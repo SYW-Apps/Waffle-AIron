@@ -1,0 +1,50 @@
+id: ireach_model_projector
+name: Reach Model Projector Interface
+description: >-
+  Derives the reach model from a run's read model, and composes the family's from each project's,
+  for the network rules and the derived networking outputs.
+component: reach_model_projector
+methods:
+  - name: project
+    description: >-
+      One project's own reach model (scope own): its own network declaration when it makes one, and
+      every Portal verb of its own tree with its transport, endpoint, effective entry and widest L0
+      export audience, together with the project's own cross-subsystem calls into Portal verbs.
+      Pure: the same inputs always give the same model.
+    signature: 'project(ctx: RuleContext, network: NetworkDeclaration?): ReachModel'
+    returns: ReachModel
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The project's read model, as its own gate builds it
+      - name: network
+        type: NetworkDeclaration?
+        description: The project's own network declaration, when it makes one
+    guarantees:
+      - idempotent
+  - name: compose
+    description: >-
+      The family's reach model (scope family) from each selected project's own model: every declared
+      network nested by membership (a network encloses its declaring project and every member below
+      it, one level per declaring project), each project's verbs and calls placed in its innermost
+      network, and the cross-project calls the family's references record (each reference at
+      position call, calls, register or dispatch that names a method on a Portal). Pure.
+    signature: >-
+      compose(models: map<string, ReachModel>, family: ProjectFamily, networks: map<string,
+      NetworkDeclaration>): ReachModel
+    returns: ReachModel
+    params:
+      - name: models
+        type: map<string, ReachModel>
+        description: Each selected project's own reach model, by project key
+      - name: family
+        type: ProjectFamily
+        description: 'The family root''s project graph: membership and the cross-project references'
+      - name: networks
+        type: map<string, NetworkDeclaration>
+        description: Each project key's network declaration, for the projects that declare one
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-06T12:57:49.377Z'
+updatedAt: '2026-10-06T12:59:50.668Z'

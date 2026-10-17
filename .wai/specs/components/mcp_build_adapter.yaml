@@ -1,0 +1,15 @@
+id: mcp_build_adapter
+name: MCP Build Adapter
+description: >-
+  Reads the wairon build a running MCP server was started from, as it now stands on disk: the entry
+  file's stamp, whether that file has changed since, and the schema fingerprint the build on disk
+  computes for itself. The fingerprint is read in a child process that loads the build on disk, so
+  the running server never loads a second copy of itself and never mistakes its own in-memory
+  schemas for the new ones.
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-09-26T00:24:09.445Z'
+updatedAt: '2026-09-26T00:24:09.459Z'

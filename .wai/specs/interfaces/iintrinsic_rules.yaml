@@ -1,0 +1,97 @@
+id: iintrinsic_rules
+name: Intrinsic Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge one spec's
+  own fields against its stereotype; they are the spec-scoped rules, run by validate over the tree
+  and by the write gate on a candidate.
+component: intrinsic_rules
+methods:
+  - name: portalFields
+    description: >-
+      Rule portal-fields. A Portal declares its transport (the retired portalType is read as it for
+      one release); only an InProcess Portal may declare an abi. An Adapter may declare a transport:
+      the one it calls its target Portal over (adapter-transport judges it against the target).
+      Every other non-Portal component carries no transport, and no non-Portal carries an abi,
+      basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on
+      the Portal that exposes the surface; an entry on a non-Portal is entry-declarations'
+      ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.
+    signature: 'portalFields(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNEXPECTED_PORTAL_FIELD
+        severity: error
+        summary: >-
+          Non-Portal component with an abi or basePath, or a transport on one that is not an
+          Adapter, or an abi on a Portal whose transport is not InProcess
+      - code: AUTH_ON_NON_PORTAL
+        severity: warning
+        summary: >-
+          Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a
+          Portal)
+      - code: MISSING_PORTAL_TRANSPORT
+        severity: error
+        summary: Portal without a transport
+  - name: durabilityDeclaration
+    description: >-
+      Rule durability-declaration. Every Store declares its durability (MISSING_DURABILITY) and
+      nothing but a Store may declare one (DURABILITY_ON_NON_STORE). Intrinsic to one component: no
+      tree required. The round-trip consequences of the declaration are enforced by
+      durability-round-trip.
+    signature: 'durabilityDeclaration(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DURABILITY_ON_NON_STORE
+        severity: error
+        summary: durability declared on a component that is not a Store
+      - code: MISSING_DURABILITY
+        severity: warning
+        summary: >-
+          Store with no durability declaration — the round-trip machinery cannot know whether
+          restart-survival is promised
+  - name: logicDeclaration
+    description: >-
+      Rule logic-declaration. Only an Orchestrator may declare a dependencyClass
+      (DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR); what the class allows is judged by
+      logic-dependency-class. Intrinsic to one component: no tree required.
+    signature: 'logicDeclaration(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR
+        severity: error
+        summary: dependencyClass declared on a component that is not an Orchestrator
+  - name: retiredStereotypes
+    description: >-
+      Rule retired-stereotypes. A component typed with a retired stereotype is an error until it is
+      migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass
+      its dependencies give it, which `wairon doctor --fix` applies. A Gateway becomes the Portal it
+      owns, with the gateway variant: its other members are depended on rather than owned, its
+      consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for
+      the author. Intrinsic to one component: no tree required.
+    signature: 'retiredStereotypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: STEREOTYPE_RETIRED
+        severity: error
+        summary: >-
+          Component typed with a retired stereotype: a Specialist is an Orchestrator with a
+          dependencyClass, a Gateway is a Portal with the gateway variant
+status: complete
+createdAt: '2026-09-14T06:06:25.571Z'
+updatedAt: '2026-10-06T23:07:05.966Z'

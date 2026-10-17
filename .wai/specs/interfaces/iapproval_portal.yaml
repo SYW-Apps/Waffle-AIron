@@ -1,0 +1,165 @@
+id: iapproval_portal
+name: Approval Portal Interface
+description: Published approval reads and the lock record write of sdd_core.
+component: approval_portal
+methods:
+  - name: computeStateId
+    description: Compute the deterministic content hash (StateId) of the current spec tree.
+    signature: 'computeStateId(): StateId'
+    returns: StateId
+  - name: readLockRecord
+    description: Read the current commit-scoped lock record, or null if the project is unlocked.
+    signature: 'readLockRecord(): LockRecord | null'
+    returns: LockRecord?
+  - name: writeLockRecord
+    description: Persist a commit-scoped lock record.
+    signature: 'writeLockRecord(record: LockRecord): void'
+    returns: void
+  - name: computeStateIdAt
+    description: >-
+      Compute the current state hash of the project at the given root (read-only bind). Pure 1:1
+      forward.
+    signature: 'computeStateIdAt(root: string): string?'
+    returns: string?
+    params:
+      - name: root
+        type: string
+  - name: readLockState
+    description: >-
+      Forward to core_orchestrator.readLockState: resolve the lock against the gate identity the
+      caller computed now
+    signature: 'readLockState(current: StateId): LockStatus'
+    returns: LockStatus
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
+  - name: captureApprovedSpecs
+    description: >-
+      Capture the CURRENT spec tree as approved: one DESIGN digest per spec file (its design view in
+      canonical form — code linkage and timestamps out), keyed by path relative to the project root,
+      recorded with specsReading `design`. A member project's own specs are excluded — the trees are
+      approved separately. An optional scope restricts the capture (lock --subsystem).
+    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): map<string, string>'
+    returns: map<string, string>
+    params:
+      - name: root
+        type: string
+        optional: true
+      - name: scope
+        type: ApprovalScope
+        optional: true
+  - name: localApprover
+    description: >-
+      Who to record as having approved a lock taken on THIS machine, where wairon has no account of
+      its own. Prefers the git author identity (`user.name <user.email>`) — the one identity the
+      repository already attributes work to, so a reviewer can match it against the author of the
+      commit carrying the lock — and falls back to user@hostname. Never throws and never prompts: a
+      lock must not fail because a name could not be resolved.
+    signature: 'localApprover(): ApproverIdentity'
+    returns: ApproverIdentity
+    params: []
+  - name: diffAgainstApproval
+    description: >-
+      What differs between this tree and the approval on record: which specs were added, changed or
+      removed, and which are untouched. Null when the project was never approved — a different
+      answer from approved and drifted.
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: approvalRecord
+    description: The approval record this project carries, or null when it has none.
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: settledSpecPaths
+    description: >-
+      The spec paths the approval on record covers, as a set for membership tests; null when there
+      is no record. Published here because the validator needs it to tell an approved spec from an
+      unapproved one, and the validator reaching into the approval module directly would cross a
+      subsystem boundary the Portal exists to be.
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: approvalVerdict
+    description: >-
+      What the lock says about the tree as it stands (approval_comparison.verdict), given the pin
+      tree the caller obtained from the validator; silent for a project never approved.
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params:
+      - name: approvals
+        type: list<ProjectApproval>
+        description: The pin tree from validator_portal.familyApprovals
+        optional: true
+    guarantees:
+      - idempotent
+  - name: computeOwnStateId
+    description: >-
+      The content identity of the bound project's OWN specs in the full content reading, code
+      linkage included (state_hash.ownTree) — the content half of a format-2 lock's gate identity,
+      recomputed only to judge such a lock as it was taken (StateId.asRecorded).
+    signature: 'computeOwnStateId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: computeOwnDesignId
+    description: >-
+      The DESIGN identity of the bound project's own specs, code linkage and timestamps left out
+      (state_hash.ownDesign): the content half of the gate identity from format 3 on.
+    signature: 'computeOwnDesignId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: reexpress
+    description: >-
+      Forward to approval_comparison.reexpress: the format-2 record carried into the design reading
+      when the gate identity's asRecorded proves the design unchanged, else null. A read; the caller
+      writes the answer through writeLockRecord.
+    signatureFrom: approval_comparison.reexpress
+  - name: computeOwnDesignIdAsRecorded
+    description: >-
+      The design identity of the bound project's own specs in the earlier design reading, status put
+      back from approvedStatus (state_hash.ownDesignAsRecorded): how a lock taken in that reading is
+      recomputed exactly as it was taken.
+    signature: 'computeOwnDesignIdAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
+    returns: StateId
+    params:
+      - name: approvedStatus
+        type: map<string, SpecStatus>
+        description: Each spec's approved status, keyed `<kind>:<id>`
+    guarantees:
+      - idempotent
+  - name: approvedStatuses
+    description: >-
+      The status each own spec had when the record was approved, recovered from its design digests
+      (approval_comparison.approvedStatuses).
+    signature: 'approvedStatuses(record: LockRecord, root?: string): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-25T17:32:24.931Z'
+updatedAt: '2026-10-06T23:05:06.470Z'

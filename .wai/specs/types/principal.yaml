@@ -6,26 +6,26 @@ description: >-
   Transient (never persisted). Its subject, projects narrowing, and permissionSubject are
   server-side bindings derived from the token or bootstrap credential, never from client-supplied
   parameters. The role/projects fields remain a coarse compatibility projection for display; precise
-  authorization is expressed through the permission resolver over the permissionSubject
-  (roleBindings + assignments + the env-anchored instance-admin bypass), never through stored
-  grants.
+  authorization is expressed through the permission rules over the permissionSubject (roleBindings +
+  assignments + the env-anchored instance-admin bypass), never through stored grants.
 fields:
   - name: tokenId
     type: string
     description: Stable id of the credential that authenticated, used for audit correlation; never the raw key.
     optional: false
   - name: role
-    type: string
+    type: DisplayRole
     description: >-
-      Coarse compatibility role such as "editor" or "admin", projected for display only — NOT an
-      authorization source (authorization resolves from permissionSubject).
+      Coarse compatibility role, projected for display only — NOT an authorization source
+      (authorization resolves from permissionSubject).
     optional: false
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
-      Coarse compatibility projection of the token's project narrowing; "*" denotes no narrowing.
-      Entries may be subproject-qualified ('projectId::subsystemId') — carried through verbatim so
-      root resolution can bind the mounted child root.
+      Coarse projection of the token's project narrowing; '*' denotes no narrowing (permission rules
+      still gate per record). Entries are hosted record ids; an entry covers its project and every
+      member below it. A member-qualified entry ('projectId::alias', one alias per hop) left by an
+      older wairon still resolves for one release, to the member's record.
     optional: false
   - name: subject
     type: PrincipalSubject
@@ -35,15 +35,29 @@ fields:
     type: PermissionSubject
     description: >-
       The resolved permission subject (subjectId + roleBindings + instanceAdmin) for hierarchical
-      authorization. instanceAdmin (the resolver bypass, NON-overridable) is true ONLY for the
-      built-in super-admin subject (issuer 'local', userId === the persisted boot-reserved
+      authorization. instanceAdmin (the permission-rules bypass, NON-overridable) is true ONLY for
+      the built-in super-admin subject (issuer 'local', userId === the persisted boot-reserved
       super-admin UUID seeded at first boot), the bootstrap/master credential, and — under devMode
       only — the synthetic local-developer subject (its persisted boot-reserved UUID). A regular
       user is NEVER instanceAdmin: a delegated instance-wide admin holds a project:admin@instance
       assignment (or the sso-admin role), which resolves as a normal OVERRIDABLE permission, not the
       bypass. There is no '*'@instance assignment. Replaces the former grants field; precise
-      authorization is expressed through the permission resolver over this subject.
+      authorization is expressed through the permission rules over this subject.
     optional: true
-methods: []
+  - name: authenticated
+    type: bool
+    description: >-
+      Whether the request presented a valid credential. The unauthenticated principal carries false;
+      every gate checks it first.
+    optional: false
+methods:
+  - name: isInstanceAdmin
+    signature: 'isInstanceAdmin(): boolean'
+    returns: bool
+    description: >-
+      Whether this principal holds the permission-rules bypass: its permissionSubject marks it
+      instanceAdmin. Listings short-circuit on it to show the whole instance.
+    sourcePath: src/server/authorization.ts
+sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-07-24T18:20:42.782Z'
+updatedAt: '2026-10-04T23:40:18.446Z'

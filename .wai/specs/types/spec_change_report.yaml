@@ -1,0 +1,106 @@
+kind: value-object
+id: spec_change_report
+name: SpecChangeReport
+description: >-
+  The answer to an authoring write: exactly what changed, or that nothing did. A write that changes
+  nothing writes nothing — `written` is false and the stored `updatedAt` is untouched. One sentence
+  for both outcomes is what let a delta that landed nowhere read as a completed edit.
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The spec kind written.
+    optional: false
+  - name: id
+    type: string
+    description: The stored spec's id.
+    optional: false
+  - name: written
+    type: bool
+    description: 'False when the merged spec equals what is stored: nothing reached disk.'
+    optional: false
+  - name: changes
+    type: list<SpecChange>
+    description: Every change the write made; empty exactly when `written` is false.
+    optional: false
+  - name: notices
+    type: list<string>
+    description: Store placement notices, component gate warnings and delta notices.
+    optional: false
+  - name: summary
+    type: string
+    description: One line for people, naming the spec and either the change count or that nothing was written.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when the caller asked what the delta would do and nothing was written. `written` is false
+      for a dry run exactly as it is for a delta that changed nothing, and only this field tells the
+      two apart.
+    optional: false
+  - name: ineffective
+    type: list<string>
+    description: >-
+      Every path the delta named that the write did not act on, each with why: a key the level's
+      schema drops (a nested typo the permissive delta cannot refuse), or a value the stored spec
+      already held. Named rather than stripped, because a key silently dropped is how a typo reads
+      as a completed edit.
+    optional: false
+  - name: testsToRevisit
+    type: list<TestsToRevisit>
+    description: >-
+      The tests that encode a method this write changed or deleted, one entry per such method. Empty
+      when the write touched no method, when the project declares no test roots, or when nothing
+      references them. This is what a spec pass never said: eight hosted tests once encoded
+      behaviour a committed spec had changed, and a brief that said "keep existing tests green"
+      collided with the spec because nothing listed them. The write that creates the collision is
+      the one that reports it.
+    optional: false
+  - name: strippedKeys
+    type: list<string>
+    description: >-
+      Keys the stored document on disk carries that its level's schema does not know — read from the
+      raw file, not the parsed spec, since the parse already discards them — which this write will
+      drop, each as `path: value` (e.g. `status: draft` on an L0). A dry run lists them too, so a
+      caller can show them before anything is written. Absent when there are none. Named, never
+      silently lost.
+    optional: true
+  - name: respellings
+    type: list<TypeRespelling>
+    description: >-
+      Each type position of the merged spec the write normalised (or, on a dry run, would): what the
+      delta or the stored file wrote against the canonical spelling stored. Empty when every
+      position was already canonical.
+    optional: false
+  - name: cascaded
+    type: list<string>
+    description: >-
+      Each implementation method entry the write removed with a contract method it removed, as
+      `<implementation>.<method>` (or, on a dry run, would remove): a narrative realizes its
+      contract method and means nothing without it, so it goes with it in the same write. Absent
+      when the write removed no contract method.
+    optional: true
+  - name: published
+    type: list<ExportUse>
+    description: >-
+      Every public name of the bound project's export tables a consumer reaches a contract method
+      this write removed through (the entries publishing it, and every published verb forwarding it
+      by signatureFrom), read before the write. Absent when the write removed no published method.
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers in reach whose specs call a removed method on one of the published names — the
+      projects the removal breaks. Filled by the door that read the consumers; absent when none
+      breaks.
+    optional: true
+  - name: rerouted
+    type: bool
+    description: >-
+      True when published names the methods whose wire endpoint the write moved (sdd_set_endpoints),
+      not methods it removed: a client spelling the old route breaks until it follows. Filled by the
+      door that read the consumers
+    optional: true
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-18T21:11:43.565Z'
+updatedAt: '2026-10-09T16:51:12.048Z'

@@ -15,7 +15,12 @@ componentType: Portal
 owns: []
 dependsOn:
   - sdk_orchestrator
-portalType: Custom
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Pack authors' build scripts and tools that import the published @wairon/sdk package (sdk/, main
+    dist/index.js) and call its functions in their own process
 status: complete
 createdAt: '2026-07-21T17:22:39.912Z'
-updatedAt: '2026-07-21T19:26:04.963Z'
+updatedAt: '2026-10-06T18:59:43.165Z'

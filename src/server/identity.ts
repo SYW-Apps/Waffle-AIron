@@ -1,5 +1,4 @@
 import * as crypto from 'crypto';
-import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential, signSsoState, verifySsoState } from './auth.js';
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
@@ -20,7 +19,7 @@ import {
 import * as userRepo from './users.js';
 import { listAssignments } from './permissions.js';
 import * as auditRepo from './audit.js';
-import { assertMintableNarrowingEntry, parseQualifiedSelector } from './projects.js';
+import { assertMintableNarrowingEntry } from './projects.js';
 import { removeAllWebSessionsForSubject } from './websessions.js';
 import {
   authorize,
@@ -31,34 +30,34 @@ import {
 } from './authorization.js';
 import { isReservedSubject } from './auth.js';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
-import { sendJson } from './httpio.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  AuditLevel,
   AuditQuery,
-  AuditRetentionPolicy,
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  MintedToken,
   Principal,
   PrincipalSubject,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Identity Orchestrator + Portal (sdd_host)
+// Identity Orchestrator (sdd_host)
 //
 // The identity control-plane workflows: authenticate the caller credential
-// (bootstrap master or user-bound token) via the auth specialist, resolve the
+// (bootstrap master or user-bound token) via authentication, resolve the
 // caller's permission through the authorization seam, then manage user-bound
 // MCP/API tokens, hosted users, and audit access. Exported as plain functions so
-// both the HTTP identity portal (handleIdentityRequest, below) and any
-// in-process caller reach the same logic — mirroring admin.ts. Every audit
+// both the HTTP identity portal (./identity-portal.ts) and any in-process caller
+// reach the same logic — mirroring admin.ts. Every audit
 // append is best-effort: an append failure is recorded as a server diagnostic
 // and never fails the primary action.
 //
 // Phase 1 exposure decision: the identity control plane rides the ADMIN-plane
 // listener (127.0.0.1 by default) until HostExposurePolicy lands in a later
-// phase and gives it its own `identityApiEnabled` switch. See handleIdentityRequest.
+// phase and gives it its own `identityApiEnabled` switch. See ./identity-portal.ts.
 // ---------------------------------------------------------------------------
 
 /** Authorized request to mint a user-bound MCP/API token. Mirrors
@@ -68,26 +67,35 @@ export interface TokenMintRequest {
   ownerUserId: string;
   /** Human-readable token label for administration and audit views. */
   label: string;
-  /** The token's project NARROWING (which projects it may name), or ['*'] for
-   *  the owner's full accessible set. NOT a grant: the token acts as the OWNER's
-   *  live permission, resolved fresh on every request. */
-  projects?: string[];
+  /** The token's project NARROWING (which projects it may name). Required and
+   *  non-empty; ['*'] is the owner's full accessible set. NOT a grant: the token
+   *  acts as the OWNER's live permission, resolved fresh on every request. */
+  projects: string[];
   /** Optional ISO-8601 token expiry. */
   expiresAt?: string;
 }
 
-// Error classes moved to errors.ts (breaking the identity↔policy import cycle);
-// imported for local use and re-exported so existing importers keep working.
-import { UnauthenticatedError, ForbiddenError } from './errors.js';
-export { UnauthenticatedError, ForbiddenError };
+/** The answer to a mint request that names no projects. */
+const PROJECTS_REQUIRED = "projects is required: pass the project ids the token may name, or '*' for the owner's full reach";
 
-// ── authorization helpers (hierarchical resolver) ───────────────────────────
+/** Refuse a mint request whose narrowing is missing or empty: the list is
+ *  required, and '*' is the full reach. */
+function assertNarrowingGiven(request: { projects?: unknown }): void {
+  if (!Array.isArray(request.projects) || request.projects.length === 0) {
+    throw new Error(PROJECTS_REQUIRED);
+  }
+}
+
+// Error classes live in errors.ts (breaking the identity↔policy import cycle).
+import { UnauthenticatedError, ForbiddenError } from './errors.js';
+
+// ── authorization helpers (hierarchical permission rules) ───────────────────
 //
 // Every decision resolves through the authorization seam (authorization.ts):
 // user administration = project:admin over the target user's home unit; audit
 // reads = project:admin over the caller's actionable projects; IdP config and
 // audit administration = project:admin at the instance root. isInstanceAdmin is
-// the env-anchored resolver bypass (built-in super-admin / master / devMode
+// the env-anchored permission-rules bypass (built-in super-admin / master / devMode
 // subject) — a delegated instance-wide project:admin is NOT instanceAdmin.
 
 /** The capability the legacy user:admin / audit:read / key:manage / grant
@@ -153,12 +161,6 @@ function auditReadView(cfg: HostConfig, principal: Principal): { all: boolean; p
 
 // ── audit helpers ──────────────────────────────────────────────────────────
 
-/** Resolve the active audit retention policy. Host-config plumbing
- *  (HostConfig.auditPolicy) is a later phase; until then the secure default. */
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return auditRepo.DEFAULT_AUDIT_POLICY;
-}
-
 /** The audit actor for an action: the caller's resolved subject, or — when a
  *  legacy master/token credential carries no subject — a synthesized service
  *  identity keyed by the credential's token id. */
@@ -175,7 +177,7 @@ function auditActor(principal: Principal): PrincipalSubject {
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
@@ -196,16 +198,15 @@ function buildAuditEvent(
 /** The audit actor for the unauthenticated login-start step: no user is resolved
  *  yet (the provider hasn't spoken), so the action is attributed to an anonymous
  *  local service identity — the provider it targets is carried on the event target. */
-export const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
+const ANONYMOUS_SSO_ACTOR: PrincipalSubject = { userId: 'anonymous', kind: 'service', issuer: 'local' };
 
 /** Build a redacted audit event for an actor SUBJECT directly (category 'auth'),
  *  for the unauthenticated SSO login pair (start/complete) which carries no
- *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor.
- *  Exported so the web plane (web.ts) builds its web sign-in / sign-out events. */
-export function buildSsoAuditEvent(
+ *  Principal. Mirrors buildAuditEvent but takes the resolved subject as the actor. */
+function buildSsoAuditEvent(
   actor: PrincipalSubject,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
   return {
@@ -220,12 +221,28 @@ export function buildSsoAuditEvent(
   };
 }
 
+/**
+ * Record a sign-in or sign-out event, best-effort: the actor is the resolved
+ * subject, or null when no user is resolved yet (the login-start and sign-out
+ * steps), which records the anonymous local service actor. Category 'auth'.
+ * The web plane (web.ts) records its browser sign-in events through this.
+ */
+export function auditSignIn(
+  cfg: HostConfig,
+  actor: PrincipalSubject | null,
+  action: string,
+  level: AuditLevel,
+  over: Partial<AuditEvent> = {},
+): void {
+  tryAppendAudit(cfg, buildSsoAuditEvent(actor ?? ANONYMOUS_SSO_ACTOR, action, level, over));
+}
+
 /** Append a redacted audit event, best-effort: a failure is recorded as a server
  *  diagnostic and swallowed so an append can never fail the primary action.
  *  Exported so the web plane (web.ts) reuses the same best-effort append path. */
 export function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    auditRepo.appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    auditRepo.appendAuditEvent(cfg.dataDir, event, auditRepo.effectiveAuditPolicy(cfg));
   } catch (err) {
     // Server diagnostic (audit appends are best-effort by invariant).
     console.error(
@@ -290,14 +307,15 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * may mint here; delegated minting-with-dominance is deferred. Rejects a
  * reserved owner id (the built-in subjects can never own a mintable bearer), a
  * deactivated owner (deactivation must stay revoked), and unknown projects in
- * the narrowing — a subproject-qualified entry ('projectId::subsystemId') is
- * validated at mint time: the named subsystem must exist on that project and
- * carry a projectPath (unknown/non-chained mounts are rejected with guidance,
- * never stored broken). Persists only the hashed record with owner/narrowing
+ * the narrowing — a member-qualified entry ('projectId::alias', one member
+ * alias per hop) is validated at mint time: each alias must declare a member of
+ * the project it is looked up in, in project.yaml `members` or for one release
+ * a legacy L1 mount (an unknown alias, or an internal subsystem, is rejected
+ * with guidance, never stored broken). Persists only the hashed record with owner/narrowing
  * metadata and appends a redacted audit event. Returns the plaintext token
  * exactly once.
  */
-export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): string {
+export function mintToken(cfg: HostConfig, credential: string | null, request: TokenMintRequest): MintedToken {
   const principal = requirePrincipal(cfg, credential);
 
   if (!isInstanceAdmin(principal)) {
@@ -308,16 +326,17 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // instance-admin bearer — the env-anchored paths are the only super-admin routes.
   assertNotReservedSubjectId(cfg, [request.ownerUserId]);
 
-  // The token's project NARROWING (never a grant): which projects it may name.
-  // ['*'] (or omitted) = the owner's full accessible set, still resolved live.
-  // An entry MAY be subproject-qualified ('projectId::subsystemId', nested
-  // mounts composing) — validated at MINT time: the named subsystem must exist
-  // on that project and carry a projectPath. An unknown project or an
-  // unknown/non-chained mount is rejected with guidance, never stored broken.
-  const projects = request.projects?.length ? request.projects : ['*'];
-  for (const p of projects) {
-    assertMintableNarrowingEntry(cfg.dataDir, p);
-  }
+  // The token's project NARROWING (never a grant): which records it may name,
+  // each covering its members. The list is required; ['*'] = the owner's full
+  // accessible set, still resolved live. A member-qualified entry ('projectId::alias') is
+  // DEPRECATED: for one release it is accepted and STORED as the member's
+  // record id; an unknown project, an alias that declares no member, or a
+  // member no record holds is rejected with guidance, never stored broken.
+  assertNarrowingGiven(request);
+  const stored = request.projects.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
+  const projects = [...new Set(stored.map((e) => e.as))];
+  // The caller learns what each deprecated qualified entry was stored as.
+  const mapped = stored.filter((e) => e.as !== e.asked).map((e) => `${e.asked} -> ${e.as}`);
 
   // Refuse minting a token for a user record that has been deactivated — else
   // deactivation could be undone by minting fresh tokens for the inactive owner.
@@ -354,7 +373,7 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     buildAuditEvent(principal, 'token.mint', 'security', 'admin', { target: record.id }),
   );
 
-  return token; // plaintext, shown exactly once
+  return { token, mapped }; // plaintext, shown exactly once
 }
 
 /**
@@ -392,11 +411,11 @@ export function revokeToken(cfg: HostConfig, credential: string | null, tokenId:
  * or bearer token) to their principal; require the caller's OWN resolved permission
  * to already cover project:read on the project (and project:write when write) — the
  * token can never exceed the caller's own access at mint time, and it acts as the
- * OWNER's LIVE permission afterwards. `projectId` may be subproject-qualified
- * ('projectId::subsystemId', nested mounts composing), scoping the caller's own
- * token INTO a chained subproject — validated at MINT time (the named subsystem
- * must exist on that project and carry a projectPath; unknown/non-chained mounts
- * are rejected with guidance, never stored broken), while permission keeps
+ * OWNER's LIVE permission afterwards. `projectId` may be member-qualified
+ * ('projectId::alias', nested members composing), scoping the caller's own
+ * token INTO a member project — validated at MINT time (each alias must declare
+ * a member, in `members` or a legacy L1 mount; an unknown alias or an internal
+ * subsystem is rejected with guidance, never stored broken), while permission keeps
  * resolving over the TOP project (the qualifier narrows reach, it never refines
  * grants). Mint a token OWNED BY the caller (ownerSubject AND createdBySubject =
  * the caller's subject, so deactivating the caller revokes it via
@@ -412,30 +431,19 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // Parse the possibly-qualified project id: permission resolves over the TOP
-  // project — a subproject qualifier narrows reach, never what the token may do.
-  const parsed = parseQualifiedSelector(projectId);
-  if (!parsed) {
-    throw new Error(
-      `invalid project id "${projectId}" (expected a project id, optionally ` +
-        `subproject-qualified as projectId::subsystemId)`,
-    );
-  }
+  // The record the token names: a project id as it is, or — a deprecated
+  // member-qualified id, for one release — the member's own record id. An
+  // unknown project or member is rejected with guidance, never stored broken.
+  const recordId = assertMintableNarrowingEntry(cfg.dataDir, projectId);
 
-  // Self-scoped authorization through the resolver: the caller must ALREADY hold
-  // a yes-valued permission over this exact (TOP) project (a unit-scoped
-  // assignment covers its own subtree, never another tenant's).
-  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
+  // Self-scoped authorization through permission rules: the caller must ALREADY
+  // hold a yes-valued permission over that record, through its own chain (a
+  // parent's grant reaches its members; an explicit no on a member removes it).
+  if (authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', recordId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:read on the requested project');
   }
-  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', parsed.projectId).value !== 'yes') {
+  if (write && authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', recordId).value !== 'yes') {
     throw new ForbiddenError('caller lacks project:write on the requested project');
-  }
-
-  // A subproject qualifier is validated at MINT time — the named subsystem must
-  // exist on the project and carry a projectPath; never store a broken mount.
-  if (parsed.mounts.length > 0) {
-    assertMintableNarrowingEntry(cfg.dataDir, projectId);
   }
 
   // Mint the token owned by the caller, NARROWED to exactly the one project. It
@@ -446,11 +454,11 @@ export function mintSelfToken(
   const record: ApiKeyRecord = {
     id: crypto.randomBytes(6).toString('hex'),
     keyHash: hashToken(token),
-    projects: [projectId],
+    projects: [recordId],
     createdAt: new Date().toISOString(),
     ownerSubject: owner,
     createdBySubject: owner,
-    label: `agent token (${projectId})`,
+    label: `agent token (${recordId})`,
   };
   createCredential(cfg.dataDir, record);
 
@@ -566,7 +574,7 @@ export function pruneAuditEvents(cfg: HostConfig, credential: string | null): nu
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'audit administration');
 
-  const policy = resolveAuditPolicy(cfg);
+  const policy = auditRepo.effectiveAuditPolicy(cfg);
   const removed = auditRepo.pruneAuditEvents(cfg.dataDir, policy, new Date().toISOString());
 
   tryAppendAudit(cfg, buildAuditEvent(principal, 'audit.prune', 'info', 'audit', { target: 'audit' }));
@@ -680,7 +688,7 @@ export function setUserStatus(
 // ── headless SSO login (unauthenticated pair) ────────────────────────────────
 //
 // The SSO state is a signed, self-describing payload — a JSON string
-// `{ providerId, nonce, redirectUri }` sealed by the auth specialist (signSsoState)
+// `{ providerId, nonce, redirectUri }` sealed by authentication (signSsoState)
 // on start and verified (verifySsoState) on completion. It is the ONLY integrity
 // anchor the callback carries: there is no server-side login session. The pair is
 // unauthenticated by design — no caller credential is required or accepted; trust
@@ -767,8 +775,8 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
       status: 'active',
       // first-login: bind the built-in sso-admin ROLE when the verified groups
       // match adminGroupClaims, otherwise no bindings — an admin assigns roles
-      // and grid assignments later. The role resolves through the permission
-      // resolver (project:admin + project:create @instance, OVERRIDABLE — never
+      // and grid assignments later. The role resolves through permission
+      // rules (project:admin + project:create @instance, OVERRIDABLE — never
       // the instance-admin bypass).
       roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
@@ -811,7 +819,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 
   // Mint a user-bound token (same record shape as mintToken). It carries NO
   // permissions and no narrowing: it acts as the owner's LIVE permission,
-  // resolved by the auth specialist + resolver on every request — so a later
+  // resolved by authentication + permission rules on every request — so a later
   // role/assignment revocation cuts this token down immediately.
   const token = 'wk_' + crypto.randomBytes(24).toString('hex');
   const record: ApiKeyRecord = {
@@ -840,7 +848,7 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
  * configured identity provider by forwarding to the policy repository. Not audited
  * (a read).
  */
-export function listIdentityProviders(
+export function listProviders(
   cfg: HostConfig,
   credential: string | null,
 ): IdentityProviderConfig[] {
@@ -855,7 +863,7 @@ export function listIdentityProviders(
  * carries a clientSecretRef, never a raw secret), append a redacted idp.upsert
  * (security) audit event, and return the stored config.
  */
-export function upsertIdentityProvider(
+export function upsertProvider(
   cfg: HostConfig,
   credential: string | null,
   config: IdentityProviderConfig,
@@ -875,7 +883,7 @@ export function upsertIdentityProvider(
  * identity-provider configuration by id through the policy repository (an unknown
  * id is rejected), and append a redacted idp.remove (security) audit event.
  */
-export function removeIdentityProvider(cfg: HostConfig, credential: string | null, id: string): void {
+export function removeProvider(cfg: HostConfig, credential: string | null, id: string): void {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
@@ -904,135 +912,4 @@ export function countAuditEvents(
   if (view.all) return auditRepo.countAuditEvents(cfg.dataDir, query);
   // A count ignores the query limit; scope the query to the in-view projects.
   return scopedAuditEvents(cfg, view, { ...query, limit: undefined }).length;
-}
-
-// ── Identity Portal (HTTP) ──────────────────────────────────────────────────
-//
-// Forwarding to the orchestrator functions above. The router is async because the
-// SSO callback awaits completeSsoLogin (the provider code exchange is network I/O);
-// every route is wrapped in the same error → status mapping, so an awaited
-// rejection is caught here too and never escapes as an unhandled promise. Phase 1
-// decision: these routes ride the ADMIN-plane listener (127.0.0.1 bind) until
-// HostExposurePolicy / `identityApiEnabled` lands in a later phase to give the
-// identity plane its own exposure switch. The credential is extracted the same way
-// admin routes do (the caller passes the bearer token); the unauthenticated SSO
-// start/complete pair ignores it. Endpoints match iidentity_portal exactly.
-
-function auditQueryFromParams(sp: URLSearchParams): AuditQuery {
-  const q: AuditQuery = {};
-  const projectId = sp.get('projectId');
-  if (projectId) q.projectId = projectId;
-  const actorUserId = sp.get('actorUserId');
-  if (actorUserId) q.actorUserId = actorUserId;
-  const tokenId = sp.get('tokenId');
-  if (tokenId) q.tokenId = tokenId;
-  const category = sp.get('category');
-  if (category) q.category = category;
-  const action = sp.get('action');
-  if (action) q.action = action;
-  const outcome = sp.get('outcome');
-  if (outcome) q.outcome = outcome;
-  const minimumLevel = sp.get('minimumLevel');
-  if (minimumLevel) q.minimumLevel = minimumLevel;
-  const from = sp.get('from');
-  if (from) q.from = from;
-  const to = sp.get('to');
-  if (to) q.to = to;
-  const limit = sp.get('limit');
-  if (limit !== null && limit !== '') q.limit = Number(limit);
-  return q;
-}
-
-/**
- * Route one identity control-plane request to the orchestrator and write the HTTP
- * response. Owns its own error → status mapping (401 unauthenticated, 403 forbidden,
- * 400 otherwise) so it never depends on the admin-plane catch. Called by http.ts
- * when the admin listener sees an `/identity/*` path; body is the parsed request body.
- */
-export async function handleIdentityRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body: any,
-  url: URL,
-): Promise<void> {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['identity', ...]
-  try {
-    // ── headless SSO login (unauthenticated: no credential) ──────────────────
-    // POST /identity/sso/start  { providerId, redirectUri }
-    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'start') {
-      const url_ = await startSsoLogin(cfg, body.providerId as string, body.redirectUri as string);
-      return sendJson(res, 200, { url: url_ });
-    }
-    // GET /identity/sso/callback?state=&code=
-    // Headless flow: returns the minted token as JSON. A browser-facing UI would
-    // render/exchange this into a session instead of showing it raw — UX watch-item.
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'sso' && parts[2] === 'callback') {
-      const token = await completeSsoLogin(
-        cfg,
-        url.searchParams.get('state') ?? '',
-        url.searchParams.get('code') ?? '',
-      );
-      return sendJson(res, 200, { token });
-    }
-
-    // ── identity-provider (SSO) administration (instance-admin only) ─────────
-    // GET /identity/providers
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'providers') {
-      return sendJson(res, 200, listIdentityProviders(cfg, credential));
-    }
-    // PUT /identity/providers/{id}
-    if (req.method === 'PUT' && parts.length === 3 && parts[1] === 'providers') {
-      const config = { ...(body as IdentityProviderConfig), id: parts[2] };
-      return sendJson(res, 200, upsertIdentityProvider(cfg, credential, config));
-    }
-    // DELETE /identity/providers/{id}
-    if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'providers') {
-      removeIdentityProvider(cfg, credential, parts[2]);
-      return sendJson(res, 200, { ok: true });
-    }
-    // GET /identity/audit/count
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'count') {
-      return sendJson(res, 200, { count: countAuditEvents(cfg, credential, auditQueryFromParams(url.searchParams)) });
-    }
-
-    // POST /identity/tokens
-    if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
-      return sendJson(res, 201, { key: mintToken(cfg, credential, body as TokenMintRequest) });
-    }
-    // DELETE /identity/tokens/{id}
-    if (req.method === 'DELETE' && parts.length === 3 && parts[1] === 'tokens') {
-      revokeToken(cfg, credential, parts[2]);
-      return sendJson(res, 200, { ok: true });
-    }
-    // GET /identity/users?project=
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'users') {
-      return sendJson(res, 200, listUsers(cfg, credential, url.searchParams.get('project') ?? undefined));
-    }
-    // PUT /identity/users/{id}/status
-    if (req.method === 'PUT' && parts.length === 4 && parts[1] === 'users' && parts[3] === 'status') {
-      return sendJson(res, 200, setUserStatus(cfg, credential, parts[2], body.status as string));
-    }
-    // PUT /identity/users/{id}
-    if (req.method === 'PUT' && parts.length === 3 && parts[1] === 'users') {
-      const record = { ...(body as HostedUserRecord), id: parts[2] };
-      return sendJson(res, 200, upsertUser(cfg, credential, record));
-    }
-    // GET /identity/audit/events
-    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'events') {
-      return sendJson(res, 200, queryAuditEvents(cfg, credential, auditQueryFromParams(url.searchParams)));
-    }
-    // POST /identity/audit/prune
-    if (req.method === 'POST' && parts.length === 3 && parts[1] === 'audit' && parts[2] === 'prune') {
-      return sendJson(res, 200, { pruned: pruneAuditEvents(cfg, credential) });
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
-  }
 }

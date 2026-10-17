@@ -1,0 +1,35 @@
+kind: value-object
+id: pack_selection_failure
+name: PackSelectionFailure
+description: >-
+  One declared pack selection that could not be resolved, or resolved with a caveat, tagged with the
+  code the conformance gate reports it under. Four codes rather than one because the remedies
+  differ: obtain the pack, correct the pin, reconcile the content, or refresh the store copy.
+  Resolution happens in the extension loader (committed bundle first, then the pack store) and the
+  pack-resolution rule only surfaces what the loader found, so the loader and the gate can never
+  disagree about whether a pack applies.
+fields:
+  - name: code
+    type: PackFailureCode
+    description: Why the selected pack could not be applied as pinned.
+    optional: false
+  - name: name
+    type: string
+    description: The declared pack name, so a finding can be attributed to the selection that caused it.
+    optional: false
+  - name: message
+    type: string
+    description: >-
+      The finding message, naming the remedy that fits this code — and, for a version mismatch,
+      which versions ARE installed.
+    optional: false
+  - name: severity
+    type: pack_rule_severity
+    description: >-
+      Every code is an error except PACK_STORE_DRIFT, a warning under which the pack still applies,
+      so the severity travels with the finding.
+    optional: false
+methods: []
+sourcePath: src/core/extensions.ts
+createdAt: '2026-07-30T11:24:59.575Z'
+updatedAt: '2026-10-04T23:41:41.797Z'

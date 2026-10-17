@@ -1,0 +1,21 @@
+kind: enum
+id: transaction_phase
+name: TransactionPhase
+description: How far a family migration's file transaction has got, as its journal records it.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: staging
+    description: Backups and staged copies are being written; nothing live has moved
+  - name: staged
+    description: All of them are on disk and synced
+  - name: swapping
+    description: Live files are being replaced
+  - name: committed
+    description: 'Final (for the coordinator: the commit point)'
+  - name: rolled-back
+    description: Every live file is back
+createdAt: '2026-10-04T23:13:30.172Z'
+updatedAt: '2026-10-04T23:13:30.564Z'

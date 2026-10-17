@@ -4,10 +4,21 @@ description: Read path over the in-memory role collection.
 contract: irole_index
 sourcePath: src/server/roles.ts
 methods:
-  - name: listRoles
+  - name: list
     narrative: []
     intent: Return every role in the in-memory collection.
+    calls:
+      - role_store.load
+    symbol: indexListRoles
+  - name: effective
+    narrative: []
+    intent: >-
+      Return every stored role whose id is not a reserved built-in id, followed by the built-in role
+      definitions, so a stray stored row can never shadow a built-in.
+    calls:
+      - role_store.load
+    symbol: indexListEffectiveRoles
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:42.876Z'
-updatedAt: '2026-07-16T15:03:23.316Z'
+updatedAt: '2026-10-04T19:41:12.234Z'

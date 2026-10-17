@@ -1,0 +1,66 @@
+kind: value-object
+id: conformance_rule_config
+name: ConformanceRuleConfig
+description: >-
+  Where this project's own source code lives, what of it is not yet claimed by a spec, and which
+  code↔spec findings it carries as declared debt. Declaring a source root is what opts a project
+  into the unclaimed-source check: without one the walk finds nothing and the check is silent, so
+  upgrading wairon never floods an existing project. Both lists are one-way debt registers, not
+  suppressions: every entry is written down where a reviewer sees the whole list, an entry can only
+  be deleted (by paying the debt it names), and anything neither carried nor claimed is reported.
+fields:
+  - name: sourceRoots
+    type: list<string>
+    description: >-
+      Project-relative paths holding this project's own source code; a directory is walked
+      recursively, a file names itself. Absolute or parent-escaping entries are refused by
+      containment, exactly as a sourcePath is.
+    optional: true
+  - name: exclude
+    type: list<string>
+    description: >-
+      Paths inside a source root that are not this project's code to claim — vendored libraries,
+      generated output. A file at, or under, one of these is never walked, so it is neither reported
+      nor carried as debt.
+    optional: true
+  - name: unclaimed
+    type: list<string>
+    description: >-
+      The files under the source roots that no spec names yet, frozen. A listed file is not
+      reported; an unlisted one is UNCLAIMED_SOURCE_FILE; an entry the walk no longer finds
+      unclaimed is STALE_UNCLAIMED_ENTRY, so the list can only shrink.
+    optional: true
+  - name: carried
+    type: list<CarriedDebt>
+    description: >-
+      The conformance findings this tree carries as declared debt, grouped by the reason that
+      explains them — the unclaimed list's shape, for findings about code a spec DOES claim. It is
+      not a second lint.allow: an allow says a finding is wrong here by design and means to live
+      forever, while an entry here says the finding is right and unpaid. Only a code a rule declares
+      carryable may appear (anything else is UNCARRYABLE_FINDING, an error), an entry carries a
+      finding only when it lists every unit that finding reports, and an entry that stops applying
+      is STALE_CARRIED_FINDING, so the register only shrinks.
+    optional: true
+  - name: testRoots
+    type: list<string>
+    description: >-
+      Project-relative directories holding this project's tests. Declaring none means no test scan
+      and no `testsToRevisit` on any write — opt-in on the same terms as `sourceRoots`, so a project
+      that never asked for it never pays for it. Separate from `sourceRoots` deliberately: tests are
+      not code the specs are expected to claim, and putting them in `sourceRoots` would make every
+      test file an UNCLAIMED_SOURCE_FILE.
+    optional: true
+  - name: requireCode
+    type: bool
+    description: >-
+      Opt-in strictness for teams that want CI to say "every designed component has code": every
+      implementation must have begun (some file it names exists). When true, SOURCE_FILE_PLANNED and
+      MISSING_SOURCE_PATH are reported at error, naming this setting, instead of as notices. Off by
+      default, so a design-only tree passes `validate --ci`. Code-conformance tuning like the rest
+      of `rules.conformance`: it enters the analyzer's digest, never the gate identity, so switching
+      it never stales a lock.
+    optional: true
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-19T10:44:18.090Z'
+updatedAt: '2026-10-06T10:07:20.733Z'

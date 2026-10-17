@@ -8,10 +8,10 @@ import { buildPack } from '@wairon/sdk';
 import { zipSync } from 'fflate';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import * as packs from '../../src/server/packs.js';
-import { AdminAuthError } from '../../src/server/admin.js';
+import { AdminAuthError } from '../../src/server/errors.js';
 import { UnauthenticatedError } from '../../src/server/errors.js';
 import { createPlacedProject, mintUserToken } from './helpers.js';
-import { loadProjectConfig } from '../../src/config/loader.js';
+import { loadProjectConfig } from '../../src/core/index.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { routeData } from '../../src/server/http.js';
 import { createWebSession } from '../../src/server/websessions.js';
@@ -55,7 +55,6 @@ function writeDeclarativeSource(name: string, version = '1.0.0'): string {
       'languages:',
       '  rust:',
       '    unsupportedFlow: {}',
-      '    foreignBuiltins: []',
       '',
     ].join('\n'),
   );
@@ -191,7 +190,7 @@ describe('hosted pack archive install (sdd_host)', () => {
 
       const root = path.join(dataDir, 'projects', 'demo');
       expect(fs.existsSync(path.join(root, '.wai', 'packs', 'acme-doctrine', 'pack.yaml'))).toBe(true);
-      const registered = runWithProjectRoot(root, () => loadProjectConfig()).extensions?.packs ?? [];
+      const registered = runWithProjectRoot(root, () => loadProjectConfig())?.extensions?.packs ?? [];
       expect(registered).toContain('.wai/packs/acme-doctrine');
 
       expect(packs.listProjectPacks(cfg, ADMIN, 'demo').map((p) => p.name)).toContain('acme-doctrine');

@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -10,28 +11,31 @@ import {
   findSystemRoot,
   getProjectRootOverride,
   setProjectRoot,
+  pathExists,
 } from '../utils/fs.js';
-import { loadSystemSpec } from '../core/specs.js';
-import { createChainedSubsystem } from '../core/provision.js';
-import type { SubsystemSpec } from '../models/index.js';
+import { writeYamlFile } from '../utils/yaml.js';
+import { AI_PATHS } from '../config/paths.js';
 import {
+  createProjectConfig,
+  projectConfigExists,
+  loadSystemSpec,
+  loadProjectConfig,
+  createMember,
+  defaultPackSelections,
+  ensureProjectInitialized,
+  // Through the core adapter, never ../utils/ai-guide.js: writing a tool's
+  // configuration file is sdd_core work, and init is an sdd_cli command.
   globalGuideFilePath,
   localGuideFilePath,
   injectGuide,
   writeRootGuideDelegator,
-} from '../utils/ai-guide.js';
-import { writeYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/loader.js';
-import {
-  defaultTargetConfig,
-  ARCHITECT_AGENT_ID,
-  ARCHITECT_TEMPLATE_ID,
-} from '../config/defaults.js';
-import { createAgentRecord, AgentRecord } from '../models/agent.js';
-import { ProjectConfig, TargetConfig } from '../models/project.js';
-import { loadTemplate, renderTemplateInstructions } from '../core/templates.js';
-import { getExporter } from '../exporters/index.js';
-import { syncContextFiles } from '../core/context.js';
+  syncContextFiles,
+} from './adapters/core.js';
+import { exportSddSkills } from './adapters/skills.js';
+import { reportMemberPacks } from './subsystem.js';
+import type { MemberCreation } from '../core/index.js';
+import { defaultTargetConfig } from '../config/defaults.js';
+import { ProjectConfig, TargetConfig, activeTargetTypes, declaredMembers, effectiveProjectId } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // init command
@@ -57,14 +61,28 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
   // Case (b): this very directory is already an initialized wairon project.
   if (ancestorRoot && path.resolve(ancestorRoot) === path.resolve(cwd)) {
     logger.info('Project already initialized.');
-    logger.info('Design your spec tree with the SDD architect skill, then run `wairon generate`.');
+    logger.info('Design your spec tree with the SDD architect skill, validate it, then run `wairon lock` to approve it.');
     return;
   }
 
-  // Case (c): cwd sits inside a parent wairon project → offer to make this
-  // directory an external subsystem of that parent instead of dead-ending.
+  // Every path below asks questions unless --yes. Without a terminal to ask
+  // them on, inquirer died with an ERR_USE_AFTER_CLOSE stack trace; say what
+  // to do instead, before anything is written.
+  if (!options.yes && !process.stdin.isTTY) {
+    throw new WaironError(
+      'Non-interactive shell: `wairon init` asks questions and there is no terminal to ask them on. '
+        + 'Re-run with --yes (-y) to use the defaults (project name from the directory, profile backend, '
+        + 'target claude). Nothing was written.',
+    );
+  }
+
+  // Case (c): a parent project binds this folder (the binding rule: inside the
+  // same repository, or across it only where the parent declares it). A
+  // project.yaml outside this folder is never edited without a question:
+  // --yes refuses with the exact commands, a terminal asks.
   if (ancestorRoot) {
-    await runInitAsExternalSubsystem(ancestorRoot, cwd, options);
+    if (options.yes) throw new WaironError(boundByParentMessage(ancestorRoot, cwd));
+    await runInitAsMember(ancestorRoot, cwd, options);
     return;
   }
 
@@ -78,107 +96,151 @@ export async function runInit(options: InitOptions = {}): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// External-subsystem branch: cwd is a subdirectory of an existing project
+// Member branch: cwd is a subdirectory of an existing project
 // ---------------------------------------------------------------------------
 
-async function runInitAsExternalSubsystem(
+/** A directory name as a member alias: lowercased, every character outside [a-z0-9-_] made a hyphen. */
+function memberAliasOf(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'member';
+}
+
+/** The two ways out of a folder a parent project binds: become its member, or become an independent repository. */
+function boundByParentCommands(parentRoot: string, cwd: string): string[] {
+  const relPath = (path.relative(parentRoot, cwd) || '.').split(path.sep).join('/');
+  const alias = memberAliasOf(path.basename(cwd));
+  return [
+    `make it a member project of that parent: cd "${parentRoot}" && wairon member add ${alias} ${relPath} --project`,
+    'or start an independent project here: make this folder its own repository (`git init`), then re-run `wairon init`',
+  ];
+}
+
+/** Step 6: the refusal under --yes — the project and root that bind this folder, and the exact commands. */
+function boundByParentMessage(parentRoot: string, cwd: string): string {
+  const [member, independent] = boundByParentCommands(parentRoot, cwd);
+  return `This folder is bound by the wairon project at ${parentRoot}, and --yes cannot answer whether it should join it — `
+    + 'init never edits a project.yaml outside this folder without asking. Nothing was written. To '
+    + `${member}; ${independent}.`;
+}
+
+async function runInitAsMember(
   parentRoot: string,
   cwd: string,
   options: InitOptions,
 ): Promise<void> {
-  const relPath = path.relative(parentRoot, cwd) || '.';
-  const defaultId = path.basename(cwd);
+  const relPath = (path.relative(parentRoot, cwd) || '.').split(path.sep).join('/');
+  const defaultAlias = memberAliasOf(path.basename(cwd));
 
-  logger.info(`Detected a parent wairon project at ${parentRoot}`);
+  logger.info(`Detected a parent wairon project at ${parentRoot} — it binds this folder.`);
   logger.info(`This directory ("${relPath}") is not yet a wairon project.`);
 
+  // Steps 7-9: ask (yes edits the parent's project.yaml, outside this folder),
+  // and stop without changes when declined.
   if (!options.yes) {
     const { proceed } = await inquirer.prompt<{ proceed: boolean }>([
       {
         type: 'confirm',
         name: 'proceed',
-        message: `Create "${relPath}" as an external subsystem of the parent project?`,
-        default: true,
+        message: `Create "${relPath}" as a member project of the parent project? (edits ${path.join(parentRoot, '.wai', 'project.yaml')})`,
+        default: false,
       },
     ]);
     if (!proceed) {
       logger.info('Cancelled — no changes made.');
-      logger.info('To design this subproject, add it from the parent with `wairon subsystem add` or the SDD tools.');
+      for (const line of boundByParentCommands(parentRoot, cwd)) logger.info(`To ${line}.`);
       return;
     }
   }
 
-  let subsystemId = defaultId;
+  let alias = defaultAlias;
   if (!options.yes) {
     const { id } = await inquirer.prompt<{ id: string }>([
       {
         type: 'input',
         name: 'id',
-        message: 'Subsystem id:',
-        default: defaultId,
+        message: 'Member alias (also its project id):',
+        default: defaultAlias,
       },
     ]);
-    subsystemId = id?.trim() || defaultId;
+    alias = memberAliasOf(id?.trim() || defaultAlias);
   }
 
-  // Resolve the parent system name and wire the subsystem against the PARENT
-  // root, while createChainedSubsystem provisions this directory as the child.
+  // Everything below runs against the PARENT root: the member is declared
+  // there, and this directory is scaffolded as its project.
   const prevOverride = getProjectRootOverride();
   setProjectRoot(parentRoot);
+  let creation: MemberCreation;
   try {
+    // Step 10: the parent's system spec; a parent without one is refused.
     const system = loadSystemSpec();
     if (!system) {
       throw new WaironError(`Parent project at ${parentRoot} has no system spec.`);
     }
-    const now = new Date().toISOString();
-    const subsystem: SubsystemSpec = {
-      id: subsystemId,
-      name: subsystemId,
-      description: `External subsystem ${subsystemId}`,
-      parentSystem: system.name,
-      publicInterfaces: [],
-      projectPath: relPath,
-      trustedLinks: [],
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-    };
-    createChainedSubsystem(subsystem, subsystemId);
+    // Step 11: the members the parent already declares — a re-run finds this
+    // directory under the alias it was declared with.
+    const config = loadProjectConfig();
+    const declared = config ? declaredMembers(config).find((m) => m.path === relPath) : undefined;
+    // Step 12: the member — its alias and its path from the parent root.
+    if (declared) alias = declared.alias;
+    // Step 13: scaffold this directory's project and declare it in the
+    // parent's `members`; no L1 spec is written into the parent.
+    creation = createMember(alias, relPath, undefined, 'project');
   } finally {
     setProjectRoot(prevOverride);
   }
 
-  logger.success(`Created "${subsystemId}" as an external subsystem of the parent project.`);
-  logger.info(`Wired the parent (projectPath: ${relPath}) and scaffolded this directory as a child wairon project.`);
-  logger.info(`Design its spec tree from the parent using namespaced ids (e.g. ${subsystemId}::<component>).`);
+  // Step 14: the member was created.
+  logger.success(`Created "${relPath}" as the member "${alias}" of the parent project.`);
+  logger.info(`Declared it in the parent's project.yaml \`members\` and scaffolded this directory as its project (id "${alias}").`);
+  // What scaffolding applied: the parent's required packs, the projectType, and
+  // each requirement nothing installed satisfies — as `wairon member add` states it.
+  reportMemberPacks(creation);
+  logger.info(`Design it from here, and export what the parent consumes from its L0; the parent references it as ${alias}::<name>.`);
 }
 
 // ---------------------------------------------------------------------------
 // Non-interactive (--yes) path: sensible defaults, no prompts
 // ---------------------------------------------------------------------------
 
+/**
+ * The name a new project defaults to: the one the folder's own manifest
+ * already gives it — package.json's `name` (its npm scope dropped), else
+ * Cargo.toml's `[package] name` — and the folder's name when it has none.
+ */
+function defaultProjectNameAt(cwd: string): string {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8')) as { name?: unknown };
+    if (typeof pkg.name === 'string' && pkg.name.trim() !== '') return pkg.name.trim().replace(/^@[^/]+\//, '');
+  } catch { /* no package.json, or not JSON */ }
+  try {
+    const cargo = fs.readFileSync(path.join(cwd, 'Cargo.toml'), 'utf8');
+    const section = cargo.split(/^\[/m).find((s) => s.startsWith('package]'));
+    const name = section?.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+    if (name) return name;
+  } catch { /* no Cargo.toml */ }
+  return path.basename(cwd);
+}
+
 async function runInitNonInteractive(): Promise<void> {
   const cwd = process.cwd();
-  const projectName = path.basename(cwd);
+  const projectName = defaultProjectNameAt(cwd);
   const now = new Date().toISOString();
 
-  // Claude and Antigravity are active by default
-  const targets: TargetConfig[] = [defaultTargetConfig('claude'), defaultTargetConfig('agy')];
+  // Claude only: a tool nobody chose gets no files. Another target is one
+  // `wairon init` question (interactive) or a project.yaml `targets` entry away.
+  const targets: TargetConfig[] = [defaultTargetConfig('claude')];
   const projectConfig = buildProjectConfig(projectName, targets, now, 'backend');
 
   const guidePlan: AiGuidePlan = {
     claudeGlobal: false,
     claudeLocal: true,
     geminiGlobal: false,
-    geminiLocal: true,
+    geminiLocal: false,
   };
 
   await executeInit(
     projectName,
-    targets,
     projectConfig,
     guidePlan,
-    now,
   );
 
   logger.success(`Project "${projectName}" initialized (non-interactive).`);
@@ -191,7 +253,7 @@ async function runInitNonInteractive(): Promise<void> {
 
 async function runInitInteractive(): Promise<void> {
   const cwd = process.cwd();
-  const defaultProjectName = path.basename(cwd);
+  const defaultProjectName = defaultProjectNameAt(cwd);
 
   // ------------------------------------------------------------------
   // Phase 1 — Project name
@@ -292,12 +354,12 @@ async function runInitInteractive(): Promise<void> {
     geminiLocal: false,
   };
 
-  const activeTargetTypes = targets.map((t) => t.type);
+  const selectedTypes = targets.map((t) => t.type);
 
-  if (activeTargetTypes.includes('claude')) {
+  if (selectedTypes.includes('claude')) {
     guidePlan.claudeLocal = true;
   }
-  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+  if (selectedTypes.includes('gemini') || selectedTypes.includes('agy')) {
     guidePlan.geminiLocal = true;
   }
 
@@ -311,7 +373,7 @@ async function runInitInteractive(): Promise<void> {
   console.log(`  ${chalk.bold('Project:')}  ${projectName}`);
   console.log(`  ${chalk.bold('Profile:')}  ${projectType}`);
   console.log(`  ${chalk.bold('Targets:')}  ${targets.map((t) => t.type).join(', ')}`);
-  console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${activeTargetTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
+  console.log(`  ${chalk.bold('Guide:')}    Auto-inject local AI rules card (${selectedTypes.filter(t => ['claude', 'gemini', 'agy'].includes(t)).join(', ') || 'none'})`);
   logger.blank();
 
   const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
@@ -337,10 +399,8 @@ async function runInitInteractive(): Promise<void> {
 
   await executeInit(
     projectName,
-    targets,
     projectConfig,
     guidePlan,
-    now,
   );
 }
 
@@ -348,12 +408,24 @@ async function runInitInteractive(): Promise<void> {
 // Execution — creates all files after confirmation
 // ---------------------------------------------------------------------------
 
+/**
+ * Write wairon's block of one target's repository-root pointer file and say
+ * what happened: a new file created, or the block written into the user's own
+ * file with every line of theirs kept (ai_tool_guide.writeDelegator never
+ * deletes text a person wrote there).
+ */
+function rootPointer(projectRoot: string, target: string, file: string, what: string): void {
+  const existed = pathExists(path.join(projectRoot, file));
+  writeRootGuideDelegator(projectRoot, target);
+  logger.success(existed
+    ? `Wrote wairon's block into the existing root ${file} (${what}) — your own text in it is kept as it was`
+    : `Created root ${file} ${what}`);
+}
+
 async function executeInit(
   projectName: string,
-  targets: TargetConfig[],
   projectConfig: ProjectConfig,
   guidePlan: AiGuidePlan,
-  now: string,
 ): Promise<void> {
   const projectRoot = fromProjectRoot();
   const cwd = process.cwd();
@@ -367,62 +439,36 @@ async function executeInit(
   ensureDir(AI_PATHS.rulesDir());
   ensureDir(AI_PATHS.docsDir());
   ensureDir(AI_PATHS.generatedDir());
+  // The spec tree's write lock (.wai/.spec-write.lock) is a file of the moment,
+  // never of the design: ignored by .wai's own .gitignore, so a team that
+  // commits .wai/ wholesale never commits one a crashed session left behind.
+  ignoreWriteLock();
 
-  writeYamlFile(AI_PATHS.projectConfig(), projectConfig);
-
-  // Agents (including domain owners) are derived from the SDD spec tree and the
-  // free-standing domains in .wai/topology.yaml at read time — nothing persisted here.
-  const activeTargetTypes = targets
-    .filter((t) => !('enabled' in t) || t.enabled)
-    .map((t) => t.type);
-
-  // The architect agent is generated as a file directly below. All other agents
-  // are derived from the SDD spec tree at read time (resolveAgentTopology), so
-  // no agents.json is persisted.
-  const architectAgent = createAgentRecord({
-    id: ARCHITECT_AGENT_ID,
-    name: 'Agent Architect',
-    description: 'Responsible for managing the AI agent topology of this project using the wairon CLI.',
-    template: ARCHITECT_TEMPLATE_ID,
-    ownedPaths: ['.wai/**'],
-    tags: ['meta', 'architect'],
-    creationReason: 'Bootstrapped by wairon init as the root agent for topology management.',
-    targets: activeTargetTypes as AgentRecord['targets'],
-  });
-
-  // Generate architect agent file into each target
-  logger.info('Generating architect agent files...');
-  let template;
-  try {
-    template = loadTemplate(ARCHITECT_TEMPLATE_ID);
-  } catch {
-    logger.warn('Built-in "architect" template not found — skipping architect generation.');
-    template = null;
+  // Complete only what is missing. runInit's early return looks for the spec
+  // tree, so a half-finished init reaches here with its configuration in place;
+  // that configuration is kept exactly as it is.
+  const hadConfig = projectConfigExists();
+  if (!hadConfig) {
+    // A NEW configuration seeds the store packs that declare `applyByDefault`, and
+    // records the machine-wide decision explicitly. This is what a machine-wide
+    // install should mean: a default for projects created from now on, written
+    // where it is visible in review and removable — not retroactive authority over
+    // projects that never mentioned it. A kept configuration reads no packs.
+    createProjectConfig({
+      ...projectConfig,
+      extensions: {
+        packs: defaultPackSelections(),
+        useGlobalPacks: false,
+      },
+    });
+  } else {
+    logger.info('Kept the existing .wai/project.yaml.');
   }
 
-  if (template) {
-    const vars: Record<string, string> = {
-      agentId: architectAgent.id,
-      agentName: architectAgent.name,
-      agentDescription: architectAgent.description,
-      ownedPaths: architectAgent.ownedPaths.join('\n'),
-      tags: architectAgent.tags.join(', '),
-    };
-    const renderedInstructions = renderTemplateInstructions(template, vars);
-
-    for (const targetConfig of targets) {
-      const exporter = getExporter(targetConfig);
-
-      const result = exporter.export({
-        agent: architectAgent,
-        template,
-        renderedInstructions,
-        projectRoot,
-        target: targetConfig,
-      });
-      logger.success(`Generated: ${path.relative(cwd, result.outputPath)}`);
-    }
-  }
+  // No agent file is written here: agents are live briefs resolved from the spec
+  // tree at read time, and `wairon generate` writes agent files only when
+  // rules.materializeAgentFiles is on.
+  const targetTypes = activeTargetTypes(projectConfig);
 
   // Starter docs + rules
   writeStarterDocs(projectName);
@@ -440,8 +486,7 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'claude')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
-    writeRootGuideDelegator(projectRoot, 'claude');
-    logger.success(`Created root CLAUDE.md delegator pointing to .claude/CLAUDE.md`);
+    rootPointer(projectRoot, 'claude', 'CLAUDE.md', 'pointing to .claude/CLAUDE.md');
   }
   if (guidePlan.geminiGlobal) {
     const p = globalGuideFilePath('gemini')!;
@@ -452,65 +497,59 @@ async function executeInit(
     const p = localGuideFilePath(projectRoot, 'gemini')!;
     injectGuide(p, 'local');
     logger.success(`Injected wairon guide into ${path.relative(cwd, p)}`);
-    writeRootGuideDelegator(projectRoot, 'gemini');
-    logger.success(`Created root GEMINI.md delegator pointing to .gemini/GEMINI.md`);
+    rootPointer(projectRoot, 'gemini', 'GEMINI.md', 'carrying the wairon guide');
   }
 
   // Root instructions/rules for other targets if active
-  if (activeTargetTypes.includes('cursor')) {
-    writeRootGuideDelegator(projectRoot, 'cursor');
-    logger.success(`Created root .cursorrules pointing to .cursor/rules/`);
+  if (targetTypes.includes('cursor')) {
+    rootPointer(projectRoot, 'cursor', '.cursorrules', 'pointing to .cursor/rules/');
   }
-  if (activeTargetTypes.includes('copilot')) {
-    writeRootGuideDelegator(projectRoot, 'copilot');
-    logger.success(`Created root .github/copilot-instructions.md pointing to .github/prompts/`);
+  if (targetTypes.includes('copilot')) {
+    rootPointer(projectRoot, 'copilot', '.github/copilot-instructions.md', 'pointing to .github/prompts/');
   }
-  if (activeTargetTypes.includes('codex')) {
-    writeRootGuideDelegator(projectRoot, 'codex');
-    logger.success(`Created root .codexrules pointing to .codex/agents/`);
+  if (targetTypes.includes('codex')) {
+    rootPointer(projectRoot, 'codex', '.codexrules', 'pointing to .codex/agents/');
   }
 
   // Register MCP server locally for Claude Code target
-  if (activeTargetTypes.includes('claude')) {
+  if (targetTypes.includes('claude')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-      await runMcpInstall({ global: false, backend: 'claude' });
+      runMcpInstall({ global: false, backend: 'claude' });
     } catch (err) {
       logger.warn(`Failed to automatically register MCP server for Claude: ${err}`);
     }
   }
 
-  // Register MCP server for Antigravity (agy) target — project-local only.
-  // Global registration ($HOME) is opt-in via `wairon mcp install --global`.
-  if (activeTargetTypes.includes('gemini') || activeTargetTypes.includes('agy')) {
+  // Register only what a selected tool reads. The project .gemini/settings.json
+  // is the Gemini CLI's; Antigravity (agy) reads MCP servers ONLY from its
+  // machine-wide mcp_config.json, which init never writes (global registration
+  // is opt-in) — so for an agy target, say how to register instead of writing a
+  // project file it ignores and then warning that it is ignored.
+  if (targetTypes.includes('gemini')) {
     try {
       const { runMcpInstall } = require('./mcp.js') as typeof import('./mcp.js');
-      await runMcpInstall({ backend: 'gemini', global: false });
+      runMcpInstall({ backend: 'gemini', global: false });
     } catch (err) {
-      logger.warn(`Failed to automatically register MCP server for Antigravity: ${err}`);
+      logger.warn(`Failed to automatically register MCP server for the Gemini CLI: ${err}`);
     }
+  } else if (targetTypes.includes('agy')) {
+    logger.info(
+      'Antigravity (agy) reads MCP servers only from its machine-wide ~/.gemini/antigravity-cli/mcp_config.json, '
+        + `which init does not write. To give it the wairon tools: ${chalk.bold('wairon mcp install --backend gemini --global')}`,
+    );
   }
 
   // Seed the context directory with auto-generated files (domains.md + wairon-guide.md)
   syncContextFiles();
   logger.verbose('Context files seeded in .wai/context/');
 
-  // Bootstrap L0 System Spec and export SDD Skills for AI toolings
+  // Bootstrap the L0 system spec through core — completing only what is missing,
+  // the same bootstrap every chained subproject gets — then export the SDD skills
+  // for this init's targets.
   try {
-    const { saveSystemSpec } = require('../core/specs.js') as typeof import('../core/specs.js');
-    saveSystemSpec({
-      schemaVersion: '1.0.0',
-      name: projectName,
-      vision: `Core vision for ${projectName}`,
-      boundaries: [],
-      globalRequirements: [],
-      databases: [],
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const { exportSddSkills } = require('../core/skills.js') as typeof import('../core/skills.js');
-    const skillsResult = exportSddSkills(activeTargetTypes);
+    ensureProjectInitialized(projectName);
+    const skillsResult = exportSddSkills(targetTypes);
     logger.success(`Bootstrapped SDD spec system and installed SDD skills into ${skillsResult.destinations.length} target(s).`);
   } catch (err) {
     logger.warn(`Failed to bootstrap SDD Specs: ${String(err)}`);
@@ -522,16 +561,19 @@ async function executeInit(
   logger.blank();
   logger.info('What was created:');
   logger.info('  .wai/               — source of truth for agent topology');
-  logger.info('  .wai/project.yaml   — project config');
+  if (!hadConfig) logger.info('  .wai/project.yaml   — project config');
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
+  logger.info('  .wai/.gitignore     — keeps the spec write lock (.spec-write.lock) out of git');
+  if (hadConfig) logger.info('Kept .wai/project.yaml as it was (not recreated).');
   logger.blank();
   logger.info('Next steps:');
   logger.info('  Edit .wai/context/project.md — describe the project concept and stack details for the AI');
-  logger.info('  wairon status               — view the architecture completeness dashboard');
-  logger.info('  wairon validate             — check the spec tree & component boundaries');
   logger.info('  Design your spec tree with the SDD architect skill or the wairon MCP sdd_* tools');
+  logger.info('  wairon status               — view the spec tree, its authoring readiness and approval state');
+  logger.info('  wairon validate             — check the spec tree & component boundaries');
+  logger.info('  wairon lock                 — approve the validated design (commit .wai/lock.json); `wairon lock-check` gates CI on it');
   logger.blank();
 }
 
@@ -539,23 +581,56 @@ async function executeInit(
 // Helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * The id a new project starts with: its name slugified, or — when the id
+ * grammar refuses that slug (a Windows device name, the reserved `super`) or
+ * the name yields none — the slug with `-project` appended (`project` for an
+ * empty one), with one line saying why the name was not usable as it is.
+ */
+export function initialProjectId(name: string): string {
+  const id = effectiveProjectId({ name });
+  if (id !== null) return id;
+  const slug = name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '').replace(/[^a-z0-9]+$/, '').slice(0, 48);
+  const fallback = effectiveProjectId({ name: slug ? `${slug}-project` : 'project' }) ?? 'project';
+  logger.warn(`The name "${name}" gives no usable project id (${slug ? `"${slug}" is a name the id grammar refuses — a device name or a reserved word` : 'it holds no letter or digit'}), so the project id is "${fallback}". Change it with \`wairon project rename <id>\` before anything else consumes it.`);
+  return fallback;
+}
+
+/** Compose a new project's configuration. Its pack selections are seeded only
+ *  when the configuration is actually created (see executeInit). */
 function buildProjectConfig(
   name: string,
   targets: TargetConfig[],
   now: string,
   projectType: 'backend' | 'frontend-reactive' | 'frontend-controller' | 'lowlevel-os' | 'game-ecs' | 'realtime-embedded' | 'plc-cyclic' | 'fullstack',
 ): ProjectConfig {
+  // The project's id is its name slugified; a slug the id grammar refuses (a
+  // device name such as con, the reserved `super`, nothing at all) takes
+  // `-project`, said once, so a new project never starts without an id.
+  const id = initialProjectId(name);
   return {
     schemaVersion: '1.0.0',
+    id,
     name,
     projectType,
     targets,
+    // New projects start with budgets off — the same output a project got
+    // before execution budgets existed. Opt in with `execution.tier`.
+    execution: { tier: 'off', overrides: {} },
     rules: {
       noOverlappingOwnership: true,
       requireOwnedPaths: true,
       metaAgentTags: ['meta', 'guardian', 'architect'],
       enforceReproducibility: true,
-      generateComponentImplementers: true,
+      // Off by default (matches the schema + subproject provisioning): one owner
+      // agent per subsystem is the file granularity; component-level delegation
+      // is served as live MCP briefs. Per-component implementer FILES are a
+      // legacy escape hatch — opt in with `true` on small trees only.
+      generateComponentImplementers: false,
+      // Off by default too: `init` (and every default `generate`) writes NO
+      // agent files — agents are served as live briefs, and files are the
+      // opt-in materialized view of the same briefs.
+      materializeAgentFiles: false,
       sddRuleSeverity: {},
     },
     paths: {
@@ -577,9 +652,7 @@ Describe the overall agent strategy for this project here. See also [.wai/phased
 
 ## Agents
 
-| ID | Template | Purpose |
-|----|----------|---------|
-| agent-architect | architect | Manages agent topology using the wairon CLI |
+Agents are live briefs resolved from the spec tree (\`.wai/specs/\`) whenever they are needed — an AI tool fetches one through the \`sdd_get_agent_brief\` MCP tool, and \`wairon list\` shows the current topology. \`wairon generate\` writes agent files only when \`rules.materializeAgentFiles\` is on in \`.wai/project.yaml\`.
 
 ## Decisions
 
@@ -616,11 +689,13 @@ Define the non-negotiable architectural guardrails here. The AI agent must follo
 
 *   [ ] **Primary Language & Runtime:** Node.js (TypeScript) / Python / etc.
 *   [ ] **Architectural Style:** Clean Architecture / Hexagonal / Domain-Driven Design (DDD).
-*   [ ] **Data Persistence Rules:** E.g. No raw SQL in controllers; all DB operations must use a \`Store\` / \`Repository\`.
-*   [ ] **Stereotype Dependencies:**
-    *   \`Store\` components can only call other \`Stores\` or \`Registries\`.
-    *   \`Adapter\` components cannot depend on \`Orchestrators\` or \`Stores\` directly.
-    *   Only \`Portal\` components can accept external traffic.
+*   [ ] **Data Persistence Rules:** E.g. No raw SQL in controllers; held state lives in a data component — the recommended \`Repository\` (owning its \`Store\`, \`Registry\`, \`Index\`es and \`Query\`s), or a deliberately standalone \`Store\` for genuinely simple state.
+*   [ ] **Stereotype Dependencies** (enforced by \`sdd_validate_tree\`):
+    *   Only \`Portal\` components accept external traffic; a gateway is a \`Portal\` with the \`gateway\` variant.
+    *   A \`Portal\` never depends on a \`Store\`, \`Registry\` or \`Adapter\`. Its reads may go through a \`Repository\` / \`Index\` facade; every write routes through an \`Orchestrator\`.
+    *   State never lives as fields inside an \`Orchestrator\`; logic is an \`Orchestrator\` (\`dependencyClass: pure | read\` bounds what it may depend on).
+    *   A \`Registry\` and an \`Index\` depend on the \`Store\` they read; a \`Store\` may use an \`Adapter\` as its backend.
+    *   Outbound calls to third parties go through an \`Adapter\`.
 
 ---
 
@@ -633,15 +708,16 @@ Define the non-negotiable architectural guardrails here. The AI agent must follo
 
 ---
 
-## Stage 3: Ingress/Egress Portals (Level 2 & Level 3)
+## Stage 3: Ingress Portals & Outbound Adapters (Level 2 & Level 3)
 
-Portals are the boundaries of your subsystems. Define how requests enter and leave.
+Portals are where requests enter a subsystem; Adapters are where calls leave it.
 
 *   [ ] **Define Ingress Portals (REST / gRPC / MessageBus):**
     *   *AI Action:* Create L2 Portal components with \`status: draft\` and map their L3 interfaces.
-    *   *Design check:* Ensure HTTP endpoints (method, path) or gRPC names are correctly declared in the method bindings.
-*   [ ] **Define Egress Portals (Clients / Publishers):**
-    *   *AI Action:* Declare any external event publishing or client communication Portals.
+    *   *Design check:* Bind each method's wire endpoint with \`sdd_set_endpoints\`, and give every Portal its \`transport\`; a Portal that callers outside the design reach declares a Portal-level \`invokedBy\` entry.
+    *   *Design check:* A subsystem another subsystem calls lists those callers in its \`publicInterfaces[].consumers\`.
+*   [ ] **Define Outbound Adapters (third-party clients / publishers):**
+    *   *AI Action:* Declare an \`Adapter\` for each external API, database driver or event publisher the subsystem calls.
 
 ---
 
@@ -666,13 +742,13 @@ Map the behavior step-by-step.
 
 ---
 
-## Stage 6: Sandbox Implementation
+## Stage 6: Approval & Implementation
 
-Once the specs are clean and compiled, mark the components as \`status: complete\` to lock them, then generate the agents and write code!
+Once the specs validate cleanly, the human approves the design with \`wairon lock\`; implementation starts from the approved design.
 
 *   [ ] **Validation Check (AI):** Call the \`sdd_validate_tree\` MCP tool (must return 0 errors).
-*   [ ] **Agent Generation (human):** The developer runs \`wairon generate\` from their terminal to instantiate agent sandboxes — the AI does not run this.
-*   [ ] **Code Implementation:** Let the agent implement the component code matching the narrative.
+*   [ ] **Approval (human):** The developer runs \`wairon lock\` from their terminal and commits \`.wai/lock.json\` — the AI does not run this. The lock records the approval; it does not rewrite spec files or their \`status\`. \`wairon lock-check\` gates merges on it in CI.
+*   [ ] **Code Implementation (AI):** Confirm \`sdd_get_status\` reports the design approved, then delegate each component via the \`sdd-delegate\` skill (live briefs from \`sdd_get_agent_brief\`); code must match the L3 interfaces and L5 narratives.
 `;
   // Written verbatim: AI steps reference MCP tools; the one CLI step is explicitly
   // human-run, so `wairon` stays literal (no dev-path substitution).
@@ -694,4 +770,23 @@ A new project initialized with Wairon.
 - Refrain from writing code implementation until specifications are approved.
 `;
   writeFile(AI_PATHS.contextProjectMd(), content);
+}
+
+/** The line .wai/.gitignore carries so the spec tree's write lock is never committed. */
+const WRITE_LOCK_IGNORE = '.spec-write.lock';
+
+/**
+ * Step 15 of runInit: .wai/.gitignore ignoring the spec tree's write lock —
+ * created when absent, the line added when the file lacks it, anything else
+ * in it kept. Inside .wai, so it covers the project whether or not it keeps a
+ * root .gitignore, and travels with .wai/ wherever that is committed.
+ */
+function ignoreWriteLock(): void {
+  const file = path.join(AI_PATHS.root(), '.gitignore');
+  const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return;
+  const body = held === null
+    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
+    : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${WRITE_LOCK_IGNORE}\n`;
+  writeFile(file, body);
 }

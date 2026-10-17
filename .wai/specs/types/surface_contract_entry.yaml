@@ -9,7 +9,9 @@ description: >-
 fields:
   - name: id
     type: string
-    description: Stable public interface id (matches the producing system's L0 entry).
+    description: >-
+      The entry's public name in the producing project's export table (`as`, else the legacy L0 id,
+      else the narrowed interface, else the component).
     optional: false
     key: primary
   - name: name
@@ -31,13 +33,13 @@ fields:
     description: Local name of the backing Portal in the producing project (informational for consumers).
     optional: false
   - name: methods
-    type: object[]
+    type: list<any>
     description: >-
       Full contract methods: name, description, signature, params, returns, guarantees, effect,
       endpoint.
     optional: false
   - name: dispatch
-    type: DispatchBinding[]
+    type: list<DispatchBinding>
     description: >-
       The backing portal's capability dispatch table, when it is a generic-dispatch portal — carries
       the per-capability typing.
@@ -67,6 +69,68 @@ fields:
       The backing Portal's basePath, projected onto the entry so the codec can emit this portal's
       OpenAPI `servers`.
     optional: true
-methods: []
+  - name: componentType
+    type: string
+    description: >-
+      Stereotype of the backing component (a consumable entry is a Portal — a gateway is a Portal
+      variant — or an Observer for an event surface), carried so a consumer applies the same
+      boundary rule the producer's tree would. Absent on snapshots written before exports carried
+      it.
+    optional: true
+  - name: interface
+    type: string
+    description: >-
+      The L3 interface the export narrows to, when it narrows; two narrowings of one component are
+      distinct contracts.
+    optional: true
+  - name: formerly
+    type: list<string>
+    description: >-
+      The former public names of the entry, from the producer's rename trace: the narrowed
+      interface's previousIds, else the backing component's, when the public name is the one that id
+      gives (an export renamed with `as` keeps its public name through a rename, and carries none).
+      Each method entry likewise carries its own `formerly` — the method names in its previousNames
+      — when it was renamed. Carried into the pin snapshot and the surface export, so the consumer
+      check, a generator and a reader can follow a rename instead of reading a delete plus an add;
+      provenance, never signature, so it enters neither memberDigest nor contentDigest and no
+      existing pin moves. Absent when never renamed.
+    optional: true
+  - name: transport
+    type: string
+    description: >-
+      The backing Portal's transport. A consumer reads it to tell a library (InProcess, called
+      directly by any component) from a network or local surface (called through an Adapter); absent
+      on snapshots written before it was carried, read then as the entry's derived kind
+    optional: true
+  - name: abi
+    type: string
+    description: 'The backing InProcess Portal''s abi, when it declares one: how a foreign language links it'
+    optional: true
+  - name: role
+    type: string
+    description: >-
+      The entry's export role, call (the default) or implement: an extension point the consumer
+      implements
+    optional: true
+  - name: retired
+    type: list<string>
+    description: >-
+      On a PINNED snapshot only: the method names an earlier pin of this entry held that the
+      producer has since removed — gone from the entry, and named in no method's `formerly` (a
+      rename is not a removal). Written by `wairon externals pin` from the snapshot it replaces,
+      carried forward while the name stays absent, so a consumer's binding module still declaring a
+      removed verb is told it was removed instead of reading the declaration as its own plumbing.
+      Provenance: it enters no digest, no carried fact and no drift comparison; a fresh projection
+      never carries it.
+    optional: true
+methods:
+  - name: sameContract
+    signature: 'sameContract(other: SurfaceContractEntry): boolean'
+    returns: bool
+    description: >-
+      Whether two entries carry the same contract: the same backing component by local name, the
+      same methods and the same dispatch table, so whichever judges an edge the verdict is the same
+    sourcePath: src/models/surface-references.ts
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:38.492Z'
-updatedAt: '2026-07-23T15:53:56.510Z'
+updatedAt: '2026-10-08T18:47:56.734Z'

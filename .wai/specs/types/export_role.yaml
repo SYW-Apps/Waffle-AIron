@@ -1,0 +1,19 @@
+kind: enum
+id: export_role
+name: ExportRole
+description: >-
+  What consumers do with an exported contract: call it, or implement it. An implement export is an
+  extension point (a trait, a callback, a webhook contract). Its backing component may be an Adapter
+  whose realization consumers supply. A consumer's interface realizes it with `implements:
+  alias::name` (IMPLEMENTS_MISMATCH), and its methods count as reached because the producer calls
+  them.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: call
+    description: Consumers call the contract (the default)
+  - name: implement
+    description: Consumers implement the contract and the producer calls their implementation
+createdAt: '2026-10-06T12:53:39.401Z'
+updatedAt: '2026-10-06T12:53:40.197Z'

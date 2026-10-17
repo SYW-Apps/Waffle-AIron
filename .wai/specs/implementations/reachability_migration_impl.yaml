@@ -1,0 +1,151 @@
+id: reachability_migration_impl
+name: Reachability Migration Implementation
+description: The migration in its own module, beside the stereotype migration it mirrors.
+contract: ireachability_migration
+sourcePath: src/core/reachability-migration.ts
+methods:
+  - name: migrate
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the retired forms the scan recorded, with what each stored spec held; a contained
+          member's facts (keyed under its namespace) are its own doctor's and are left out
+        type: call
+        targetComponent: spec_loader
+        targetMethod: retiredReachFacts
+      - stepNumber: 2
+        description: >-
+          Load every component spec: the Portals to retype, the listeners and the Portals they
+          mounted
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 3
+        description: 'Load every interface spec: the invokedBy kinds and endpoints of each Portal''s verbs'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 4
+        description: 'Load every implementation spec: the one a mounted Portal''s router moves onto'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 5
+        description: 'Load every subsystem spec: the L1 export tables'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 6
+        description: 'Load the system spec: the L0 export table'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 7
+        description: 'Load every type spec: a lint allow can sit on a type too'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 8
+        description: >-
+          Plan the transports: each portalType becomes transport (HTTP_API as HTTP); a Custom Portal
+          that binds no endpoint on any verb, or whose Custom addresses all name in-process calls,
+          becomes InProcess, its addresses dropped and reported as symbol hints
+        type: local
+      - stepNumber: 9
+        description: >-
+          Plan the listeners: for each listener's mounts, a Portal-level entry (kind entry, scope
+          outside, the caller naming the listener and the prefixes it routed) on the listener and on
+          every Portal it mounted that declares none; each mount's via as the mounted Portal
+          implementation's router (a different router already there, or no implementation, is
+          reported); each HTTP endpoint outside every prefix of its mounts reported. A Portal that
+          declares mounts but mounts nothing is no listener: the field goes and it gets no entry. A
+          Portal neither a listener nor mounted gets no entry
+        type: local
+      - stepNumber: 10
+        description: >-
+          Plan the invokedBy kinds: external becomes entry on a Portal and runtime elsewhere,
+          keeping its caller prose; sibling-subsystem is reported (model the call), never rewritten
+        type: local
+      - stepNumber: 11
+        description: >-
+          Plan the export types: an authored L1 or L0 type that equals the backing Portal's
+          transport.exportKind() (after the transport rewrite) is dropped, one that differs or has
+          no backing Portal is reported
+        type: local
+      - stepNumber: 12
+        description: >-
+          Plan the lint allows on every own spec: each allow of a retired code is removed, and an
+          allow of MISSING_PORTAL_TYPE is rekeyed to MISSING_PORTAL_TRANSPORT
+        type: local
+      - stepNumber: 13
+        description: 'Without apply, nothing is written: the plan is the rehearsal of exactly what apply writes'
+        type: branch
+        condition: apply is true and the plan has a rewrite
+        onFalseStep: 23
+      - stepNumber: 14
+        label: write
+        description: >-
+          Write each rewritten spec once, through the store's own writers, told to retire the forms
+          rather than carry them back
+        type: loop
+        loopKind: forEach
+        over: >-
+          the specs the plan rewrites, components first, then interfaces, implementations,
+          subsystems, types and the system
+        endStep: 21
+      - stepNumber: 15
+        description: Which writer?
+        type: switch
+        'on': the spec's kind
+        cases:
+          - value: component
+            step: 16
+          - value: interface
+            step: 18
+        defaultStep: 20
+      - stepNumber: 16
+        label: component
+        description: Save the rewritten component (transport, Portal-level entry, no mounts, no portalType)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 17
+        description: On to the next spec
+        type: jump
+        toStep: 14
+      - stepNumber: 18
+        label: interface
+        description: Save the rewritten interface (invokedBy kinds, dropped in-process addresses)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 19
+        description: On to the next spec
+        type: jump
+        toStep: 14
+      - stepNumber: 20
+        label: other
+        description: >-
+          Save any other rewritten spec (an implementation's router, an export table's dropped
+          types, a lint allow)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 21
+        label: writeEnd
+        description: Done with this spec
+        type: local
+      - stepNumber: 22
+        description: Invalidate the spec cache, so the next scan reads the migrated tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 23
+        label: answer
+        description: Answer the plan, applied or not, with what it reports instead of writing
+        type: return
+        outcome: ReachabilityMigrationPlan
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:07:22.189Z'
+updatedAt: '2026-10-06T18:30:58.384Z'

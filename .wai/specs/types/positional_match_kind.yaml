@@ -1,0 +1,23 @@
+kind: enum
+id: positional_match_kind
+name: PositionalMatchKind
+description: What a bare reference matched by position in the family.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/position-reader.ts
+values:
+  - name: import
+    description: >-
+      A bare name another project supplies: plan the import, and the export and the external when
+      missing
+  - name: self-prefix
+    description: 'The consumer''s own id used as a prefix: rewrite to the bare local id'
+  - name: ambiguous
+    description: >-
+      The name keys onto public names or types of several projects: a person picks; reported, never
+      guessed
+  - name: none
+    description: 'Nothing in the family matches: a genuine dangling reference'
+createdAt: '2026-10-04T23:33:59.819Z'
+updatedAt: '2026-10-04T23:34:00.284Z'

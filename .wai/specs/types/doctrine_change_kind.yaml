@@ -1,0 +1,34 @@
+kind: enum
+id: doctrine_change_kind
+name: DoctrineChangeKind
+description: How a pack changes doctrine against wairon's defaults, stated neutrally.
+fields: []
+methods: []
+sourcePath: src/models/pack-impact.ts
+values:
+  - name: loosened
+    description: 'Rule: a lower severity than the default'
+  - name: raised
+    description: 'Rule: a higher severity'
+  - name: 'off'
+    description: 'Rule: turned off'
+  - name: added
+    description: >-
+      Rule: a code wairon does not have (an assertion or a programmatic rule). Concept: a profile,
+      pattern, guarantee token or language table wairon does not have
+  - name: depth
+    description: 'Rule: the profile''s designDepth differs from narratives'
+  - name: inert
+    description: 'Rule: a profile severity for a code no loaded rule reports, which therefore changes nothing'
+  - name: redefined
+    description: 'Concept: a profile carrying a builtin profile''s id'
+  - name: removed
+    description: 'Concept: a stereotype the profile forbids'
+  - name: discouraged
+    description: 'Concept: a stereotype the profile discourages'
+  - name: licensed
+    description: 'Concept: a dependency edge the builtin matrix refuses and the profile allows'
+  - name: gated
+    description: 'Concept: a flow construct the language table marks unsupported'
+createdAt: '2026-10-04T23:33:53.804Z'
+updatedAt: '2026-10-04T23:33:54.236Z'

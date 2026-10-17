@@ -1,0 +1,18 @@
+kind: value-object
+id: legacy_spec_file
+name: LegacySpecFile
+description: A spec file stored under a legacy (undotted) name, and the name the current layout expects for it.
+subsystem: sdd_core
+fields:
+  - name: path
+    type: string
+    description: The legacy file's absolute path
+    optional: false
+  - name: expected
+    type: string
+    description: The path the current layout names for it
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-25T21:05:46.975Z'
+updatedAt: '2026-09-25T21:05:46.977Z'

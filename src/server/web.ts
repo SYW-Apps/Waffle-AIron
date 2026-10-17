@@ -6,10 +6,8 @@ import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, 
 import { resolveEndpoints, buildAuthorizationUrl, exchangeCode, resolveSubject, resolveGroups } from './idp.js';
 import {
   resolveEnabledProvider,
-  tryAppendAudit,
-  buildSsoAuditEvent,
+  auditSignIn,
   isInAdminGroup,
-  ANONYMOUS_SSO_ACTOR,
   type SsoStatePayload,
 } from './identity.js';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
@@ -17,7 +15,6 @@ import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
 import * as projectops from './projectops.js';
 import { listIdentityProviderRecords } from './policy.js';
-import { assertAllowedRedirectUri } from './idp.js';
 import { getHealthReport, getUsage } from './operations.js';
 import { listPendingRequests, decideRequest } from './projectlifecycle.js';
 import { UnauthenticatedError, ForbiddenError, AdminAuthError } from './errors.js';
@@ -29,51 +26,79 @@ import {
   touchWebSession,
   listWebSessionsBySubject,
 } from './websessions.js';
-import { resolveProjectRoot } from './projects.js';
+import { existingProjectRoot, listFamilyRecords, resolveProjectRoot } from './projects.js';
 import * as shareadmin from './shareadmin.js';
-import { runWithProjectRoot } from '../utils/fs.js';
-import { hostCore, hostSurfaces, validateProjectAsComplete } from './adapters.js';
+import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import * as hostCore from './adapters/core.js';
+import * as hostSurfaces from './adapters/surfaces.js';
+import * as hostNetwork from './adapters/network.js';
+import { validateAsComplete } from './adapters/validator.js';
+import * as hostValidator from './adapters/validator.js';
 import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
-import { sendJson } from './httpio.js';
+import { sendJson, setSessionCookie, clearSessionCookie } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
+import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
+import type { GitBackingStatus, GitPublish } from '../git/index.js';
+import type { ProducerConfig } from '../producers/index.js';
+import type { PackImpact } from '../models/pack-impact.js';
+import type { ExternalStatus } from '../models/index.js';
+import { readExternalSource } from '../models/project.js';
 import type {
+  ApiKeyRecord,
   ApprovalDecision,
+  ApprovalRequest,
+  AuditEvent,
   AuditQuery,
+  AvailableProfile,
   GitBackingBinding,
+  GovernedProjectCreation,
   HostConfig,
+  HostedProjectRecord,
   HostedUserRecord,
   HostExposurePolicy,
+  ProjectActionOutcome,
   IdentityProviderConfig,
+  InstanceHealthReport,
   InstancePackPolicy,
   LandscapeGraphModel,
   OrganizationUnitRecord,
+  PackDescriptor,
   PermissionAssignment,
+  EffectivePermission,
+  PolicyEvaluationResult,
   PrincipalSubject,
+  ProjectConfigView,
   ProjectProfileSelection,
+  ResourceUsageSnapshot,
   Role,
   ScopeKind,
+  ShareAccessEntry,
+  ShareLink,
+  ShareLinkCreated,
   ShareLinkInput,
   ShareLinkUpdate,
   UnitDisposition,
   WebContext,
   WebGraphModel,
   WebGraphNode,
+  WebGraphNodeKind,
   WebLoginOptions,
   WebSession,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Web Orchestrator + Web Graph Orchestrator + Web Portal (sdd_host)
+// Web Session Orchestrator + Web Graph Orchestrator + Web Portal (sdd_host)
 //
 // THREE components realize in this module (all sharing sourcePath src/server/web.ts):
 //
-// 1. web_orchestrator — the unified web UI's server-side shell: SSO sign-in
+// 1. web_session_orchestrator — the unified web UI's browser-session lifecycle: SSO sign-in
 //    start/complete (unauthenticated, trust anchored by the signed SSO state and
 //    the provider code exchange), browser-session lifecycle (create on sign-in,
 //    remove on sign-out, opportunistic expired-session GC), the session-principal
-//    context projection, and the graph entry point delegated to the graph
-//    orchestrator. MULTI-DEVICE: prior sessions are left intact on sign-in, so one
+//    context projection, and the pre-auth login-options read. The live graph and
+//    the project canvas belong to the graph orchestrator, which the portal reaches
+//    directly. MULTI-DEVICE: prior sessions are left intact on sign-in, so one
 //    principal may hold concurrent sessions; each is independently revocable, and
 //    signOutEverywhere revokes them all. Audit appends are best-effort.
 //
@@ -94,7 +119,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** Browser session lifetime: long enough for a working session, short enough to
- *  bound a stolen cookie. The auth specialist rejects a session past its expiry. */
+ *  bound a stolen cookie. Authentication rejects a session past its expiry. */
 const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 // ── Local developer server (`wairon dev`) conventions ────────────────────────
@@ -105,7 +130,7 @@ const WEB_SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 // sole source of those conventions (subject id, project id, session lifetime).
 
 /** The synthetic identity behind the local dev session: the PERSISTED
- *  boot-reserved local-developer UUID, resolved through the auth specialist
+ *  boot-reserved local-developer UUID, resolved through authentication
  *  (which owns built-in subject recognition — see auth.localDevSubject; it
  *  throws when the instance identity has never been seeded). */
 function devSubject(cfg: HostConfig): PrincipalSubject {
@@ -165,21 +190,18 @@ export async function startSignIn(
 ): Promise<{ url: string; nonce: string }> {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
 
-  // Pin the redirect URI to the provider's server-side allowlist (when configured)
-  // — the callback destination must never be attacker-chosen (open-redirect /
-  // code-delivery hardening on top of the nonce-cookie login-CSRF defense).
-  assertAllowedRedirectUri(provider, redirectUri);
-
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload)); // step 6
   // step 7: resolve the provider's concrete endpoints (overrides -> discovery ->
   // template); step 8: build the authorization URL against the front-channel endpoint.
   const endpoints = await resolveEndpoints(provider);
+  // buildAuthorizationUrl enforces the provider's redirect allowlist, as it does
+  // on every sign-in start path.
   const url = buildAuthorizationUrl(provider, endpoints, state, redirectUri);
 
-  // steps 9–12: best-effort append (tryAppendAudit wraps the try/jump/catch).
-  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signin.start', 'info', { target: providerId }));
+  // steps 9–12: best-effort append (auditSignIn wraps the try/jump/catch).
+  auditSignIn(cfg, null, 'web.signin.start', 'info', { target: providerId });
 
   return { url, nonce }; // step 13
 }
@@ -239,7 +261,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
       // first-login: bind the built-in sso-admin ROLE when the verified groups
       // match adminGroupClaims, otherwise no bindings — an admin assigns roles
       // and grid assignments later. Permissions never live on the user record;
-      // the role resolves through the permission resolver (project:admin +
+      // the role resolves through permission rules (project:admin +
       // project:create @instance, OVERRIDABLE — never the instance-admin bypass).
       roleBindings: inAdminGroup ? [{ roleId: SSO_ADMIN_ROLE_ID }] : [],
       createdAt: new Date().toISOString(),
@@ -271,7 +293,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
 
   // Build the new WebSession (the repository mints the reserved-prefix id and
   // stamps createdAt/lastSeenAt). The session stores NO permissions and no
-  // narrowing ('*'): the auth specialist resolves the subject's permissionSubject
+  // narrowing ('*'): authentication resolves the subject's permissionSubject
   // (roleBindings + instanceAdmin) LIVE on every request, so revocations take
   // effect immediately. Prior sessions are LEFT INTACT so one principal may hold
   // concurrent sessions.
@@ -288,7 +310,7 @@ export async function completeSignIn(cfg: HostConfig, state: string, code: strin
   // steps 22–25: best-effort security-level append. The actor carries WHO signed
   // in; the target is the providerId (the session id is a secret credential and
   // must never be logged — the audit sink rejects credential-shaped targets).
-  tryAppendAudit(cfg, buildSsoAuditEvent(user.subject, 'web.signin', 'security', { target: providerId }));
+  auditSignIn(cfg, user.subject, 'web.signin', 'security', { target: providerId });
 
   return stored.id; // step 26 (the portal sets it as the session cookie)
 }
@@ -319,7 +341,7 @@ export function __resetLoginThrottle(): void {
  * Sign the built-in super-admin in with the env-configured username + password.
  * Consult the minimal in-memory failed-attempt throttle first (~5 consecutive
  * failures lock the username out for a short window; attempts during the lockout
- * are rejected outright). Verify BOTH values via the auth specialist's
+ * are rejected outright). Verify BOTH values via authentication's
  * constant-time verifyBuiltinAdmin (unset env = password login disabled, always
  * fails). On failure, record the attempt and reject as unauthenticated. On
  * success, clear the throttle entry and create a browser session bound to the
@@ -356,8 +378,8 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
   }
 
   // step 7: success clears the throttle. The session stores NO permissions —
-  // the subject IS the persisted built-in super-admin, so the auth specialist
-  // resolves instanceAdmin (the resolver bypass) live at authentication.
+  // the subject IS the persisted built-in super-admin, so authentication
+  // resolves instanceAdmin (the permission-rules bypass) live at authentication.
   loginThrottle.delete(key);
   const session: WebSession = {
     id: '', // web_session_repository mints a ws_-prefixed id
@@ -369,7 +391,7 @@ export function signInWithPassword(cfg: HostConfig, user: string, password: stri
   const stored = createWebSession(cfg.dataDir, session); // step 8
 
   // steps 9–12: best-effort security-level append (no credential-shaped target).
-  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signin.password', 'security'));
+  auditSignIn(cfg, subject, 'web.signin.password', 'security');
 
   return stored.id; // step 13 (the portal sets it as the session cookie)
 }
@@ -385,7 +407,7 @@ export function signOut(cfg: HostConfig, sessionId: string): void {
   pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString()); // step 2
 
   // steps 3–6: best-effort append.
-  tryAppendAudit(cfg, buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'web.signout', 'info'));
+  auditSignIn(cfg, null, 'web.signout', 'info');
   // step 7: return once removed.
 }
 
@@ -402,8 +424,8 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
 
   // step 3: the coarse instance-admin flag comes from the resolved permission
   // subject (the env-anchored super-admin / master / devMode subject — the
-  // resolver bypass). The context carries NO permission projections: the client
-  // lists projects via /web/projects (resolver-filtered server-side) and drives
+  // permission-rules bypass). The context carries NO permission projections: the client
+  // lists projects via /web/projects (permission-rules-filtered server-side) and drives
   // delegated/SSO admin chrome from its project:admin visible scopes.
   return {
     subject: principal.subject ?? { userId: principal.tokenId, kind: 'service', issuer: 'local' },
@@ -421,7 +443,7 @@ export function getCurrentContext(cfg: HostConfig, sessionId: string): WebContex
  * — this is the ONLY unauthenticated session-minting path and it exists solely for
  * `wairon dev` (loopback, auth off). The session is bound to the persisted
  * boot-reserved local-developer subject, narrowed to the ONE local project; it
- * carries NO permissions of its own — the auth specialist resolves THIS subject's
+ * carries NO permissions of its own — authentication resolves THIS subject's
  * permissionSubject (instanceAdmin = full local access) live at authentication.
  * Reuses an existing dev session rather than churning the store on every
  * cookieless hit.
@@ -432,16 +454,21 @@ export function startDevSession(cfg: HostConfig): string {
     throw new Error('dev session is only available under wairon dev (devMode)');
   }
 
-  // step 3: list existing sessions for the synthetic local-developer subject.
+  // step 3: drop already-expired sessions BEFORE looking for one to reuse — an aged-out
+  // dev session must never be handed back as a dead credential (the dev UI would land
+  // on a login screen that devMode configures no login method for).
+  pruneExpiredWebSessions(cfg.dataDir, new Date().toISOString());
+
+  // step 4: list the surviving (live) sessions for the synthetic local-developer subject.
   const dev = devSubject(cfg);
   const existing = listWebSessionsBySubject(cfg.dataDir, dev.userId);
 
-  // steps 4–5: reuse an existing dev session (no churn).
+  // steps 5–6: reuse a live dev session (no churn).
   if (existing.length > 0) {
     return existing[0].id;
   }
 
-  // step 6: build a new session bound to the local-developer subject, narrowed to
+  // step 7: build a new session bound to the local-developer subject, narrowed to
   // the one local project (never instance-wide '*'); the session stores NO
   // permissions — authentication resolves them live from the subject identity.
   const session: WebSession = {
@@ -451,9 +478,9 @@ export function startDevSession(cfg: HostConfig): string {
     createdAt: '', // stamped by the registry
     expiresAt: new Date(Date.now() + DEV_SESSION_TTL_MS).toISOString(),
   };
-  const stored = createWebSession(cfg.dataDir, session); // step 7
+  const stored = createWebSession(cfg.dataDir, session); // step 8
 
-  return stored.id; // step 8
+  return stored.id; // step 9
 }
 
 /**
@@ -481,6 +508,43 @@ export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: 
 }
 
 /**
+ * Return one authorized project's canvas model (data, not HTML) by delegating to
+ * the web graph orchestrator, which authenticates the session and scopes the
+ * result to the principal's authorized projects.
+ */
+export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
+  return getWebProjectCanvasModel(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return one authorized project's relation health — its externals status, one
+ * entry per external — by delegating to the web graph orchestrator, which
+ * authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectExternals(cfg: HostConfig, sessionId: string, projectId: string): ExternalStatus[] {
+  return getWebProjectExternals(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return one authorized project's network view — its declared networks, the
+ * workloads inside them, the gateways and the allowed flows per workload pair,
+ * derived from the design — by delegating to the web graph orchestrator, which
+ * authenticates the session and scopes the read to the caller's reach.
+ */
+export function getProjectNetwork(cfg: HostConfig, sessionId: string, projectId: string): hostNetwork.NetworkViewModel {
+  return getWebProjectNetwork(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return one authorized project's API explorer page by delegating to the web
+ * graph orchestrator, which authenticates the session, scopes the project and
+ * chooses between the explorer and the index of the project's APIs.
+ */
+export function getProjectOpenApi(cfg: HostConfig, sessionId: string, projectId: string, portalId?: string): string {
+  return getWebProjectOpenApi(cfg, sessionId, projectId, portalId); // step 1 (delegate)
+}
+
+/**
  * Revoke every browser session belonging to the caller's principal (sign out on
  * all devices/tabs): resolve the presented session to a Principal (an expired or
  * absent session yields an unauthenticated principal → idempotent no-op), remove
@@ -503,7 +567,7 @@ export function signOutEverywhere(cfg: HostConfig, sessionId: string): void {
 
   // steps 7–10: best-effort security-level append. The actor carries the subject;
   // no session id is logged (the audit sink rejects credential-shaped targets).
-  tryAppendAudit(cfg, buildSsoAuditEvent(subject, 'web.signout.all', 'security'));
+  auditSignIn(cfg, subject, 'web.signout.all', 'security');
   // step 11: return, all of the principal's sessions revoked.
 }
 
@@ -557,7 +621,7 @@ export function getWebGraph(
       // steps 7–11: bind the root for the host-core reads that follow.
       return runWithProjectRoot(root, () => {
         const graph = hostCore.buildProjectGraph(level); // step 8
-        const validation = validateProjectAsComplete(); // step 9
+        const validation = validateAsComplete(); // step 9
         return overlayProjectIssues(graph, validation.issues, projectId, level); // steps 10–11
       });
     }
@@ -594,8 +658,14 @@ export function getWebProjectCanvas(cfg: HostConfig, sessionId: string, projectI
     throw new ForbiddenError('project not authorized or unknown');
   }
 
-  // steps 3–5: bind the root and render the interactive canvas over the bound tree.
-  return runWithProjectRoot(root, () => hostCore.renderDiagram('canvas'));
+  // Steps 5-6: the family's relation health, read within the caller's reach —
+  // the listed projects, exactly as the canvas model and the Relations tab read,
+  // so a member or producer outside it is unavailable, never read and never ok.
+  const listed = webproject.listProjects(cfg, sessionId);
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
+  // Step 7: render the interactive canvas over the bound tree, each consumption
+  // edge carrying its relation's health.
+  return runWithProjectRoot(root, () => hostCore.renderDiagram('canvas', relations));
 }
 
 /**
@@ -616,7 +686,101 @@ export function getWebProjectCanvasModel(cfg: HostConfig, sessionId: string, pro
   if (!root) {
     throw new ForbiddenError('project not authorized or unknown');
   }
-  return runWithProjectRoot(root, () => hostCore.buildCanvasDataModel());
+  // Steps 5-6: the family's relation health, read within the caller's reach —
+  // the listed projects, exactly as the Relations tab reads — so a member or
+  // producer outside it is unavailable, never ok.
+  const listed = webproject.listProjects(cfg, sessionId);
+  const relations = runWithProjectBinding(root, readReach(cfg, projectId, root, listed), () => hostValidator.familyRelations());
+  // Step 7: the model, each consumption edge carrying its relation's health.
+  const model = runWithProjectRoot(root, () => hostCore.buildCanvasDataModel(relations));
+  // Steps 8-10: the family canvas — a member project node is linked to its
+  // member's record, and an external project node to the hosted record its
+  // external names, only when the caller may read that record; any other node
+  // stays unlinked (no id leaks).
+  const readable = new Set(listed.map((r) => r.id));
+  const members = new Set(listFamilyRecords(cfg.dataDir, projectId).filter((r) => r.parentProjectId !== undefined).map((r) => r.id));
+  const hostedOf = externalRecords(runWithProjectRoot(root, () => hostCore.loadProjectConfig()));
+  return withProjectLinks(model, (node) => {
+    const id = node.external ? hostedOf.get(node.id) : node.id;
+    if (id === undefined || !readable.has(id)) return undefined;
+    return node.external || members.has(id) ? id : undefined;
+  });
+}
+
+/** Each declared external's alias → the hosted record its `source.hosted` names. */
+function externalRecords(config: { externals?: Record<string, { source?: unknown } | null> } | null): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [alias, decl] of Object.entries(config?.externals ?? {})) {
+    // Either form of the source: `hosted:<id>` or { hosted }.
+    const hosted = readExternalSource(decl?.source).source?.hosted;
+    if (hosted !== undefined) out.set(alias, hosted);
+  }
+  return out;
+}
+
+/** The canvas model with each project node carrying the record id `linkOf` answers for it — only one the caller may read. */
+function withProjectLinks<T>(model: T, linkOf: (node: { id: string; external?: boolean }) => string | undefined): T {
+  const m = model as { subsystems?: { id: string; project?: boolean; external?: boolean; recordId?: string }[] };
+  if (!Array.isArray(m.subsystems)) return model;
+  return {
+    ...model,
+    subsystems: m.subsystems.map((s) => {
+      const recordId = s.project ? linkOf(s) : undefined;
+      return recordId !== undefined ? { ...s, recordId } : s;
+    }),
+  } as T;
+}
+
+/**
+ * Relation health for ONE authorized project: its externals status, each
+ * declared external's pin compared with its live producer, read over the
+ * project's root bound with the caller's reach — the family above it only when
+ * the caller may read the family root, a hosted producer only when the caller
+ * may read that record. Unavailable is never a pass.
+ */
+export function getWebProjectExternals(cfg: HostConfig, sessionId: string, projectId: string): ExternalStatus[] {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Steps 4-6: bound with the caller's reach — the caller must gate on reach itself.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostSurfaces.getExternalsStatus());
+}
+
+/**
+ * The network view of ONE authorized project, derived from the design: same
+ * scoped authorization and reach as getWebProjectExternals — the family above
+ * the project is composed only when its root is listed too.
+ */
+export function getWebProjectNetwork(cfg: HostConfig, sessionId: string, projectId: string): hostNetwork.NetworkViewModel {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  if (!principal.authenticated) throw new UnauthenticatedError();
+  // Step 2.
+  const readable = webproject.listProjects(cfg, sessionId);
+  if (!readable.some((r) => r.id === projectId)) throw new ForbiddenError('project not authorized or unknown');
+  // Step 3.
+  const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
+  if (!root) throw new ForbiddenError('project not authorized or unknown');
+  // Steps 4-6: bound with the caller's reach, the view read over it.
+  return runWithProjectBinding(root, readReach(cfg, projectId, root, readable), () => hostNetwork.view({}));
+}
+
+/** The caller's read reach around a project: its family root (when readable) and a hosted record lookup over its readable records. */
+function readReach(cfg: HostConfig, projectId: string, root: string, readable: HostedProjectRecord[]): { topRoot: string; parentReach: boolean; hostedLookup: (id: string) => string | null } {
+  const ids = new Set(readable.map((r) => r.id));
+  const familyRoot = listFamilyRecords(cfg.dataDir, projectId)[0];
+  const parentReach = familyRoot !== undefined && ids.has(familyRoot.id);
+  return {
+    topRoot: parentReach ? familyRoot.rootPath : root,
+    parentReach,
+    hostedLookup: (id) => (ids.has(id) ? existingProjectRoot(cfg.dataDir, id) : null),
+  };
 }
 
 /**
@@ -633,7 +797,7 @@ export function getWebProjectOpenApi(cfg: HostConfig, sessionId: string, project
   }
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new ForbiddenError('project not authorized or unknown');
-  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface('project', 'openapi')) as {
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportSurface('project', 'openapi')) as {
     rendered?: string;
     renderedSet?: { portalId: string; name: string; document: string }[];
   };
@@ -691,7 +855,7 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 
   const nodes: WebGraphNode[] = [];
   for (const n of model.nodes) {
-    let kind: string;
+    let kind: WebGraphNodeKind;
     let nodeLevel: number;
     if (n.nodeKind === 'orgUnit') {
       kind = 'unit';
@@ -756,7 +920,8 @@ function reshapeLandscapeGraph(model: LandscapeGraphModel, level: number): WebGr
 }
 
 /**
- * Overlay validator issues onto a project graph's nodes as per-node issueCounts,
+ * Overlay validator issues onto a project graph's nodes as per-node issueCounts
+ * (errors and warnings) and, apart from them, noticeCounts (notices),
  * grouping each issue by the component/spec id it references, and stamp tier
  * 'project', scope = the project id, level = the requested level, generatedAt = now.
  */
@@ -767,13 +932,24 @@ function overlayProjectIssues(
   level: number,
 ): WebGraphModel {
   const counts = new Map<string, number>();
+  const noticeCounts = new Map<string, number>();
   for (const issue of issues) {
     const id = issue.specId;
-    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    if (!id) continue;
+    // A notice is never a failing issue: counted apart, so a node holding only
+    // notices is not drawn with the error pill.
+    const into = issue.severity === 'notice' ? noticeCounts : counts;
+    into.set(id, (into.get(id) ?? 0) + 1);
   }
   const nodes = graph.nodes.map((n) => {
     const count = counts.get(n.id);
-    return count !== undefined ? { ...n, issueCount: count } : n;
+    const notices = noticeCounts.get(n.id);
+    if (count === undefined && notices === undefined) return n;
+    return {
+      ...n,
+      ...(count !== undefined ? { issueCount: count } : {}),
+      ...(notices !== undefined ? { noticeCount: notices } : {}),
+    };
   });
   return {
     ...graph,
@@ -792,37 +968,6 @@ function overlayProjectIssues(
 // listener (gated by exposure.webUiEnabled in http.ts). The cookie/CSRF/exposure
 // security decisions live in http.ts (routeData); this handler owns the route
 // dispatch, cookie management on the response, and its own error → status mapping.
-
-/** The browser cookie carrying the session id (a first-class credential). It is
- *  HttpOnly, so client JS cannot read it — the server reads it from the Cookie
- *  header as the auth bridge. */
-export const WEB_SESSION_COOKIE = 'wairon_session';
-
-/** Read the wairon_session cookie (a ws_-prefixed session id) from the request's
- *  Cookie header, or null when absent. */
-export function sessionCookieValue(req: IncomingMessage): string | null {
-  const header = req.headers['cookie'];
-  if (!header) return null;
-  const raw = Array.isArray(header) ? header.join(';') : header;
-  for (const part of raw.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq === -1) continue;
-    if (part.slice(0, eq).trim() === WEB_SESSION_COOKIE) return part.slice(eq + 1).trim();
-  }
-  return null;
-}
-
-/** The Set-Cookie value that installs the session cookie: HttpOnly + SameSite=Lax +
- *  Path=/, plus Secure when the effective exposure requires TLS. Exported so the
- *  HTTP layer can install the cookie inline on the dev auto-login path. */
-export function setSessionCookie(sessionId: string, secure: boolean): string {
-  return `${WEB_SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/${secure ? '; Secure' : ''}`;
-}
-
-/** The Set-Cookie value that clears the session cookie (Max-Age=0). */
-function clearSessionCookie(secure: boolean): string {
-  return `${WEB_SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
-}
 
 /** Short-lived cookie binding the browser that STARTED an SSO flow to the one that
  *  COMPLETES it — the callback requires the cookie's nonce to equal the nonce inside
@@ -1233,7 +1378,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       </div>
     </div>
 
-    <!-- Projects view (project lifecycle: list / create / lock / promote / destroy) -->
+    <!-- Projects view (project lifecycle: list / create / lock / destroy) -->
     <div class="view" id="view-projects">
       <div class="pane-r"><div id="projectsBody" style="max-width:900px;margin:0 auto;"><div class="hint">Loading…</div></div></div>
     </div>
@@ -1269,7 +1414,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   var ctx = null;
   var selectedProjectId = '';
   // Whether the Admin tab is shown. True for the env super-admin (ctx.isAdmin)
-  // AND for a DELEGATED/SSO instance admin — detected by probing a resolver-gated
+  // AND for a DELEGATED/SSO instance admin — detected by probing a permission-rules-gated
   // instance-admin read, since the slim context carries no permission projection.
   var adminVisible = false;
 
@@ -1364,7 +1509,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     // shows for any instance-level admin (env super-admin OR a delegated/SSO
     // admin who holds project:admin@instance). The slim context only carries the
     // env-super flag, so a delegated admin is detected by probing a
-    // resolver-gated instance-admin read (/web/admin/roles → project:admin@instance).
+    // permission-rules-gated instance-admin read (/web/admin/roles → project:admin@instance).
     $('adminBadge').hidden = !ctx.isAdmin;
     adminVisible = !!ctx.isAdmin;
     $('navAdmin').hidden = !adminVisible;
@@ -1374,12 +1519,12 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       }).catch(function () { /* not an instance admin — tab stays hidden */ });
     }
     // The context carries no permission projections: write authority is enforced
-    // per request server-side (the resolver). Per-project ops (git/packs/policy/
+    // per request server-side (permission rules). Per-project ops (git/packs/policy/
     // producers) are reachable by any signed-in user from the Projects view and
     // gated per project server-side.
     $('roBadge').hidden = true;
 
-    // The project selector comes from /web/projects — the resolver-filtered
+    // The project selector comes from /web/projects — the permission-rules-filtered
     // listing of projects this principal can act on (dev mode lists the single
     // registered "local" project the same way).
     api('/web/projects').then(function (r) { return r.ok ? r.json() : {}; }).then(function (list) {
@@ -1554,7 +1699,8 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         nodes.forEach(function (n) {
           var li = document.createElement('li');
           li.innerHTML = '<span class="kind">' + esc(n.kind) + '</span><span>' + esc(n.label || n.id) + '</span>'
-            + (n.issueCount ? ' <span class="pill bad" title="validation issues">' + n.issueCount + '</span>' : '');
+            + (n.issueCount ? ' <span class="pill bad" title="validation errors and warnings">' + n.issueCount + '</span>' : '')
+            + (n.noticeCount ? ' <span class="pill" title="validation notices">' + n.noticeCount + '</span>' : '');
           li.addEventListener('click', function () {
             Array.prototype.forEach.call(list.children, function (x) { x.classList.remove('sel'); });
             li.classList.add('sel');
@@ -1569,7 +1715,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     selectedSpec = { kind: kind, id: id };
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Loading ' + esc(id) + '…</div>';
     mcp('sdd_get_spec', { kind: kind, id: id }).then(function (spec) {
-      // Write authority is enforced per request by the resolver server-side; a
+      // Write authority is enforced per request by permission rules server-side; a
       // save from a read-only principal is refused with a clear error. Scope-
       // aware read-only chrome returns with the roles/assignments UI.
       var canWrite = true;
@@ -1597,14 +1743,18 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   $('btnValidate').addEventListener('click', function () {
     var insp = $('insp'); insp.innerHTML = '<div class="hint">Validating…</div>';
     mcp('sdd_validate_tree', {}).then(function (res) {
-      var issues = (res && res.issues) || [];
+      // sdd_validate_tree answers with three lists — errors, warnings, notices;
+      // this view used to read an "issues" list the tool never sends, so it
+      // reported every tree clean.
+      var issues = (res && res.issues) || [].concat((res && res.errors) || [], (res && res.warnings) || [], (res && res.notices) || []);
       var errs = issues.filter(function (i) { return i.severity === 'error'; }).length;
-      var warns = issues.length - errs;
-      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s)') : 'clean — no findings') + '</p>';
+      var notes = issues.filter(function (i) { return i.severity === 'notice'; }).length;
+      var warns = issues.length - errs - notes;
+      var html = '<h2>Validation</h2><p class="meta">' + (issues.length ? (errs + ' error(s), ' + warns + ' warning(s), ' + notes + ' notice(s)') : 'clean — no findings') + '</p>';
       if (issues.length) {
         html += '<table class="grid"><thead><tr><th>Severity</th><th>Code</th><th>Spec</th><th>Message</th></tr></thead><tbody>';
         issues.slice(0, 200).forEach(function (i) {
-          var cls = i.severity === 'error' ? 'bad' : 'warn';
+          var cls = i.severity === 'error' ? 'bad' : i.severity === 'notice' ? '' : 'warn';
           html += '<tr><td><span class="pill ' + cls + '">' + esc(i.severity) + '</span></td><td>' + esc(i.code) + '</td><td>' + esc(i.specId || '') + '</td><td>' + esc(i.message) + '</td></tr>';
         });
         html += '</tbody></table>';
@@ -1670,7 +1820,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       renderExposurePanel(el);
     } else if (panel === 'landscape') {
       adminGet('landscape').then(function (g) {
-        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'unit'; });
+        var units = (g.nodes || []).filter(function (n) { return n.nodeKind === 'orgUnit'; });
         var projs = (g.nodes || []).filter(function (n) { return n.nodeKind === 'project'; });
         var html = '<div class="cards"><div class="stat"><div class="k">Org units</div><div class="v">' + units.length + '</div></div>'
           + '<div class="stat"><div class="k">Projects</div><div class="v">' + projs.length + '</div></div>'
@@ -2055,7 +2205,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function placementForm(el, units) {
     var box = $('oForm');
     // The project ids come from the already-populated selector (fed by
-    // /web/projects, the resolver-filtered listing).
+    // /web/projects, the permission-rules-filtered listing).
     var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var projCtl = pids.length ? '<select id="plProj">' + pids.map(function (pid) { return opt(pid, pid, false); }).join('') + '</select>' : '<input id="plProj" placeholder="projectId" />';
     var unitOpts = units.map(function (u) { return opt(u.id, u.name + ' (' + u.id + ')', false); }).join('');
@@ -2456,7 +2606,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function renderConnect() {
     var box = $('connectBody');
     // The project ids come from the already-populated selector (fed by
-    // /web/projects, the resolver-filtered listing).
+    // /web/projects, the permission-rules-filtered listing).
     var pids = Array.prototype.map.call($('projSel').options, function (o) { return o.value; });
     var html = '<h2 style="margin:0 0 4px">Connect an agent</h2>';
     html += '<p style="color:var(--dim);margin:0 0 12px;font-size:12.5px">Mint a single-project MCP token to hand to an AI agent.</p>';
@@ -2530,7 +2680,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
 
   // ---- Projects (lifecycle management; any signed-in user) ----------------
-  // Lists the caller's in-scope projects (GET /web/projects — resolver-filtered).
+  // Lists the caller's in-scope projects (GET /web/projects — permission-rules-filtered).
   // The management affordances are always offered; the SERVER resolves the real
   // per-action permission, so a 403 is surfaced gracefully rather than trusted
   // to client-side flags. Scope-aware chrome returns with the roles UI.
@@ -2585,7 +2735,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         var st = p.status === 'active' ? 'ok' : 'warn';
         var actions = (canManage
           ? '<button class="mini" data-lock="' + esc(p.id) + '">Lock</button> '
-            + '<button class="mini" data-promote="' + esc(p.id) + '">Promote</button> '
             + '<button class="mini danger" data-destroy="' + esc(p.id) + '">Destroy</button> '
           : '')
           + '<button class="mini" data-ops="' + esc(p.id) + '">Ops</button>';
@@ -2599,9 +2748,6 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       });
       Array.prototype.forEach.call(host.querySelectorAll('[data-lock]'), function (b) {
         b.addEventListener('click', function () { projectAction('/web/projects/lock', { projectId: b.getAttribute('data-lock') }, b, 'Locking…', 'Lock'); });
-      });
-      Array.prototype.forEach.call(host.querySelectorAll('[data-promote]'), function (b) {
-        b.addEventListener('click', function () { projectAction('/web/projects/promote', { projectId: b.getAttribute('data-promote') }, b, 'Promoting…', 'Promote'); });
       });
       Array.prototype.forEach.call(host.querySelectorAll('[data-destroy]'), function (b) {
         b.addEventListener('click', function () {
@@ -2622,8 +2768,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function projectAction(path, payload, btn, busyLabel, label) {
     var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
     btn.disabled = true; btn.textContent = busyLabel;
-    postAndParse(path, payload).then(function () {
+    postAndParse(path, payload).then(function (out) {
       loadProjects();
+      if (out && out.status === 'pending-approval' && note) {
+        note.className = 'msg'; note.textContent = 'Approval requested; someone with approval rights decides it.';
+      }
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = label;
       if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
@@ -2774,142 +2923,165 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Body = any;
 
-/** Sign the built-in super-admin in with a username + password posted as JSON
- *  ({user, password}); forwards to web_orchestrator.signInWithPassword and sets the
- *  session cookie exactly like the SSO callback (Secure follows requireTls). It
+/** Sign the built-in super-admin in with a username + password; forwards to
+ *  web_session_orchestrator.signInWithPassword and returns the new session id. The
+ *  router decodes {user, password} from the JSON body and sets the session cookie
+ *  from the returned id exactly like the SSO callback (Secure follows requireTls). It
  *  ESTABLISHES a session (no prior cookie exists to ride), so it is intentionally
  *  NOT in the cookie-mutation CSRF set. An invalid credential (or disabled password
  *  login, or an active throttle lockout) maps to 401 with no distinguishing detail. */
-function loginWithPassword(cfg: HostConfig, body: Body, res: ServerResponse, secureCookie: boolean): void {
-  const sessionId = signInWithPassword(cfg, String(body?.user ?? ''), String(body?.password ?? ''));
-  res.writeHead(200, {
-    'content-type': 'application/json',
-    'set-cookie': setSessionCookie(sessionId, secureCookie),
-  });
-  res.end(JSON.stringify({ ok: true }));
+function loginWithPassword(cfg: HostConfig, user: string, password: string): string {
+  return signInWithPassword(cfg, user, password);
 }
 
 /** List hosted users in the caller's scope; forwards to web_admin_orchestrator.listUsers. */
-function adminListUsers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  const project = url.searchParams.get('project') ?? undefined;
-  sendJson(res, 200, { users: webadmin.listUsers(cfg, sessionId, project) });
+function adminListUsers(cfg: HostConfig, sessionId: string, project?: string): HostedUserRecord[] {
+  return webadmin.listUsers(cfg, sessionId, project);
 }
 
 /** Create or update a hosted user; forwards to web_admin_orchestrator.upsertUser. */
-function adminUpsertUser(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.upsertUser(cfg, sessionId, body as HostedUserRecord));
+function adminUpsertUser(cfg: HostConfig, sessionId: string, record: HostedUserRecord): HostedUserRecord {
+  return webadmin.upsertUser(cfg, sessionId, record);
 }
 
 /** Set a hosted user's lifecycle status; forwards to web_admin_orchestrator.setUserStatus. */
-function adminSetUserStatus(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.setUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
+function adminSetUserStatus(cfg: HostConfig, sessionId: string, userId: string, status: string): HostedUserRecord {
+  return webadmin.setUserStatus(cfg, sessionId, userId, status);
 }
 
 // Share links (owner-side; gated on share:create). Each forwards straight to the
 // share admin orchestrator — the same portal→orchestrator shape as every other
 // /web/admin route — passing the ws_ session as the credential.
 /** Create a share link (mint the token once); forwards to share_admin_orchestrator.createShareLink. */
-function adminCreateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 201, shareadmin.createShareLink(cfg, sessionId, (body ?? {}) as unknown as ShareLinkInput));
+function adminCreateShareLink(cfg: HostConfig, sessionId: string, input: ShareLinkInput): ShareLinkCreated {
+  return shareadmin.createShareLink(cfg, sessionId, input);
 }
 
 /** List a project's share links; forwards to share_admin_orchestrator.listShareLinks. */
-function adminListShareLinks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { links: shareadmin.listShareLinks(cfg, sessionId, url.searchParams.get('projectId') ?? '') });
+function adminListShareLinks(cfg: HostConfig, sessionId: string, projectId: string): ShareLink[] {
+  return shareadmin.listShareLinks(cfg, sessionId, projectId);
 }
 
 /** Re-capture a link's immutable snapshot; forwards to share_admin_orchestrator.refreshSnapshot. */
-function adminRefreshShareSnapshot(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, shareadmin.refreshSnapshot(cfg, sessionId, String(body?.linkId ?? '')));
+function adminRefreshShareSnapshot(cfg: HostConfig, sessionId: string, linkId: string): ShareLink {
+  return shareadmin.refreshSnapshot(cfg, sessionId, linkId);
 }
 
 /** Update a link's mutable settings; forwards to share_admin_orchestrator.updateShareLink. */
-function adminUpdateShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, shareadmin.updateShareLink(cfg, sessionId, String(body?.linkId ?? ''), (body?.changes ?? {}) as ShareLinkUpdate));
+function adminUpdateShareLink(cfg: HostConfig, sessionId: string, linkId: string, changes: ShareLinkUpdate): ShareLink {
+  return shareadmin.updateShareLink(cfg, sessionId, linkId, changes);
 }
 
 /** Revoke a share link; forwards to share_admin_orchestrator.removeShareLink. */
-function adminRemoveShareLink(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  shareadmin.removeShareLink(cfg, sessionId, String(body?.linkId ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminRemoveShareLink(cfg: HostConfig, sessionId: string, linkId: string): void {
+  shareadmin.removeShareLink(cfg, sessionId, linkId);
 }
 
 /** Read a link's access log; forwards to share_admin_orchestrator.getShareAccessLog. */
-function adminGetShareAccessLog(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  const limit = Number(url.searchParams.get('limit') ?? '100') || 100;
-  sendJson(res, 200, { entries: shareadmin.getShareAccessLog(cfg, sessionId, url.searchParams.get('linkId') ?? '', limit) });
+function adminGetShareAccessLog(cfg: HostConfig, sessionId: string, linkId: string, limit: number): ShareAccessEntry[] {
+  return shareadmin.getShareAccessLog(cfg, sessionId, linkId, limit);
 }
 
 /** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
-function adminListProviders(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { providers: webadmin.listIdentityProviders(cfg, sessionId) });
+function adminListProviders(cfg: HostConfig, sessionId: string): IdentityProviderConfig[] {
+  return webadmin.listIdentityProviders(cfg, sessionId);
 }
 
 /** Create or update an identity-provider configuration; forwards to web_admin_orchestrator.upsertIdentityProvider. */
-function adminUpsertProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.upsertIdentityProvider(cfg, sessionId, body as IdentityProviderConfig));
+function adminUpsertProvider(cfg: HostConfig, sessionId: string, config: IdentityProviderConfig): IdentityProviderConfig {
+  return webadmin.upsertIdentityProvider(cfg, sessionId, config);
 }
 
 /** Remove an identity-provider configuration by id; forwards to web_admin_orchestrator.removeIdentityProvider. */
-function adminRemoveProvider(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.removeIdentityProvider(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminRemoveProvider(cfg: HostConfig, sessionId: string, id: string): void {
+  webadmin.removeIdentityProvider(cfg, sessionId, id);
 }
 
 /** Mint a single-project MCP token for an AI agent (self-service, session-authorized);
  *  forwards to web_admin_orchestrator.mintProjectToken. The plaintext token is
  *  returned exactly once. */
-function mintAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const token = webadmin.mintProjectToken(cfg, sessionId, String(body?.projectId ?? ''), body?.write === true);
-  sendJson(res, 201, { token });
+function mintAgentToken(cfg: HostConfig, sessionId: string, projectId: string, write: boolean): string {
+  return webadmin.mintProjectToken(cfg, sessionId, projectId, write);
 }
 
 /** Revoke an MCP token by id; forwards to web_admin_orchestrator.revokeProjectToken. */
-function revokeAgentToken(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.revokeProjectToken(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function revokeAgentToken(cfg: HostConfig, sessionId: string, tokenId: string): void {
+  webadmin.revokeProjectToken(cfg, sessionId, tokenId);
 }
 
 /** List the caller's own MCP tokens (redacted); forwards to
  *  web_admin_orchestrator.listMyTokens. */
-function listAgentTokens(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { tokens: webadmin.listMyTokens(cfg, sessionId) });
+function listAgentTokens(cfg: HostConfig, sessionId: string): ApiKeyRecord[] {
+  return webadmin.listMyTokens(cfg, sessionId);
 }
 
 /** List organization units; forwards to web_admin_orchestrator.listOrganizationUnits. */
-function adminListOrgUnits(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { units: webadmin.listOrganizationUnits(cfg, sessionId) });
+function adminListOrgUnits(cfg: HostConfig, sessionId: string): OrganizationUnitRecord[] {
+  return webadmin.listOrganizationUnits(cfg, sessionId);
 }
 
 /** List configured secret KEY NAMES (never values); forwards to
  *  web_admin_orchestrator.listSecretRefs — for the IdP form's clientSecretRef picker. */
-function adminListSecretRefs(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { refs: webadmin.listSecretRefs(cfg, sessionId) });
+function adminListSecretRefs(cfg: HostConfig, sessionId: string): string[] {
+  return webadmin.listSecretRefs(cfg, sessionId);
 }
 
 /** Set/update one integration secret (e.g. git-token); forwards to
  *  web_admin_orchestrator.setSecret. The value is write-only (never read back). */
-function adminSetSecret(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.setSecret(cfg, sessionId, String(body?.key ?? ''), String(body?.value ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminSetSecret(cfg: HostConfig, sessionId: string, key: string, value: string): void {
+  webadmin.setSecret(cfg, sessionId, key, value);
 }
 
 /** Create or update an organization unit; forwards to web_admin_orchestrator.upsertOrganizationUnit. */
-function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.upsertOrganizationUnit(cfg, sessionId, body as OrganizationUnitRecord));
+function adminUpsertOrgUnit(cfg: HostConfig, sessionId: string, record: OrganizationUnitRecord): OrganizationUnitRecord {
+  return webadmin.upsertOrganizationUnit(cfg, sessionId, record);
 }
 
 /** Place a project into an organization unit; forwards to web_admin_orchestrator.placeProject. */
-function adminPlaceProject(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.placeProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminPlaceProject(cfg: HostConfig, sessionId: string, projectId: string, unitId: string): void {
+  webadmin.placeProject(cfg, sessionId, projectId, unitId);
 }
 
 /** Remove an organization unit per its disposition (migrate/alternative/absorb/
  *  cascade); forwards to web_admin_orchestrator.removeUnit. */
-function adminRemoveUnit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.removeUnit(cfg, sessionId, String(body?.unitId ?? ''), (body?.disposition ?? {}) as UnitDisposition);
-  sendJson(res, 200, { ok: true });
+function adminRemoveUnit(cfg: HostConfig, sessionId: string, unitId: string, disposition: UnitDisposition): void {
+  webadmin.removeUnit(cfg, sessionId, unitId, disposition);
+}
+
+/** The org-unit + project + relation graph in the caller's scope (landscape:read);
+ *  forwards to landscape_orchestrator.generate. */
+function adminGetLandscape(cfg: HostConfig, sessionId: string): LandscapeGraphModel {
+  return generateLandscape(cfg, sessionId);
+}
+
+/** The instance health report (operations:read); forwards to
+ *  operations_orchestrator.getHealthReport. */
+function adminGetHealth(cfg: HostConfig, sessionId: string): InstanceHealthReport {
+  return getHealthReport(cfg, sessionId);
+}
+
+/** Resource usage snapshots (operations:read); forwards to
+ *  operations_orchestrator.getUsage. The router wraps them as { usage }. */
+function adminGetUsage(cfg: HostConfig, sessionId: string): ResourceUsageSnapshot[] {
+  return getUsage(cfg, sessionId);
+}
+
+/** Pending approval requests in the caller's scope (approval:decide); forwards to
+ *  project_lifecycle_orchestrator.listPendingRequests. The router wraps them as
+ *  { requests }. */
+function adminListApprovals(cfg: HostConfig, sessionId: string): ApprovalRequest[] {
+  return listPendingRequests(cfg, sessionId);
+}
+
+/** Accepted body of POST /web/admin/approvals/decide, named in every 400 so a caller can fix it. */
+const APPROVAL_DECIDE_FIELDS_MESSAGE =
+  'Body must be JSON {"requestId": string, "approved": boolean, "reason"?: string}.';
+
+/** Decide a pending approval request; forwards the decision the router decoded
+ *  to project_lifecycle_orchestrator.decideRequest, which sets decidedBy from the
+ *  session principal and refuses self-approval. */
+function adminDecideApproval(cfg: HostConfig, sessionId: string, decision: ApprovalDecision): ApprovalRequest {
+  return decideRequest(cfg, sessionId, decision);
 }
 
 /** The optional {scopeKind, scopeId} pair from a request body (role bindings). */
@@ -2921,120 +3093,118 @@ function bodyScope(body: Body): { scopeKind?: ScopeKind; scopeId?: string } {
 }
 
 /** List permission roles; forwards to web_admin_orchestrator.listRoles. */
-function adminListRoles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { roles: webadmin.listRoles(cfg, sessionId) });
+function adminListRoles(cfg: HostConfig, sessionId: string): Role[] {
+  return webadmin.listRoles(cfg, sessionId);
 }
 
 /** Create a permission role; forwards to web_admin_orchestrator.createRole. */
-function adminCreateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.createRole(cfg, sessionId, body as Role));
+function adminCreateRole(cfg: HostConfig, sessionId: string, role: Role): Role {
+  return webadmin.createRole(cfg, sessionId, role);
 }
 
 /** Update a permission role; forwards to web_admin_orchestrator.updateRole. */
-function adminUpdateRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.updateRole(cfg, sessionId, body as Role));
+function adminUpdateRole(cfg: HostConfig, sessionId: string, role: Role): Role {
+  return webadmin.updateRole(cfg, sessionId, role);
 }
 
 /** Delete a permission role by id; forwards to web_admin_orchestrator.deleteRole. */
-function adminDeleteRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.deleteRole(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminDeleteRole(cfg: HostConfig, sessionId: string, roleId: string): void {
+  webadmin.deleteRole(cfg, sessionId, roleId);
 }
 
 /** Bind a role to a user at a scope; forwards to web_admin_orchestrator.bindRole. */
-function adminBindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const scope = bodyScope(body);
-  sendJson(res, 200, webadmin.bindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+function adminBindRole(cfg: HostConfig, sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind, scopeId?: string): HostedUserRecord {
+  return webadmin.bindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
 }
 
 /** Unbind a role from a user at a scope; forwards to web_admin_orchestrator.unbindRole. */
-function adminUnbindRole(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const scope = bodyScope(body);
-  sendJson(res, 200, webadmin.unbindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
+function adminUnbindRole(cfg: HostConfig, sessionId: string, userId: string, roleId: string, scopeKind?: ScopeKind, scopeId?: string): HostedUserRecord {
+  return webadmin.unbindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
 }
 
-/** List permission assignments filtered by scope/subject query params; forwards
- *  to web_admin_orchestrator.listAssignments. */
-function adminListAssignments(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  const q = (name: string): string | undefined => url.searchParams.get(name) ?? undefined;
-  sendJson(res, 200, {
-    assignments: webadmin.listAssignments(
-      cfg,
-      sessionId,
-      q('scopeKind') as ScopeKind | undefined,
-      q('scopeId'),
-      q('subjectKind') as 'user' | 'everyone' | undefined,
-      q('subjectId'),
-    ),
-  });
+/** List permission assignments filtered by scope/subject; forwards to
+ *  web_admin_orchestrator.listAssignments. */
+function adminListAssignments(
+  cfg: HostConfig,
+  sessionId: string,
+  scopeKind?: ScopeKind,
+  scopeId?: string,
+  subjectKind?: 'user' | 'everyone',
+  subjectId?: string,
+): PermissionAssignment[] {
+  return webadmin.listAssignments(cfg, sessionId, scopeKind, scopeId, subjectKind, subjectId);
+}
+
+/** Explain one user's effective permission for a capability at a unit, project or
+ *  subsystem scope ("why can or can't they"); forwards to web_admin_orchestrator.explainPermission. */
+function adminExplainPermission(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  capability: string,
+  scopeKind: ScopeKind,
+  scopeId?: string,
+): EffectivePermission {
+  return webadmin.explainPermission(cfg, sessionId, userId, capability, scopeKind, scopeId ?? '');
 }
 
 /** Upsert a permission assignment; forwards to web_admin_orchestrator.setAssignment. */
-function adminSetAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webadmin.setAssignment(cfg, sessionId, body as PermissionAssignment));
+function adminSetAssignment(cfg: HostConfig, sessionId: string, assignment: PermissionAssignment): PermissionAssignment {
+  return webadmin.setAssignment(cfg, sessionId, assignment);
 }
 
 /** Remove a permission assignment by id; forwards to web_admin_orchestrator.removeAssignment. */
-function adminRemoveAssignment(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webadmin.removeAssignment(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function adminRemoveAssignment(cfg: HostConfig, sessionId: string, assignmentId: string): void {
+  webadmin.removeAssignment(cfg, sessionId, assignmentId);
 }
 
 // ── Web project-lifecycle plane (session-scoped /web/projects*) ──────────────
 //
 // The human project-lifecycle surface of the unified web UI on the PUBLIC data
-// plane. Each thin portal handler resolves the browser session id and forwards to
+// plane. Each thin portal handler takes the browser session id and forwards to
 // the web project orchestrator (webproject.ts): projectList is a scoped read owned
-// there; create/lock/promote/destroy forward to the admin orchestrator with the
+// there; create/lock/destroy forward to the admin orchestrator with the
 // session as the credential, so its per-action grant-scope authorization applies
 // UNCHANGED (a caller lacking the grant is refused with AdminAuthError → 403).
 // Cookie-authenticated POSTs are CSRF-gated in http.ts (routeData) like /web/logout.
 
 /** List the projects the caller can manage, each annotated with its home unit;
  *  forwards to web_project_orchestrator.listProjects. */
-function projectList(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { projects: webproject.listProjects(cfg, sessionId) });
+function projectList(cfg: HostConfig, sessionId: string): HostedProjectRecord[] {
+  return webproject.listProjects(cfg, sessionId);
 }
 
 /** Create a project placed in the REQUIRED owner unit, optionally with a
  *  profile selection; forwards to web_project_orchestrator.createProject, which
  *  routes through the policy-aware initialization (missing/unknown unit and
- *  policy violations reject upstream). */
-function projectCreate(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(
-    res,
-    201,
-    webproject.createProject(
-      cfg,
-      sessionId,
-      String(body?.id ?? ''),
-      String(body?.unitId ?? ''),
-      body?.profileSelection as ProjectProfileSelection | undefined,
-    ),
-  );
+ *  policy violations reject upstream). Answers the GovernedProjectCreation: the
+ *  record with the impact of every pack and of the governing-profile step the
+ *  instance policy applied, which the SPA shows after creation. */
+function projectCreate(
+  cfg: HostConfig,
+  sessionId: string,
+  id: string,
+  unitId: string,
+  profileSelection?: ProjectProfileSelection,
+): GovernedProjectCreation {
+  return webproject.createProject(cfg, sessionId, id, unitId, profileSelection);
 }
 
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */
-function projectLock(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webproject.lockProject(cfg, sessionId, String(body?.projectId ?? '')));
-}
-
-/** Promote a project; forwards to web_project_orchestrator.promoteProject. */
-function projectPromote(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, webproject.promoteProject(cfg, sessionId, String(body?.projectId ?? '')));
+function projectLock(cfg: HostConfig, sessionId: string, projectId: string): ProjectActionOutcome {
+  return webproject.lockProject(cfg, sessionId, projectId);
 }
 
 /** Destroy a project; forwards to web_project_orchestrator.destroyProject. */
-function projectDestroy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  webproject.destroyProject(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function projectDestroy(cfg: HostConfig, sessionId: string, id: string): void {
+  webproject.destroyProject(cfg, sessionId, id);
 }
 
 // ── Project ops plane (packs / policy / producers / git / audit / exposure) ──
 //
 // Thin portal handlers forwarding to the project ops orchestrator with the
 // session as the credential; the OWNING orchestrators re-apply the exact
-// resolver authorization (instance-level project:admin for the global/instance
+// permission-rules authorization (instance-level project:admin for the global/instance
 // surfaces; project:admin / project:write / project:read over the project for
 // its surfaces). Cookie POSTs are CSRF-gated in http.ts like /web/logout.
 
@@ -3054,139 +3224,156 @@ function packNameOverride(req: IncomingMessage): string | undefined {
   return v && v.trim() ? v.trim() : undefined;
 }
 
-function opsListGlobalPacks(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { packs: projectops.listGlobalPacks(cfg, sessionId) });
+function opsListGlobalPacks(cfg: HostConfig, sessionId: string): PackDescriptor[] {
+  return projectops.listGlobalPacks(cfg, sessionId);
 }
-function opsInstallGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.installGlobalPack(cfg, sessionId, String(body?.name ?? ''), String(body?.content ?? '')));
+function opsInstallGlobalPack(cfg: HostConfig, sessionId: string, name: string, content: string): PackDescriptor {
+  return projectops.installGlobalPack(cfg, sessionId, name, content);
 }
-function opsRemoveGlobalPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.removeGlobalPack(cfg, sessionId, String(body?.name ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsRemoveGlobalPack(cfg: HostConfig, sessionId: string, name: string): void {
+  projectops.removeGlobalPack(cfg, sessionId, name);
 }
-function opsListProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { packs: projectops.listProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+function opsListProjectPacks(cfg: HostConfig, sessionId: string, project: string): PackDescriptor[] {
+  return projectops.listProjectPacks(cfg, sessionId, project);
 }
-function opsInstallProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.installProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), String(body?.content ?? '')));
+function opsInstallProjectPack(cfg: HostConfig, sessionId: string, project: string, name: string, content: string): PackDescriptor {
+  return projectops.installProjectPack(cfg, sessionId, project, name, content);
 }
-function opsRemoveProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.removeProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsRemoveProjectPack(cfg: HostConfig, sessionId: string, project: string, name: string): void {
+  projectops.removeProjectPack(cfg, sessionId, project, name);
 }
 // ZIP (.wpack) archive installs: the raw application/zip body is the archive; the
 // name comes from the envelope, or the optional X-Wairon-Pack-Name override.
-function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.installGlobalPackArchive(cfg, sessionId, archiveBody(body), packNameOverride(req)));
+function opsInstallGlobalPackArchive(cfg: HostConfig, sessionId: string, archive: Uint8Array, name?: string): PackDescriptor {
+  return projectops.installGlobalPackArchive(cfg, sessionId, archive, name);
 }
-function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, req: IncomingMessage, url: URL, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.installProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
+function opsInstallProjectPackArchive(cfg: HostConfig, sessionId: string, project: string, archive: Uint8Array, name?: string): PackDescriptor {
+  return projectops.installProjectPackArchive(cfg, sessionId, project, archive, name);
+}
+
+// ── Spec-tree transfer (.waitree) ────────────────────────────────────────────
+// The browser half of local↔hosted migration: download the whole tree, or
+// replace it from an uploaded archive. Export answers raw bytes (the archive IS
+// the payload; the router writes them); import takes a raw application/zip body
+// like the pack upload.
+
+/** GET /web/projects/tree/export?projectId=[&includeDerived=1][&allowPartial=1] — project:read.
+ *  `allowPartial` is forwarded to project_ops_orchestrator.exportProjectTree but is not
+ *  (yet) declared on this method's contract. */
+function opsExportProjectTree(
+  cfg: HostConfig,
+  sessionId: string,
+  project: string,
+  includeDerived?: boolean,
+  allowPartial?: boolean,
+): TreeExportResult {
+  return projectops.exportProjectTree(cfg, sessionId, project, includeDerived, allowPartial);
+}
+
+/** POST /web/projects/tree/import?projectId=[&replace=1] — project:admin, raw zip body. */
+function opsImportProjectTree(
+  cfg: HostConfig,
+  sessionId: string,
+  project: string,
+  archive: Uint8Array,
+  replaceExisting?: boolean,
+): TreeImportResult {
+  return projectops.importProjectTree(cfg, sessionId, project, archive, replaceExisting);
 }
 // Stage B+C: the selectable-profile catalog and server-global pack adoption.
-function opsListAvailableProfiles(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { profiles: projectops.listAvailableProfiles(cfg, sessionId) });
+function opsListAvailableProfiles(cfg: HostConfig, sessionId: string): AvailableProfile[] {
+  return projectops.listAvailableProfiles(cfg, sessionId);
 }
-function opsListAdoptableProjectPacks(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { packs: projectops.listAdoptableProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
+function opsListAdoptableProjectPacks(cfg: HostConfig, sessionId: string, project: string): PackDescriptor[] {
+  return projectops.listAdoptableProjectPacks(cfg, sessionId, project);
 }
-function opsAdoptProjectPack(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.adoptProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
+function opsAdoptProjectPack(cfg: HostConfig, sessionId: string, project: string, name: string): PackDescriptor {
+  return projectops.adoptProjectPack(cfg, sessionId, project, name);
 }
-function opsGetPackPolicy(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, projectops.getPackPolicy(cfg, sessionId));
+/** POST /web/projects/packs/impact { projectId, name, content? } — what installing
+ *  (content given) or adopting (content omitted) a declarative pack would change,
+ *  writing nothing (project:read); forwards to project_ops_orchestrator. The SPA
+ *  shows it before projectPackInstall / projectPackAdopt and asks. */
+function projectPackImpact(cfg: HostConfig, sessionId: string, project: string, name: string, content?: string): PackImpact {
+  return projectops.previewProjectPack(cfg, sessionId, project, name, content);
 }
-function opsSetPackPolicy(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.setPackPolicy(cfg, sessionId, body as InstancePackPolicy));
+/** POST /web/projects/packs/removal-impact { projectId, name } — what removing a
+ *  registered pack would change, writing nothing (project:read); the SPA shows it
+ *  before projectPackRemove and asks. */
+function projectPackRemovalImpact(cfg: HostConfig, sessionId: string, project: string, name: string): PackImpact {
+  return projectops.previewProjectPackRemoval(cfg, sessionId, project, name);
 }
-function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, projectops.evaluateProjectPolicy(cfg, sessionId, q(url, 'projectId') ?? ''));
+function opsGetPackPolicy(cfg: HostConfig, sessionId: string): InstancePackPolicy {
+  return projectops.getPackPolicy(cfg, sessionId);
 }
-function opsPolicyReconcile(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.reconcileProjectPolicy(cfg, sessionId, String(body?.projectId ?? '')));
+function opsSetPackPolicy(cfg: HostConfig, sessionId: string, policy: InstancePackPolicy): InstancePackPolicy {
+  return projectops.setPackPolicy(cfg, sessionId, policy);
 }
-function opsGetProjectConfig(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, projectops.getProjectConfig(cfg, sessionId, q(url, 'projectId') ?? ''));
+function opsPolicyEvaluate(cfg: HostConfig, sessionId: string, projectId: string): PolicyEvaluationResult {
+  return projectops.evaluateProjectPolicy(cfg, sessionId, projectId);
 }
-function opsSetProjectConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.setProjectType(cfg, sessionId, String(body?.projectId ?? ''), String(body?.projectType ?? '')));
+function opsPolicyReconcile(cfg: HostConfig, sessionId: string, projectId: string): PolicyEvaluationResult {
+  return projectops.reconcileProjectPolicy(cfg, sessionId, projectId);
+}
+function opsGetProjectConfig(cfg: HostConfig, sessionId: string, projectId: string): ProjectConfigView {
+  return projectops.getProjectConfig(cfg, sessionId, projectId);
+}
+function opsSetProjectConfig(cfg: HostConfig, sessionId: string, projectId: string, projectType: string): ProjectConfigView {
+  return projectops.setProjectType(cfg, sessionId, projectId, projectType);
 }
 // The project-scoped profile catalog (built-ins + the project's own packs +
 // server-global packs still needing adoption). Same envelope key as
 // opsListAvailableProfiles (/web/admin/profiles) — the client's list-unwrapping
 // helper reads both routes through the same 'profiles' key.
-function opsListProjectProfiles(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { profiles: projectops.listProjectProfiles(cfg, sessionId, q(url, 'projectId') ?? '') });
+function opsListProjectProfiles(cfg: HostConfig, sessionId: string, project: string): AvailableProfile[] {
+  return projectops.listProjectProfiles(cfg, sessionId, project);
 }
-function opsListProducers(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { producers: projectops.listProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
+function opsListProducers(cfg: HostConfig, sessionId: string, project: string): ProducerConfig[] {
+  return projectops.listProducers(cfg, sessionId, project);
 }
-function opsConfigureProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.configureProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''), String(body?.parentPageId ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsConfigureProducer(cfg: HostConfig, sessionId: string, project: string, target: string, parentPageId: string): void {
+  projectops.configureProducer(cfg, sessionId, project, target, parentPageId);
 }
-function opsRemoveProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.removeProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsRemoveProducer(cfg: HostConfig, sessionId: string, project: string, target: string): void {
+  projectops.removeProducer(cfg, sessionId, project, target);
 }
-async function opsRunProducer(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): Promise<void> {
-  await projectops.produceProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
-  sendJson(res, 200, { ok: true });
+async function opsRunProducer(cfg: HostConfig, sessionId: string, project: string, target: string): Promise<void> {
+  await projectops.produceProducer(cfg, sessionId, project, target);
 }
-function opsGitStatus(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, projectops.getGitBinding(cfg, sessionId, q(url, 'projectId') ?? ''));
+function opsGitStatus(cfg: HostConfig, sessionId: string, project: string): GitBackingStatus {
+  return projectops.getGitBinding(cfg, sessionId, project);
 }
-function opsGitBind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  const pat = body?.pat ? String(body.pat) : undefined;
-  sendJson(res, 200, projectops.enableGit(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? ''), pat));
+/** Bind the project's real repo. `pat` is forwarded to project_ops_orchestrator.enableGit
+ *  but is not (yet) declared on this method's contract. */
+function opsGitBind(cfg: HostConfig, sessionId: string, project: string, remote: string, branch: string, pat?: string): HostedProjectRecord {
+  return projectops.enableGit(cfg, sessionId, project, remote, branch, pat);
 }
-function opsGitUnbind(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.disableGit(cfg, sessionId, String(body?.projectId ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsGitUnbind(cfg: HostConfig, sessionId: string, project: string): void {
+  projectops.disableGit(cfg, sessionId, project);
 }
-function opsGitSync(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.syncGit(cfg, sessionId, String(body?.projectId ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsGitSync(cfg: HostConfig, sessionId: string, project: string): void {
+  projectops.syncGit(cfg, sessionId, project);
 }
-function opsGitCommit(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(
-    res,
-    200,
-    projectops.commitProject(
-      cfg,
-      sessionId,
-      String(body?.projectId ?? ''),
-      typeof body?.subsystem === 'string' && body.subsystem ? body.subsystem : undefined,
-      typeof body?.message === 'string' && body.message ? body.message : undefined,
-    ),
-  );
+function opsGitCommit(cfg: HostConfig, sessionId: string, project: string, subsystem?: string, message?: string): GitPublish {
+  return projectops.commitProject(cfg, sessionId, project, subsystem, message);
 }
-function opsGitSyncConfig(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.configureGitSync(
-    cfg,
-    sessionId,
-    String(body?.projectId ?? ''),
-    typeof body?.periodicSyncMinutes === 'number' ? body.periodicSyncMinutes : undefined,
-    typeof body?.skipIfClean === 'boolean' ? body.skipIfClean : undefined,
-  );
-  sendJson(res, 200, { ok: true });
+function opsGitSyncConfig(cfg: HostConfig, sessionId: string, project: string, periodicSyncMinutes?: number, skipIfClean?: boolean): void {
+  projectops.configureGitSync(cfg, sessionId, project, periodicSyncMinutes, skipIfClean);
 }
-function opsListGitBacking(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, { bindings: projectops.listBackingBindings(cfg, sessionId) });
+function opsListGitBacking(cfg: HostConfig, sessionId: string): GitBackingBinding[] {
+  return projectops.listBackingBindings(cfg, sessionId);
 }
-function opsBindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  // Strip the inline PAT out of the binding shape — it is stored write-only in
-  // the secret store, NEVER persisted into the binding record.
-  const pat = body?.pat ? String(body.pat) : undefined;
-  const binding = { ...(body ?? {}) } as Record<string, unknown>;
-  delete binding.pat;
-  sendJson(res, 200, projectops.bindBackingScope(cfg, sessionId, binding as unknown as GitBackingBinding, pat));
+/** Bind a container-level backup repo. `pat` is forwarded to
+ *  project_ops_orchestrator.bindBackingScope but is not (yet) declared on this
+ *  method's contract. */
+function opsBindGitBacking(cfg: HostConfig, sessionId: string, binding: GitBackingBinding, pat?: string): GitBackingBinding {
+  return projectops.bindBackingScope(cfg, sessionId, binding, pat);
 }
-function opsUnbindGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  projectops.unbindBackingScope(cfg, sessionId, String(body?.id ?? ''));
-  sendJson(res, 200, { ok: true });
+function opsUnbindGitBacking(cfg: HostConfig, sessionId: string, bindingId: string): void {
+  projectops.unbindBackingScope(cfg, sessionId, bindingId);
 }
-function opsSyncGitBacking(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, { published: projectops.syncBackingScope(cfg, sessionId, String(body?.id ?? '')) });
+function opsSyncGitBacking(cfg: HostConfig, sessionId: string, bindingId: string): boolean {
+  return projectops.syncBackingScope(cfg, sessionId, bindingId);
 }
 /** Build an AuditQuery from the viewer's query params (all optional). */
 function auditQueryFrom(url: URL): AuditQuery {
@@ -3211,17 +3398,17 @@ function auditQueryFrom(url: URL): AuditQuery {
   if (limit !== undefined) query.limit = Number(limit);
   return query;
 }
-function opsAuditQuery(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { events: projectops.queryAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+function opsAuditQuery(cfg: HostConfig, sessionId: string, query: AuditQuery): AuditEvent[] {
+  return projectops.queryAuditEvents(cfg, sessionId, query);
 }
-function opsAuditCount(cfg: HostConfig, sessionId: string, url: URL, res: ServerResponse): void {
-  sendJson(res, 200, { count: projectops.countAuditEvents(cfg, sessionId, auditQueryFrom(url)) });
+function opsAuditCount(cfg: HostConfig, sessionId: string, query: AuditQuery): number {
+  return projectops.countAuditEvents(cfg, sessionId, query);
 }
-function opsGetExposure(cfg: HostConfig, sessionId: string, res: ServerResponse): void {
-  sendJson(res, 200, projectops.getExposurePolicy(cfg, sessionId));
+function opsGetExposure(cfg: HostConfig, sessionId: string): HostExposurePolicy {
+  return projectops.getExposurePolicy(cfg, sessionId);
 }
-function opsSetExposure(cfg: HostConfig, sessionId: string, body: Body, res: ServerResponse): void {
-  sendJson(res, 200, projectops.setExposurePolicy(cfg, sessionId, body as HostExposurePolicy));
+function opsSetExposure(cfg: HostConfig, sessionId: string, policy: HostExposurePolicy): HostExposurePolicy {
+  return projectops.setExposurePolicy(cfg, sessionId, policy);
 }
 
 /**
@@ -3312,7 +3499,13 @@ export async function handleWebRequest(
     // cookie-mutation CSRF set — like the SSO callback, trust anchors on the
     // credential itself. Gated (with every /web route) on exposure.webUiEnabled.
     if (req.method === 'POST' && parts.length === 2 && parts[1] === 'login') {
-      return loginWithPassword(cfg, body, res, ctx.secureCookie);
+      const loginSessionId = loginWithPassword(cfg, String(body?.user ?? ''), String(body?.password ?? ''));
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'set-cookie': setSessionCookie(loginSessionId, ctx.secureCookie),
+      });
+      res.end(JSON.stringify({ ok: true }));
+      return;
     }
 
     // POST /web/logout → end this session and clear the cookie.
@@ -3360,7 +3553,22 @@ export async function handleWebRequest(
     // canvas renderer directly rather than iframing the HTML. Cross-project → 403.
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = url.searchParams.get('projectId') ?? '';
-      return sendJson(res, 200, getWebProjectCanvasModel(cfg, sessionId, projectId));
+      return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
+    }
+
+    // GET /web/projects/externals?projectId= → one authorized project's relation
+    // health: its externals status, one entry per external. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'externals') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, { externals: getProjectExternals(cfg, sessionId, projectId) });
+    }
+
+    // GET /web/projects/network?projectId= → one authorized project's network
+    // view (the canvas's network view): networks, workloads, gateways and the
+    // allowed flows per workload pair, derived from the design. Cross-project → 403.
+    if (req.method === 'GET' && parts.length === 3 && parts[1] === 'projects' && parts[2] === 'network') {
+      const projectId = url.searchParams.get('projectId') ?? '';
+      return sendJson(res, 200, getProjectNetwork(cfg, sessionId, projectId));
     }
 
     // GET /web/openapi?projectId= → the project's full public surface as an
@@ -3368,7 +3576,7 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'openapi') {
       const projectId = url.searchParams.get('projectId') ?? '';
       const spec = url.searchParams.get('spec') ?? undefined;
-      const html = getWebProjectOpenApi(cfg, sessionId, projectId, spec);
+      const html = getProjectOpenApi(cfg, sessionId, projectId, spec);
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       res.end(html);
       return;
@@ -3378,7 +3586,7 @@ export async function handleWebRequest(
     // GET /web/tokens → list the caller's OWN minted MCP tokens (redacted). A read,
     // so it carries no CSRF requirement (only cookie-auth POSTs are gated above).
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'tokens') {
-      return listAgentTokens(cfg, sessionId, res);
+      return sendJson(res, 200, { tokens: listAgentTokens(cfg, sessionId) });
     }
     // POST /web/tokens { projectId, write } → mint a single-project MCP token for an
     // AI agent. mintProjectToken forwards to the identity orchestrator's self-service
@@ -3386,16 +3594,18 @@ export async function handleWebRequest(
     // and OWNS the token to the caller. The plaintext token is returned once. Web-UI
     // login and MCP tokens are separate credentials (the token is owned by the human).
     if (req.method === 'POST' && parts.length === 2 && parts[1] === 'tokens') {
-      return mintAgentToken(cfg, sessionId, body, res);
+      const token = mintAgentToken(cfg, sessionId, String(body?.projectId ?? ''), body?.write === true);
+      return sendJson(res, 201, { token });
     }
     // POST /web/tokens/revoke { id } → revoke a minted MCP token the caller OWNS.
     if (req.method === 'POST' && parts.length === 3 && parts[1] === 'tokens' && parts[2] === 'revoke') {
-      return revokeAgentToken(cfg, sessionId, body, res);
+      revokeAgentToken(cfg, sessionId, String(body?.id ?? ''));
+      return sendJson(res, 200, { ok: true });
     }
 
     // ── Project-lifecycle self-management (session-scoped) ───────────────────
     // The human project-lifecycle surface: list the projects the caller may manage
-    // and create / lock / promote / destroy within their grant scope. projectList is
+    // and create / lock / destroy within their grant scope. projectList is
     // a scoped read owned by the web project orchestrator; the mutations forward to
     // the admin orchestrator with the session as the credential (per-action grant
     // scope enforced there — a caller lacking the grant is refused 403). Cookie POSTs
@@ -3403,117 +3613,190 @@ export async function handleWebRequest(
     if (parts.length >= 2 && parts[1] === 'projects') {
       // GET /web/projects — the projects the caller may manage (scoped).
       if (req.method === 'GET' && parts.length === 2) {
-        return projectList(cfg, sessionId, res);
+        return sendJson(res, 200, { projects: projectList(cfg, sessionId) });
       }
       // POST /web/projects { id, unitId? } — create a project (project:create scope).
       if (req.method === 'POST' && parts.length === 2) {
-        return projectCreate(cfg, sessionId, body, res);
+        return sendJson(
+          res,
+          201,
+          projectCreate(
+            cfg,
+            sessionId,
+            String(body?.id ?? ''),
+            String(body?.unitId ?? ''),
+            body?.profileSelection as ProjectProfileSelection | undefined,
+          ),
+        );
       }
-      // POST /web/projects/lock { projectId } — lock (lock:create scope).
+      // POST /web/projects/lock { projectId } — lock (approval:decide over the project) or, for a writer, request it; decided by the lifecycle orchestrator.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'lock') {
-        return projectLock(cfg, sessionId, body, res);
-      }
-      // POST /web/projects/promote { projectId } — mark ready (promote:mark-ready scope).
-      if (req.method === 'POST' && parts.length === 3 && parts[2] === 'promote') {
-        return projectPromote(cfg, sessionId, body, res);
+        return sendJson(res, 200, projectLock(cfg, sessionId, String(body?.projectId ?? '')));
       }
       // POST /web/projects/destroy { id } — deregister (project:destroy scope).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'destroy') {
-        return projectDestroy(cfg, sessionId, body, res);
+        projectDestroy(cfg, sessionId, String(body?.id ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
 
       // ── Per-project ops (packs / policy / producers / git) ────────────────
       // GET /web/projects/packs?projectId= — the project's registered packs (project:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
-        return opsListProjectPacks(cfg, sessionId, url, res);
+        return sendJson(res, 200, { packs: opsListProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
       }
       // POST /web/projects/packs { projectId, name, content } — declarative install (project:admin).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
-        return opsInstallProjectPack(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsInstallProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), String(body?.content ?? '')));
       }
       // POST /web/projects/packs/upload?projectId= — raw .wpack archive install
       // (project:admin). Body is the application/zip archive; name from the
       // envelope or the X-Wairon-Pack-Name header.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'upload') {
-        return opsInstallProjectPackArchive(cfg, sessionId, req, url, body, res);
+        return sendJson(res, 200, opsInstallProjectPackArchive(cfg, sessionId, q(url, 'projectId') ?? '', archiveBody(body), packNameOverride(req)));
       }
       // POST /web/projects/packs/remove { projectId, name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
-        return opsRemoveProjectPack(cfg, sessionId, body, res);
+        opsRemoveProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''));
+        return sendJson(res, 200, { ok: true });
+      }
+      // POST /web/projects/packs/impact { projectId, name, content? } — the impact
+      // of an install (content) or an adoption (no content), writing nothing (project:read).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'impact') {
+        const content = typeof body?.content === 'string' ? body.content : undefined;
+        return sendJson(res, 200, projectPackImpact(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? ''), content));
+      }
+      // POST /web/projects/packs/removal-impact { projectId, name } — the impact of a removal, writing nothing.
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'removal-impact') {
+        return sendJson(res, 200, projectPackRemovalImpact(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
       }
       // GET /web/projects/packs/adoptable?projectId= — the server-global catalog
       // the project may adopt from (project:read).
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adoptable') {
-        return opsListAdoptableProjectPacks(cfg, sessionId, url, res);
+        return sendJson(res, 200, { packs: opsListAdoptableProjectPacks(cfg, sessionId, q(url, 'projectId') ?? '') });
       }
       // POST /web/projects/packs/adopt { projectId, name } — vendor a server-global
       // pack into the project by name (project:admin).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'adopt') {
-        return opsAdoptProjectPack(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsAdoptProjectPack(cfg, sessionId, String(body?.projectId ?? ''), String(body?.name ?? '')));
+      }
+      // GET /web/projects/tree/export?projectId=[&includeDerived=1] — download the
+      // whole spec tree as a .waitree archive (project:read).
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'tree' && parts[3] === 'export') {
+        const result = opsExportProjectTree(
+          cfg,
+          sessionId,
+          q(url, 'projectId') ?? '',
+          q(url, 'includeDerived') === '1',
+          q(url, 'allowPartial') === '1',
+        );
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-disposition': `attachment; filename="${result.suggestedFileName}"`,
+        });
+        res.end(Buffer.from(result.archive));
+        return;
+      }
+      // POST /web/projects/tree/import?projectId=[&replace=1] — replace the spec
+      // tree from a raw application/zip .waitree body (project:admin).
+      if (req.method === 'POST' && parts.length === 4 && parts[2] === 'tree' && parts[3] === 'import') {
+        return sendJson(
+          res,
+          200,
+          opsImportProjectTree(
+            cfg,
+            sessionId,
+            q(url, 'projectId') ?? '',
+            archiveBody(body),
+            q(url, 'replace') === '1',
+          ),
+        );
       }
       // GET /web/projects/config?projectId= — the project's editable config (projectType + lock) (project:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'config') {
-        return opsGetProjectConfig(cfg, sessionId, url, res);
+        return sendJson(res, 200, opsGetProjectConfig(cfg, sessionId, q(url, 'projectId') ?? ''));
       }
       // POST /web/projects/config { projectId, projectType } — set the project-level type (project:write).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'config') {
-        return opsSetProjectConfig(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsSetProjectConfig(cfg, sessionId, String(body?.projectId ?? ''), String(body?.projectType ?? '')));
       }
       // GET /web/projects/profiles?projectId= — the profiles selectable FOR ONE
       // PROJECT (built-ins + the project's own registered packs + server-global
       // packs still adoptable on selection) (project:read). The project-type
       // picker reads this instead of the instance-wide /web/admin/profiles catalog.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
-        return opsListProjectProfiles(cfg, sessionId, url, res);
+        return sendJson(res, 200, { profiles: opsListProjectProfiles(cfg, sessionId, q(url, 'projectId') ?? '') });
       }
       // GET /web/projects/policy?projectId= — pack/profile compliance (project:write).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
-        return opsPolicyEvaluate(cfg, sessionId, url, res);
+        return sendJson(res, 200, opsPolicyEvaluate(cfg, sessionId, q(url, 'projectId') ?? ''));
       }
       // POST /web/projects/policy/reconcile { projectId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'policy' && parts[3] === 'reconcile') {
-        return opsPolicyReconcile(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsPolicyReconcile(cfg, sessionId, String(body?.projectId ?? '')));
       }
       // GET /web/projects/producers?projectId= — configured producer targets (project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'producers') {
-        return opsListProducers(cfg, sessionId, url, res);
+        return sendJson(res, 200, { producers: opsListProducers(cfg, sessionId, q(url, 'projectId') ?? '') });
       }
       // POST /web/projects/producers { projectId, target, parentPageId }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'producers') {
-        return opsConfigureProducer(cfg, sessionId, body, res);
+        opsConfigureProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''), String(body?.parentPageId ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/projects/producers/remove { projectId, target }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'remove') {
-        return opsRemoveProducer(cfg, sessionId, body, res);
+        opsRemoveProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/projects/producers/run { projectId, target }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'producers' && parts[3] === 'run') {
-        return opsRunProducer(cfg, sessionId, body, res);
+        await opsRunProducer(cfg, sessionId, String(body?.projectId ?? ''), String(body?.target ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // GET /web/projects/git?projectId= — the git-backing status (project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git') {
-        return opsGitStatus(cfg, sessionId, url, res);
+        return sendJson(res, 200, opsGitStatus(cfg, sessionId, q(url, 'projectId') ?? ''));
       }
       // POST /web/projects/git { projectId, remote, branch } — bind the REAL repo.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git') {
-        return opsGitBind(cfg, sessionId, body, res);
+        const pat = body?.pat ? String(body.pat) : undefined;
+        return sendJson(res, 200, opsGitBind(cfg, sessionId, String(body?.projectId ?? ''), String(body?.remote ?? ''), String(body?.branch ?? ''), pat));
       }
       // POST /web/projects/git/disconnect { projectId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'disconnect') {
-        return opsGitUnbind(cfg, sessionId, body, res);
+        opsGitUnbind(cfg, sessionId, String(body?.projectId ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/projects/git/sync { projectId } — integrate the default branch (project:write).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync') {
-        return opsGitSync(cfg, sessionId, body, res);
+        opsGitSync(cfg, sessionId, String(body?.projectId ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/projects/git/commit { projectId, subsystem?, message? } — the
       // deliberate .wai/-scoped commit+push (project:write).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'commit') {
-        return opsGitCommit(cfg, sessionId, body, res);
+        return sendJson(
+          res,
+          200,
+          opsGitCommit(
+            cfg,
+            sessionId,
+            String(body?.projectId ?? ''),
+            typeof body?.subsystem === 'string' && body.subsystem ? body.subsystem : undefined,
+            typeof body?.message === 'string' && body.message ? body.message : undefined,
+          ),
+        );
       }
       // POST /web/projects/git/sync-config { projectId, periodicSyncMinutes?, skipIfClean? }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git' && parts[3] === 'sync-config') {
-        return opsGitSyncConfig(cfg, sessionId, body, res);
+        opsGitSyncConfig(
+          cfg,
+          sessionId,
+          String(body?.projectId ?? ''),
+          typeof body?.periodicSyncMinutes === 'number' ? body.periodicSyncMinutes : undefined,
+          typeof body?.skipIfClean === 'boolean' ? body.skipIfClean : undefined,
+        );
+        return sendJson(res, 200, { ok: true });
       }
     }
 
@@ -3532,217 +3815,271 @@ export async function handleWebRequest(
       //
       // GET /web/admin/users?project= — scoped user directory (user:admin scope).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'users') {
-        return adminListUsers(cfg, sessionId, url, res);
+        const project = url.searchParams.get('project') ?? undefined;
+        return sendJson(res, 200, { users: adminListUsers(cfg, sessionId, project) });
       }
       // POST /web/admin/users/status { userId, status }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'users' && parts[3] === 'status') {
-        return adminSetUserStatus(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminSetUserStatus(cfg, sessionId, String(body?.userId ?? ''), String(body?.status ?? '')));
       }
       // POST /web/admin/users { ...HostedUserRecord }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'users') {
-        return adminUpsertUser(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminUpsertUser(cfg, sessionId, body as HostedUserRecord));
       }
       // GET /web/admin/providers — identity-provider (SSO) configs (instance-admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'providers') {
-        return adminListProviders(cfg, sessionId, res);
+        return sendJson(res, 200, { providers: adminListProviders(cfg, sessionId) });
       }
       // POST /web/admin/providers/remove { id }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'providers' && parts[3] === 'remove') {
-        return adminRemoveProvider(cfg, sessionId, body, res);
+        adminRemoveProvider(cfg, sessionId, String(body?.id ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/admin/providers { ...IdentityProviderConfig }
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'providers') {
-        return adminUpsertProvider(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminUpsertProvider(cfg, sessionId, body as IdentityProviderConfig));
       }
       // GET /web/admin/org/units — organization units (instance-admin).
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
-        return adminListOrgUnits(cfg, sessionId, res);
+        return sendJson(res, 200, { units: adminListOrgUnits(cfg, sessionId) });
       }
       // GET /web/admin/secrets — configured secret ref NAMES (instance-admin; never values).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'secrets') {
-        return adminListSecretRefs(cfg, sessionId, res);
+        return sendJson(res, 200, { refs: adminListSecretRefs(cfg, sessionId) });
       }
       // POST /web/admin/secrets { key, value } — set/update an integration secret.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'secrets') {
-        return adminSetSecret(cfg, sessionId, body, res);
+        adminSetSecret(cfg, sessionId, String(body?.key ?? ''), String(body?.value ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/admin/org/units { ...OrganizationUnitRecord }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'units') {
-        return adminUpsertOrgUnit(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminUpsertOrgUnit(cfg, sessionId, body as OrganizationUnitRecord));
       }
       // POST /web/admin/org/units/remove { unitId, disposition } — dispose of a
       // unit (migrate/alternative/absorb/cascade); never a silent cascade.
       if (req.method === 'POST' && parts.length === 5 && parts[2] === 'org' && parts[3] === 'units' && parts[4] === 'remove') {
-        return adminRemoveUnit(cfg, sessionId, body, res);
+        adminRemoveUnit(cfg, sessionId, String(body?.unitId ?? ''), (body?.disposition ?? {}) as UnitDisposition);
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/admin/org/placements { projectId, unitId }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'org' && parts[3] === 'placements') {
-        return adminPlaceProject(cfg, sessionId, body, res);
+        adminPlaceProject(cfg, sessionId, String(body?.projectId ?? ''), String(body?.unitId ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
 
       // ── Permission roles / assignments / bindings (permission_admin) ──────
       // GET /web/admin/roles — stored (admin-defined) roles (instance-admin upstream).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'roles') {
-        return adminListRoles(cfg, sessionId, res);
+        return sendJson(res, 200, { roles: adminListRoles(cfg, sessionId) });
       }
       // POST /web/admin/roles { ...Role } — create a role.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'roles') {
-        return adminCreateRole(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminCreateRole(cfg, sessionId, body as Role));
       }
       // POST /web/admin/roles/update { ...Role } — update a role's metadata/permissions.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'update') {
-        return adminUpdateRole(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminUpdateRole(cfg, sessionId, body as Role));
       }
       // POST /web/admin/roles/remove { id } — delete a role (bindings become inert).
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'remove') {
-        return adminDeleteRole(cfg, sessionId, body, res);
+        adminDeleteRole(cfg, sessionId, String(body?.id ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/admin/roles/bind { userId, roleId, scopeKind?, scopeId? }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'bind') {
-        return adminBindRole(cfg, sessionId, body, res);
+        const scope = bodyScope(body);
+        return sendJson(res, 200, adminBindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
       }
       // POST /web/admin/roles/unbind { userId, roleId, scopeKind?, scopeId? }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'roles' && parts[3] === 'unbind') {
-        return adminUnbindRole(cfg, sessionId, body, res);
+        const scope = bodyScope(body);
+        return sendJson(res, 200, adminUnbindRole(cfg, sessionId, String(body?.userId ?? ''), String(body?.roleId ?? ''), scope.scopeKind, scope.scopeId));
       }
       // GET /web/admin/permissions?scopeKind=&scopeId=&subjectKind=&subjectId= —
       // the assignment grid, scope-authorized upstream.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'permissions') {
-        return adminListAssignments(cfg, sessionId, url, res);
+        const q = (name: string): string | undefined => url.searchParams.get(name) ?? undefined;
+        return sendJson(res, 200, {
+          assignments: adminListAssignments(
+            cfg,
+            sessionId,
+            q('scopeKind') as ScopeKind | undefined,
+            q('scopeId'),
+            q('subjectKind') as 'user' | 'everyone' | undefined,
+            q('subjectId'),
+          ),
+        });
+      }
+      // GET /web/admin/permissions/explain?userId=&capability=&scopeKind=&scopeId= —
+      // one user's effective permission with the rung that decided it.
+      if (req.method === 'GET' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'explain') {
+        const q = (name: string): string => url.searchParams.get(name) ?? '';
+        return sendJson(res, 200, adminExplainPermission(cfg, sessionId, q('userId'), q('capability'), (q('scopeKind') || 'instance') as ScopeKind, q('scopeId') || undefined));
       }
       // POST /web/admin/permissions { ...PermissionAssignment } — upsert one assignment.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'permissions') {
-        return adminSetAssignment(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminSetAssignment(cfg, sessionId, body as PermissionAssignment));
       }
       // POST /web/admin/permissions/remove { id } — remove one assignment.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'permissions' && parts[3] === 'remove') {
-        return adminRemoveAssignment(cfg, sessionId, body, res);
+        adminRemoveAssignment(cfg, sessionId, String(body?.id ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
 
       // ── Instance ops (packs / policy / audit / exposure / git backing) ────
       // GET /web/admin/packs — server-global packs (instance-level project:admin).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'packs') {
-        return opsListGlobalPacks(cfg, sessionId, res);
+        return sendJson(res, 200, { packs: opsListGlobalPacks(cfg, sessionId) });
       }
       // POST /web/admin/packs { name, content } — declarative install, instance tier.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'packs') {
-        return opsInstallGlobalPack(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsInstallGlobalPack(cfg, sessionId, String(body?.name ?? ''), String(body?.content ?? '')));
       }
       // POST /web/admin/packs/upload — raw .wpack archive install, instance tier
       // (instance-level project:admin). Body is the application/zip archive; name
       // from the envelope or the X-Wairon-Pack-Name header.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'upload') {
-        return opsInstallGlobalPackArchive(cfg, sessionId, req, body, res);
+        return sendJson(res, 200, opsInstallGlobalPackArchive(cfg, sessionId, archiveBody(body), packNameOverride(req)));
       }
       // POST /web/admin/packs/remove { name }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'packs' && parts[3] === 'remove') {
-        return opsRemoveGlobalPack(cfg, sessionId, body, res);
+        opsRemoveGlobalPack(cfg, sessionId, String(body?.name ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // GET /web/admin/profiles — the selectable architectural-profile catalog
       // (built-in + server-global pack profiles, each tagged with its source).
       // Any authenticated read.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'profiles') {
-        return opsListAvailableProfiles(cfg, sessionId, res);
+        return sendJson(res, 200, { profiles: opsListAvailableProfiles(cfg, sessionId) });
       }
       // GET /web/admin/policy — the instance pack/profile policy (any authenticated read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'policy') {
-        return opsGetPackPolicy(cfg, sessionId, res);
+        return sendJson(res, 200, opsGetPackPolicy(cfg, sessionId));
       }
       // POST /web/admin/policy { ...InstancePackPolicy } — replace it (instance-level project:admin).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'policy') {
-        return opsSetPackPolicy(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsSetPackPolicy(cfg, sessionId, body as InstancePackPolicy));
       }
       // GET /web/admin/audit?projectId=&category=&action=&minimumLevel=&from=&to=&limit= —
       // the scoped, redacted audit viewer (filtered to project:admin visible scopes).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'audit') {
-        return opsAuditQuery(cfg, sessionId, url, res);
+        return sendJson(res, 200, { events: opsAuditQuery(cfg, sessionId, auditQueryFrom(url)) });
       }
       // GET /web/admin/audit/count — the scoped audit-event count for pagination.
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'audit' && parts[3] === 'count') {
-        return opsAuditCount(cfg, sessionId, url, res);
+        return sendJson(res, 200, { count: opsAuditCount(cfg, sessionId, auditQueryFrom(url)) });
       }
       // GET /web/admin/exposure — the effective instance exposure policy.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'exposure') {
-        return opsGetExposure(cfg, sessionId, res);
+        return sendJson(res, 200, opsGetExposure(cfg, sessionId));
       }
       // POST /web/admin/exposure { ...HostExposurePolicy } — replace it (audited).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'exposure') {
-        return opsSetExposure(cfg, sessionId, body, res);
+        return sendJson(res, 200, opsSetExposure(cfg, sessionId, body as HostExposurePolicy));
       }
       // GET /web/admin/git-backing — the container-level backup bindings in reach.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'git-backing') {
-        return opsListGitBacking(cfg, sessionId, res);
+        return sendJson(res, 200, { bindings: opsListGitBacking(cfg, sessionId) });
       }
       // POST /web/admin/git-backing { ...GitBackingBinding } — bind a unit container
       // repo or the instance-structure backup repo.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'git-backing') {
-        return opsBindGitBacking(cfg, sessionId, body, res);
+        // Strip the inline PAT out of the binding shape — it is stored write-only in
+        // the secret store, NEVER persisted into the binding record.
+        const pat = body?.pat ? String(body.pat) : undefined;
+        const binding = { ...(body ?? {}) } as Record<string, unknown>;
+        delete binding.pat;
+        return sendJson(res, 200, opsBindGitBacking(cfg, sessionId, binding as unknown as GitBackingBinding, pat));
       }
       // POST /web/admin/git-backing/remove { id }
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'remove') {
-        return opsUnbindGitBacking(cfg, sessionId, body, res);
+        opsUnbindGitBacking(cfg, sessionId, String(body?.id ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // POST /web/admin/git-backing/sync { id } — run the mirror sync now.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'git-backing' && parts[3] === 'sync') {
-        return opsSyncGitBacking(cfg, sessionId, body, res);
+        return sendJson(res, 200, { published: opsSyncGitBacking(cfg, sessionId, String(body?.id ?? '')) });
       }
 
       // ── Share links (owner-side; gated on share:create) ───────────────────
       // POST /web/admin/share { ...ShareLinkInput } — create a link (token once).
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'share') {
-        return adminCreateShareLink(cfg, sessionId, body, res);
+        return sendJson(res, 201, adminCreateShareLink(cfg, sessionId, (body ?? {}) as unknown as ShareLinkInput));
       }
       // GET /web/admin/share?projectId= — a project's share links.
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'share') {
-        return adminListShareLinks(cfg, sessionId, url, res);
+        return sendJson(res, 200, { links: adminListShareLinks(cfg, sessionId, url.searchParams.get('projectId') ?? '') });
       }
       // POST /web/admin/share/refresh { linkId } — re-capture the snapshot.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'refresh') {
-        return adminRefreshShareSnapshot(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminRefreshShareSnapshot(cfg, sessionId, String(body?.linkId ?? '')));
       }
       // POST /web/admin/share/update { linkId, changes } — mutable settings.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'update') {
-        return adminUpdateShareLink(cfg, sessionId, body, res);
+        return sendJson(res, 200, adminUpdateShareLink(cfg, sessionId, String(body?.linkId ?? ''), (body?.changes ?? {}) as ShareLinkUpdate));
       }
       // POST /web/admin/share/remove { linkId } — revoke.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'remove') {
-        return adminRemoveShareLink(cfg, sessionId, body, res);
+        adminRemoveShareLink(cfg, sessionId, String(body?.linkId ?? ''));
+        return sendJson(res, 200, { ok: true });
       }
       // GET /web/admin/share/access?linkId=&limit= — the link's access log.
       if (req.method === 'GET' && parts.length === 4 && parts[2] === 'share' && parts[3] === 'access') {
-        return adminGetShareAccessLog(cfg, sessionId, url, res);
+        const limit = Number(url.searchParams.get('limit') ?? '100') || 100;
+        return sendJson(res, 200, { entries: adminGetShareAccessLog(cfg, sessionId, url.searchParams.get('linkId') ?? '', limit) });
       }
 
       // ── Existing scoped control-plane reads (unchanged) ───────────────────
       // GET /web/admin/landscape — the org-unit + project + relation graph (landscape:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'landscape') {
-        return sendJson(res, 200, generateLandscape(cfg, sessionId));
+        return sendJson(res, 200, adminGetLandscape(cfg, sessionId));
       }
       // GET /web/admin/health — instance health report (operations:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'health') {
-        return sendJson(res, 200, getHealthReport(cfg, sessionId));
+        return sendJson(res, 200, adminGetHealth(cfg, sessionId));
       }
       // GET /web/admin/usage — resource usage snapshots (operations:read).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'usage') {
-        return sendJson(res, 200, { usage: getUsage(cfg, sessionId) });
+        return sendJson(res, 200, { usage: adminGetUsage(cfg, sessionId) });
       }
       // GET /web/admin/approvals — pending approval requests in the caller's scope
       // (approval:decide).
       if (req.method === 'GET' && parts.length === 3 && parts[2] === 'approvals') {
-        return sendJson(res, 200, { requests: listPendingRequests(cfg, sessionId) });
+        return sendJson(res, 200, { requests: adminListApprovals(cfg, sessionId) });
       }
       // POST /web/admin/approvals/decide { requestId, approved, reason } — decide a
       // pending request. decidedBy is server-authoritative (the session principal);
       // self-approval is refused inside decideRequest.
       if (req.method === 'POST' && parts.length === 4 && parts[2] === 'approvals' && parts[3] === 'decide') {
+        // Strict decoding: a body that does not carry exactly the accepted fields is
+        // refused (400) and the request stays pending — it is never read as a denial.
+        const requestId: unknown = body?.requestId;
+        if (typeof requestId !== 'string' || requestId.trim() === '') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `requestId` must be a non-empty string.' });
+        }
+        if (typeof body?.approved !== 'boolean') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `approved` must be true or false.' });
+        }
+        if (body.reason !== undefined && typeof body.reason !== 'string') {
+          return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' `reason` must be a string.' });
+        }
         const decision: ApprovalDecision = {
-          requestId: String(body?.requestId ?? ''),
-          approved: body?.approved === true,
-          reason: typeof body?.reason === 'string' ? body.reason : undefined,
+          requestId,
+          approved: body.approved,
+          reason: body.reason,
           decidedBy: { userId: '', kind: 'human', issuer: 'local' }, // overridden server-side
           decidedAt: '', // set server-side
         };
-        return sendJson(res, 200, decideRequest(cfg, sessionId, decision));
+        try {
+          return sendJson(res, 200, adminDecideApproval(cfg, sessionId, decision));
+        } catch (err) {
+          // An unknown request id is a malformed decision, not a missing route.
+          if (err instanceof Error && /^Approval request ".*" not found\./.test(err.message)) {
+            return sendJson(res, 400, { error: APPROVAL_DECIDE_FIELDS_MESSAGE + ' No pending approval request has that `requestId`.' });
+          }
+          throw err;
+        }
       }
     }
 
@@ -3762,6 +4099,8 @@ export async function handleWebRequest(
       const errors = (err as { errors?: { code: string; message: string; specId?: string }[] }).errors;
       return sendJson(res, 409, { error: err.message, errors });
     }
+    // A lock that refused before writing anything is a conflict with the tree's state.
+    if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
     const msg = err instanceof Error ? err.message : String(err);
     if (/unsupported graph tier/i.test(msg)) return sendJson(res, 400, { error: msg });
     if (/not found|unknown/i.test(msg)) return sendJson(res, 404, { error: msg });

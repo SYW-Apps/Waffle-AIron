@@ -280,6 +280,9 @@ export function buildAuthorizationUrl(
   state: string,
   redirectUri: string,
 ): string {
+  // Every sign-in start path builds its URL here, so this is where the
+  // provider's redirect allowlist is enforced: no start path can skip it.
+  assertAllowedRedirectUri(config, redirectUri);
   const clientId = requireClientId(config);
   const url = new URL(endpoints.authorizationEndpoint);
   url.searchParams.set('response_type', 'code');
@@ -606,7 +609,7 @@ export function resolveGroups(providerMetadata: string): string[] {
  * (backward compatible). The thrown message never echoes the supplied
  * redirectUri, so a malicious value cannot be reflected back.
  */
-export function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri: string): void {
+function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri: string): void {
   const allowed = provider.allowedRedirectUris;
   if (!allowed || allowed.length === 0) {
     return;

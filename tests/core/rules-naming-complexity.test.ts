@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { RulesConfig, RulesConfigSchema } from '../../src/models/project.js';
 
@@ -97,13 +97,14 @@ schemaVersion: 1.0.0
 id: invalid-comp
 name: invalid-comp
 subsystem: subsystem_a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
 `);
 
-      const result = validateSddTree(rules);
+      const result = validateProject(rules);
       expect(result.valid).toBe(true); // Warnings don't invalidate tree
       const codes = result.issues.map(i => i.code);
       expect(codes).toContain('NAMING_CONVENTION_VIOLATION');
@@ -179,7 +180,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
 `);
 
-      const result = validateSddTree(rules);
+      const result = validateProject(rules);
       const codes = result.issues.map(i => i.code);
       expect(codes).toContain('STEREOTYPE_NAMING_VIOLATION');
       const messages = result.issues.map(i => i.message);
@@ -226,13 +227,14 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
 `);
 
-      const result = validateSddTree(rules);
+      const result = validateProject(rules);
       expect(result.valid).toBe(false);
       expect(result.issues.map(i => i.code)).toContain('INVALID_NAMING_PATTERN');
 
@@ -287,13 +289,14 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: ''
 `);
 
-      const result = validateSddTree(rules);
+      const result = validateProject(rules);
       const codes = result.issues.map(i => i.code);
       expect(codes).toContain('MISSING_DESCRIPTION');
       expect(codes).toContain('DESCRIPTION_TOO_SHORT');
@@ -347,7 +350,8 @@ schemaVersion: 1.0.0
 id: comp-a
 name: comp-a
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 dependsOn: [comp-b, comp-c]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -359,7 +363,8 @@ schemaVersion: 1.0.0
 id: comp-b
 name: comp-b
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
@@ -370,7 +375,8 @@ schemaVersion: 1.0.0
 id: comp-c
 name: comp-c
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 description: valid description
@@ -424,7 +430,7 @@ createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
 
-      const result = validateSddTree(rules);
+      const result = validateProject(rules);
       const codes = result.issues.map(i => i.code);
       expect(codes).toContain('EXCESSIVE_DEPENDENCIES');
       expect(codes).toContain('EXCESSIVE_METHODS');

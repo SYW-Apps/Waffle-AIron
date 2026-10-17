@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { resolveNarrativeLabels } from '../../src/core/narrative-labels.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
   loadImplementationSpec,
@@ -91,7 +91,7 @@ describe('updateSpec label resolution (write path)', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-labels-test-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'billing', name: 'Billing', description: 'd',
       parentSystem: 'GK', publicInterfaces: [], createdAt: now, updatedAt: now,
     });

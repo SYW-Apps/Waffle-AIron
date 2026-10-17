@@ -1,0 +1,26 @@
+id: approval_portal
+name: Approval Portal
+description: >-
+  Published approval surface of sdd_core: the gate identity of the tree (state ids), the committed
+  lock record and the lock state it implies, the approval verdict and diff against the approved
+  specs, the approved snapshot a lock captures, the chained children's pins, and the local approver
+  identity. Every caller that asks "is this design the approved one, and what changed since" reaches
+  core here. In-process today: realized by src/core/index.ts alongside core's other portals.
+subsystem: sdd_core
+componentType: Portal
+owns: []
+dependsOn:
+  - approval_comparison
+  - core_orchestrator
+  - local_approver
+  - state_hash
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js, which
+    re-exports the core barrel) and read or record approval (gate identity, lock record, approval
+    verdict) in their own process
+status: complete
+createdAt: '2026-09-25T17:32:17.292Z'
+updatedAt: '2026-10-06T19:13:30.128Z'

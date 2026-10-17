@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { seedIdentityProviderFromEnv } from '../../src/commands/host.js';
 import { listIdentityProviderRecords } from '../../src/server/policy.js';
-import { listIdentityProviders } from '../../src/server/identity.js';
+import { listProviders } from '../../src/server/identity.js';
 import { resolveSecret, setSecret } from '../../src/utils/secrets.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -108,7 +108,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
     expect(JSON.stringify(records)).not.toContain(RAW_SECRET);
 
     // Visible through the identity plane (instance-admin master credential).
-    const listed = listIdentityProviders(cfg, MASTER);
+    const listed = listProviders(cfg, MASTER);
     expect(listed.map((p) => p.id)).toEqual(['default']);
   });
 

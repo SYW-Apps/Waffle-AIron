@@ -1,10 +1,9 @@
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
-  saveTypeSpec,
   invalidateSpecCache,
 } from './specs.js';
 import type {
@@ -22,7 +21,7 @@ import type {
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Demo project seeder (sdd_core)
+// Demo project seeder (sdd_core demo_orchestrator.seedTree)
 //
 // Writes a RICH, coherent, multi-layer example spec tree into the bound project
 // root so the architecture canvas has substantial content to render across all
@@ -36,7 +35,7 @@ import type {
 //
 // Coverage the example deliberately exercises:
 //   • ≥3 subsystems, each a layered slice: Portal → Orchestrator → Repository
-//     (which OWNS a Store + Registry + Index), plus a Specialist / Adapter.
+//     (which OWNS a Store + Registry + Index), plus an Orchestrator (pure logic) / Adapter.
 //   • Two cross-subsystem edges shaped correctly: a client Adapter in one
 //     subsystem dependsOn another subsystem's PUBLISHED Portal (red boundary
 //     edges + frames in the canvas).
@@ -105,7 +104,7 @@ export function seedDemoTree(): void {
       { id: 'catalogdb', name: 'Catalog DB', engine: 'postgres', description: 'Products and categories.' },
       { id: 'ordersdb', name: 'Orders DB', engine: 'postgres', description: 'Orders, order lines, and payments.' },
     ],
-    // L0 gateway surface — the entries exported beyond the project (each backed by
+    // L0 export surface — the entries exported beyond the project (each backed by
     // a subsystem-published Portal), with an audience ceiling. Catalog + Ordering
     // are externally shareable (they appear in a public share's OpenAPI); Payments
     // is instance-internal (excluded from an external projection).
@@ -123,8 +122,8 @@ export function seedDemoTree(): void {
     name: string,
     description: string,
     publicInterfaces: PublicInterface[],
-  ): void =>
-    saveSubsystemSpec({
+  ): void => void
+    saveSpec('subsystem', {
       id,
       name,
       description,
@@ -169,12 +168,12 @@ export function seedDemoTree(): void {
 
   // catalog
   comp('catalog-portal', 'Catalog Portal', 'catalog', 'Portal', 'HTTP front door for catalog reads.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/catalog',
     dependsOn: ['catalog-orchestrator'],
   });
   comp('catalog-orchestrator', 'Catalog Orchestrator', 'catalog', 'Orchestrator', 'Coordinates catalog reads and pricing.', {
-    dependsOn: ['product-repo', 'pricing-specialist'],
+    dependsOn: ['product-repo', 'pricing'],
   });
   comp('product-repo', 'Product Repository', 'catalog', 'Repository', 'Persistence facade for products.', {
     owns: ['product-store', 'product-registry', 'product-index'],
@@ -182,11 +181,13 @@ export function seedDemoTree(): void {
   comp('product-store', 'Product Store', 'catalog', 'Store', 'Durable product record storage.');
   comp('product-registry', 'Product Registry', 'catalog', 'Registry', 'SKU → product identity registry.');
   comp('product-index', 'Product Index', 'catalog', 'Index', 'Category → product id lookup index.');
-  comp('pricing-specialist', 'Pricing Specialist', 'catalog', 'Specialist', 'Computes tiered display pricing.');
+  comp('pricing', 'Pricing', 'catalog', 'Orchestrator', 'Computes tiered display pricing.', {
+    dependencyClass: 'pure',
+  });
 
   // payments
   comp('payments-portal', 'Payments Portal', 'payments', 'Portal', 'HTTP front door for charges.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/payments',
     dependsOn: ['payments-orchestrator'],
   });
@@ -203,7 +204,7 @@ export function seedDemoTree(): void {
 
   // ordering
   comp('ordering-portal', 'Ordering Portal', 'ordering', 'Portal', 'HTTP front door for orders.', {
-    portalType: 'HTTP_API',
+    transport: 'HTTP',
     basePath: '/orders',
     dependsOn: ['ordering-orchestrator'],
   });
@@ -237,8 +238,8 @@ export function seedDemoTree(): void {
 
   // catalog interfaces
   iface('icatalog-portal', 'ICatalogPortal', 'catalog-portal', [
-    { name: 'getProduct', description: 'Fetch one product by id.', returns: 'Product', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/catalog/products/{id}' } },
-    { name: 'listByCategory', description: 'List products in a category.', returns: 'Product[]', params: [{ name: 'categoryId', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/catalog/categories/{categoryId}/products' } },
+    { name: 'getProduct', description: 'Fetch one product by id.', returns: 'Product', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/products/{id}' } },
+    { name: 'listByCategory', description: 'List products in a category.', returns: 'Product[]', params: [{ name: 'categoryId', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/categories/{categoryId}/products' } },
   ]);
   iface('icatalog-orchestrator', 'ICatalogOrchestrator', 'catalog-orchestrator', [
     { name: 'fetchProduct', description: 'Load and validate a product.', returns: 'Product', params: [{ name: 'productId', type: 'string' }] },
@@ -260,13 +261,13 @@ export function seedDemoTree(): void {
   iface('iproduct-index', 'IProductIndex', 'product-index', [
     { name: 'byCategory', description: 'Product ids in a category.', returns: 'string[]', params: [{ name: 'categoryId', type: 'string' }] },
   ]);
-  iface('ipricing-specialist', 'IPricingSpecialist', 'pricing-specialist', [
+  iface('ipricing', 'IPricing', 'pricing', [
     { name: 'quote', description: 'Compute a tiered price for a quantity.', returns: 'Money', params: [{ name: 'product', type: 'Product' }, { name: 'qty', type: 'number' }] },
   ]);
 
   // payments interfaces
   iface('ipayments-portal', 'IPaymentsPortal', 'payments-portal', [
-    { name: 'charge', description: 'Charge an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/payments/charges' } },
+    { name: 'charge', description: 'Charge an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/charges' } },
   ]);
   iface('ipayments-orchestrator', 'IPaymentsOrchestrator', 'payments-orchestrator', [
     { name: 'settle', description: 'Authorize and record a charge for an order.', returns: 'Payment', params: [{ name: 'orderId', type: 'string' }, { name: 'amount', type: 'Money' }] },
@@ -293,8 +294,8 @@ export function seedDemoTree(): void {
 
   // ordering interfaces
   iface('iordering-portal', 'IOrderingPortal', 'ordering-portal', [
-    { name: 'placeOrder', description: 'Place a new order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/orders' } },
-    { name: 'getOrder', description: 'Fetch an order by id.', returns: 'Order', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/orders/{id}' } },
+    { name: 'placeOrder', description: 'Place a new order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }], endpoint: { transport: 'HTTP', method: 'POST', path: '/' } },
+    { name: 'getOrder', description: 'Fetch an order by id.', returns: 'Order', params: [{ name: 'id', type: 'string' }], endpoint: { transport: 'HTTP', method: 'GET', path: '/{id}' } },
   ]);
   iface('iordering-orchestrator', 'IOrderingOrchestrator', 'ordering-orchestrator', [
     { name: 'checkout', description: 'Validate, price, charge, and persist an order.', returns: 'Order', params: [{ name: 'customerId', type: 'string' }, { name: 'items', type: 'OrderLine[]' }] },
@@ -346,7 +347,7 @@ export function seedDemoTree(): void {
   });
   const intentMethod = (name: string, intent: string): MethodImplementation => ({ name, narrative: [], intent });
 
-  // catalog: Portal (calls-only) → Orchestrator (full narratives) → Specialist (switch)
+  // catalog: Portal (calls-only) → Orchestrator (full narratives) → Orchestrator, pure logic (switch)
   impl('catalog-portal-impl', 'icatalog-portal', [
     callsOnly('getProduct', 'catalog-orchestrator', 'fetchProduct', 'Dispatch the read to the catalog orchestrator.'),
     callsOnly('listByCategory', 'catalog-orchestrator', 'browseCategory', 'Dispatch the category browse to the orchestrator.'),
@@ -369,13 +370,13 @@ export function seedDemoTree(): void {
         step({ stepNumber: 1, description: 'Normalize the category id.', type: 'local' }),
         step({ stepNumber: 2, description: 'Fetch every product in the category.', type: 'call', targetComponent: 'product-repo', targetMethod: 'findByCategory' }),
         step({ stepNumber: 3, description: 'Price each product for display.', type: 'loop', loopKind: 'forEach', over: 'each product in the result', endStep: 4 }),
-        step({ stepNumber: 4, description: 'Compute the display price for the product.', type: 'call', targetComponent: 'pricing-specialist', targetMethod: 'quote' }),
+        step({ stepNumber: 4, description: 'Compute the display price for the product.', type: 'call', targetComponent: 'pricing', targetMethod: 'quote' }),
         step({ stepNumber: 5, description: 'Return the priced product list.', type: 'return', outcome: 'priced catalog page' }),
       ],
     },
   ]);
 
-  impl('pricing-specialist-impl', 'ipricing-specialist', [
+  impl('pricing-impl', 'ipricing', [
     {
       name: 'quote',
       narrative: [
@@ -477,7 +478,7 @@ export function seedDemoTree(): void {
 
   // ── Types (entities + value objects) — ERD tables + FK reference edges ────────
   const type = (t: Omit<TypeSpec, 'createdAt' | 'updatedAt' | 'methods' | 'fields'> & Partial<Pick<TypeSpec, 'methods' | 'fields'>>): void =>
-    void saveTypeSpec({ methods: [], fields: [], ...base, ...t } as TypeSpec);
+    void saveSpec('type', { methods: [], fields: [], ...base, ...t } as TypeSpec);
 
   // Shared, system-level value object (no owning subsystem).
   type({

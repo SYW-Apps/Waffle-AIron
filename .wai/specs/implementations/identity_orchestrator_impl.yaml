@@ -4,18 +4,20 @@ description: >-
   Hosted identity control-plane workflows: authenticate the caller credential, then manage
   user-bound MCP/API tokens, hosted user records + their role bindings, identity-provider (SSO)
   configuration, and admin-only audit access; plus the unauthenticated headless SSO login pair.
-  Authorization resolves through the permission resolver (project:admin over the relevant scope, or
-  the env-anchored instance-admin bypass) — never stored grants. Audit appends are best-effort and
-  never fail the primary action.
+  Authorization resolves through the permission rules (project:admin over the relevant scope, or the
+  env-anchored instance-admin bypass) — never stored grants. Audit appends are best-effort and never
+  fail the primary action.
 contract: iidentity_orchestrator
 sourcePath: src/server/identity.ts
+injectedParams:
+  - cfg
 methods:
   - name: revokeToken
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential to the calling principal
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -34,7 +36,7 @@ methods:
       - stepNumber: 4
         description: Revoke the credential record by token id
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 5
         description: Append a redacted audit event without letting a failure fail the revoke
@@ -91,7 +93,7 @@ methods:
           Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
           authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signSsoState
       - stepNumber: 7
         description: >-
@@ -136,29 +138,20 @@ methods:
           is rejected; the original payload is returned (no caller credential — trust derives from
           the signed state and the code exchange)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifySsoState
       - stepNumber: 2
         description: Parse the verified state payload into providerId, nonce, and redirectUri
         type: local
       - stepNumber: 3
-        description: Resolve the configured identity providers through the policy repository
+        description: >-
+          Resolve the ENABLED identity provider the verified state is bound to through the shared
+          pre-auth resolution — an unknown id and a disabled provider reject identically (no
+          existence leak)
         type: call
-        targetComponent: policy_repository
-        targetMethod: listIdentityProviders
+        targetComponent: identity_orchestrator
+        targetMethod: resolveEnabledProvider
       - stepNumber: 4
-        description: Select the identity-provider configuration whose id is the state's providerId
-        type: local
-      - stepNumber: 5
-        description: If the selected provider is unknown or not enabled, reject
-        type: branch
-        condition: the selected provider is unknown or not enabled
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject the callback for an unknown or disabled provider
-        type: throw
-        error: unknown or disabled identity provider
-      - stepNumber: 7
         description: >-
           Resolve the provider's concrete OIDC endpoints through the identity provider adapter
           (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
@@ -166,46 +159,46 @@ methods:
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveEndpoints
-      - stepNumber: 8
+      - stepNumber: 5
         description: >-
           Exchange the authorization code for provider tokens using the config and the state's
           redirectUri, receiving a redacted provider response summary
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: exchangeCode
-      - stepNumber: 9
+      - stepNumber: 6
         description: >-
           Verify the provider metadata and resolve it to a Wairon PrincipalSubject (issuer +
           external subject), without leaking raw provider tokens
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveSubject
-      - stepNumber: 10
+      - stepNumber: 7
         description: >-
           Read the verified id_token's groups claim from the redacted provider summary (meaningful
           only now — after resolveSubject verified the same summary)
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveGroups
-      - stepNumber: 11
+      - stepNumber: 8
         description: >-
           Decide the SSO-admin membership: in the admin group exactly when the verified groups
           intersect the provider's configured adminGroupClaims (an unset or empty adminGroupClaims
           never matches)
         type: local
-      - stepNumber: 12
+      - stepNumber: 9
         description: Look up the hosted user by the resolved subject's issuer and external subject id
         type: call
         targetComponent: user_repository
         targetMethod: findByExternalSubject
-      - stepNumber: 13
+      - stepNumber: 10
         description: >-
           If no hosted user matched the resolved external subject, provision one; otherwise skip to
           minting
         type: branch
         condition: no hosted user matched the resolved external subject
-        onFalseStep: 16
-      - stepNumber: 14
+        onFalseStep: 13
+      - stepNumber: 11
         description: >-
           Build a new active HostedUserRecord for the resolved subject — first-login provisioning:
           status active, createdAt now, displayName + email read from the verified id_token claims
@@ -214,24 +207,24 @@ methods:
           admin assigns roles/permissions afterwards). The sso-admin role grants project:admin +
           project:create instance-wide, never *:*.
         type: local
-      - stepNumber: 15
+      - stepNumber: 12
         description: Persist the newly provisioned first-login user record through the user repository
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 16
+      - stepNumber: 13
         description: >-
           Reject re-login for a deactivated user before minting: if the hosted user resolved for
           this login is not 'active', deny (a freshly provisioned first-login record is always
           active, so only an existing deactivated user is rejected here)
         type: branch
         condition: the resolved hosted user's status is not 'active'
-        onFalseStep: 18
-      - stepNumber: 17
+        onFalseStep: 15
+      - stepNumber: 14
         description: Reject the re-login of a deactivated user
         type: throw
         error: deactivated user may not re-login
-      - stepNumber: 18
+      - stepNumber: 15
         description: >-
           If the user's stored profile or bindings are stale, refresh them; otherwise skip the
           refresh. Stale when the roleBindings disagree with the SSO-admin membership decided from
@@ -242,9 +235,9 @@ methods:
         condition: >-
           the user's stored profile or bindings are stale (roleBindings disagree with the SSO-admin
           membership, or the verified displayName/email differ from the stored record)
-        onTrueStep: 19
-        onFalseStep: 20
-      - stepNumber: 19
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
         description: >-
           Persist the refreshed record through the user repository: add the built-in sso-admin role
           binding on entry into the admin group and drop it on exit, and update displayName/email to
@@ -253,44 +246,28 @@ methods:
         type: call
         targetComponent: user_repository
         targetMethod: upsert
-      - stepNumber: 20
+      - stepNumber: 17
         description: >-
           Resolve the effective user record (the freshly provisioned record on first login,
           otherwise the existing match with the binding refresh applied) and mint a user-bound
           token: generate a cryptographically random token, compute its salted hash, and build the
           ApiKeyRecord (keyHash, ownerSubject = the resolved user's subject, createdBySubject = the
           resolved user's subject, projects = '*' so the token acts as the user across their
-          accessible projects with the resolver gating per project, createdAt now); the token
-          carries NO grants — the auth specialist resolves the owner's permissionSubject live from
-          roleBindings + assignments.
+          accessible projects with permission rules gating per project, createdAt now); the token
+          carries NO grants — the authentication component resolves the owner's permissionSubject
+          live from roleBindings + assignments.
         type: local
-      - stepNumber: 21
+      - stepNumber: 18
         description: Persist only the hashed credential record
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 22
-        description: Append a redacted audit event without letting a failure fail the login
-        type: try
-        endStep: 24
-        catches:
-          - error: audit append failure
-            step: 25
-      - stepNumber: 23
-        description: >-
-          Append the redacted sso.login audit event (security level) under the active retention
-          policy
+      - stepNumber: 19
+        description: Append the redacted sso.login (security) audit event best-effort
         type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 24
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 26
-      - stepNumber: 25
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 26
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
+      - stepNumber: 20
         description: Return the plaintext user-bound token (shown exactly once)
         type: return
         outcome: plaintext token returned once
@@ -299,14 +276,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Resolve the caller's project:read over the EXACT requested project through the resolver
-          (self-scoped: a unit assignment covers its own subtree, never another tenant's)
+          Resolve the caller's project:read over the EXACT requested project through the permission
+          rules (self-scoped: a unit assignment covers its own subtree, never another tenant's)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: The caller must already hold read authority over the project
@@ -337,7 +314,7 @@ methods:
       - stepNumber: 8
         description: Persist the credential record (hashed token only — the plaintext is never stored)
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
       - stepNumber: 9
         description: Append the redacted token.mint.self (security) audit event best-effort
@@ -350,13 +327,13 @@ methods:
         outcome: the plaintext token
     detail: intent
     intent: >-
-      Authenticate the caller (ws_ session or token) to the calling principal via the auth
-      specialist. Mint a token OWNED BY the caller (ownerSubject and createdBySubject = the
+      Authenticate the caller (ws_ session or token) to the calling principal via the authentication
+      component. Mint a token OWNED BY the caller (ownerSubject and createdBySubject = the
       principal's subject) narrowed to exactly one project (projects = [projectId]); the token
-      carries NO grants — it acts as the caller's OWN live permission on that project, so the
-      resolver gates read vs write at use time and the token can never exceed the caller's access
+      carries NO grants — it acts as the caller's OWN live permission on that project, so permission
+      rules gate read vs write at use time and the token can never exceed the caller's access
       (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
-      (token label only). Persist only the hashed record through the credential registry, append a
+      (token label only). Persist only the hashed record through the credential repository, append a
       best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
       once. Because the token is owned by the caller, a later deactivation of that user revokes it
       via revokeAllForOwner.
@@ -365,14 +342,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Return the caller's OWN minted credential records through the credential registry,
+          Return the caller's OWN minted credential records through the credential repository,
           redacted — hashed token only, with id/project/label/createdAt/revokedAt
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: listByOwner
       - stepNumber: 3
         description: Return the redacted records — a read, not audited
@@ -381,7 +358,7 @@ methods:
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, list the principal's own
-      credential records through the credential registry (listByOwner on the principal's subject
+      credential records through the credential repository (listByOwner on the principal's subject
       user id), and return them redacted: each carries the hashed token (never plaintext) with its
       id, authorized project, label, createdAt and revokedAt, so the client can show a user their
       agent tokens and offer revoke. A read; not audited.
@@ -390,12 +367,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: List the caller's OWN tokens through the credential registry
+        description: List the caller's OWN tokens through the credential repository
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: listByOwner
       - stepNumber: 3
         description: Only a token the caller owns may be revoked
@@ -410,9 +387,9 @@ methods:
         type: throw
         error: token not found
       - stepNumber: 5
-        description: Revoke the token through the credential registry
+        description: Revoke the token through the credential repository
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 6
         description: Append the redacted token.revoke.self (security) audit event best-effort
@@ -428,47 +405,54 @@ methods:
       Authenticate the caller credential to the calling principal, fetch the principal's own tokens
       (listByOwner) and confirm tokenId is among them (a token the caller does not own is rejected
       as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
-      it through the credential registry and append a best-effort redacted token.revoke.self
+      it through the credential repository and append a best-effort redacted token.revoke.self
       (security) audit event.
   - name: listUsers
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Compute the caller's project:admin visible scopes over the organization tree (the units
           they may administer)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Read the actionable units down from that view: its unit entries that are not breadcrumb
+          context
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableUnits
+      - stepNumber: 4
         description: If the caller has no actionable unit scope, deny
         type: branch
         condition: the caller has no actionable unit scope in the visible set
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
         description: Reject the listing
         type: throw
         error: Forbidden — user administration required
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           List hosted users through the repository, optionally narrowed by status (the user store
           owns NO project filter — membership is a grid question)
         type: call
         targetComponent: user_repository
         targetMethod: list
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           If a caller-supplied project filter is present, resolve its holders from the permission
           grid; otherwise skip to the scope filter
         type: branch
         condition: a caller-supplied project filter is present
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: >-
           List the DIRECT user assignments at that project scope through the permission repository
           and narrow the listing to those subject ids (user records carry no project reference of
@@ -476,13 +460,13 @@ methods:
         type: call
         targetComponent: permission_repository
         targetMethod: listAssignments
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Filter the returned users to those whose home unit is an actionable unit in the visible
           set (an instance-admin keeps every user), intersected with the grid-resolved project
           holders when a project filter was supplied
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Return the hosted user records filtered to the caller's scope
         type: return
         outcome: scoped hosted user records
@@ -492,7 +476,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the target user by id to read its home unit and existence
@@ -512,7 +496,7 @@ methods:
       - stepNumber: 5
         description: Resolve the caller's project:admin permission over the target user's home unit
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective project:admin value is not yes, deny
@@ -542,7 +526,7 @@ methods:
           Revoke every non-revoked credential owned by the user so existing tokens can no longer
           authenticate, capturing the revoked count
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revokeAllForOwner
       - stepNumber: 11
         description: >-
@@ -582,12 +566,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -619,12 +603,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -656,7 +640,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -670,7 +654,7 @@ methods:
           Resolve the caller's project:admin permission over the target user's home unit (the
           incoming record's, or the existing record's on update)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: If the effective project:admin value is not yes, deny
@@ -687,7 +671,7 @@ methods:
           Check the target record's subject id against the reserved built-in subject ids (the
           persisted boot-reserved UUIDs and the legacy 'builtin:*' literals)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: isReservedSubject
       - stepNumber: 7
         description: If the target subject id is reserved, reject
@@ -744,38 +728,9 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential to the calling principal
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: >-
-          Resolve the token's owner user by request.ownerUserId — matching the record id or the
-          record's subject userId (record id wins) — to confirm existence and read status
-        type: call
-        targetComponent: user_repository
-        targetMethod: findByRecordOrSubjectId
-      - stepNumber: 3
-        description: If no user matches request.ownerUserId, reject as not found
-        type: branch
-        condition: no user matches request.ownerUserId
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject minting for an unknown owner
-        type: throw
-        error: unknown owner user
-      - stepNumber: 5
-        description: >-
-          If the owner user's status is not 'active', reject — a fresh token must never revive a
-          deactivated user whose credentials were revoked at deactivation
-        type: branch
-        condition: the owner user's status is not 'active'
-        onTrueStep: 6
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject minting a token for a deactivated user
-        type: throw
-        error: cannot mint a token for a deactivated user
-      - stepNumber: 7
         description: >-
           If the caller is not an instance admin (permissionSubject.instanceAdmin is false), deny —
           the minted token acts as the OWNER's live permission, which may exceed a non-super-admin
@@ -783,51 +738,100 @@ methods:
           every owner
         type: branch
         condition: the caller is not an instance admin (permissionSubject.instanceAdmin is false)
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
         description: Reject minting a token on behalf of another user without instance-admin
         type: throw
         error: >-
-          Forbidden — minting a token for another user requires instance-admin; delegated minting
-          bounded by the minter's own scope is a future enhancement, and a user mints their own
-          single-project tokens via mintSelfToken
+          Forbidden — minting a token for another user requires instance-admin; a user mints their
+          own single-project tokens via mintSelfToken
+      - stepNumber: 4
+        description: >-
+          Refuse a reserved built-in subject id as the owner: the env-anchored paths are the only
+          super-admin routes
+        type: local
+      - stepNumber: 5
+        description: >-
+          If request.projects is missing or empty, reject — the narrowing is required, and '*' is
+          the full reach
+        type: branch
+        condition: request.projects is missing or empty
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject the request, telling the caller to pass the project ids or '*'
+        type: throw
+        error: >-
+          projects is required: pass the project ids the token may name, or '*' for the owner's full
+          reach
+      - stepNumber: 7
+        description: >-
+          Validate each narrowing entry through the project repository (a hosted record id or '*');
+          a deprecated member-qualified entry is stored as the member's record id and the mapping
+          kept for the answer; an unknown project or unheld member is refused
+        type: call
+        targetComponent: project_repository
+        targetMethod: admitNarrowing
+      - stepNumber: 8
+        description: >-
+          Resolve the owner's user record by request.ownerUserId — matching the record id or the
+          record's subject userId (record id wins). An owner id with no user record is a service
+          principal, allowed by design
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByRecordOrSubjectId
       - stepNumber: 9
         description: >-
-          Generate a cryptographically random token, compute its salted hash, and build the
-          ApiKeyRecord (keyHash, ownerSubject = the owner user's subject, createdBySubject = the
-          caller's subject, projects = request.projects narrowing, createdAt now, optional
-          expiresAt); the token carries NO grants — within its narrowing it acts as the owner's live
-          permission and the resolver gates per project
-        type: local
+          If a user record matches and its status is not 'active', reject — a fresh token must never
+          revive a deactivated user whose credentials were revoked at deactivation
+        type: branch
+        condition: a user record matches and its status is not 'active'
+        onTrueStep: 10
+        onFalseStep: 11
       - stepNumber: 10
+        description: Reject minting a token for a deactivated user
+        type: throw
+        error: cannot mint a token for a deactivated user
+      - stepNumber: 11
+        description: >-
+          Generate a cryptographically random token, compute its salted hash, and build the
+          ApiKeyRecord (keyHash, ownerSubject = the owner record's subject, or a synthesized service
+          subject for a record-less service principal, createdBySubject = the caller's subject,
+          projects = the validated narrowing, createdAt now, optional expiresAt); the token carries
+          NO grants — within its narrowing it acts as the owner's live permission and permission
+          rules gate per project
+        type: local
+      - stepNumber: 12
         description: Persist only the hashed credential record
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 11
+      - stepNumber: 13
         description: Append a redacted audit event without letting a failure fail the mint
         type: try
-        endStep: 13
+        endStep: 15
         catches:
           - error: audit append failure
-            step: 14
-      - stepNumber: 12
+            step: 16
+      - stepNumber: 14
         description: >-
-          Append the redacted token.mint audit event (security level) under the active retention
+          Append the redacted token.mint audit event (security level) under the effective audit
           policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 13
+      - stepNumber: 15
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 17
+      - stepNumber: 16
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 15
-        description: Return the plaintext token (shown exactly once)
+      - stepNumber: 17
+        description: >-
+          Return the plaintext token (shown exactly once) with the mapping of every deprecated
+          member-qualified entry to the record id it was stored as
         type: return
         outcome: plaintext token returned once
     detail: full
@@ -836,14 +840,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over instance scope (the env-anchored
           instance-admin passes via bypass; a delegated project:admin@instance also passes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -857,8 +861,8 @@ methods:
         error: Forbidden — audit administration requires instance-wide project:admin
       - stepNumber: 5
         description: >-
-          Resolve the active AuditRetentionPolicy from the host config, using the secure default
-          policy when unset
+          Resolve the effective AuditRetentionPolicy: the host config's auditPolicy, else the secure
+          default (host_config.effectiveAuditPolicy)
         type: local
       - stepNumber: 6
         description: Apply the retention policy and delete expired audit events
@@ -889,17 +893,17 @@ methods:
         type: return
         outcome: removed count
     detail: full
-  - name: listIdentityProviders
+  - name: listProviders
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -921,17 +925,18 @@ methods:
         type: return
         outcome: identity-provider configurations
     detail: full
-  - name: upsertIdentityProvider
+    symbol: listProviders
+  - name: upsertProvider
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -976,17 +981,18 @@ methods:
         type: return
         outcome: stored identity-provider configuration
     detail: full
-  - name: removeIdentityProvider
+    symbol: upsertProvider
+  - name: removeProvider
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over instance scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -1031,6 +1037,7 @@ methods:
         type: return
         outcome: identity provider removed
     detail: full
+    symbol: removeProvider
   - name: resolveEnabledProvider
     narrative:
       - stepNumber: 1
@@ -1081,6 +1088,18 @@ methods:
         type: return
         outcome: void
     symbol: tryAppendAudit
+  - name: auditSignIn
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the redacted auth event: the given subject as the actor, or the anonymous local
+          service actor when none is resolved yet, with the fields laid over it
+        type: local
+      - stepNumber: 2
+        description: Append it best-effort, so a failed append never fails the sign-in step
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-07-19T13:29:42.967Z'
+updatedAt: '2026-10-03T17:58:56.809Z'

@@ -1,0 +1,16 @@
+kind: enum
+id: profile_family
+name: ProfileFamily
+description: A profile's doctrine family, which opts it into the built-in stereotype fencing.
+fields: []
+methods: []
+sourcePath: src/core/extensions.ts
+values:
+  - name: backend-like
+    description: Frontend stereotypes are refused
+  - name: frontend-like
+    description: Backend runtime stereotypes are warned
+  - name: neutral
+    description: No fencing (the default)
+createdAt: '2026-10-04T23:34:13.960Z'
+updatedAt: '2026-10-04T23:34:14.410Z'

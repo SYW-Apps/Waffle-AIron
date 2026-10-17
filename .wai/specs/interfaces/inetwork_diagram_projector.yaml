@@ -1,0 +1,34 @@
+id: inetwork_diagram_projector
+name: Network Diagram Projector Interface
+description: The network picture, as Mermaid or as the canvas's view model.
+component: network_diagram_projector
+methods:
+  - name: view
+    description: >-
+      The view model the hosted canvas's network view draws: networks outermost first, the workloads
+      inside them, gateways marked, an outside node, and the flows aggregated per workload pair and
+      transport. Pure.
+    signature: 'view(model: ReachModel, flows: list<NetworkFlow>): NetworkViewModel'
+    returns: NetworkViewModel
+    params:
+      - name: model
+        type: ReachModel
+      - name: flows
+        type: list<NetworkFlow>
+    guarantees:
+      - idempotent
+  - name: mermaid
+    description: >-
+      The same picture as a Mermaid flowchart: each network a subgraph nested in its parent's,
+      gateways on the boundary, an outside node, each aggregated flow an edge labelled with its
+      transport and verb count. Pure.
+    signature: 'mermaid(view: NetworkViewModel): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: view
+        type: NetworkViewModel
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-06T13:10:56.937Z'
+updatedAt: '2026-10-06T13:10:57.568Z'

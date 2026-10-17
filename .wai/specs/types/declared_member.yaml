@@ -1,0 +1,71 @@
+kind: value-object
+id: declared_member
+name: DeclaredMember
+description: >-
+  One member as the configuration declares it, normalized from the shorthand or the long form: the
+  alias, its source parsed into its object form with the storage that implies, the `as` it asserts
+  (if any), the description, and what is wrong with the declaration on its own (before the loader
+  looks for the directory). What the member IS follows from its content, so it is the scan's to
+  decide (ScannedPart, ProjectNode), never this value's. The answer of
+  project_config.declaredMembers().
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: >-
+      The alias key as written in project.yaml: the first segment this project's references use for
+      the member.
+    optional: false
+    key: primary
+  - name: path
+    type: string
+    description: >-
+      A contained member's root as written, relative to the declaring project's root — from a
+      contained `source` or the deprecated long-form `path`; absent for any other storage.
+    optional: true
+  - name: description
+    type: string
+    description: The long form's description, when given.
+    optional: true
+  - name: problem
+    type: string
+    description: >-
+      Set when the declaration cannot be used as written: an alias outside [a-z0-9-_]+, no source
+      (or both `source` and the deprecated `path`), an absolute path, a source string none of the
+      four forms parses, a git source without `#<full commit>`, an `as` other than part or project,
+      a `hosted:` source asserted `as: part` (a part is part of its parent's record), an alias this
+      configuration also declares under `externals` (one alias names one project), or a `use` entry
+      that is neither `*` nor a public name of [a-z0-9-_]+.
+    optional: true
+  - name: use
+    type: list<string>
+    description: >-
+      The long form's `use` as written, deduplicated in first-seen order; empty for the shorthand
+      and when it imports nothing.
+    optional: false
+  - name: as
+    type: string
+    description: part | project when the declaration asserts one; absent otherwise (the usual case).
+    optional: true
+  - name: source
+    type: ExternalSource
+    description: >-
+      The source string parsed: { path } for a contained or sibling path, { git, commit, ref?, dir?
+      }, or { hosted }.
+    optional: false
+  - name: storage
+    type: MemberStorage
+    description: >-
+      Where the member's files live, from `path` or the source's one set field. Shown on the canvas
+      as the part's storage badge.
+    optional: false
+  - name: deprecatedPath
+    type: bool
+    description: >-
+      Whether the entry used the deprecated long-form `path` key (DEPRECATED_MOUNT_FORM; `doctor
+      --fix` rewrites it).
+    optional: false
+methods: []
+sourcePath: src/models/project.ts
+createdAt: '2026-09-27T10:32:33.853Z'
+updatedAt: '2026-10-04T23:39:03.705Z'

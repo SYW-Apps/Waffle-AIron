@@ -1,0 +1,30 @@
+kind: value-object
+id: spec_reference
+name: SpecReference
+description: >-
+  One reference a spec holds to another: the spec that holds it, the position it sits in, and the
+  spec it names. What a deletion would leave dangling is a list of these.
+subsystem: sdd_core
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The kind of the spec that holds the reference
+    optional: false
+  - name: id
+    type: string
+    description: The id of the spec that holds the reference
+    optional: false
+  - name: position
+    type: string
+    description: >-
+      Where the reference sits, as a dotted path: dependsOn, owns, subsystem, contract,
+      publicInterfaces, a step's targetComponent, a param's type
+    optional: false
+  - name: target
+    type: SpecRef
+    description: The spec the reference names
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-08T18:49:59.915Z'
+updatedAt: '2026-10-08T18:50:00.597Z'

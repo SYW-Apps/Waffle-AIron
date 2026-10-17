@@ -1,0 +1,26 @@
+kind: value-object
+id: reachability_migration_plan
+name: ReachabilityMigrationPlan
+description: >-
+  The reachability migration of one project, planned and (with apply) written: each rewrite with the
+  spec it touches, and what it reports instead of guessing.
+subsystem: sdd_core
+fields:
+  - name: rewrites
+    type: list<ReachRewrite>
+    description: Every rewrite, in spec order
+    optional: false
+  - name: reported
+    type: list<ReachRewrite>
+    description: >-
+      What it will not write and why: an endpoint outside every old prefix, a sibling-subsystem
+      caller to model, an authored export type that disagrees with the derived one
+    optional: false
+  - name: applied
+    type: bool
+    description: Whether the rewrites were written
+    optional: false
+methods: []
+sourcePath: src/core/reachability-migration.ts
+createdAt: '2026-10-06T13:06:43.847Z'
+updatedAt: '2026-10-06T13:06:44.448Z'

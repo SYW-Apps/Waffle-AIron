@@ -1,0 +1,32 @@
+id: ilandscape_graph
+name: Landscape Graph Interface
+description: >-
+  Contract for projecting hosted organization, project, public-surface, and relation records into a
+  landscape graph.
+component: landscape_graph
+methods:
+  - name: build
+    description: >-
+      Build a hosted-instance landscape graph from authorized organization units, projects,
+      placements, snapshots, and relations.
+    signature: >-
+      build(units: list<OrganizationUnitRecord>, projects: list<HostedProjectRecord>, placements:
+      list<ProjectPlacement>, snapshots: list<ProjectPublicSurfaceSnapshot>, relations:
+      list<ProjectRelationRecord>): LandscapeGraphModel
+    returns: LandscapeGraphModel
+    params:
+      - name: units
+        type: list<OrganizationUnitRecord>
+      - name: projects
+        type: list<HostedProjectRecord>
+      - name: placements
+        type: list<ProjectPlacement>
+      - name: snapshots
+        type: list<ProjectPublicSurfaceSnapshot>
+      - name: relations
+        type: list<ProjectRelationRecord>
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-08T21:13:30.746Z'
+updatedAt: '2026-10-04T10:18:57.296Z'

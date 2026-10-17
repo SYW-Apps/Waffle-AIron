@@ -1,0 +1,143 @@
+kind: value-object
+id: method_implementation
+name: MethodImplementation
+description: >-
+  One L4 method realization: the unit of the implementation_spec methods list. name matches an L3
+  contract method; sourcePath names the method's own source file when it is not the
+  implementation's; narrative is the flat numbered L5 step list (see narrative_step); detail and
+  conformance override the spec-level dials for this method; intent is the prose substitute at
+  detail: intent; symbol binds the code-level realizing name when it legitimately differs from the
+  contract name; ext carries opaque pack/tool data preserved verbatim.
+fields:
+  - name: name
+    type: string
+    description: Contract method this realizes; must match a method on the L3 interface
+    optional: false
+    key: primary
+  - name: narrative
+    type: list<NarrativeStep>
+    description: >-
+      The L5 narrative: a flat numbered step list whose order mimics the code lines; flow steps jump
+      by step number. Empty when the method is specified by intent.
+    optional: false
+  - name: detail
+    type: NarrativeDetail
+    description: Narrative detail for this method (overrides the spec-level default)
+    optional: true
+  - name: intent
+    type: string
+    description: >-
+      Behavioural prose, the narrative substitute at detail: intent; must be non-trivial and state
+      failure behaviour here or in the contract's guarantees (INTENT_FLOOR)
+    optional: true
+  - name: conformance
+    type: ConformanceTier
+    description: Conformance tier for this method (overrides the spec-level default)
+    optional: true
+  - name: symbol
+    type: string
+    description: >-
+      Code-level name realizing this contract method when it legitimately differs from the contract
+      name, e.g. a store's put realized by saveSnapshot
+    optional: true
+  - name: ext
+    type: any
+    description: Opaque pack/tool extension data, preserved verbatim
+    optional: true
+  - name: sourcePath
+    type: string
+    description: >-
+      Source file realizing this method when it is not the implementation's sourcePath, such as a
+      command whose body lives in its own file. Relative to the root of the project holding the spec
+      (a chained subproject's own root). The code model analyzes it; structural, call, dependency,
+      integration and hidden-state conformance and the narrative-detail lint read the method against
+      it; agent write fences include it.
+    optional: true
+  - name: calls
+    type: list<string>
+    description: >-
+      The calls this method makes, when its narrative does not show them (detail: intent, or
+      calls-only with no steps authored). Each entry is one "<component>.<method>" reference — the
+      spelling the conformance debt register and a lint allow name a unit with. The narrative graph
+      walk takes exactly these edges for a method with no narrative and no others, so an undeclared
+      collaborator is not reached. An entry is held to everything a call step is held to: the target
+      is validated the same way (narrative-target-references), and the CODE is read for it the same
+      way (call-conformance, both directions) — a declaration asserts the same call a step does,
+      minus the position in the flow that this check never reads, so it can no more buy reachability
+      without the code than a step can. Refused beside a non-empty narrative, where the steps
+      already say what is called.
+    optional: true
+  - name: exportedVia
+    type: string
+    description: >-
+      The exported binding a consumer imports to reach this method when the realization is published
+      as a value that composes it rather than exported in its own right. A handle the method's
+      source file does not export is reported (UNREALIZED_EXPORT_HANDLE).
+    optional: true
+methods:
+  - name: sourceFile
+    signature: 'sourceFile(implementationSourcePath?: string): string | undefined'
+    returns: string?
+    description: >-
+      The file this method is realized in: its own sourcePath, else the implementation's sourcePath
+      passed in, else none.
+    symbol: methodSourceFile
+  - name: effectiveDetail
+    signature: 'effectiveDetail(implementation: ImplementationSpec, component?: ComponentSpec): ResolvedDetail'
+    returns: ResolvedDetail
+    description: >-
+      The narrative detail this method is held to: its own detail, else the implementation's, else
+      the component's default; explicit when either of the first two set it
+  - name: stepGraph
+    signature: 'stepGraph(): StepGraph'
+    returns: StepGraph
+    description: The step graph of its narrative
+    sourcePath: src/models/step-graph.ts
+  - name: cognitiveScore
+    signature: 'cognitiveScore(): i32'
+    returns: int
+    description: >-
+      The cognitive weight of this method's narrative, counting how much nesting and branching a
+      reader must hold. A branch, switch, loop or parallel step counts one plus its nesting depth;
+      each catch clause of a try counts the same; each jump counts one, flat. Nesting depth comes
+      from the regions that carry an endStep (loop, try, parallel), so a flat sequence of calls
+      scores zero however long it is.
+  - name: complexityLevel
+    signature: 'complexityLevel(): string'
+    returns: string
+    description: >-
+      The band its cognitiveScore falls in: linear (0), simple (1-4), moderate (5-9), complex
+      (10-19) or severe (20 and above). The band, not the raw score, is what a threshold is
+      configured against.
+  - name: stepConfigVerdict
+    signature: 'stepConfigVerdict(): StepConfigVerdict'
+    returns: StepConfigVerdict
+    description: >-
+      The step-config problems of this method's narrative and whether its control flow is sound. The
+      schema keeps every flow field optional, so this derivation is what holds each step type to the
+      config it needs, each label and each step number to one step, and every jump field to a step
+      number the narrative actually has. Reachability, region nesting and jump-edge judgement all
+      read the step graph, so each of them runs behind the soundness it reports.
+    sourcePath: src/models/step-config.ts
+  - name: parseCall
+    signature: 'parseCall(reference: string): DeclaredCall | null'
+    returns: DeclaredCall?
+    description: >-
+      One `calls` entry read apart: the component the reference names and the method on it, or null
+      when it is not "<component>.<method>". Split at the LAST dot — a component id may be
+      namespaced with "::" but never holds a dot, and a method name is alphanumeric.
+    symbol: parseDeclaredCall
+  - name: resolveLabels
+    signature: 'resolveLabels(): string[]'
+    returns: list<string>
+    description: >-
+      Resolve every *Label jump reference in this method's narrative to the step number its label
+      anchors, in place, and answer with what could not be resolved — an unknown label, or a number
+      and its label twin set together. Empty means every reference resolved; anything else refuses
+      the whole write, because a jump saved to the wrong step is a narrative that silently says
+      something else.
+    sourcePath: src/core/narrative-labels.ts
+    symbol: resolveNarrativeLabels
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-13T16:59:08.774Z'
+updatedAt: '2026-10-04T23:39:24.080Z'

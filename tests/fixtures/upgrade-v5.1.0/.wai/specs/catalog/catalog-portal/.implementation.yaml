@@ -1,0 +1,30 @@
+id: catalog-portal-impl
+name: Catalog portal impl
+description: Maps product routes onto the workflows
+contract: icatalog-portal
+methods:
+  - name: post
+    narrative:
+      - stepNumber: 1
+        description: Create the record
+        type: call
+        targetComponent: catalog-orch
+        targetMethod: create
+      - stepNumber: 2
+        description: Respond 201
+        type: return
+        outcome: success
+  - name: fetch
+    narrative:
+      - stepNumber: 1
+        description: Look the record up
+        type: call
+        targetComponent: catalog-orch
+        targetMethod: find
+      - stepNumber: 2
+        description: Respond 200
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:26.932Z'
+updatedAt: '2026-10-17T11:46:28.388Z'

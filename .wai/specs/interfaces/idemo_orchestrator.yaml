@@ -1,0 +1,16 @@
+id: idemo_orchestrator
+name: Demo Orchestrator Interface
+description: Seeds the example tree a demo project is created with.
+component: demo_orchestrator
+methods:
+  - name: seedTree
+    description: >-
+      Writes the ShopFlow example spec tree into the currently bound project root, replacing the L0
+      system spec the provisioner wrote, and drops the spec repository's cached index
+    signature: 'seedTree(): void'
+    returns: void
+    params: []
+    effect: write
+status: complete
+createdAt: '2026-10-07T22:40:16.246Z'
+updatedAt: '2026-10-07T22:40:18.015Z'

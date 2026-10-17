@@ -1,0 +1,11 @@
+id: catalog-orch
+name: Catalog Orchestrator
+description: Runs the product workflows
+subsystem: catalog
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - catalog-repo
+status: complete
+createdAt: '2026-10-17T11:46:26.834Z'
+updatedAt: '2026-10-17T11:46:28.155Z'

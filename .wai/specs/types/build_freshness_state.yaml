@@ -1,0 +1,21 @@
+kind: enum
+id: build_freshness_state
+name: BuildFreshnessState
+description: Whether the build on disk is still the one this MCP server runs, and whether its schemas moved.
+subsystem: sdd_mcp
+fields: []
+methods: []
+sourcePath: src/mcp/server.ts
+values:
+  - name: fresh
+    description: The build on disk is the one running
+  - name: build-changed
+    description: Rebuilt, schemas unchanged
+  - name: schema-changed
+    description: Rebuilt with different spec or tool schemas
+  - name: unreadable
+    description: >-
+      Rebuilt, and the new build's schema fingerprint could not be read, so a schema change cannot
+      be ruled out
+createdAt: '2026-10-04T23:33:44.863Z'
+updatedAt: '2026-10-04T23:33:45.325Z'

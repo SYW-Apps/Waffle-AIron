@@ -1,0 +1,52 @@
+kind: value-object
+id: template
+name: Template
+description: >-
+  The instruction body an agent is written from, before any tool's formatting touches it. Held apart
+  from the agent so several agents can share one, and so a change to how a role is briefed is one
+  edit rather than one per agent.
+fields:
+  - name: id
+    type: string
+    description: The template's id, as an agent references it.
+    optional: false
+  - name: name
+    type: string
+    description: Its human name.
+    optional: false
+  - name: description
+    type: string
+    description: What kind of agent it briefs.
+    optional: false
+  - name: instructions
+    type: string
+    description: The instruction body, rendered per agent before export.
+    optional: false
+  - name: defaultTags
+    type: list<string>
+    description: 'Tags applied to agents created from this template (default: an empty list)'
+    optional: false
+  - name: requiresOwnedPaths
+    type: bool
+    description: 'Whether an agent created from this template must declare owned paths (default: true)'
+    optional: false
+  - name: frontmatter
+    type: any
+    description: Extra frontmatter keys the exporters carry through to the written file.
+    optional: true
+  - name: version
+    type: string
+    description: 'Template version (default: 1.0.0)'
+    optional: false
+methods:
+  - name: render
+    signature: 'render(vars: Record<string, string>): string'
+    returns: string
+    description: >-
+      The template's instruction body with each {{variable}} placeholder replaced by its value; a
+      placeholder with no value stays as written.
+    sourcePath: src/core/templates.ts
+    symbol: renderTemplateInstructions
+sourcePath: src/models/template.ts
+createdAt: '2026-09-20T19:47:43.160Z'
+updatedAt: '2026-10-04T10:21:17.009Z'

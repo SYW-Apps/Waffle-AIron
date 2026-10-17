@@ -1,32 +1,27 @@
 id: web_project_orchestrator_impl
 name: Web Project Orchestrator Implementation
 description: >-
-  Bridges project lifecycle to the admin orchestrator (session as credential; grant-scope authorized
-  there); owns the scoped project list because the admin list is master-only.
+  Bridges project lifecycle to the owning orchestrators (session as credential; authorized there):
+  lock goes through the project lifecycle orchestrator, the decision the MCP lock tool makes; owns
+  the scoped project list because the admin list is master-only.
 contract: iweb_project_orchestrator
 sourcePath: src/server/webproject.ts
+injectedParams:
+  - cfg
 methods:
-  - name: lockProject
+  - name: lock
     narrative:
       - stepNumber: 1
         description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (project:write
-          permission enforced there)
+          Forward to the project lifecycle orchestrator passing the sessionId as the credential
+          (approval:decide locks directly, a writer requests the lock, anyone else is forbidden;
+          enforced there)
         type: call
-        targetComponent: admin_orchestrator
+        targetComponent: project_lifecycle_orchestrator
         targetMethod: lockProject
     detail: calls-only
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Forward to the admin orchestrator passing the sessionId as the credential (project:write
-          permission enforced there)
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: promoteProject
-    detail: calls-only
-  - name: destroyProject
+    symbol: lockProject
+  - name: destroy
     narrative:
       - stepNumber: 1
         description: >-
@@ -36,36 +31,45 @@ methods:
         targetComponent: admin_orchestrator
         targetMethod: destroyProject
     detail: calls-only
-  - name: listProjects
+    symbol: destroyProject
+  - name: list
     narrative:
       - stepNumber: 1
         description: >-
           Resolve the browser session to a Principal (an expired or absent session yields an
           unauthenticated principal)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateSession
       - stepNumber: 2
         description: Compute the caller's project-read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Reduce the visible scopes to the ids of the projects the caller can act on (read, write or
+          admin) - the set the records are kept against, an instance admin skipping it
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableProjects
+      - stepNumber: 4
         description: List all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Keep only the records whose id is an actionable project scope in the visible set (an
           instance-admin sees all)
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return the project records the caller may see
         type: return
         outcome: scoped hosted project records
     detail: full
-  - name: createProject
+    symbol: listProjects
+  - name: create
     narrative:
       - stepNumber: 1
         description: >-
@@ -81,11 +85,14 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: initializeProjectWithProfile
       - stepNumber: 3
-        description: Return the created hosted project record
+        description: >-
+          Return the GovernedProjectCreation — the created record with what the policy applied,
+          which the web UI shows after creation (an unattended policy write states what it changed)
         type: return
-        outcome: created project record
+        outcome: GovernedProjectCreation
     detail: full
+    symbol: createProject
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-07-16T15:31:49.622Z'
+updatedAt: '2026-10-17T16:27:25.062Z'

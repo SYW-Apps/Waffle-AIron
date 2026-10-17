@@ -19,8 +19,8 @@ globalRequirements:
   - Expose an MCP server with tools for spec manipulation, validation, and analysis.
   - Verify method implementation contracts against interface method signatures.
   - >-
-    Enforce component interaction boundaries based on component type categories (Orchestrator,
-    Store, Adapter, Repository, Resolver, Supervisor, Registry).
+    Enforce component interaction boundaries based on component type: the building blocks and
+    patterns that the architecture standard (docs/standards/architecture.md) defines.
   - >-
     Export structured workflow skills to local AI agent configurations on project initialization and
     generation.
@@ -29,7 +29,6 @@ publicInterfaces:
     name: Hosted MCP Data Plane
     subsystem: sdd_host
     component: host_http_portal
-    type: REST
     details: >-
       Streamable HTTP MCP endpoint exposing the sdd_* tool surface request-scoped to the
       authenticated project, plus discovery and self-service tools. The consumable surface of a
@@ -41,20 +40,80 @@ publicInterfaces:
     name: Hosted Admin API
     subsystem: sdd_host
     component: admin_portal
-    type: REST
     details: >-
       Exposure-policy-controlled control plane for project/key/pack/producer/secret/git lifecycle
-      and privileged lock/promote. Operator-facing within a deployment.
+      and the privileged lock. Operator-facing within a deployment.
     audience: instance
     authPolicy: master credential or scoped admin grants; disabled over HTTP by default
     stability: stable
-  - id: hosted-admin-api
+  - name: wairon command line
+    component: cli_portal
+    from: sdd_cli
+    as: wairon-cli
     details: >-
-      Streamable HTTP MCP endpoint exposing the sdd_* tool surface request-scoped to the
-      authenticated project, plus discovery and execute-primary project-lifecycle tools. The
-      consumable surface of a wairon deployment.
-    authPolicy: master credential or resolved admin permissions; disabled over HTTP by default
+      The `wairon` (and `wai`) binary of the @wairon/cli package (package.json bin): one CLI
+      endpoint per command.
+    audience: external
+    stability: stable
+  - name: '@wairon/sdk'
+    component: sdk_portal
+    from: sdd_sdk
+    as: wairon-sdk
+    details: >-
+      The @wairon/sdk package (sdk/, main dist/index.js): scaffold, build, inspect and safely
+      extract .wpack pack archives and .waitree spec-tree archives.
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: core'
+    from: sdd_core
+    details: >-
+      The @wairon/cli package's library entry (main dist/index.js, src/index.ts) re-exports the core
+      barrel, which publishes exactly sdd_core's portal contracts — each under its own public name.
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: validation'
+    component: validator_portal
+    from: sdd_validator
+    as: wairon-library-validation
+    details: >-
+      The library entry re-exports the validator portal's whole contract — validateProject (the
+      owner's gate), validateFamily (the family run), validateAsComplete, the pack-impact
+      measurements, the gate identity and the rest — the embedding API a wrapper compiles its gate
+      from.
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_context
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_spec_node
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_finding
+    audience: external
+    stability: stable
+  - from: sdd_sdk
+    typeDef: pack_rule_severity
+    audience: external
+    stability: stable
+  - name: '@wairon/cli library: surfaces'
+    component: surface_portal
+    from: sdd_surfaces
+    as: wairon-library-surfaces
+    details: >-
+      The library entry re-exports the surface portal's whole contract: exportDesign (the in-process
+      twin of `wairon export`), surface export and import, the stored snapshots, and pinning and
+      reading the declared externals. The family migrations' pin maintenance is a separate internal
+      portal and is not published here.
+    audience: external
+    stability: stable
 databases: []
 targetLanguage: typescript
 createdAt: '2026-06-10T20:23:00.000Z'
-updatedAt: '2026-07-16T00:13:29.552Z'
+updatedAt: '2026-10-04T18:29:49.777Z'

@@ -1,0 +1,117 @@
+kind: value-object
+id: agent_brief
+name: AgentBrief
+description: >-
+  The live delegation brief for one resolved agent: the fully rendered instruction body plus the
+  structured scope fields an orchestrating session needs to spawn a correctly-fenced subagent.
+  Composed on demand from the CURRENT spec tree (never persisted, never stale) — the dynamic
+  replacement for generate-time agent files, served over MCP as the sdd_get_agent_brief tool and
+  wairon-agent:// resources.
+subsystem: sdd_core
+fields:
+  - name: agentId
+    type: string
+    description: The resolved agent's stable id (e.g. sdd_core-owner, system-architect).
+    optional: false
+    key: primary
+  - name: name
+    type: string
+    description: Human-readable display name of the agent.
+    optional: false
+  - name: template
+    type: string
+    description: >-
+      The instruction template the brief was rendered from (architect, domain-owner, implementer,
+      …).
+    optional: false
+  - name: domainRoot
+    type: string
+    description: Domain the agent belongs to (absent = global root).
+    optional: true
+  - name: ownedPaths
+    type: list<string>
+    description: >-
+      Glob patterns of the files this agent owns — the write-scope fence the spawning session passes
+      to the subagent.
+    optional: false
+  - name: readPaths
+    type: list<string>
+    description: >-
+      What the subagent reads before any edit. For a component's implementer: the system spec, the
+      component's own spec, contracts and implementations; the spec of every type its contracts use
+      (params and returns, and the types those types' fields name, within this project); its
+      dependencies' contracts and the files that realize them (the code it will call); and the
+      pinned snapshot of each external it reaches. Other agents read the whole tree (`**`).
+    optional: true
+  - name: instructions
+    type: string
+    description: >-
+      The fully rendered instruction body (template variables substituted, variant guidance folded
+      in) — paste-ready as a spawned subagent's prompt.
+    optional: false
+  - name: variantGuidance
+    type: string
+    description: >-
+      The rendered variant-implementation guidance for the agent's variant-tagged components, also
+      folded into instructions; carried structurally for programmatic consumers.
+    optional: true
+  - name: root
+    type: string
+    description: >-
+      Set only on a brief for a member's agent (an id qualified `<alias>::`): the member's directory
+      relative to the root the brief was asked from. The brief was composed at that root, and its
+      ownedPaths and readPaths are re-expressed under this prefix so the fence is correct from the
+      asking root. Absent for an agent of the asking project itself.
+    optional: true
+  - name: profile
+    type: ExecutionProfile
+    description: The execution profile (model, effort) for this agent; absent unless execution.tier opts in.
+    optional: true
+  - name: budget
+    type: ExecutionBudget
+    description: The execution budget (turns, tools) for this agent; absent unless execution.tier opts in.
+    optional: true
+  - name: typeMapping
+    type: list<string>
+    description: >-
+      How the neutral types of the contracts this agent implements are spelled in its language
+      (type_dialect.mappingLines of the dialect for the language its implementations' technologies
+      or source files name), also folded into instructions. Absent when no dialect is shipped for
+      that language or the agent implements nothing.
+    optional: true
+  - name: codeFence
+    type: list<string>
+    description: >-
+      Where an implementing agent may write CODE, as exact files and never a folder glob: every file
+      the specs name for this agent's components ALONE — the implementations' and their methods'
+      sourcePaths, simPath harnesses and binding modules, and the sourcePaths of the types the agent
+      owns (a component's: the types whose componentClass it is, and the types only its own
+      contracts use; a subsystem owner's: the types its subsystem owns) — existing or planned. A
+      file the specs of another component (or, for an owner, another subsystem) also name is no
+      single agent's and is listed under sharedPaths instead, so two fences never claim one path.
+      Also folded into instructions as a '## Code write fence' section, which marks each planned
+      file `(planned — create it)` and says plainly when nothing names a code location yet (the
+      parent then declares the planned sourcePath — code linkage, no re-lock). Absent for an agent
+      that implements nothing (the architect, a delegating member owner).
+    optional: true
+  - name: sharedPaths
+    type: list<string>
+    description: >-
+      The files an implementing agent may touch but does not own, each existing or planned: the
+      files its specs name that other components' (or subsystems') specs name too — a shared type
+      module, a shared binding module — and, as they exist, the project's setup on the way to its
+      code (package.json and its lockfile, tsconfig.json, Cargo.toml, pyproject.toml, go.mod, from
+      the project root down to each folder of its files), the package or crate roots in those
+      folders (index.ts, lib.rs, main.rs, mod.rs, __init__.py), and the source files beside its own
+      that no spec names (shared helpers, a composition root), capped so the brief stays small.
+      Folded into the '## Code write fence' section with the rule that governs them: create or
+      extend one only for this component's needs — a planned shared type exactly as its spec
+      declares it, never redeclared locally — and a file no spec names that would need a
+      responsibility of its own (domain logic, held state, a decision the design does not make) is a
+      design change: stop and report it. Absent when there is none, and for an agent that implements
+      nothing.
+    optional: true
+methods: []
+sourcePath: src/models/agent.ts
+createdAt: '2026-08-08T11:11:36.097Z'
+updatedAt: '2026-10-08T08:20:33.745Z'

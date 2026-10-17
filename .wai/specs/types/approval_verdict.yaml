@@ -1,0 +1,36 @@
+kind: value-object
+id: approval_verdict
+name: ApprovalVerdict
+description: >-
+  What the lock says about the tree as it stands: the sentence to show, and whether it is drift. The
+  two are separate because the caller picks its own severity from the FACT rather than by matching
+  the sentence's wording — a terminal warns in yellow, an MCP client may do nothing at all, and
+  neither should have to parse prose to decide.
+fields:
+  - name: text
+    type: string
+    description: >-
+      The verdict as a line to show, empty for a project that was never approved — absence of an
+      approval is the normal state of a tree still being designed, not news.
+    optional: false
+  - name: drifted
+    type: bool
+    description: >-
+      Whether this project's approval no longer covers the tree: its own specs moved since it was
+      approved, a direct member's pin moved (the member re-approved, so this project's gate identity
+      moved even when none of its own specs did), or the lock was taken under an earlier gate
+      identity (stage-5 upgrade). A member that is merely drifted or never approved is named in the
+      text but is not this project's drift.
+    optional: false
+  - name: moved
+    type: list<string>
+    description: >-
+      Every own spec path that moved since the approval — changed, added or removed, each prefixed
+      `~`, `+` or `-` — in full. The text names the first few and counts the rest so it stays a
+      line, not a wall; this list is what `wairon status --all` prints when the whole account is
+      wanted. Absent when nothing moved or the project was never approved.
+    optional: true
+methods: []
+sourcePath: src/core/approval.ts
+createdAt: '2026-09-23T12:24:05.267Z'
+updatedAt: '2026-10-05T23:52:48.202Z'

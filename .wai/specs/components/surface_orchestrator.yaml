@@ -10,10 +10,12 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - surface_repository
+  - externals_repository
   - surface_projector
   - openapi_codec
   - surfaces_core_adapter
   - surface_transfer_adapter
+  - design_exporter
 status: complete
 createdAt: '2026-07-10T23:12:12.860Z'
-updatedAt: '2026-07-11T09:04:02.132Z'
+updatedAt: '2026-10-04T13:54:48.534Z'

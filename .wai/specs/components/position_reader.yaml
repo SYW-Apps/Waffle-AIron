@@ -1,0 +1,20 @@
+id: position_reader
+name: Position Reader
+description: >-
+  Reads the references stage 4's owner-scoped resolution leaves unresolved the way the retired
+  reading did — by position, across the family's top scan — and says what explicit form replaces
+  each: an import (with the export and the external it needs), a rewrite of a self-prefixed
+  reference to the bare local id, an ambiguity for a person, or nothing. It is the ONE place the old
+  family-wide suffix match survives, and only as a migration aid: it never resolves a reference for
+  validation. Pure: it is handed the family's graph, its export tables and its types, and computes.
+  The positional migration step calls it here, and verdict_changes (the upgrade report, in sdd_cli)
+  reaches the same match through migration_portal.matchPositions, so the report explains exactly
+  what the migration writes. It moved from sdd_cli with the chaining migration (stage 6).
+subsystem: sdd_migrations
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-28T16:09:19.048Z'
+updatedAt: '2026-09-30T20:46:03.166Z'

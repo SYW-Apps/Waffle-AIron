@@ -1,0 +1,37 @@
+kind: value-object
+id: pack_rule_context
+name: RuleContext
+description: >-
+  The minimal, stable view of the spec tree a code-pack rule inspects — deliberately not core's
+  RuleContext. A rule reads these collections and returns findings; it never mutates state.
+subsystem: sdd_sdk
+fields:
+  - name: system
+    type: pack_rule_spec_node
+    description: The L0 system spec
+    optional: false
+  - name: subsystems
+    type: list<pack_rule_spec_node>
+    description: All L1 subsystem specs
+    optional: false
+  - name: components
+    type: list<pack_rule_spec_node>
+    description: All L2 component specs
+    optional: false
+  - name: interfaces
+    type: list<pack_rule_spec_node>
+    description: All L3 interface specs
+    optional: false
+  - name: implementations
+    type: list<pack_rule_spec_node>
+    description: All L4 implementation specs
+    optional: false
+  - name: types
+    type: list<pack_rule_spec_node>
+    description: All type specs
+    optional: false
+methods: []
+componentClass: sdk_portal
+sourcePath: sdk/src/authoring.ts
+createdAt: '2026-10-04T18:23:19.765Z'
+updatedAt: '2026-10-04T18:23:20.307Z'

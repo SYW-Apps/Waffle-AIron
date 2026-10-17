@@ -1,0 +1,19 @@
+id: diagram_codec
+name: Diagram Codec
+description: >-
+  Encoding an arranged spec graph as somebody else's file format: draw.io XML and an Excalidraw
+  scene. It knows shapes, colours and wire syntax, and nothing about where the boxes go — that is
+  asked of the layout, which is why two formats of the same tree come out as the same picture rather
+  than two drawings that happen to agree. Retired stereotypes draw as plain boxes in the retired
+  colour rather than being dropped, so a tree that still holds one exports honestly instead of
+  silently losing it.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - diagram_layout
+dependencyClass: pure
+variant: codec
+status: complete
+createdAt: '2026-09-20T16:39:07.454Z'
+updatedAt: '2026-09-20T16:39:51.499Z'

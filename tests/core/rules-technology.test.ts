@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ describe('technology boundary rules', () => {
     proj.component('orch-a', 'Orchestrator');
     proj.activate();
     try {
-      expect(techIssues(validateSddTree())).toHaveLength(0);
+      expect(techIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -132,7 +132,7 @@ componentType: Portal
 portalType: HTTP_API`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'billing-portal')).toBe(true);
       expect(issues.some(i => i.specId === 'impl-cust-store')).toBe(false);
       expect(issues.some(i => i.specId === 'impl-cust-adapter')).toBe(false);
@@ -155,7 +155,7 @@ methods:
     returns: "Promise<void>"`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'VENDOR_NAME_IN_CONTRACT' && i.specId === 'icust-adapter')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -185,7 +185,7 @@ methods:
       - { stepNumber: 1, description: coordinate the workflow, type: local }`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_ON_LOGIC_COMPONENT' && i.specId === 'impl-orch-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -216,7 +216,7 @@ methods:
     proj.component('rogue-orch', 'Orchestrator', 'dependsOn: [mysql-adapter]');
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'rogue-orch')).toBe(true);
       // The adapter itself (id contains the token) is in scope — never flagged.
       expect(issues.some(i => i.specId === 'mysql-adapter')).toBe(false);
@@ -236,7 +236,7 @@ fields:
     type: string`);
     proj.activate();
     try {
-      const issues = techIssues(validateSddTree());
+      const issues = techIssues(validateProject());
       expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'mysql_row')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -257,7 +257,7 @@ lint:
       reason: legacy naming, cleanup tracked separately`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(techIssues(res).some(i => i.specId === 'billing-portal')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNUSED_LINT_ALLOW' && i.specId === 'billing-portal')).toBe(false);
     } finally { proj.cleanup(); }
@@ -285,7 +285,105 @@ componentType: Portal
 portalType: HTTP_API`);
     proj.activate();
     try {
-      expect(techIssues(validateSddTree())).toHaveLength(0);
+      expect(techIssues(validateProject())).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('flags TECH_LEAKAGE in a method source path outside the owning boundary', () => {
+    const proj = createTempProject();
+    writeRepositoryBoundary(proj);
+    proj.component('billing-orch', 'Orchestrator');
+    proj.writeSpec('interface', 'ibilling-orch', `schemaVersion: 1.0.0
+id: ibilling-orch
+name: IBillingOrch
+description: Runs the monthly billing cycle.
+component: billing-orch
+methods:
+  - name: runBillingCycle
+    description: Runs one billing cycle end to end.
+    signature: "runBillingCycle(): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-billing-orch', `schemaVersion: 1.0.0
+id: impl-billing-orch
+name: ImplBillingOrch
+description: Coordinates the monthly billing cycle.
+contract: ibilling-orch
+sourcePath: src/billing/billing-orchestrator.ts
+methods:
+  - name: runBillingCycle
+    sourcePath: src/billing/mysql-billing-cycle.ts
+    narrative:
+      - { stepNumber: 1, description: coordinate the billing cycle, type: local }`);
+    proj.activate();
+    try {
+      const issues = techIssues(validateProject());
+      expect(issues.some(i => i.code === 'TECH_LEAKAGE' && i.specId === 'impl-billing-orch')).toBe(true);
+    } finally { proj.cleanup(); }
+  });
+
+  // Round-4 trial (tinkerer): binding redis on one Store made ANOTHER Store's
+  // prose ("in memory now, swap to Redis later") a TECH_LEAKAGE — three times,
+  // on its component, contract and implementation. A word in a seam's prose is
+  // no binding; a seam's identifiers and any logic component's prose still are.
+  it('does not read a word in another data-layer seam\'s prose as leakage — its identifiers and logic prose still are', () => {
+    const proj = createTempProject();
+    proj.component('hit-store', 'Store');
+    proj.writeSpec('interface', 'ihit-store', `schemaVersion: 1.0.0
+id: ihit-store
+name: IHitStore
+description: Hit counters.
+component: hit-store
+methods:
+  - name: addHit
+    description: Adds one hit.
+    signature: "addHit(code: string): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-hit-store', `schemaVersion: 1.0.0
+id: impl-hit-store
+name: ImplHitStore
+description: Counters in redis.
+contract: ihit-store
+technologies: [redis]
+methods:
+  - { name: addHit, detail: intent, intent: INCR the counter key. }`);
+    // Another Store, whose prose names its own planned realization.
+    proj.writeSpec('component', 'link-store', `schemaVersion: 1.0.0
+id: link-store
+name: link-store
+description: Short links, held in memory now; swap to Redis later.
+subsystem: sub-a
+componentType: Store`);
+    proj.writeSpec('interface', 'ilink-store', `schemaVersion: 1.0.0
+id: ilink-store
+name: ILinkStore
+description: Link persistence (memory today, Redis once it scales).
+component: link-store
+methods:
+  - name: putLink
+    description: Stores one link; a later Redis realization keeps the same contract.
+    signature: "putLink(code: string): Promise<void>"
+    returns: "Promise<void>"`);
+    proj.writeSpec('implementation', 'impl-link-store', `schemaVersion: 1.0.0
+id: impl-link-store
+name: ImplLinkStore
+description: In-memory map, to be swapped for Redis.
+contract: ilink-store
+methods:
+  - { name: putLink, detail: intent, intent: Sets the map entry; the Redis version will SET the key. }`);
+    // A logic component whose prose names the vendor IS a leak.
+    proj.component('report-orch', 'Orchestrator');
+    proj.writeSpec('component', 'report-orch', `schemaVersion: 1.0.0
+id: report-orch
+name: report-orch
+description: Reads the redis counters directly for the report.
+subsystem: sub-a
+componentType: Orchestrator`);
+    // A seam whose IDENTIFIER names the vendor still leaks.
+    proj.component('redis-cache', 'Store');
+    proj.activate();
+    try {
+      const leaks = techIssues(validateProject()).filter(i => i.code === 'TECH_LEAKAGE').map(i => i.specId).sort();
+      expect(leaks).toEqual(['redis-cache', 'report-orch']);
     } finally { proj.cleanup(); }
   });
 });

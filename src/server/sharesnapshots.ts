@@ -1,20 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { runWithProjectRoot } from '../utils/fs.js';
-import { resolveProjectRoot } from './projects.js';
-import { hostCore, hostSurfaces } from './adapters.js';
+import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { listFamilyRecords, resolveProjectRoot } from './projects.js';
+import * as hostCore from './adapters/core.js';
+import * as hostSurfaces from './adapters/surfaces.js';
+import * as hostValidator from './adapters/validator.js';
 import { ForbiddenError } from './errors.js';
 import type { Principal, ShareSnapshot } from './types.js';
 import { openApiIndexDocument } from './openapiindex.js';
 
 // ---------------------------------------------------------------------------
-// Share Snapshot Repository + Specialist (sdd_host).
+// Share Snapshot Repository + Share Snapshots (sdd_host).
 //
 // A snapshot is the immutable, point-in-time capture a share link serves. The
 // store keeps one write-once JSON blob per snapshot id under
 // <dataDir>/share-snapshots/; a captured share never changes even as the spec
-// tree evolves. The specialist FREEZES a project view into a snapshot via the
+// tree evolves. share_snapshots FREEZES a project view into a snapshot via the
 // core + surfaces adapters, scoped to the caller's own read authority.
 // ---------------------------------------------------------------------------
 
@@ -130,7 +132,7 @@ export function getSnapshotArtifact(
   return new ShareSnapshotIndex(new ShareSnapshotStore(dataDir)).getArtifact(snapshotId, kind, portalId);
 }
 
-// ── share_snapshot_specialist ─────────────────────────────────────────────────
+// ── share_snapshots ────────────────────────────────────────────────────────
 
 /**
  * Capture a project view into an immutable snapshot payload set. Binds the
@@ -141,6 +143,17 @@ export function getSnapshotArtifact(
  * document are captured only when requested. Returns the snapshot ready to
  * persist (write-once) — it is never larger than what its creator can see.
  */
+/** The creator's read reach around a project: its family root when the creator resolves it, and a record lookup over what the creator resolves. */
+function creatorReach(dataDir: string, principal: Principal, projectId: string, root: string): { topRoot: string; parentReach: boolean; hostedLookup: (id: string) => string | null } {
+  const familyRoot = listFamilyRecords(dataDir, projectId)[0];
+  const top = familyRoot !== undefined ? resolveProjectRoot(dataDir, principal, familyRoot.id) : null;
+  return {
+    topRoot: top ?? root,
+    parentReach: top !== null,
+    hostedLookup: (id) => resolveProjectRoot(dataDir, principal, id),
+  };
+}
+
 export function captureSnapshot(
   dataDir: string,
   principal: Principal,
@@ -151,17 +164,22 @@ export function captureSnapshot(
   const root = resolveProjectRoot(dataDir, principal, projectId);
   if (!root) throw new ForbiddenError('project not authorized or unknown');
 
+  // Step 2: the family's relation health as it is now, within the creator's
+  // reach — frozen into the snapshot with its compared-at time, never refreshed
+  // behind the link. A record the creator cannot resolve is out of reach.
+  const relations = runWithProjectBinding(root, creatorReach(dataDir, principal, projectId, root), () => hostValidator.familyRelations());
   return runWithProjectRoot(root, () => {
     const snapshot: ShareSnapshot = {
       id: '',
       projectId,
       view,
       capturedAt: new Date().toISOString(),
-      // The canvas model is the primary payload the shared view renders.
-      canvasModel: JSON.stringify(hostCore.buildCanvasDataModel()),
+      // Step 3: the canvas model is the primary payload the shared view renders,
+      // with those relations on its consumption edges and no member record ids.
+      canvasModel: JSON.stringify(hostCore.buildCanvasDataModel(relations)),
     };
     if (artifacts.includes('html')) {
-      snapshot.html = hostCore.renderDiagram('canvas');
+      snapshot.html = hostCore.renderDiagram('canvas', relations);
     }
     if (artifacts.includes('openapi')) {
       // The OpenAPI must MATCH THE DIAGRAM it is linked from. This share captures
@@ -182,7 +200,7 @@ export function captureSnapshot(
       // exists, which is also what pre-existing links carry. Capturing nothing is
       // honest when the project publishes no portal; an empty `{}` placeholder
       // standing in for real APIs is not.
-      const result = hostSurfaces.exportBoundSurface('project', 'openapi');
+      const result = hostSurfaces.exportSurface('project', 'openapi');
       const specs = result.renderedSet ?? [];
       if (specs.length) {
         snapshot.openapiSet = specs;

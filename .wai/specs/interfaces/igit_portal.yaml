@@ -6,9 +6,25 @@ methods:
   - name: enable
     description: >-
       Clone the remote into the bound project and set up the isolated working branch; persist the
-      config.
-    signature: 'enable(remote: string, branch: string): void'
+      config. The clone authenticates with the token the caller resolved and hands in (null for a
+      public remote): this subsystem never asks anyone for a secret by name. credentialRef only
+      records which of the caller's secrets the connection uses, for its status.
+    signature: 'enable(remote: string, branch: string, token: string?, credentialRef?: string): void'
     returns: void
+    params:
+      - name: remote
+        type: string
+      - name: branch
+        type: string
+      - name: token
+        type: string?
+        description: The resolved credential the clone presents; null for a public remote
+      - name: credentialRef
+        type: string
+        description: >-
+          The name of the caller's secret the connection uses, recorded for its status; never
+          resolved here
+        optional: true
   - name: disable
     description: Clear the project's git-backing config.
     signature: 'disable(): void'
@@ -19,16 +35,16 @@ methods:
     returns: void
   - name: publish
     description: >-
-      Commit ONLY the scoped subpath of the working tree (default .wai/ — never the whole tree),
-      push the working branch, and return the pushed commit + compare URL; no-op (published=false)
-      when not git-backed or the scoped path is clean.
-    signature: 'publish(message: string, subpath: string): GitPublish'
+      Commit ONLY the scoped pathspecs of the working tree (default ['.wai/'] — never the whole
+      tree) in one commit, push the working branch, and return the pushed commit + compare URL;
+      no-op (published=false) when not git-backed or every scoped path is clean.
+    signature: 'publish(message: string, subpaths?: list<string>): GitPublish'
     returns: GitPublish
     params:
       - name: message
         type: string
-      - name: subpath
-        type: string
+      - name: subpaths
+        type: list<string>
         optional: true
   - name: status
     description: >-
@@ -39,15 +55,15 @@ methods:
     params: []
   - name: configureSync
     description: Persist the project's periodic-sync setting (interval + skip-if-clean).
-    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: int, skipIfClean?: bool): void'
     returns: void
     params:
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:50.042Z'
-updatedAt: '2026-07-16T15:24:24.505Z'
+updatedAt: '2026-10-04T10:28:22.658Z'

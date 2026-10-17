@@ -1,0 +1,16 @@
+id: network_portal
+name: Network Portal
+description: >-
+  The derived networking front door, called in-process by the CLI's `wairon network` commands, the
+  MCP read tools and the hosted canvas's network view. It terminates the call and dispatches each
+  request to the network workflows. Everything it answers is read-only: no spec, lock or file is
+  written here.
+subsystem: sdd_network
+componentType: Portal
+owns: []
+dependsOn:
+  - network_orchestrator
+transport: InProcess
+status: complete
+createdAt: '2026-10-06T13:10:26.072Z'
+updatedAt: '2026-10-06T18:55:02.456Z'

@@ -1,0 +1,22 @@
+id: design_exporter
+name: Design Exporter
+description: >-
+  Projects the bound project's loaded, resolved spec tree into the design export (DesignExport):
+  every subsystem, component, interface, implementation and type keyed and resolved, the export
+  tables resolved, the dependencies listed with their pinned digests, and the source stamped with
+  the tree's StateId and its approval state. It reads what the loader already resolved (stage 1
+  signatures, stage 2 canonical types) and the project graph through the core client adapter, and
+  each dependency's pin through the externals repository, and writes nothing: the surface snapshot's
+  sibling for the whole design, not for the public contract. Pure projection, deterministic over the
+  tree it reads.
+subsystem: sdd_surfaces
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - surfaces_core_adapter
+  - externals_repository
+dependencyClass: read
+variant: projector
+status: complete
+createdAt: '2026-10-04T13:53:51.689Z'
+updatedAt: '2026-10-04T17:32:46.518Z'

@@ -1,0 +1,16 @@
+kind: enum
+id: diagnostic_status
+name: DiagnosticStatus
+description: How one diagnostic check of an instance health report came out.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: pass
+    description: The check holds
+  - name: warn
+    description: A mild signal; the report reads degraded
+  - name: fail
+    description: The check failed; the report reads unhealthy
+createdAt: '2026-10-04T23:52:52.485Z'
+updatedAt: '2026-10-04T23:52:53.137Z'

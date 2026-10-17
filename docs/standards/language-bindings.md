@@ -16,6 +16,7 @@ mainstream structured language expresses this:
 | Concept | Rust | Go | TypeScript / Java / C# / Kotlin | Python |
 |---|---|---|---|---|
 | "class" (component) | `struct` + `impl` | `struct` + methods | `class` | `class` |
+| module of functions (an Orchestrator) | closures capturing the collaborators, or a module of `fn`s taking a `&Deps` | a constructor func returning a struct of closures | TypeScript/Kotlin: a factory `createX(deps)` returning functions closed over `deps`; Java/C#: the class form | a factory returning closures over the collaborators |
 | interface (method contract) | `trait` | `interface` | `interface` | `Protocol` / ABC |
 | port + implementations | trait + impl structs | interface + structs | interface + classes | Protocol + classes |
 | dependency injection | constructor (`new`) | constructor func | constructor | `__init__` |
@@ -23,6 +24,44 @@ mainstream structured language expresses this:
 Interfaces are **method contracts only** (no fields). Languages whose interfaces
 can't declare fields (Rust traits, Go interfaces) lose nothing — fields are an
 implementation detail of the concrete type, never part of the L3 contract.
+
+**Two forms of an Orchestrator.** An Orchestrator holds only its collaborators, so
+it is realized either as a class whose constructor takes them, or as a **module of
+functions** closed over them: a factory takes the collaborators once and returns
+the component's methods as functions that share them. Functional languages use the
+second form natively — a function that takes the collaborators and returns a
+record or map of functions closed over them, or partial application. In both forms
+the collaborators are the component's `dependsOn` and the functions are its L3
+methods, and nothing at module level holds state between calls: domain state
+belongs in a Store, runtime state in an Actor.
+
+---
+
+## Type mapping
+
+Contracts are typed in the neutral grammar of the
+[Architecture Standard](architecture.md#type-expressions-one-neutral-grammar);
+each language spells it with what it has. The TypeScript column is the dialect
+conformance reads code through, and the one an implementer brief carries as
+its `typeMapping`; the others are the idiomatic spellings to follow.
+
+| Neutral | TypeScript | Rust | Python | Go | Java / Kotlin / C# |
+|---|---|---|---|---|---|
+| `string` | `string` | `String` | `str` | `string` | `String` / `String` / `string` |
+| `int`, `float` | `number` | `i64`, `f64` (width per L4) | `int`, `float` | `int64`, `float64` | `long`, `double` |
+| `bool` | `boolean` | `bool` | `bool` | `bool` | `boolean` / `Boolean` / `bool` |
+| `bytes` | `Uint8Array` | `Vec<u8>` | `bytes` | `[]byte` | `byte[]` / `ByteArray` / `byte[]` |
+| `date`, `datetime`, `duration` | `string` (ISO 8601) | `chrono` types | `date`, `datetime`, `timedelta` | `time.Time`, `time.Duration` | `java.time` / `DateTime`, `TimeSpan` |
+| `list<T>` | `T[]` | `Vec<T>` | `list[T]` | `[]T` | `List<T>` |
+| `set<T>` | `Set<T>` | `HashSet<T>` | `set[T]` | `map[T]struct{}` | `Set<T>` |
+| `map<K, V>` | `Record<K, V>` | `HashMap<K, V>` | `dict[K, V]` | `map[K]V` | `Map<K, V>` / `Dictionary<K, V>` |
+| `T?` | `T \| null` | `Option<T>` | `T \| None` | `*T` | nullable `T` / `T?` |
+| `A \| B` | `A \| B` | `enum` with payload | `A \| B` | an interface both implement | `sealed` hierarchy |
+| `async T` | `Promise<T>` | `async fn` → `T` | `async def` → `T` | a blocking call or a channel | `CompletableFuture<T>` / `suspend` / `Task<T>` |
+| `result<T, E>` (returns only; `result<void, E>` for `Result<(), E>`) | `T`, throwing `E` on failure (`void` for `result<void, E>`) | `Result<T, E>` (`()` for `void`) | `T`, raising `E` | `(T, error)` | `T` with `throws E` / `Result<T>` / `T`, throwing `E` |
+| enum `E` | `type E = 'a' \| 'b'` | `enum E` | `class E(StrEnum)` | typed `string` constants | `enum E` |
+| named scalar `E` holding `P` | `type E = P` | `struct E(P)` | `E = NewType('E', P)` | `type E P` | a value class / `@JvmInline value class E` / `record struct E(P)` |
+| `any` | `unknown` | `serde_json::Value` | `Any` | `any` | `Object` / `Any` / `object` |
 
 ---
 

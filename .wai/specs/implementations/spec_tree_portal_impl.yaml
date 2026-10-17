@@ -1,0 +1,360 @@
+id: spec_tree_portal_impl
+name: Core Portal Implementation
+description: Concrete implementation forwarding portal requests to core orchestrators.
+contract: ispec_tree_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: loadSystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSystemSpec
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSubsystemSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadComponentSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpecs
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadInterfaceSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpecs
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadImplementationSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpecs
+  - name: loadSubsystemSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadSubsystemSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSubsystemSpec
+  - name: loadComponentSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadComponentSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadComponentSpec
+  - name: loadInterfaceSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadInterfaceSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadInterfaceSpec
+  - name: loadImplementationSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadImplementationSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadImplementationSpec
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator, relation health included
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renderDiagram
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpecs
+  - name: dryRunSerializeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward dryRunSerializeSpecs call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: dryRunSerializeSpecs
+  - name: buildProjectGraph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: buildProjectGraph
+    detail: calls-only
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's chaining detection
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: exportSpecTree
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's mount resolution
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveSubprojectForNamespace
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: listDirectChainedSubprojects
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: consumedContractInputs
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward loadTypeSpec call to core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadTypeSpec
+  - name: getStatusReport
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the project status
+        type: call
+        targetComponent: project_status
+        targetMethod: report
+  - name: specPathsInScope
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: specPathsInScope
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSpec on core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadSpec
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's chaining walk
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findChainingParent
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: scanAllSpecs
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: getLoaderIssues
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: clearLoaderIssues
+  - name: assertContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator's containment guard
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: assertContainedProjectPath
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams, relation health included
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: buildCanvasDataModel
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveSubsystemExports
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveProjectExports
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+  - name: exportUsage
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+  - name: resolveExternals
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow, passing `offline` through
+        type: call
+        targetComponent: external_producers
+        targetMethod: resolveDeclared
+  - name: excerptParent
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the part-context read
+        type: call
+        targetComponent: part_context
+        targetMethod: excerpt
+  - name: signatureFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+  - name: resolveSignatures
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the handed interfaces' and types' type positions under the grammar first
+          (interface_spec.canonicalTypes, type_spec.canonicalTypes) — an excerpt's documents are
+          stored forms and may still hold aliases — so a sourced method resolved from the excerpt
+          carries canonical types like every method the scan resolved
+        type: local
+      - stepNumber: 2
+        description: Hand the specs to the pure signature resolver and answer what it resolved
+        type: call
+        targetComponent: signature_resolver
+        targetMethod: resolveTree
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: typeSpellingFacts
+  - name: retiredReachFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward the passthrough read to the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: retiredReachFacts
+  - name: resolveExternalCandidate
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow, passing the alias and the declaration through
+        type: call
+        targetComponent: external_producers
+        targetMethod: resolveCandidate
+  - name: listExternalConsumers
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow
+        type: call
+        targetComponent: external_producers
+        targetMethod: listConsumers
+  - name: approvedRevision
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow
+        type: call
+        targetComponent: external_producers
+        targetMethod: approvedRevision
+  - name: crossProjectWriteRefusal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: crossProjectWriteRefusal
+  - name: publishedUsesOf
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: publishedUsesOf
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: lockTree
+  - name: unlockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: unlockTree
+  - name: readPinnedSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: readPinnedSpec
+  - name: memberRevisions
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the external-producers workflow
+        type: call
+        targetComponent: external_producers
+        targetMethod: memberRevisions
+  - name: inspectLock
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: inspectLock
+  - name: readProjectSystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: readProjectSystem
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-10-15T16:03:14.913Z'

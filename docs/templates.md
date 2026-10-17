@@ -2,8 +2,12 @@
 
 A **template** is a reusable agent *shape*: a YAML file with metadata and an
 `instructions` body that is rendered (with the agent's id, name, owned paths,
-etc.) into the final agent file. Templates are rendering shapes only — they are
+etc.) into the agent's brief. Templates are rendering shapes only — they are
 not a source of truth. The agent topology itself is derived from the spec tree.
+
+Every brief is composed live (`sdd_get_agent_brief`, `wairon agent brief <id>`)
+from the current tree. The same rendering is written to agent files on disk
+only when the project sets `rules.materializeAgentFiles: true`.
 
 Built-in templates live in `src/templates/*.yaml`. Project-local overrides can be
 placed in `.wai/templates/`.
@@ -49,8 +53,9 @@ instructions: |
 
 ## SDD skills (not templates)
 
-The SDD skill files in `src/templates/skills/` (`sdd-architect`, `sdd-narrative`,
-`sdd-auditor`, `sdd-implement`) are different: they are copied verbatim (with the
+The five SDD skill files in `src/templates/skills/` (`sdd-architect`,
+`sdd-narrative`, `sdd-auditor`, `sdd-implement`, `sdd-delegate`) are different:
+they are copied verbatim (with the
 CLI command substituted) into each target tool's `skills/` directory by
 `wairon skills install` and `wairon generate`. They drive the spec-driven
 workflow in-session rather than rendering an agent file.

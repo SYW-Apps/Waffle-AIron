@@ -1,123 +1,231 @@
 id: host_core_adapter_impl
 name: Host Core Client Adapter Implementation
-description: Forwards spec-tree operations to the core portal for provisioning and lock/promote.
+description: >-
+  Forwards spec-tree operations to the core portal for provisioning, lock records, and the approval
+  baseline.
 contract: ihost_core_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/core.ts
 methods:
   - name: provisionProject
     narrative:
       - stepNumber: 1
         description: Forward provisioning to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_maintenance_portal
         targetMethod: provisionProject
   - name: computeStateId
     narrative:
       - stepNumber: 1
         description: Forward StateId computation to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: computeStateId
-  - name: readLockRecord
-    narrative:
-      - stepNumber: 1
-        description: Forward lock-record read to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: readLockRecord
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
         description: Forward lock-record write to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: approval_portal
         targetMethod: writeLockRecord
-  - name: promoteAllComplete
-    narrative:
-      - stepNumber: 1
-        description: Forward status promotion to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: promoteAllComplete
   - name: renderDiagram
     narrative:
       - stepNumber: 1
         description: Forward diagram rendering to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: renderDiagram
   - name: loadSystemSpec
     narrative:
       - stepNumber: 1
         description: Forward the L0 system spec read to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Forward the subsystem specs read to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
   - name: buildProjectGraph
     narrative:
       - stepNumber: 1
         description: Forward the project-graph projection to the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: buildProjectGraph
     detail: calls-only
   - name: globalPacksDir
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader's global-packs-directory resolution (WAIRON_PACKS_DIR,
-      else the default), so the hosted pack store never reaches into sdd_core directly.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: globalPacksDir
+    detail: calls-only
   - name: discoverPacks
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader's directory discovery, returning the pack refs found in
-      the given directory (empty for a missing/unreadable directory, never an error).
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: discoverPacks
+    detail: calls-only
   - name: loadExtensionPacks
-    narrative: []
-    detail: intent
-    intent: >-
-      Forwards to the core extension loader, loading the given refs against the project root into a
-      LoadedExtensions (a failed pack rides on the result's errors rather than throwing).
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadExtensionPacks
+    detail: calls-only
   - name: checkDeclarativePack
-    narrative: []
-    detail: intent
-    intent: >-
-      Validates the parsed manifest against the declarative-pack schema via the core loader,
-      returning the first schema error message or null when valid — so the hosted store can reject
-      non-declarative (rule/code) packs over the API.
-  - name: builtinProfileIds
-    narrative: []
-    detail: intent
-    intent: >-
-      Return the ids of wairon's built-in architectural profiles by reading the core rules
-      registry's built-in profile set (BUILTIN_PROFILES). A pure, side-effect-free read of a bundled
-      constant; never fails.
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: checkDeclarativePack
+    detail: calls-only
   - name: resolveContainedProjectPath
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve and assert the projectPath within the root via the core containment guard
-          (assertContainedProjectPath — a pure path utility of the core module, not a portal
-          workflow), returning the contained absolute child root
-        type: local
-  - name: builtinProjectKinds
-    narrative: []
-    detail: intent
-    intent: >-
-      Return the ids of wairon's built-in composite project kinds by reading the core rules
-      registry's bundled PROJECT_KINDS constant (fullstack, system-of-systems, monorepo). A pure,
-      side-effect-free read of a bundled constant; never fails. Kept beside builtinProfileIds so the
-      two halves of a legal projectType value — architectural profiles and composite project kinds —
-      come from the same core source instead of being restated in the hosting layer, where they
-      would drift.
+          Forward to the spec tree portal's containment check, which answers the contained absolute
+          child root
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: assertContainedProjectPath
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the lock-verdict resolution to the core portal, passing the caller's current gate
+          identity
+        type: call
+        targetComponent: approval_portal
+        targetMethod: readLockState
+  - name: exportSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the spec-tree export to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: exportSpecTree
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the spec-tree import to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: importSpecTree
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward approval capture to the core portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: captureApprovedSpecs
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: recordProfileSelection
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: deregisterPackRef
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: buildCanvasDataModel
+  - name: packEntryRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryRef
+  - name: packEntryLabel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryLabel
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward the resolved export table read to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: loadInterfaceSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward the interface specs read to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadInterfaceSpecs
+  - name: parseDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: parseDeclarativePack
+    detail: calls-only
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: describeProject
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward the reachability migration to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-07-24T23:52:35.483Z'
+updatedAt: '2026-10-06T19:54:03.430Z'

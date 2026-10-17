@@ -1,14 +1,78 @@
 id: imcp_surfaces_adapter
 name: MCP Surfaces Adapter Interface
-description: Contract for the MCP server's surface-exchange reads.
+description: Contract for the MCP server's surface-exchange reads and the externals pin.
 component: mcp_surfaces_adapter
 methods:
-  - name: listExternalInterfaces
+  - name: pinExternals
+    description: Forward the externals pin to the surface portal.
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: aliases
+        type: list<string>
+        description: The aliases to pin; all when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: Forward the externals status report to the surface portal.
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+  - name: declareExternal
     description: >-
-      Forward the scope-aware external-surface discovery (parent family, siblings, foreign imports —
-      with origin, provenance, freshness) to the surface portal.
-    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
+      Forward to surface_portal.declareExternal: declare one external of the bound project
+      (sdd_add_external).
+    signature: 'declareExternal(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location, and the optional producer id, ref, dir, use, description, pin and
+          dryRun
+  - name: removeExternal
+    description: >-
+      Forward to surface_portal.removeExternal: remove one external of the bound project and its pin
+      (sdd_remove_external).
+    signature: 'removeExternal(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateExternalUse
+    description: >-
+      Forward to surface_portal.updateExternalUse: add and remove `use` imports of one external
+      (sdd_update_external).
+    signature: 'updateExternalUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and dryRun
+  - name: listConsumers
+    description: >-
+      Forward to the surface portal: the projects that consume the bound project, the searched
+      folders' too (sdd_list_consumers).
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diffSurface
+    description: 'Forward to the surface portal: the public-surface changelog (sdd_surface_diff).'
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
 status: complete
 createdAt: '2026-07-24T18:14:20.548Z'
-updatedAt: '2026-07-24T20:48:49.396Z'
+updatedAt: '2026-10-07T10:59:30.465Z'

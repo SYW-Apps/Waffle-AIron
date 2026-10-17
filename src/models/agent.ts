@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ExecutionBudgetSchema, ExecutionProfileSchema } from './execution.js';
 
 // ---------------------------------------------------------------------------
 // Output target definitions
@@ -73,6 +74,14 @@ export const AgentRecordSchema = z.object({
   /** Rendered implementation guidance for this agent's variant-tagged components (deep variant integration); empty when none. */
   variantGuidance: z.string().optional(),
 
+  /**
+   * A member project's delegating owner only: the ids of the member's own
+   * agents, each qualified `<alias>::<agentId>`, resolved from the member's
+   * topology at the member's own root. REFERENCES, never copies: nothing of the
+   * member's agents is rendered into this layer (one level deep, ids only).
+   */
+  delegatesTo: z.array(z.string()).optional(),
+
   /** Why this agent was created — the architectural reason for its existence */
   creationReason: z.string(),
 
@@ -86,6 +95,103 @@ export const AgentRecordSchema = z.object({
 });
 
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
+
+// ---------------------------------------------------------------------------
+// Live delegation brief — composed on demand from the CURRENT spec tree
+// (never persisted, never stale); the dynamic replacement for generate-time
+// agent files, served over MCP.
+// ---------------------------------------------------------------------------
+
+export const AgentTemplateSchema = z.object({
+  /** Template identifier (architect, domain-owner, implementer, …) */
+  templateName: z.string(),
+
+  /** The raw instruction body with {{variable}} placeholders, before rendering */
+  instructions: z.string(),
+});
+
+export type AgentTemplate = z.infer<typeof AgentTemplateSchema>;
+
+export const AgentBriefSchema = z.object({
+  /** The resolved agent's stable id (e.g. sdd_core-owner, system-architect) */
+  agentId: z.string(),
+
+  /** Human-readable display name of the agent */
+  name: z.string(),
+
+  /** The instruction template the brief was rendered from */
+  template: z.string(),
+
+  /** Domain the agent belongs to (absent = global root) */
+  domainRoot: z.string().optional(),
+
+  /** Glob patterns of the files this agent owns — the write-scope fence */
+  ownedPaths: z.array(z.string()),
+
+  /** Spec paths the subagent should read first */
+  readPaths: z.array(z.string()).optional(),
+
+  /** The fully rendered instruction body — paste-ready as a subagent prompt */
+  instructions: z.string(),
+
+  /** Rendered variant guidance, also folded into instructions */
+  variantGuidance: z.string().optional(),
+
+  /**
+   * How the neutral types of the contracts this agent implements are spelled
+   * in its language: the write table (type_dialect.mappingLines) of the dialect
+   * for the language its implementations are written in, also folded into
+   * instructions. Absent when no dialect is shipped for that language or the
+   * agent implements nothing.
+   */
+  typeMapping: z.array(z.string()).optional(),
+
+  /**
+   * Where an implementing agent may write CODE, as exact files and never a
+   * folder glob: every file the specs name for its components alone (their
+   * implementations', methods', simPath and binding files, and the files of
+   * the types it owns), existing or planned. Empty when nothing names a file
+   * yet (the instructions then ask the spawning session to name the planned
+   * files); absent for an agent that implements nothing.
+   */
+  codeFence: z.array(z.string()).optional(),
+
+  /**
+   * The files an implementing agent may touch but does not own: those its
+   * specs name that other components' specs name too, and — as they exist —
+   * the setup files from the project root down to its code, the package roots
+   * there and the unnamed source files beside its own. The instructions state
+   * the rule: only for this component's needs, a shared responsibility is a
+   * design change to report. Absent when there is none.
+   */
+  sharedPaths: z.array(z.string()).optional(),
+
+  /**
+   * Set only on a brief for a member's agent (an id qualified `<alias>::`): the
+   * member's directory relative to the root the brief was asked from. The
+   * brief was composed at that root, and its ownedPaths and readPaths are
+   * re-expressed under this prefix so the fence is correct from the asking root.
+   */
+  root: z.string().optional(),
+
+  /**
+   * The resource shape of this agent's work, and the allowance it earns.
+   *
+   * Both are ABSENT unless the project has opted in with `execution.tier`,
+   * which is what keeps the brief useful to consumers that cannot act on it:
+   * an MCP client with no subagents — or a host tool that cannot express a
+   * model choice — simply never sees these fields.
+   *
+   * Where generated agent files can ENFORCE a budget through front-matter,
+   * a brief can only ADVISE: the caller spawning from this brief is the one
+   * that picks the model and tool grant. That asymmetry is deliberate, not a
+   * gap — a brief is consumed by tools wairon does not control.
+   */
+  profile: ExecutionProfileSchema.optional(),
+  budget: ExecutionBudgetSchema.optional(),
+});
+
+export type AgentBrief = z.infer<typeof AgentBriefSchema>;
 
 // ---------------------------------------------------------------------------
 // Helper: create a minimal valid agent record (useful in tests / stubs)

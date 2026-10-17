@@ -5,19 +5,25 @@ import {
   getApprovalRequestById,
   listApprovalRequests,
   markApprovalCompleted,
+  cancelApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, executeApprovedPromote } from './admin.js';
+import { executeApprovedLock, gateIdentity, hostedApprover } from './admin.js';
+import type { ApproverIdentity } from '../models/lock.js';
+import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
-import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
-import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds } from './authorization.js';
+import { impactHeadline } from '../models/pack-impact.js';
+import { isValidProjectId, listProjectRecords, existingProjectRoot, resolveProjectBinding } from './projects.js';
+import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
+import { describeDecision } from './types.js';
 import type {
   ApprovalRequest,
   ApprovalDecision,
   AuditEvent,
-  AuditRetentionPolicy,
+  AuditLevel,
+  GovernedProjectCreation,
   HostConfig,
   Principal,
   PrincipalSubject,
@@ -28,16 +34,16 @@ import type {
 // ---------------------------------------------------------------------------
 // Project Lifecycle Orchestrator (sdd_host)
 //
-// EXECUTE-PRIMARY project lifecycle actions — initialize / lock / promote —
+// EXECUTE-PRIMARY project lifecycle actions — initialize / lock —
 // requested over MCP, CLI, or UI. The action is the caller's normal intent;
 // an approval request is the EXCEPTION added for separation of duties. Every
-// method authenticates the caller credential (via the auth specialist) and
+// method authenticates the caller credential (via authentication) and
 // resolves their permission through the authorization seam, then acts on the
 // resolved value:
 //   yes      → execute directly through the pre-authorized entry points
 //              (project:init through the policy orchestrator's
-//              executeApprovedInit; project:lock / project:promote through the
-//              admin plane's executeApprovedLock / executeApprovedPromote) and
+//              executeApprovedInit; project:lock through the admin plane's
+//              executeApprovedLock) and
 //              return a completed ProjectActionOutcome.
 //   approval → create a pending ApprovalRequest and return a pending-approval
 //              outcome; deciding it AUTO-EXECUTES the action.
@@ -65,7 +71,7 @@ const DEFAULT_APPROVAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  *  Resolved hierarchically: an instance-level value decides everywhere, a
  *  unit-scoped value decides within its subtree's projects. */
 const APPROVAL_DECIDE_CAPABILITY = 'approval:decide';
-/** The capability that lets a caller lock/promote a project. The legacy
+/** The capability that lets a caller lock a project. The legacy
  *  `mcp:write` / `lock:create` / `promote:mark-ready` permissions all map here. */
 const PROJECT_WRITE_CAPABILITY = 'project:write';
 /** The capability that lets a caller initialize a project into a unit. */
@@ -78,7 +84,7 @@ const AWAIT_MAX_TIMEOUT_S = 300;
 
 // ── authorization ────────────────────────────────────────────────────────────
 //
-// Every decision resolves through the permission resolver (authorization.ts).
+// Every decision resolves through permission rules (authorization.ts).
 // isInstanceAdmin is imported rather than re-implemented: the previous local
 // copy had to be kept "in lockstep" with three other copies by hand, which is
 // exactly how the model drifted.
@@ -122,16 +128,10 @@ function isOriginalRequester(principal: Principal, req: ApprovalRequest): boolea
   return subjectMatch || tokenMatch;
 }
 
-/** Resolve the active audit retention policy. Host-config plumbing is a later
- *  phase; until then the secure default (mirrors identity.ts). */
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
-}
-
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
   const event: AuditEvent = {
@@ -152,7 +152,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     // Server diagnostic (audit appends are best-effort by invariant).
     console.error(
@@ -224,7 +224,7 @@ function createPendingOutcome(
  * EXECUTE-PRIMARY project initialization. Authenticate the caller, validate the
  * ProjectInitRequest structurally (id shape per the project-id rules
  * createProject enforces, non-collision, and the REQUIRED ownerUnitId — every
- * project is placed at creation so the permission resolver can always see it),
+ * project is placed at creation so permission rules can always see it),
  * then evaluate it against the active instance pack policy via the policy
  * orchestrator's pre-authorized evaluation: an enforcing ('block') policy
  * rejects a non-compliant request immediately with actionable findings, while
@@ -280,7 +280,8 @@ export function initializeProject(
   const effective = authorize(cfg.dataDir, principal, PROJECT_CREATE_CAPABILITY, 'unit', request.ownerUnitId);
   switch (effective.value) {
     case 'yes': {
-      const rec = executeApprovedInit(cfg, request);
+      const creation = executeApprovedInit(cfg, request);
+      const rec = creation.record;
       tryAppendAudit(
         cfg,
         buildAuditEvent(principal, 'lifecycle.completed', 'info', {
@@ -289,10 +290,13 @@ export function initializeProject(
           metadata: JSON.stringify({ kind: 'project:init' }),
         }),
       );
+      // A completed outcome carrying the creation: the record and the impact of
+      // every pack and of the governing-profile step the unattended init applied.
       return {
         status: 'completed',
         action: 'project:init',
         summary: `Initialized project "${rec.id}" under the active pack policy.`,
+        creation,
       };
     }
     case 'no':
@@ -311,35 +315,30 @@ export function initializeProject(
 }
 
 /**
- * EXECUTE-PRIMARY project lock: resolve the caller's project:write permission
- * over the project — yes locks directly via the admin plane's pre-authorized
- * executeApprovedLock (completed outcome carrying the lock record), approval
- * creates a pending project:lock request, no forbids.
- *
- * An optional `subproject` qualifier ('a' or 'a::b' — the mount chain only)
- * CONFINES the action to a chained child's tree: it is forwarded to the
- * pre-authorized entry, which freezes that child's own spec tree instead of the
- * whole project. Permission resolution and audit provenance stay anchored at the
- * TOP project id — a qualifier narrows which tree is acted on, never which grants
- * apply — so nothing below the switch changes.
+ * Project lock — the project's approval. A caller whose approval:decide over
+ * the project's OWN record is yes locks directly via the admin plane's
+ * pre-authorized executeApprovedLock (completed outcome carrying the lock
+ * record); a caller who may write the project (or holds approval:decide as
+ * approval) creates a pending project:lock request someone else decides;
+ * anyone else is forbidden. Since
+ * stage 7 a member is a record of its own, so locking a member is locking its
+ * record: no qualifier exists.
  */
 export function lockProject(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
-  subproject?: string,
 ): ProjectActionOutcome {
   return lifecycleAction(cfg, credential, projectId, {
     action: 'project:lock',
     verb: 'Lock',
     noun: 'lock',
-    subproject,
-    execute: () => {
-      const lock = executeApprovedLock(cfg, projectId, subproject);
+    execute: (approver) => {
+      const lock = executeApprovedLock(cfg, projectId, approver);
       return {
         status: 'completed',
         action: 'project:lock',
-        summary: `Locked project "${projectId}"${subprojectSuffix(subproject)} (status: ${lock.status}).`,
+        summary: `Locked project "${projectId}" (status: ${lock.status}). ${codeBesideClaim(lock)}.`,
         lock,
       };
     },
@@ -347,156 +346,138 @@ export function lockProject(
 }
 
 /**
- * EXECUTE-PRIMARY project promotion: resolve the caller's project:write
- * permission over the project — yes promotes directly via the admin plane's
- * pre-authorized executeApprovedPromote (completed outcome carrying the promote
- * result), approval creates a pending project:promote request, no forbids.
- *
- * An optional `subproject` qualifier CONFINES the action to a chained child's
- * tree (forwarded to the pre-authorized entry, which reads and re-checks THAT
- * child's own lock and StateId). Permission resolution and audit provenance stay
- * anchored at the TOP project id.
+ * The line a hosted lock outcome states beside its claim: the code-conformance
+ * findings the lock recorded (`code`) with the analyzer that produced them.
+ * They never refuse the lock — CI enforces code conformance, not the lock.
  */
-export function promoteProject(
-  cfg: HostConfig,
-  credential: string | null,
-  projectId: string,
-  subproject?: string,
-): ProjectActionOutcome {
-  return lifecycleAction(cfg, credential, projectId, {
-    action: 'project:promote',
-    verb: 'Promote',
-    noun: 'promotion',
-    subproject,
-    execute: () => {
-      const promo = executeApprovedPromote(cfg, projectId, subproject);
-      return {
-        status: 'completed',
-        action: 'project:promote',
-        summary:
-          `Promotion of project "${projectId}"${subprojectSuffix(subproject)}: ` +
-          `${promo.status} — ${promo.message}`,
-        promote: promo,
-      };
-    },
-  });
+function codeBesideClaim(lock: LockRecord): string {
+  if (!lock.code) return 'code: no code analysis recorded';
+  return `code: ${lock.code.errors} errors recorded beside the claim (${lock.code.warnings} warnings; `
+    + `analyzer ${lock.code.analyzer.validatorVersion}, grade ${lock.code.analyzer.grade})`;
 }
 
-/** The completed-outcome summary fragment naming the confined child tree, empty
- *  for an unqualified action (whose wording is unchanged). */
-function subprojectSuffix(subproject?: string): string {
-  return subproject ? ` subproject "${subproject}"` : '';
-}
-
-/** The payloadType a lock/promote ApprovalRequest carries when its requester was
- *  confined to a chained subproject. */
+/** The payload type a project:lock request recorded before stage 7 when its
+ *  requester was bound to a member through a qualifier. Read for one release. */
 const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
 
-/**
- * The ApprovalRequest payload fields recording a subproject qualifier — empty for
- * an unqualified request, so existing requests keep their exact shape.
- *
- * Approval is the one path where the requester does not perform the action, so the
- * qualifier has to survive on the REQUEST or the confinement is lost the moment
- * someone approves it (a subproject-bound caller would obtain a whole-project
- * lock). It rides in the existing payload/payloadType fields — the same mechanism
- * project:init already uses to carry its execution input — rather than a new
- * ApprovalRequest field, and carries no secret: a mount chain is spec topology.
- */
-function subprojectScopePayload(subproject?: string): { payloadType?: string; payload?: string } {
-  if (!subproject) return {};
-  return { payloadType: SUBPROJECT_SCOPE_PAYLOAD, payload: JSON.stringify({ subproject }) };
-}
+/** An unnarrowed lookup principal: resolves a pre-authorized request's qualifier to its record, nothing else. */
+const RECORD_LOOKUP: Principal = { tokenId: 'approval-lookup', role: 'editor', projects: ['*'], authenticated: true };
 
-/** The subproject qualifier recorded on an approved lock/promote request, or
- *  undefined for an unqualified one (or a payload that does not parse — a
- *  malformed payload must not silently widen the action to the whole project,
- *  so the caller treats undefined as "no confinement was requested" only when
- *  payloadType is absent; see readSubprojectScope's callers). */
-function readSubprojectScope(req: ApprovalRequest): string | undefined {
-  if (req.payloadType !== SUBPROJECT_SCOPE_PAYLOAD || !req.payload) return undefined;
+/**
+ * The record a project:lock request executes on: its own projectId, or — for a
+ * request recorded with a member qualifier before the upgrade (one release) —
+ * the member record the qualifier maps to, never wider. A qualifier payload
+ * that does not parse, or names a member no record holds, refuses: falling
+ * back to the whole project would widen the scope the requester was confined to.
+ */
+function lockTargetOf(cfg: HostConfig, req: ApprovalRequest): string {
+  const projectId = req.projectId ?? '';
+  if (req.payloadType !== SUBPROJECT_SCOPE_PAYLOAD || !req.payload) return projectId;
   const parsed = JSON.parse(req.payload) as { subproject?: unknown };
   if (typeof parsed.subproject !== 'string' || !parsed.subproject) {
     throw new Error(
       `Approved ${req.kind} request "${req.id}" carries a ${SUBPROJECT_SCOPE_PAYLOAD} payload with no usable ` +
-        `subproject qualifier — refusing to execute, because falling back to the whole project would widen the ` +
-        `scope the requester was confined to.`,
+        'member qualifier — refusing to execute, because falling back to the whole project would widen the ' +
+        'scope the requester was confined to.',
     );
   }
-  return parsed.subproject;
+  // The qualifier mapped to its member record exactly as a data-plane binding maps it.
+  const member = resolveProjectBinding(cfg.dataDir, RECORD_LOOKUP, `${projectId}::${parsed.subproject}`);
+  if (!member) {
+    throw new Error(
+      `Approved ${req.kind} request "${req.id}" names member "${parsed.subproject}" of "${projectId}", which holds no ` +
+        'hosted record — refusing to execute rather than widen to the whole project; run `wairon host doctor --fix`.',
+    );
+  }
+  return member.projectId;
 }
 
-/** Shared body for the lock/promote lifecycle actions: authenticate → resolve
- *  project:write over the project → switch on the resolved value (yes executes
- *  through the supplied pre-authorized entry, no forbids, approval creates the
- *  pending request), differing only in the kind, wording, and execution.
- *
- *  A subproject qualifier is CLOSED OVER by opts.execute (the yes path) and is
- *  deliberately absent from this body: the permission resolved here and the audit
- *  event appended below anchor at the TOP project id, exactly as before. The
- *  APPROVAL path likewise carries no qualifier — an ApprovalRequest records only
- *  `projectId`, so a request queued from a qualified credential describes, and on
- *  approval executes, the WHOLE project (its summary says so). Confining the
- *  approval path would need a qualifier field on ApprovalRequest, i.e. a spec
- *  change; until then a qualified credential should hold a yes-valued
- *  project:write. */
+/** Shared body for the gated lifecycle actions. A lock is the project's
+ *  APPROVAL, so it is decided by approval:decide over the project's own
+ *  record, never by the right to edit it:
+ *    approval:decide yes → execute through the supplied pre-authorized entry,
+ *      the caller recorded as the approver;
+ *    otherwise, a caller who may write the project (project:write yes or
+ *      approval at the project rung) or whose approval:decide resolves to
+ *      approval → create the pending request someone else decides;
+ *    anyone else → Forbidden.
+ *  The REQUEST path pins the gate identity of the project's tree
+ *  (gateStateId), so the approved execution refuses a tree that moved since;
+ *  the record id alone confines it. */
 function lifecycleAction(
   cfg: HostConfig,
   credential: string | null,
   projectId: string,
   opts: {
-    action: 'project:lock' | 'project:promote';
+    action: 'project:lock';
     verb: string;
     noun: string;
-    execute: () => ProjectActionOutcome;
-    /** The bound mount chain, when the caller is confined to a chained subproject.
-     *  Recorded onto an APPROVAL request so the approved execution stays confined
-     *  (see subprojectScopePayload) — the direct path is confined by `execute`. */
-    subproject?: string;
+    execute: (approver: ApproverIdentity) => ProjectActionOutcome;
   },
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
 
-  // Resolve project:write over the project through the permission resolver: the
-  // leaf->root walk reaches a project-scoped value, a unit-scoped value for the
-  // subtree it is placed in, or an instance-level default — so a unit admin is
-  // first-class over their subtree and nobody reaches across tenants.
-  const effective = authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId);
-  switch (effective.value) {
-    case 'yes': {
-      // The pre-authorized entries validate existence themselves (Unknown project).
-      const outcome = opts.execute();
-      tryAppendAudit(
-        cfg,
-        buildAuditEvent(principal, 'lifecycle.completed', 'security', {
-          target: projectId,
-          projectId,
-          metadata: JSON.stringify({ kind: opts.action }),
-        }),
-      );
-      return outcome;
-    }
-    case 'no':
-      throw new ForbiddenError(`caller may not ${opts.noun === 'promotion' ? 'promote' : opts.noun} this project`);
-    default: {
-      if (!existingProjectRoot(cfg.dataDir, projectId)) {
-        throw new Error(`Unknown project "${projectId}".`);
-      }
-      // A subproject-bound caller must not be able to obtain a WHOLE-PROJECT
-      // action by routing through approval: record the qualifier on the request
-      // (the same payload mechanism a project:init request uses to carry its
-      // execution input) so executeApproved forwards it, and name the subproject
-      // in the summary so an approver sees the real scope before deciding.
-      const pending = buildPendingRequest(
-        principal,
-        opts.action,
-        `${opts.verb} project ${projectId}${subprojectSuffix(opts.subproject)}`,
+  // Steps 2-3: resolve approval:decide over the project through permission
+  // rules (the leaf->root walk: project, its unit subtree, the instance
+  // default — so nobody reaches across tenants). Only a yes approves.
+  const decide = authorize(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY, 'project', projectId);
+  if (decide.value === 'yes') {
+    // Steps 4-6: the pre-authorized entries validate existence themselves (Unknown project).
+    const outcome = opts.execute(hostedApprover(principal.subject));
+    tryAppendAudit(
+      cfg,
+      buildAuditEvent(principal, 'lifecycle.completed', 'security', {
+        target: projectId,
         projectId,
-        subprojectScopePayload(opts.subproject),
-      );
-      return createPendingOutcome(cfg, principal, pending, opts.action);
-    }
+        metadata: JSON.stringify({ kind: opts.action }),
+      }),
+    );
+    return outcome;
   }
+
+  // Steps 7-9: anyone else may only REQUEST the lock, and only when they may
+  // write the project at its rung (a subsystem's yes never reaches a
+  // whole-tree action) or hold approval:decide as approval.
+  const write = authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId);
+  if (write.value === 'no' && decide.value !== 'approval') {
+    throw new ForbiddenError(
+      `caller may not ${opts.noun} this project: approving it needs approval:decide over the project, `
+        + `and requesting the ${opts.noun} for someone else to approve needs project:write over it`,
+    );
+  }
+  // Steps 10-12: a lock signs the whole tree — nobody requests a signature
+  // over a subsystem they may not change.
+  if (write.value !== 'no') refuseDeniedSubsystems(cfg, principal, projectId);
+  if (!existingProjectRoot(cfg.dataDir, projectId)) {
+    throw new Error(`Unknown project "${projectId}".`);
+  }
+  // Steps 13-16: pin the design the request is about: the approved execution
+  // refuses a tree whose gate identity moved after this moment. No qualifier is
+  // recorded — the record id (a member's own) confines the request.
+  const gateStateId = gateIdentity(cfg, projectId);
+  const pending = buildPendingRequest(
+    principal,
+    opts.action,
+    `${opts.verb} project ${projectId}`,
+    projectId,
+    { gateStateId },
+  );
+  return createPendingOutcome(cfg, principal, pending, opts.action);
+}
+
+/**
+ * Refuse a whole-tree write (a lock) when a subsystem rule denies the caller
+ * write on any subsystem of the project, naming each subsystem and the rung
+ * that decided it. With no subsystem settings nothing is refused.
+ */
+function refuseDeniedSubsystems(cfg: HostConfig, principal: Principal, projectId: string): void {
+  const denied = resolveFamilyReach(cfg.dataDir, principal, [projectId]).subsystems
+    .filter((s) => s.projectId === projectId && s.permission.value === 'no');
+  if (denied.length === 0) return;
+  throw new ForbiddenError(
+    'a lock signs the whole tree, and the caller may not change these subsystems: '
+    + denied.map((s) => `${s.subsystemId} (decided by ${describeDecision(s.permission)})`).join(', '),
+  );
 }
 
 /**
@@ -610,8 +591,9 @@ export function decideRequest(
   // executeApprovedRequest.
   let final = decided;
   if (decided.status === 'approved') {
-    executeApproved(cfg, decided);
-    markApprovalCompleted(cfg.dataDir, decided.id);
+    const executed = executeApproved(cfg, decided);
+    // A project:init records what it applied on the approval as its executionSummary.
+    markApprovalCompleted(cfg.dataDir, decided.id, executed.executionSummary);
     final = getApprovalRequestById(cfg.dataDir, decided.id) ?? decided;
   }
 
@@ -627,10 +609,27 @@ export function decideRequest(
   return final;
 }
 
+/** What an executed approval did: the human-readable outcome and, for a
+ *  project:init, the summary of what the unattended init applied. */
+interface ApprovedExecution {
+  outcome: string;
+  executionSummary?: string;
+}
+
+/** An executed project:init's GovernedProjectCreation as an approval's
+ *  executionSummary: one headline per pack the policy applied and one for the
+ *  governing-profile step. The full impacts are in the project.init.policy audit. */
+function executionSummaryOf(creation: GovernedProjectCreation): string {
+  const lines = creation.packImpacts.map((impact) => `Applied pack ${impactHeadline(impact)}`);
+  if (creation.profileImpact) lines.push(`Governing profile — ${impactHeadline(creation.profileImpact)}`);
+  return lines.length > 0 ? lines.join('\n') : 'The instance policy applied no pack and no governing profile.';
+}
+
 /** Dispatch an APPROVED request to its pre-authorized execution entry point by
- *  kind, returning the human-readable outcome. Shared by decideRequest's
+ *  kind, returning the human-readable outcome (and, for a project:init, the
+ *  executionSummary of what it applied). Shared by decideRequest's
  *  auto-execution and the manual executeApprovedRequest retry path. */
-function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
+function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecution {
   switch (req.kind) {
     case 'project:init': {
       if (!req.payload) {
@@ -643,25 +642,57 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
       // request's own profile selection — so an init approved under a permissive
       // policy still fails here if the policy has since flipped to enforcing.
       const init = JSON.parse(req.payload) as ProjectInitRequest;
-      const rec = executeApprovedInit(cfg, init);
-      return `Initialized project "${rec.id}" under the active pack policy.`;
+      const creation = executeApprovedInit(cfg, init);
+      return {
+        outcome: `Initialized project "${creation.record.id}" under the active pack policy.`,
+        executionSummary: executionSummaryOf(creation),
+      };
     }
     case 'project:lock': {
-      // Forward the qualifier the requester was confined to, so approving a
-      // subproject-scoped request freezes THAT child tree — an approval must never
-      // widen the scope its requester was bound to.
-      const scope = readSubprojectScope(req);
-      const lock = executeApprovedLock(cfg, req.projectId ?? '', scope);
-      return `Locked project "${req.projectId}"${subprojectSuffix(scope)} (status: ${lock.status}).`;
-    }
-    case 'project:promote': {
-      const scope = readSubprojectScope(req);
-      const promo = executeApprovedPromote(cfg, req.projectId ?? '', scope);
-      return `Promotion of project "${req.projectId}"${subprojectSuffix(scope)}: ${promo.status} — ${promo.message}`;
+      // The request's record id — a pre-upgrade member qualifier mapped to its
+      // member record for one release, never wider.
+      const target = lockTargetOf(cfg, req);
+      // The request's gateStateId is the expected identity: an approval never
+      // certifies a design other than the one requested (a request without one,
+      // created before stage 5, executes against the tree as it stands).
+      const lock = lockAsRequested(cfg, req, target);
+      return {
+        outcome: `Locked project "${target}" (status: ${lock.status}). ${codeBesideClaim(lock)}.`,
+      };
     }
     default:
       throw new Error(`Unsupported approval kind "${req.kind}".`);
   }
+}
+
+/**
+ * Execute an approved project:lock through the admin plane on the request's
+ * record, with the request's gateStateId as the expected identity.
+ * When the design moved after the request, the request is CANCELLED with the
+ * reason recorded on it (never left approved and un-executable until it
+ * expires), and the refusal says the same; the requester asks again.
+ */
+function lockAsRequested(cfg: HostConfig, req: ApprovalRequest, target: string): LockRecord {
+  try {
+    // The DECIDER is the approver: in the approval path the requester did not
+    // have the authority, and the decision is what conferred it. The requester
+    // is not lost — the ApprovalRequest and the audit event both carry them.
+    return executeApprovedLock(cfg, target, hostedApprover(req.decidedBy), req.gateStateId);
+  } catch (err) {
+    const moved = designMovedSince(err);
+    if (!moved) throw err;
+    const reason = `the design changed since it was requested (requested ${moved.requested}, now ${moved.now}); `
+      + 'request the lock again';
+    cancelApprovalRequest(cfg.dataDir, req.id, reason);
+    throw new Error(`Approval request "${req.id}" was cancelled: ${reason}.`);
+  }
+}
+
+/** The two identities of a lock refused because its requested design moved, or null for any other failure. */
+function designMovedSince(err: unknown): { requested: string; now: string } | null {
+  if (!(err instanceof Error) || err.name !== 'LockRefusedError') return null;
+  const { requested, now } = err as Error & { requested?: unknown; now?: unknown };
+  return typeof requested === 'string' && typeof now === 'string' ? { requested, now } : null;
 }
 
 /**
@@ -670,7 +701,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): string {
  * in approved status (error naming the actual status) and unexpired, dispatch by
  * kind to the pre-authorized execution entry point (project:init to the policy
  * orchestrator's executeApprovedInit, which re-evaluates the active policy and may
- * reject; project:lock / project:promote to the admin plane), mark the approval
+ * reject; project:lock to the admin plane), mark the approval
  * completed, audit at security level (best-effort), and return an outcome summary.
  * The manual retry path behind decideRequest's auto-execution. A re-evaluation
  * failure at execution leaves the approval approved, not completed. Rejects
@@ -696,9 +727,10 @@ export function executeApprovedRequest(
     throw new Error(`Approval request "${req.id}" expired at ${req.expiresAt} and can no longer be executed.`);
   }
 
-  const outcome = executeApproved(cfg, req);
+  const executed = executeApproved(cfg, req);
 
-  markApprovalCompleted(cfg.dataDir, req.id);
+  // A project:init records what it applied on the approval as its executionSummary.
+  markApprovalCompleted(cfg.dataDir, req.id, executed.executionSummary);
 
   tryAppendAudit(
     cfg,
@@ -709,7 +741,8 @@ export function executeApprovedRequest(
     }),
   );
 
-  return outcome;
+  // The outcome summary — for a project:init, including what the init applied.
+  return executed.executionSummary ? `${executed.outcome}\n${executed.executionSummary}` : executed.outcome;
 }
 
 /**

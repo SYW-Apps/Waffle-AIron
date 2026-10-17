@@ -1,0 +1,58 @@
+id: domain_curator_impl
+name: Domain Curator Implementation
+description: >-
+  src/core/domain_curator.ts. The check and the write are deliberately in different components: this
+  one can see both sources and decides, the repository owns the file and persists. Neither refusal
+  is duplicated — a clash with the derived half is only visible here, and a clash inside the
+  registered set is only answerable from the store, so each is caught where it can actually be seen.
+contract: idomain_curator
+sourcePath: src/core/domain_curator.ts
+methods:
+  - name: register
+    narrative:
+      - stepNumber: 1
+        description: Ask what already answers to an id, derived and registered alike
+        type: call
+        targetComponent: domain_projector
+        targetMethod: resolve
+      - stepNumber: 2
+        description: Decide whether the id is free
+        type: branch
+        condition: a domain with this id already exists, derived or registered
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse by name, saying which kind already holds it. A free-standing domain shadowing a
+          subsystem would silently outrank the tree it came from, and the caller could not tell from
+          the outside that it had
+        type: throw
+        error: duplicate domain id
+      - stepNumber: 4
+        description: Hand it to the repository to append and persist
+        type: call
+        targetComponent: topology_repository
+        targetMethod: addFreeStanding
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: registered
+    symbol: registerDomain
+  - name: unregister
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the id to the repository, which drops it from the registered set and persists — and
+          refuses by name when the set does not hold it, because a derived domain is not there to
+          remove and answering "removed" would be a lie the caller could not detect
+        type: call
+        targetComponent: topology_repository
+        targetMethod: removeFreeStanding
+      - stepNumber: 2
+        description: Done
+        type: return
+        outcome: unregistered
+    symbol: unregisterDomain
+status: complete
+createdAt: '2026-09-20T22:44:51.596Z'
+updatedAt: '2026-09-20T22:45:26.720Z'

@@ -1,0 +1,11 @@
+id: orders-repo
+name: Orders Repository
+description: Facade over the order store
+subsystem: orders
+componentType: Repository
+owns:
+  - orders-store
+dependsOn: []
+status: complete
+createdAt: '2026-10-17T11:46:27.545Z'
+updatedAt: '2026-10-17T11:46:28.229Z'

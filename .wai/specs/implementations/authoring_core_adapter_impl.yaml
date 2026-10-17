@@ -1,0 +1,124 @@
+id: authoring_core_adapter_impl
+name: Authoring Core Adapter Implementation
+description: >-
+  sdd_authoring's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals, plus the one forward that is more than a name — the configuration read answers nothing
+  for an uninitialized or unreadable project instead of throwing, because a configuration read must
+  never be what fails a write closed. The seam imports this module, so its calls into core land
+  here.
+contract: iauthoring_core_adapter
+sourcePath: src/core/adapters/authoring-core.ts
+methods:
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Apply the delta through the core subsystem's published update, passing the caller's
+          judgement in as the write hook so it runs on the merged spec at the last point before
+          anything reaches disk
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: updateSpec
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core subsystem's published read,
+          answering with nothing when the project has none or cannot be read — a configuration read
+          must never be the thing that fails a write closed
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the move to the core portal with the caller's hooks and dry-run request carried
+          through unchanged
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: moveMethods
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadSpec on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSpec
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Call saveSpec on the core portal
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: saveSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Call deleteSpec on the core portal
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: deleteSpec
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Read every implementation spec through the core subsystem's published tree read
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadImplementationSpecs
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call scanAllSpecs on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
+  - name: loadComponentSpecs
+    narrative:
+      - stepNumber: 1
+        description: Read every component spec through the core subsystem's published tree read
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadComponentSpecs
+  - name: crossProjectWriteRefusal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the core subsystem's published tree read whether any target of the write lives in
+          another project
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: crossProjectWriteRefusal
+  - name: publishedUsesOf
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the core subsystem's published tree read which public names a removal takes something
+          away from
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: publishedUsesOf
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Move the spec through the core subsystem's published raw write; the caller judged it first
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: moveSpec
+  - name: rehearsalCopy
+    narrative:
+      - stepNumber: 1
+        description: Copy the bound tree through the core subsystem's published face
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: rehearsalCopy
+  - name: discardRehearsal
+    narrative:
+      - stepNumber: 1
+        description: Remove the copy through the core subsystem's published face
+        type: call
+        targetComponent: spec_store_portal
+        targetMethod: discardRehearsal
+status: complete
+createdAt: '2026-09-18T21:43:38.007Z'
+updatedAt: '2026-10-09T17:09:34.767Z'

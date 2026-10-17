@@ -7,7 +7,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { setSecret } from '../../src/utils/secrets.js';
 import * as identity from '../../src/server/identity.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { authenticate, signSsoState, verifySsoState } from '../../src/server/auth.js';
 import {
   upsertIdentityProviderRecord,
@@ -19,7 +19,7 @@ import { mintUserToken, allow } from './helpers.js';
 import {
   appendAuditEvent,
   queryAuditEvents as auditQuery,
-  DEFAULT_AUDIT_POLICY,
+  effectiveAuditPolicy,
 } from '../../src/server/audit.js';
 import { routeAdmin } from '../../src/server/http.js';
 import type {
@@ -233,6 +233,18 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     );
   });
 
+  // Every sign-in start path enforces the provider's redirect allowlist,
+  // including this headless one.
+  it('startSsoLogin refuses a redirectUri outside the provider allowlist', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: ['https://app.example/cb'] }));
+    await expect(identity.startSsoLogin(cfg, PROVIDER_ID, 'https://other.example/cb')).rejects.toThrow(
+      /redirect_uri not allowed/,
+    );
+    // An allowlisted redirectUri still starts the login.
+    const authUrl = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb');
+    expect(new URL(authUrl).searchParams.get('redirect_uri')).toBe('https://app.example/cb');
+  });
+
   // ── completeSsoLogin: first login provisions + mints ───────────────────────
 
   it('completeSsoLogin (first login): provisions an active user with empty grants and mints a user-bound token', async () => {
@@ -363,20 +375,20 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     const editor = tokenWith('project:read', 'instance');
 
     // Editor (not instance-admin) is denied on every IdP admin method.
-    expect(() => identity.upsertIdentityProvider(cfg, editor, providerConfig())).toThrow(ForbiddenError);
-    expect(() => identity.listIdentityProviders(cfg, editor)).toThrow(ForbiddenError);
-    expect(() => identity.removeIdentityProvider(cfg, editor, PROVIDER_ID)).toThrow(ForbiddenError);
+    expect(() => identity.upsertProvider(cfg, editor, providerConfig())).toThrow(ForbiddenError);
+    expect(() => identity.listProviders(cfg, editor)).toThrow(ForbiddenError);
+    expect(() => identity.removeProvider(cfg, editor, PROVIDER_ID)).toThrow(ForbiddenError);
 
     // Admin upsert → stored + idp.upsert (security) audit.
-    const stored = identity.upsertIdentityProvider(cfg, MASTER, providerConfig());
+    const stored = identity.upsertProvider(cfg, MASTER, providerConfig());
     expect(stored.id).toBe(PROVIDER_ID);
-    expect(identity.listIdentityProviders(cfg, MASTER).map((p) => p.id)).toContain(PROVIDER_ID);
+    expect(identity.listProviders(cfg, MASTER).map((p) => p.id)).toContain(PROVIDER_ID);
     const upEvents = auditQuery(dataDir, { action: 'idp.upsert' });
     expect(upEvents).toHaveLength(1);
     expect(upEvents[0].level).toBe('security');
 
     // Admin remove → gone + idp.remove (security) audit.
-    identity.removeIdentityProvider(cfg, MASTER, PROVIDER_ID);
+    identity.removeProvider(cfg, MASTER, PROVIDER_ID);
     expect(listIdentityProviderRecords(dataDir)).toHaveLength(0);
     const rmEvents = auditQuery(dataDir, { action: 'idp.remove' });
     expect(rmEvents).toHaveLength(1);
@@ -386,9 +398,9 @@ describe('identity SSO orchestrator (sdd_host)', () => {
   // ── countAuditEvents ───────────────────────────────────────────────────────
 
   it('countAuditEvents is audit-read gated and returns filter-consistent counts', () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.b' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'idp.count.b' }), effectiveAuditPolicy());
 
     const reader = tokenWith('project:admin', 'instance');
 
@@ -509,9 +521,9 @@ describe('identity SSO portal (sdd_host http)', () => {
   });
 
   it('GET /identity/audit/count responds via routeAdmin with a filter-consistent count', async () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.b' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.a' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'http.count.b' }), effectiveAuditPolicy());
 
     const all = await api('GET', '/identity/audit/count', { cred: MASTER });
     expect(all.status).toBe(200);

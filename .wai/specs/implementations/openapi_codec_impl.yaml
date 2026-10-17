@@ -4,35 +4,6 @@ description: Snapshot ↔ OpenAPI 3.1 conversion.
 contract: iopenapi_codec
 sourcePath: src/core/openapi.ts
 methods:
-  - name: toOpenApi
-    narrative:
-      - stepNumber: 1
-        description: Select the snapshot's HTTP-transport entries (REST endpoints)
-        type: local
-      - stepNumber: 2
-        description: >-
-          Map each contract method to an OpenAPI operation: endpoint method+path, params to
-          parameters/requestBody, returns to responses, guarantees and effect noted as extensions
-        type: local
-      - stepNumber: 3
-        description: Render the embedded type closure as JSON-Schema component schemas
-        type: local
-      - stepNumber: 4
-        description: >-
-          Derive security from the entries' projected auth: for each entry whose auth.scheme is a
-          real scheme (apiKey | bearer | basic | oauth2 | openIdConnect | custom), add a
-          components.securitySchemes entry — deduplicating structurally identical schemes under a
-          shared scheme name — and attach the matching security requirement (including oauth2 scopes
-          when present) to that entry's operations; entries with no auth or scheme 'none' emit
-          neither a scheme nor operation-level security.
-        type: local
-      - stepNumber: 5
-        description: Emit the info block with project identity, version or StateId, and generatedAt
-        type: local
-      - stepNumber: 6
-        description: Return the serialized OpenAPI 3.1 document
-        type: return
-        outcome: OpenAPI document
   - name: fromOpenApi
     narrative:
       - stepNumber: 1
@@ -49,19 +20,35 @@ methods:
         error: InvalidSurfaceDocumentError
       - stepNumber: 4
         description: >-
-          Map operations to contract methods: parameters/requestBody to structured params, responses
-          to returns, method+path to endpoints
+          Map operations to contract methods: parameters/requestBody to structured params (a body
+          x-wairon-body-param names, or one that is a $ref to a component, read back as that one
+          param — named as the extension says, else after its type — and an object body's properties
+          as one param each), the first 2xx response in code order (else the first 3xx) to returns
+          (no JSON body, as a 204 or a redirect, reads void) — and a `default`, 4XX or 5XX response
+          with a JSON body makes it `result<T, E>` with E that body's type — method+path to
+          endpoints, the success code kept as the endpoint's status when it is not the one the
+          export's convention would pick — a document's x-wairon-base-path taken back off each path
+          and set as the entry's basePath, and the parameter an operation's
+          x-wairon-credential-param names put back first among its params — each schema read back
+          into its canonical type expression's text (an inline anonymous enum as string, its values
+          listed in the description)
         type: local
       - stepNumber: 5
-        description: Derive the type closure from component schemas
+        description: >-
+          Derive the type closure from component schemas: a component carrying x-wairon-signature
+          decodes back into a signature type with its params and returns (each type as written when
+          the extension carries it, else read from its schema), a string component carrying `enum`
+          into an enum type with those values, a component whose schema is one primitive's (a
+          string, integer, number or boolean type with no properties) into a named scalar holding
+          that primitive, any other into a data type whose field types are read back canonical
         type: local
       - stepNumber: 6
         description: >-
           Read components.securitySchemes back into the entry's auth, symmetric with the x-wairon-*
           handling: map the document's declared security scheme to a PortalAuth on the entry (scheme
           kind, in/name, bearerFormat, oauth2 authorizationUrl/tokenUrl/refreshUrl/scopes/flow,
-          openIdConnectUrl) so an OpenAPI-format exchange round-trips auth; a document with no
-          security yields no auth.
+          openIdConnectUrl; an http scheme `custom` a custom auth) so an OpenAPI-format exchange
+          round-trips auth; a document with no security yields no auth.
         type: local
       - stepNumber: 7
         description: >-
@@ -75,7 +62,7 @@ methods:
   - name: toOpenApiSet
     narrative:
       - stepNumber: 1
-        description: Select the snapshot's HTTP-transport entries (same selection rule as toOpenApi).
+        description: Select the snapshot's HTTP-transport entries (REST endpoints).
         type: local
       - stepNumber: 2
         description: >-
@@ -87,25 +74,125 @@ methods:
         type: loop
         loopKind: forEach
         over: portal partitions
-        endStep: 5
+        endStep: 7
       - stepNumber: 4
         description: >-
-          Render this partition as a standalone OpenAPI 3.1 document: reuse the operation-mapping
-          and JSON-Schema type-closure logic over only this partition's entries, set `servers` from
-          the partition's basePath, and emit only this partition's components.securitySchemes with
-          the matching per-operation security.
-        type: local
+          For each HTTP operation of the partition, its document path: the Portal's basePath joined
+          in, every `:name` placeholder respelled `{name}`
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: openApiPath
       - stepNumber: 5
+        description: >-
+          For each operation, the parameter that is the credential the Portal's auth scheme binds —
+          left out of the parameters and the body
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: credentialParam
+      - stepNumber: 6
+        description: >-
+          Render this partition as a standalone OpenAPI 3.1 document over only its own entries: map
+          each contract method to an operation at openApiPath(the Portal's basePath, the endpoint
+          path) — basePath joined in, `:name` placeholders as `{name}` — refusing with
+          OpenApiRouteCollisionError, naming both operations, the verb and the path, an operation
+          whose verb and path (placeholders compared by position) an earlier operation of the
+          partition already holds; leave out the parameter credentialParam names (the security
+          scheme carries the credential) and name it under x-wairon-credential-param; each param
+          named by a path placeholder a parameter in: path, required, and the rest parameters in:
+          query on a verb without a body, or the JSON body on POST/PUT/PATCH — the one object-typed
+          param left (a named data type, never a scalar, list, map or enum — an optional one or one
+          typed `T?` included, the body then optional or nullable rather than wrapped) AS the body,
+          required unless the param is optional, named under x-wairon-body-param so a reader puts it
+          back, and several params as the properties of a body object — a param or field required
+          unless it is optional or typed `T?`; the success response under the endpoint's own
+          `status` when it states one (a 3xx a redirect with a Location header and no body), else
+          its conventional code — 204 with no content for a method returning nothing; 201 Created
+          for a POST that creates: a method whose effect is `lifecycle` (it brings an entity into
+          existence), or one whose effect is undeclared, `write` or `io` and whose name says it
+          creates (create, add, new, register, sign up, place, open, insert, submit, upload, start,
+          issue, book); else 200 and, for a `result<T, E>` returns, a `default` response whose body
+          is E's schema; guarantees and effect noted as extensions; each param and return type
+          parsed (type_expression.parse) and rendered from its canonical expression; the components
+          are exactly the types the operations reach, transitively, each identified by its owning
+          project and its id there — an own type by its id, `alias::name` from the context's pinned
+          snapshot or member surface, a qualified closure id naming a project the context holds read
+          as that project's type — so a type reached under several aliases, a member's project id or
+          another producer's closure is rendered ONCE, under `<alias>.<id>` for the first alias the
+          context holds its project under, every key matching `^[a-zA-Z0-9._-]+$` (`::` written
+          `.`), each field's description carried on its property, resolving the names a producer's
+          type uses inside that producer's own closure, until none is left unrendered; derive
+          components.securitySchemes from the entries' projected auth (deduplicating identical
+          schemes, attaching each requirement — with oauth2 scopes — to its operations; a custom
+          scheme an apiKey only where auth.name names its header or parameter, else an http scheme
+          `custom`); name the basePath once as x-wairon-base-path and declare no servers; and set
+          the info block from the portal's name, the context's declared version (else the
+          snapshot's, else 0.0.0), the StateId and generatedAt.
+        type: local
+      - stepNumber: 7
         description: >-
           Wrap the rendered document as a NamedOpenApiSpec { portalId = the backing Portal id, name
           = the portal's surface name, document }.
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: >-
           Return the named set — one spec per portal; distinct portals are never merged into a
           combined document.
         type: return
         outcome: NamedOpenApiSpec[]
+  - name: recognizes
+    narrative:
+      - stepNumber: 1
+        description: Parse the body as YAML (a superset of JSON); a body that does not parse is not a document
+        type: local
+      - stepNumber: 2
+        description: Return whether the parsed value is an object carrying a string openapi version
+        type: return
+        outcome: whether the body is an OpenAPI document
+    symbol: isOpenApiDocument
+  - name: openApiPath
+    narrative:
+      - stepNumber: 1
+        description: Take the basePath as nothing when it is absent, empty or `/`
+        type: local
+      - stepNumber: 2
+        description: >-
+          Join it before the endpoint path with exactly one `/` between them, and root the result at
+          `/`
+        type: local
+      - stepNumber: 3
+        description: >-
+          Answer the path with every `/:name` segment placeholder respelled `/{name}` — the Express
+          idiom and OpenAPI's form are one placeholder
+        type: return
+        outcome: the OpenAPI path
+    detail: full
+  - name: credentialParam
+    narrative:
+      - stepNumber: 1
+        description: Does the Portal authenticate at all?
+        type: branch
+        condition: auth is absent or its scheme is none
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        label: none
+        description: 'No auth binds a credential: no parameter is one'
+        type: return
+        outcome: none
+      - stepNumber: 3
+        label: names
+        description: >-
+          The credential names of the scheme — a token for bearer, oauth2 and openIdConnect; the
+          credentials for basic; the key for apiKey and custom, and the scheme's own key name — each
+          compared lower-cased with everything but letters and digits removed
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the first parameter typed string whose name is one of them, or equals or ends the
+          scheme's key name of at least three characters; none when no parameter is
+        type: return
+        outcome: the credential parameter, or none
+    detail: full
 status: complete
 createdAt: '2026-07-10T23:15:26.486Z'
-updatedAt: '2026-07-23T15:54:26.016Z'
+updatedAt: '2026-10-09T11:22:27.961Z'

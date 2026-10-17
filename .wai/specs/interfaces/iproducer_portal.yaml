@@ -10,9 +10,18 @@ methods:
   - name: produce
     description: >-
       Project the bound project's spec tree and push it to the target (with an optional live-canvas
-      link).
-    signature: 'produce(target: string, diagramUrl: string): void'
+      link), authenticating with the token the caller resolved and hands in: this subsystem never
+      asks anyone for a secret by name.
+    signature: 'produce(target: string, diagramUrl: string, token: string): void'
     returns: void
+    params:
+      - name: target
+        type: string
+      - name: diagramUrl
+        type: string
+      - name: token
+        type: string
+        description: The target service's credential, resolved by the caller
   - name: remove
     description: Remove a producer target's config.
     signature: 'remove(target: string): void'
@@ -20,7 +29,7 @@ methods:
   - name: list
     description: List configured producers for the bound project.
     signature: 'list(): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
 status: complete
 createdAt: '2026-07-04T17:37:31.056Z'
-updatedAt: '2026-07-04T17:42:04.169Z'
+updatedAt: '2026-10-04T10:19:17.631Z'

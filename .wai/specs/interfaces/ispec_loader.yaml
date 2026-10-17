@@ -6,7 +6,7 @@ methods:
   - name: loadSystemSpec
     description: Loads L0 system specification from system.yaml
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: saveSystemSpec
     description: Saves L0 system specification to system.yaml
     signature: 'saveSystemSpec(spec: SystemSpec): void'
@@ -14,55 +14,61 @@ methods:
   - name: loadSubsystemSpecs
     description: Loads all L1 subsystem specifications from subsystems/*.yaml
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadSubsystemSpec
     description: Loads a single subsystem specification by id
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
-  - name: saveSubsystemSpec
-    description: Saves a subsystem specification
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
+    returns: SubsystemSpec?
   - name: loadComponentSpecs
     description: Loads all L2 component specifications from components/*.yaml
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadComponentSpec
     description: Loads a single component specification by id
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: saveComponentSpec
-    description: Saves a component specification
+    description: >-
+      Saves a component specification. A spec arriving at draft, or without a status, keeps the
+      status already stored unless the caller states the demotion. A retired listener `mounts` the
+      stored file holds is carried onto the write unless the spec states its own, or the caller is
+      the reachability migration retiring it.
     signature: 'saveComponentSpec(spec: ComponentSpec): void'
     returns: void
   - name: loadInterfaceSpecs
     description: Loads all L3 interface specifications from interfaces/*.yaml
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadInterfaceSpec
     description: Loads a single interface specification by id
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: saveInterfaceSpec
-    description: Saves an interface specification
+    description: >-
+      Saves an interface specification. A spec arriving at draft, or without a status, keeps the
+      status already stored unless the caller states the demotion. A retired invokedBy kind the
+      author left as it was read, and a stored endpoint the written method leaves out, are carried
+      onto the write, unless the caller is the reachability migration retiring them.
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: loadImplementationSpecs
     description: Loads all L4 implementation specifications from implementations/*.yaml
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadImplementationSpec
     description: Loads a single implementation specification by id
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: saveImplementationSpec
-    description: Saves an implementation specification
+    description: >-
+      Saves an implementation specification. A spec arriving at draft, or without a status, keeps
+      the status already stored unless the caller states the demotion.
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
   - name: loadTypeSpecs
     description: Loads all type specifications (entities and value-objects) from types/*.yaml
-    signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
     params: []
   - name: dryRunSerializeSpecs
     description: >-
@@ -75,17 +81,246 @@ methods:
       field path; never throws for an unserializable spec. Guarantees validate predicts every
       refusal lock or any save would raise.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
     guarantees:
       - idempotent
   - name: findChainingParent
     description: >-
-      Detect whether the CURRENTLY BOUND project root is a chained subproject: walk the filesystem
-      upward (bounded) for an ancestor project holding a subsystem spec whose projectPath resolves
-      exactly to this root. Returns the parent root and the mounting subsystem id, or null for a
-      genuine top root. Pure detection — never rebinds, never mutates.
+      Detect whether the CURRENTLY BOUND project root is a member of another project: walk the
+      filesystem upward (bounded) for an ancestor project that declares this root as a member — a
+      `members` entry of its configuration or, for one release, a legacy L1 subsystem whose
+      projectPath resolves exactly to this root — staying within that ancestor's own root. Returns
+      the parent root, the alias and the form, or null for a genuine top root. Pure detection —
+      never rebinds, never mutates, and not reach-gated: a request-scoped caller discovers its
+      parent through resolveChainingParent, which checks the request's reach before reading anything
+      above the bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
+  - name: invalidateCache
+    description: >-
+      Drop the cached spec index, for callers that changed the tree on disk outside the save paths
+      (an imported tree swapped into place).
+    signature: 'invalidateCache(): void'
+    returns: void
+    guarantees:
+      - idempotent
+  - name: resolveSubprojectForNamespace
+    description: Resolve a member's key to its project root, or null. Pure 1:1 forward to the index read face.
+    signatureFrom: spec_index.resolveSubprojectForNamespace
+  - name: inspectChainedRoots
+    description: >-
+      Every chained mount beneath the bound project: the followable project-relative roots in walk
+      order, and every mount that cannot be followed — with its qualified id, declared path and
+      reason (escapes, missing, cyclic, too-deep) — so a whole-tree operation can refuse a partial
+      result.
+    signature: 'inspectChainedRoots(): ChainedRootsInspection'
+    returns: ChainedRootsInspection
+    guarantees:
+      - idempotent
+  - name: loadTypeSpec
+    description: Loads a single type specification (entity or value-object) by id.
+    signatureFrom: spec_index.loadTypeSpec
+  - name: loadSpec
+    description: >-
+      Load one spec of the named kind by id, or null when none is stored. The one place the store
+      turns a kind into its typed loader, so a caller that holds the kind as data (a gated write, a
+      delete by kind) never repeats the switch. The L0 is a singleton: its id is informational.
+    signatureFrom: spec_index.load
+    effect: read
+  - name: saveSpec
+    description: >-
+      Persist one spec through the typed writer of its kind and answer with that writer's placement
+      notices (none for the L0 and a subsystem, whose writers raise none). A spec arriving at draft,
+      or without a status, keeps the status already stored unless the caller states the demotion,
+      exactly as the typed writers do.
+    signatureFrom: spec_registry.save
+    effect: write
+  - name: deleteSpec
+    description: >-
+      Delete one spec document of the named kind through the file store, and invalidate the index
+      cache. Answers false when no such document existed. The L0 cannot be deleted: a kind of system
+      is refused.
+    signatureFrom: spec_registry.delete
+    effect: write
+  - name: resolveSubsystemExports
+    description: >-
+      One subsystem's resolved export table — what it makes visible to the other subsystems of its
+      project — with the problems met resolving it as facts. Forwards 1:1 to the Export Index.
+    signatureFrom: export_index.resolveSubsystemExports
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward 1:1 to the Export Index: a project's resolved L0 export table — the bound root's, or
+      the member project's at the given namespace — with member and family-external sources followed
+      and every problem as a fact.
+    signatureFrom: export_index.resolveProjectExports
+    guarantees:
+      - idempotent
+  - name: exportUsage
+    description: >-
+      Forward 1:1 to the Export Index: one consumer's references into one producer — `alias::name`
+      references and bare names bound through its `use` imports alike — mapped onto the producer's
+      public names (used) or not (unexported).
+    signatureFrom: export_index.usage
+    guarantees:
+      - idempotent
+  - name: graph
+    description: 'Forward 1:1 to the Project Family Index: the project graph of the current scan.'
+    signatureFrom: project_family_index.graph
+    guarantees:
+      - idempotent
+  - name: deleteMount
+    description: >-
+      Delete the bound project's legacy L1 mount declaration for one alias, once the chaining
+      migration has carried its fields and declared the member; false when there is none. Pure 1:1
+      forward to the registry write face.
+    signatureFrom: spec_registry.deleteMount
+    guarantees:
+      - idempotent
+    effect: write
+  - name: normalizeReferences
+    description: >-
+      Re-save one spec with every reference in its canonical stage-3 form (bare local, or
+      `alias::publicName`), targets unchanged; answers whether the stored text changed. Pure 1:1
+      forward to the registry write face.
+    signatureFrom: spec_registry.normalizeReferences
+    guarantees:
+      - idempotent
+    effect: write
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec, each edit replacing exactly its text at
+      exactly its position; refuses the whole spec when an edit's text is not there. Answers whether
+      the stored text changed. Pure 1:1 forward to the registry write face.
+    signatureFrom: spec_registry.rewriteReferences
+    guarantees:
+      - idempotent
+    effect: write
+  - name: pinnedUsage
+    description: >-
+      Forward 1:1 to the Export Index: one consumer's references into a producer the scan did not
+      read (an outside external, or a referenced project member — a `../`, git or hosted source),
+      counted by the public name they spell.
+    signatureFrom: export_index.pinnedUsage
+    guarantees:
+      - idempotent
+    effect: read
+  - name: subsystemPath
+    description: >-
+      The file a subsystem's spec lives in, under the bound tree: where the spec loads from and
+      saves to. Consumers that derive file ownership (agent ownedPaths) read spec locations through
+      it.
+    signatureFrom: spec_index.subsystemPath
+    effect: read
+  - name: componentPath
+    description: >-
+      The file a component's spec lives in, under the bound tree; the owning subsystem places a
+      component that is not stored yet.
+    signatureFrom: spec_index.componentPath
+    effect: read
+  - name: interfacePath
+    description: >-
+      The file an interface's spec lives in, under the bound tree; the owning component places one
+      that is not stored yet.
+    signatureFrom: spec_index.interfacePath
+    effect: read
+  - name: implementationPath
+    description: >-
+      The file an implementation's spec lives in, under the bound tree; the contract it implements
+      places one that is not stored yet.
+    signatureFrom: spec_index.implementationPath
+    effect: read
+  - name: snapshot
+    description: >-
+      The bytes of every spec file of the bound tree, keyed by path: a whole-tree read an approval
+      captures and a failed write restores.
+    signatureFrom: spec_index.snapshot
+    effect: read
+  - name: signatureFacts
+    description: >-
+      What the current scan's signature resolution recorded (spec_index.signatureFacts): every
+      signatureFrom met and how it resolved, and every stored signature text its params contradict.
+    signatureFrom: spec_index.signatureFacts
+    guarantees:
+      - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded (spec_index.typeSpellingFacts): every
+      stored type position that is an alias of its canonical spelling, and every one that is not
+      canonical at all.
+    signatureFrom: spec_index.typeSpellingFacts
+    guarantees:
+      - idempotent
+  - name: retiredReachFacts
+    description: >-
+      What the current scan met in the forms the reachability model retired
+      (spec_index.retiredReachFacts).
+    signatureFrom: spec_index.retiredReachFacts
+    guarantees:
+      - idempotent
+  - name: typePath
+    description: >-
+      The file a type's spec lives in, under the bound tree; its subsystem and group place one that
+      is not stored yet. A brief's readPaths name the specs of the types a contract uses through it.
+    signatureFrom: spec_index.typePath
+    effect: read
+  - name: lockTree
+    description: >-
+      Take the cross-process write lock of the bound project's spec tree and re-read the tree at
+      once. Pure 1:1 forward to the registry write face.
+    signatureFrom: spec_registry.lockTree
+    effect: io
+  - name: unlockTree
+    description: Release the bound project's spec-tree write lock. Pure 1:1 forward to the file store.
+    signature: 'unlockTree(): void'
+    returns: void
+    effect: io
+  - name: readPinnedSpec
+    description: >-
+      Read a spec of an EXTERNAL from the pinned snapshot this project holds of it, by
+      `alias::name`: the alias one this project declares as an external, the name a public name its
+      pin recorded — an export entry (for a component or an interface asked for, or no kind) or a
+      type (for a type asked for, or no kind when no entry holds the name): the exported type, else
+      a type the pinned shapes carry without exporting it (by its closure id, or the local segment
+      of exactly one), answered with the public names carrying it. Null when the alias is no
+      declared external, its pin is absent or unreadable, or the pin holds no such name. Read-only:
+      the answer says it is pinned, and nothing is written.
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: 'The kind asked for: component or interface read the contract entry, type the exported type'
+      - name: id
+        type: string
+        description: The `alias::name` asked for
+    effect: read
+  - name: inspectLock
+    description: >-
+      The bound project's spec-tree write lock as its file stands, or none. Pure 1:1 forward to the
+      file store.
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
+    effect: read
+  - name: readProjectSystem
+    description: >-
+      Read the L0 a system id names — the one place that decides it. A bare id names this project's
+      own L0 when it is `system`, the L0's name or the project id. An `alias::name` (or
+      `project-id::name`) id names a MEMBER project's own L0, read from its root as stored, when the
+      name is `system`, the member's L0 name or its project id. Otherwise the answer carries the
+      reason no L0 answers — a name the L0 does not go by, a part (no L0 of its own: its subsystems
+      are this project's), an external (its pin records only the names it exports, which are named),
+      or a prefix that is no member, part or external — so no read ever answers one project's L0
+      under another's id. Read-only.
+    signature: 'readProjectSystem(id: string): ProjectSystemRead'
+    returns: ProjectSystemRead
+    params:
+      - name: id
+        type: string
+        description: 'The system id asked for: a name of this L0, or `alias::name`'
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:01:35.994Z'
+updatedAt: '2026-10-15T16:06:23.764Z'

@@ -1,0 +1,44 @@
+id: cli_network_adapter_impl
+name: CLI Network Adapter Implementation
+description: In-process forwards onto the network portal.
+contract: icli_network_adapter
+sourcePath: src/commands/adapters/network.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: flows
+  - name: policy
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: policy
+  - name: diagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: diagram
+  - name: check
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: check
+  - name: why
+    narrative:
+      - stepNumber: 1
+        description: Forward to the network portal
+        type: call
+        targetComponent: network_portal
+        targetMethod: why
+status: complete
+createdAt: '2026-10-06T13:13:08.425Z'
+updatedAt: '2026-10-06T13:13:09.175Z'

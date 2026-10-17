@@ -1,0 +1,58 @@
+kind: value-object
+id: externals_options
+name: ExternalsOptions
+description: The options `wairon externals` reads.
+subsystem: sdd_cli
+fields:
+  - name: json
+    type: bool
+    description: '--json: print the structured answer instead of the table.'
+    optional: true
+  - name: project
+    type: string
+    description: 'add: the producer''s project id when it differs from the alias (--project)'
+    optional: true
+  - name: ref
+    type: string
+    description: 'add: git only — the branch, tag or full commit the pin follows (--ref)'
+    optional: true
+  - name: dir
+    type: string
+    description: 'add: git only — the producer''s root inside the repository (--dir)'
+    optional: true
+  - name: use
+    type: list<string>
+    description: 'add: public names to import bare, comma-separated (--use a,b or --use ''*'')'
+    optional: true
+  - name: description
+    type: string
+    description: 'add: what the producer is to this project (--description)'
+    optional: true
+  - name: pin
+    type: bool
+    description: 'add: pin right after declaring (default true; --no-pin declares only)'
+    optional: true
+  - name: dryRun
+    type: bool
+    description: >-
+      add, use, remove: say what would change, write nothing (--dry-run); add still reads the
+      producer
+    optional: true
+  - name: add
+    type: list<string>
+    description: 'use: public names to import bare, comma-separated (--add a,b or --add ''*'')'
+    optional: true
+  - name: remove
+    type: list<string>
+    description: 'use: names to stop importing, comma-separated (--remove a,b)'
+    optional: true
+  - name: search
+    type: list<string>
+    description: >-
+      consumers: folders to scan, besides the family in reach, for project roots declaring this one
+      as an external (--search <dir>…)
+    optional: true
+methods: []
+sourcePath: src/commands/externals.ts
+createdAt: '2026-10-03T17:11:27.059Z'
+updatedAt: '2026-10-07T06:38:14.352Z'

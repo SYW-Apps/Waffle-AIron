@@ -6,6 +6,7 @@ import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { seedDemoTree, DEMO_SYSTEM_NAME } from '../../src/core/demo-seed.js';
 import { buildCanvasModel, type CanvasModel } from '../../src/core/canvas.js';
+import { validateProject } from '../../src/core/validation.js';
 import { runHostDemo } from '../../src/commands/host.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 
@@ -78,16 +79,29 @@ describe('demo-project seeder', () => {
     );
   });
 
+  it('seeds a tree with no retired stereotypes and no dependency-class violations', () => {
+    const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demo-seed-'));
+    cleanups.push(proj);
+    fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
+    const result = runWithProjectRoot(proj, () => {
+      seedDemoTree();
+      return validateProject();
+    });
+    expect(result.issues.filter((i) => i.code === 'STEREOTYPE_RETIRED')).toEqual([]);
+    expect(result.issues.filter((i) => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);
+  });
+
   it('fills the interface details: methods with structured params, returns, and HTTP endpoints', () => {
     const model = seedInto();
     const portal = model.components.find((c) => c.id === 'ordering-portal')!;
     const place = portal.interfaces[0].methods.find((m) => m.name === 'placeOrder')!;
     expect(place.params).toEqual([
       { name: 'customerId', type: 'string' },
-      { name: 'items', type: 'OrderLine[]' },
+      { name: 'items', type: 'list<OrderLine>' },
     ]);
     expect(place.returns).toBe('Order');
-    expect(place.endpoint).toMatchObject({ transport: 'HTTP', method: 'POST', path: '/orders' });
+    // Paths are relative to the Portal's basePath (`/orders`), as the reach model and OpenAPI join them.
+    expect(place.endpoint).toMatchObject({ transport: 'HTTP', method: 'POST', path: '/' });
   });
 
   it('fills the ERD: typed tables, primary/unique keys, and FK reference edges with cardinality', () => {
@@ -123,7 +137,7 @@ describe('demo-project seeder', () => {
     const checkout = stepKinds(model, 'ordering-orchestrator', 'checkout');
     expect(checkout).toEqual(expect.arrayContaining(['local', 'loop', 'call', 'branch', 'throw', 'return']));
     // A multiway dispatch (switch) + jump in pricing.
-    expect(stepKinds(model, 'pricing-specialist', 'quote')).toEqual(expect.arrayContaining(['switch', 'jump', 'return']));
+    expect(stepKinds(model, 'pricing', 'quote')).toEqual(expect.arrayContaining(['switch', 'jump', 'return']));
     // A guarded region (try) in settlement.
     expect(stepKinds(model, 'payments-orchestrator', 'settle')).toEqual(expect.arrayContaining(['try', 'call', 'return']));
 
@@ -166,5 +180,8 @@ describe('demo-project seeder', () => {
       return buildCanvasModel();
     });
     expect(reseeded.components).toHaveLength(22);
-  });
+    // Provisions a hosted project and seeds a 22-component tree twice (the
+    // --force idempotency half), so it needs more than the 5s default once the
+    // suite is running it alongside everything else.
+  }, 60_000);
 });

@@ -1,0 +1,19 @@
+id: topology_repository
+name: Topology Repository
+description: >-
+  The agent topology a project holds, as one face over the file that stores it and the domains
+  registered in it. It exists because something finally needed to register into that topology rather
+  than load it whole: `topology_store` was deliberately standalone while the only operations were
+  read-the-file and write-the-file, and its own allow said the shape would be revisited when a
+  member earned it. What it does NOT do is decide anything about domains that the spec tree also
+  supplies — combining the registered set with the derived one is workflow, and it lives above this
+  facade rather than inside it.
+subsystem: sdd_core
+componentType: Repository
+owns:
+  - topology_store
+  - domain_registry
+dependsOn: []
+status: complete
+createdAt: '2026-09-20T22:01:30.156Z'
+updatedAt: '2026-09-20T22:43:43.516Z'

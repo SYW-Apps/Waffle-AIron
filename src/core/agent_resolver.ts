@@ -1,22 +1,44 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { AgentRecord } from '../models/agent.js';
-import { loadProjectConfig, AI_PATHS, loadTopologyConfig } from '../config/loader.js';
-import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { AgentBrief, AgentRecord } from '../models/agent.js';
+// The topology configuration, through the Repository facade that owns it —
+// never ../config/loader.js, which is one of its members. The narrative says
+// topology_repository.loadConfig, and a namespace binding is what lets the call
+// SITE say `loadConfig` too: an `as` rename compiles to the same thing, but the
+// name a reader (and the conformance analysis) sees at the call is the local
+// one, so the renamed form hides which contract method was reached.
+import * as topology from './topology.js';
+import { AI_PATHS, assertProjectInitialized } from '../config/paths.js';
+import { Registry, createEmptyRegistry } from '../models/registry.js';
+import { projectConfigRepository } from '../config/project-config.js';
+import { getProjectRoot, pathExists, runWithProjectRoot } from '../utils/fs.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
+import { loadTemplate, loadAgentOverride, renderTemplateInstructions } from './templates.js';
+import { deriveExecutionProfile } from './execution_profile.js';
+import { resolveBudget } from './budget_policy.js';
 import {
   loadSystemSpec,
   loadSubsystemSpecs,
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  loadTypeSpecs,
   getSubsystemPath,
   getComponentPath,
   getInterfacePath,
   getImplementationPath,
+  getTypePath,
   resolveSubprojectForNamespace,
+  // The members this layer declares (stage 3: a member is not a subsystem), each
+  // collapsing to one delegating owner.
+  graph,
 } from './specs.js';
-import { ComponentSpec } from '../models/specs.js';
-import { loadProjectVariants, type VariantDef } from './variants.js';
+import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
+import { fieldTypeRefs, methodTypeRefs, typeMatchesRef } from '../models/type-references.js';
+import { languageOfSourcePath } from '../models/code-model.js';
+import { typeMappingFor } from '../models/type-dialects.js';
+import { readYamlFile } from '../utils/yaml.js';
+import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './variants.js';
 
 // Cache for project files relative to the system root
 const projectFilesCache = new Map<string, string[]>();
@@ -208,62 +230,116 @@ function summarize(text: string, max = 140): string {
 }
 
 /**
- * Build the "Component variants" guidance block injected into an owner/implementer
- * agent for its variant-tagged components: each component's variant guidance plus
- * the same-variant siblings elsewhere in the project, so the implementer reuses one
- * shared approach. Empty when none of the given components declare a known variant.
+ * The "Component variants" guidance block for an owner/implementer agent.
+ * Composition lives in core/variants.ts so the generated-agent renderer and the
+ * MCP `sdd_get_spec` path share ONE implementation — a hosted agent and a local
+ * session are told the same thing about a variant, by construction.
  */
 function buildVariantGuidance(
   comps: ComponentSpec[],
   allComponents: ComponentSpec[],
   variantsById: Map<string, VariantDef>,
 ): string {
-  const tagged = comps.filter((c) => c.variant && variantsById.has(c.variant));
-  if (tagged.length === 0) return '';
-  const lines = [
-    '## Component variants — reuse the shared approach',
-    '',
-    'One or more of your components declare a variant — a base-anchored kind with implementation guidance. Implement every component of the same variant alike, reusing one shared approach instead of reinventing it per instance:',
-    '',
-  ];
-  for (const c of tagged) {
-    const v = variantsById.get(c.variant!)!;
-    const siblings = allComponents.filter((o) => o.variant === c.variant && o.id !== c.id).map((o) => o.id);
-    let line = `- **${c.id}** — variant \`${c.variant}\` (a kind of ${v.base}): ${v.guidance}`;
-    if (siblings.length > 0) {
-      line += ` Same-variant components elsewhere: ${siblings.join(', ')} — implement them consistently, reusing the same logic/concept.`;
-    }
-    lines.push(line);
-  }
-  return lines.join('\n');
+  return composeVariantGuidance(comps, allComponents, variantsById);
 }
 
 // ---------------------------------------------------------------------------
 // Topology Resolver: Translates SDD Spec Tree into Agent Topology
 // ---------------------------------------------------------------------------
 export function resolveAgentTopology(): AgentRecord[] {
+  return resolveLayer(true);
+}
+
+/**
+ * Step 10 of resolveAgentTopology: the ids of the agents a member's OWN layer
+ * resolves, bound to the member's root and qualified `<alias>::<agentId>`. Ids
+ * only, and one level: the member's own members appear as its delegating
+ * owners and are never expanded further. A member that cannot resolve a
+ * topology of its own (no configuration yet) delegates to nothing listed.
+ */
+function memberAgentIds(alias: string, memberDir: string): string[] {
+  try {
+    return runWithProjectRoot(memberDir, () => resolveLayer(false).map((r) => `${alias}::${r.id}`));
+  } catch {
+    return [];
+  }
+}
+
+/** Whether `target` is `dir` or lies under it. */
+function isWithinDir(dir: string, target: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * One layer's topology; `delegate` lists each member's own agents by reference.
+ * `implementers` derives every component's implementer record even when
+ * rules.generateComponentImplementers is off — what a per-component brief
+ * composes from, so it never needs agent files or the setting.
+ */
+function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   projectFilesCache.clear();
 
   const system = loadSystemSpec();
   if (!system) return [];
 
   // LAYERED topology: generate agents ONLY for THIS project's own layer. The
-  // loader federates every chained subproject recursively (their specs carry a
-  // `::` namespace prefix); those belong to the SUBPROJECT's layer, generated in
-  // the subproject's own .wai. Here a chained subproject collapses to a single
-  // delegating owner. A LOCAL spec id carries no `::` prefix. This keeps each
+  // loader reads every member project too (their specs carry the member's
+  // project key as a `::` prefix); those belong to the MEMBER's layer, generated
+  // in the member's own .wai. Here a member collapses to a single delegating
+  // owner. A LOCAL spec id carries no `::` prefix. This keeps each
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  const subsystems = loadSubsystemSpecs().filter((s) => isLocal(s.id));
+  // Each member the bound root declares — `members` or a legacy L1 mount — is
+  // one delegating owner here, shaped as the mount subsystem it used to be.
+  const members = graph().nodes
+    .filter((n) => n.parent === '' && n.mountAlias !== undefined)
+    .map((n) => ({
+      id: n.mountAlias!,
+      name: n.mountAlias!,
+      projectPath: path.relative(getProjectRoot(), n.directory).replace(/\\/g, '/'),
+      form: n.mountForm,
+      createdAt: n.legacyMount?.createdAt ?? system.createdAt,
+      updatedAt: n.legacyMount?.updatedAt ?? system.updatedAt,
+    }));
+  const subsystems = [
+    ...loadSubsystemSpecs().filter((s) => isLocal(s.id)),
+    ...members,
+  ] as (ReturnType<typeof loadSubsystemSpecs>[number] & { form?: 'members' | 'mount' })[];
+  // Stage 8: the parts this layer declares — their subsystems are this
+  // layer's own (no delegating owner); a git part's files are read-only here.
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const readOnlyPartDirs = parts.filter((p) => p.storage === 'git' && p.directory !== undefined).map((p) => p.directory!);
+  const partOf = new Map(parts.flatMap((p) => p.subsystems.map((s) => [s, p.storage === 'git'
+    ? `Stored in the part "${p.alias}", fetched from git at ${p.commit ?? 'its pinned commit'}: read-only here — change it in its own repository, then \`wairon member update ${p.alias}\`.`
+    : `Stored in the part "${p.alias}" (${p.storage === 'path' ? 'a sibling checkout' : 'its own folder'}); it is this project's own subsystem.`] as const)));
   const components = loadComponentSpecs().filter((c) => isLocal(c.id) && isLocal(c.subsystem));
   const interfaces = loadInterfaceSpecs();
   const implementations = loadImplementationSpecs();
+  const types = loadTypeSpecs();
+  // Which subsystems' specs name each code file — implementations through
+  // their component, types directly — so a file shared across subsystems is
+  // never fenced to one owner.
+  const namedBy = new Map<string, Set<string>>();
+  const nameFile = (file: string, subsystem: string | undefined): void => {
+    if (!subsystem) return;
+    const set = namedBy.get(file) ?? new Set<string>();
+    set.add(subsystem);
+    namedBy.set(file, set);
+  };
+  for (const impl of implementations) {
+    const contract = interfaces.find((i) => i.id === impl.contract);
+    const owner = contract ? components.find((c) => c.id === contract.component)?.subsystem : undefined;
+    for (const file of codeLocationsOf(impl)) nameFile(file, owner);
+  }
+  for (const type of types) for (const file of typeSourceFiles(type)) nameFile(file, type.subsystem);
   // Component-variant registry (dynamic layer on top of packs) — resolved here so
   // each owner/implementer carries its variant-tagged components' guidance + siblings.
   const variantsById = new Map(loadProjectVariants().map((v) => [v.id, v]));
 
-  const config = loadProjectConfig();
+  const config = projectConfigRepository.load();
+  if (!config) throw new ProjectNotInitializedError();
   const activeTargets = config.targets
     .filter((t) => !('enabled' in t) || t.enabled)
     .map((t) => typeof t === 'string' ? t : t.type) as AgentRecord['targets'];
@@ -290,25 +366,31 @@ export function resolveAgentTopology(): AgentRecord[] {
 
   // 2. Subsystem Owners (Domain Owners)
   for (const sub of subsystems) {
-    // A chained subproject collapses to ONE delegating owner: it owns only the
-    // parent-side mount spec and points work DOWN into the subproject, whose own
-    // detailed agents are generated in that subproject's .wai (one layer deeper).
+    // A member project collapses to ONE delegating owner: it owns only the
+    // parent-side declaration and points work DOWN into the member, whose own
+    // detailed agents are generated in that member's .wai (one layer deeper).
     // It never enumerates the child's internals here — that is the whole point of
     // stacking agents per layer instead of flattening the tree at the top.
     if (sub.projectPath) {
-      const mountSpecPath = path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
+      // The declaration it owns: the legacy mount's spec file, or — declared in
+      // project.yaml `members` — the member's own tree it delegates into.
+      const mountSpecPath = sub.form === 'members'
+        ? `${sub.projectPath}/**`
+        : path.relative(getProjectRoot(), getSubsystemPath(sub.id)).replace(/\\/g, '/');
       agents.push({
         id: `${sub.id}-owner`,
-        name: `${sub.name} (chained subproject)`,
-        description: `Delegates into the "${sub.id}" chained subproject at ${sub.projectPath}. Its own agents live in that subproject's .wai — run \`wairon generate\` there (or spawn from ${sub.projectPath}/.claude/agents). Do not implement its internals from this layer.`,
+        name: `${sub.name} (member project)`,
+        description: `Delegates into the member project "${sub.id}" at ${sub.projectPath}. Its own agents live in that member's .wai — run \`wairon generate\` there (or spawn from ${sub.projectPath}/.claude/agents). Do not implement its internals from this layer.`,
         template: 'domain-owner',
-        creationReason: `Automatically inferred from a chained subproject subsystem: ${sub.id}`,
+        creationReason: `Automatically inferred from the member "${sub.id}" this project declares`,
         domainRoot: sub.id,
         ownedPaths: [mountSpecPath],
         readPaths: ['**'],
         writePaths: [mountSpecPath],
         tags: ['owner', 'subproject', 'delegate', 'sdd'],
         dependencies: [],
+        // The member's own agents BY REFERENCE, never copied into this layer.
+        ...(delegate ? { delegatesTo: memberAgentIds(sub.id, path.resolve(getProjectRoot(), sub.projectPath)) } : {}),
         status: 'active',
         targets: activeTargets,
         createdAt: sub.createdAt,
@@ -340,14 +422,20 @@ export function resolveAgentTopology(): AgentRecord[] {
 
         let hasExplicitSource = false;
         for (const impl of compImpls) {
-          if (impl.sourcePath) {
-            hasExplicitSource = true;
-            if (!ownedPaths.includes(impl.sourcePath)) ownedPaths.push(impl.sourcePath);
+          // Every code location the implementation names, existing or PLANNED:
+          // its own sourcePath, each method's, and its simPath harness.
+          const files = codeLocationsOf(impl);
+          if (files.length > 0) hasExplicitSource = true;
+          for (const file of files) {
+            // A file the specs of another subsystem name too is no single
+            // owner's: the brief lists it as shared instead.
+            if ((namedBy.get(file)?.size ?? 0) > 1) continue;
+            if (!ownedPaths.includes(file)) ownedPaths.push(file);
           }
         }
 
-        // Inference is a FALLBACK for components whose implementations declare
-        // no sourcePath. Running it on implemented components lets a filename
+        // Inference is a FALLBACK for components whose implementations name no
+        // source file at all. Running it on implemented components lets a filename
         // that matches the component TYPE claim a foreign file — e.g. a
         // Repository facade realized in specs.ts inferring rules/repository.ts
         // owned by another subsystem — tripping OVERLAPPING_OWNERSHIP.
@@ -356,6 +444,19 @@ export function resolveAgentTopology(): AgentRecord[] {
           if (inferred && !ownedPaths.includes(inferred)) {
             ownedPaths.push(inferred);
           }
+        }
+      }
+    }
+
+    // The types this subsystem owns are its code too: each one's own
+    // sourcePath and its methods', existing or planned. A file the specs of
+    // ANOTHER subsystem name as well (a shared models module) is no single
+    // owner's to fence: claiming it would give one path two owners.
+    if (!config.rules.generateComponentImplementers) {
+      for (const type of types.filter((t) => t.subsystem === sub.id)) {
+        for (const file of typeSourceFiles(type)) {
+          if ((namedBy.get(file)?.size ?? 0) > 1) continue;
+          if (!ownedPaths.includes(file)) ownedPaths.push(file);
         }
       }
     }
@@ -377,16 +478,22 @@ export function resolveAgentTopology(): AgentRecord[] {
       dependencies = Array.from(depSubsystems);
     }
 
+    // Stage 8: a part's subsystems are this project's own, so the same owner
+    // covers them — its spec files where the part stores them. A part fetched
+    // from git is read-only here (its files are the fetch cache's): it is read,
+    // never owned, and changed in its own repository.
+    const writable = ownedPaths.filter((p) => !readOnlyPartDirs.some((dir) => isWithinDir(dir, path.resolve(getProjectRoot(), p))));
+    const partNote = partOf.get(sub.id);
     agents.push({
       id: `${sub.id}-owner`,
       name: `${sub.name} Owner`,
-      description: `Owns the ${sub.id} subsystem. ${summarize(sub.description)}`,
+      description: `Owns the ${sub.id} subsystem. ${summarize(sub.description)}${partNote ? ` ${partNote}` : ''}`,
       template: 'domain-owner',
       creationReason: `Automatically inferred from L1 subsystem spec: ${sub.id}`,
       domainRoot: sub.id,
-      ownedPaths,
+      ownedPaths: writable,
       readPaths: ['**'],
-      writePaths: ownedPaths,
+      writePaths: writable,
       tags: ['owner', 'domain', 'sdd'],
       dependencies,
       variantGuidance: buildVariantGuidance(subComponents, components, variantsById),
@@ -398,7 +505,11 @@ export function resolveAgentTopology(): AgentRecord[] {
   }
 
   // 3. Component Implementers
-  if (config.rules.generateComponentImplementers) {
+  if (config.rules.generateComponentImplementers || implementers) {
+    // Which components' specs name each code file: a file one component's
+    // specs alone name is that component's fence; one several name is shared.
+    const claims = componentClaims(components, interfaces, implementations, types);
+    const rel = (p: string): string => path.relative(getProjectRoot(), p).replace(/\\/g, '/');
     for (const comp of components) {
       // Find contract interfaces for this component
       const compInterfaces = interfaces.filter((i) => i.component === comp.id);
@@ -408,11 +519,28 @@ export function resolveAgentTopology(): AgentRecord[] {
       const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
       const ownedPaths: string[] = [];
-      for (const impl of compImpls) {
-        if (impl.sourcePath) ownedPaths.push(impl.sourcePath);
+      const add = (file: string): void => {
+        if (!ownedPaths.includes(file)) ownedPaths.push(file);
+      };
+      // Existing or PLANNED: every file this component's specs ALONE name —
+      // implementation and method files, the simPath harness, binding modules,
+      // and the types only its own contracts use.
+      for (const [file, owners] of claims) {
+        if (owners.size === 1 && owners.has(comp.id)) add(file);
+      }
+      // The types this component realizes (its componentClass) are its code
+      // too, whoever else's contract uses them — but only in a file no other
+      // component's specs name: one types file holding the entity types of
+      // two Stores is neither Store's to fence.
+      for (const type of types.filter((t) => t.componentClass === comp.id && t.subsystem === comp.subsystem)) {
+        for (const file of typeSourceFiles(type)) {
+          const owners = claims.get(file);
+          if (!owners || [...owners].every((o) => o === comp.id)) add(file);
+        }
       }
 
-      if (ownedPaths.length === 0) {
+      const namesAny = compImpls.some((impl) => codeLocationsOf(impl).length > 0);
+      if (ownedPaths.length === 0 && !namesAny) {
         const inferred = inferSourcePathForComponent(comp, subsystems);
         if (inferred) {
           ownedPaths.push(inferred);
@@ -421,13 +549,23 @@ export function resolveAgentTopology(): AgentRecord[] {
 
       const dependencies = comp.dependsOn.map((depId) => `${depId}-implementer`);
 
-      // An implementer needs to read specs, interfaces, and direct dependency component files
-      const readPaths = [
-        path.relative(getProjectRoot(), AI_PATHS.specsSystem()).replace(/\\/g, '/'),
-        path.relative(getProjectRoot(), getComponentPath(comp.id, comp.subsystem)).replace(/\\/g, '/'),
-        ...compInterfaces.map((i) => path.relative(getProjectRoot(), getInterfacePath(i.id, comp.id)).replace(/\\/g, '/')),
-        ...compImpls.map((impl) => path.relative(getProjectRoot(), getImplementationPath(impl.id, impl.contract)).replace(/\\/g, '/')),
-      ];
+      // An implementer reads its own specs, the specs of the types its
+      // contracts use, and the contracts — and the code — of what it calls.
+      const deps = components.filter((c) => c.id !== comp.id && (comp.dependsOn.includes(c.id) || (comp.owns ?? []).includes(c.id)));
+      const depInterfaces = interfaces.filter((i) => deps.some((d) => d.id === i.component));
+      const depFiles = implementations
+        .filter((impl) => depInterfaces.some((i) => i.id === impl.contract))
+        .flatMap((impl) => implementationSourceFiles(impl))
+        .filter((file) => fs.existsSync(path.resolve(getProjectRoot(), file)));
+      const readPaths = [...new Set([
+        rel(AI_PATHS.specsSystem()),
+        rel(getComponentPath(comp.id, comp.subsystem)),
+        ...compInterfaces.map((i) => rel(getInterfacePath(i.id, comp.id))),
+        ...compImpls.map((impl) => rel(getImplementationPath(impl.id, impl.contract))),
+        ...contractTypes(compInterfaces, types).map((t) => rel(getTypePath(t.id, t.subsystem, t.group))),
+        ...depInterfaces.map((i) => rel(getInterfacePath(i.id, i.component))),
+        ...depFiles,
+      ])];
 
       agents.push({
         id: `${comp.id}-implementer`,
@@ -448,12 +586,24 @@ export function resolveAgentTopology(): AgentRecord[] {
         updatedAt: comp.updatedAt,
       });
     }
+
+    // The invariant held outright: no file in two implementers' fences. A
+    // file that still lands in two (an inferred fallback path meeting a named
+    // one) is taken out of both — the briefs list it as shared instead.
+    const implementerRecords = agents.filter((a) => a.template === 'implementer');
+    const fencedBy = new Map<string, number>();
+    for (const r of implementerRecords) for (const p of r.ownedPaths) fencedBy.set(p, (fencedBy.get(p) ?? 0) + 1);
+    for (const r of implementerRecords) {
+      if (!r.ownedPaths.some((p) => (fencedBy.get(p) ?? 0) > 1)) continue;
+      r.ownedPaths = r.ownedPaths.filter((p) => (fencedBy.get(p) ?? 0) <= 1);
+      r.writePaths = r.ownedPaths;
+    }
   }
 
 
   // 4. Free-standing domain owners (declared in .wai/topology.yaml)
   const now = new Date().toISOString();
-  for (const dom of loadTopologyConfig().domains) {
+  for (const dom of topology.loadConfig().domains) {
     agents.push({
       id: `${dom.id}-owner`,
       name: `${dom.name ?? dom.id} Owner`,
@@ -474,4 +624,635 @@ export function resolveAgentTopology(): AgentRecord[] {
   }
 
   return agents;
+}
+
+/** Thrown when composeAgentBrief is asked for an id the current topology does not resolve. */
+export class UnknownAgentError extends WaironError {
+  constructor(agentId: string, knownIds: string[]) {
+    super(`Unknown agent id: "${agentId}". Known agent ids: ${knownIds.join(', ')} — or any component id of this project, which composes that component's implementer brief.`);
+    this.name = 'UnknownAgentError';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Live delegation brief: composed on demand from the CURRENT spec tree, the
+// dynamic replacement for generate-time agent files.
+// ---------------------------------------------------------------------------
+export function composeAgentBrief(agentId: string): AgentBrief {
+  // Steps 1-4: an id qualified by a direct member's alias composes AT THE
+  // MEMBER'S ROOT (brief-through-mount) — exactly the brief the member's own
+  // session gets, so it never grows with the family — and comes back with its
+  // fence re-expressed under the member's directory. One hop per member.
+  const hop = memberHop(agentId);
+  if (hop) {
+    const brief = runWithProjectRoot(hop.directory, () => composeAgentBrief(hop.rest));
+    return throughMount(brief, hop.alias, hop.relative);
+  }
+
+  // Always resolve against the live topology — a re-lock changes the next call.
+  const records = resolveAgentTopology();
+  // Step 5: the record, or — for a component id (`<component>` or
+  // `<component>-implementer`) — that component's implementer record derived
+  // on demand, so a per-component brief never needs agent files or a setting.
+  const record = records.find((r) => r.id === agentId) ?? componentImplementer(agentId);
+  if (!record) {
+    throw new UnknownAgentError(agentId, records.map((r) => r.id));
+  }
+
+  // The project configuration, read once: the global templates directory the template
+  // lookup consults, and the execution settings the budget is resolved from.
+  const config = projectConfigRepository.load();
+  if (!config) throw new ProjectNotInitializedError();
+  const template = loadTemplate(record.template, config.globalTemplatesDir);
+  // The same variable map the generate-time exporter feeds templates (see
+  // exporters/generate.ts buildVars) — duplicated here because core must not
+  // import exporters.
+  let instructions = renderTemplateInstructions(template, {
+    agentId: record.id,
+    agentName: record.name,
+    agentDescription: record.description,
+    ownedPaths: record.ownedPaths.join('\n'),
+    tags: record.tags.join(', '),
+    renderContext: 'root',
+    contextNote: '',
+    domainPath: '.',
+    domainName: '',
+    variantGuidance: record.variantGuidance ?? '',
+  });
+
+  // Step 13 (part): the code write fence — where this agent may write CODE —
+  // ahead of the user's own guidance, which stays the last word.
+  // Exact files, never a folder glob: what this agent's specs alone name.
+  const codeFence = codeFenceOf(record);
+  // The files it may touch but does not own: the ones its specs name that
+  // other components' specs name too, the project setup on the way to its
+  // code, the package roots there and the unnamed files beside its own — so
+  // a first implementation (module setup, composition root, test setup) is
+  // never blocked, and is never silent either.
+  const sharedPaths = codeFence ? sharedFilesOf(record, codeFence) : [];
+  if (codeFence) {
+    // A planned file (named, not on disk yet) is marked, so the implementer
+    // writes it rather than looks for it.
+    const shown = (p: string): string => (fs.existsSync(path.resolve(getProjectRoot(), p))
+      ? `- \`${p}\``
+      : `- \`${p}\` (planned — create it)`);
+    const ownSection = codeFence.length > 0
+      ? `Write code only in these files (and tests beside them, as the project lays tests out):\n\n${codeFence.map(shown).join('\n')}\n`
+      : sharedPaths.length > 0 && namesAnyCode(record)
+        ? 'Every file this agent\'s specs name is named by another component\'s specs too, so none is this agent\'s alone: they are listed as shared below.\n'
+        : 'No spec names a code location yet, so no code location is declared. The spawning session should declare the planned `sourcePath` on the implementation now — it is code linkage, not part of the approval, so declaring it costs no re-lock — and that file is then this agent\'s fence.\n';
+    const sharedSection = sharedPaths.length > 0
+      ? `\nShared, owned by no single agent — create or extend these only for what this component needs (an import, a wiring line, a module setting), and name each one you touch in your report. A shared type file is created at its planned home exactly as its spec declares it, never redeclared in your own file. A module root listed here (\`mod.rs\`, \`index.ts\`, \`__init__.py\`) may be another agent's file: add only the line that declares or re-exports your module:\n\n${sharedPaths.map(shown).join('\n')}\n`
+      : '';
+    const rule = '\nA file no spec names — a shared helper, the composition root, test setup, a module manifest beside your code — may be created or extended the same way, for this component\'s needs only. If a shared or unnamed file would need a responsibility of its own (domain logic, held state, a decision the design does not make), that is a design change: stop and report it instead of writing it. Never delete or move a file or folder outside the files this brief fences — an ignored or scratch-looking folder of the project included — and never use an existing project folder as scratch space: keep scratch work in a temporary directory outside the repository.\n';
+    instructions = `${instructions.trimEnd()}\n\n## Code write fence\n\n${ownSection}${sharedSection}${rule}`;
+    instructions = `${instructions.trimEnd()}\n\n${linkageSection(record)}`;
+  }
+
+  // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
+  // read LIVE — an edit applies on the next call) under an attributed section,
+  // so the user's delta stays legible AS a delta over the inferred brief.
+  const guidance = loadAgentOverride(agentId);
+  if (guidance !== null) {
+    instructions = `${instructions.trimEnd()}\n\n## Project guidance\n\n${guidance.trim()}\n`;
+  }
+
+  // Step 13: the type mapping — how the neutral contract types are spelled in
+  // the language this agent's implementations are written in, so an
+  // implementer maps list<T>, T?, async T and an enum by rule, not by guess.
+  const language = implementationLanguage(record);
+  const typeMapping = (language ? typeMappingFor(language) : null) ?? undefined;
+  if (typeMapping) {
+    instructions = `${instructions.trimEnd()}\n\n## Types in ${language}\n\nContracts speak wairon's neutral type grammar; write each type in ${language} as:\n\n${typeMapping.map((line) => `- ${line}`).join('\n')}\n`;
+  }
+
+  // The externals a consumer codes against: each other project this record's
+  // components reach, the names they use, the producer's transport and abi
+  // where the pin records them, and the pinned snapshot — the contract the
+  // consumer codes against — which joins the read list.
+  const externals = externalsUsedBy(record);
+  let readPaths = record.readPaths;
+  if (externals.length > 0) {
+    const bindings = bindingModulesOf(record);
+    // What the binding is compared with: a pin, a member's live export table, or either.
+    const membersOnly = externals.every((e) => e.member);
+    const pinsOnly = externals.every((e) => !e.member);
+    const source = membersOnly
+      ? 'the member\'s live L0 export table names them now'
+      : pinsOnly ? 'the pin has them' : 'the pin has them (for a member, as its live L0 export table names them now)';
+    const comparedWith = membersOnly ? 'that table' : pinsOnly ? 'the pin' : 'the pin or the table';
+    // The tag convention: a doc comment naming the export ties a declaration to it, so a verb the
+    // producer no longer holds is named; untagged, a declaration nothing matches by name is the
+    // binding's own plumbing and never judged. Spelled with an alias these components really use.
+    const tagAlias = externals[0].alias;
+    const tagNote = ` Tag each declaration in a binding that mirrors a producer name with a doc comment naming it — \`/** ${tagAlias}::<public name> */\` above an interface, a class or a type, \`/** ${tagAlias}::<public name>.<method> */\` above a free function — so \`validate\` compares it with that export alone and names a verb the producer no longer holds; an untagged declaration is matched by name, and one nothing matches is read as the binding's own plumbing and never judged.`;
+    const bindingNote = bindings.length > 0
+      ? `\nThe binding modules these implementations name are the one place the code spells the producer's names — keep them exactly as ${source} (\`validate\` compares them with it and reports a stale name, parameter or field as BINDING_DRIFT, with the rename to follow): ${bindings.map((b) => `\`${b}\``).join(', ')}.${tagNote}\n`
+      : `\nWhen the code reaches a producer through a hand-written binding module (a typed binding to a native library, a client stub), name it on the implementation as \`bindings\` — code linkage, no re-lock — so \`validate\` compares it with ${comparedWith}.${tagNote}\n`;
+    instructions = `${instructions.trimEnd()}\n\n## Externals used\n\nThese components reach other projects through \`alias::name\`; code against the pinned snapshot (for a member project, its live L0 export table), never the producer's source:\n\n${externals.map(describeExternal).join('\n')}\n${bindingNote}`;
+    readPaths = [...new Set([...record.readPaths, ...externals.map((e) => e.pin)])];
+  }
+
+  // The resource axis, resolved from the same live topology as the rest of the
+  // brief. Absent at tier `off` (the default), so a consumer that never opted
+  // in sees exactly the brief it saw before budgets existed.
+  const profile = deriveExecutionProfile(record);
+  const budget = resolveBudget(profile, config.execution, record.id);
+
+  return {
+    agentId: record.id,
+    name: record.name,
+    template: record.template,
+    domainRoot: record.domainRoot,
+    ownedPaths: record.ownedPaths,
+    readPaths,
+    instructions,
+    variantGuidance: record.variantGuidance || undefined,
+    ...(typeMapping ? { typeMapping } : {}),
+    ...(codeFence ? { codeFence } : {}),
+    ...(sharedPaths.length > 0 ? { sharedPaths } : {}),
+    profile: budget ? profile : undefined,
+    budget,
+  };
+}
+
+/**
+ * A component's implementer record, derived on demand for an id naming a
+ * component (`<component>` or `<component>-implementer`) of this layer — the
+ * record rules.generateComponentImplementers would materialize. Null when the
+ * id names no component.
+ */
+function componentImplementer(agentId: string): AgentRecord | null {
+  const componentId = agentId.endsWith('-implementer') ? agentId.slice(0, -'-implementer'.length) : agentId;
+  if (componentId === '' || componentId.includes('::')) return null;
+  return resolveLayer(true, true).find((r) => r.id === `${componentId}-implementer`) ?? null;
+}
+
+/**
+ * Every code location an implementation names, existing or planned: its own
+ * sourcePath, each method's, then its simPath harness.
+ */
+function codeLocationsOf(impl: ImplementationSpec): string[] {
+  const files = implementationSourceFiles(impl);
+  if (impl.simPath && !files.includes(impl.simPath)) files.push(impl.simPath);
+  for (const binding of impl.bindings ?? []) if (!files.includes(binding)) files.push(binding);
+  return files;
+}
+
+/**
+ * The named types a set of contracts uses — their params and returns — and,
+ * transitively, the types those types' fields name, within the loaded tree.
+ */
+function contractTypes(contracts: InterfaceSpec[], types: TypeSpec[]): TypeSpec[] {
+  const found: TypeSpec[] = [];
+  const pending = contracts.flatMap((c) => c.methods.flatMap((m) => methodTypeRefs(m)));
+  while (pending.length > 0) {
+    const ref = pending.shift()!;
+    if (ref.includes('::')) continue; // another project's: its pin is read instead
+    const type = types.find((t) => !t.id.includes('::') && typeMatchesRef(t, ref));
+    if (!type || found.includes(type)) continue;
+    found.push(type);
+    for (const field of type.fields ?? []) pending.push(...fieldTypeRefs(type, field.type));
+  }
+  return found;
+}
+
+/**
+ * Which components' specs name each code file, existing or planned: an
+ * implementation's files (its own, its methods', its simPath, its bindings)
+ * through the component owning its contract, and a type's files through its
+ * componentClass — or, when it has none, through every component whose
+ * contracts use it. A file one component alone names is that component's to
+ * fence; a file several name is shared.
+ */
+function componentClaims(
+  components: ComponentSpec[],
+  interfaces: InterfaceSpec[],
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+): Map<string, Set<string>> {
+  const local = new Set(components.map((c) => c.id));
+  const claims = new Map<string, Set<string>>();
+  const claim = (file: string, component: string | undefined): void => {
+    if (!component || !local.has(component)) return;
+    const owners = claims.get(file) ?? new Set<string>();
+    owners.add(component);
+    claims.set(file, owners);
+  };
+  const contractOwner = new Map(interfaces.map((i) => [i.id, i.component]));
+  for (const impl of implementations) for (const file of codeLocationsOf(impl)) claim(file, contractOwner.get(impl.contract));
+  const users = new Map<string, Set<string>>();
+  for (const contract of interfaces) {
+    for (const type of contractTypes([contract], types)) {
+      const set = users.get(type.id) ?? new Set<string>();
+      set.add(contract.component);
+      users.set(type.id, set);
+    }
+  }
+  for (const type of types) {
+    const owners = type.componentClass ? [type.componentClass] : [...(users.get(type.id) ?? [])];
+    for (const file of typeSourceFiles(type)) {
+      // A file only the type's METHODS name holds their pure logic, and the
+      // component whose narratives call those methods implements them: it
+      // alone claims the file, so one brief fences it instead of every
+      // contract that merely names the type listing it as shared.
+      const caller = type.componentClass ? undefined : methodFileCaller(type, file, implementations, contractOwner);
+      for (const owner of caller ? [caller] : owners) claim(file, owner);
+    }
+  }
+  return claims;
+}
+
+/**
+ * The one component whose implementations' narratives (or intents) call a
+ * method of the type that lives in `file` — a file the type's METHODS name
+ * and its own declaration does not. Undefined when the file is the type's own,
+ * when no component calls one of its methods, or when several do.
+ */
+function methodFileCaller(
+  type: TypeSpec,
+  file: string,
+  implementations: ImplementationSpec[],
+  contractOwner: Map<string, string>,
+): string | undefined {
+  if (type.sourcePath === file) return undefined;
+  // Method names are identifiers; one that is not names no call to match.
+  const names = (type.methods ?? []).filter((m) => m.sourcePath === file).map((m) => m.name).filter((n) => /^\w+$/.test(n));
+  if (names.length === 0) return undefined;
+  const called = new RegExp(`\\b(?:${names.join('|')})\\s*\\(`);
+  const callers = new Set<string>();
+  for (const impl of implementations) {
+    const owner = contractOwner.get(impl.contract);
+    if (!owner) continue;
+    if (impl.methods.some((m) => called.test(JSON.stringify([m.narrative ?? [], m.intent ?? ''])))) callers.add(owner);
+  }
+  return callers.size === 1 ? [...callers][0] : undefined;
+}
+
+/**
+ * The code write fence of a record that implements components: exactly the
+ * code files it owns, existing or planned — never a folder glob, so two
+ * fences never overlap and nothing outside the named files is claimed. Empty
+ * when the record implements components but owns no file yet; null for a
+ * record that implements nothing (the architect, a delegating member owner, a
+ * free-standing domain).
+ */
+function codeFenceOf(record: AgentRecord): string[] | null {
+  if (!implementsComponents(record)) return null;
+  return record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
+}
+
+/**
+ * The language a record's implementations are written in: a technology they
+ * bind that names a language a dialect is shipped for, else the language their
+ * source files are analyzed as. Undefined when the record implements nothing
+ * (the architect, a delegating member owner) or no file names a language.
+ */
+function implementationLanguage(record: AgentRecord): string | undefined {
+  const owned = new Set(record.ownedPaths);
+  const implementations = loadImplementationSpecs()
+    .filter((impl) => implementationSourceFiles(impl).some((file) => owned.has(file)));
+  for (const impl of implementations) {
+    for (const technology of impl.technologies ?? []) {
+      const name = typeof technology === 'string' ? technology : technology.name;
+      if (typeMappingFor(name)) return name.toLowerCase();
+    }
+  }
+  for (const impl of implementations) {
+    for (const file of implementationSourceFiles(impl)) {
+      const language = languageOfSourcePath(file);
+      if (language) return language;
+    }
+  }
+  // Else the language any fenced file's extension names — a planned file
+  // selects the mapping as well as an existing one.
+  for (const file of record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/'))) {
+    const language = languageOfSourcePath(file);
+    if (language) return language;
+  }
+  // Else the language the design declares: a subsystem's own targetLanguage
+  // for its owner, then the L0's — a design with no code yet still says it.
+  if (!implementsComponents(record)) return undefined;
+  const subsystem = loadSubsystemSpecs().find((s) => record.ownedPaths.some((p) => p.includes(`/${s.id}/`) || p.endsWith(`/${s.id}.yaml`)));
+  const declared = subsystem?.targetLanguage ?? loadSystemSpec()?.targetLanguage;
+  return declared ? declared.toLowerCase() : undefined;
+}
+
+/** Whether a record implements components (an implementer, or a subsystem owner inferred from an L1). */
+function implementsComponents(record: AgentRecord): boolean {
+  return record.template === 'implementer' || isSubsystemOwner(record);
+}
+
+/** A qualified id's first hop: the direct member its alias names, and the rest of the id. */
+function memberHop(agentId: string): { alias: string; rest: string; directory: string; relative: string } | null {
+  const at = agentId.indexOf('::');
+  if (at < 0) return null;
+  const alias = agentId.slice(0, at);
+  const member = graph().nodes.find((n) => n.parent === '' && n.mountAlias === alias);
+  if (!member) return null; // not a direct member: an unknown agent id, reported as such
+  const relative = path.relative(getProjectRoot(), member.directory).split(path.sep).join('/');
+  return { alias, rest: agentId.slice(at + 2), directory: member.directory, relative };
+}
+
+/** A member's brief as seen from the asking root: paths under the member's directory, id qualified. */
+function throughMount(brief: AgentBrief, alias: string, relative: string): AgentBrief {
+  const under = (p: string): string => path.posix.join(relative, p);
+  return {
+    ...brief,
+    agentId: `${alias}::${brief.agentId}`,
+    ownedPaths: brief.ownedPaths.map(under),
+    ...(brief.codeFence ? { codeFence: brief.codeFence.map(under) } : {}),
+    ...(brief.sharedPaths ? { sharedPaths: brief.sharedPaths.map(under) } : {}),
+    ...(brief.readPaths ? { readPaths: brief.readPaths.map(under) } : {}),
+    root: brief.root ? under(brief.root) : relative,
+  };
+}
+
+/**
+ * The derived agent topology in the Registry shape callers expect.
+ *
+ * There is no registry FILE: the agents come from the spec tree, and this is
+ * resolveAgentTopology() wrapped for callers that still speak Registry. It
+ * lived in config/loader.ts until the topology store was modelled, which is
+ * why that file had to lazily require THIS one - a store calling an
+ * orchestrator, through a require that existed only to break the cycle it
+ * created. Derivation belongs with the deriver.
+ */
+export function loadRegistry(): Registry {
+  assertProjectInitialized();
+  if (!pathExists(AI_PATHS.specsSystem())) return createEmptyRegistry();
+  return {
+    schemaVersion: '1.0.0',
+    agents: resolveAgentTopology(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Whether a record is a subsystem's owner, inferred from an L1 — the one that implements the subsystem's components. */
+function isSubsystemOwner(record: AgentRecord): boolean {
+  return record.template === 'domain-owner' && record.creationReason.startsWith('Automatically inferred from L1');
+}
+
+/** The project setup files a folder may hold: manifests, lockfiles, compiler settings. */
+const SHARED_SETUP_FILES = [
+  'package.json', 'package-lock.json', 'tsconfig.json', 'Cargo.toml', 'Cargo.lock',
+  'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', 'go.mod',
+];
+
+/** The crate or package roots a folder's modules are reached through. */
+const SHARED_ROOT_FILES = ['index.ts', 'index.js', 'lib.rs', 'main.rs', 'mod.rs', '__init__.py'];
+
+/** Source extensions an unnamed sibling file is recognised by. */
+const SOURCE_EXTENSIONS = new Set(['.rs', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.go', '.java', '.kt', '.cs']);
+
+/** At most this many unnamed sibling files are listed, so the brief stays small. */
+const MAX_UNNAMED_SIBLINGS = 8;
+
+/**
+ * The code linkage the implementer owns, as brief sections: for a record
+ * whose components include a Portal, the honest handler shape; for every
+ * record with a fence, that injectedParams are declared once the code takes
+ * such a parameter — never guessed at design time — with the ones its
+ * implementations already declare, which may be such guesses.
+ */
+function linkageSection(record: AgentRecord): string {
+  const comps = scopeComponents(record);
+  const ids = new Set(comps.map((c) => c.id));
+  const contractOwner = new Map(loadInterfaceSpecs().map((i) => [i.id, i.component]));
+  const impls = loadImplementationSpecs().filter((impl) => ids.has(contractOwner.get(impl.contract) ?? ''));
+  const parts: string[] = [];
+  if (comps.some((c) => c.componentType === 'Portal')) {
+    parts.push('## Handler shape\n\n'
+      + 'Each verb\'s function takes the contract\'s OWN parameters, in order, under the contract\'s names. What its framework hands it besides those — a request, a response, a context, `next` — is wiring: name it in the implementation\'s `injectedParams` (it matches at the start or the end of the list, with or without a leading `_`). Two honest shapes: the router unpacks the path, query and body and calls the verb with the contract\'s parameters; or the function gets the request alone and reads each contract parameter off it by its own name (`req.params.<name>`, `req.query.<name>`, `req.body.<name>`, `url.searchParams.get(\'<name>\')`, or a helper\'s result), and the one record parameter by the body read whole (`req.body`, or `const <record> = await readJsonBody(req)` passed on whole). A `(req, res)` handler that reads nothing by the contract\'s names is reported as substitutions. Set the implementation\'s `router` to the table or function the server actually dispatches: the entry its file exports, a class\'s method as `Class.method`, or a central route table (`src/routes.ts#routes`) — the aggregate the server dispatches, never a Portal\'s own table spread into it. `conformance: off` is only for generated or vendored code: it switches the realization checks off, never the doctrine. The full rules: `sdd-implement`, **Handler shape** and **Routers**.\n');
+  }
+  const declared = impls.filter((impl) => (impl.injectedParams ?? []).length > 0);
+  const listed = declared.length > 0
+    ? ` Declared now: ${declared.map((impl) => `\`${impl.id}\`: [${(impl.injectedParams ?? []).join(', ')}]`).join('; ')}. These may be guesses written before any code existed: keep the ones your code really takes and remove the rest with \`sdd_update_spec\` (\`{"injectedParams": [{"value": "<name>", "action": "delete"}]}\`, or \`[]\` to clear) — an injection no function takes is UNUSED_INJECTED_PARAM.`
+    : '';
+  parts.push('## Code linkage you own\n\n'
+    + '`injectedParams` are code linkage, not design: declare them only when your code takes a parameter its framework or wiring imposes beside the contract\'s own (a request handle, a context), with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` — no re-lock. A dependency held as a field or passed to a constructor is not one.'
+    + `${listed}\n`);
+  return parts.join('\n');
+}
+
+/** Whether any implementation of the record's components names a code file at all. */
+function namesAnyCode(record: AgentRecord): boolean {
+  const ids = new Set(scopeComponents(record).map((c) => c.id));
+  const contracts = new Set(loadInterfaceSpecs().filter((i) => ids.has(i.component)).map((i) => i.id));
+  return loadImplementationSpecs().some((impl) => contracts.has(impl.contract) && codeLocationsOf(impl).length > 0);
+}
+
+/** The components a record implements: its one component for an implementer, its subsystem's local components for an owner. */
+function scopeComponents(record: AgentRecord): ComponentSpec[] {
+  const components = loadComponentSpecs().filter((c) => !c.id.includes('::'));
+  if (record.template === 'implementer') return components.filter((c) => `${c.id}-implementer` === record.id);
+  return components.filter((c) => c.subsystem === record.domainRoot);
+}
+
+/**
+ * The files a record may touch but does not own, existing or planned: the
+ * files its components' specs name that are not in its fence (another
+ * component's specs name them too), the system-level types' files for an
+ * owner, and — where they exist — the setup files from the project root down
+ * to each folder of its own files, the package or crate roots in those
+ * folders, and up to MAX_UNNAMED_SIBLINGS source files beside its own that no
+ * spec names.
+ */
+function sharedFilesOf(record: AgentRecord, fence: string[]): string[] {
+  const root = getProjectRoot();
+  const comps = scopeComponents(record);
+  const ids = new Set(comps.map((c) => c.id));
+  const interfaces = loadInterfaceSpecs();
+  const implementations = loadImplementationSpecs();
+  const types = loadTypeSpecs();
+  const owned = new Set(fence);
+  const out: string[] = [];
+  const add = (file: string): void => {
+    if (!owned.has(file) && !out.includes(file)) out.push(file);
+  };
+  // The files its specs name that are another's too.
+  const claims = componentClaims(loadComponentSpecs().filter((c) => !c.id.includes('::')), interfaces, implementations, types);
+  for (const [file, owners] of claims) if ([...owners].some((o) => ids.has(o))) add(file);
+  if (isSubsystemOwner(record)) {
+    for (const type of types) if (!type.subsystem) for (const file of typeSourceFiles(type)) add(file);
+  }
+  // The folders its code lives in, and every folder from the root down to them.
+  const ownFolders = [...new Set([...fence, ...out].map((f) => path.posix.dirname(f.replace(/\\/g, '/'))))];
+  const chain = new Set<string>(['.']);
+  for (const folder of ownFolders) {
+    const parts = folder === '.' ? [] : folder.split('/');
+    for (let i = 1; i <= parts.length; i++) chain.add(parts.slice(0, i).join('/'));
+  }
+  const join = (dir: string, file: string): string => (dir === '.' ? file : `${dir}/${file}`);
+  for (const dir of [...chain].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
+    for (const file of SHARED_SETUP_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
+  }
+  // The package or crate roots of its folders — existing, or PLANNED where a
+  // spec names one (a Portal's mod.rs): a first-wave module beside it needs
+  // the one line that declares it there.
+  const named = new Set<string>(claims.keys());
+  for (const type of types) for (const file of typeSourceFiles(type)) named.add(file);
+  for (const dir of ownFolders) {
+    for (const file of SHARED_ROOT_FILES) {
+      const rootFile = join(dir, file);
+      if (named.has(rootFile) || fs.existsSync(path.join(root, dir, file))) add(rootFile);
+    }
+  }
+  // The unnamed source files beside its own: shared helpers, a composition root.
+  let siblings = 0;
+  for (const dir of ownFolders) {
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+    } catch {
+      continue; // a planned folder: nothing beside it yet
+    }
+    for (const entry of entries.filter((e) => e.isFile()).sort((a, b) => a.name.localeCompare(b.name))) {
+      const file = join(dir, entry.name);
+      if (siblings >= MAX_UNNAMED_SIBLINGS) break;
+      if (!SOURCE_EXTENSIONS.has(path.extname(entry.name)) || named.has(file) || owned.has(file) || out.includes(file)) continue;
+      if (/\.(test|spec)\.[a-z]+$/.test(entry.name)) continue;
+      add(file);
+      siblings++;
+    }
+  }
+  return out;
+}
+
+/** One other project a record's components reach: its alias, the names used, the pin and what it records of each. */
+interface ExternalUse {
+  alias: string;
+  names: string[];
+  /** The pinned snapshot, project-relative. */
+  pin: string;
+  /** Whether the pin is on disk. */
+  pinned: boolean;
+  /** The producer Portal's transport and abi per used name, where the pin records them. */
+  bindings: Map<string, { transport?: string; abi?: string }>;
+  /** A contained member project, read live and never pinned: its id and its L0 spec, project-relative. */
+  member?: { id: string; system: string };
+}
+
+/** The components a record implements: those whose implementations name a file it owns, or the one its id names. */
+function implementedComponents(record: AgentRecord): ComponentSpec[] {
+  const owned = new Set(record.ownedPaths);
+  const components = loadComponentSpecs();
+  const contractOwner = new Map(loadInterfaceSpecs().map((i) => [i.id, i.component]));
+  const ids = new Set<string>();
+  for (const impl of loadImplementationSpecs()) {
+    if (!implementationSourceFiles(impl).some((file) => owned.has(file))) continue;
+    const component = contractOwner.get(impl.contract);
+    if (component) ids.add(component);
+  }
+  if (record.id.endsWith('-implementer')) ids.add(record.id.slice(0, -'-implementer'.length));
+  return components.filter((c) => ids.has(c.id));
+}
+
+/**
+ * Every other project the record's components reach through `alias::name` —
+ * a dependsOn or owns, a narrative call or declared call, a contract's
+ * `implements` — with what the alias's pinned snapshot records of each name.
+ */
+function externalsUsedBy(record: AgentRecord): ExternalUse[] {
+  const components = implementedComponents(record);
+  if (components.length === 0) return [];
+  const ids = new Set(components.map((c) => c.id));
+  const refs: string[] = [];
+  for (const c of components) refs.push(...c.dependsOn, ...(c.owns ?? []));
+  const contracts = loadInterfaceSpecs().filter((i) => ids.has(i.component));
+  for (const contract of contracts) if (contract.implements) refs.push(contract.implements);
+  // The types its contracts name: a types-only library is reached through them.
+  for (const contract of contracts) for (const m of contract.methods) refs.push(...methodTypeRefs(m));
+  const contractIds = new Set(contracts.map((i) => i.id));
+  for (const impl of loadImplementationSpecs()) {
+    if (!contractIds.has(impl.contract)) continue;
+    for (const method of impl.methods) {
+      for (const step of method.narrative) if (step.targetComponent) refs.push(step.targetComponent);
+      for (const call of method.calls ?? []) refs.push(call.slice(0, call.lastIndexOf('.')));
+    }
+  }
+  // A first segment names another project unless it is one of this project's
+  // own subsystems (which qualifies a local item); a contained member is named
+  // by its alias or its project id (the bound references spell it by its id).
+  const root = getProjectRoot();
+  const externals = new Set(Object.keys(projectConfigRepository.load()?.externals ?? {}));
+  const local = new Set(loadSubsystemSpecs().filter((s) => !s.id.includes('::')).map((s) => s.id));
+  const members = graph().nodes.filter((n) => n.parent === '' && n.namespace !== '');
+  const memberOf = (segment: string) => members.find((n) => n.mountAlias === segment || n.namespace === segment);
+  const byAlias = new Map<string, Set<string>>();
+  for (const ref of refs) {
+    const cut = ref.indexOf('::');
+    if (cut <= 0) continue;
+    const segment = ref.slice(0, cut);
+    const node = externals.has(segment) ? undefined : memberOf(segment);
+    if (!externals.has(segment) && !node && local.has(segment)) continue;
+    const alias = node?.mountAlias ?? segment;
+    const names = byAlias.get(alias) ?? new Set<string>();
+    names.add(ref.slice(cut + 2));
+    byAlias.set(alias, names);
+  }
+  const out: ExternalUse[] = [];
+  for (const [alias, names] of [...byAlias].sort(([a], [b]) => a.localeCompare(b))) {
+    const node = externals.has(alias) ? undefined : memberOf(alias);
+    if (node) {
+      // A contained member is read live: its L0 export table is the contract, never a pin.
+      const system = path.relative(root, path.join(node.directory, '.wai', 'specs', '.index.yaml')).replace(/\\/g, '/');
+      // Spelled by the PUBLIC names of its export table: the loader resolves
+      // `geo::distance` to the internal id it names, which the brief maps back.
+      const publicName = memberPublicNames(path.join(node.directory, '.wai', 'specs', '.index.yaml'));
+      const spelled = [...new Set([...names].map((n) => publicName.get(n) ?? n))].sort();
+      out.push({ alias, names: spelled, pin: system, pinned: true, bindings: new Map(), member: { id: node.id ?? node.namespace, system } });
+      continue;
+    }
+    const pin = `.wai/externals/${alias}.yaml`;
+    const bindings = new Map<string, { transport?: string; abi?: string }>();
+    let pinned = false;
+    try {
+      const doc = readYamlFile(path.join(root, pin)) as { interfaces?: Array<{ id?: string; transport?: string; abi?: string }> } | null;
+      pinned = !!doc;
+      for (const entry of doc?.interfaces ?? []) {
+        if (entry.id && names.has(entry.id)) bindings.set(entry.id, { transport: entry.transport, abi: entry.abi });
+      }
+    } catch { /* no pin on disk: named as unpinned */ }
+    out.push({ alias, names: [...names].sort(), pin, pinned, bindings });
+  }
+  return out;
+}
+
+/**
+ * A member's L0 export table read as internal id → public name: each entry's
+ * component or typeDef under the name it is exported `as`. Empty when the
+ * table cannot be read — the internal ids are then shown as they are.
+ */
+function memberPublicNames(systemSpec: string): Map<string, string> {
+  const out = new Map<string, string>();
+  try {
+    const doc = readYamlFile(systemSpec) as { publicInterfaces?: Array<{ component?: string; typeDef?: string; as?: string; name?: string }> } | null;
+    for (const entry of doc?.publicInterfaces ?? []) {
+      const exported = entry.as ?? entry.name;
+      const internal = entry.component ?? entry.typeDef;
+      if (internal && exported && !out.has(internal)) out.set(internal, exported);
+    }
+  } catch { /* unreadable: the ids are shown as they are */ }
+  return out;
+}
+
+/** The binding modules the implementations of a record's components name, in first-seen order. */
+function bindingModulesOf(record: AgentRecord): string[] {
+  const ids = new Set(implementedComponents(record).map((c) => c.id));
+  const contracts = new Set(loadInterfaceSpecs().filter((i) => ids.has(i.component)).map((i) => i.id));
+  return [...new Set(loadImplementationSpecs().filter((impl) => contracts.has(impl.contract)).flatMap((impl) => impl.bindings ?? []))];
+}
+
+/** One external as the brief's section lists it. */
+function describeExternal(use: ExternalUse): string {
+  const names = use.names.map((name) => {
+    const binding = use.bindings.get(name);
+    const how = [binding?.transport ? `transport ${binding.transport}` : '', binding?.abi ? `abi ${binding.abi}` : ''].filter(Boolean).join(', ');
+    return `\`${use.alias}::${name}\`${how ? ` (${how})` : ''}`;
+  });
+  if (use.member) {
+    return `- **${use.alias}** — uses ${names.join(', ')}; a member project (\`${use.member.id}\`), read live and never pinned: code against what its L0 export table (\`${use.member.system}\`) exports now`;
+  }
+  return `- **${use.alias}** — uses ${names.join(', ')}; pinned snapshot \`${use.pin}\`${use.pinned ? '' : ` (not pinned yet — run \`wairon externals pin ${use.alias}\` before coding against it)`}`;
 }

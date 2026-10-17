@@ -1,0 +1,26 @@
+kind: enum
+id: capability
+name: Capability
+description: >-
+  A permission the hosted authorization model resolves over a scope. There is no '*' capability and
+  no instance-admin assignment: the instance-admin bypass is env-anchored to the built-in
+  super-admin, never granted through the assignment grid.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: project:read
+    description: Read a project's specs
+  - name: project:create
+    description: Create a project under a unit
+  - name: project:write
+    description: Change a project's specs (per subsystem, where a subsystem carries its own setting)
+  - name: project:admin
+    description: 'Administer a project: lifecycle, keys, settings'
+  - name: approval:decide
+    description: Decide approval requests
+  - name: share:create
+    description: Create and manage share links for a project
+createdAt: '2026-10-04T23:13:50.948Z'
+updatedAt: '2026-10-04T23:13:51.376Z'

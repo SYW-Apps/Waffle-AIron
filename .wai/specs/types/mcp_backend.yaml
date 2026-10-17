@@ -1,0 +1,15 @@
+kind: enum
+id: mcp_backend
+name: McpBackend
+description: The AI assistants an MCP install writes a server entry for.
+subsystem: sdd_cli
+fields: []
+methods: []
+sourcePath: src/commands/mcp.ts
+values:
+  - name: claude
+    description: Claude Code
+  - name: gemini
+    description: Gemini CLI
+createdAt: '2026-10-04T23:33:48.144Z'
+updatedAt: '2026-10-04T23:33:48.571Z'

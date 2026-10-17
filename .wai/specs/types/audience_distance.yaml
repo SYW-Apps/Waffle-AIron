@@ -1,0 +1,19 @@
+kind: enum
+id: audience_distance
+name: AudienceDistance
+description: >-
+  How far an observer stands from a project in the unit graph, nearest first; an entry is visible
+  when its audience ceiling covers the distance.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: department
+    description: On the observer's own branch of the unit tree
+  - name: instance
+    description: Elsewhere in the observer's tenant
+  - name: partner
+    description: In another tenant, reached through an exposeTo grant
+createdAt: '2026-10-04T23:53:00.351Z'
+updatedAt: '2026-10-04T23:53:21.989Z'

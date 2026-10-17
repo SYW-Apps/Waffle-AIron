@@ -1,7 +1,8 @@
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { authorize } from './authorization.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
+import { authorize, explain as explainPermission } from './authorization.js';
+import { declaredSubsystemIds } from './projects.js';
 import {
   createRole as repoCreateRole,
   updateRole as repoUpdateRole,
@@ -16,11 +17,14 @@ import {
   listAssignments as repoListAssignments,
 } from './permissions.js';
 import { findUserByRecordOrSubjectId, getUserById, upsertUser } from './users.js';
+import { parseSubsystemScope, SUBSYSTEM_NOT_FOUND } from './types.js';
 import type {
   AuditEvent,
+  EffectivePermission,
   HostConfig,
   HostedUserRecord,
   PermissionAssignment,
+  PermissionSubject,
   Principal,
   PrincipalSubject,
   Role,
@@ -55,10 +59,10 @@ const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 
 /**
  * The canonical assignment key for a user subject is the subject's userId —
- * the id every live Principal carries into the resolver. Callers routinely
+ * the id every live Principal carries into permission rules. Callers routinely
  * pass the user RECORD id instead (the Users list shows it); when the two
- * have diverged, storing the record id would key a row the resolver only
- * honors via the alias path. Canonicalize at the write/read boundary; an id
+ * have diverged, storing the record id would key a row permission rules only
+ * honor via the alias path. Canonicalize at the write/read boundary; an id
  * with no user record (a pre-provisioned subject) passes through unchanged.
  */
 function canonicalSubjectId(cfg: HostConfig, subjectId: string): string {
@@ -118,7 +122,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[permissionadmin] audit append failed for "${event.action}": ` +
@@ -169,7 +173,7 @@ export function updateRole(cfg: HostConfig, credential: string | null, role: Rol
 /**
  * Authenticate, require instance-level project:admin, delete a role through the
  * role repository, and audit. Bindings referencing a deleted role become inert
- * (the resolver ignores unknown roles). A reserved built-in id is refused
+ * (permission rules ignore unknown roles). A reserved built-in id is refused
  * before anything else.
  */
 export function deleteRole(cfg: HostConfig, credential: string | null, roleId: string): void {
@@ -208,7 +212,10 @@ export function setAssignment(
       "the instance-admin marker ('*'@instance) is reserved to the built-in admin account",
     );
   }
-  // steps 4–6: the caller must administer the scope the assignment lands on.
+  // steps 4–5: a subsystem scope carries one capability as a yes/no setting.
+  refuseUnfitSubsystemAssignment(assignment);
+  // steps 6–8: the caller must administer the scope the assignment lands on
+  // (a subsystem's project:admin resolves at its project).
   requireAdminOverScope(
     cfg,
     principal,
@@ -216,17 +223,60 @@ export function setAssignment(
     assignment.scopeId ?? '',
     'setting an assignment requires project:admin over its scope',
   );
+  // A listing's label is never stored.
+  const { scopeNote: _label, ...unlabelled } = assignment;
   const stored = repoSetAssignment(cfg.dataDir, {
-    ...assignment,
+    ...unlabelled,
     // Canonical grid key: user-kind subjects store the subject's userId, so
-    // the resolver's primary match (not the legacy-alias path) serves them.
+    // permission rules' primary match (not the legacy-alias path) serves them.
     ...(assignment.subjectKind === 'user' && assignment.subjectId
       ? { subjectId: canonicalSubjectId(cfg, assignment.subjectId) }
       : {}),
     createdBy: principalSubject(principal),
   }); // step 7
-  tryAppendAudit(cfg, buildAuditEvent(principal, 'permission.set', stored.id)); // steps 8–11
-  return stored; // step 12
+  tryAppendAudit(cfg, buildAuditEvent(principal, 'permission.set', stored.id)); // steps 10–13
+  return stored; // step 14
+}
+
+/** The values a subsystem rule may take: yes or no, or inherit to defer to the project. */
+const SUBSYSTEM_VALUES = new Set(['yes', 'no', 'inherit']);
+
+/**
+ * Refuse, before any authorization, a subsystem-scope assignment that is not
+ * project:write with yes, no or inherit, or whose scope id is not
+ * `<projectId>/<subsystemId>`: reading stays whole-project, and there is no
+ * approval flow for a single spec write.
+ */
+function refuseUnfitSubsystemAssignment(assignment: PermissionAssignment): void {
+  if (assignment.scopeKind !== 'subsystem') return;
+  const fits = String(assignment.capability) === 'project:write'
+    && SUBSYSTEM_VALUES.has(String(assignment.value))
+    && parseSubsystemScope(assignment.scopeId ?? '') !== null;
+  if (!fits) {
+    throw new ForbiddenError(
+      'a subsystem scope carries only project:write, yes or no (or inherit), at <projectId>/<subsystemId> — '
+      + `got ${assignment.capability}=${assignment.value} at "${assignment.scopeId ?? ''}"`,
+    );
+  }
+}
+
+/** Refuse a subsystem-scope binding whose scope id is not `<projectId>/<subsystemId>`. */
+function refuseUnfitSubsystemBinding(scopeKind: ScopeKind | undefined, scopeId: string | undefined): void {
+  if (scopeKind === 'subsystem' && parseSubsystemScope(scopeId ?? '') === null) {
+    throw new ForbiddenError(`a subsystem scope id is <projectId>/<subsystemId> — got "${scopeId ?? ''}"`);
+  }
+}
+
+/**
+ * Whether a subsystem scope names a subsystem its project's tree does not
+ * declare (or whose project has no root) — a rule stored there is kept and
+ * labelled, never dropped. `cache` holds one tree read per project.
+ */
+function subsystemMissing(cfg: HostConfig, scopeId: string, cache: Map<string, string[] | null>): boolean {
+  const parsed = parseSubsystemScope(scopeId);
+  if (!parsed) return true;
+  if (!cache.has(parsed.projectId)) cache.set(parsed.projectId, declaredSubsystemIds(cfg.dataDir, parsed.projectId));
+  return !(cache.get(parsed.projectId) ?? []).includes(parsed.subsystemId);
 }
 
 /**
@@ -290,13 +340,19 @@ export function listAssignments(
     ? subjectIds.flatMap((id) => repoListAssignments(cfg.dataDir, undefined, subjectKind, id))
     : repoListAssignments(cfg.dataDir, undefined, subjectKind, subjectId);
   const seen = new Set<string>();
-  return assignments.filter((a) => {
+  const listed = assignments.filter((a) => {
     if (seen.has(a.id)) return false;
     seen.add(a.id);
     if (scopeKind !== undefined && a.scopeKind !== scopeKind) return false;
     if (scopeId !== undefined && (a.scopeId ?? '') !== scopeId) return false;
     return true;
   });
+  // Steps 6-8: a subsystem rule whose subsystem its project no longer declares
+  // is kept and labelled, so nothing stale sits there silently.
+  const trees = new Map<string, string[] | null>();
+  return listed.map((a) => (a.scopeKind === 'subsystem' && subsystemMissing(cfg, a.scopeId ?? '', trees)
+    ? { ...a, scopeNote: SUBSYSTEM_NOT_FOUND }
+    : a)); // step 9
 }
 
 // ── user role bindings ────────────────────────────────────────────────────────
@@ -330,9 +386,10 @@ export function bindRole(
   scopeId?: string,
 ): HostedUserRecord {
   const principal = requirePrincipal(cfg, credential); // step 1
+  refuseUnfitSubsystemBinding(scopeKind, scopeId); // steps 2–3
   const scope = bindingScope(scopeKind, scopeId);
-  requireAdminOverScope(cfg, principal, scope.kind, scope.id, 'binding a role requires project:admin over the scope'); // steps 2–4
-  const user = getUserById(cfg.dataDir, userId); // step 5
+  requireAdminOverScope(cfg, principal, scope.kind, scope.id, 'binding a role requires project:admin over the scope'); // steps 4–6
+  const user = getUserById(cfg.dataDir, userId); // step 7
   if (!user) {
     throw new Error(`User "${userId}" not found.`); // steps 6–7
   }
@@ -378,4 +435,47 @@ export function unbindRole(
   const stored = upsertUser(cfg.dataDir, { ...user, roleBindings: next }); // step 9
   tryAppendAudit(cfg, buildAuditEvent(principal, 'role.unbind', `${userId}:${roleId}`)); // steps 10–13
   return stored; // step 14
+}
+
+// ── the explanation ───────────────────────────────────────────────────────────
+
+/** A user record as the permission subject authentication resolves for it (a user record is never the instance admin). */
+function subjectOfUser(user: HostedUserRecord): PermissionSubject {
+  const subjectId = user.subject.userId || user.id;
+  const aliases = [user.id, user.subject.userId].filter((id) => !!id && id !== subjectId);
+  return {
+    subjectId,
+    ...(aliases.length ? { aliasSubjectIds: [...new Set(aliases)] } : {}),
+    roleBindings: user.roleBindings ?? [],
+    instanceAdmin: false,
+  };
+}
+
+/**
+ * Authenticate, require project:admin over the target scope (a subsystem's
+ * resolves at its project), read the user, and answer that user's effective
+ * permission for a capability at the scope with the source and the rung that
+ * decided it — through the same walk every gate takes. A subsystem its project
+ * does not declare is labelled "subsystem not found". A read; not audited.
+ */
+export function explain(
+  cfg: HostConfig,
+  credential: string | null,
+  userId: string,
+  capability: string,
+  scopeKind: ScopeKind,
+  scopeId: string,
+): EffectivePermission {
+  const principal = requirePrincipal(cfg, credential); // step 1
+  // steps 2–4: only an administrator of the scope may ask why someone can or cannot act there.
+  requireAdminOverScope(cfg, principal, scopeKind, scopeId, 'explaining a permission requires project:admin over its scope');
+  const user = findUserByRecordOrSubjectId(cfg.dataDir, userId); // step 5
+  if (!user) throw new Error(`User "${userId}" not found.`); // steps 6–7
+  // steps 8–9: the user's subject, resolved through the authorization seam.
+  const explained = explainPermission(cfg.dataDir, subjectOfUser(user), capability, scopeKind, scopeId);
+  // steps 10–12: a subsystem its project does not declare is labelled.
+  if (scopeKind === 'subsystem' && subsystemMissing(cfg, scopeId, new Map())) {
+    return { ...explained, scopeNote: SUBSYSTEM_NOT_FOUND };
+  }
+  return explained; // step 13
 }

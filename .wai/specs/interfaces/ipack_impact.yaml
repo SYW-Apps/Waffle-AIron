@@ -1,0 +1,47 @@
+id: ipack_impact
+name: Pack Impact Interface
+description: What one pack write would change on the bound project, measured without writing anything.
+component: pack_impact
+methods:
+  - name: measure
+    description: >-
+      Measure a pack write on the bound project without performing it. Reads the stored
+      configuration and builds the candidate with project_config.withPack (the entry upserted, or
+      dropped under `remove`; the candidate's projectType when the write also sets one; a candidate
+      with no entry changes only the projectType). Resolves the candidate pack's manifest (the
+      supplied one, else the entry's) and, on an update, the manifest currently applied under the
+      same name. Builds wairon's defaults (DoctrineBaseline) from the builtin rule registry and the
+      builtin profiles, and states each manifest's changes against them (none for a projectType-only
+      write). Then runs the owner's gate twice — once under the stored configuration, once with
+      every configuration input taken from the candidate (its rules, projectType, pack selections,
+      and the extensions loaded for it) — and answers the finding changes between them. Never the
+      family run: a pack applies per project. Throws when the candidate pack does not resolve (the
+      same PACK_NOT_INSTALLED / PACK_VERSION_UNSATISFIED / PACK_INTEGRITY_MISMATCH reason the gate
+      would give) or the bound project has no configuration. Writes nothing.
+    signature: 'measure(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: >-
+          The pack write to measure: the entry, an optional supplied manifest, whether it removes,
+          and the projectType it also sets
+    guarantees:
+      - idempotent
+  - name: doctrine
+    description: >-
+      The doctrine half alone, for a pack no project exists to validate against (an init request
+      evaluated before creation): builds wairon's defaults (DoctrineBaseline) exactly as measure
+      does and states the manifest's changes against them with extension_pack.changesAgainst. No
+      finding diff, no configuration read, nothing written.
+    signature: 'doctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-29T15:52:55.472Z'
+updatedAt: '2026-09-29T16:41:34.089Z'

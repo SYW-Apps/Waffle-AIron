@@ -1,0 +1,2440 @@
+id: conformance_rules_impl
+name: Conformance Rules Implementation
+description: >-
+  The conformance rule family, one file per rule under src/core/rules/conformance/, each exporting
+  the rule object whose check realizes the method of the same name.
+contract: iconformance_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: hiddenState
+    sourcePath: src/core/rules/conformance/hidden-state.ts
+    narrative:
+      - stepNumber: 1
+        label: implLoop
+        description: Map each source file to the implementations that name it
+        type: loop
+        over: ctx.implementations
+        endStep: 4
+      - stepNumber: 2
+        description: >-
+          Resolve component = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 3
+        description: >-
+          Unresolvable or chained-subproject implementations map no files: continue with the next
+          implementation
+        type: branch
+        condition: component resolves and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 1
+      - stepNumber: 4
+        label: mapFiles
+        description: >-
+          Map only the files the conformance dial trusts as evidence (a file dialed off is generated
+          or vendored code): impl.sourcePath unless impl.conformance is off, and
+          method.sourceFile(impl.sourcePath) for each method of impl.methods unless
+          method.conformance ?? impl.conformance is off. For each trusted file, add {impl,
+          component} to byPath under ctx.codeModel.pathKey(file), once per implementation per path
+        type: local
+      - stepNumber: 5
+        label: fileLoop
+        description: >-
+          Judge each exact-grade source file: the code index's own exact-grade path set is the loop,
+          so lower analysis grades never reach a verdict to guess at
+        type: loop
+        over: ctx.codeIndex().exactPaths
+        endStep: 7
+      - stepNumber: 6
+        description: >-
+          A file with no module-scope let or var, an unmapped file, or a file also mapped to any
+          component that is not stateless logic is exempt: a data or boundary component's file hosts
+          that component's state (N:1 collapse), and a Supervisor or Actor holds runtime state by
+          definition, so its file may keep module-scope state. Continue with the next file
+        type: branch
+        condition: >-
+          facts = ctx.codeIndex().factsAt(path) has non-empty topLevelMutableBindings, mapped =
+          byPath.get(path) is non-empty, and every mapped component is stateless logic:
+          component.isLogic() and not component.holdsState(), which is an Orchestrator (or a
+          Specialist until it is migrated)
+        onFalseStep: 5
+      - stepNumber: 7
+        label: report
+        description: >-
+          Report HIDDEN_STATE (warning; spec the mapped implementation with the lowest impl.id;
+          draft context when any mapped implementation is ctx.isImplementationDraft) naming
+          facts.path, its bindings and the distinct mapped component id (componentType) pairs:
+          promote the state to a Store (durability cache for a loss-safe memo), or lint.allow with
+          the reason it is wiring or ephemeral; measured let and var at module scope at exact grade,
+          const-bound container mutation is beyond the check
+        type: local
+    symbol: check
+    exportedVia: hiddenStateRule
+  - name: dependencyConformance
+    sourcePath: src/core/rules/conformance/dependency-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); mappedPaths = the
+          realization index's paths that code.exactPaths holds. A component maps to every file its
+          implementations name (each implementation's sourcePath and each method's), chained
+          subprojects are absent from the index as in Level 1, and only exact-grade analyzed files
+          participate: pattern and generic imports are too coarse to accuse anyone with
+        type: local
+      - stepNumber: 2
+        description: >-
+          graph = ctx.importGraph(mappedPaths): the import edges and re-export traces resolved
+          against exactly those files. The closed set is part of the graph's identity, so a
+          specifier can never resolve to a file outside the mapped set. filesOf(compId) =
+          realization.filesOf narrowed to code.exactPaths, kept per component; mappedImplsOf(compId)
+          = the component's implementations that named at least one such file. reach = the private
+          unownedReach(ctx) — a call's own answer plus the calls of every unowned function it lands
+          on, transitively, with the hops — and candidatesOf = the private writeCandidates(ctx),
+          both shared with call-conformance
+        type: local
+      - stepNumber: 3
+        description: >-
+          Build ownerOf over ctx.components: each id in a component's owns maps to that owning
+          component. This is the PLAIN reading — every claim, the last claimant winning —
+          deliberately not ctx.ownershipIndex(), which records nothing for an illegal claim: the two
+          differ only on trees that already carry an ownership error, where narrowing this map would
+          turn one finding into two, so adopting the strict reading here is a doctrine decision
+          rather than a refactor
+        type: local
+      - stepNumber: 4
+        label: edgeLoop
+        description: Every runtime import edge between mapped files needs a justification
+        type: loop
+        over: >-
+          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
+          targets
+        endStep: 7
+      - stepNumber: 5
+        description: >-
+          justified = the private edgeJustified over realization.componentsAt(fromPath) and
+          realization.componentsAt(toPath): true when some component cf of the importer and cg of
+          the imported are the same component; cf dependsOn or owns cg; they share a subsystem and
+          cg, a Portal or Observer, dependsOn or owns cf without calling it — no call or dispatch
+          step of its narratives, no declared call and no dispatch-table binding names cf (the
+          mounting shape: a Portal that calls cf is its client, and cf importing it back runs
+          against the declared edge); ownerOf(cg) is cf or cf dependsOn or owns it; ownerOf(cf) is
+          cg or dependsOn or owns cg; both have the same owner; or they sit in different subsystems
+          and cf dependsOn a component published in ctx.publicSet for cg's subsystem (the private
+          declaresSurfaceEdge)
+        type: local
+      - stepNumber: 6
+        description: A justified edge continues with the next edge
+        type: branch
+        condition: justified is false
+        onFalseStep: 4
+      - stepNumber: 7
+        label: undeclaredReport
+        description: >-
+          Report UNDECLARED_DEPENDENCY (warning; spec the first of
+          realization.implementationsAt(fromPath); draft context when any implementation naming
+          either file is ctx.isImplementationDraft) naming fromPath and toPath with the components
+          each realizes: declare the collaboration on the component that uses it, or route the
+          cross-subsystem hop through the target's published surface. When an imported component
+          depends on or owns an importing one and calls it, the finding says so: the import runs
+          against that declared edge — an import cycle between the two — and is no Portal mounting
+          onto its host
+        type: local
+      - stepNumber: 8
+        label: compLoop
+        description: >-
+          Every declared edge should leave a trace. A trace is a runtime import or a re-export
+          (barrel forwarding), for a mounting declarer the reverse import counts too — unless the
+          declarer calls the target, since a client's edge is never realized by its callee importing
+          it back — and a TYPE-ONLY import counts as well: a collaborator injected through its
+          constructor is reached through its type, and `import type` is the whole of what dependency
+          injection writes down — so it realizes the declared edge, while it still never ACCUSES one
+          (UNDECLARED_DEPENDENCY reads runtime imports alone, type coupling being allowed)
+        type: loop
+        over: ctx.components
+        endStep: 14
+      - stepNumber: 9
+        description: A component with no exact-grade file continues with the next component
+        type: branch
+        condition: fromFiles = filesOf(component.id) is non-empty
+        onFalseStep: 8
+      - stepNumber: 10
+        label: targetLoop
+        description: Check each declared edge
+        type: loop
+        over: >-
+          the distinct ids of component.dependsOn then component.owns (targetId), so a target
+          declared under both is one edge
+        endStep: 14
+      - stepNumber: 11
+        description: An unresolvable target continues with the next target
+        type: branch
+        condition: ctx.componentMap resolves targetId to target
+        onFalseStep: 10
+      - stepNumber: 12
+        description: >-
+          toFiles = across subsystems, the exact-grade files of
+          realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
+          import into any module of the target subsystem as proof the hop exists, and a shared file
+          satisfies it trivially — WHERE the hop lands (the target's portal file or past it) is
+          portal-imports' question, not this one; within one subsystem, filesOf(targetId)
+        type: local
+      - stepNumber: 13
+        label: traceGuard
+        description: >-
+          An empty toFiles is Level 1 territory (an unmapped target, or a target subsystem whose
+          every mapped file is shared with the source), a shared file is the N:1 same-file collapse,
+          an Adapter's edge to a Portal reached over an out-of-process transport is the link the
+          design models — realized by the Adapter's transport client, never by an import, so no
+          import across that boundary is ever asked for — and a trace realizes the edge — a runtime
+          import, a re-export, the reverse import for a mounting declarer that does not call the
+          target, a type-only import of a fromFile (source_file_facts.typeOnlyBindings, each
+          specifier resolved against mappedPaths) landing in toFiles, or a call or reference of a
+          fromFile the type checker lands in toFiles (reach over its resolvedCalls, so through every
+          barrel, `export *`, port declared in a shared module, dependency bag typed inline and
+          unowned helper); and a target whose own code drifted from its contract's return
+          (RETURN_TYPE_MISMATCH) only LOOKS stale, a port typed after the contract no longer
+          matching the class — the drift's consequence, held under that one finding and judged again
+          once it is fixed: continue with the next target
+        type: branch
+        condition: >-
+          the edge is not a remote link (component is an Adapter and target a Portal whose transport
+          is set and not InProcess), toFiles is non-empty, fromFiles and toFiles share no file,
+          graph.connects(fromFiles, toFiles, component is a Portal or Observer that does not call
+          the target) is false, no type-only import of a fromFile resolves into toFiles, and no call
+          or reference reach answers for a fromFile lands in toFiles, and the target's own code has
+          no return drift (param conformance's returnDrifts)
+        onFalseStep: 10
+      - stepNumber: 14
+        label: unrealizedReport
+        description: >-
+          Report UNREALIZED_DEPENDENCY (warning; spec the first of mappedImplsOf(component.id), else
+          component.id; draft context when ctx.isComponentDraft(component.id),
+          ctx.isComponentDraft(targetId), or any of those implementations is
+          ctx.isImplementationDraft) naming the edge as dependsOn and owns when both declare
+          targetId, else as whichever of the two does, with fromFiles and the target subsystem
+          across subsystems or the target's files: the collaboration is wired indirectly (DI) or the
+          declared edge is stale
+        type: local
+      - stepNumber: 15
+        label: callLoop
+        description: >-
+          Every call a mapped file makes through a collaborator is collaboration, whatever the form
+          of the import that typed it
+        type: loop
+        over: >-
+          each mapped path fromPath: for a Portal realized there, each call of the Portal's own code
+          — its source_file_facts.resolvedCalls when the type checker read the file (every one when
+          the file realizes only Portals; at a file shared with other components, those whose
+          enclosing function is a body the Portal's own methods reach: their symbols and the helpers
+          closedCallSites follows from them, leaving out a Portal method realized by the same body
+          as another component's modelled method in that file (N:1 identity makes that body the
+          other component's code) and stopping at such methods' anchors), references to a function
+          or method taken as a value among them, each expanded by reach into the calls of the
+          unowned code it lands on, carrying the hops — else the shape facts' call sites closed over
+          the Portal's methods; and, for every mapped file, each call site of its
+          source_file_facts.functionCallSites
+        endStep: 19
+      - stepNumber: 16
+        description: >-
+          toPaths = for a resolved call, the files of its targets other than fromPath — the
+          declaration the checker resolved the callee to, whatever the receiver's spelling, and for
+          a declaration in an interface or type shape each project class realizing it; for a
+          shape-fact site, the mapped files other than fromPath among code.possibleOriginsOf(site,
+          fromPath) and the module its receiver's declared type names — the analysis has already
+          read a receiver written through a non-null assertion, a cast or parentheses, and a local
+          alias or destructuring of a field, as that field. Each toPath counts where it realizes a
+          component with a contract method the call's name is (its name or a per-method symbol): a
+          call into anything else is no modelled collaboration. A resolved landing on a MODULE
+          function (a target with no container) never counts for a component that reaches that
+          contract method through an exportedVia handle: that method is a member of the published
+          object, so in a file several components share, the same-named module function beside it is
+          another body
+        type: local
+      - stepNumber: 17
+        description: >-
+          A Portal file calling a write- or lifecycle-effect contract method of a Repository, Index,
+          Store or Registry that its own narrative does not already claim (the design rule reports a
+          claimed one) is the persistence shortcut in code
+        type: branch
+        condition: >-
+          a component at fromPath is a Portal, the called method's effect is write or lifecycle on a
+          data component at a toPath, and no implementation of the Portal claims that call
+        onFalseStep: 19
+      - stepNumber: 18
+        description: >-
+          Report PORTAL_WRITE_SHORTCUT_IN_CODE (error; site `<fromPath> -> <component>.<method>`)
+          naming the call and its target: route the mutation through an Orchestrator that owns the
+          workflow
+        type: local
+      - stepNumber: 19
+        label: typeOnlyEdge
+        description: >-
+          For each toPath that the file does not import at runtime (graph.importsOf(fromPath) does
+          not hold it — a runtime edge was judged above) and edgeJustified refuses, report
+          UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
+          runtime import of it reports under), naming the call: a shape-fact site counts here only
+          when a type-only import connects the two files, and a Portal's resolved call only when it
+          lands on a data component (Repository, Index, Store, Registry), whatever connects them (a
+          port the Portal declares itself connects nothing) — any other resolved landing is left to
+          the import graph, because the checker resolves a call through every re-export to the
+          module that declares it, past the forwarding module (an Adapter re-exporting its provider)
+          the file imports on purpose. A call of the Portal's own code that resolves to nothing — a
+          resolved call marked unresolved (its receiver or callee typed any, unknown or nothing, a
+          cast to either or to an index signature included, or its member picked by a computed key —
+          and a member read by a key that names no single member off a receiver that was a data
+          component before any cast, invoked on the spot or taken as a value and invoked later,
+          however the receiver or the key is cast; the checker's own error type, a name from a
+          package with no typings in reach, is not such a receiver), or, without a type checker, a
+          site whose receiver nothing declares, binds or aliases — under the name of a write- or
+          lifecycle-effect method of a data component — candidatesOf narrowed to data components:
+          where the checker recorded the receiver's original type, before any cast, a write of the
+          data component it lands on, every one of its writes when a computed key names none; else
+          one of that name in the Portal's own subsystem or a subsystem it depends into — which no
+          implementation of the Portal claims, is PORTAL_CALL_UNRESOLVED (warning; site `<fromPath>
+          -> <name>`, or the candidates when no name was written): the analysis could not follow it,
+          and fails closed rather than passing it
+        type: local
+      - stepNumber: 20
+        label: portWrite
+        description: >-
+          A call of the Portal's own code that the checker lands only on a PORT no written class
+          realizes (resolved_call_fact.port: every landing a member of an interface or type shape no
+          project class realizes, none of them in a file where a component's contract answers for
+          it), under the name of a write- or lifecycle-effect method of a data component in the
+          Portal's own subsystem or one it depends into that no implementation of the Portal claims,
+          and under a name no narrative step or declared call of the Portal names on any component
+          (a port to a planned Orchestrator verb is the claim it realizes), is
+          PORTAL_CALL_UNRESOLVED too (warning; site `<fromPath> -> <name>`): the design says what
+          the port will be before the code realizing it exists, and the finding names a data
+          component whose code is not written yet (code.holdsAny over its implementations' files is
+          false) as planned. Once its code is written, the port lands on it and the call is judged
+          as any other. The same port CAST away — `(this.sink as any).update(x)`, `const s: any =
+          this.sink` — is unresolved rather than a port: its original type lands only on the
+          Portal's own file, which names no component to judge it by, so candidatesOf reads it by
+          name against the design's write set, which a planned data component has as much as a
+          written one. A receiver typed any is opaque however it came to be — an untyped or
+          any-typed parameter of a closure, a local typed any, a function result typed any — and a
+          member read by NAME off one and taken as a value (`const f = (this.store as any).save;
+          f(x)`) is such a call too. Each is reported once per site and per function it is written
+          in, so one shortcut never hides another of the same name
+        type: local
+      - stepNumber: 21
+        description: >-
+          Build each technology's home: for every implementation declaring technologies, its
+          component, the components it owns and the pattern that owns it, keyed by every package the
+          technology is imported by (technology.packages over the packages loaded packs contribute:
+          its declared tokens, the built-in table's packages for its name, and the contributed ones)
+          lower-cased. Then every technology of the built-in table and of the loaded packs that no
+          implementation binds gets an EMPTY home under its packages: the design never says where it
+          lives, so every importer is outside it
+        type: local
+      - stepNumber: 22
+        label: techLoop
+        description: Every package a mapped file imports
+        type: loop
+        over: >-
+          each mapped path and each bare (package) specifier among its runtime imports and type-only
+          bindings, and the bare specifiers of the UNOWNED modules it imports
+          (ctx.codeModel.reachedImports: a module no component realizes is read as if inlined in its
+          importer, transitively through the project files each import resolves to, to a depth of
+          eight, each specifier carrying the modules it was reached through; a module a component
+          realizes stops the walk, its imports judged as its own), local packages of this repository
+          excluded
+        endStep: 23
+      - stepNumber: 23
+        description: >-
+          When the specifier's package name (`@scope/name` or its first segment) equals a technology
+          token exactly and no component realized at the file is in that technology's home, report
+          TECH_LEAKAGE_IN_CODE (warning; site `<path> -> <package>`) naming the technology and its
+          home: move the vendor call behind the component that binds it — or, for a technology with
+          an empty home, saying that no implementation binds it: bind it on the data-layer component
+          that owns the vendor call. A package reached through unowned modules names them, in order,
+          as the hops it was imported through
+        type: local
+      - stepNumber: 24
+        label: crossProjectImports
+        description: >-
+          For every file of the code model, report each of its source_file_facts.crossProjectImports
+          that resolves to nothing as CROSS_PROJECT_IMPORT_UNRESOLVED (warning; spec the first of
+          realization.implementationsAt(file); site `<file> -> <specifier>#<name>`, or the specifier
+          alone when the module itself is gone): an import, runtime or type-only, from ANOTHER
+          project's source that the checker resolves to nothing, naming the line, the other project,
+          and — for a type-only import — that it is erased at run time so no test notices. Follow
+          the producer's rename, or reach its code through a binding module the implementation
+          declares, which is compared with the pin. Each one that DOES resolve
+          (cross_project_import_fact.resolved) is judged like any other edge, unless the file is a
+          binding module an implementation declares — the sanctioned place for that reach, compared
+          by binding conformance: the other project's published names are its L0 export table as a
+          member exports it now (ctx.exportTables, the member found by its directory in
+          ctx.projectFamily: each exported type by its public name, id and code name, each exported
+          component by its contract methods and their code symbols), else the pinned snapshot of the
+          external it is (its types, exported types and interfaces with their methods), else none;
+          every name the import binds that is not among them — compared with case and separators set
+          aside, a namespace or side-effect import never being one — is reported once per file and
+          specifier as CROSS_PROJECT_SOURCE_IMPORT (warning; site `<file> -> <specifier>`; units the
+          names): code reaching into that project's internals past its surface, naming the data
+          component of that project the module realizes when it realizes one, since a write through
+          it is the shortcut past the other project's surface into its held state. Judge Python
+          imports for UNDECLARED_DEPENDENCY over a graph of their own, from the imports the Python
+          reader read (source_file_facts.reads): relative ones from the importing file's package,
+          absolute ones from its folder or any folder above it, to a module or a package's
+          `__init__.py`.
+        type: local
+    symbol: check
+    exportedVia: dependencyConformanceRule
+  - name: sourceFileLinkage
+    sourcePath: src/core/rules/conformance/source-file-linkage.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        description: >-
+          Collect degradedTsFiles: the analyzed files whose language is typescript or javascript and
+          whose analysisGrade is not exact
+        type: local
+      - stepNumber: 3
+        description: 'A silently degraded gate is worse than a degraded gate: surface it once per run'
+        type: branch
+        condition: degradedTsFiles is non-empty
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report CONFORMANCE_DEGRADED (warning; run-wide: no spec id, no draft context) with the
+          count of degradedTsFiles: structural findings carry their grade, but dependency
+          conformance skips these files. The analyzer reads with the project's own TypeScript when
+          it ships the JavaScript compiler API and with the copy wairon depends on otherwise, so
+          neither TypeScript 7 nor a project without TypeScript degrades a run: what is left is a
+          wairon installation missing its own typescript dependency, or a file the compiler could
+          not parse — the finding says to reinstall wairon
+        type: local
+      - stepNumber: 5
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 22
+      - stepNumber: 6
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 7
+        description: >-
+          Unresolvable implementations are skipped, and so are chained-subproject implementations
+          (their sourcePaths are relative to the child root and the child validates them in its own
+          run): continue with the next implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 5
+      - stepNumber: 8
+        description: >-
+          draft = ctx.isImplementationDraft(impl). unlinked = the names of contract.methods whose
+          source file is none: the entry of impl.methods with the same name gives
+          methodImpl.sourceFile(impl.sourcePath), and a contract method with no entry falls back to
+          impl.sourcePath. noFileAtAll = impl.sourceFiles() is empty. begun =
+          code.holdsAny(impl.sourceFiles()): realization has begun once any file the implementation
+          names exists. strict = ctx.rules.conformance.requireCode. planned = an empty list of the
+          implementation's planned files
+        type: local
+      - stepNumber: 9
+        description: >-
+          An implementation-type external link is the external source-of-record wairon cannot
+          analyze, so it suppresses the missing-path finding
+        type: branch
+        condition: >-
+          (unlinked is non-empty or noFileAtAll) and no entry of component.externalLinks has type
+          implementation
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Before realization has begun, unlinked design is not a defect: report MISSING_SOURCE_PATH
+          (notice, or error naming rules.conformance.requireCode when strict; spec impl.id; draft
+          context from draft) — naming the unlinked contract methods when there are some, else
+          stating that the implementation names no source file at all, and saying a planned
+          sourcePath may be declared now (it is not part of the approval). Once it has begun, report
+          METHOD_SOURCE_PATH_MISSING (warning; spec impl.id; draft context from draft) naming the
+          contract methods of impl.contract that name no source file of their own while the
+          implementation declares no sourcePath
+        type: local
+      - stepNumber: 11
+        label: fileLoop
+        description: >-
+          Check the status of each distinct file the implementation names; the existence check
+          applies at every conformance tier
+        type: loop
+        over: impl.sourceFiles() (its own sourcePath, then each method's)
+        endStep: 20
+      - stepNumber: 12
+        description: key = ctx.codeModel.pathKey(file); facts = factsByPath.get(key)
+        type: local
+      - stepNumber: 13
+        description: >-
+          Each distinct file is reported once, and only when the code model marks it escaped,
+          missing or unreadable (no facts means no code model for the path): otherwise continue with
+          the next file
+        type: branch
+        condition: >-
+          key is not yet in reported (record it there now) and facts exist with a status other than
+          analyzed
+        onFalseStep: 11
+      - stepNumber: 14
+        description: >-
+          owner = the implementation itself when impl.sourcePath normalizes to key; otherwise the
+          names of impl.methods whose sourcePath normalizes to key, or the implementation itself
+          when none does
+        type: local
+      - stepNumber: 15
+        description: Dispatch on the file's status
+        type: switch
+        'on': facts.status
+        cases:
+          - value: escaped
+            step: 16
+          - value: missing
+            step: 18
+        defaultStep: 20
+      - stepNumber: 16
+        label: escapedReport
+        description: >-
+          Report SOURCE_PATH_ESCAPES_ROOT (error; spec impl.id; draft context from draft) naming
+          owner and file: the sourcePath is absolute or escapes the project root
+        type: local
+      - stepNumber: 17
+        description: Continue with the next file
+        type: jump
+        toStep: 11
+      - stepNumber: 18
+        label: missingReport
+        description: >-
+          A named file that is not on disk is planned, at method level as at implementation level
+          and whether or not the realization has begun: add owner and file to planned — the
+          implementation's planned files are reported together once its files are checked, so a
+          planned design reads one line per component
+        type: local
+      - stepNumber: 19
+        description: Continue with the next file
+        type: jump
+        toStep: 11
+      - stepNumber: 20
+        label: skippedReport
+        description: >-
+          Report CONFORMANCE_ANALYSIS_SKIPPED (warning; spec impl.id; draft context from draft)
+          naming owner and file: it could not be analyzed (binary or unreadable), so the methods in
+          it were not checked
+        type: local
+      - stepNumber: 21
+        label: plannedGuard
+        description: An implementation with no planned file continues with the next implementation
+        type: branch
+        condition: planned is non-empty
+        onFalseStep: 5
+      - stepNumber: 22
+        label: plannedReport
+        description: >-
+          Report SOURCE_FILE_PLANNED once for the implementation (notice, or error naming
+          rules.conformance.requireCode when strict; spec impl.id; draft context from draft; covers
+          the planned files) naming every planned file with its owner: planned, not written yet;
+          method-realization judges the methods in each once it exists
+        type: local
+    symbol: check
+    exportedVia: sourceFileLinkageRule
+  - name: findingRealization
+    sourcePath: src/core/rules/conformance/finding-realization.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the shared per-path index, whose findingAnchorsAt is anchoredNames
+          alone (string literals and property-access names at exact grade; the pattern grade adds
+          every identifier outside comments, the generic grade every word)
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 11
+      - stepNumber: 3
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
+          component.defaultConformanceTier()
+        type: local
+      - stepNumber: 6
+        label: methodLoop
+        description: Check the finding codes each contract method declares
+        type: loop
+        over: contract.methods
+        endStep: 11
+      - stepNumber: 7
+        description: >-
+          methodImpl = the entry of impl.methods carrying the method's name; tier =
+          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
+          impl.sourcePath; facts = code.factsAt(file)
+        type: local
+      - stepNumber: 8
+        description: >-
+          A method declaring no findings is skipped, and so is one the dial turns off, one with no
+          file, and one whose file is not analyzed (source-file-linkage reports that file once):
+          continue with the next method
+        type: branch
+        condition: >-
+          method.findings is non-empty, tier is not off, file is named, and facts exist with status
+          analyzed
+        onFalseStep: 6
+      - stepNumber: 9
+        label: findingLoop
+        description: Check each declared finding code
+        type: loop
+        over: method.findings
+        endStep: 11
+      - stepNumber: 10
+        description: >-
+          A code among the file's finding anchors (a string literal, or a property-access name at
+          exact grade) continues with the next finding
+        type: branch
+        condition: code.findingAnchorsAt(file) lacks finding.code
+        onFalseStep: 9
+      - stepNumber: 11
+        label: findingReport
+        description: >-
+          Report UNREALIZED_FINDING (warning; spec impl.id; draft context from draft) naming the
+          method, impl.contract, finding.code, file and facts.analysisGrade: report the finding
+          under its declared code, or remove the declaration
+        type: local
+    symbol: check
+    exportedVia: findingRealizationRule
+  - name: integrationSimDeclaration
+    sourcePath: src/core/rules/conformance/integration-sim-declaration.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          adopted = the subsystem of every component whose implementation declares a simPath,
+          resolved through contract = ctx.interfaceMap.get(impl.contract) and comp =
+          ctx.componentMap.get(contract.component), skipping what does not resolve and what sits in
+          a chained subproject (whose paths are relative to the child's own root)
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each implementation against its subsystem's adoption
+        type: loop
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 3
+        description: >-
+          A declared harness is integration-sim-file's, -wiring's and -coverage's question, not this
+          one: continue with the next implementation
+        type: branch
+        condition: impl declares no simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          Expected only once the subsystem has adopted sims, only for complete implementations, only
+          for non-leaf components (a leaf's unit suite is its sim), and only for an implementation
+          whose realization has BEGUN (code_index.holdsAny over the files it names): one with no
+          code yet has nothing to wire — a harness for it is premature, and that it is unlinked or
+          planned is MISSING_SOURCE_PATH's and SOURCE_FILE_PLANNED's subject. Otherwise continue
+          with the next implementation
+        type: branch
+        condition: >-
+          adopted has comp.subsystem, !ctx.isImplementationDraft(impl), deps — the distinct ids of
+          comp.dependsOn then comp.owns that ctx.componentMap resolves — is non-empty, and
+          ctx.codeIndex().holdsAny(impl.sourceFiles())
+        onFalseStep: 2
+      - stepNumber: 7
+        label: report
+        description: >-
+          Report MISSING_INTEGRATION_SIM (warning; spec impl.id; no draft context argument, draft
+          implementations were already skipped) naming the component, its dependency count and its
+          subsystem: declare the committed harness that constructs it with its real dependencies, or
+          lint.allow with the reason
+        type: local
+    symbol: check
+    exportedVia: integrationSimDeclarationRule
+  - name: integrationSimFile
+    sourcePath: src/core/rules/conformance/integration-sim-file.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each declared integration harness
+        type: loop
+        over: ctx.implementations
+        endStep: 10
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped, a chained child's paths
+          being relative to its own root: continue with the next implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          A harness that resolves to a readable committed file is sound: continue with the next
+          implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) is absent or has status missing, escaped or unreadable
+        onFalseStep: 2
+      - stepNumber: 7
+        description: >-
+          Has the implementation the harness wires begun (code.holdsAny(impl.sourceFiles()))? A
+          harness for code not written yet is planned with it
+        type: branch
+        condition: code.holdsAny(impl.sourceFiles()) or the harness escapes the root or is unreadable
+        onFalseStep: 10
+      - stepNumber: 8
+        label: report
+        description: >-
+          Report SIM_FILE_MISSING (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath and why: it resolves to no file (no
+          facts, or status missing), escapes the project root, or is not readable as source text
+        type: local
+      - stepNumber: 9
+        description: Continue with the next implementation
+        type: jump
+        toStep: 2
+      - stepNumber: 10
+        label: planned
+        description: >-
+          Report SOURCE_FILE_PLANNED (notice, or error naming rules.conformance.requireCode; spec
+          impl.id; draft context ctx.isImplementationDraft(impl)) naming impl.simPath: the harness
+          is planned with the code it wires, not written yet
+        type: local
+    symbol: check
+    exportedVia: integrationSimFileRule
+  - name: integrationSimWiring
+    sourcePath: src/core/rules/conformance/integration-sim-wiring.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); graph = ctx.importGraph()
+          over every path the run analyzed — the graph's default closed set, which is the one a
+          harness is walked over. A named file is a module only when it exists: code.factsAt reports
+          status analyzed or unreadable, a missing or escaped file being structural conformance's
+          finding alone that no harness can reach. modulesOf(compId) = realization.filesOf(compId)
+          narrowed to those, and modulesIn(subsystemId) = realization.filesIn(subsystemId) narrowed
+          the same way — the realization index already leaves out implementations whose component
+          does not resolve and those inside a chained subproject
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge each declared harness's import graph
+        type: loop
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          integration-sim-file's verdict restated — a harness that resolves to no readable file
+          reaches nothing and is its finding, not ours — and only exact-grade import graphs prove
+          wiring, weaker grades staying silent: otherwise continue with the next implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) has status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 7
+        description: >-
+          deps = the distinct ids of comp.dependsOn then comp.owns that ctx.componentMap resolves.
+          reach = graph.reachFrom(simPath): the paths reached from the normalized simPath by
+          following the imports and re-exports of each reached analyzed file transitively, every
+          specifier resolved against the graph's closed set. ownFiles = modulesOf(comp.id). missing
+          starts with the component's own module when ownFiles is non-empty and reach holds none of
+          them
+        type: local
+      - stepNumber: 8
+        label: depLoop
+        description: Check that the harness reaches each direct dependency
+        type: loop
+        over: deps
+        endStep: 10
+      - stepNumber: 9
+        description: >-
+          A technology boundary's fake is sanctioned, an unrealized dependency is covered by its own
+          findings, and one reached module proves the wiring (any module of the subsystem across
+          subsystems): continue with the next dependency
+        type: branch
+        condition: >-
+          the private isTechBoundary(dep) is false (no implementation in
+          realization.implementationsOf(dep) declares technologies), depFiles is non-empty
+          (modulesIn(depComp.subsystem) when depComp = ctx.componentMap.get(dep) sits in another
+          subsystem, else modulesOf(dep)), and reach holds none of depFiles
+        onFalseStep: 8
+      - stepNumber: 10
+        label: appendDep
+        description: >-
+          Append the dependency to missing: dep with its subsystem (any module of it) across
+          subsystems, else dep with its files
+        type: local
+      - stepNumber: 11
+        description: A fully wired harness continues with the next implementation
+        type: branch
+        condition: missing is non-empty
+        onFalseStep: 2
+      - stepNumber: 12
+        label: report
+        description: >-
+          Report UNWIRED_INTEGRATION_SIM (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath and every module in missing its
+          import graph does not reach: import the real modules (technology-boundary adapters may
+          stay faked), or fix the simPath
+        type: local
+    symbol: check
+    exportedVia: integrationSimWiringRule
+  - name: integrationSimCoverage
+    sourcePath: src/core/rules/conformance/integration-sim-coverage.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, derived once and
+          shared with every conformance rule
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Judge the path coverage each harness claims
+        type: loop
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 3
+        description: >-
+          An implementation that declares no harness is integration-sim-declaration's question:
+          continue with the next implementation
+        type: branch
+        condition: impl declares a simPath
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          Resolve comp = ctx.componentMap.get(contract.component) for contract =
+          ctx.interfaceMap.get(impl.contract)
+        type: local
+      - stepNumber: 5
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: comp resolves and !ctx.isInChainedSubproject(comp.subsystem)
+        onFalseStep: 2
+      - stepNumber: 6
+        description: >-
+          integration-sim-file's verdict restated — a harness that resolves to no readable file
+          carries no anchors and is its finding, not ours — and anchors are read from the file, so
+          only exact grade may accuse: otherwise continue with the next implementation
+        type: branch
+        condition: facts = code.factsAt(impl.simPath) has status analyzed at analysisGrade exact
+        onFalseStep: 2
+      - stepNumber: 7
+        description: >-
+          Path coverage is opt-in per component: simAnchors = the sim: anchors of the harness, and
+          only an anchor for this component claims coverage (no sim: anchors means no claim):
+          otherwise continue with the next implementation. Start an empty uncovered list
+        type: branch
+        condition: 'some anchor in facts.anchoredNames that starts with sim: starts with sim:<comp.id>.'
+        onFalseStep: 2
+      - stepNumber: 8
+        label: methodLoop
+        description: Check each narrated method's paths
+        type: loop
+        over: impl.methods
+        endStep: 10
+      - stepNumber: 9
+        description: A method with no narrative continues with the next method
+        type: branch
+        condition: method.narrative is non-empty
+        onFalseStep: 8
+      - stepNumber: 10
+        label: appendPaths
+        description: >-
+          Append the happy path to uncovered when simAnchors lacks sim:<comp.id>.<method.name>,
+          then, for each throw step that carries a label, its error path when simAnchors lacks
+          sim:<comp.id>.<method.name>:<step.label>
+        type: local
+      - stepNumber: 11
+        description: A fully covered harness continues with the next implementation
+        type: branch
+        condition: uncovered is non-empty
+        onFalseStep: 2
+      - stepNumber: 12
+        label: report
+        description: >-
+          Report SIM_PATH_UNCOVERED (warning; spec impl.id; draft context
+          ctx.isImplementationDraft(impl)) naming impl.simPath, comp.id and every uncovered happy or
+          error path: drive the path and anchor it with the exact string literal, or drop the
+          component's sim: anchors to withdraw the claim
+        type: local
+    symbol: check
+    exportedVia: integrationSimCoverageRule
+  - name: typeRealization
+    sourcePath: src/core/rules/conformance/type-realization.ts
+    narrative:
+      - stepNumber: 1
+        label: typeLoop
+        description: Judge each type that claims code
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 14
+      - stepNumber: 2
+        label: unlinkedType
+        description: >-
+          A type that names no sourcePath of its own, outside a chained subproject, is one whose
+          shape nothing compares with code — said, never left silent
+        type: branch
+        condition: type.sourcePath is unset and !ctx.isInChainedSubproject(type.subsystem)
+        onFalseStep: 4
+      - stepNumber: 3
+        label: unlinkedReport
+        description: >-
+          Report MISSING_TYPE_SOURCE_PATH (spec type.id): a notice (an error naming
+          rules.conformance.requireCode) while the code of the type's subsystem has not begun — no
+          file an implementation of a component in that subsystem names exists (for a type no
+          subsystem owns, no file of any implementation) — saying to plan the type's sourcePath with
+          the implementations'; a warning once that code exists, since the type is data no check
+          reads
+        type: local
+      - stepNumber: 4
+        description: >-
+          A type that names no sourcePath claims nothing, and a chained child's sourcePaths are
+          relative to its own root, so the child judges them in its own run: continue with the next
+          type
+        type: branch
+        condition: type.sourcePath is set and !ctx.isInChainedSubproject(type.subsystem)
+        onFalseStep: 1
+      - stepNumber: 5
+        description: >-
+          code = ctx.codeIndex(); blocked = an empty set of the files whose status already stopped
+          them from realizing anything
+        type: local
+      - stepNumber: 6
+        label: fileLoop
+        description: Check the status of each distinct file the type names, once per file
+        type: loop
+        loopKind: forEach
+        over: type.sourceFiles() (its own sourcePath, then each method's)
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          An analyzed file realizes what it holds; a file the model knows nothing about is judged by
+          nobody here
+        type: branch
+        condition: facts = code.factsAt(ctx.codeModel.pathKey(file)) exists with a status other than analyzed
+        onFalseStep: 6
+      - stepNumber: 8
+        description: >-
+          Add the file to blocked and report the problem its status names, spec'd to type.id:
+          SOURCE_PATH_ESCAPES_ROOT (error) when escaped; when missing, SOURCE_FILE_PLANNED (notice,
+          or error naming rules.conformance.requireCode) — planned, not written yet — while the
+          type's realization has not begun (code.holdsAny(type.sourceFiles())), and for a file only
+          its METHODS name whether or not it has, as a component method's planned file is (the
+          methods are written after the fields, by whoever implements them); MISSING_SOURCE_FILE
+          (error) for the type's OWN file once a file its methods name exists, since its declaration
+          is what they build on; CONFORMANCE_ANALYSIS_SKIPPED (warning) when unreadable — naming the
+          file and, when it is a method's own file rather than the type's, the methods that name it
+        type: local
+      - stepNumber: 9
+        description: >-
+          The declaration the claim promises: its symbol when the code-level name legitimately
+          differs, else the type's own name. The declaration tier alone would accept a file that
+          merely imports the name, which every consumer does
+        type: branch
+        condition: >-
+          facts = code.factsAt(ctx.codeModel.pathKey(type.sourcePath)) exists, the file is not in
+          blocked, and the names the file publishes do not hold type.symbol, else type.name —
+          published being facts.exportedNames at exact grade (empty when facts.reexportOnly, a
+          barrel declaring nothing of its own), else code.declarationsAt(that key), since only exact
+          analysis separates an export from a mention
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report UNREALIZED_TYPE (warning; spec type.id) naming the type, the name looked for, the
+          file and the grade it was analyzed at: the claim points at code that does not hold the
+          declaration — correct the sourcePath, or bind the code-level name with symbol
+        type: local
+      - stepNumber: 11
+        label: methodLoop
+        description: Judge each pure method of the claim
+        type: loop
+        loopKind: forEach
+        over: type.methods
+        endStep: 14
+      - stepNumber: 12
+        description: file = the method's own sourcePath when it names one, else type.sourcePath
+        type: local
+      - stepNumber: 13
+        description: >-
+          A method is realized under its symbol when the code names it differently — a pure type
+          method is often a free function named after its type
+        type: branch
+        condition: >-
+          file is not in blocked, code.factsAt(ctx.codeModel.pathKey(file)) reports it analyzed, and
+          code.declarationsAt(that key) does not hold method.symbol, else method.name
+        onFalseStep: 11
+      - stepNumber: 14
+        description: >-
+          Report UNREALIZED_TYPE_METHOD (warning; spec type.id) naming the method, the name looked
+          for, the file and the grade it was analyzed at
+        type: local
+    symbol: check
+    exportedVia: typeRealizationRule
+  - name: unclaimedSource
+    sourcePath: src/core/rules/conformance/unclaimed-source.ts
+    narrative:
+      - stepNumber: 1
+        description: walked = ctx.codeModel.rootFiles, the files the source-root walk found
+        type: local
+      - stepNumber: 2
+        description: A project that declares no source root opted out of the check
+        type: branch
+        condition: walked is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report nothing: auditing the frozen list against a walk that found nothing would call
+          every entry stale for a reason the reader never chose. Silent means silent
+        type: return
+        outcome: void
+      - stepNumber: 4
+        description: >-
+          claimed = every file the specs name, as canonical keys: each implementation's
+          sourceFiles(), its simPath, the binding modules it declares in bindings (code linkage: the
+          files through which it reaches another project's code) and the module a Portal's router
+          linkage names (`<module>#<name>`, or the module alone), then each type's sourceFiles()
+        type: local
+      - stepNumber: 5
+        description: >-
+          listed = the entries of the project's rules.conformance.unclaimed list, as canonical keys
+          — the frozen debt register
+        type: local
+      - stepNumber: 6
+        label: fileLoop
+        description: Judge each file the walk found
+        type: loop
+        loopKind: forEach
+        over: walked
+        endStep: 10
+      - stepNumber: 7
+        description: 'A file some spec names is designed code: continue with the next file'
+        type: branch
+        condition: claimed does not hold the file
+        onFalseStep: 6
+      - stepNumber: 8
+        description: >-
+          A pure re-export barrel declares nothing of its own and only republishes other modules, so
+          it has no code to claim. Only exact analysis proves that, and a weaker grade never takes
+          the exemption
+        type: branch
+        condition: the file's facts do not report reexportOnly
+        onFalseStep: 6
+      - stepNumber: 9
+        description: A listed file is debt already written down where a reviewer sees the whole list
+        type: branch
+        condition: listed does not hold the file
+        onFalseStep: 6
+      - stepNumber: 10
+        description: >-
+          Report UNCLAIMED_SOURCE_FILE (warning; no spec id — the finding is about a file no spec
+          names) naming the file: give it to a spec as a sourcePath, or carry it in
+          rules.conformance.unclaimed until it is designed
+        type: local
+      - stepNumber: 11
+        label: entryLoop
+        description: Audit the frozen list against what the walk found, so it can only shrink
+        type: loop
+        loopKind: forEach
+        over: listed
+        endStep: 13
+      - stepNumber: 12
+        description: 'Live debt — exactly what the list is for: continue with the next entry'
+        type: branch
+        condition: >-
+          the entry names a walked file that no spec claims and that is not a proven re-export
+          barrel
+        onTrueStep: 11
+        onFalseStep: 13
+      - stepNumber: 13
+        description: >-
+          Report STALE_UNCLAIMED_ENTRY (warning; no spec id) naming the entry: a spec now claims it,
+          it is a proven barrel, or the walk no longer finds it (deleted, renamed, excluded, or
+          outside the declared roots) — delete the entry, the list only shrinks
+        type: local
+    symbol: check
+    exportedVia: unclaimedSourceRule
+  - name: methodRealization
+    sourcePath: src/core/rules/conformance/method-realization.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the shared per-path index, whose declarationsAt is declaredNames
+          plus exportedNames (the declared tier) and whose anchorsAt adds anchoredNames (the
+          anchored tier)
+        type: local
+      - stepNumber: 2
+        label: implLoop
+        description: Check each implementation
+        type: loop
+        over: ctx.implementations
+        endStep: 15
+      - stepNumber: 3
+        description: >-
+          Resolve contract = ctx.interfaceMap.get(impl.contract), then component =
+          ctx.componentMap.get(contract.component)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Unresolvable and chained-subproject implementations are skipped: continue with the next
+          implementation
+        type: branch
+        condition: contract and component both resolve and !ctx.isInChainedSubproject(component.subsystem)
+        onFalseStep: 2
+      - stepNumber: 5
+        description: >-
+          draft = ctx.isImplementationDraft(impl); specTier = impl.conformance ??
+          component.defaultConformanceTier(). When the dial is off on the implementation or on any
+          of its method entries, report REALIZATION_UNCHECKED (notice; spec impl.id; draft context
+          from draft; site conformance) once, naming every method it covers — or the whole
+          implementation — and that the doctrine checks still run: the dial is code linkage outside
+          the approval, and this notice is the one surface where switching the realization checks
+          off shows
+        type: local
+      - stepNumber: 6
+        label: methodLoop
+        description: Check that each contract method is realized in its own source file
+        type: loop
+        over: contract.methods
+        endStep: 15
+      - stepNumber: 7
+        description: >-
+          methodImpl = the entry of impl.methods carrying the method's name; tier =
+          methodImpl.conformance ?? specTier; file = methodImpl.sourceFile(impl.sourcePath), else
+          impl.sourcePath; facts = code.factsAt(file)
+        type: local
+      - stepNumber: 8
+        description: >-
+          Tier off, no file (source-file-linkage's MISSING_SOURCE_PATH covers it) or a file that is
+          not analyzed (source-file-linkage's own finding covers it, and only the methods realized
+          in it are blocked): continue with the next method
+        type: branch
+        condition: tier is not off, file is named, and facts exist with status analyzed
+        onFalseStep: 6
+      - stepNumber: 9
+        description: >-
+          symbol = methodImpl.symbol ?? method.name; inDeclared = code.declarationsAt(file) holds
+          symbol; realized = inDeclared at tier declared, and inDeclared or code.anchorsAt(file)
+          holds symbol at any other tier
+        type: local
+      - stepNumber: 10
+        description: 'A realized method is asked the second question instead: is there a body under that name?'
+        type: branch
+        condition: realized is false
+        onFalseStep: 13
+      - stepNumber: 11
+        label: methodReport
+        description: >-
+          Report UNREALIZED_METHOD (warning; spec impl.id; draft context from draft) naming the
+          method (with its symbol when one is mapped), impl.contract, file, tier and
+          facts.analysisGrade; adds the weak-anchor hint when the tier is declared and only
+          code.anchorsAt(file) holds symbol
+        type: local
+      - stepNumber: 12
+        description: 'An unrealized method is reported once: continue with the next method'
+        type: jump
+        toStep: 6
+      - stepNumber: 13
+        label: bodyReach
+        description: >-
+          reachable = the private bodyReachable(code, file, symbol): the origins code.originOf
+          resolves a bare call site of symbol in file to, answering true when any of them holds
+          facts.hasFunctionBody under symbol — or under the file's importBindingOf(symbol).imported
+          when the import renamed it. No origin at all, or one below exact grade, also answers true:
+          unreadable is not absent
+        type: local
+      - stepNumber: 14
+        description: >-
+          A weak string anchor claims no function (the anchored tier's registration is deliberate),
+          a weaker grade measures no bodies, and a reachable body is realization: continue with the
+          next method
+        type: branch
+        condition: inDeclared, facts.analysisGrade is exact, and reachable is false
+        onFalseStep: 6
+      - stepNumber: 15
+        label: bodyReport
+        description: >-
+          Report METHOD_BODY_NOT_FOUND (warning; spec impl.id; draft context from draft) naming the
+          method (with its symbol when one is mapped), impl.contract and file: the name is a
+          declaration with no function body behind it — a signature, an ambient or interface
+          declaration, a value binding, or a name this file only imports or re-exports — so every
+          deeper check reads nothing and the method is judged on its name alone
+        type: local
+    symbol: check
+    exportedVia: methodRealizationRule
+  - name: callConformance
+    sourcePath: src/core/rules/conformance/call-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path. methods =
+          ctx.implementationMethods() — the descent resolved once for the whole run: the
+          implementation, its contract's component, the file that realizes the method (its
+          sourcePath, else the implementation's) and its draft context, with unresolvable and
+          chained-subproject implementations already left out. modelledAt = for every entry that
+          names a sourceFile, the component and method it belongs to under that file's canonical
+          key, keyed two ways: by the body identity its anchor names (implMethod.symbol ??
+          implMethod.name, qualified as <exportedVia>.<symbol> when it is reached through a handle),
+          and by that bare symbol — the converse direction's whole subject, read off the same
+          descent so a component and its colocated neighbour come from one walk. sharedBodies = the
+          body identities (file and anchor) every modelled method of a component that is NOT a
+          Portal is anchored to. reach = the private unownedReach(ctx), which reads UNOWNED code as
+          part of whoever calls it: given resolved calls and the file they were written in, it
+          answers them and, for each target that is unowned — in a file no component realizes, or a
+          function that is none of its file's components' modelled methods (a contract method name
+          or a per-method symbol) — the resolved calls and references of that function's body
+          (ctx.codeModel's resolvedCalls of the file, else its reachedCalls, those whose enclosing
+          function and container are the target's), transitively with a visited set and a depth
+          bound of eight, each carrying the hops it was reached through; a modelled method stops the
+          walk, its calls being its own narrative's, and a target in the calling file itself is left
+          to the caller's own body walk. candidatesOf = the private writeCandidates(ctx): the writes
+          an unresolved call may be — where it recorded receivers, the write- or lifecycle-effect
+          contract methods (by name or per-method symbol) of the components those classes' files
+          realize, the one its name names or every one when a computed key names none; otherwise, by
+          name, those of the components in the caller's own subsystem or one its component depends
+          into. verbEffect(component, method) = what a workflow verb does to state where its
+          contract does not say, read off its own narrative transitively and memoized: a declared
+          effect is the answer (write, lifecycle and io change state, read and none do not); an
+          undeclared one on an Orchestrator, Supervisor or Actor is what its claims reach (its
+          narrative call steps or its declared calls, claimsOf) — any claim reaching a method that
+          changes state makes it write, only reads or nothing at all read — and what the design
+          leaves unsaid is unknown, never guessed: a verb with no narrative and no declared calls, a
+          dispatch step (a runtime table names no method), a target outside this tree, a
+          non-workflow method declaring no effect. A verb already on the path (a cycle) adds
+          nothing, and an answer read inside a cycle is not kept
+        type: local
+      - stepNumber: 2
+        label: workflowClassStop
+        description: >-
+          reach stops at one more kind of target: a member of the CLASS a workflow component
+          (Orchestrator, Supervisor, Actor) is realized by — a class in that file holding one of the
+          component's modelled methods (source_file_facts.functionBodies under a contract name or
+          per-method symbol, in that class) — which is none of its modelled methods and is not the
+          calling component's own. It is that component's code under a name its contract does not
+          declare, never unowned code read as the caller's: the reached call records it (into: the
+          component and the member) and its body is not walked. So a claimed call the function
+          answers by calling such a member instead — the shape a rename made in the code alone
+          leaves — misses with that member named (CALL_STEP_UNREALIZED: the function calls it on the
+          component's code instead, a rename made in the code only?), never as a write the caller
+          makes through that body; and a Portal's call to one no missed claim names is kept apart as
+          an undeclared member, reported with the method's unnarrated writes (UNDECLARED_WRITE_CALL:
+          a method of a workflow component's code its contract does not declare, whose effect no
+          narrative settles)
+        type: local
+      - stepNumber: 3
+        label: methodLoop
+        description: >-
+          Judge each method's narrative call steps against the calls its realized function makes,
+          and those calls against its narrative
+        type: loop
+        over: methods
+        endStep: 21
+      - stepNumber: 4
+        description: >-
+          tier = implMethod.conformance ?? impl.conformance ?? component.defaultConformanceTier();
+          off = tier is off, which skips the FORWARD direction alone — whether the claims are found
+          in the code — never the converse, so the dial is no way past an unnarrated write or a call
+          the analysis cannot follow; facts = code.factsAt(the entry's sourceFile) when it names one
+        type: local
+      - stepNumber: 5
+        description: >-
+          Only exact analysis grade fires (weaker grades never guess), and a method that CLAIMS no
+          call is this rule's subject in neither direction — nothing to prove forward, and nothing
+          it could have failed to declare, so what it leaves unsaid is UNUSED_*'s subject and not a
+          charge of hiding a colocated call. The stance stays written here, where the accusation is
+          read: otherwise continue with the next method
+        type: branch
+        condition: >-
+          implMethod.narrative or implMethod.calls is non-empty, the entry names a sourceFile, and
+          facts exist with status analyzed at analysisGrade exact
+        onFalseStep: 3
+      - stepNumber: 6
+        description: >-
+          fnSymbol = implMethod.symbol ?? implMethod.name; colocated = modelledAt at that file;
+          sites = the private closedCallSites(code, file, fnSymbol, exportedVia): the ONE body the
+          anchor means (facts.bodySitesOf with the anchor's exportedVia as container — same-named
+          functions in one file are judged apart where the code settles which body a name means, and
+          read as their union where it does not), closed transitively over the named helpers it
+          calls, each hop read as the body its call reaches (bodySitesOf with the site's receiver),
+          each site carrying the file its names resolve in. The forward direction closes over
+          EVERYTHING the function reaches — a wider callee set can only accept more, never accuse.
+          forwardReach = where the type checker read the file (facts.resolvedCalls is present),
+          reach over the resolved calls and references written in the ONE body the anchor means —
+          told apart from a same-named neighbour by its enclosing container exactly as bodySitesOf
+          tells the bodies apart: the module function when the anchor means the module-scope body,
+          the member of the exportedVia object or class it names otherwise, every body of the name
+          where the code does not settle it — and in the same-file helpers among sites (a bare call,
+          or a this.<method>() inside a class), read by name; empty otherwise. claims = the private
+          claimsOf(implMethod): every narrative call step carrying its stepNumber, then every
+          declared `calls` entry parsed into the component and method it names and carrying no
+          stepNumber at all. One subject, because the two assert the same call and only a step also
+          says where in the flow it happens — which this check never reads. A dispatch step names a
+          capability rather than a method and asserts nothing about a call site, and a declared
+          reference that is not <component>.<method> names no target (MALFORMED_DECLARED_CALL
+          reports exactly that): neither becomes a claim. Start an empty missed list
+        type: local
+      - stepNumber: 7
+        description: >-
+          The function has no body here at all — UNREALIZED_METHOD's find when the name is absent,
+          METHOD_BODY_NOT_FOUND's when it is a bodyless declaration: continue with the next method
+        type: branch
+        condition: sites is present
+        onFalseStep: 3
+      - stepNumber: 8
+        label: stepLoop
+        description: Check each call the method claims
+        type: loop
+        over: claims, none when off
+        endStep: 14
+      - stepNumber: 9
+        description: >-
+          A target this tree does not contain is cross-tree-references' finding, and
+          surface-reference-backing's once it resolves; an Adapter's claim on a verb of a Portal
+          that declares an out-of-process transport (any transport but InProcess — HTTP, gRPC, a
+          database, a bus, a CLI) is the LINK the design models, never a call into the remote
+          Portal's source file: what realizes it is the transport client the Adapter drives, so it
+          is never resolved to that file and never reported (the caller's call to the Adapter stays
+          checked as any call); and a claim whose target's code is in ANOTHER language than the
+          caller's TypeScript or JavaScript file — every file resolveCallTarget names is in a
+          language this call graph does not read, or, naming none, the member or project the
+          component belongs to (its `ns::` qualifier in ctx.projectFamily) declares such a target
+          language — is noted on its language boundary (the project and the language, the claim as
+          `impl.method → component.method`) and skipped: a call graph of one language never resolves
+          into another's file. Continue with the next claim
+        type: branch
+        condition: >-
+          ctx.componentMap has claim.component, it is not an Adapter's claim on a Portal whose
+          transport is out of process, and the target's code is in the caller's language
+        onFalseStep: 8
+      - stepNumber: 10
+        description: >-
+          target = the private resolveCallTarget over the implementations of each interface in
+          ctx.interfacesByComponent.get(claim.component): accepted = claim.method plus the symbol
+          each target-side implementation declares for it, files = each such implementation's method
+          sourcePath, else its own, and bodies = each such file paired with the anchor its method
+          names there (its symbol, qualified as <exportedVia>.<symbol> when it is reached through a
+          handle) — the ONE body that realizes the target in each file
+        type: local
+      - stepNumber: 11
+        description: >-
+          N:1 identity forwarding — the caller's own realized function IS the target's: the same
+          body in the same file (target.bodies holds this file paired with the caller's own anchor),
+          so facade and target collapse onto one function and the claim is realized by identity,
+          exactly as Level 1's N:1 sharing blesses. A shared NAME is not identity: a Portal method
+          forwarding to a same-named Orchestrator method in another file is two functions, and
+          accepting the caller's own name as the target's realization was how removing the
+          forwarding call went unreported — so that call is judged like any other, and a target
+          naming no file of its own can prove no identity at all. The same identity written as a
+          forwarding under another name counts the same: when code.forwardsOf(file, fnSymbol,
+          exportedVia) — the symbol followed through this file's re-exports (`export { a as b } from
+          'm'` exactly as the unaliased `export { a } from 'm'`), its export aliases (`export { a as
+          b }`, or a property `{ b: a }` of the exportedVia object) and the import binding such an
+          alias names — reaches one of the target's own files under a name the target is realized
+          by, the adapter forwarding its provider under the adapter's contract name IS the
+          provider's function. A declaration earns this on the same terms a step does: the reason is
+          the shape of the CODE, which does not know which way the claim was written. Continue with
+          the next claim
+        type: branch
+        condition: target.bodies lacks this file paired with the caller's own anchor
+        onFalseStep: 8
+      - stepNumber: 12
+        description: >-
+          matching = the sites whose name is in accepted. reached = the union of
+          code.possibleOriginsOf(site, file) over matching — every file each matching call CAN have
+          been written in, a this.<field>.<method>() receiver followed through the field's declared
+          type, a receiver CHAIN (this.<field>.<property>.<method>(), <name>.<property>.<method>())
+          followed link by link through each link's declared type, a new Class(...).<method>()
+          receiver through the module its class name came from, a plain <name>.<method>() receiver
+          through the type the file annotates that name with, a fn(...).<method>() receiver through
+          the type fn returns, and a this.<method>() receiver through the class whose own method it
+          sits in. landed = the union of code.originOf(site, file) over the same sites — the files a
+          call PROVABLY lands in, empty where a pure model cannot say, and the only tier a finding
+          may name a landing from: widening what a call reached can accept a claim, it must never
+          accuse one
+        type: local
+      - stepNumber: 13
+        description: >-
+          A target naming no file of its own has nothing to resolve AGAINST (MISSING_SOURCE_PATH
+          reports exactly that), so it falls back to the name membership this check has always had.
+          Otherwise a call spelled with a REPUBLISHED name realizes the claim on the proven tier:
+          the private invokedAs follows a bare call's import binding, or a namespace member call's
+          module, to the module and name it imports and then through code.forwardsOf, so `b()`
+          imported from a module republishing m's `a` as `b` lands where m.a lives. A call or
+          reference of forwardReach that the type checker lands on the target realizes it — one of
+          target.files under a name in target.accepted (the declaration, or a class realizing the
+          port the call was typed by), or a (file, name) in targetForwards(target), since the
+          checker resolves past a re-export to the module that wrote the function — whatever the
+          receiver's spelling: a type-only or `export *` barrel, a port declared in a shared module,
+          a dependency bag typed inline. And a call landing in one of the target's own files
+          realizes it: continue with the next claim
+        type: branch
+        condition: >-
+          the claim is unrealized: target.files is empty and matching is empty, or target.files is
+          non-empty, no call of forwardReach lands on the target, and reached meets none of
+          target.files
+        onFalseStep: 8
+      - stepNumber: 14
+        label: appendMissed
+        description: >-
+          Append to missed: the claim's stepNumber when it has one, its target (component.method),
+          the accepted names and the miss — absent when matching is empty, unresolved when landed is
+          empty, carrying the distinct SHAPES the matching sites were written in, which is what an
+          unresolved answer is about, else elsewhere carrying the files it did land in. A claim the
+          type checker did not land on its target keeps this answer: the checker's landing on a
+          declaration says what a receiver is TYPED as (a type literal, an interface no class
+          realizes), never where the call went instead, so it accuses nothing. An unresolved miss
+          whose target component has no code yet — code.holdsAny over every file its implementations
+          name is false, the normal state after the first component of a service is implemented from
+          its brief through a port to a collaborator still planned — is appended to plannedClaims
+          instead: planned, not unresolved
+        type: local
+      - stepNumber: 15
+        label: unrealizedReport
+        description: >-
+          When missed holds an entry whose miss is NOT unresolved, report CALL_STEP_UNREALIZED
+          (warning; spec impl.id; draft context the entry's draftContext), one finding per method
+          listing each such claim with its target, the names looked for and the files it landed in
+          instead, plus the function fnSymbol and file: callees are closed over the named helpers
+          the function calls and resolved through this file's import bindings, order and arguments
+          unchecked. A claim reads as "step 3" or as "declared call" and is carried as a unit the
+          same way — stepNumber:target for a step, target alone for a declaration, which is the
+          `calls` entry verbatim. Only what RESOLVED may accuse, so an unresolved miss is never
+          counted here
+        type: local
+      - stepNumber: 16
+        label: unresolvedReport
+        description: >-
+          When plannedClaims is non-empty, report CALL_TARGET_PLANNED (notice; spec impl.id; draft
+          context the entry's draftContext), one finding per method naming each such claim, the
+          shape its call was written in and the files the target plans: the call is in the function
+          by name through a receiver nothing written yet realizes — planned, not missing, said as
+          SOURCE_FILE_PLANNED says it — and it is judged like any other claim once the target's
+          realization begins. When missed holds an unresolved entry whose target component's own
+          code did not drift from its contract's return — a claim on a drifted component
+          (RETURN_TYPE_MISMATCH) no longer resolves for that reason, a port typed after the contract
+          no longer matching the class: the drift's consequence, held under that one finding and
+          judged again once it is fixed — report CALL_ORIGIN_UNRESOLVED (warning; spec impl.id;
+          draft context the entry's draftContext), one finding per method listing each such claim
+          with the shape its call sites were written in: the target name IS called inside fnSymbol,
+          but from no site this analysis can resolve to a file — so the claim is neither proven
+          realized nor accused of being missing, and no working call is asked to be rewritten to
+          suit the analysis. The finding names its sites and says that much and no more; which
+          receiver forms resolve and which do not is the code's summary and the rule's description,
+          stated ONCE where `wairon rules list` reads it, never repeated per finding
+        type: local
+      - stepNumber: 17
+        description: >-
+          declared = every targetComponent.targetMethod any narrative step of the method names,
+          together with every entry of its declared `calls`. A dispatch or register step asserts
+          nothing about a call site, but it does name the target out loud, and this direction asks
+          only whether the boundary hop is written down where a reader will find it. crossings = the
+          sites of closedCallSites(code, file, fnSymbol, exportedVia, stopping AT a colocated
+          modelled method) whose modelled method — the one anchored to the body the site resolved to
+          in this file, else, where the code does not settle the body, the one anchored under the
+          bare name — belongs to another component, is not in declared, and whose code.originOf
+          resolves to this very file. The converse direction stops at a modelled method because what
+          it goes on to call belongs to its own narrative — and for the same reason crossings is
+          EMPTY when the function itself forwards by identity (code.forwardsOf(file, fnSymbol,
+          exportedVia)) to a modelled method written in ANOTHER file: the body read here is that
+          method's, carried across the forwarding, and its calls are its own narrative's subject
+        type: local
+      - stepNumber: 18
+        description: >-
+          A call to a same-file PRIVATE helper is no modelled method and never appears among the
+          crossings, so a rule's internal factoring is never a finding: continue with the next
+          method
+        type: branch
+        condition: crossings is non-empty
+        onFalseStep: 20
+      - stepNumber: 19
+        label: colocatedReport
+        description: >-
+          Report UNDECLARED_COLOCATED_CALL (warning; spec impl.id; draft context the entry's
+          draftContext), one finding per method naming each crossing's called symbol and the
+          component method it is: sharing a file does not make the hop internal — it crosses a
+          component boundary nothing imports, which no file-level check can see. Narrate the call,
+          declare it in `calls`, or move the code so the boundary is real
+        type: local
+      - stepNumber: 20
+        label: writeCalls
+        description: >-
+          writes = the calls and references reach answers for the file's
+          source_file_facts.resolvedCalls (none where no type checker read it) whose enclosing
+          function is a body the method's function reaches in its own file — fnSymbol and the
+          helpers the stopping walk (the one the colocated direction takes) follows from it, never
+          past a colocated modelled method, whose calls are its own narrative's — together with the
+          unowned code those reach, that land, through a target in ANOTHER file, on a contract
+          method (its name or a per-method symbol) of a component other than this one whose effect
+          is write or lifecycle — or, when this component is a Portal and its function is not a body
+          a non-Portal component's modelled method is anchored to (sharedBodies), on a verb of an
+          Orchestrator, Supervisor or Actor whose verbEffect is not read — write, whether declared
+          or read off its own narrative, or unknown, kept apart as undecided since nothing settles
+          it — since a Portal changes state only by dispatching to such a verb — which is claimed
+          nowhere. A landing on a MODULE function (no container) is never a method the callee
+          reaches through an exportedVia handle, the same-named object member in a shared file being
+          another body. Claimed are: what declared names, what every modelled method sharing this
+          very body (the same file and anchor, N:1 identity) claims, and every landing a claimed
+          target IS or forwards to by identity — its own files under its accepted names and
+          targetForwards of it, since an Adapter re-exporting its provider's function is called
+          under the Adapter's claim while the checker resolves the call past it. unresolvedWrites =
+          the same calls marked unresolved, each with candidatesOf(call, component) left unclaimed.
+          Left out of both: a call from a Portal into a data component
+          (PORTAL_WRITE_SHORTCUT_IN_CODE and PORTAL_CALL_UNRESOLVED judge it), an Adapter's call on
+          a Portal reached over an out-of-process transport (the link the design models), and, as
+          for crossings, every call of a function that forwards by identity to a modelled method
+          written in another file. A same-file target is the colocated direction's subject and never
+          counted twice
+        type: local
+      - stepNumber: 21
+        label: writeReport
+        description: >-
+          When writes is non-empty, report UNDECLARED_WRITE_CALL (warning; spec impl.id; draft
+          context the entry's draftContext), one finding per method naming each component method
+          changing state and the call as written — a reference quoted as taken as a value, a call
+          reached through unowned code with the hops it was reached through: the code changes state
+          the design says this method never touches. Narrate the call, declare it in `calls`, or
+          remove it. When unresolvedWrites is non-empty, report CALL_ORIGIN_UNRESOLVED (warning;
+          same spec and draft context), one finding per method naming each candidate write and the
+          call as written (a reference quoted as taken as a value): the call goes through a receiver
+          the analysis cannot follow, so it is neither proven an unnarrated write nor cleared, and
+          fails closed until the receiver carries its declared type. Each carried like its siblings,
+          one unit per component.method. A workflow verb in undecided is named in the same finding
+          as an unnarrated call to it whose effect is undeclared, never as a change of state:
+          declare the verb's effect (read or none when it changes nothing), or narrate the call.
+          Once every method is read, report each language boundary the claims crossed once as
+          CALL_ACROSS_LANGUAGE (notice; spec the first implementation crossing it; site the project;
+          units the claims), naming the two languages and the binding as what crosses it — never as
+          an unrealized call no code could clear. Read the converse for every call too, where the
+          method claims its calls at call level (a narrative at full or calls-only, or declared
+          calls): a call written in the function's OWN body that the checker lands on a contract
+          method of another component — or on a port a claimed target is called through (an
+          interface no class realizes), read as that target's component — of a collaborator the
+          narrative names, that no step and no declared call names and no write finding already
+          says, is UNNARRATED_CALL (warning; site the method; units the targets). A call inside a
+          helper, to a collaborator the narrative never names, or taken as a value is what the
+          detail lets it summarize. In a file read without a checker but with its calls read
+          (Python), the body's call sites, closed over its file's helpers and stopping at another
+          modelled method, land through what the code declares — an import binding, a namespace
+          binding, a field's or a name's annotated class — and are judged the same way
+        type: local
+    symbol: check
+    exportedVia: callConformanceRule
+  - name: carriedDebt
+    sourcePath: src/core/rules/conformance/carried-debt.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          carried = ctx.carriedFindings, the conformance debt register flattened to one entry per
+          carried finding, each holding its reason group's kind and why
+        type: local
+      - stepNumber: 2
+        description: A project that declares no debt has nothing to audit
+        type: branch
+        condition: carried is empty
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report nothing
+        type: return
+        outcome: void
+      - stepNumber: 4
+        label: legality
+        description: >-
+          Legality first, and whatever the run saw: a code that may not be carried is wrong even in
+          a run that judged no code at all
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 7
+      - stepNumber: 5
+        description: 'A carryable code is the register''s whole domain: continue with the next entry'
+        type: branch
+        condition: ctx.carryableIssueCodes holds the entry's code
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 6
+        description: >-
+          why = ctx.knownIssueCodes holds the code ? that code is not CARRYABLE, because the
+          register holds measured code↔spec debt and a doctrine, soundness or configuration finding
+          says the design is illegal rather than unfinished : no registered rule emits that code
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report UNCARRYABLE_FINDING (error; no spec id, so no lint allow can reach it) naming the
+          code, the spec, the site and why: remove the entry, or declare the code carryable on the
+          rule that emits it
+        type: local
+      - stepNumber: 8
+        description: A run that built no code model could not have fired one conformance finding
+        type: branch
+        condition: ctx.codeModel.files is empty
+        onFalseStep: 10
+      - stepNumber: 9
+        description: 'Report nothing: every entry would read as stale for a reason the reader never chose'
+        type: return
+        outcome: void
+      - stepNumber: 10
+        description: known = every spec id in the tree; addressed = the spec, code and site keys already judged
+        type: local
+      - stepNumber: 11
+        label: audit
+        description: Audit each entry against what the run actually saw, so the register can only shrink
+        type: loop
+        loopKind: forEach
+        over: carried
+        endStep: 22
+      - stepNumber: 12
+        description: >-
+          A silence the project itself chose, and a spec this run never reached, are not debts
+          anyone paid: continue with the next entry
+        type: branch
+        condition: >-
+          the entry's code is carryable, the project did not switch that code off, and its spec is
+          in this run's scope
+        onTrueStep: 13
+        onFalseStep: 11
+      - stepNumber: 13
+        description: Only the first entry for a finding can ever match, so a repeat carries nothing
+        type: branch
+        condition: addressed already holds the entry's spec, code and site
+        onTrueStep: 14
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the repeat: delete it and merge
+          its units into the one entry
+        type: local
+      - stepNumber: 15
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 16
+        description: Record the entry's spec, code and site in addressed
+        type: local
+      - stepNumber: 17
+        description: An entry no finding matched carries nothing
+        type: branch
+        condition: the entry fired this run
+        onTrueStep: 20
+        onFalseStep: 18
+      - stepNumber: 18
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the entry with its kind and
+          reason: no such finding fired, so the debt is paid or the spec no longer reaches that site
+          — or the tree holds no such spec at all. Delete the entry; the register only shrinks
+        type: local
+      - stepNumber: 19
+        description: Continue with the next entry
+        type: jump
+        toStep: 11
+      - stepNumber: 20
+        description: paid = the entry's covers the live finding did not report
+        type: local
+      - stepNumber: 21
+        description: >-
+          An entry that lists exactly what fired is the register doing its job: continue with the
+          next entry
+        type: branch
+        condition: paid is empty
+        onTrueStep: 11
+        onFalseStep: 22
+      - stepNumber: 22
+        description: >-
+          Report STALE_CARRIED_FINDING (warning; no spec id) naming the paid units: that much of the
+          debt is paid, so delete those lines from the entry's covers; the register only shrinks
+        type: local
+    symbol: check
+    exportedVia: carriedDebtRule
+  - name: exportConformance
+    sourcePath: src/core/rules/conformance/export-conformance.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build, per source file, the set of names the components realized by that file legitimately
+          answer to: every method its contracts declare, every method name and per-method symbol its
+          implementations record. A file may realize several components — wairon's own MCP server
+          realizes eleven — so the sets union rather than compete
+        type: local
+      - stepNumber: 2
+        description: >-
+          Add the declared publication handles: each method's `exportedVia`, the export a consumer
+          imports to REACH the method, which `symbol` cannot name because `symbol` names the
+          function inside it; and each Portal implementation's `router`, the entry whatever serves
+          the Portal calls to hand it its requests, which belongs to the Portal's own files — or,
+          written `<module>#<name>` (or as a module alone), to the module it names, which must
+          export that name (a module named alone must be on disk); a class's method is written
+          `Class.method`, the class the export, which must hold the method, and is reported against
+          the implementation when it does not. Read a handle only where its file was analysed at
+          exact grade; below that nothing separates an export from a mention, so no verdict on it
+          could be backed, and a handle whose file the run never read at all is skipped rather than
+          guessed at. A portal may be realized across several files, and its router entry may live
+          in any of them: it is reported missing only when EVERY one of those files was read at
+          exact grade and none exports it, since a file read below that, or not at all, may be the
+          one holding it. A handle the file does export becomes promised surface. One that is
+          missing is reported against the spec that declares it, naming the handle and the file, and
+          does not count as allowed: a route nobody can import cannot be the reason a name is
+          promised, and without that the field would be a free-text way to silence the rule. A
+          refused bare name that is a method of an exported class in those files is told its
+          `Class.method` spelling, and one they declare without exporting is told to be exported
+        type: local
+      - stepNumber: 3
+        description: >-
+          Add what the data model legitimately publishes from the same files: a type's own
+          declaration and each pure type method under its symbol. A file that re-exports one of
+          those type methods from the file the method is promised at publishes the same promised
+          name — a method travels with its type — so the re-export counts as promised there too (a
+          star re-export republishes every type method of its module); a re-exported contract method
+          of another component does not, and stays a crossing. Whether a type IS published is
+          `typeRealization`'s question and stays there; this rule only needs to stop re-reporting
+          its answers as surface nobody promised
+        type: local
+      - stepNumber: 4
+        description: >-
+          For each analysed file, take the exported names the contracts do not cover. These are
+          candidates, not findings — an exported helper that only its own file's components use is a
+          module's business, and reporting it would flag 304 names in this tree alone, most of them
+          internal
+        type: local
+      - stepNumber: 5
+        description: Decide whether the analysis can honestly tell an export from a mention
+        type: branch
+        condition: the file was analysed at exact grade
+        onTrueStep: 6
+        onFalseStep: 10
+      - stepNumber: 6
+        description: >-
+          Walk every other analysed file that realizes a component, and read what it takes from
+          others. A named import takes the name it binds — the local name, and the name the module
+          published it under when the import renamed it. A namespace import takes each name the file
+          CALLS on it: `webadmin.setSecret(…)` written against `import * as webadmin` names the
+          export `setSecret` exactly as a named import would, and the call site already records the
+          receiver it was called on. A namespace bound and never called through takes nothing,
+          because nothing names what it reaches. Resolve each import's OWN module specifier and keep
+          only what lands in this file: a name is not taken from here merely because somebody
+          elsewhere uses the same word, and an accusation that cannot name the import it rests on is
+          not one
+        type: local
+      - stepNumber: 7
+        description: >-
+          Decide whether that consumer is a different component at all. The owns relation draws the
+          fence wider than one component: a pattern constructs the blocks it owns, so the file of a
+          component that OWNS one of the exporting file's components (ctx.ownershipIndex().ownerOf),
+          or of another member of the same owner, reaching for that member's class is the owns
+          relation made real and no crossing
+        type: branch
+        condition: >-
+          the consumer realizes none of the components the exporting file realizes, none of their
+          owners, and no component sharing an owner with one of them
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Record the name as crossed. This is the whole finding: a surface the design never
+          promised, reached from outside the thing that owns it. Judged on OVERLAP rather than on
+          one component matching, because a file realizing many components shares each of them with
+          a different neighbour, and requiring every owner to match reports a crossing wherever two
+          files merely differ in how much they hold
+        type: local
+      - stepNumber: 9
+        description: >-
+          Ignore it. Two files realizing the same component are that component's own implementation
+          spread over two files, which the source-path model has always allowed. Read the surface no
+          taker reveals: for every file realizing a component (tests aside), at exact grade or by a
+          reader that reads members, each public instance method of a class holding one of the
+          components' modelled methods, and each function the file exports, that no contract,
+          symbol, exportedVia, router or type of the file declares and that nothing in the project
+          uses — no call or reference in its own file but its own body, no name another analyzed
+          file writes, no identifier of an unanalyzed project file (code_model.outsideNames), no
+          star re-export publishing the module — is reported once per file as
+          UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). An exported CLASS is
+          read the same way, where the reader recorded the file's class references
+          (source_file_facts.classReferences): a top-level class the file exports beside the classes
+          realizing its components, that no contract, symbol, exportedVia, router or type declares,
+          that its own file names nowhere outside its own declaration and that nothing else uses —
+          its own methods naming it, a static factory, are no use — is one of those members, said as
+          an exported class. Exempt: constructors, accessors, fields, static, private, protected,
+          #private, underscore-prefixed, override, computed names, language protocol and framework
+          lifecycle hooks, Python dunders, and an implementation whose conformance dial is off
+        type: local
+      - stepNumber: 10
+        description: Decide whether anything crossed
+        type: branch
+        condition: the file has at least one crossed name
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report the file once, naming every crossed name as a unit the finding covers and the files
+          that took them (an import no declared relation justifies is UNDECLARED_DEPENDENCY on the
+          importer besides: who reached across, where this is what crossed), so the register carries
+          each crossing rather than the message that happens to list them. A file has no spec of its
+          own, so the finding lands on an implementation that names it — the first by sorted id when
+          several do, which keeps one crossing one finding instead of one per owner. Carryable,
+          because this is measured code-to-spec drift — a surface that grew past its contract — and
+          not a design that is illegal as written
+        type: return
+        outcome: reported
+      - stepNumber: 12
+        description: >-
+          Say nothing. A file whose whole exported surface is either promised or private is exactly
+          what the rule is asking for
+        type: return
+        outcome: clean
+    symbol: check
+    exportedVia: exportConformanceRule
+  - name: typeShape
+    sourcePath: src/core/rules/conformance/type-shape.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each type spec that names a source file, ask the analyzer for the shape declared there
+          under the type's own code name — its `symbol` when it declares one, else its name. A type
+          that names no file is making no claim about code and there is nothing here to check
+        type: local
+      - stepNumber: 2
+        description: Is the type a named scalar? Its shape is the primitive it holds, not a field list
+        type: branch
+        condition: the type declares holds
+        onTrueStep: 11
+        onFalseStep: 3
+      - stepNumber: 3
+        description: Decide whether the shape can honestly be read at all
+        type: branch
+        condition: the file was read at exact grade and a shape of that name was found
+        onTrueStep: 4
+        onFalseStep: 10
+      - stepNumber: 4
+        label: read
+        description: >-
+          Take the shape's data members and whether the code lets each be absent — a class's
+          constructor parameter properties are fields it declares, absent-able only when marked
+          optional. Method-style members are not data and are left to the method axis
+          `typeRealization` already judges; counting them here would accuse every behavioural
+          interface of carrying undeclared state. A field the spec gives a function type that the
+          code writes as a method is one fact in two spellings, not a disagreement
+        type: local
+      - stepNumber: 5
+        description: Decide whether this shape's whole membership is in front of us
+        type: branch
+        condition: the shape extends another type
+        onTrueStep: 8
+        onFalseStep: 6
+      - stepNumber: 6
+        label: presence
+        description: >-
+          Report each declared field the shape does not carry. The spec is describing data the code
+          does not have, and it is the ERD and the briefs that carried the claim — nothing breaks at
+          a call site to correct it
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report each field the shape carries that no declared field names. Data the design never
+          described is data no diagram draws and no brief hands to an implementer, which is how a
+          record grows past the model of it without anyone deciding to
+        type: local
+      - stepNumber: 8
+        label: optionality
+        description: >-
+          Report each field both sides carry but disagree about. Absent-able is the code's word for
+          it — a wrapper that lets the key be missing — and a wrapper that FILLS a missing key makes
+          the field required in the value the type finally holds, which is the thing the spec is
+          describing. Judged even for a shape that extends another, because a member this file lists
+          is one this file answers for
+        type: local
+      - stepNumber: 9
+        description: >-
+          Done: the type's data was compared to the code's, which is the one reading a spec-driven
+          gate could not make before
+        type: return
+        outcome: judged
+      - stepNumber: 10
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
+          about somebody's data model is worse than silence; a type whose shape the file does not
+          declare at all is `typeRealization`'s finding, and reporting it here too would make one
+          absence look like two
+        type: return
+        outcome: unjudged
+      - stepNumber: 11
+        label: scalar
+        description: >-
+          Take what the file declares under the type's code name: the right side of a type alias
+          (source_file_facts.aliasTypes), or an object shape (typeShapes), and the file's dialect
+          (source_file_facts.dialect)
+        type: local
+      - stepNumber: 12
+        description: Does the code disagree with holds?
+        type: branch
+        condition: >-
+          the file was read at exact grade and has a dialect, and either the alias's right side does
+          not agree with the primitive holds names (type_dialect.agrees) or the name is declared as
+          an object shape instead of an alias
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report TYPE_HOLDS_MISMATCH naming the type, the primitive it holds and what the code
+          declares under its name instead — another primitive, a named type, or a record; every
+          reader of a named scalar is told what one value of it is, and the code says otherwise
+        type: local
+      - stepNumber: 14
+        description: >-
+          Done: the named scalar was compared to the code's alias, or there was nothing to compare
+          it with (no alias of that name, below exact grade, or no dialect — typeRealization says
+          when the declaration is missing)
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: typeShapeRule
+  - name: paramConformance
+    sourcePath: src/core/rules/conformance/param-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method whose conformance dial is not off (its own, else its
+          implementation's, else the component's default), ask the analyzer for the parameter lists
+          of every function realizing it in its own file, under its `symbol` when it declares one. A
+          file may hold two bodies under one name — a class member and the module-level facade that
+          forwards to it — and which one the contract means is not something this reader can decide,
+          so every candidate is kept. Every name each candidate takes is noted for its
+          implementation, read without its leading underscores, before anything is judged: once
+          every method has been read, each injected name (implementation_spec.injectedParams) none
+          of an implementation's read functions takes is reported as UNUSED_INJECTED_PARAM (notice;
+          site injectedParams; units the stale names) — stale code linkage, said so it can be
+          dropped: no function takes a parameter it could set aside, so it hides nothing and never
+          fails a gate; said only where at least one of its functions was read. A contract method
+          declaring no parameters makes no claim a signature could contradict
+        type: local
+      - stepNumber: 2
+        description: Decide whether a signature is there to read
+        type: branch
+        condition: >-
+          the method's conformance dial is not off, the file was read at exact grade and at least
+          one function of that name has a body
+        onTrueStep: 3
+        onFalseStep: 9
+      - stepNumber: 3
+        label: align
+        description: >-
+          Drop the runs of parameters the implementation declares as injected — the config, data
+          root or transport handles whatever wires the component up supplies — at either end of the
+          list: a LEADING run, and a TRAILING run of names the contract does not itself declare,
+          which is where a framework puts a response or a next handler. Only names the
+          implementation actually declared, each matching with or without its leading underscore, so
+          a handle that becomes used keeps its declaration; an injected name in the middle of the
+          caller's list is an argument, not wiring. Then set aside every parameter whose name starts
+          with an underscore that the analyzer proves UNUSED (parameter_fact.unused: no identifier
+          of its name in the body or another parameter's default value, no read of `arguments`),
+          unless its bare name is the contract's own: a leading underscore means unused, and it is
+          believed only where it is true — a used `_secret` is a credential like any other, and is
+          judged like any other parameter. Then set apart an OBJECT (parameter_fact.fields) whose
+          properties name two or more of the contract's own parameters, its type agreeing with none
+          of them and holding no declared record whole: it BUNDLES them, so each is reported
+          unrealized — the code takes it inside the object — and the object undeclared, naming the
+          parameters it bundles (`cancelOrder(input: { orderId, customerId })` for
+          `cancelOrder(orderId, customerId)` names both, never one half by position); the rest are
+          paired
+        type: local
+      - stepNumber: 4
+        description: >-
+          Pair what remains with the declared parameters in ORDER, as many pairs as the shorter side
+          holds — a caller passes arguments in order, so the pairing keeps both sides' order. Among
+          the order-keeping pairings take the one where the most names agree (read without their
+          leading underscores), then the most declared types agree, then the most kinds of value
+          agree (parameter_fact.kind, counted only for a parameter the code annotates, against the
+          kind the contract's type is: a primitive's, a list, a map or set as an object, an enum as
+          a string, a named scalar as what it holds, a record type as an object, a signature as a
+          function), and on a tie the one aligned against the TAIL of the realization's list — so an
+          inserted first argument is the one left over (`planRoute(apiKey, req)` for
+          `planRoute(request)` leaves apiKey), never the declared one it pushed along. A name with
+          several bodies is judged on each of them but a member of a PRIVATE table — an object
+          literal the file neither exports nor declares as a shape, like a router's dispatch table
+          keyed by the same verb names — and only what they ALL agree on is reported: a wider answer
+          can only narrow what this rule accuses
+        type: local
+      - stepNumber: 5
+        description: Decide which side has more
+        type: branch
+        condition: the declared parameters and the realized ones are the same in number
+        onTrueStep: 7
+        onFalseStep: 6
+      - stepNumber: 6
+        label: count
+        description: >-
+          Report the surplus on whichever side has it: a declared parameter with no pair is one the
+          code would never receive — unless the code reads it off an injected request handle (req,
+          request, ctx, context, event, url) by its own name (parameter_fact.reads:
+          `req.params.code`, `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a
+          destructuring at any depth, a local the handle's value flows into, and what a helper of
+          the same file or of a file no implementation claims reads off it when the handle is passed
+          to it, or its result yields), which realizes it through that handle, the green path for a
+          framework that hands its handlers the request alone; and the one RECORD parameter left
+          unpaired is realized by the request's body read whole — `req.body`, or the request handed
+          as a call's first argument to any function but a collaborator's method, whose result the
+          handler binds to a local and then uses whole (parameter_fact.handedWhole: `const cart =
+          await readJsonBody(req)`, then passed on); a result only destructured or only read for
+          members is named reads, never the body — and a realized parameter with no pair is an
+          argument a caller must supply that the design never mentions, the shape that hid a
+          credential in a signature nobody had read against its contract. Where parameters left over
+          (or substituted) stand ahead of every kept pair under a name transports give their handles
+          (req, request, res, response, reply, url, ctx, context, next, event, socket), the finding
+          names the one green path for them: the handles in the implementation's injectedParams, the
+          contract's own parameters after them in order — spelled out as the method's signature —
+          the router unpacking the path, query and body into them, or the contract's parameters read
+          off the injected request by their own names. A declared parameter left unrealized because
+          the implementation injects its own name is said so in the finding (the injection set the
+          code's parameter of that name aside as wiring), and where an injected request handle is
+          wiring, the finding names both ways a parameter is read off it, with this method's own
+          names
+        type: local
+      - stepNumber: 7
+        label: compare
+        description: >-
+          For each pair: where the dialect does not say the types agree, the code holds a DIFFERENT
+          argument in the declared one's place — a substitution, reported as the declared parameter
+          unrealized and the code's undeclared, saying what each is — when, the names differing,
+          both kinds of value are settled and differ (`getRoute(params: Record<string, string>)`
+          realizing `getRoute(id: string)`); when the code's parameter is a platform transport class
+          (parameter_fact.transport) where the contract declares a record; when the contract's type
+          is a record whose fields the code's object (parameter_fact.fields) shares NONE of,
+          whatever either side calls it (`planRoute(session: { user: string })` for
+          `planRoute(request: plan_request)`); or when the code's name is a transport handle's (req,
+          res, ctx, request, response, next, reply) where the contract declares an argument of its
+          own and its type holds no declared record whole — however the handle is typed
+          (`cancelOrder(req: Req, res: Res)` for `cancelOrder(orderId, customerId)`). Short of a
+          substitution, where the contract declares a record and the code's parameter is OPAQUE
+          (parameter_fact.opaque, or no annotation at all in a TypeScript file) or an object sharing
+          only some of the record's fields or adding fields of its own, report PARAM_TYPE_MISMATCH
+          (warning; site the method; units the parameter names) naming the fields missing and added:
+          its type cannot hold what the design declares, and the analysis fails closed on it as on
+          an opaque receiver. Where the contract declares a scalar (a string, a number, a boolean,
+          an enum or a named scalar as what it holds, or a date, a datetime or a duration as any
+          value it is written as) and the code's parameter is opaque as above and the body reads a
+          member directly off it that no such value has (parameter_fact.members: `args.habitId`
+          where a date is declared), report PARAM_TYPE_MISMATCH too: an object stands in the
+          scalar's place. Otherwise, for a pair whose names differ, report a rename where the
+          declared type agrees: through the file's dialect (source_file_facts.dialect, then
+          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
+          type matching through its code-level name), as the same primitive kind of value (string,
+          number, boolean) of an annotated parameter or one of the kinds a date, a datetime, a
+          duration or bytes is written as, or as an object holding every field of the declared
+          record — naming the contract's former name (its previousNames) when the code still uses
+          it. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it under
+          that public name (ctx.pinnedExternals); a MEMBER's type (alias::name of a project the
+          family composes, ctx.projectFamily) to its own type spec in ctx.types, read live — its
+          code name, its kind and its fields — so where a parameter's type lives never decides
+          whether it is compared; anything else to its public name's last segment in the code's type
+          casing. With no dialect, no annotation, no settled kind and no handle name, say nothing
+          about the name — without it a rename cannot be told from a substitution, and a guess about
+          somebody's signature is worse than silence. Judge the RETURN beside the parameters: for
+          every contract method whose `returns` is not void, whose function is not a registrar (a
+          narrative register step) nor a void function handed a response handle, and whose every
+          body under the symbol annotates a return (source_file_facts.functionReturns) — at exact
+          grade, or by a reader that read returns (Python) — read each annotation through the file's
+          dialect past `async` on both sides, a named scalar through what it holds, an enum as a
+          string, a date, datetime or duration as the string, Date or number the code writes it as,
+          a name differing only in case and separators as itself; a type the design does not know,
+          or either side does not read, is never accused. When every body disagrees, report
+          RETURN_TYPE_MISMATCH (warning; site the method; unit returns) naming the method, the
+          contract's type and the code's. The drifts are shared, so a caller whose call or declared
+          edge no longer resolves because of one is not reported again (CALL_ORIGIN_UNRESOLVED,
+          UNREALIZED_DEPENDENCY): it is held under this finding and judged again once it is fixed.
+          Read Python signatures the same way through its reader, naming parameters in the
+          language's snake_case: a code `document_id` is the contract's `documentId`
+        type: local
+      - stepNumber: 8
+        description: >-
+          Report each matched position where the two sides disagree about whether the argument may
+          be left out. A default value or a rest parameter makes it omittable just as a question
+          mark does, because what a caller may leave out is the thing the contract is describing
+        type: return
+        outcome: judged
+      - stepNumber: 9
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a parameter list cannot be told from a call, and a method
+          whose named file only CALLS the function is `methodRealization`'s finding — it already
+          reports that the body is not here, and a second voice saying the parameters cannot be read
+          would make one absence look like two
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: paramConformanceRule
+  - name: routeCoverage
+    sourcePath: src/core/rules/conformance/route-coverage.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each Portal implementation that names a router, read the linkage's three spellings: a
+          bare name is an entry the Portal's own files hold, `Class.method` a method whose body sits
+          in that class; `<module>#<name>` (or `<module>#Class.method`) an entry or a route table
+          another module holds (a central routes.ts); a module alone, every route-bearing export of
+          it. Find the routes the analyzer read (source_file_facts.functionRoutes — a function's, or
+          a route table const's under its name, a spread table's entries included) from that entry
+          and from the functions of its file it calls by name: a router delegating its matching to a
+          helper that reads a route table is one router. Note the ONE prefix those functions strip
+          off the path before matching (source_file_facts.routePrefixes), where exactly one settles.
+          Routers resolving to the same entry in the same files are one router, read once against
+          every Portal naming it, however each linkage spells it. A Portal that binds HTTP endpoints
+          and names no router, while a file of its implementation is read at exact grade, is
+          reported once as ROUTER_UNDECLARED (notice; site router), naming what its files hold, each
+          spelled as the linkage accepts it — an exported router or table by its name, a method of
+          an exported class as `Class.method`, an exported entry calling into a router of its file —
+          and, apart, what reads as a router or a table but is not exported, to be exported before
+          it can be named: its routes are checked against nothing, and that is said, never left
+          silent. A router linkage naming a declaration of an exact-grade file that holds neither a
+          function body nor a route table is reported as unread (step 4); one naming nothing the
+          module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router naming a route
+          TABLE that no table of the exact-grade code spreads and that spreads none itself, where a
+          sibling table spreading other tables of its module (source_file_facts.tableSpreads, in
+          that module or through an import binding in another) leaves it out, is reported as
+          ROUTER_NOT_DISPATCHED (notice; site the router): if the server dispatches the sibling,
+          none of its routes is served, while coverage reading the table itself reads them as
+          served. A Portal binding HTTP endpoints that names no router while its exact-grade files
+          hold what reads as a router or a route table is ROUTES_UNCHECKED (warning; site router;
+          units each spelling `router:` accepts) — route-bearing code no check read; only where its
+          files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method
+          by method, its realizing class's public methods judged by UNDECLARED_PUBLIC_MEMBER
+        type: local
+      - stepNumber: 2
+        description: Decide whether there is a router to judge
+        type: branch
+        condition: the entry's file was read at exact grade
+        onTrueStep: 3
+        onFalseStep: 7
+      - stepNumber: 3
+        label: any-routes
+        description: Decide whether the idiom was recognised at all
+        type: branch
+        condition: the router function yielded at least one route
+        onTrueStep: 5
+        onFalseStep: 4
+      - stepNumber: 4
+        label: unread
+        description: >-
+          Report the router as unread, naming the Portal and the entry. Silence here would read as a
+          clean router; it is only one this analysis cannot see
+        type: return
+        outcome: unread
+      - stepNumber: 5
+        label: compare
+        description: >-
+          Fold the stripped prefix in front of every TABLE route (route_fact.table) that does not
+          already state it: a table is written under the prefix its router strips, so a prefix that
+          is not the Portal's basePath reads as the different URL it is. Then read each route
+          against each Portal's own endpoints: a route whose leading segments are the Portal's
+          basePath is read beneath it, where the contract writes its endpoint paths; a route that
+          does not state the whole path (route_fact.fullPath unset) and leaves its leading segment
+          unconstrained has it completed with each first segment of the Portal's HTTP endpoint paths
+          — the one whatever serves the Portal routes on. Match routes against the Portal's HTTP
+          endpoints by verb and path. A template parameter in an endpoint matches a segment the
+          router leaves unconstrained, and only that: a literal the router compares against is a
+          distinct handler, and a template endpoint beside it does not declare it, or the one route
+          this check exists to find would hide behind its neighbour. A route that pins no segment
+          count also covers a longer path with the same leading segments
+        type: local
+      - stepNumber: 6
+        description: >-
+          Report each route no endpoint of any Portal reading the router matches — a surface the
+          code serves and no contract declares — once, against the first; and each endpoint no route
+          answers, per Portal, which the contract promises and no request reaches. Where the router
+          strips a prefix that is not the Portal's basePath, both findings say so, naming the two.
+          The first shape is the one that let a write run with no contract, so both are carryable
+          measured drift rather than refusals
+        type: return
+        outcome: judged
+      - stepNumber: 7
+        label: silent
+        description: >-
+          Say nothing. Below exact grade a guard cannot be read as a route, and the file's grade is
+          already on every other finding about it
+        type: return
+        outcome: unjudged
+    symbol: check
+    exportedVia: routeCoverageRule
+  - name: portalImports
+    sourcePath: src/core/rules/conformance/portal-imports.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(); realization = ctx.realizationIndex(); mappedPaths = the
+          realization index's paths that code.exactPaths holds; graph = ctx.importGraph(mappedPaths)
+          — the same closed file set dependency-conformance judges, so the two rules read one graph
+        type: local
+      - stepNumber: 2
+        description: >-
+          portalFilesOf(subsystem) = the files in mappedPaths that realize any component
+          ctx.publicSet publishes for that subsystem. A subsystem whose published components realize
+          no exact-grade file has no portal file to land on
+        type: local
+      - stepNumber: 3
+        label: edge
+        description: For each runtime import edge between mapped files
+        type: loop
+        loopKind: forEach
+        over: >-
+          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
+          targets
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          crossed = the subsystems of the components realization.componentsAt(toPath) that no
+          component of realization.componentsAt(fromPath) shares — an import between files of one
+          subsystem, or into a file the importer's own subsystem also realizes, crosses nothing
+        type: local
+      - stepNumber: 5
+        description: Does the import cross into a subsystem somewhere other than its portal file?
+        type: branch
+        condition: some subsystem in crossed has toPath outside portalFilesOf(it)
+        onFalseStep: 3
+      - stepNumber: 6
+        label: bypass
+        description: >-
+          Report IMPORT_BYPASSES_PORTAL (warning; spec the first of
+          realization.implementationsAt(fromPath); draft context when any implementation naming
+          either file is ctx.isImplementationDraft) naming fromPath, toPath, the subsystem crossed
+          into and its portal files: import the name from the portal file instead, and when no
+          portal of that subsystem publishes it, it is a surface the provider never promised —
+          publish it on the contract of the portal whose capability it is, or stop depending on it
+        type: local
+      - stepNumber: 7
+        description: 'Done: every crossing import judged'
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: portalImportsRule
+  - name: enumValues
+    sourcePath: src/core/rules/conformance/enum-values.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each enum type that names a source file, ask the analyzer for the values of the
+          enum-like declaration there under the type's own code name — its `symbol` when it declares
+          one, else its name
+        type: local
+      - stepNumber: 2
+        description: Decide whether the values can honestly be read
+        type: branch
+        condition: the file was read at exact grade and values were read for that name
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Report each value the enum lists that the declaration does not hold
+          (UNREALIZED_ENUM_VALUE), compared exactly — a value is data, and `local_only` is not
+          `local-only`
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report each value the declaration holds that the enum does not list
+          (UNDECLARED_ENUM_VALUE)
+        type: local
+      - stepNumber: 5
+        description: 'Done: the enum''s values were compared to the code''s'
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a value list cannot be told from a mention, and a
+          declaration the file does not hold at all is typeRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: enumValuesRule
+  - name: asyncConformance
+    sourcePath: src/core/rules/conformance/async-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method with a contract method, find the bodies realizing it in its
+          own file under its `symbol` when it declares one, as param-conformance does
+        type: local
+      - stepNumber: 2
+        description: Decide whether a body is there to read, and whether the method is to be judged at all
+        type: branch
+        condition: >-
+          the method's conformance dial (its own, else its implementation's, else the component's
+          default) is not off, the file was read at exact grade and at least one function of that
+          name has a body
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Read whether the contract's returns is `async T` from its canonical expression, and
+          whether each body completes later from source_file_facts.asyncFunctions
+        type: local
+      - stepNumber: 4
+        description: >-
+          Report ASYNC_MISMATCH when every body disagrees with the contract the same way, naming
+          which side says async; a wider answer can only narrow what this rule accuses
+        type: local
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: judged
+      - stepNumber: 6
+        label: silent
+        description: >-
+          Say nothing: below exact grade a body cannot be told from a call, and a file that only
+          calls the function is methodRealization's finding
+        type: return
+        outcome: unjudged
+    detail: full
+    symbol: check
+    exportedVia: asyncConformanceRule
+  - name: bindingModules
+    sourcePath: src/core/rules/conformance/binding-modules.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each binding module in ctx.bindingModules, collect the implementations naming it and
+          the first segments of every `alias::name` their components write — a dependsOn, owns,
+          narrative call, declared call or implements, and every named type their contracts' params
+          and returns write, followed through the bound project's own types those name; resolve each
+          segment to the alias ctx.pinnedExternals holds a snapshot for, or to a contained member
+          project of the bound root (ctx.projectFamily: its alias, or its project id as the bound
+          references spell it) — whose surface is its L0 export table in ctx.exportTables read live:
+          each exported component's contract methods (narrowed to the exported interface) with their
+          params' previousNames and their own, each exported type's fields with their previousNames
+          and the type's previousIds — and, when ctx.memberApprovedSurfaces holds the member's
+          surface at the approval it is judged against, each exported entry's `retired`: the method
+          names that approved entry held that the live entry neither holds nor names in any method's
+          trace (a removal, never a rename), so a name the member dropped since its approval is
+          named even though a member is never pinned. A segment naming the bound project's OWN id (a
+          member's signature copied into this project spells this project's L0 re-exports, the shape
+          `member promote` writes) reaches each member project the bound root's L0 export table
+          re-exports from
+        type: loop
+        over: ctx.bindingModules
+        endStep: 8
+      - stepNumber: 2
+        description: Can it be compared?
+        type: branch
+        condition: >-
+          the module was read, declares at least one exported declaration, and at least one reached
+          project is pinned or is a member project exporting something
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Report BINDING_UNREAD (notice) once for the module, naming why — not on disk yet, escapes
+          the root, unreadable, a language the reader does not read, nothing it declares that the
+          reader compares (with each unread export form it met), a reached member that exports
+          nothing (told to export there, never to pin), an external with no pin (told to pin it), or
+          no other project reached — and move on
+        type: jump
+        toStep: 1
+      - stepNumber: 4
+        description: >-
+          Match each declaration: by its doc comment's `alias::name` (the alias or a member's
+          project id), else by nameKey against a reached interface's id or name or a reached type's
+          id or name (an Api, Port or Client suffix ignored) or a type's former id, else for an
+          interface by the reached interface most of its member names (current or former) belong to;
+          an exported function against its tagged interface alone, else the methods of every reached
+          interface, else a pinned entry's retired names. An unmatched declaration is the binding's
+          own plumbing
+        type: local
+      - stepNumber: 5
+        description: >-
+          For each member of a declaration matched to an interface, and each matched function: a
+          name that is a method's former name is drift with the rename to follow; a name the matched
+          interface does not hold (a tagged function's included, and any name a pinned entry's
+          retired list holds — or a member entry's, which says the member's approved design held it)
+          is drift, removed — an untagged exported function too, matched by that retired name;
+          otherwise compare the parameter list's arity and names by nameKey with the method's
+          params, a param's previousNames giving the rename
+        type: local
+      - stepNumber: 6
+        description: >-
+          For a declaration matched to a type: a declaration named by the type's former id is drift
+          with the new name; each field the type does not declare is drift (with the rename when a
+          field was formerly that name), each field the binding lacks and no rename explains is
+          drift, and each field whose declared type names a type the producer renamed (a reached
+          type's former id) is drift with the new name
+        type: local
+      - stepNumber: 7
+        description: >-
+          Report BINDING_DRIFT (warning) per drifted declaration, anchored on the first
+          implementation naming the module (draft context when it is draft), naming the module, the
+          line, the alias, whether it was compared with a pin or with the member project's live
+          export table, and every difference with the rename to follow
+        type: local
+      - stepNumber: 8
+        description: Next module
+        type: jump
+        toStep: 1
+      - stepNumber: 9
+        description: 'Done: every binding module judged'
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: bindingModulesRule
+status: complete
+createdAt: '2026-09-14T23:15:29.785Z'
+updatedAt: '2026-10-17T19:56:29.004Z'

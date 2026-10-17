@@ -1,0 +1,22 @@
+kind: enum
+id: tool_class
+name: ToolClass
+description: >-
+  The shape of an agent's tool grant, named by intent rather than by any one tool's tool names.
+  Exporters translate it to concrete allowlists.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: read-only
+    description: Reads and searches, never writes
+  - name: implement
+    description: Reads, edits and runs commands
+  - name: orchestrate
+    description: >-
+      Delegates and messages, and deliberately cannot read files, so a manager does not accumulate
+      context
+  - name: full
+    description: Inherits every tool the host grants
+createdAt: '2026-10-04T23:12:36.255Z'
+updatedAt: '2026-10-04T23:12:50.668Z'

@@ -1,0 +1,24 @@
+id: iexecution_profiler
+name: Execution Profiler Interface
+description: >-
+  One question: what is this agent's work like? Answered from the agent record alone, so it is safe
+  to call from generate, from the brief composer and from analyze without any of them arranging
+  state first.
+component: execution_profiler
+methods:
+  - name: derive
+    description: >-
+      The execution profile implied by an agent's own topology — its owned and readable paths, its
+      template and its stereotype tags. Pure and total: it never reads the filesystem and never
+      throws, so no caller has to guard it.
+    signature: 'derive(agent: AgentRecord): ExecutionProfile'
+    returns: ExecutionProfile
+    params:
+      - name: agent
+        type: AgentRecord
+        description: The resolved agent whose work shape is wanted
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T23:51:04.190Z'
+updatedAt: '2026-09-20T23:52:21.386Z'

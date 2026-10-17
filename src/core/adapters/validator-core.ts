@@ -1,0 +1,69 @@
+// ---------------------------------------------------------------------------
+// validator_core_adapter — sdd_validator's client hop into sdd_core.
+//
+// Identity re-exports of the core portals, under the adapter's contract names.
+// The validator imports THIS module, so every call it makes into core lands
+// here and resolves to the portal's function, not to a wrapper in the
+// validator's own file.
+//
+// The owner's gate never walks up to a parent; only the derived networking's
+// member view reads one (resolveChainingParent), to compose its family.
+// ---------------------------------------------------------------------------
+export {
+  loadSystemSpec,
+  loadSubsystemSpecs,
+  loadComponentSpecs,
+  loadInterfaceSpecs,
+  loadImplementationSpecs,
+  loadTypeSpecs,
+  dryRunSerializeSpecs,
+  loadProjectExtensions,
+  loadProjectConfig,
+  // The bound project's OWN content identity (the gate identity's content
+  // half) and another root's lock record (a direct member's, for its
+  // composition subject; a member's parent's, for its pin).
+  computeOwnStateId,
+  // The bound project's OWN design identity — the gate identity's content
+  // half from lock format 3 on (computeOwnStateId is kept to judge a format-2
+  // lock under its own algorithm).
+  computeOwnDesignId,
+  // The earlier design reading's identity and the statuses an approval
+  // recorded, to judge a lock taken in that reading as it was taken.
+  computeOwnDesignIdAsRecorded,
+  approvedStatuses,
+  approvalRecord,
+  // The own spec files that moved since the approval: what a record from
+  // before gate parts proves about its design (family_validator.releaseVerdict).
+  diffAgainstApproval,
+  consumedContractInputs,
+  settledSpecPaths,
+  readLockRecord,
+  getLoaderIssues,
+  clearLoaderIssues,
+  scanAllSpecs,
+  loadProjectVariants,
+  // The resolved export tables the export-tables rule judges.
+  resolveSubsystemExports,
+  resolveProjectExports,
+  // The project graph and the export usages the family rules judge.
+  projectFamily,
+  // The bound root's chaining parent: read by the derived networking alone,
+  // to compose a member's view from its enclosing family (the owner's gate
+  // itself never climbs).
+  resolveChainingParent,
+  exportUsage,
+  // What the scan's signature resolution recorded, and the resolution itself
+  // for specs read outside the scan (a part's pinned parent excerpt).
+  signatureFacts,
+  resolveSignatures,
+  // What the scan's type canonicalisation recorded: the stored aliases and
+  // the positions that are not canonical.
+  typeSpellingFacts,
+  // The retired reachability forms the scan read compatibly, which
+  // entry-declarations reports.
+  retiredReachFacts,
+  // The pack loader over a candidate configuration, and one entry's manifest:
+  // what the pack impact's dry run and the family's adoption checks read.
+  loadExtensionsFor,
+  packManifest,
+} from '../index.js';

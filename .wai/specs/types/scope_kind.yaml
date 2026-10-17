@@ -1,0 +1,21 @@
+kind: enum
+id: scope_kind
+name: ScopeKind
+description: >-
+  The level a permission setting or role binding is anchored at, widest first. A subsystem scope
+  sits below its project and carries only project:write.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: instance
+    description: The whole hosted instance
+  - name: unit
+    description: An organization unit and its subtree
+  - name: project
+    description: One project
+  - name: subsystem
+    description: One subsystem of a project (project:write only)
+createdAt: '2026-10-04T23:13:54.970Z'
+updatedAt: '2026-10-04T23:13:55.371Z'

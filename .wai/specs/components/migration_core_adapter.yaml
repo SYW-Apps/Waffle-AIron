@@ -1,0 +1,20 @@
+id: migration_core_adapter
+name: Migration Core Client Adapter
+description: >-
+  Local client adapter in sdd_migrations for the hop into sdd_core: the family graph and export
+  tables, each project's configuration and lock record, and the configuration, reference and member
+  writes the verbs make — each at whatever project root the caller has bound, which during a
+  rehearsal is the rehearsal copy's. In-process import seam today, swappable for a remote spec store
+  without changing the verbs. It exists because only a client Adapter may cross a subsystem
+  boundary.
+subsystem: sdd_migrations
+componentType: Adapter
+owns: []
+dependsOn:
+  - spec_tree_portal
+  - spec_maintenance_portal
+  - project_config_portal
+  - approval_portal
+status: complete
+createdAt: '2026-09-30T20:31:10.015Z'
+updatedAt: '2026-09-30T22:58:27.583Z'

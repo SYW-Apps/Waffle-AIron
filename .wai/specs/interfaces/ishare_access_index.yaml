@@ -5,13 +5,13 @@ component: share_access_index
 methods:
   - name: listByLink
     description: Access entries for a given link, most-recent-first, capped at limit.
-    signature: 'listByLink(linkId: string, limit: number): ShareAccessEntry[]'
-    returns: ShareAccessEntry[]
+    signature: 'listByLink(linkId: string, limit: int): list<ShareAccessEntry>'
+    returns: list<ShareAccessEntry>
     params:
       - name: linkId
         type: string
       - name: limit
-        type: number
+        type: int
 status: complete
 createdAt: '2026-07-17T22:29:36.361Z'
-updatedAt: '2026-07-18T10:10:39.191Z'
+updatedAt: '2026-10-04T10:28:35.423Z'

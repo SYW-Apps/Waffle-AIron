@@ -1,0 +1,10 @@
+id: billing-orch
+name: Billing Orchestrator
+description: Charges an order once
+subsystem: charges
+componentType: Orchestrator
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-17T11:46:27.392Z'
+updatedAt: '2026-10-17T11:46:28.247Z'

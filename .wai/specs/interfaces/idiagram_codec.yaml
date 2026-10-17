@@ -1,0 +1,83 @@
+id: idiagram_codec
+name: Diagram Codec Interface
+description: >-
+  Two formats, each offered twice: once taking an arrangement the caller already has, and once
+  computing the default arrangement first. The split is not convenience — the web canvas holds its
+  own collapse state and must encode THAT arrangement, while a command-line export has none and
+  wants the default.
+component: diagram_codec
+methods:
+  - name: buildDrawioXml
+    description: >-
+      Encode an already-arranged graph as draw.io XML. A retired stereotype draws as a plain box in
+      the retired colour and contains nothing, so a tree that still holds one exports honestly
+      rather than losing it.
+    signature: 'buildDrawioXml(model: ExportModel, L: LayoutResult): string'
+    returns: string
+    params:
+      - name: model
+        type: ExportModel
+        description: The graph to encode
+      - name: L
+        type: LayoutResult
+        description: Where every box sits, as the layout arranged it
+    guarantees:
+      - idempotent
+  - name: buildExcalidrawScene
+    description: >-
+      Encode an already-arranged graph as an Excalidraw scene, laid out identically to the draw.io
+      encoding of the same graph.
+    signature: 'buildExcalidrawScene(model: ExportModel, L: LayoutResult): string'
+    returns: string
+    params:
+      - name: model
+        type: ExportModel
+        description: The graph to encode
+      - name: L
+        type: LayoutResult
+        description: Where every box sits, as the layout arranged it
+    guarantees:
+      - idempotent
+  - name: generateDrawioXml
+    description: >-
+      Arrange a canvas model with nothing collapsed and encode it as draw.io XML — the whole export,
+      for a caller holding no arrangement of its own.
+    signature: 'generateDrawioXml(model: CanvasModel): string'
+    returns: string
+    params:
+      - name: model
+        type: CanvasModel
+        description: The canvas model to export
+    guarantees:
+      - idempotent
+  - name: generateExcalidrawScene
+    description: Arrange a canvas model with nothing collapsed and encode it as an Excalidraw scene.
+    signature: 'generateExcalidrawScene(model: CanvasModel): string'
+    returns: string
+    params:
+      - name: model
+        type: CanvasModel
+        description: The canvas model to export
+    guarantees:
+      - idempotent
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: buildDrawioXml
+      reason: >-
+        The finding is correct and accepted, not disputed: no narrative calls this, and none
+        honestly can. `spec_canvas.render` embeds this function by SERIALIZING ITS SOURCE into the
+        rendered page (`canvas.ts:447`, `buildDrawioXml.toString()`), so the download button runs it
+        in the reader's browser, against a layout they rearranged, long after the rendering process
+        exited. The dependency on this component is real and declared; the caller is simply a
+        different runtime. A call step would claim an in-process call that does not happen, which is
+        the one thing worse than this allow.
+    - code: UNUSED_METHOD
+      at: buildExcalidrawScene
+      reason: >-
+        Same seam as buildDrawioXml: serialized into the page rather than called, and run by the
+        browser for the Excalidraw download. See `spec_canvas_impl.render` step 3, which states the
+        mechanism rather than inventing a call to hide it.
+status: complete
+createdAt: '2026-09-20T16:39:20.510Z'
+updatedAt: '2026-09-20T18:50:00.671Z'

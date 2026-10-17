@@ -1,0 +1,20 @@
+kind: enum
+id: member_storage
+name: MemberStorage
+description: >-
+  Where a member's files live, from its path or its source's one set field. Shown on the canvas as
+  the part's storage badge.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: contained
+    description: A directory inside the parent's repository
+  - name: path
+    description: A directory outside it, reached by a relative path
+  - name: git
+    description: Another repository, read from the git cache at the pinned commit
+  - name: hosted
+    description: A hosted project record (never a part)
+createdAt: '2026-10-04T23:13:42.888Z'
+updatedAt: '2026-10-04T23:13:43.268Z'

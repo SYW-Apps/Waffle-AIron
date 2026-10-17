@@ -3,6 +3,8 @@ name: Share Access Repository Implementation
 description: 'Facade forwarding: the append write to the registry, the per-link read to the index.'
 contract: ishare_access_repository
 sourcePath: src/server/shareaccesslog.ts
+injectedParams:
+  - dataDir
 methods:
   - name: append
     narrative:
@@ -23,4 +25,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-18T09:26:56.326Z'
-updatedAt: '2026-07-18T23:33:29.582Z'
+updatedAt: '2026-09-23T21:20:05.005Z'

@@ -7,6 +7,8 @@ description: >-
   stamping.
 contract: ipolicy_registry
 sourcePath: src/server/policy.ts
+injectedParams:
+  - dataDir
 methods:
   - name: setPackPolicy
     narrative: []
@@ -18,7 +20,9 @@ methods:
       previous record intact and surfaces as a storage error. Authorization is enforced by the
       orchestrator, not here; the registry owns only server-side stamping and durable replacement of
       the one active record.
-    symbol: setPackPolicyRecord
+    calls:
+      - policy_store.replaceActive
+    symbol: registrySetPackPolicy
   - name: upsertIdentityProvider
     narrative: []
     intent: >-
@@ -51,4 +55,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-07-18T23:45:29.205Z'
+updatedAt: '2026-10-04T19:50:52.794Z'

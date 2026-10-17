@@ -1,9 +1,10 @@
 import * as path from 'path';
-import { listFiles, pathExists } from '../utils/fs.js';
+import { pathExists, readFileOrNull } from '../utils/fs.js';
 import { parseYaml, readYamlFile } from '../utils/yaml.js';
 import { TemplateNotFoundError } from '../utils/errors.js';
 import { Template, TemplateSchema } from '../models/template.js';
-import { AI_PATHS } from '../config/loader.js';
+import { AgentTemplate } from '../models/agent.js';
+import { AI_PATHS } from '../config/paths.js';
 import { globalTemplatesDir as resolveGlobalDir } from '../config/defaults.js';
 
 // ---------------------------------------------------------------------------
@@ -23,35 +24,38 @@ function builtinTemplatesDir(): string {
 }
 
 /**
- * Load a single template by id.
- * Throws TemplateNotFoundError if not found in any tier.
+ * Load a single template by id (the itemplate_source_adapter loadTemplate
+ * contract). Returns the full Template for the exporters, superimposed with
+ * the AgentTemplate shape (templateName + raw instructions) for the live
+ * brief composition path.
+ * Throws TemplateNotFoundError if not found in any tier — never silently
+ * falls past the built-in tier.
  *
- * @param globalOverride - optional path from project config (globalTemplatesDir field)
+ * @param globalTemplatesDir - optional path from project config (globalTemplatesDir field)
  */
-export function loadTemplate(id: string, globalOverride?: string): Template {
-  const dirs = templateSearchDirs(globalOverride);
+export function loadTemplate(templateName: string, globalTemplatesDir?: string): Template & AgentTemplate {
+  const dirs = templateSearchDirs(globalTemplatesDir);
   for (const dir of dirs) {
-    const filePath = path.join(dir, `${id}.yaml`);
+    const filePath = path.join(dir, `${templateName}.yaml`);
     if (pathExists(filePath)) {
       const raw = readYamlFile(filePath);
-      return TemplateSchema.parse(raw);
+      return { ...TemplateSchema.parse(raw), templateName };
     }
   }
-  throw new TemplateNotFoundError(id);
+  throw new TemplateNotFoundError(templateName);
 }
 
 /**
- * List all available template ids across all tiers, deduplicated.
- * Earlier tiers shadow later ones.
+ * Read the optional per-agent project guidance file (the
+ * itemplate_source_adapter loadAgentOverride contract):
+ * .wai/agents/<agentId>.md under the bound project root. Read LIVE on every
+ * call — a user edit applies on the next brief composition, and wairon never
+ * regenerates or prunes the file (it is user-owned). A missing, unreadable,
+ * or non-file path behaves as absent (null) rather than throwing.
  */
-export function listTemplateIds(globalOverride?: string): string[] {
-  const seen = new Set<string>();
-  for (const dir of templateSearchDirs(globalOverride)) {
-    for (const file of listFiles(dir, '.yaml')) {
-      seen.add(path.basename(file, '.yaml'));
-    }
-  }
-  return Array.from(seen).sort();
+export function loadAgentOverride(agentId: string): string | null {
+  const filePath = path.join(AI_PATHS.root(), 'agents', `${agentId}.md`);
+  return readFileOrNull(filePath);
 }
 
 /**

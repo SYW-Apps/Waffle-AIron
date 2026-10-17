@@ -1,0 +1,20 @@
+kind: enum
+id: surface_change_kind
+name: SurfaceChangeKind
+description: >-
+  What moved on one public name (or one of its contract methods) between two snapshots of one
+  producer's surface.
+fields: []
+methods: []
+sourcePath: src/models/surface-references.ts
+values:
+  - name: added
+    description: New in the newer surface
+  - name: removed
+    description: Gone from the newer surface, with no rename trace to follow
+  - name: renamed
+    description: Carried to a new name by the producer's rename trace (formerly)
+  - name: changed
+    description: Kept, with a different signature, type shape or audience
+createdAt: '2026-10-07T06:38:26.702Z'
+updatedAt: '2026-10-07T06:38:27.527Z'

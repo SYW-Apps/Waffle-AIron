@@ -1,0 +1,640 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as crypto from 'crypto';
+import * as path from 'path';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import {
+  saveSystemSpec, saveSpec, saveComponentSpec, updateSpec, loadComponentSpecs,
+  deleteComponentSpec, invalidateSpecCache,
+} from '../../src/core/specs.js';
+import {
+  captureApprovedSpecs, approvalRecord, diffAgainstApproval, diffSize,
+  pinOf, approvalVerdict,
+} from '../../src/core/approval.js';
+// The same surface as the CLI sees it: through core_portal, never the module.
+import * as portal from '../../src/core/index.js';
+import {
+  readLockRecord, writeLockRecord, normalizeApprover,
+  type LockRecord,
+} from '../../src/core/lockfile.js';
+import { describeApprover, type ApproverIdentity, type ProjectApproval } from '../../src/models/lock.js';
+import { computeGateStateId } from '../../src/core/validation.js';
+import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
+
+// ---------------------------------------------------------------------------
+// The approval: a digest per spec, carried in the COMMITTED lock record.
+//
+// Two things it has to get right, and they pull against each other. Storing
+// only a whole-tree hash could answer "did anything move?" and nothing else —
+// the `Lock: STALE` banner on a clean tree, which no human can act on. Storing
+// the approved CONTENT could answer "what moved?" but was ~2 MB kept outside
+// the repository, invisible to a teammate, a fresh clone, and CI.
+//
+// One digest per spec answers every question anything actually asks, at a size
+// that commits. So these tests assert both halves: that it names what moved,
+// and that it lands in the project rather than beside it — while still never
+// touching a spec file, which is the ratchet this replaced.
+// ---------------------------------------------------------------------------
+
+const now = '2026-09-11T10:00:00Z';
+
+function project(name = 'approval-sys'): string {
+  invalidateSpecCache();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approval-'));
+  fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0', name, projectType: 'backend',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {}, createdAt: now, updatedAt: now,
+  }));
+  setProjectRoot(root);
+  saveSystemSpec({
+    schemaVersion: '1.0.0', name, vision: 'an approval fixture',
+    boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+  });
+  saveSpec('subsystem', {
+    id: 'dom', name: 'dom', description: 'the approval domain',
+    parentSystem: name, publicInterfaces: [], trustedLinks: [],
+    status: 'draft', createdAt: now, updatedAt: now,
+  } as SubsystemSpec);
+  saveComponentSpec({
+    id: 'worker', name: 'Worker', description: 'a worker component',
+    subsystem: 'dom', componentType: 'Orchestrator', dependsOn: [], owns: [],
+    status: 'draft', createdAt: now, updatedAt: now,
+  } as ComponentSpec);
+  invalidateSpecCache();
+  return root;
+}
+
+const TESTER: ApproverIdentity = { id: 'tester <t@example.com>', source: 'git' };
+
+/** What a lock writes: the record, carrying the approval. */
+function approve(
+  who: ApproverIdentity = TESTER,
+  children: Record<string, string> = {},
+  scope?: { paths: Set<string> },
+): LockRecord {
+  const record: LockRecord = {
+    stateId: computeGateStateId(),
+    lockedAt: now,
+    lockedBy: who,
+    validatorVersion: 'test',
+    validationResult: { valid: true, errors: 0, warnings: 0 },
+    status: 'ready',
+    specs: captureApprovedSpecs(undefined, scope),
+    // captureApprovedSpecs answers the design reading (lock format 3).
+    specsReading: 'design',
+    format: 3,
+    children,
+  };
+  writeLockRecord(record);
+  return record;
+}
+
+/** Write a lock record into ANOTHER root (a chained child approving itself). */
+function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
+  const record: LockRecord = {
+    stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: stateDigest },
+    lockedAt: now,
+    lockedBy: { id: 'child <c@example.com>', source: 'git' },
+    validatorVersion: 'test',
+    validationResult: { valid: true, errors: 0, warnings: 0 },
+    status: 'ready',
+    specs: {},
+    children: {},
+  };
+  fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify(record, null, 2));
+  return record;
+}
+
+function specTree(root: string): Map<string, string> {
+  const out = new Map<string, string>();
+  const dir = path.join(root, '.wai', 'specs');
+  const walk = (d: string): void => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else out.set(path.relative(dir, p), fs.readFileSync(p, 'utf8'));
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+describe('the approval', () => {
+  let root: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+  });
+
+  it('touches NO spec file — it is one record, not a rewrite of the tree', () => {
+    root = project();
+    const before = specTree(root);
+
+    approve();
+
+    // The ratchet this replaced rewrote every spec file to mark it complete.
+    const after = specTree(root);
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [rel, content] of before) expect(after.get(rel)).toBe(content);
+  });
+
+  it('lands INSIDE the project, so a teammate and CI see the same approval', () => {
+    root = project();
+    approve();
+
+    // The whole point of the move: a machine-local record could not be seen by
+    // anyone else, so a fresh clone judged an approved tree as unapproved.
+    const lock = path.join(root, '.wai', 'lock.json');
+    expect(fs.existsSync(lock)).toBe(true);
+    expect(Object.keys(JSON.parse(fs.readFileSync(lock, 'utf8')).specs).length).toBeGreaterThan(0);
+  });
+
+  it('records a DIGEST per spec, never the content', () => {
+    root = project();
+    const specs = approve().specs!;
+
+    for (const [rel, value] of Object.entries(specs)) {
+      expect(rel).toMatch(/^\.wai\/specs\//);
+      expect(value).toMatch(/^[0-9a-f]{64}$/); // sha256, not a spec body
+    }
+  });
+
+  it('writes spec keys sorted, so a re-lock diffs one line per changed spec', () => {
+    root = project();
+    approve();
+
+    const keys = Object.keys(JSON.parse(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')).specs);
+    expect(keys).toEqual([...keys].sort());
+  });
+
+  it('distinguishes "never approved" from "approved and unchanged"', () => {
+    root = project();
+    expect(diffAgainstApproval()).toBeNull();
+
+    approve();
+    const d = diffAgainstApproval()!;
+    expect(d).not.toBeNull();
+    expect(diffSize(d)).toBe(0);
+    expect(d.unchangedPaths.length).toBeGreaterThan(0);
+  });
+
+  it('names WHAT changed, not merely that something did', () => {
+    root = project();
+    approve();
+
+    updateSpec('component', 'worker', { description: 'a revised worker component' });
+    invalidateSpecCache();
+
+    const d = diffAgainstApproval()!;
+    expect(d.changed).toHaveLength(1);
+    expect(d.changed[0]).toMatch(/worker/);
+    expect(d.added).toEqual([]);
+    expect(d.removed).toEqual([]);
+  });
+
+  it('reports an added spec', () => {
+    root = project();
+    approve();
+
+    saveComponentSpec({
+      id: 'second', name: 'Second', description: 'a second component',
+      subsystem: 'dom', componentType: 'Orchestrator', dependsOn: [], owns: [],
+      status: 'draft', createdAt: now, updatedAt: now,
+    } as ComponentSpec);
+    invalidateSpecCache();
+
+    const d = diffAgainstApproval()!;
+    expect(d.added.some((p) => p.includes('second'))).toBe(true);
+    expect(d.changed).toEqual([]);
+  });
+
+  it('reports a removed spec', () => {
+    root = project();
+    approve();
+
+    deleteComponentSpec('worker');
+    invalidateSpecCache();
+
+    expect(diffAgainstApproval()!.removed.some((p) => p.includes('worker'))).toBe(true);
+  });
+
+  it('ignores line endings — an approval must survive a checkout on another OS', () => {
+    // The record is COMMITTED, so the machine that approves and the machine that
+    // reads it back are routinely different. Git rewrites line endings on
+    // checkout (`core.autocrlf`), so hashing raw bytes would make an approval
+    // taken on Windows report EVERY spec as drifted on a Linux CI runner — a
+    // fully drifted tree that nobody touched. This was invisible while the
+    // approval was machine-local; sharing it is what made it reachable.
+    root = project();
+    const rel = Object.keys(approve().specs!).find((p) => p.includes('worker'))!;
+    const target = path.join(root, rel);
+    const lf = fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n');
+    fs.writeFileSync(target, lf.replace(/\n/g, '\r\n'));
+    invalidateSpecCache();
+
+    expect(diffSize(diffAgainstApproval()!)).toBe(0);
+
+    // …while a real content edit still registers, CRLF and all.
+    fs.writeFileSync(target, lf.replace('a worker component', 'a revised worker').replace(/\n/g, '\r\n'));
+    invalidateSpecCache();
+    expect(diffAgainstApproval()!.changed).toHaveLength(1);
+  });
+
+  it('re-approving clears the diff', () => {
+    root = project();
+    approve();
+    updateSpec('component', 'worker', { description: 'a revised worker component' });
+    invalidateSpecCache();
+    expect(diffSize(diffAgainstApproval()!)).toBe(1);
+
+    approve();
+    expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('lives per project root, so two projects never share an approval', () => {
+    root = project('alpha-sys');
+    approve();
+
+    const other = project('beta-sys');
+    try {
+      expect(diffAgainstApproval()).toBeNull();
+    } finally {
+      setProjectRoot(null);
+      try { fs.rmSync(other, { recursive: true, force: true }); } catch { /* win */ }
+    }
+  });
+
+  it('never WRITES the legacy `children` map — format 2 records `members` instead', () => {
+    root = project();
+    approve(TESTER, { billing: 'sha256:abc123' });
+
+    expect(approvalRecord()!.children).toBeUndefined();
+    expect(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')).not.toContain('"children"');
+    expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('still READS a format-1 record\'s `children` (one release)', () => {
+    root = project();
+    const legacy = approveAt(root);
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, children: { billing: 'sha256:abc123' } }, null, 2));
+    expect(approvalRecord()!.children).toEqual({ billing: 'sha256:abc123' });
+    expect(approvalRecord()!.format).toBeUndefined();
+  });
+
+  it('excludes a REAL chained child’s specs — a child edit must not dirty the parent', () => {
+    // Regression. `snapshotSpecFiles` federates recursively, so the parent
+    // approval captured every child spec file: approving the parent silently
+    // froze work it does not own, and any child edit showed up in the parent's
+    // diff — the exact thing the child PIN exists to replace. An earlier test
+    // used a fake pin with no mounted child, so it could not see this.
+    root = project();
+
+    saveSpec('subsystem', {
+      id: 'billing', name: 'billing', description: 'a chained billing domain',
+      parentSystem: 'approval-sys', publicInterfaces: [], trustedLinks: [],
+      projectPath: 'packages/billing',
+      status: 'draft', createdAt: now, updatedAt: now,
+    } as SubsystemSpec);
+    const childSpecs = path.join(root, 'packages', 'billing', '.wai', 'specs');
+    fs.mkdirSync(path.join(childSpecs, 'subsystems'), { recursive: true });
+    fs.mkdirSync(path.join(childSpecs, 'components'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name: 'billing-sys', projectType: 'backend',
+      targets: [], rules: {}, createdAt: now, updatedAt: now,
+    }));
+    const stamp = `createdAt: '${now}'\nupdatedAt: '${now}'`;
+    fs.writeFileSync(path.join(childSpecs, '.index.yaml'),
+      `schemaVersion: 1.0.0\nname: billing-sys\nvision: the child system\n${stamp}\n`);
+    fs.writeFileSync(path.join(childSpecs, 'subsystems', 'ledger.yaml'),
+      `schemaVersion: 1.0.0\nid: ledger\nname: ledger\ndescription: the child ledger domain\n`
+      + `parentSystem: billing-sys\n${stamp}\n`);
+    // A COMPONENT is what makes the child appear in the federated spec index —
+    // snapshotSpecFiles pulls from index.paths, not from raw directories.
+    const childComp = path.join(childSpecs, 'components', 'ledger_store.yaml');
+    const childBody = (description: string): string =>
+      `schemaVersion: 1.0.0\nid: ledger_store\nname: Ledger Store\ndescription: ${description}\n`
+      + `subsystem: ledger\ncomponentType: Store\ndependsOn: []\nowns: []\n${stamp}\n`;
+    fs.writeFileSync(childComp, childBody('the child store'));
+    invalidateSpecCache();
+
+    // Sanity: the child IS federated into the parent's index, so this fixture
+    // genuinely exercises the recursion the bug rode on.
+    expect(loadComponentSpecs().some((c) => c.id.includes('ledger_store'))).toBe(true);
+
+    const approved = Object.keys(approve().specs!);
+    expect(approved.some((p) => p.includes('packages/billing'))).toBe(false);
+
+    fs.writeFileSync(childComp, childBody('the child store, revised'));
+    invalidateSpecCache();
+    expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('refuses a corrupt lock record by name — never reads it as "never approved" (round-5 tinkerer M1: that passed the gate)', () => {
+    root = project();
+    approve();
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), '{ not json');
+
+    expect(() => readLockRecord()).toThrow(/cannot be read as an approval record: it is not valid JSON/);
+    expect(() => diffAgainstApproval()).toThrow(/cannot be read as an approval record/);
+  });
+
+  it('treats a lock with no per-spec record as unapproved, without losing the lock', () => {
+    // Every lock written before approval moved in here. It still proves the
+    // tree validated, so the record must survive — but it cannot say which
+    // specs match, and inventing an answer would be worse than admitting it.
+    root = project();
+    const record = approve();
+    delete record.specs;
+    writeLockRecord(record);
+
+    expect(readLockRecord()).not.toBeNull();
+    expect(readLockRecord()!.stateId.digest).toBeTruthy();
+    expect(diffAgainstApproval()).toBeNull();
+  });
+
+  it('deleting the lock record forgets the approval', () => {
+    root = project();
+    approve();
+    fs.rmSync(path.join(root, '.wai', 'lock.json'));
+    expect(diffAgainstApproval()).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Who approved — and how much that name is worth.
+  // -------------------------------------------------------------------------
+
+  it('records the approver WITH the source that established them', () => {
+    root = project();
+    const rec = approve({ id: 'u-4f2a91', name: 'Robbe', source: 'hosted' });
+
+    expect(rec.lockedBy).toEqual({ id: 'u-4f2a91', name: 'Robbe', source: 'hosted' });
+    expect(rec.stateId.digest).toBeTruthy();
+    // A hosted identity was authenticated by the instance; a git or os one was
+    // read off the machine. The rendering says which, so a bare name cannot
+    // imply more than it proves.
+    expect(describeApprover(rec.lockedBy)).toContain('authenticated');
+    expect(describeApprover({ id: 'a <a@b.c>', source: 'git' })).not.toContain('authenticated');
+  });
+
+  it('reads a legacy string approver as legacy rather than guessing its source', () => {
+    expect(normalizeApprover('local:ShutYourWaffle')).toEqual({ id: 'local:ShutYourWaffle', source: 'legacy' });
+    expect(normalizeApprover('admin:master')).toEqual({ id: 'admin:master', source: 'legacy' });
+    expect(normalizeApprover(undefined)).toEqual({ id: 'unknown', source: 'legacy' });
+    // An unrecognised source is a claim this version cannot vouch for.
+    expect(normalizeApprover({ id: 'x', source: 'sso' })).toEqual({ id: 'x', source: 'legacy' });
+  });
+
+  it('normalizes a legacy record on read, so consumers never see a bare string', () => {
+    root = project();
+    const record = approve();
+    fs.writeFileSync(
+      path.join(root, '.wai', 'lock.json'),
+      JSON.stringify({ ...record, lockedBy: 'local:someone' }, null, 2),
+    );
+
+    expect(readLockRecord()!.lockedBy).toEqual({ id: 'local:someone', source: 'legacy' });
+  });
+
+  // -------------------------------------------------------------------------
+  // Member pins (stage 5) — the verdict takes the pin tree the validator
+  // computed at each project's own root; core never computes a member's state.
+  // -------------------------------------------------------------------------
+
+  const own = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({ key: '', state: 'approved', ...over });
+  const member = (over: Partial<ProjectApproval> = {}): ProjectApproval => ({
+    key: 'billing', alias: 'billing', parent: '', state: 'approved', pinned: 'matches',
+    subject: pinOf({ algorithm: 'sha256+content+doctrine+inputs+members', digest: 'a'.repeat(64) }), ...over,
+  });
+
+  it('a member whose pin MOVED is this project\'s drift, WITHOUT dirtying its own spec diff', () => {
+    root = project();
+    approve();
+    expect(approvalVerdict([own(), member()]).drifted).toBe(false);
+
+    const verdict = approvalVerdict([own({ state: 'drifted' }), member({ pinned: 'moved' })]);
+    expect(verdict.drifted).toBe(true);
+    // Round 11: "no spec has changed since" beside the drift, and "re-lock to approve them".
+    expect(verdict.text).toContain("none of this project's own specs has changed since; what moved is a member's approval.");
+    expect(verdict.text).toContain('Member pin moved since approval: billing was re-approved at its own root after this approval, which still pins its earlier approval. Run `wairon lock` here to pin the new one');
+    expect(verdict.text).not.toContain('no spec has changed since.');
+    expect(diffSize(diffAgainstApproval()!)).toBe(0);
+  });
+
+  it('names a member that is drifted or never approved, without calling it this project\'s drift', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own(), member({ state: 'never', subject: undefined }), member({ key: 'claims', alias: 'claims', state: 'drifted', upgraded: true })]);
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).toContain('billing (never)');
+    expect(verdict.text).toContain('claims (drifted, re-lock once)');
+  });
+
+  it('says plainly when this approval predates the stage-5 gate identity', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own({ state: 'drifted', upgraded: true })]);
+    expect(verdict.drifted).toBe(true);
+    // No own spec moved: the cause named is the gate, never the design.
+    expect(verdict.text).toContain('what moved is the gate it was judged under');
+    expect(verdict.text).toContain('One `wairon lock` re-approves the unchanged design');
+  });
+
+  it('only DIRECT members are this project\'s pins — a grandchild is its parent\'s', () => {
+    root = project();
+    approve();
+    const verdict = approvalVerdict([own(), member(), member({ key: 'billing::ledger', alias: 'ledger', parent: 'billing', pinned: 'moved', state: 'never' })]);
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).not.toContain('ledger');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Where sdd_cli is allowed to reach it.
+//
+// `wairon lock` and `wairon status` were importing movedChildren and diffSize
+// straight out of src/core/approval.js — a command reaching past core_portal
+// into another subsystem's module, while the Portal's own comment already said
+// the approval is published there "because both the local lock and the hosted
+// admin plane approve through it". Nothing was broken by it, which is exactly
+// why it survived: an import that works is invisible until something asks where
+// the boundary is.
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// The verdict: the one sentence every presenter shows about the approval.
+//
+// It used to be a PRIVATE helper inside `wairon status`, so the terminal could
+// say "15 specs changed since approval" while sdd_get_status — what an AI agent
+// reads to decide whether it may write code against these specs — said nothing
+// at all, and silence reads exactly like being current. Nothing covered the
+// line either: the status tests all used temp projects with NO lock record,
+// where the verdict was empty whatever the code did, which is how a later wave
+// could drop it with the suite still green. These cover the three answers by
+// name.
+// ---------------------------------------------------------------------------
+describe('the verdict the lock gives on the tree', () => {
+  let root: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { if (root) fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+  });
+
+  it('says nothing about a project nobody has approved', () => {
+    root = project();
+
+    // Absence of an approval is the normal state of a tree still being
+    // designed, not news — and `drifted` must not claim otherwise.
+    expect(approvalVerdict()).toEqual({ text: '', drifted: false });
+  });
+
+  it('answers that nothing moved, and names who approved it', () => {
+    root = project();
+    approve();
+
+    const verdict = approvalVerdict();
+    expect(verdict.drifted).toBe(false);
+    expect(verdict.text).toContain('no spec has changed since');
+    expect(verdict.text).toContain(describeApprover(TESTER));
+    expect(verdict.text).toContain(now);
+  });
+
+  it('NAMES the spec that moved and reports it as drift', () => {
+    root = project();
+    approve();
+
+    updateSpec('component', 'worker', { description: 'a revised worker component' });
+    invalidateSpecCache();
+
+    const verdict = approvalVerdict();
+    expect(verdict.drifted).toBe(true);
+    // Singular, with no redundant "(1 changed)" breakdown — one category says
+    // it once — and pointing at the FILE rather than merely asserting staleness.
+    expect(verdict.text).toMatch(/1 spec changed since approval/);
+    expect(verdict.text).not.toMatch(/\(1 changed\)/);
+    expect(verdict.text).toMatch(/worker/);
+    expect(verdict.text).not.toContain('STALE');
+  });
+
+  it('does not say "changed since approval" beside an approval that holds: only what the approval leaves out moved', () => {
+    root = project();
+    const record = approve();
+    // A record read in the content reading (before lock format 3): its per-spec
+    // digests are the raw bytes, so a moved authoring status reads as a changed file.
+    const specs: Record<string, string> = {};
+    for (const rel of Object.keys(record.specs ?? {})) {
+      specs[rel] = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8').replace(/\r\n/g, '\n')).digest('hex');
+    }
+    delete (record as { specsReading?: unknown }).specsReading;
+    writeLockRecord({ ...record, specs, format: 2 });
+
+    updateSpec('component', 'worker', { status: 'complete' });
+    invalidateSpecCache();
+
+    const own = { key: '', state: 'approved' } as unknown as ProjectApproval;
+    const verdict = approvalVerdict([own]);
+    expect(verdict.text).not.toMatch(/changed since approval/);
+    expect(verdict.text).toContain('The approval still holds');
+    expect(verdict.text).toContain('authoring status');
+    expect(verdict.drifted).toBe(false);
+  });
+
+  it('names the LIMIT of a lock written before per-spec approval', () => {
+    root = project();
+    const record = approve();
+    delete (record as { specs?: unknown }).specs;
+    writeLockRecord(record);
+
+    const verdict = approvalVerdict();
+    // Such a record proves the tree validated, not which specs still match it.
+    // Saying so beats implying either answer — and it is not drift, because
+    // nothing here can tell whether anything moved.
+    expect(verdict.text).toContain('predates per-spec approval');
+    expect(verdict.drifted).toBe(false);
+  });
+
+  it('never lets a broken read break the report', () => {
+    root = project();
+    approve();
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), 'not json at all');
+
+    // An unreadable record reads as no record: quiet, not a thrown status.
+    expect(approvalVerdict()).toEqual({ text: '', drifted: false });
+  });
+});
+
+describe('the approval, published on core_portal', () => {
+  const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+  it('publishes the same functions, not wrappers around them', () => {
+    // Re-export, so the Portal method and the component's function resolve by
+    // identity. A wrapper would be a second place for the behaviour to drift.
+    expect(portal.diffSize).toBe(diffSize);
+    expect(portal.diffAgainstApproval).toBe(diffAgainstApproval);
+    expect(portal.approvalRecord).toBe(approvalRecord);
+    expect(portal.captureApprovedSpecs).toBe(captureApprovedSpecs);
+    // The stage-1 child-pin reads are gone from the Portal (stage 5).
+    expect((portal as Record<string, unknown>).movedChildren).toBeUndefined();
+    expect((portal as Record<string, unknown>).currentChildPins).toBeUndefined();
+    expect(portal.approvalVerdict).toBe(approvalVerdict);
+  });
+
+  it('answers a member\'s moved pin through the Portal exactly as the module does', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-approval-portal-'));
+    try {
+      approveAt(root);
+      setProjectRoot(root);
+      const approvals: ProjectApproval[] = [
+        { key: '', state: 'drifted' },
+        { key: 'billing', alias: 'billing', parent: '', state: 'approved', pinned: 'moved', subject: 'x:y' },
+      ];
+      expect(portal.approvalVerdict(approvals)).toEqual(approvalVerdict(approvals));
+      expect(portal.approvalVerdict(approvals).drifted).toBe(true);
+    } finally {
+      setProjectRoot(null);
+      try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* win locks */ }
+    }
+  });
+
+  it('is how the VALIDATOR reaches it too — sdd_validator does not import the module', () => {
+    // The third instance of the same crossing: validation.ts took
+    // settledSpecPaths straight out of ./approval.js, which is sdd_validator
+    // reaching into an sdd_core module rather than through the Portal. Same
+    // assertion a type-check cannot make - both spellings compile.
+    const source = fs.readFileSync(path.join(REPO_ROOT, 'src/core/validation.ts'), 'utf8');
+    expect(source).not.toContain("import { settledSpecPaths } from './approval.js'");
+    // Through the validator's own client adapter, which re-exports the core
+    // portal's forward by identity.
+    expect(source).toContain('  settledSpecPaths,');
+    expect(source).toContain("} from './adapters/validator-core.js';");
+    expect(fs.readFileSync(path.join(REPO_ROOT, 'src/core/adapters/validator-core.ts'), 'utf8')).toContain("} from '../index.js';");
+  });
+  it('is how the commands reach it — neither imports the module', () => {
+    // The one assertion a type-check cannot make: every spelling compiles, so
+    // only the import SITE says which side of the boundary the command is on.
+    // Neither command may name ./approval.js. Where each one is ALLOWED to take
+    // the verdict from differs, and that difference is the point:
+    //   lock.ts   — the core portal's barrel.
+    //   status.ts — cli_core_adapter, the component whose whole job is the
+    //               crossing. `wairon status` reached the barrel directly until
+    //               the dashboard stopped rendering the report itself; the
+    //               import-graph check (UNDECLARED_DEPENDENCY) names that reach
+    //               because cli_runner declares no edge to core_portal.
+    for (const rel of ['src/commands/lock.ts', 'src/commands/status.ts']) {
+      const source = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+      expect(source).not.toMatch(/from '\.\.\/core\/approval\.js'/);
+    }
+    const lockSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/lock.ts'), 'utf8');
+    expect(lockSource).toMatch(/from '\.\.\/core\/index\.js'/);
+
+    const statusSource = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/status.ts'), 'utf8');
+    expect(statusSource).toContain("import { getStatusReport, approvalVerdict } from './adapters/core.js';");
+    expect(statusSource).not.toMatch(/^import .*from '\.\.\/core\/index\.js';$/m);
+  });
+});

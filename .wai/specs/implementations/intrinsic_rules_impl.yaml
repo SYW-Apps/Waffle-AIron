@@ -1,0 +1,229 @@
+id: intrinsic_rules_impl
+name: Intrinsic Rules Implementation
+description: The intrinsic rule family's methods, one per rule file under src/core/rules/intrinsic/.
+contract: iintrinsic_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: portalFields
+    sourcePath: src/core/rules/intrinsic/portal-fields.ts
+    narrative:
+      - stepNumber: 1
+        label: component
+        description: For each component, check its Portal-only wire fields against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 13
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: 'Branch: is the component a Portal?'
+        type: branch
+        condition: comp.componentType is "Portal"
+        onFalseStep: 9
+      - stepNumber: 4
+        description: 'Branch (Portal only): is its transport missing?'
+        type: branch
+        condition: comp.transport is unset
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report MISSING_PORTAL_TRANSPORT (error; isDraftCtx) naming the component as a Portal with
+          no transport.
+        type: local
+      - stepNumber: 6
+        label: abi
+        description: >-
+          Branch (Portal only): an abi says how a foreign language links a library, so it belongs on
+          an InProcess Portal only
+        type: branch
+        condition: comp.abi is set and comp.transport is not InProcess
+        onFalseStep: 13
+      - stepNumber: 7
+        description: >-
+          Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's transport and
+          that abi is for InProcess Portals only.
+        type: local
+      - stepNumber: 8
+        description: Continue with the next component.
+        type: jump
+        toStep: 13
+      - stepNumber: 9
+        label: nonPortal
+        description: >-
+          Branch (non-Portal): is an abi or basePath set, or a transport on anything but an Adapter
+          (an Adapter may state the transport it calls its target Portal over)?
+        type: branch
+        condition: >-
+          comp.abi or comp.basePath is set, or comp.transport is set on a component that is not an
+          Adapter
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's actual
+          componentType and that abi and basePath are Portal-only and transport is a Portal's (or an
+          Adapter's, as the one it calls over).
+        type: local
+      - stepNumber: 11
+        label: auth
+        description: 'Branch (non-Portal): is auth declared?'
+        type: branch
+        condition: comp.auth is set
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Report AUTH_ON_NON_PORTAL (warning; isDraftCtx) naming the component's componentType and
+          that auth is inbound transport auth, meaningful only on a Portal.
+        type: local
+      - stepNumber: 13
+        label: next
+        description: Continue with the next component.
+        type: local
+    symbol: check
+    exportedVia: portalFieldsRule
+  - name: durabilityDeclaration
+    sourcePath: src/core/rules/intrinsic/durability-declaration.ts
+    narrative:
+      - stepNumber: 1
+        label: ddStart
+        description: For each component, check its durability declaration against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 9
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: 'Branch: is durability undeclared?'
+        type: branch
+        condition: comp.durability is unset
+        onFalseStep: 7
+      - stepNumber: 4
+        description: 'Branch (no durability declared): is the component a Store?'
+        type: branch
+        condition: comp.componentType is "Store"
+        onFalseStep: 9
+      - stepNumber: 5
+        description: >-
+          Report MISSING_DURABILITY (warning; isDraftCtx) naming the Store and the four durability
+          modes it must choose among
+        type: local
+      - stepNumber: 6
+        description: >-
+          Continue with the next component (mirrors the source's unconditional continue after the
+          no-durability branch).
+        type: jump
+        toStep: 9
+      - stepNumber: 7
+        label: ddHasDurability
+        description: 'Branch (durability declared): is the component not a Store?'
+        type: branch
+        condition: comp.componentType is not "Store"
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Report DURABILITY_ON_NON_STORE (error; isDraftCtx) naming the component's componentType
+          and its declared durability value.
+        type: local
+      - stepNumber: 9
+        label: ddEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+    exportedVia: durabilityDeclarationRule
+  - name: logicDeclaration
+    sourcePath: src/core/rules/intrinsic/logic-declaration.ts
+    narrative:
+      - stepNumber: 1
+        label: ldStart
+        description: For each component, check its dependencyClass declaration against its own stereotype.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 5
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Branch: does a live component other than an Orchestrator declare a dependencyClass? Only
+          the stereotype is judged: the component schema refuses any value but pure and read before
+          a rule runs, and what a class allows is the logic-dependency-class verdict. A retired
+          component is skipped: a Specialist's STEREOTYPE_RETIRED is its one finding, and its
+          migration sets the class.
+        type: branch
+        condition: >-
+          comp.dependencyClass is set, comp.componentType is not "Orchestrator", and not
+          comp.isRetired()
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR (error; isDraftCtx) naming the component, its
+          componentType and its declared dependencyClass: a dependencyClass is an Orchestrator
+          property, because logic is an Orchestrator. Drop it, or make the component an
+          Orchestrator.
+        type: local
+      - stepNumber: 5
+        label: ldEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+    exportedVia: logicDeclarationRule
+  - name: retiredStereotypes
+    sourcePath: src/core/rules/intrinsic/retired-stereotypes.ts
+    narrative:
+      - stepNumber: 1
+        label: rsStart
+        description: For each component, check its own stereotype against the retired ones.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 8
+      - stepNumber: 2
+        description: isDraftCtx = ctx.isComponentDraft(comp.id).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Branch: is the component typed with a retired stereotype? A live stereotype has nothing to
+          migrate.
+        type: branch
+        condition: comp.isRetired() (componentType Specialist or Gateway)
+        onFalseStep: 8
+      - stepNumber: 4
+        description: 'Branch (retired): is it a Specialist? Otherwise it is a Gateway.'
+        type: branch
+        condition: comp.componentType is "Specialist"
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired
+          Specialist: it is logic, an Orchestrator with the dependencyClass its dependencies give
+          it. Run wairon doctor --fix to retype it (the doctor names the class), or set
+          componentType: Orchestrator and its dependencyClass yourself.
+        type: local
+      - stepNumber: 6
+        description: Continue with the next component.
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: rsGateway
+        description: >-
+          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired Gateway
+          and listing its migration: (1) the Portal it owns becomes the front door, with the gateway
+          variant; (2) its other members become dependencies of that Portal instead of owned
+          members; (3) its consumers depend on that Portal; (4) delete the Gateway spec.
+          sdd_rename_component can then give the Portal the Gateway's id.
+        type: local
+      - stepNumber: 8
+        label: rsEnd
+        description: Continue with the next component.
+        type: local
+    symbol: check
+    exportedVia: retiredStereotypesRule
+lint:
+  allow: []
+status: complete
+createdAt: '2026-09-14T23:17:12.294Z'
+updatedAt: '2026-10-06T23:07:00.038Z'

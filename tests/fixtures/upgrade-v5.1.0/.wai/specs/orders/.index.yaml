@@ -1,0 +1,9 @@
+id: orders
+name: Orders
+description: Orders for the shop
+parentSystem: Shopfront
+publicInterfaces: []
+trustedLinks: []
+status: complete
+createdAt: '2026-10-17T11:46:27.493Z'
+updatedAt: '2026-10-17T11:46:28.132Z'

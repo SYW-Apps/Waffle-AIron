@@ -1,0 +1,19 @@
+id: orders-billing-client-impl
+name: Billing client impl
+description: Forwards to billing
+contract: iorders-billing-client
+methods:
+  - name: charge
+    narrative:
+      - stepNumber: 1
+        description: Ask billing to charge
+        type: call
+        targetComponent: billing::billing-portal
+        targetMethod: postCharge
+      - stepNumber: 2
+        description: Charged
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:27.527Z'
+updatedAt: '2026-10-17T11:46:28.416Z'

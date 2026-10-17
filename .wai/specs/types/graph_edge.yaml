@@ -12,5 +12,6 @@ fields:
     description: Target component id
     optional: false
 methods: []
+sourcePath: src/producers/types.ts
 createdAt: '2026-07-04T18:03:55.500Z'
-updatedAt: '2026-07-04T18:03:55.523Z'
+updatedAt: '2026-09-19T11:07:08.264Z'

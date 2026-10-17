@@ -1,0 +1,176 @@
+id: extension_portal_impl
+name: Extension Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the extension
+  orchestrator.
+contract: iextension_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: loadProjectExtensions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the extension orchestrator, which gathers, loads, and merges the governing
+          packs.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadProjectExtensions
+      - stepNumber: 2
+        description: Return the merged LoadedExtensions to the caller.
+        type: return
+        outcome: success
+    detail: calls-only
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: defaultPackSelections
+  - name: packStoreDir
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packStoreDir
+  - name: listInstalledPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: listInstalledPacks
+  - name: resolveInstalledPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: resolveInstalledPack
+  - name: installPackFromDirectory
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: installPackFromDirectory
+  - name: uninstallPack
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: uninstallPack
+  - name: globalPacksDir
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: globalPacksDir
+  - name: discoverPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: discoverPacks
+  - name: packDirEntry
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packDirEntry
+  - name: loadExtensionPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadPacks
+  - name: checkDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: checkDeclarativePack
+  - name: packEntryRef
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packEntryRef
+  - name: packEntryLabel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: packEntryLabel
+  - name: globalPacksEnabled
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: globalPacksEnabled
+  - name: diagnoseProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: diagnoseProjectPacks
+  - name: loadProjectVariants
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: loadProjectVariants
+  - name: resolveVariantGuidance
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveVariantGuidance
+  - name: loadExtensionsFor
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator's loader over the given configuration and candidate.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: loadFor
+      - stepNumber: 2
+        description: Return the merged LoadedExtensions to the caller.
+        type: return
+        outcome: success
+    detail: calls-only
+  - name: packManifest
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator, which resolves the entry and reads its manifest.
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: manifestOf
+      - stepNumber: 2
+        description: Return the manifest, or null.
+        type: return
+        outcome: ExtensionPack | null
+    detail: calls-only
+  - name: parseDeclarativePack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension orchestrator
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: parseDeclarativePack
+status: complete
+createdAt: '2026-09-25T17:33:11.897Z'
+updatedAt: '2026-10-07T21:49:50.435Z'

@@ -9,7 +9,7 @@ export interface ExportModel {
     name: string;
     subsystem: string;
     componentType: string;
-    portalType?: string;
+    transport?: string;
     public: boolean;
     owner?: string;
     owns: string[];
@@ -19,16 +19,22 @@ export interface ExportModel {
 type LayoutResult = any;
 
 export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
-  const PATTERN_TYPES: Record<string, number> = { Repository: 1, Gateway: 1, FeatureComponent: 1, RouterComponent: 1 };
+  // A retired Specialist or Gateway draws as a plain box in the retired colour;
+  // a Gateway is no pattern, so it never contains members.
+  const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
   const COLORS: Record<string, { fill: string; stroke: string }> = {
     entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
     logic: { fill: '#f4effd', stroke: '#8a5cf6' },
     data: { fill: '#fdf6e3', stroke: '#c9963f' },
+    query: { fill: '#fbeee4', stroke: '#b0643a' },
     adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
     pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
+    retired: { fill: '#efedeb', stroke: '#8a817c' },
   };
   function stereo(t: string): string {
+    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
     if (t === 'Adapter') return 'adapter';
     if (PATTERN_TYPES[t]) return 'pattern';
@@ -39,7 +45,7 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
   }
 
   const cells: string[] = [];
-  const compById: Record<string, ExportModel['components'][number]> = {};
+  const compById: Record<string, ExportModel['components'][number]> = Object.create(null);
   model.components.forEach(function (c) { compById[c.id] = c; });
 
   function vertex(id: string, parent: string, value: string, style: string, box: { x: number; y: number; w: number; h: number }, parentBox?: { x: number; y: number }): void {
@@ -68,7 +74,7 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
     const parentId = nestInPattern ? 'comp_' + owner!.id : 'sub_' + comp.subsystem;
     const parentBox = nestInPattern ? L.boxes[owner!.id] : L.subs[comp.subsystem];
     const colors = COLORS[stereo(comp.componentType)];
-    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
+    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     const style = isPattern
       ? 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';dashed=1;verticalAlign=top;fontStyle=1;container=1;collapsible=1;whiteSpace=wrap;'
       : 'rounded=1;fillColor=' + colors.fill + ';strokeColor=' + colors.stroke + ';whiteSpace=wrap;fontSize=11;' + (comp.public ? 'strokeWidth=3;' : '');
@@ -105,16 +111,22 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
 }
 
 export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): string {
-  const PATTERN_TYPES: Record<string, number> = { Repository: 1, Gateway: 1, FeatureComponent: 1, RouterComponent: 1 };
+  // A retired Specialist or Gateway draws as a plain box in the retired colour;
+  // a Gateway is no pattern, so it never contains members.
+  const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
   const COLORS: Record<string, { fill: string; stroke: string }> = {
     entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
     logic: { fill: '#f4effd', stroke: '#8a5cf6' },
     data: { fill: '#fdf6e3', stroke: '#c9963f' },
+    query: { fill: '#fbeee4', stroke: '#b0643a' },
     adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
     pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
+    retired: { fill: '#efedeb', stroke: '#8a817c' },
   };
   function stereo(t: string): string {
+    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
     if (t === 'Adapter') return 'adapter';
     if (PATTERN_TYPES[t]) return 'pattern';
@@ -156,7 +168,7 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
   }
 
   const elements: any[] = [];
-  const rectById: Record<string, any> = {};
+  const rectById: Record<string, any> = Object.create(null);
 
   model.subsystems.forEach(function (sub) {
     const box = L.subs[sub.id];
@@ -180,7 +192,7 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
     rect.strokeStyle = (isPattern || stereo(comp.componentType) === 'pattern') ? 'dashed' : 'solid';
     elements.push(rect);
     rectById[comp.id] = rect;
-    const label = comp.name + '\n«' + comp.componentType + (comp.portalType ? '/' + comp.portalType : '') + '»';
+    const label = comp.name + '\n«' + comp.componentType + (comp.transport ? '/' + comp.transport : '') + '»';
     elements.push(boundLabel(rect, label, 11, isPattern ? 'top' : 'middle'));
   });
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { loadExtensions } from '../../src/core/extensions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { addPack, removePack } from '../../src/commands/packs.js';
@@ -48,7 +48,7 @@ describe('examples/wrapper (wrapper-tool template)', () => {
   it('demo project is completely clean under its config-injected packs', () => {
     activate(DEMO_DIR);
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues).toEqual([]);
       expect(res.valid).toBe(true);
     } finally { cleanup(); }
@@ -85,7 +85,7 @@ ${stamp}
 
     activate(proj);
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const codes = res.issues.map(i => `${i.code}:${i.specId}`);
       expect(codes).toContain('PROFILE_FORBIDDEN_STEREOTYPE:rogue-worker');
       expect(codes).toContain('FLOWOPS_PORTAL_TRANSPORT:admin-portal');
@@ -115,21 +115,21 @@ ${stamp}
 
     activate(tempDir);
     try {
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
 
       // Install (what a wrapper's install script runs).
       await addPack(path.join(WRAPPER_DIR, 'packs', 'flowops.yaml'));
       expect(fs.existsSync(path.join(waiDir, 'packs', 'flowops.yaml'))).toBe(true);
       expect(fs.readFileSync(path.join(waiDir, 'project.yaml'), 'utf-8')).toContain('.wai/packs/flowops.yaml');
       invalidateSpecCache();
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
 
       // Uninstall by pack name.
       await removePack('flowops-doctrine');
       expect(fs.existsSync(path.join(waiDir, 'packs', 'flowops.yaml'))).toBe(false);
       expect(fs.readFileSync(path.join(waiDir, 'project.yaml'), 'utf-8')).not.toContain('.wai/packs/flowops.yaml');
       invalidateSpecCache();
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
     } finally { cleanup(tempDir); }
   });
 });

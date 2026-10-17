@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { assertAllowedRedirectUri } from '../../src/server/idp.js';
-import type { IdentityProviderConfig } from '../../src/server/types.js';
+import { buildAuthorizationUrl } from '../../src/server/idp.js';
+import type { IdentityProviderConfig, ProviderEndpoints } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Tests for the server-side redirect_uri allowlist on the OIDC Identity Provider
-// Adapter (sdd_host). Closes the MEDIUM finding where POST /web/sso/start trusted
-// a client-supplied redirectUri verbatim with no server-side check.
+// Adapter (sdd_host). Every sign-in start path builds its authorization URL
+// through buildAuthorizationUrl, which enforces the provider's redirect allowlist.
 // ---------------------------------------------------------------------------
 
 function cfg(overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderConfig {
@@ -21,7 +21,18 @@ function cfg(overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderC
   };
 }
 
-describe('assertAllowedRedirectUri', () => {
+const ENDPOINTS: ProviderEndpoints = {
+  issuer: 'https://idp.example',
+  authorizationEndpoint: 'https://idp.example/authorize',
+  tokenEndpoint: 'https://idp.example/token',
+};
+
+/** Build an authorization URL for `redirectUri`, which applies the allowlist. */
+function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri: string): void {
+  buildAuthorizationUrl(provider, ENDPOINTS, 'signed-state', redirectUri);
+}
+
+describe('buildAuthorizationUrl enforces the redirect allowlist', () => {
   it('accepts any redirectUri when allowedRedirectUris is unset', () => {
     expect(() => assertAllowedRedirectUri(cfg(), 'https://app.example/cb')).not.toThrow();
     expect(() => assertAllowedRedirectUri(cfg(), 'https://anything.example/whatever')).not.toThrow();
@@ -67,7 +78,7 @@ describe('assertAllowedRedirectUri', () => {
     const attacker = 'https://evil.example/steal?token=SECRET';
     try {
       assertAllowedRedirectUri(provider, attacker);
-      throw new Error('expected assertAllowedRedirectUri to throw');
+      throw new Error('expected buildAuthorizationUrl to throw');
     } catch (err) {
       expect((err as Error).message).not.toContain(attacker);
       expect((err as Error).message).toMatch(/redirect_uri not allowed/);

@@ -16,9 +16,35 @@ fields:
     description: One-paragraph statement of what the rule enforces and why.
     optional: false
   - name: codes
-    type: RuleCode[]
+    type: list<RuleCode>
     description: Every issue code this rule can emit, with default severity and summary.
     optional: false
+  - name: scope
+    type: RuleScope
+    description: >-
+      What the check needs to see (default tree). In the spec tree the spec-scoped built-ins are
+      exactly intrinsic_rules' methods.
+    optional: true
+  - name: judges
+    type: RuleJudgement
+    description: >-
+      What the rule's verdict is about (default design). A rule that reads the source code model —
+      the structural, dependency, call-graph, type-shape, export and integration-sim conformance
+      rules, and detail sufficiency — judges code. Its codes are left out of the gate identity and
+      summarized apart in the as-complete run's analysis (CodeAnalysis), so an approval certifies
+      the design and an analyzer upgrade never stales it. A pack rule declares none and counts as
+      design.
+    optional: true
+  - name: needsWholeTree
+    type: bool
+    description: >-
+      Stage 8: whether the rule's verdict needs the whole system's specs — reachability and unused
+      detection, topic pairing, cycles across subsystems, hydration. Such a rule is skipped (and
+      named in PART_JUDGED_ALONE) when a part is judged alone against its pinned parent excerpt,
+      since the excerpt carries only what the part references. Absent means false: a rule that
+      judges what it is handed runs everywhere.
+    optional: true
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:52.909Z'
-updatedAt: '2026-07-14T18:56:52.949Z'
+updatedAt: '2026-10-04T23:40:33.084Z'

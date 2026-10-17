@@ -1,8 +1,10 @@
 # Design: declarative rule assertions for hosted-safe packs
 
 Status: **designed + implemented** (July 2026): `PackAssertionSchema` in
-`src/core/extensions.ts`, evaluated by the `declarative-assertions` rule.
-This record is the semantic contract for the three v1 kinds.
+`src/core/extensions.ts`, evaluated by one rule per kind —
+`assertion-forbidden-edges`, `assertion-required-fields` and
+`assertion-endpoint-shapes`. This record is the semantic contract for the three
+v1 kinds.
 
 ## 1. Motivation
 
@@ -90,11 +92,15 @@ project loads IS that project's doctrine — but the project's
 `sddRuleSeverity` still wins, and draft-context downgrades apply (the
 assertions are boundary/completeness doctrine, not soundness).
 
-## 4. Evaluation (one core rule)
+## 4. Evaluation (one core rule per kind)
 
-A single `declarative-assertions` rule in the registry reads the merged
+One rule per assertion kind — `assertion-forbidden-edges`,
+`assertion-required-fields` and `assertion-endpoint-shapes` — reads the merged
 assertion list from `LoadedExtensions.assertions` (append across packs, with
-pack provenance) via `RuleContext.ext.assertions` and evaluates:
+pack provenance) via `RuleContext.ext.assertions`, takes the assertions of its
+own kind, and evaluates them. The kind is what a pack author writes, so it is
+also what `wairon rules list` names; the three share only how a selector picks
+its specs and how a violation is reported (`declared-assertion.ts`):
 
 - **forbid-edge** — for every component matched by `from`, every declared
   edge in `relation` whose target matches `to` raises the finding (message

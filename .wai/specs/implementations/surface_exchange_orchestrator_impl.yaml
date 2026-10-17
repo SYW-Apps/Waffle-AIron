@@ -7,13 +7,15 @@ description: >-
   is a responsibility split, not a file split.
 contract: isurface_exchange_orchestrator
 sourcePath: src/server/landscape.ts
+injectedParams:
+  - cfg
 methods:
   - name: listReachableProjectsForMcp
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List the ACTIVE cross-project relations whose sourceProjectId is currentProjectId
@@ -35,7 +37,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List the ACTIVE cross-project relations whose sourceProjectId is currentProjectId
@@ -80,16 +82,23 @@ methods:
       - stepNumber: 10
         description: Resolve the current project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 11
         description: >-
           Classify the observer→target audience distance (an invisible target classifies as the
           farthest class; a unit-less instance keeps all entries)
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: audienceDistance
       - stepNumber: 12
+        description: >-
+          Ask the visibility rules, per summary, whether its declared audience ceiling covers the
+          observer's distance
+        type: call
+        targetComponent: visibility_rules
+        targetMethod: covers
+      - stepNumber: 13
         description: >-
           Return only the redacted PublicInterfaceSummary entries whose declared audience ceiling
           covers the observer's distance
@@ -100,7 +109,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units (postures + exposeTo grants)
@@ -115,7 +124,7 @@ methods:
       - stepNumber: 4
         description: Resolve the observer project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 5
         description: For each visible target project in the resolution
@@ -137,9 +146,11 @@ methods:
         type: local
       - stepNumber: 8
         description: >-
-          Keep only the redacted summaries whose audience ceiling covers the distance and collect
-          the VisibleSurfaceEntry
-        type: local
+          Keep only the redacted summaries whose audience ceiling covers the distance, through the
+          visibility rules, and collect the VisibleSurfaceEntry
+        type: call
+        targetComponent: visibility_rules
+        targetMethod: covers
       - stepNumber: 9
         description: Return the visibility-resolved surface catalog
         type: return
@@ -149,7 +160,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential through the single auth authority
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units
@@ -187,14 +198,14 @@ methods:
       - stepNumber: 8
         description: Resolve the current project's visibility view over the unit graph
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 9
         description: >-
           Classify the observer→target audience distance — it becomes the ceiling of the generated
           snapshot
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: audienceDistance
       - stepNumber: 10
         description: The target is not visible to the current project (distance is null)
@@ -219,7 +230,7 @@ methods:
           target's bound root
         type: call
         targetComponent: host_surfaces_adapter
-        targetMethod: exportBoundSurface
+        targetMethod: exportSurface
       - stepNumber: 14
         description: Stamp the snapshot origin exchanged for the consumer's import
         type: local
@@ -232,14 +243,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (an instance-admin
           bypasses to yes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -254,7 +265,7 @@ methods:
       - stepNumber: 5
         description: Resolve and bind the target project's isolated root within the principal's authorized set
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: >-
@@ -265,7 +276,7 @@ methods:
           set.
         type: call
         targetComponent: host_surfaces_adapter
-        targetMethod: exportBoundSurface
+        targetMethod: exportSurface
       - stepNumber: 7
         description: >-
           The requested format is openapi — the orchestrator selects among the rendered per-portal
@@ -274,7 +285,6 @@ methods:
         condition: the requested format is openapi
         onTrueStep: 8
         onFalseStep: 16
-        outcome: SurfaceArtifact
       - stepNumber: 8
         description: >-
           Take the rendered per-portal document set from the export result (empty when the project
@@ -329,4 +339,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-11T12:03:31.491Z'
-updatedAt: '2026-07-24T09:47:12.744Z'
+updatedAt: '2026-10-03T18:00:26.471Z'

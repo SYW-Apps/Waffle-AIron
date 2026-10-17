@@ -1,0 +1,36 @@
+kind: enum
+id: narrative_step_type
+name: NarrativeStepType
+description: >-
+  What one step of a flat L5 narrative does. Syntax variants are configuration on one type (every
+  loop form is loop plus loopKind), so renderers and validators handle one shape per concept.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: local
+    description: In-component work
+  - name: call
+    description: A cross-component call (targetComponent, targetMethod)
+  - name: dispatch
+    description: A capability routed through a generic Portal's dispatch table
+  - name: register
+    description: 'A runtime-callback handoff: a reachability edge, never an invocation'
+  - name: branch
+    description: 'if/else: condition, onTrueStep (default next), onFalseStep'
+  - name: switch
+    description: 'Multiway dispatch: on, cases, defaultStep'
+  - name: loop
+    description: Loop header; the body runs to endStep and loopKind picks the form
+  - name: try
+    description: Guarded region with catches and an optional finallyStep
+  - name: parallel
+    description: 'Concurrent fan-out and join: flow continues after endStep once every arm completes'
+  - name: jump
+    description: Unconditional goto (break, continue, rejoin after a catch)
+  - name: return
+    description: 'Terminator: a happy or handled-failure exit'
+  - name: throw
+    description: 'Error terminator: this path raises'
+createdAt: '2026-10-04T23:12:07.082Z'
+updatedAt: '2026-10-04T23:12:07.507Z'

@@ -1,0 +1,26 @@
+kind: value-object
+id: step_config_verdict
+name: StepConfigVerdict
+description: >-
+  What a narrative's step configuration says about itself: the problems it carries, in step order,
+  and whether its control flow is sound — no duplicate step number, no missing or misplaced flow
+  config, and no jump that lands outside the narrative. A duplicate label is a problem but not an
+  unsoundness: labels name steps, they do not route flow. Soundness is the gate every later phase
+  runs behind, because a graph built over jumps that target nothing reports sound steps as dead.
+fields:
+  - name: problems
+    type: list<StepConfigProblem>
+    description: >-
+      The step-config problems, in step order: labels first, then numbering, then each step's own
+      config and jump targets.
+    optional: false
+  - name: sound
+    type: bool
+    description: >-
+      True when nothing found makes the control flow unreadable — the precondition for judging
+      structure.
+    optional: false
+methods: []
+sourcePath: src/models/step-config.ts
+createdAt: '2026-09-17T22:21:29.573Z'
+updatedAt: '2026-10-04T10:21:12.301Z'

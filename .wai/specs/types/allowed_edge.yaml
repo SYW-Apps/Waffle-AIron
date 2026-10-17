@@ -1,0 +1,29 @@
+kind: value-object
+id: allowed_edge
+name: AllowedEdge
+description: >-
+  A profile's license for an intra-subsystem dependsOn edge the built-in stereotype matrix refuses:
+  the platform's own idiom, with the stated reason. Cross-subsystem boundary rules and pattern
+  containment are never relaxable this way; the deny half is a forbid-edge declarative assertion.
+fields:
+  - name: from
+    type: list<string>
+    description: The depending component types this license covers (at least one)
+    optional: false
+  - name: to
+    type: list<string>
+    description: The dependency component types it covers (at least one)
+    optional: false
+  - name: reason
+    type: string
+    description: Why the platform needs the edge
+    optional: false
+methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the shape is the inline zod object of ProfileDefSchema's allowedEdges
+        array in src/core/extensions.ts, so there is no symbol a sourcePath could bind.
+createdAt: '2026-09-14T23:23:38.442Z'
+updatedAt: '2026-10-07T06:30:01.161Z'

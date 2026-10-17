@@ -1,0 +1,57 @@
+id: authoring_portal_impl
+name: Authoring Portal Implementation
+description: >-
+  The two exported entry points of src/core/authoring.ts that callers outside this subsystem reach.
+  They terminate the in-process call and hand the work to the gated workflow in the same module; the
+  file is one seam, so portal and workflow collapse onto the same functions, which is the N:1
+  sharing the model blesses rather than an indirection the code pretends to have.
+contract: iauthoring_portal
+sourcePath: src/core/authoring.ts
+methods:
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the delta to the gated update workflow, which injects the same judgement into the
+          store's write and answers with the change report
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: updateSpecGated
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the move to the gated workflow, which judges it as a whole and writes all of it or
+          none of it
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: moveMethods
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the restatement to the gated whole-spec workflow, which applies it to the stored
+          spec, judges it before anything reaches disk and answers with the write receipt
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: writeSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the delete, with the caller's dry-run and force requests, to the workflow, which
+          plans the subtree, refuses a referenced one unless forced, and reports what went and the
+          tests a removed method invalidated
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: deleteSpec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Route the move to the gated workflow
+        type: call
+        targetComponent: authoring_orchestrator
+        targetMethod: moveSpec
+status: complete
+createdAt: '2026-09-18T21:43:28.738Z'
+updatedAt: '2026-10-09T00:31:04.683Z'

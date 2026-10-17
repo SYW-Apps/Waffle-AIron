@@ -1,0 +1,41 @@
+kind: value-object
+id: pinned_external
+name: PinnedExternal
+description: >-
+  One declared external as the owner's gate judges against it: its lock entry and the snapshot that
+  entry names, read from the bound project's own .wai/externals.lock.yaml and .wai/externals/ and
+  nothing else. The producer is never read: this is what the project pinned, not what the producer
+  holds now (that comparison is the family run's composition).
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias the project declares in project.yaml externals
+    optional: false
+    key: primary
+  - name: project
+    type: string
+    description: The producer's project id the lock recorded
+    optional: false
+  - name: entry
+    type: ExternalLockEntry
+    description: >-
+      The lock's entry for the alias: its digest and the used members with their digests. Absent
+      when the alias was declared but never pinned
+    optional: true
+  - name: snapshot
+    type: SurfaceSnapshot
+    description: >-
+      The pinned snapshot the entry names. Absent when the alias is unpinned or the file is missing
+      or malformed
+    optional: true
+  - name: problem
+    type: string
+    description: >-
+      Why the alias has nothing to judge against: never pinned, the snapshot file missing, or the
+      snapshot unreadable. Absent when the entry and the snapshot are both present
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-28T06:01:54.841Z'
+updatedAt: '2026-09-28T17:16:24.975Z'

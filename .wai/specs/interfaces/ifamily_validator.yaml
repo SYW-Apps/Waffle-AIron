@@ -1,0 +1,438 @@
+id: ifamily_validator
+name: Family Validator Interface
+description: >-
+  The family run: every selected project's own gate verbatim, the composition of each project's
+  externals against their live producers, and the family checks over the root's graph. One judge per
+  edge: a family run never judges an owner's edge differently from the owner's own gate, it only
+  adds findings that need two projects on disk.
+component: family_validator
+methods:
+  - name: run
+    description: >-
+      Validate the bound project's family: the bound root and its members (all levels, or as many as
+      `memberDepth` bounds), each by its own gate under its own configuration and prefixed with its
+      project key, verbatim; then the composition findings of each project's externals; then the
+      family checks; then the governance checks (checkPolicies). A plain run narrows the request's
+      reach to the bound root before any read, so an external whose producer lies above the family
+      is not composed and is counted in a one-line hint instead; with `family` set the reach stays
+      the request's (locally an explicit walk up, hosted the credential's), never widened. A
+      requirement placed by a project above the bound root is not in the selection and is not
+      judged: governance, like composition, sees only what the run reaches. The result is valid when
+      no project's gate and no family or governance finding holds an error, and lists each project's
+      totals.
+    signature: 'run(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          The run's switches: family (walk up explicitly), memberDepth (bounds the member levels;
+          absent, all), scopeSubsystem (a member key narrows the run to that member),
+          treatAllAsComplete and pre-loaded packs, passed to every project's own gate
+  - name: compose
+    description: >-
+      With one project's root bound: compare each of its externals — and each of its referenced
+      project members (a `../`, git or hosted source; stage 8) — as its lock records it with the
+      producer's live export table (decision 19, signature-level superset, canonical digests). The
+      uses compared are every public name the project's references land on or spell — `alias::name`
+      references and bare names bound through its `use` imports alike, each method of an implemented
+      extension point too, for family and outside producers alike since stage 8 — so a type used
+      only bare is covered, and a producer outside the family that breaks a used method is
+      EXTERNAL_INCOMPATIBLE, not only drifted. A used method or type that changed, was renamed (the
+      producer's rename trace names the new name, and the message names it) or vanished is
+      EXTERNAL_INCOMPATIBLE (error) — pinned or not, a public name gone from the live table
+      included: a use the lock does not hold is still compared with the live producer the run can
+      read. An external with uses that was never pinned at all is EXTERNAL_UNPINNED (error): nothing
+      records what the design is judged against, so a producer change cannot be told — never a pass,
+      and `wairon lock` refuses until it is pinned. A producer whose canonical contract changed
+      while nothing used changed, or whose pinned snapshot no longer carries what the producer says
+      (a stale abi, transport or role), is EXTERNAL_DRIFTED (notice; prose never drifts); a use that
+      cannot be compared — used but not in the lock, an unreachable, unfetchable or unreadable
+      producer — is EXTERNAL_CHECK_UNAVAILABLE (warning), never a pass. This is the family run's
+      gate over producers inside its reach (one checkout, so live is reproducible there); everything
+      else is advise's to report.
+    signature: 'compose(project: string): ExternalComposition'
+    returns: ExternalComposition
+    params:
+      - name: project
+        type: string
+        description: >-
+          The key of the project whose externals are composed ('' for the family root), stamped on
+          each finding
+    findings:
+      - code: EXTERNAL_INCOMPATIBLE
+        severity: error
+        summary: >-
+          A method or type a project uses from an external changed or vanished in the producer's
+          live export table
+      - code: EXTERNAL_DRIFTED
+        severity: notice
+        summary: An external's producer changed since it was pinned, but nothing the project uses changed
+      - code: EXTERNAL_CHECK_UNAVAILABLE
+        severity: warning
+        summary: >-
+          A use of an external could not be compared with its producer: unpinned, not in the lock,
+          or the producer unreachable
+      - code: EXTERNAL_UNPINNED
+        severity: error
+        summary: >-
+          A project uses an external it never pinned: nothing records what its design is judged
+          against
+  - name: checkMembers
+    description: >-
+      The family checks over the root's graph. A declared member with no project on disk is
+      MEMBER_NOT_FOUND (error: the family cannot be composed; the owner's gate reports its own
+      references into it as unavailable). Two members resolving to one project id are
+      PROJECT_ID_COLLISION (error, pointing at consumption: one member, several consumers). A member
+      that declares no id is PROJECT_ID_DEFAULTED (notice), naming its alias as the id to declare; a
+      member with no usable id is PROJECT_ID_AMBIGUOUS (warning) — the family half of project
+      identity, moved here from the project-identity rule, which judges only the bound project's own
+      id. Projects of the selection that depend on each other in a loop are PROJECT_DEPENDENCY_CYCLE
+      (warning), reported once per loop on each project in it with the references that close each
+      edge. A family-only (audience project) L0 re-export of another family project's name that no
+      project of the family reaches through the re-exporting project is EXPORT_UNREACHED (notice): a
+      dead re-export, its consumer moved to the source or left. A present member whose approval
+      state (approvals) is never is MEMBER_UNAPPROVED, and one that is drifted is MEMBER_DRIFTED —
+      warnings, and they stay warnings in stage 5 (decision #11): `--ci` at the parent fails until
+      the member is locked or its severity is lowered, and a parent that wants its own lock to
+      refuse sets composition.requireApprovedMembers. A member drifted only by the stage-5 identity
+      upgrade says so in the message. Each finding's severity is the root's rules.sddRuleSeverity
+      override, else the default.
+    signature: 'checkMembers(family: ProjectFamily): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: family
+        type: ProjectFamily
+        description: >-
+          The family root's project graph: the selected projects, their directories, the
+          cross-project references and the identity and membership problems
+    findings:
+      - code: MEMBER_NOT_FOUND
+        severity: error
+        summary: A member the project declares has no project on disk at its path
+      - code: PROJECT_ID_COLLISION
+        severity: error
+        summary: Two members of one family resolve to one project id
+      - code: PROJECT_DEPENDENCY_CYCLE
+        severity: warning
+        summary: Projects of the family depend on each other in a loop
+      - code: MEMBER_UNAPPROVED
+        severity: warning
+        summary: A member of the family has never been locked
+      - code: MEMBER_DRIFTED
+        severity: warning
+        summary: 'A member''s lock no longer matches its own gate identity: it changed since it was approved'
+      - code: PROJECT_ID_DEFAULTED
+        severity: notice
+        summary: A member declares no id; it answers to one derived from its display name
+      - code: PROJECT_ID_AMBIGUOUS
+        severity: warning
+        summary: 'A member has no usable id: its name yields no slug, or its declared id breaks the grammar'
+      - code: EXPORT_UNREACHED
+        severity: notice
+        summary: >-
+          A family-only re-export of another project's name that no project of the family reaches:
+          dead
+  - name: checkPolicies
+    description: >-
+      The governance checks over the root's graph (governance stage). Every selected project that
+      declares `composition.requirePolicies` requires those packs of every member below it in the
+      selection, at every level; the root's own requirements never apply to the root, and a
+      requiring project above the bound root is not in the selection and is not judged (a member's
+      `--family` run selects downward only). A requirement whose range does not parse is skipped
+      here — the requiring project's OWN gate reports it (extension_rules.packRequirements,
+      POLICY_REQUIREMENT_INVALID). Each member's adoption of each readable requirement is judged by
+      `adoption`, and each finding's severity is the REQUIRING project's rules.sddRuleSeverity
+      override, else the default — as the family codes are tuned. Nothing here reads the
+      requirements at a member's own gate, so a member's own verdict is the same with and without
+      them (member-gate-unchanged-by-requirements); nothing here compares a pack with wairon's
+      defaults, so a pack's loosening is never reported (pack-loosening-is-never-a-finding); and
+      nothing here depends on what the machine has installed, so the family verdict is the same from
+      every machine (location-independent).
+    signature: 'checkPolicies(family: ProjectFamily): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: family
+        type: ProjectFamily
+        description: >-
+          The family root's project graph: the selected projects, their directories and each
+          member's parent
+    findings: []
+  - name: adoption
+    description: >-
+      With one member's root bound: judge its adoption of the requirements one requiring project
+      places on it, from the member's committed files only — never from the version the machine
+      happens to resolve — so the verdict is location-independent. POLICY_NOT_ADOPTED (error) when:
+      the member has no entry for the pack (a selection by that name, or a legacy path reference
+      whose committed manifest carries it); the entry is a selection with no version pin (reason:
+      "unpinned — a family cannot judge a floating selection; pin a version"); the pinned version —
+      or, for a legacy path reference, its committed manifest's declared version — is outside the
+      range (an unversioned manifest is admitted by `*` only); or the requirement names a profile
+      and the member's projectType is another. The message names the requirement (pack, range,
+      profile, requiring project) and the member's entry. An adopted requirement's settings are then
+      compared by `deviations` (POLICY_DEVIATION). Answered at the default severities, stamped with
+      the member's key; checkPolicies applies the requiring project's overrides.
+    signature: >-
+      adoption(requiring: string, member: string, requirements: list<PackRequirement>):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
+    params:
+      - name: requiring
+        type: string
+        description: >-
+          The key of the requiring project ('' for the family root): named in each message, and the
+          project whose sddRuleSeverity tunes each finding
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding as its project
+      - name: requirements
+        type: list<PackRequirement>
+        description: The requiring project's valid requirements
+    findings:
+      - code: POLICY_NOT_ADOPTED
+        severity: error
+        summary: >-
+          A member does not select a pack a project above it requires, selects it outside the
+          required range, or is not governed by the required profile
+  - name: deviations
+    description: >-
+      With one member's root bound: every override the member makes against the settings an adopted
+      pack sets under its governing profile, as POLICY_DEVIATION (notice) — the complete list of
+      what a project can override against a profile in today's validator (src/core/rules/index.ts:
+      getRuleSeverity, effectiveDesignDepth, namingConfigFor, complexityConfigFor,
+      documentationConfigFor, getComponentProfile): rules.sddRuleSeverity per code the pack sets;
+      rules.designDepth and each subsystem's designDepth; each rules.naming key and each
+      rules.naming.stereotypes entry; each rules.complexity key; each rules.documentation key; each
+      subsystem `profile` other than the governing one; and each lint.allow on the member's specs
+      over a code the pack sets. A key the profile does not set is not a deviation, and nothing is
+      compared with wairon's defaults. Each names the setting, the pack's value and the member's,
+      and the requirement it concerns.
+    signature: >-
+      deviations(member: string, requirement: PackRequirement, settings: PackSettings):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
+    params:
+      - name: member
+        type: string
+        description: The key of the bound member, stamped on each finding
+      - name: requirement
+        type: PackRequirement
+        description: The adopted requirement, named in each message
+      - name: settings
+        type: PackSettings
+        description: What the adopted pack sets under the member's governing profile (extension_pack.settings)
+    findings:
+      - code: POLICY_DEVIATION
+        severity: notice
+        summary: >-
+          A member that adopted a required pack changes one of the pack's settings in its own
+          configuration or specs
+  - name: approvals
+    description: >-
+      The bound project's pin tree: the approval state of the bound root and of each PROJECT member
+      within `depth` levels of its project graph (all levels when omitted) — contained ones and,
+      since stage 8, referenced ones (a `../`, git or hosted source), opened at their sibling
+      checkout or the fetch cache at the pinned commit — each computed at that project's OWN root —
+      its lock record against its own gate identity recomputed there — so the answer about a project
+      is the same whichever root asked (status-agrees). Per member also: its composition subject
+      (its record's stateId), whether its staleness is only the stage-5 identity upgrade, and how
+      its parent's lock pinned it (matches | moved | unpinned, read from the parent's record
+      `members`, or its legacy `children` for one release). Each PART of a selected project is
+      answered too (stage 8), as a part: approved exactly when its declaring project is (its
+      approval is that project's), with its content digest and the commit it was read at — what a
+      lock records as the part's MemberPin. A declared member with no project on disk is `never`.
+      Reads each project's own tree once and writes nothing; the caller must gate on reach itself
+      before it asks about a family.
+    signature: 'approvals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
+    params:
+      - name: depth
+        type: int
+        description: >-
+          How many member levels below the bound root to include: 1 = the direct members (what a
+          lock records), omitted = every level (what status prints)
+        optional: true
+    guarantees:
+      - idempotent
+  - name: relations
+    description: >-
+      The family's relation health, for the canvas: the bound root and each PROJECT member at every
+      level — contained ones, and referenced ones (a `../`, git or hosted source) opened at their
+      sibling checkout or the fetch cache at the pinned commit — each with its externals status read
+      at its OWN root (exactly what compose turns into findings, so the canvas and a family run can
+      never disagree about a relation), stamped with when it was read. A project that references a
+      CONTAINED project member of its own (which is no external, so getExternalsStatus never names
+      it) also gets one status per such member under its alias, from that project's OWN gate
+      findings on those references: a use is removed — the relation incompatible — when
+      EXTERNAL_NOT_EXPORTED or another resolution failure lands on it, unchanged otherwise; a
+      contained member is read live, so it never drifts and carries no pin, and one whose hosted
+      record lies outside the request's reach is unavailable, never ok. A project whose root cannot
+      be opened, or lies outside the request's reach, is answered with no statuses and the reason,
+      so every edge from it reads unavailable — never ok. Parts are not answered: their subsystems
+      are the declaring project's own, so their consumption is in that project's statuses. Writes
+      nothing and judges nothing of its own (no findings, no severities); the caller grants the
+      reach before it asks, as for approvals.
+    signature: 'relations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
+    params: []
+    guarantees:
+      - idempotent
+  - name: advise
+    description: >-
+      THE PIN GATES, LIVE DRIFT IS VISIBLE. With the bound project's root bound, compare each of its
+      externals the run did not compose with its LIVE producer within the request's reach, offline
+      (no network: a git external's head is not fetched), and report what moved — every finding
+      marked advisory, so it is printed and counted but never decides `valid` or `validate --ci`:
+      the pin stays the reproducible gate. A used member that changed, was renamed or vanished live
+      since the pin is EXTERNAL_LIVE_INCOMPATIBLE (warning), one finding per external naming each
+      moved member and how (changed at signature level; renamed to <new name> per the producer's
+      rename trace; gone from its export table), every spec of this project that uses it, every
+      binding module those specs' implementations declare (implementation_spec.bindings) — named,
+      never compared live: a binding is compared with the pin, so the finding says it draws
+      BINDING_DRIFT once the re-pin lands and is where the code follows — and the fix: adapt the
+      uses (follow the rename), then re-pin (`wairon externals pin <alias>`). A producer that moved
+      while nothing used did is EXTERNAL_DRIFTED (notice: re-pin when convenient). A producer that
+      could not be read live — unreachable, unresolved, a git source not fetched offline, a hosted
+      record out of reach — is EXTERNAL_LIVE_UNCOMPARED (notice) naming why and the command that
+      compares it (`wairon externals status`): honest, never a pass, and never a failure of the
+      owner gate. Each severity is the project's own sddRuleSeverity override, else the default.
+      Writes nothing.
+    signature: 'advise(composed?: list<string>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: composed
+        type: list<string>
+        description: >-
+          Aliases of the bound project's externals the run already composed as part of its gate (a
+          family run's in-reach externals); they are not advised on twice. Omitted: none were
+        optional: true
+    findings:
+      - code: EXTERNAL_LIVE_INCOMPATIBLE
+        severity: warning
+        summary: >-
+          Advisory: a member the project uses from an external changed, was renamed or vanished in
+          the reachable live producer since the pin — adapt the uses, then re-pin; the pin still
+          gates
+      - code: EXTERNAL_LIVE_UNCOMPARED
+        severity: notice
+        summary: >-
+          Advisory: an external's live producer could not be read (unreachable, offline git, out of
+          reach), so only its pin judged it — not a pass of the live producer
+      - code: EXTERNAL_DRIFTED
+        severity: notice
+        summary: An external's producer changed since it was pinned, but nothing the project uses changed
+  - name: checkReach
+    description: >-
+      The reachability and network checks only the family run can make. It composes the family's
+      reach model (reach_model_projector.compose) from each selected project's own model and the
+      family's cross-project references, and judges it (network_arbiter.judge): the networks around
+      a member (GATEWAY_BYPASSED, MULTIPLE_GATEWAYS, EXPORT_BEYOND_NETWORK on a member's verbs and
+      on calls crossing into a network), the proof of every network-scoped entry by a modelled
+      caller inside its boundary (ENTRY_UNPROVEN), and a network-scoped entry with no declared
+      network around it (ENTRY_SCOPE_UNBOUNDED). A finding a project's own gate already carried (its
+      own network over its own tree) is not repeated. Each finding names the project whose spec it
+      sits on and is tuned by that project's rules.sddRuleSeverity; a lint.allow on that spec covers
+      it, sited at the verb or call it names. An allow of one of these codes
+      (network_arbiter.familyCodes) on a selected project's own spec that covers no finding of the
+      family's model and none its own gate carried is stale, and is reported here
+      (UNUSED_LINT_ALLOW): the project's own gate leaves that judgement to this run. A member's own
+      verdict is unchanged by it: the member's gate judged the member alone.
+    signature: 'checkReach(family: ProjectFamily, models: map<string, ReachModel>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: family
+        type: ProjectFamily
+        description: The family root's project graph
+      - name: models
+        type: map<string, ReachModel>
+        description: Each selected project's own reach model, by project key, as the run collected them
+    findings:
+      - code: UNUSED_LINT_ALLOW
+        severity: warning
+        summary: >-
+          An allow of a family-judged reach code covers no finding of the family's reach model at
+          its site
+  - name: reachModel
+    description: >-
+      The family's reach model at the bound root, for the derived networking outputs: the same
+      selection and reach the family run makes, each selected project's own model
+      (spec_validator.reachModel under its own binding), composed with the family's references, and
+      JUDGED: its network findings (network_arbiter.judge) carried on the model, tuned and
+      lint-allow filtered as checkReach tunes them, so no derived output trusts a design that fails
+      the gate. At a project without members it is that project's own model. Reads; writes nothing.
+    signature: 'reachModel(options: ValidationOptions): ReachModel'
+    returns: ReachModel
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The selection: member depth and reach, exactly as run takes them'
+    effect: read
+  - name: unpinned
+    description: >-
+      The bound project's declared externals (and referenced project members) never pinned: no entry
+      in its externals lock, so nothing records what its design is judged against. A part is no
+      producer and is left out. Read from the bound root's own pins
+      (validator_surfaces_adapter.listPinnedExternals); writes nothing.
+    signature: 'unpinned(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
+  - name: unrecorded
+    description: >-
+      The uses of each pinned external (and referenced project member) of the bound project that its
+      pin does not record, keyed by alias, each `<name>` or `<name>.<method>` — read offline from
+      the bound root's own pins and references (validator_surfaces_adapter.unrecordedUses). With
+      unpinned, what a project's approval owes: `wairon lock` refuses until a re-pin records them.
+      Writes nothing.
+    signature: 'unrecorded(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
+  - name: implementsProblem
+    description: >-
+      What `validate` would say of a contract that declares `implements: <ref>`, read without
+      writing it — for a write to report before (or as) it lands, a dry run included: the alias
+      names no member or external of the bound project (EXTERNAL_UNDECLARED), the producer's table —
+      a member's live one, or the external's pin — has no such public name (EXTERNAL_NOT_EXPORTED),
+      or the name is exported for consumers to CALL, not as an extension point exported with role
+      implement (EXTERNAL_NOT_EXPORTED). Null when the reference names an extension point, or cannot
+      be judged here (no pin yet). Writes nothing.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
+  - name: releaseVerdict
+    description: >-
+      THE verdict on an approval whose gate identity no longer matches because the wairon release
+      changed — one function every surface reads through the project's approval entry (lock-check,
+      status, sdd_get_status, validate, the family view). Only a record that PROVES the project's
+      own inputs unchanged is re-validated: its gateParts break down its stateId
+      (lock_record.partsProblem is none), every part but `release` equals the identity's current
+      one, and its release stamp is older than or the same as the running release
+      (lock_record.releaseStampAgainst). Such an approval is re-validated under the current rules,
+      in the same command: clean at the `--ci` standard (no error, no warning but the draft-related
+      ones --ci waives; notices never count) it CARRIES OVER — approved, nothing written; otherwise
+      it is stale for exactly the findings the new release reports. A record that cannot prove it,
+      over a design whose own spec files and direct members' approvals did not move, is stale with
+      one sentence (ReleaseVerdict.reason) and never re-validated: taken before gate parts
+      ("approved under <old> before wairon recorded its inputs separately — re-lock once to record
+      them; later upgrades then carry over"), stamped by a release that records gate parts although
+      it carries none (its stamp was edited: an earlier wairon wrote it), carrying parts that do not
+      break down its identity, or stamped by a newer wairon or by no valid version. Undefined when
+      what moved is not the release: the caller judges it as before. Writes nothing; a verdict is
+      decided once per record and identity in a process.
+    signature: 'releaseVerdict(record: LockRecord, current: StateId): ReleaseVerdict?'
+    returns: ReleaseVerdict?
+    params:
+      - name: record
+        type: LockRecord
+        description: The project's own lock record
+      - name: current
+        type: StateId
+        description: Its gate identity as computed now, with its parts
+status: complete
+createdAt: '2026-09-28T06:06:08.804Z'
+updatedAt: '2026-10-09T00:22:32.671Z'

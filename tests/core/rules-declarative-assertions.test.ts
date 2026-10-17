@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { assertionFullCode } from '../../src/core/extensions.js';
 
@@ -83,7 +83,7 @@ describe('declarative assertions', () => {
     proj.writeSpec('component', 'store-b', 'schemaVersion: 1.0.0\nid: store-b\nname: store-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Store\ndurability: ram-projection');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const found = res.issues.filter(i => i.code === 'DOCTRINE_PACK_NO_SPECIALIST_STORE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
@@ -113,7 +113,7 @@ describe('declarative assertions', () => {
     proj.writeSpec('implementation', 'impl-b', 'schemaVersion: 1.0.0\nid: impl-b\nname: B\ndescription: d\ncontract: istore-b\next:\n  doctrine:\n    region: mars\nmethods: []');
     proj.activate();
     try {
-      const found = validateSddTree().issues.filter(i => i.code === 'DOCTRINE_PACK_REGION_DECLARED');
+      const found = validateProject().issues.filter(i => i.code === 'DOCTRINE_PACK_REGION_DECLARED');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-b');
       expect(found[0].message).toContain('"mars"');
@@ -152,7 +152,7 @@ describe('declarative assertions', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = validateSddTree().issues.filter(i => i.code === 'DOCTRINE_PACK_WEBHOOK_PATHS');
+      const found = validateProject().issues.filter(i => i.code === 'DOCTRINE_PACK_WEBHOOK_PATHS');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('/legacy/hook');
     } finally { proj.cleanup(); }
@@ -178,7 +178,7 @@ describe('declarative assertions', () => {
     proj.writeSpec('component', 'store-b', 'schemaVersion: 1.0.0\nid: store-b\nname: store-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Store\ndurability: ram-projection');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'DOCTRINE_PACK_NO_SPECIALIST_STORE')).toHaveLength(0);
       // and the allow is recognized, not flagged as unknown
       expect(res.issues.filter(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toHaveLength(0);
@@ -195,7 +195,7 @@ describe('declarative assertions', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'EXTENSION_LOAD_ERROR')).toBe(true);
     } finally { proj.cleanup(); }
   });

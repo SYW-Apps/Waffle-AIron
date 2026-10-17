@@ -1,0 +1,24 @@
+id: migration_portal
+name: Migration Portal
+description: >-
+  The published surface of the family migrations, shared by the CLI (`wairon member
+  attach|detach|adopt|rename-alias|internalize`, `wairon project rename`, `wairon subsystem
+  externalize`, and `wairon doctor`'s chaining migration and transaction recovery), the status and
+  validate lines that report a pending transaction, and the MCP member tools: plan, apply a
+  confirmed plan, discard one, recover (or only report) unfinished transactions, and — a pure read —
+  the positional match the upgrade report explains, which lives here with the migration that writes
+  from it. It also publishes the family transaction itself (rehearse, diff, commit, drop) for the
+  hosted member upgrade, which scopes the host data directory's store files and commits them through
+  the same all-or-nothing transaction. It terminates the in-process call and routes each write to a
+  workflow, because a Portal never performs the write itself. The caller must gate on reach itself.
+subsystem: sdd_migrations
+componentType: Portal
+owns: []
+dependsOn:
+  - family_migration_orchestrator
+  - position_reader
+  - family_transaction
+transport: InProcess
+status: complete
+createdAt: '2026-09-30T20:36:26.062Z'
+updatedAt: '2026-10-06T18:55:01.782Z'

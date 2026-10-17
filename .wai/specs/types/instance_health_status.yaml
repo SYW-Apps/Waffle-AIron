@@ -1,0 +1,15 @@
+kind: enum
+id: instance_health_status
+name: InstanceHealthStatus
+description: A hosted instance's overall health.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: ok
+  - name: degraded
+    description: Serving, with a check that needs attention
+  - name: unhealthy
+    description: A check failed
+createdAt: '2026-10-04T23:18:24.814Z'
+updatedAt: '2026-10-04T23:18:25.233Z'

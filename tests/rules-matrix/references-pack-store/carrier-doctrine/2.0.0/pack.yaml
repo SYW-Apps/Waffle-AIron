@@ -1,0 +1,22 @@
+# The SECOND rule-matrix fixture pack — "carrier-doctrine", committed in the
+# VERSIONED PACK-STORE layout (<store>/<name>/<version>/pack.yaml) so the
+# references-packs family can point WAIRON_PACKS_DIR at
+# tests/rules-matrix/references-pack-store and exercise the pack-SELECTION
+# resolution codes hermetically (PACK_NOT_INSTALLED / PACK_VERSION_UNSATISFIED /
+# PACK_INTEGRITY_MISMATCH / PACK_STORE_DRIFT) plus the reproducibility pair —
+# without depending on whatever the developer machine has under ~/.wairon/packs.
+#
+# The same directory doubles as a direct path-ref pack for the
+# references-pack-extensions family: its `patterns` entry is what
+# UNKNOWN_PATTERN_REF / PATTERN_VERSION_MISMATCH fixtures resolve against.
+#
+# IMPORTANT: keep pack.yaml the ONLY file in this directory — the
+# PACK_INTEGRITY_MISMATCH / PACK_STORE_DRIFT fixtures digest the directory
+# content (computePackDigest) and mirror this file byte-for-byte into a
+# project bundle; an extra file here would break that equality.
+name: carrier-doctrine
+version: 2.0.0
+patterns:
+  - id: rate-shopping-adapter
+    version: 2.0.0
+    description: Vendor-neutral carrier rate shopping behind one adapter seam with quote normalization at the edge.

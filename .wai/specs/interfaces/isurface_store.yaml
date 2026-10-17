@@ -1,37 +1,40 @@
 id: isurface_store
 name: Surface Store Interface
-description: Authoritative in-memory snapshot state (ram-projection rebuilt from files).
+description: >-
+  Read-through state contract for this project's stored surface snapshots: every read is the file
+  read, every write the file write.
 component: surface_store
 methods:
   - name: put
-    description: Hold or replace a parsed snapshot keyed by producing project.
-    signature: 'put(snapshot: SurfaceSnapshot): void'
-    returns: void
+    description: Persist or replace a snapshot keyed by its producing project; answers where it was persisted.
+    signature: 'put(snapshot: SurfaceSnapshot): string'
+    returns: string
     params:
       - name: snapshot
         type: SurfaceSnapshot
     effect: write
   - name: get
-    description: Held snapshot by project name, or null.
-    signature: 'get(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    description: The stored snapshot for a project name, or null.
+    signature: 'get(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
     effect: read
   - name: list
-    description: All held snapshots.
-    signature: 'list(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    description: Every stored snapshot at the bound root.
+    signature: 'list(): list<SurfaceSnapshot>'
+    returns: list<SurfaceSnapshot>
+    params: []
     effect: read
   - name: remove
-    description: Drop the held snapshot for a project.
-    signature: 'remove(projectName: string): boolean'
-    returns: boolean
+    description: Remove the stored snapshot for a project; whether one existed.
+    signature: 'remove(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
     effect: write
 status: complete
 createdAt: '2026-07-10T23:13:31.819Z'
-updatedAt: '2026-07-11T09:04:02.719Z'
+updatedAt: '2026-10-04T22:34:17.918Z'

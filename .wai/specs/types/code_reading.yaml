@@ -1,0 +1,23 @@
+kind: enum
+id: code_reading
+name: CodeReading
+description: >-
+  One conformance check a reader that reads a language without a type checker read the facts for
+  (source_file_facts.reads).
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: params
+    description: A function's parameter names and annotations
+  - name: returns
+    description: A function's return annotation
+  - name: members
+    description: A class's members and who may reach them
+  - name: imports
+    description: The module's imports, resolvable to the project's modules
+  - name: calls
+    description: A function's call sites, by the receivers the code declares
+createdAt: '2026-10-17T15:42:11.519Z'
+updatedAt: '2026-10-17T15:42:12.754Z'

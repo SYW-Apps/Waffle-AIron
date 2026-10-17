@@ -1,0 +1,19 @@
+kind: enum
+id: pack_enforcement_mode
+name: PackEnforcementMode
+description: >-
+  How the instance pack policy is enforced at hosted project initialization. setPackPolicy refuses
+  any other value, so a typo never silently disables enforcement. The explicit
+  reconcileProjectPolicy action applies resolvable missing packs whatever the mode.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: warn
+    description: Initialize even if non-compliant, and attach the findings
+  - name: block
+    description: Reject a non-compliant initialization
+  - name: auto_reconcile
+    description: Initialize, and automatically apply missing required and default packs
+createdAt: '2026-10-04T23:52:56.298Z'
+updatedAt: '2026-10-04T23:52:56.960Z'

@@ -1,16 +1,31 @@
 id: spec_validator
 name: Spec Validator
 description: >-
-  Validation linter checking spec completeness, method contracts, component type boundaries, and
-  subsystem public-surface bindings.
+  The owner's gate (stage 4). It gathers one project's own inputs — its spec tree and the export
+  tables of the members it contains, its foreign surface snapshots, its pinned externals, the
+  source-code model, the writer's round-trip results and the project's pack selections — into one
+  rule context; seeds the rule set with the built-in and pack rules; runs the rule sequence over
+  that context; and returns the findings. It never walks above the bound root and discovers nothing,
+  so a project's verdict is the same from every root. It also gathers the inputs of the gate
+  identity a lock records (the content identity, the governing extensions and gate config, the
+  consumed contract inputs and the built-in rules) and has the gate identity computed from them. Its
+  write-gate half runs the spec-scoped rules against a component candidate before the component is
+  saved, and the doctrine edge and route rules over the tree with a component or contract candidate
+  in place, keeping only what the candidate introduces. It holds no state of its own: the rule set
+  belongs to the rule Repository, and each rule's verdict to its rule family. The family run that
+  composes projects is family_validator's, which calls this gate once per project.
 subsystem: sdd_validator
-componentType: Specialist
+componentType: Orchestrator
 owns: []
 dependsOn:
   - validator_core_adapter
   - validator_surfaces_adapter
   - source_analysis_adapter
+  - binding_module_adapter
   - rule_repository
+  - gate_identity
+  - reach_model_projector
+  - doctrine_rules
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-14T19:21:21.528Z'
+updatedAt: '2026-10-08T19:14:48.774Z'

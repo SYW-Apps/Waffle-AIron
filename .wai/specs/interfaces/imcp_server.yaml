@@ -1,12 +1,55 @@
-schemaVersion: "1.0.0"
-id: "imcp_server"
-name: "MCP Server Interface"
-description: "Interface contract for starting and configuring the wairon Model Context Protocol (MCP) server."
-component: "mcp_server"
+id: imcp_server
+name: MCP Server Interface
+description: Interface contract for starting and configuring the wairon Model Context Protocol (MCP) server.
+component: mcp_server
 methods:
-  - name: "createMcpServer"
-    description: "Factory method to create, configure, and register standard tools on the MCP server"
-    signature: "createMcpServer(): McpServer"
-    returns: "McpServer"
-createdAt: "2026-06-11T14:50:00Z"
-updatedAt: "2026-06-11T14:50:00Z"
+  - name: create
+    description: >-
+      Factory method to create and configure the bare MCP server: the server instructions, the build
+      stamp, and the standard sdd_* tools, every one registered behind the build-freshness guard,
+      judged against the stamp of the build the server stands for (its own entry file unless the
+      caller names another). The caller's hostedTools choice decides whether the server is the
+      long-lived stdio session that emits list-changed notifications. The MCP portal mounts its own
+      surface on top — the skill/agent resources, the prompts, and for a hosted caller the
+      advertisement of the hosted data-plane tools.
+    signature: 'create(options?: mcp_server_options): McpServerInstance'
+    returns: McpServerInstance
+    params:
+      - name: options
+        type: mcp_server_options
+        description: >-
+          What the caller asks for: whether the seventeen hosted data-plane tools are advertised
+          (discovery only, never for the stdio server), and the build the server stands for, which
+          the build-freshness guard judges every call against
+        optional: true
+  - name: schemaFingerprint
+    description: >-
+      A stable hash over everything a spec write passes through: the six canonical spec schemas and
+      the input schema of every spec-write tool, each read structurally (object keys and their
+      strictness, element types, unions, enums, literals, defaults and checks) with descriptions
+      left out, so a field added, removed, retyped or made optional anywhere a write passes through
+      changes it and reworded prose does not. The build on disk is asked for its own through this
+      method, in a child process.
+    signature: 'schemaFingerprint(): string'
+    returns: string
+    params: []
+  - name: assessBuildFreshness
+    description: >-
+      Whether this server still runs the build on disk. An unchanged entry file is fresh. A changed
+      one is compared by schema fingerprint: equal fingerprints mean the rebuild left every schema a
+      write passes through alone, so writes proceed under a warning; different ones mean the running
+      server would silently drop fields the new build knows, so every spec write is refused; a
+      fingerprint that cannot be read cannot rule that out, so writes are refused as well, naming
+      why. The answer carries the sentence to show the human, including that only a reconnect (/mcp
+      reconnect wairon) clears it.
+    signature: 'assessBuildFreshness(stamp: BuildStamp?): BuildFreshness'
+    returns: BuildFreshness
+    params:
+      - name: stamp
+        type: BuildStamp?
+        description: >-
+          The build the server stands for, stamped at startup; null when it could not be stamped,
+          which reads as fresh
+status: complete
+createdAt: '2026-06-11T14:50:00Z'
+updatedAt: '2026-10-08T19:33:43.034Z'

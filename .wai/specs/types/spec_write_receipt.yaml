@@ -1,0 +1,71 @@
+kind: value-object
+id: spec_write_receipt
+name: SpecWriteReceipt
+description: >-
+  What a whole-spec write answers with, as data rather than as a sentence to be parsed: which spec
+  it wrote, at what status, whether a spec already held that id, and the tests the write
+  invalidated. A create is an upsert, so "added" and "re-authored in place" are different outcomes
+  with the same call, and only this receipt tells them apart without reading English. Every door
+  answers a create with this one receipt, because it is the authoring seam that produces it.
+subsystem: sdd_authoring
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The spec kind written.
+    optional: false
+  - name: id
+    type: string
+    description: The id the spec is stored under.
+    optional: false
+  - name: name
+    type: string
+    description: The spec's display name as written.
+    optional: false
+  - name: replacedExisting
+    type: bool
+    description: >-
+      True when a spec already held this id and the call re-authored it in place rather than adding
+      one.
+    optional: false
+  - name: status
+    type: SpecStatus
+    description: The lifecycle status written. Absent for the L0 and for a type, neither of which carries one.
+    optional: true
+  - name: notices
+    type: list<string>
+    description: >-
+      The notice lines the text answer lists, one per entry: what was carried forward, what a
+      restatement removed, what an omission cleared, and every gate warning the write raised.
+    optional: false
+  - name: testsToRevisit
+    type: list<TestsToRevisit>
+    description: >-
+      The tests that encode a method this write changed or removed, one entry per such method. A
+      re-authoring that drops or rewrites a method invalidates its tests as surely as a delta does,
+      so the create reports them the same way. Empty for a new spec, when no method changed, when
+      the project declares no test roots, or when nothing references them.
+    optional: false
+  - name: respellings
+    type: list<TypeRespelling>
+    description: >-
+      Each type position the write normalised: what the input wrote against the canonical spelling
+      stored. Aliases are accepted, never refused, and this list is how an author learns the
+      canonical form. Empty when every position was already canonical.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when the caller asked what the write would do: every judgement ran and nothing was
+      written.
+    optional: true
+  - name: cascaded
+    type: list<string>
+    description: >-
+      Each implementation method entry a contract restatement removed with a contract method it
+      dropped, as `<implementation>.<method>` (on a dry run, would remove). Absent when the
+      restatement dropped no contract method.
+    optional: true
+methods: []
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-19T07:48:15.465Z'
+updatedAt: '2026-10-09T00:25:03.411Z'

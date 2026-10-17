@@ -1,0 +1,18 @@
+id: demo_orchestrator
+name: Demo Orchestrator
+description: >-
+  Authors the ShopFlow example spec tree into the bound project root for `wairon host demo`, so the
+  architecture canvas has substantial content across its component, type and narrative views. Writes
+  the L0 system spec, three subsystems with their layered Portal, Orchestrator, Repository and
+  Adapter slices, their contracts, implementations with narratives of every step kind, and the types
+  with keys and foreign references, all through the spec repository's own writers so the example
+  always matches the on-disk schema and layout; then drops the repository's cached index. Holds no
+  state: one write of a fixed example over whatever root the caller bound.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+status: complete
+createdAt: '2026-10-07T22:40:08.919Z'
+updatedAt: '2026-10-07T22:40:11.315Z'

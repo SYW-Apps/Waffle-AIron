@@ -8,6 +8,8 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - skills_exporter
+lint:
+  allow: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-08T22:02:22.648Z'
+updatedAt: '2026-09-17T20:37:08.669Z'

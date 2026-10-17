@@ -5,6 +5,10 @@ import type {
   PackExtractionLimits,
   PackExtractionResult,
   PackScaffoldRequest,
+  TreeArchiveInfo,
+  TreeBuildResult,
+  TreeExtractionResult,
+  TreeRootSource,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -40,6 +44,34 @@ export function extractPack(
 ): PackExtractionResult {
   // Step 1: forward to the SDK orchestrator.
   return orchestrator.extractPack(archive, destDir, limits);
+}
+
+/** Pack a project's spec tree — the supplied roots' .wai directories — into a .waitree archive. */
+export function buildTreeArchive(
+  roots: TreeRootSource[],
+  projectName: string,
+  stateId?: string,
+  includeDerived?: boolean,
+): TreeBuildResult {
+  // Step 1: forward to the SDK orchestrator.
+  return orchestrator.buildTreeArchive(roots, projectName, stateId, includeDerived);
+}
+
+/** Inspect a .waitree archive without extracting it. */
+export function inspectTreeArchive(archive: Uint8Array): TreeArchiveInfo {
+  // Step 1: forward to the SDK orchestrator.
+  return orchestrator.inspectTreeArchive(archive);
+}
+
+/** Safely extract a .waitree archive into a destination project root under enforced limits. */
+export function extractTreeArchive(
+  archive: Uint8Array,
+  destDir: string,
+  limits?: PackExtractionLimits,
+  refuseExecutableEntries?: boolean,
+): TreeExtractionResult {
+  // Step 1: forward to the SDK orchestrator.
+  return orchestrator.extractTreeArchive(archive, destDir, limits, refuseExecutableEntries);
 }
 
 // Re-export the pure pack-archive value objects...

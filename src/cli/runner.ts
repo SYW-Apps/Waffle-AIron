@@ -1,0 +1,663 @@
+// ---------------------------------------------------------------------------
+// cli_runner — the terminal's workflows that live in no command module of
+// their own: the lock and its approval gate, attached-checkout routing for
+// validate / status / lock, the pack-ecosystem dispatch, agent briefs and the
+// hosted MCP registration. The `wairon` binary's argv parsing is cli_portal's
+// (src/cli/index.ts); it dispatches every command here or to the command
+// module that holds it, and never reaches an adapter itself.
+// ---------------------------------------------------------------------------
+
+import * as path from 'path';
+import { isSilent, logger } from '../utils/logger.js';
+import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../utils/errors.js';
+// The runner imports each command adapter module DIRECTLY (not through the
+// commands barrel) so the physical import graph mirrors the declared
+// cli_runner → adapter edges (dependency conformance).
+import { runGenerate } from '../commands/generate.js';
+import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict } from '../commands/lock.js';
+import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
+import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
+import { designOnly } from '../models/lock.js';
+import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
+import { pathExists, readFileOrNull, writeFile, getProjectRoot, getProjectRootOverride, resolveProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { effectiveProjectId } from '../models/project.js';
+import { runMcpInstall } from '../commands/mcp.js';
+import { runStatus } from '../commands/status.js';
+// The pending-transaction banner: unfinished family migrations under this root.
+import { recover as recoverMigrations } from '../commands/adapters/migrations.js';
+import { listRules } from '../commands/rules.js';
+import { listPatterns } from '../commands/patterns.js';
+import { listVariants } from '../commands/adapters/variants.js';
+import { addPack, listPacks, removePack, initPack, buildPack, installPack, uninstallStorePack, whichPack, usePack, unusePack, bundlePack, syncPacks, impactPack, type PackCommandOptions } from '../commands/packs.js';
+import {
+  resolveTarget,
+  validateAttached,
+  statusAttached,
+  lockAttached,
+  storedCredentialFor,
+} from '../commands/remote.js';
+import { composeAgentBrief, loadProjectConfig, resolveAgentTopology, setNetwork } from '../commands/adapters/core.js';
+import { summarize } from '../models/execution.js';
+import { NetworkOptionsError } from '../utils/errors.js';
+import type { NetworkCommandOptions } from '../commands/network.js';
+import {
+  flows as networkFlows,
+  policy as networkPolicy,
+  diagram as networkDiagram,
+  check as networkCheck,
+  why as networkWhy,
+  type FlowCheckReport,
+  type FlowExplanation,
+  type NetworkDocument,
+  type NetworkOutputFormat,
+  type ObservedFlow,
+} from '../commands/adapters/network.js';
+
+// ---------------------------------------------------------------------------
+// lock
+// ---------------------------------------------------------------------------
+
+// cli_runner.runLock — the local `wairon lock` workflow: CAPTURE the gate
+// identity before anything is judged, gate on the DESIGN half of the
+// as-complete dry-run validation (an invalid design is never approved), lock
+// through the lock adapter (which refuses when requireApprovedMembers finds a
+// direct member unapproved, and when the identity moved while the lock ran),
+// and refresh THIS project's generated outputs. Code-conformance findings never
+// refuse the lock: they are recorded beside the claim and printed plainly — CI
+// (`wairon validate --ci`) enforces them. A parent lock writes nothing into its
+// members, generated outputs included: each member locks at its own root.
+//
+// Why validate-as-complete: the conformance gate downgrades completeness
+// errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
+// break the moment it's locked. The gate validates the tree AS IF everything
+// were complete (the status flip happens in-memory inside the validator and is
+// restored) and the lock is refused unless it is clean at full strictness. A
+// failed or cancelled lock leaves every file byte-for-byte unchanged.
+async function runLock(options: LockOptions): Promise<void> {
+  assertProjectInitialized();
+
+  // Steps 1-3: no L0 that reads — said as `lock-check` and `validate` say it
+  // (a missing or unreadable L0 with specs below it is a tree whose root is
+  // gone, never "no tree"); nothing is written.
+  const tree = treeVerdict(true);
+  if (tree) {
+    logger.error(tree.state === 'no-tree' ? 'No SDD spec tree here (.wai/specs holds no L0): there is no design to lock. Nothing was written.' : `${tree.message} Nothing was written.`);
+    process.exit(1);
+  }
+
+  const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
+
+  // Steps 6-8: a tree holding the L0 and nothing below it, never approved, has
+  // no design to approve — approving it would record an empty design. Said, and
+  // nothing written; not a failure.
+  if (holdsNoDesign()) {
+    logger.info('Nothing designed to approve yet: the spec tree holds the L0 and nothing below it (no subsystem, no member project). '
+      + 'Add a subsystem first (an assistant adds one with sdd_add_subsystem), then run `wairon lock`. Nothing was written.');
+    return;
+  }
+
+  // Step 9: capture the identity the record will certify, before anything is judged.
+  const captured = computeGateStateId();
+
+  logger.info('Analyzing and validating specifications in-memory...');
+  const dry = validateAsComplete({
+    rules: projectConfig.rules,
+    projectType: projectConfig.projectType,
+    scopeSubsystem: options.subsystem,
+  });
+
+  // Step 11: the design half is what the approval certifies and the only
+  // findings that may refuse it — a design can be approved before its code exists.
+  const design = designOnly(dry);
+  const errors = design.issues.filter((i) => i.severity === 'error');
+  if (errors.length > 0) {
+    logger.header('Cannot lock — the design does not validate as complete');
+    let errorCount = 0;
+    const MAX_PRINT = 100;
+    let skippedErrors = 0;
+    for (const i of errors) {
+      if (errorCount < MAX_PRINT) {
+        logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
+        errorCount++;
+      } else {
+        skippedErrors++;
+      }
+    }
+    if (skippedErrors > 0) {
+      logger.error(`... and ${skippedErrors} more error(s) not shown (${errorCount} of ${errors.length} printed). `
+        + 'Run `wairon validate --all` to see every finding (it judges draft specs leniently; the lock judges them as complete).');
+    }
+    logger.blank();
+    logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
+    process.exit(1);
+  }
+
+  // --- Lock through the adapter (summary, member states, confirmation, re-confirm) ---
+  logger.header('Lock SDD specs');
+  // A refusal (requireApprovedMembers, inputs that moved while it ran) is a
+  // WaironError: printed and exited on by the CLI's own handler, nothing written.
+  const lockPath = path.join(getProjectRoot(), '.wai', 'lock.json');
+  const before = readFileOrNull(lockPath);
+  const record = await lockTree(options, dry, captured);
+  if (!record) {
+    logger.info('Cancelled. Nothing was changed.');
+    return;
+  }
+
+  // THIS project's generated outputs only — never --family: a parent lock
+  // writes nothing below itself, generated outputs included.
+  logger.blank();
+  await runGenerate({ domain: options.subsystem });
+
+  logger.blank();
+  logger.success('Specs locked and generated outputs reconciled.');
+  // Truthful about the file: the same approval re-recorded nothing.
+  logger.info(before !== null && readFileOrNull(lockPath) === before
+    ? `Lock record unchanged (.wai/lock.json left untouched by this run): stateId ${record.stateId.algorithm}:${record.stateId.digest} — approved ${record.lockedAt}.`
+    : `Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
+  for (const [alias, pin] of Object.entries(record.members ?? {})) {
+    logger.info(`  member ${alias}: ${pin.state}${pin.subject ? ` (${pin.subject.slice(0, 26)}…)` : ''}`);
+  }
+  // The code half was printed once, plainly, in the summary the lock showed
+  // before it wrote (so an approval taken over failing code is never mistaken
+  // for clean code); printing it again here only doubled the line.
+  logger.info(
+    'Live agent briefs (sdd_get_agent_brief / wairon-agent://) ' +
+      'are composed per call and already current — no session restart needed.',
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Attached-checkout routing (cli_runner)
+//
+// A checkout ATTACHED to a hosted project has no local spec tree, so the three
+// commands that read one run against the hosted tree instead. Everything else
+// stays honestly local: a command that needs files on disk keeps failing with
+// guidance to `wairon remote pull` rather than silently doing nothing.
+// ---------------------------------------------------------------------------
+
+/** cli_runner.runLock — hosted when attached, else the local approval. */
+export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    const outcome = await lockAttached(target);
+    logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
+    return;
+  }
+  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive, all: opts.all });
+}
+
+/** cli_runner.runValidate — hosted when attached, else the local validation. */
+export async function validateCommand(opts: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean; all?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    const report = (await validateAttached(target, opts.subsystem, opts.family)) as {
+      valid?: boolean;
+      errors?: { code: string; message: string; specId?: string }[];
+      warnings?: { code: string; message: string; specId?: string }[];
+      notices?: { code: string; message: string; specId?: string }[];
+    };
+    const errors = report.errors ?? [];
+    const warnings = report.warnings ?? [];
+    // An instance older than the notice severity sends no `notices` list.
+    const notices = report.notices ?? [];
+    logger.info(`Validated "${target.projectId}" on ${target.url} — ${errors.length} error(s), ${warnings.length} warning(s), ${notices.length} notice(s).`);
+    for (const e of errors) logger.error(`  [${e.code}] ${e.specId ? `${e.specId}: ` : ''}${e.message}`);
+    for (const w of warnings) logger.warn(`  [${w.code}] ${w.specId ? `${w.specId}: ` : ''}${w.message}`);
+    for (const n of notices) logger.notice(`  [${n.code}] ${n.specId ? `${n.specId}: ` : ''}${n.message}`);
+    // Exit non-zero exactly as a local run would, so CI gates identically:
+    // notices never fail it, --ci included.
+    if (errors.length || (opts.ci && warnings.length)) process.exit(1);
+    return;
+  }
+  // Not attached: the pending-transaction banner, before the tree is read (a
+  // crash mid-swap may leave it unreadable) — a notice, so --ci is unaffected.
+  for (const t of recoverMigrations(getProjectRoot(), false)) {
+    logger.notice(`[TRANSACTION_PENDING] an unfinished family migration (${t.verb}, transaction ${t.id}, coordinator phase ${t.phase}) — run \`wairon doctor --fix\` to roll it back`);
+  }
+  await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive, family: opts.family, all: opts.all });
+}
+
+/** cli_runner.runStatus — hosted when attached, else the local dashboard. */
+export async function statusCommand(options: { subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
+  const target = resolveTarget(getProjectRoot(), {});
+  if (target) {
+    logger.info(`Status of "${target.projectId}" on ${target.url}:`);
+    process.stdout.write(`${await statusAttached(target, options.subsystem)}\n`);
+    return;
+  }
+  // The flag at the edge: --no-recursive is a member depth of 0, the default every level.
+  await runStatus({ subsystem: options.subsystem, ...(options.recursive === false ? { memberDepth: 0 } : {}) }, options.all === true);
+}
+
+// ---------------------------------------------------------------------------
+// cli_runner.announceBinding — which project a command acts on
+//
+// Every command that acts on a project names the one it bound, on one line and
+// on stderr, so `wairon export` (or any --json output) keeps a pure stdout. The
+// root is the one getProjectRoot resolves: an explicit override, else the
+// binding rule from the cwd — the nearest folder with an L0, never past the
+// repository root unless an ancestor declares the crossing as a member.
+// ---------------------------------------------------------------------------
+
+/** Commands (first word, or the whole path) that act on no project, or announce their own binding. */
+const ANNOUNCE_SILENT = new Set(['init', 'host', 'remote', 'login', 'logout', 'serve', 'dev', 'update', 'aliases', 'help', 'mcp serve']);
+
+/** cli_runner.announceBinding — print `project <id> at <root>` to stderr before a command that acts on a project. */
+export function announceBinding(commandPath: string): void {
+  // Step 1: a command that acts on no project says nothing.
+  const first = commandPath.split(' ')[0];
+  if (ANNOUNCE_SILENT.has(first) || ANNOUNCE_SILENT.has(commandPath)) return;
+  // Steps 3-5: the bound root; none bound, the command reports it itself.
+  const root = getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root;
+  if (!root) return;
+  // Step 6: its effective id.
+  let id: string | null = null;
+  try {
+    const config = runWithProjectRoot(root, () => loadProjectConfig());
+    if (config) id = effectiveProjectId(config);
+  } catch (e) {
+    // Steps 7-8: a configuration that does not parse refuses every command
+    // alike (doctor diagnoses it in its own words); one failing its schema
+    // names the folder, and the command reports it.
+    if (e instanceof YamlSyntaxError && first !== 'doctor') throw e;
+  }
+  // Step 9: nothing under --silent.
+  if (!isSilent()) process.stderr.write(`project ${id ?? path.basename(root)} at ${root}\n`);
+}
+
+// ---------------------------------------------------------------------------
+// lock-check (cli_runner.runLockCheck)
+//
+// The merge gate, and deliberately NOT a flag on `validate`. Two reasons:
+//
+//  1. It asks a different question. `validate` asks whether the design is
+//     LEGAL; this asks whether it is APPROVED. They are independent — a tree
+//     can be approved and illegal, or legal and unapproved — so folding them
+//     into one exit code makes a single red check mean two unrelated things.
+//  2. It costs a fraction as much. `validate` runs the whole rule set over the
+//     whole tree; this loads the tree, hashes it, and reads one committed JSON
+//     file. A consumer importing the reusable workflow runs it on every pull
+//     request, and should not have to pay for the validator to learn whether
+//     someone approved the design.
+//
+// Local only, with no attached-checkout routing: the subject is the design in
+// the commit being merged, which is on disk here. A hosted project's lock is
+// `wairon host lock`.
+// ---------------------------------------------------------------------------
+
+/** cli_runner.runLockCheck — print the approval verdict and exit on it. */
+export async function lockCheckCommand(options: LockCheckOptions): Promise<void> {
+  // No assertProjectInitialized(): a repository with no .wai/ at all must be
+  // told exactly that, not met with an error about an uninitialized project.
+  const verdict = checkApproval(options.strict === true);
+
+  // Print BEFORE deciding — the log carries the verdict whichever way it goes.
+  if (!verdict.approved) logger.error(verdict.message);
+  else if (verdict.state === 'locked') logger.success(verdict.message);
+  else logger.info(verdict.message);
+
+  if (verdict.approved) return;
+  // Exit non-zero so the job fails. Whether that BLOCKS a merge is a branch
+  // protection setting on the repository — no workflow can declare it.
+  process.exit(1);
+}
+
+// cli_runner dispatch for the pack-ecosystem commands — consistent with
+// runValidate/runGenerate/…: the orchestrator routes each subcommand to its
+// command adapter rather than the commander action calling the adapter inline.
+export function runRules(): void {
+  listRules();
+}
+export function runPatterns(): void {
+  listPatterns();
+}
+export function runVariants(): void {
+  listVariants();
+}
+export async function runPacks(action: string, arg?: string, options: PackCommandOptions = {}): Promise<void> {
+  if (action === 'add') await addPack(arg!, options.global);
+  else if (action === 'list') listPacks();
+  else if (action === 'remove') await removePack(arg!, options.global);
+}
+export async function runPack(
+  action: string,
+  arg?: string,
+  options: PackCommandOptions = {},
+): Promise<void> {
+  // --yes passes through to the commands that select, update or remove a
+  // project's pack; without it they show the pack's impact and ask first.
+  if (action === 'init') initPack(arg!, { kind: options.kind === 'code' ? 'code' : 'declarative', dir: options.dir, skill: options.skill });
+  else if (action === 'build') buildPack(arg ?? '.', { out: options.out });
+  else if (action === 'add') await addPack(arg!, options.global, options.yes);
+  else if (action === 'list') listPacks();
+  else if (action === 'remove') await removePack(arg!, options.global, options.yes);
+  else if (action === 'install') await installPack(arg!, options.yes);
+  else if (action === 'uninstall') uninstallStorePack(arg!);
+  else if (action === 'which') whichPack(arg!);
+  else if (action === 'use') await usePack(arg!, { source: options.source, bundle: options.bundle, pin: options.pin, yes: options.yes });
+  else if (action === 'unuse') await unusePack(arg!, options.yes);
+  else if (action === 'bundle') bundlePack(arg, { all: options.all });
+  else if (action === 'sync') await syncPacks();
+  else if (action === 'impact') impactPack(arg!);
+  else throw new WaironError('unknown pack action (expected init | build | install | uninstall | which | use | unuse | impact | bundle | sync | add | list | remove)');
+}
+
+// ---------------------------------------------------------------------------
+// agent — live delegation briefs + user-owned per-agent guidance
+// ---------------------------------------------------------------------------
+
+/** Thrown when `wairon agent customize` targets a guidance file that already
+ *  exists — it is user-owned and is never regenerated or overwritten. */
+class GuidanceFileExistsError extends WaironError {
+  constructor(relPath: string) {
+    super(`${relPath} already exists. It is user-owned — edit it directly; wairon never regenerates or prunes it.`);
+    this.name = 'GuidanceFileExistsError';
+  }
+}
+
+// cli_runner.runAgent — `wairon agent <action> <id>`. `brief` prints the
+// agent's LIVE delegation brief (the CLI window into what sdd_get_agent_brief
+// serves); `customize` scaffolds the user-owned guidance file
+// .wai/agents/<id>.md from the current brief and REFUSES when it exists.
+export async function runAgent(action: string, id: string): Promise<void> {
+  assertProjectInitialized();
+
+  switch (action) {
+    case 'brief': {
+      const brief = composeAgentBrief(id);
+      logger.header(`${brief.name} (${brief.agentId})`);
+      if (brief.domainRoot) logger.info(`Domain:      ${brief.domainRoot}`);
+      if (brief.ownedPaths.length > 0) {
+        logger.info('Owned paths:');
+        for (const p of brief.ownedPaths) logger.info(`  ${p}`);
+      }
+      if (brief.codeFence) {
+        logger.info(brief.codeFence.length > 0 ? 'Code write fence:' : 'Code write fence: none declared yet (name the planned files when spawning)');
+        for (const p of brief.codeFence) logger.info(`  ${p}`);
+      }
+      if (brief.sharedPaths && brief.sharedPaths.length > 0) {
+        logger.info('Shared (touch only for this component\'s needs; a new shared responsibility is a design change):');
+        for (const p of brief.sharedPaths) logger.info(`  ${p}`);
+      }
+      if (brief.readPaths && brief.readPaths.length > 0) {
+        logger.info('Read paths:');
+        for (const p of brief.readPaths) logger.info(`  ${p}`);
+      }
+      if (brief.budget && brief.profile) {
+        logger.blank();
+        logger.info('Execution budget (advisory — apply when spawning):');
+        for (const line of summarize(brief.budget, brief.profile)) {
+          logger.info(`  ${line.replace(/^- \*\*(.+?)\*\*: /, '$1: ')}`);
+        }
+      }
+      logger.blank();
+      console.log(brief.instructions);
+      return;
+    }
+    case 'customize': {
+      // Composing first also validates the id (UnknownAgentError on a miss).
+      const brief = composeAgentBrief(id);
+      const guidancePath = path.join(AI_PATHS.root(), 'agents', `${id}.md`);
+      const relPath = `.wai/agents/${id}.md`;
+      if (pathExists(guidancePath)) {
+        throw new GuidanceFileExistsError(relPath);
+      }
+      // Starting content: the agent's (subsystem-derived) description. The
+      // spec-derived facts themselves stay OUT of the file — they are inferred
+      // live on every brief composition.
+      const description = resolveAgentTopology().find((a) => a.id === id)?.description ?? brief.name;
+      writeFile(guidancePath, [
+        `<!-- Project guidance for agent "${id}" — user-owned; wairon never regenerates or prunes this file.`,
+        '     Spec-derived facts (ownership, paths, workflow) are inferred LIVE from the spec tree on every',
+        '     brief composition — do not duplicate them here. Everything below this header is folded into',
+        `     every "${id}" brief under "## Project guidance". -->`,
+        '',
+        description,
+        '',
+      ].join('\n'));
+      logger.success(`Created ${relPath}`);
+      logger.info('Edit it freely — its content is folded into every future brief for this agent under "## Project guidance".');
+      return;
+    }
+    default:
+      throw new WaironError(`Unknown agent action "${action}" (expected brief | customize).`);
+  }
+}
+
+/**
+ * cli_runner.runMcpInstall — register (or self-heal) the wairon MCP entry. For a
+ * HOSTED registration the bearer is resolved HERE — the explicit --token, else
+ * the credential stored for that instance — because the config adapter may not
+ * read the credential store; `wairon login` once is enough to wire an agent.
+ */
+export function mcpInstallCommand(opts: {
+  global?: boolean;
+  configDir?: string;
+  backend?: string;
+  hosted?: string;
+  project?: string;
+  token?: string;
+}): void {
+  const hostedToken = opts.hosted
+    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
+    : undefined;
+  runMcpInstall({
+    global: opts.global,
+    configDir: opts.configDir,
+    backend: opts.backend,
+    hostedUrl: opts.hosted,
+    hostedProject: opts.project,
+    hostedToken,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// network — the derived networking (sdd_network): flows, policy, diagram,
+// check, why. Every output is derived from the design; deployment facts come
+// only from the bindings file the team keeps outside .wai/.
+// ---------------------------------------------------------------------------
+
+/** The selection: the family at a project that declares members, unless --no-recursive. */
+function networkSelection(options: NetworkCommandOptions): { memberDepth?: number } {
+  return options.recursive === false ? { memberDepth: 0 } : {};
+}
+
+/** A --format value checked against the formats the command writes. */
+function networkFormat(given: string | undefined, fallback: NetworkOutputFormat, allowed: NetworkOutputFormat[]): NetworkOutputFormat {
+  const format = (given ?? fallback) as NetworkOutputFormat;
+  if (!allowed.includes(format)) {
+    throw new NetworkOptionsError(`--format ${given} is not one of ${allowed.join(', ')}`);
+  }
+  return format;
+}
+
+/** Print a document, or write it to --out and say where. */
+function emitNetworkDocument(doc: NetworkDocument, out: string | undefined): void {
+  if (!out) {
+    process.stdout.write(doc.content);
+    return;
+  }
+  writeFile(path.resolve(out), doc.content);
+  logger.success(`Wrote ${doc.format} to ${out}`);
+}
+
+/**
+ * Print the gate findings a derived output was judged against, on stderr so a
+ * piped document stays clean: what refused rows (and so is never allowed) and
+ * what marked them.
+ */
+function reportGateFindings(doc: NetworkDocument, what: string): void {
+  if (doc.gateFindings.length === 0) return;
+  if (doc.refused) {
+    logger.error(`The design fails the gate: ${what}. Run \`wairon validate\` and fix the design first.`);
+  }
+  for (const line of doc.gateFindings) {
+    if (line.includes(' (error): ')) logger.error(`  ${line}`);
+    else if (line.includes(' (notice): ')) logger.notice(`  ${line}`);
+    else logger.warn(`  ${line}`);
+  }
+}
+
+/** The notes a derived output carries, each on stderr: what a reader must act on. */
+function reportNetworkNotes(notes: string[] | undefined): void {
+  for (const note of notes ?? []) logger.warn(`NOTE: ${note}`);
+}
+
+/** cli_runner.runNetworkFlows — print (or write) the allowed-flows matrix. */
+export async function runNetworkFlows(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: the matrix in the asked format, the family unless --no-recursive.
+  const doc = networkFlows(networkSelection(options), networkFormat(options.format, 'json', ['json', 'csv', 'markdown']));
+  // Step 2: printed, then every gate finding that refused or marked a row.
+  emitNetworkDocument(doc, options.out);
+  reportNetworkNotes(doc.notes);
+  reportGateFindings(doc, 'the rows marked REFUSED are refused by the gate, not allowed');
+  // A matrix of a refused design is not one to commit: the run fails, like policy, why and check.
+  if (doc.refused) process.exitCode = 1;
+}
+
+/** cli_runner.runNetworkPolicy — generate network policy from the matrix and the team's bindings. */
+export async function runNetworkPolicy(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: a policy needs the team's bindings.
+  if (!options.bindings) {
+    // Step 4.
+    throw new NetworkOptionsError('policy needs --bindings <file>: the bindings file the team keeps outside .wai/ (specs hold no deployment facts — see docs/network.md)');
+  }
+  // Step 2.
+  const format = networkFormat(options.format, 'kubernetes-network-policy', ['kubernetes-network-policy']);
+  const doc = networkPolicy(networkSelection(options), options.bindings, format);
+  // Step 3: print or write it, then list each unbound name with its placeholder label.
+  emitNetworkDocument(doc, options.out);
+  reportNetworkNotes(doc.notes);
+  for (const name of doc.unbound) {
+    logger.error(name === 'outside'
+      ? 'unbound: outside — the bindings name no `outside:` blocks, so nothing from outside is admitted'
+      : `unbound: ${name} — selected by the placeholder label wairon.dev/workload, which matches no pod until it is bound`);
+  }
+  // An unbound workload is not a safe default: applied as-is, its policy selects
+  // a placeholder (or admits nothing from outside), which is default deny for
+  // that workload in production. The run says so and fails.
+  if (doc.unbound.length > 0) {
+    logger.error(`${doc.unbound.length} name(s) unbound: applied as-is, this policy denies their ingress by default, so nothing reaches them in production. Bind each in the bindings file (a NOTE above names any key written under a renamed project's former name), then generate again.`);
+    process.exitCode = 1;
+  }
+  // A design that fails the gate has no policy to commit: the refused flows are left out, and the run fails.
+  reportGateFindings(doc, 'the flows it refuses were left out of the policy (the file\'s head names them)');
+  if (doc.refused) process.exitCode = 1;
+}
+
+/** cli_runner.runNetworkDiagram — print (or write) the network picture as Mermaid. */
+export async function runNetworkDiagram(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1.
+  const doc = networkDiagram(networkSelection(options));
+  // Step 2.
+  emitNetworkDocument(doc, options.out);
+}
+
+/** One observed flow as one line. */
+function observedLine(o: ObservedFlow): string {
+  const l7 = o.method || o.path ? ` ${[o.method, o.path].filter(Boolean).join(' ')}` : '';
+  return `${o.source} -> ${o.destination}${o.transport ? ` [${o.transport}]` : ''}${l7}${o.count !== undefined ? ` (seen ${o.count}x)` : ''}`;
+}
+
+/** The check report: the gate's findings, then unexpected, disallowed, unknown verbs, unexercised. */
+function printFlowCheck(report: FlowCheckReport): void {
+  if (report.gateFindings.length > 0) {
+    logger.header(`Gate findings (${report.gateFindings.length}) — the design was judged first; a flow an error sits on allows nothing`);
+    for (const line of report.gateFindings) console.log(`  ${line}`);
+  }
+  logger.header(`Unexpected flows (${report.unexpected.length}) — observed, but the design allows none`);
+  for (const o of report.unexpected) console.log(`  ${observedLine(o)}`);
+  logger.header(`Disallowed flows (${report.disallowed.length}) — a verb the design declares, but not allowed from this source (or refused by the gate)`);
+  for (const o of report.disallowed) console.log(`  ${observedLine(o)}`);
+  logger.header(`Unknown verbs (${report.unknownVerbs.length}) — an allowed pair, but no declared verb has this method and path`);
+  for (const o of report.unknownVerbs) console.log(`  ${observedLine(o)}`);
+  logger.header(`Unexercised flows (${report.unexercised.length}) — allowed, never observed in the window`);
+  for (const f of report.unexercised) {
+    const from = f.from.scope ?? f.from.component ?? '';
+    console.log(`  ${from} -> ${f.to.component}.${f.to.verb}${f.binding ? ` (${f.binding})` : ''}`);
+  }
+}
+
+/** cli_runner.runNetworkCheck — observed live flows against the matrix; non-zero when anything unexpected or unknown ran. */
+export async function runNetworkCheck(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: a check needs an observed-flow export.
+  if (!options.observed) {
+    // Step 5.
+    throw new NetworkOptionsError('check needs --observed <file>: a CSV or JSON export of observed flows (see docs/network.md)');
+  }
+  // Step 2.
+  const report = networkCheck(networkSelection(options), options.observed, options.bindings ?? null);
+  // Step 3.
+  if (options.format === 'json') process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+  else printFlowCheck(report);
+  if (options.format !== 'json') reportNetworkNotes(report.notes);
+  // Step 4: an unexercised flow is a review item, not a failure.
+  if (report.unexpected.length > 0 || report.disallowed.length > 0 || report.unknownVerbs.length > 0) process.exitCode = 1;
+}
+
+/** cli_runner.runNetworkWhy — why one party may reach another; non-zero when nothing allows it. */
+export async function runNetworkWhy(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  if (!options.from || !options.to) throw new NetworkOptionsError('why needs <from> <to>');
+  // Step 1.
+  const explanation = networkWhy(networkSelection(options), options.from, options.to);
+  // Step 2.
+  if (options.format === 'json') {
+    process.stdout.write(JSON.stringify(explanation, null, 2) + '\n');
+  } else {
+    logger.header(whyHeading(explanation, options.from, options.to));
+    for (const line of explanation.chain) console.log(`  ${line}`);
+  }
+  // In-process is an answer, not a refusal; every other "not allowed" fails.
+  if (!explanation.allowed && !explanation.inProcess) process.exitCode = 1;
+}
+
+/** The one-line verdict `network why` prints, said as what it is. */
+function whyHeading(explanation: FlowExplanation, from: string, to: string): string {
+  if (explanation.allowed) return `${from} may reach ${to}`;
+  if (explanation.unknown?.length) return `unknown party: ${explanation.unknown.map((n) => `"${n}"`).join(', ')}`;
+  if (explanation.refusedBy?.length) return `${from} may NOT reach ${to}: the design names the flow, but the gate refuses it`;
+  if (explanation.inProcess) return `${to} is reached in-process: never a network flow`;
+  return `${from} may NOT reach ${to}`;
+}
+
+/**
+ * cli_runner.runNetworkDeclare — `wairon network declare [--description]`:
+ * declare this project's network in .wai/project.yaml, no hand edit.
+ */
+export async function runNetworkDeclare(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  // Step 1: a declaration already held keeps its description unless a new one is given.
+  const held = loadProjectConfig()?.network;
+  const description = options.description ?? (typeof held === 'object' && held !== null ? held.description : undefined);
+  // Step 2: through the core adapter.
+  const wrote = setNetwork(description !== undefined ? { description } : {});
+  // Step 2: what was written, and what it changes.
+  if (!wrote) {
+    logger.info('This project already declares that network: nothing was written.');
+    return;
+  }
+  logger.success(`Declared this project's network in .wai/project.yaml${description ? ` ("${description}")` : ''}: it and every member below it form one isolated network boundary.`);
+  logger.info('The network rules now judge the design (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...): run `wairon validate`. The declaration is part of the gate identity — re-lock (`wairon lock`) once it validates.');
+}
+
+/** cli_runner.runNetworkUndeclare — `wairon network undeclare`: remove this project's network declaration. */
+export async function runNetworkUndeclare(options: NetworkCommandOptions): Promise<void> {
+  assertProjectInitialized();
+  void options; // undeclare takes no flags of its own
+  // Step 1: through the core adapter.
+  const wrote = setNetwork(null);
+  // Step 2.
+  if (!wrote) {
+    logger.info('This project declares no network: nothing was removed.');
+    return;
+  }
+  logger.success('Removed this project\'s network declaration from .wai/project.yaml.');
+  logger.info('The network rules no longer judge this boundary: run `wairon validate`, then re-lock (`wairon lock`).');
+}

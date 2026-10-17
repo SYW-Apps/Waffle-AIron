@@ -1,0 +1,20 @@
+kind: value-object
+id: component_identity_move
+name: ComponentIdentityMove
+description: >-
+  One component id an identity move changes, wherever a finding's covered unit
+  (`[step:]component.method`) or edge site (`a -> b`) names it.
+subsystem: sdd_core
+fields:
+  - name: from
+    type: string
+    description: The component id before the move
+    optional: false
+  - name: to
+    type: string
+    description: The component id after it
+    optional: false
+methods: []
+sourcePath: src/models/identity-rename.ts
+createdAt: '2026-09-26T10:58:30.379Z'
+updatedAt: '2026-09-26T10:58:30.381Z'

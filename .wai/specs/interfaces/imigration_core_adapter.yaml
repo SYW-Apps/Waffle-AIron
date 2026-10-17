@@ -1,0 +1,334 @@
+id: imigration_core_adapter
+name: Migration Core Client Adapter Interface
+description: >-
+  One forward per sdd_core published method the family migrations read or write, each against the
+  project root the caller has bound.
+component: migration_core_adapter
+methods:
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: The bound root's chaining parent, or null
+      for a top root and when the request may not read above its root.
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params: []
+  - name: projectFamily
+    description: >-
+      Forward to spec_tree_portal.projectFamily: The project graph of the bound root's scan: nodes,
+      owners, authored and cross-project references, identity problems.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: A project's resolved L0 export table: the
+      bound root's, or a member's at a namespace.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The member's namespace; omitted for the bound root
+        optional: true
+  - name: loadProjectConfig
+    description: >-
+      Forward to project_config_portal.loadProjectConfig: The bound project's configuration, or null
+      when it has none.
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+  - name: approvalRecord
+    description: 'Forward to approval_portal.approvalRecord: The lock record a project root carries, or null.'
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+  - name: setId
+    description: >-
+      Forward to project_config_portal.setId: Declare the bound project's id (never replaces a
+      different one).
+    signature: 'setId(id: string): bool'
+    returns: bool
+    params:
+      - name: id
+        type: string
+        description: The id to declare
+  - name: renameId
+    description: >-
+      Forward to project_config_portal.renameId: Move the bound project's id, keeping the old one in
+      previousIds.
+    signature: 'renameId(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The id it answers to now
+      - name: to
+        type: string
+        description: The new id
+  - name: renameAlias
+    description: >-
+      Forward to project_config_portal.renameAlias: Rekey one member or external alias of the bound
+      project.
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The new alias
+  - name: declareMember
+    description: >-
+      Forward to project_config_portal.declareMember: Declare an existing project as a member of the
+      bound project.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: declaration
+        type: MemberDeclaration
+        description: Its path, description and use
+  - name: removeMember
+    description: >-
+      Forward to project_config_portal.removeMember: Remove one member declaration of the bound
+      project.
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+  - name: declareExternal
+    description: 'Forward to project_config_portal.declareExternal: Declare one external of the bound project.'
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: declaration
+        type: ExternalDeclaration
+        description: The value under the alias
+  - name: repointExternal
+    description: >-
+      Forward to project_config_portal.repointExternal: Revise one external's producer id and
+      explicit source.
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: project
+        type: string?
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource?
+        description: The explicit place, or null
+  - name: removeExternal
+    description: >-
+      Forward to project_config_portal.removeExternal: Remove one external declaration of the bound
+      project.
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+  - name: importNames
+    description: >-
+      Forward to project_config_portal.importNames: Add public names to the use of an external or
+      member of the bound project.
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias
+      - name: names
+        type: list<string>
+        description: The names, or *
+  - name: rewriteReferences
+    description: >-
+      Forward to spec_maintenance_portal.rewriteReferences: Respell references at parsed positions
+      of one spec of the family.
+    signature: 'rewriteReferences(kind: string, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: string
+        description: The spec kind
+      - name: id
+        type: string
+        description: The spec's in-memory key
+      - name: edits
+        type: list<ReferenceEdit>
+        description: The edits for this spec
+  - name: externalizeSubsystem
+    description: >-
+      Forward to spec_maintenance_portal.externalizeSubsystem: move an internal subsystem of the
+      bound project out into a contained part, or with `as: project` into a member project.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem
+      - name: path
+        type: string
+        description: The part's root, relative to the bound root
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+  - name: internalizeMember
+    description: >-
+      Forward to spec_maintenance_portal.internalizeMember: Take a member back into the bound
+      project whole, sending its metadata to the destination's homes.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its metadata goes
+  - name: projectConfigExists
+    description: >-
+      Forward to project_config_portal.projectConfigExists: whether the bound project has a
+      configuration.
+    signature: 'projectConfigExists(): bool'
+    returns: bool
+    params: []
+  - name: exportUsage
+    description: >-
+      Forward to spec_tree_portal.exportUsage: one project's references into another mapped onto the
+      producer's public names (used) or not (unexported).
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+  - name: loadSpec
+    description: 'Forward to spec_tree_portal.loadSpec: one spec of the named kind by id, or null.'
+    signature: >-
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included.
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
+    params: []
+  - name: resolveSubsystemExports
+    description: 'Forward to spec_tree_portal.resolveSubsystemExports: one subsystem''s resolved L1 export table.'
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+  - name: moveMountToMembers
+    description: >-
+      Forward to spec_maintenance_portal.moveMountToMembers: move one legacy L1 mount of the bound
+      project into its `members`.
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+  - name: normalizeReferences
+    description: >-
+      Forward to spec_maintenance_portal.normalizeReferences: re-save one spec with every reference
+      in its canonical stage-3 form.
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+  - name: promoteMember
+    description: 'Forward to spec_maintenance_portal.promoteMember: a part becomes a project in place.'
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: The new project's id
+        optional: true
+  - name: demoteMember
+    description: 'Forward to spec_maintenance_portal.demoteMember: a project member becomes a part in place.'
+    signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its metadata goes
+  - name: updateMember
+    description: >-
+      Forward to spec_maintenance_portal.updateMember: change a member's declaration — the chaining
+      migration's rewrite of a deprecated long-form `path` to the one location key, and promote /
+      demote dropping a contradicted `as`.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set
+  - name: diffAgainstApproval
+    description: >-
+      Forward to approval_portal.diffAgainstApproval: what differs between a project root's tree and
+      the approval it carries — a storage move counted as moved, never as a change — or null when it
+      carries none.
+    signatureFrom: approval_portal.diffAgainstApproval
+  - name: lockTree
+    description: >-
+      Forward to spec_tree_portal.lockTree: take the cross-process write lock of the bound root's
+      spec tree (reentrant), refused after a bounded wait naming the holder
+    signature: 'lockTree(): void'
+    returns: void
+    params: []
+  - name: unlockTree
+    description: >-
+      Forward to spec_tree_portal.unlockTree: release one hold of the bound root's spec-tree write
+      lock
+    signature: 'unlockTree(): void'
+    returns: void
+    params: []
+status: complete
+createdAt: '2026-09-30T20:31:26.576Z'
+updatedAt: '2026-10-09T16:55:56.540Z'

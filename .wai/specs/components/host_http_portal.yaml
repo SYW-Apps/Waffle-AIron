@@ -11,7 +11,13 @@ owns: []
 dependsOn:
   - host_server
   - host_request_orchestrator
-portalType: HTTP_API
+  - policy_repository
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: >-
+    Clients the host's listener host_http_portal serves directly, routing "/web", "/" to web_portal;
+    "/share" to share_portal
 status: complete
 createdAt: '2026-07-04T12:33:41.703Z'
-updatedAt: '2026-07-04T13:06:22.588Z'
+updatedAt: '2026-10-06T18:54:58.479Z'

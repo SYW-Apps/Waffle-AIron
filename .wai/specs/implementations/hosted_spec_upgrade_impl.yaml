@@ -1,0 +1,70 @@
+id: hosted_spec_upgrade_impl
+name: Hosted Spec Upgrade Implementation
+description: >-
+  Realized by src/server/spec-upgrade.ts: one pass over the hosted project records, each migrated
+  with its root bound.
+contract: ihosted_spec_upgrade
+sourcePath: src/server/spec-upgrade.ts
+injectedParams:
+  - cfg
+methods:
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Read every hosted project record
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 2
+        label: each
+        description: For every record with a root, each root once
+        type: loop
+        loopKind: forEach
+        over: the hosted project records
+        endStep: 8
+      - stepNumber: 3
+        description: Is it a part retired into its parent?
+        type: call
+        targetComponent: project_repository
+        targetMethod: isRetiredPart
+      - stepNumber: 4
+        description: 'A retired part holds no tree of its own: its parent''s run covers its folder'
+        type: branch
+        condition: the record is a retired part
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        label: skip
+        description: Skip it
+        type: jump
+        toStep: 2
+      - stepNumber: 6
+        label: migrate
+        description: >-
+          With the record's root bound, plan the reachability migration and write it only with
+          apply; a failure is answered with why and the loop continues
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 7
+        description: Was anything written?
+        type: branch
+        condition: apply is on and the plan rewrote at least one spec
+        onTrueStep: 8
+        onFalseStep: 2
+      - stepNumber: 8
+        label: audit
+        description: >-
+          Audit it as migration.reachability under the operator, with the rewrites counted by form
+          and the forms left for an author, so the re-lock it owes is traceable
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 9
+        description: Answer every project's migration, failures included
+        type: return
+        outcome: list<HostedReachMigration>
+    detail: full
+status: complete
+createdAt: '2026-10-06T19:54:37.890Z'
+updatedAt: '2026-10-06T19:54:38.599Z'

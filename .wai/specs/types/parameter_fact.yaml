@@ -1,0 +1,100 @@
+kind: value-object
+id: parameter_fact
+name: ParameterFact
+description: >-
+  One parameter of a function as the code declares it: what it is called, what it is annotated with,
+  and whether a caller may leave it out. The type is what makes a RENAME tellable from a dropped
+  parameter — `seed(config: HostConfig)` realized as `bootstrapInstance(cfg: HostConfig)` is one
+  parameter under two names, and matching on names alone reads it as a parameter the code lost. A
+  parameter bound by destructuring has no name to compare, so it records none rather than inventing
+  one.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: The parameter's name, absent when it is bound by a destructuring pattern instead
+    optional: true
+  - name: type
+    type: string
+    description: >-
+      The type it is annotated with, exactly as written and whitespace-normalized; absent when the
+      code annotates nothing
+    optional: true
+  - name: optional
+    type: bool
+    description: Whether a caller may leave it out — marked optional, given a default, or a rest parameter
+    optional: false
+  - name: unused
+    type: bool
+    description: >-
+      True when the parameter is named and PROVABLY unused: no identifier of its name appears in the
+      function's body or in another parameter's default value, and the body never reads `arguments`.
+      Absent when anything could read it — a shadowing local counts as a use, which can only keep a
+      parameter judged
+    optional: true
+  - name: kind
+    type: string
+    description: >-
+      The kind of value the type checker says the parameter takes, nullability set aside — string,
+      number, boolean, list, object or function; absent when the checker settles none (any, unknown,
+      an unresolvable name, a union of kinds). What tells a substitution from a rename where the
+      annotation's own spelling cannot
+    optional: true
+  - name: fields
+    type: list<string>
+    description: >-
+      The DATA property names (a method set aside) the type checker says an OBJECT-kind parameter's
+      type has, nullability set aside; absent for any other kind, where no checker read the file,
+      and for a type with no property it can name. What a declared record type is compared with
+      structurally: an object sharing none of the record's fields is a different argument, whatever
+      either side calls it
+    optional: true
+  - name: transport
+    type: bool
+    description: >-
+      True when the annotation names a platform transport class — a request, a response, a socket, a
+      URL or its headers (node:http's IncomingMessage, a fetch Request…) — resolved or not: a handle
+      whatever serves the method hands it, never a domain record
+    optional: true
+  - name: reads
+    type: list<string>
+    description: >-
+      The member names and literal keys the body reads off the parameter, at any depth of a chain
+      (`req.params.code` reads params and code; `req.query['limit']` reads query and limit), the
+      string literal a method of such a chain is called with (`url.searchParams.get('limit')` reads
+      limit), the property names a destructuring of such a read binds at any depth, and the same
+      read off a local its value flows into (through `??`, `||`, `await`, `new URL(…)`, `new
+      URLSearchParams(…)`, `JSON.parse(…)`) or off what a helper it is passed to reads and returns —
+      a helper of the same file, or, where a type checker read the file, of any project file no
+      implementation claims. Absent when the parameter is unnamed or nothing is read off it. What
+      says a contract parameter an injected request handle carries is realized through it
+    optional: true
+  - name: opaque
+    type: bool
+    description: >-
+      True when the type checker says the parameter's type admits any value — any, unknown, object,
+      {}, or an index signature alone (`Record<string, unknown>`) — nullability set aside: a type
+      naming no field a declared record could be compared with, which the parameter check fails
+      closed on. Absent where no checker read the file
+    optional: true
+  - name: members
+    type: list<string>
+    description: >-
+      The member names the body reads DIRECTLY off the parameter — `args.habitId` reads habitId,
+      `args['date']` reads date: the first link of every chain, no flow followed. Absent when the
+      parameter is unnamed, unused or read for no member. What says a value the code types as
+      admitting anything is USED as an object, where the contract declares a scalar
+    optional: true
+  - name: handedWhole
+    type: bool
+    description: >-
+      True when the parameter is a request handle (req, request, ctx, context, event, url) the body
+      hands WHOLE to a function — as the call's first argument, any function but a collaborator's
+      method — whose result it binds to a local and then uses whole: passed on, returned, placed
+      into an object or a list, assigned (`const cart = await readJsonBody(req)`, then
+      `place(cart)`). The node:http spelling of reading the body whole
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-23T20:35:12.500Z'
+updatedAt: '2026-10-09T16:54:33.934Z'

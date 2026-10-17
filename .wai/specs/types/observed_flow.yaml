@@ -1,0 +1,37 @@
+kind: value-object
+id: observed_flow
+name: ObservedFlow
+description: >-
+  One flow seen in a live system, already named by the team's bindings (a service-mesh or eBPF flow
+  export, or flow logs once the team's tooling mapped addresses to workloads; wairon never sees an
+  address).
+subsystem: sdd_network
+fields:
+  - name: source
+    type: string
+    description: The calling workload's design name, or outside
+    optional: false
+  - name: destination
+    type: string
+    description: The called workload's design name
+    optional: false
+  - name: transport
+    type: string
+    description: The protocol seen
+    optional: true
+  - name: method
+    type: string
+    description: 'At L7: the HTTP method or RPC method seen'
+    optional: true
+  - name: path
+    type: string
+    description: 'At L7: the path seen'
+    optional: true
+  - name: count
+    type: int
+    description: How often it was seen in the window
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:45.455Z'
+updatedAt: '2026-10-06T13:09:46.129Z'

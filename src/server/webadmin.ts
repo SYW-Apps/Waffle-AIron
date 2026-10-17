@@ -4,13 +4,15 @@ import * as organization from './organization.js';
 import * as permissionadmin from './permissionadmin.js';
 import { remapScope, removeAssignmentsForScopes } from './permissions.js';
 import { remapUnitReferences } from './users.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { authorize } from './authorization.js';
-import { ForbiddenError } from './identity.js';
+import { listFamilyRecords } from './projects.js';
+import { ForbiddenError } from './errors.js';
 import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
+  EffectivePermission,
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
@@ -47,8 +49,8 @@ import type {
 // authorizes the mint strictly against the caller's OWN access to that project.
 //
 // ORGANIZATION-UNIT reads/writes have no upstream orchestrator, so this component
-// owns that workflow directly: resolve the session to a Principal via the auth
-// specialist, require an instance-wide admin grant, mutate through the
+// owns that workflow directly: resolve the session to a Principal via
+// authentication, require an instance-wide admin grant, mutate through the
 // organization repository, and append a best-effort audit event.
 // ---------------------------------------------------------------------------
 
@@ -73,24 +75,24 @@ export function setUserStatus(cfg: HostConfig, sessionId: string, userId: string
 
 // ── identity-provider (SSO) administration (forward to identity_orchestrator) ─
 
-/** Forward to identity_orchestrator.listIdentityProviders (instance-admin only upstream). */
+/** Forward to identity_orchestrator.listProviders (instance-admin only upstream). */
 export function listIdentityProviders(cfg: HostConfig, sessionId: string): IdentityProviderConfig[] {
-  return identity.listIdentityProviders(cfg, sessionId);
+  return identity.listProviders(cfg, sessionId);
 }
 
-/** Forward to identity_orchestrator.upsertIdentityProvider with the session as the
+/** Forward to identity_orchestrator.upsertProvider with the session as the
  *  credential (the config carries a clientSecretRef, never a raw secret). */
 export function upsertIdentityProvider(
   cfg: HostConfig,
   sessionId: string,
   config: IdentityProviderConfig,
 ): IdentityProviderConfig {
-  return identity.upsertIdentityProvider(cfg, sessionId, config);
+  return identity.upsertProvider(cfg, sessionId, config);
 }
 
-/** Forward to identity_orchestrator.removeIdentityProvider with the session as the credential. */
+/** Forward to identity_orchestrator.removeProvider with the session as the credential. */
 export function removeIdentityProvider(cfg: HostConfig, sessionId: string, id: string): void {
-  identity.removeIdentityProvider(cfg, sessionId, id);
+  identity.removeProvider(cfg, sessionId, id);
 }
 
 // ── agent-token self-service (forward to identity_orchestrator) ──────────────
@@ -135,7 +137,7 @@ function auditActor(principal: Principal): PrincipalSubject {
  *  server diagnostic and swallowed so it can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[webadmin] audit append failed for "${event.action}": ` +
@@ -164,7 +166,7 @@ function buildOrgAuditEvent(principal: Principal, action: string, target: string
  *  project:admin, or reject. Shared by the organization-unit, secret-ref, and
  *  identity-provider methods — the instance-structure surfaces.
  *
- *  This is the resolver check `authorize(project:admin, instance)`, NOT the
+ *  This is the permission-rules check `authorize(project:admin, instance)`, NOT the
  *  env-super-admin bypass flag: the env super-admin, the master credential, and
  *  a DELEGATED instance-wide admin (an SSO admin whose sso-admin role binds
  *  project:admin at instance scope, or a direct project:admin@instance
@@ -264,6 +266,12 @@ export function placeProject(cfg: HostConfig, sessionId: string, projectId: stri
   const existingOwners = organization
     .listProjectPlacements(cfg.dataDir, projectId)
     .filter((p) => p.role === 'owner');
+  // Steps 5-7: a member takes its units from its family root — a placement of
+  // its own would not be a rung of its permission chain, so it is refused.
+  const family = listFamilyRecords(cfg.dataDir, projectId);
+  if (family.length > 0 && family[0].id !== projectId) {
+    throw new Error('A member takes its units from its family root; place the family root instead');
+  }
   const placement: ProjectPlacement = {
     id: existingOwners[0]?.id ?? '',
     projectId,
@@ -328,7 +336,13 @@ export function removeUnit(
   const units = organization.listOrganizationUnits(cfg.dataDir);
   const subtree = subtreeUnitIds(units, unitId);
 
-  // step 7: route on the disposition.
+  // step 7: route on the disposition. Every kind moves or deletes content, so
+  // none is a default: the switch's default (step 38) refuses anything else.
+  const kind: string | undefined = disposition?.kind;
+  if (kind !== 'migrate' && kind !== 'alternative' && kind !== 'absorb' && kind !== 'cascade') {
+    // step 38: a missing or unrecognised kind is refused, never read as absorb.
+    throw new Error('A disposition kind is required: migrate, alternative, absorb or cascade');
+  }
   if (disposition.kind === 'cascade') {
     // steps 26–28: delete every placement in the subtree.
     for (const placement of organization.listProjectPlacements(cfg.dataDir)) {
@@ -376,7 +390,8 @@ export function removeUnit(
       }
       destination = target;
     } else {
-      // 'absorb': content moves to the parent, which a root does not have.
+      // 'absorb' (the only kind left after step 38): content moves to the
+      // parent, which a root does not have.
       if (unit.parentId === undefined) {
         throw new Error('Cannot absorb a root unit — it has no parent.');
       }
@@ -483,4 +498,18 @@ export function unbindRole(
   scopeId?: string,
 ): HostedUserRecord {
   return permissionadmin.unbindRole(cfg, sessionId, userId, roleId, scopeKind, scopeId);
+}
+
+/** Forward to permission_admin_orchestrator.explain with the session as the credential
+ *  (project:admin over the scope upstream): one user's effective permission at a unit,
+ *  project or subsystem scope, with the rung that decided it. */
+export function explainPermission(
+  cfg: HostConfig,
+  sessionId: string,
+  userId: string,
+  capability: string,
+  scopeKind: ScopeKind,
+  scopeId: string,
+): EffectivePermission {
+  return permissionadmin.explain(cfg, sessionId, userId, capability, scopeKind, scopeId);
 }

@@ -1,0 +1,87 @@
+id: iexport_index
+name: Export Index Interface
+description: >-
+  Read contract for export tables: projections of the tables the scan resolved, dropped with the
+  scan. Nothing here writes, and nothing here judges — problems come back as facts.
+component: export_index
+methods:
+  - name: resolveSubsystemExports
+    description: >-
+      One subsystem's export table — what it makes visible to the other subsystems of its project —
+      as the scan resolved it (own items, re-exports followed to their canonical targets, wildcards
+      expanded, a wildcard cycle as its union, every problem a fact). A subsystem the tree does not
+      have answers an empty table.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem whose table to project
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      A project's L0 export table — what other projects may consume — as the scan resolved it: the
+      bound root's, or the member's with the given key. Own project-level types (`{ typeDef }` with
+      no `from`), re-exports from its subsystems, and re-exports from its members and externals by
+      alias are all in it, each with the entry's audience; the public name is `as ?? id ?? interface
+      ?? component ?? typeDef`. A project with no L0 answers an empty table.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The key of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: usage
+    description: >-
+      One consumer's references into one producer, as the scan bound them: each reference that bound
+      to a public name of the producer's table counts that name as used, with the member it reaches
+      (the contract method, or `type` for a type) — an `alias::name` reference and a bare name bound
+      through the consumer's `use` import (AuthoredReference form import, binding exported) alike,
+      so a name used only bare is still used, the lock's `used` map pins it and a change to it is
+      EXTERNAL_INCOMPATIBLE; every reference that bound to no public name — unexported, or reached
+      only by a deprecated form or a project id the consumer does not declare — is unexported. An
+      import binding that was ambiguous or unresolved counts nothing. A type the producer exports
+      only inside a signature closure is not a public name: naming it directly is unexported (stage
+      3), and exporting it takes one `typeDef` entry. When several public names bind the same
+      target, the one the reference named is counted. A pair with no references answers an empty
+      usage.
+    signature: 'usage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+    guarantees:
+      - idempotent
+  - name: pinnedUsage
+    description: >-
+      One consumer's references into a producer the scan did NOT read — an external outside the
+      family (path, git, hosted) or a referenced project member (a `../`, git or hosted source) —
+      counted by the public name they spell, since there is no live table here to bind them to
+      (stage 8): each `alias::name` reference through the alias counts `name`, each bare name the
+      consumer's `use` on that alias imports counts that name, each with the member it reaches (the
+      contract method a call step, declared call or dispatch binding names, or `type` at a type
+      position). What the producer actually exports is the pin's and the status's to compare, so
+      nothing here is unexported. This is what fills the lock's `used` map for an outside producer,
+      so a sibling checkout or a git repository that breaks a used method is EXTERNAL_INCOMPATIBLE
+      in the family run rather than only drifted.
+    signature: 'pinnedUsage(consumer: string, alias: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's project key
+      - name: alias
+        type: string
+        description: The alias the consumer declares the producer under
+    effect: read
+status: complete
+createdAt: '2026-09-26T16:08:30.136Z'
+updatedAt: '2026-10-02T20:47:32.568Z'

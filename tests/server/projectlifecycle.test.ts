@@ -6,19 +6,27 @@ import * as crypto from 'node:crypto';
 import {
   initializeProject,
   lockProject,
-  promoteProject,
   getApprovalStatus,
   listPendingRequests,
   decideRequest,
   executeApprovedRequest,
   awaitApproval,
 } from '../../src/server/projectlifecycle.js';
-import { createProject, executeApprovedLock, executeApprovedPromote } from '../../src/server/admin.js';
+import { createProject, executeApprovedLock } from '../../src/server/admin.js';
+import { LockValidationError } from '../../src/server/errors.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
+import { computeGateStateId } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { readLockRecordAt } from '../../src/core/lockfile.js';
+import { pinOf } from '../../src/core/approval.js';
+import { createMember } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import type { SubsystemSpec } from '../../src/models/index.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { seedChainedMount, seedSubsystem } from './helpers.js';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
@@ -39,6 +47,11 @@ import type {
   PrincipalSubject,
   ScopeKind,
 } from '../../src/server/types.js';
+import type { ApproverIdentity } from '../../src/models/lock.js';
+
+/** A hosted approver, the way the lifecycle orchestrator resolves one from an
+ *  authenticated principal. */
+const TEST_APPROVER: ApproverIdentity = { id: 'u-test', name: 'Tester', source: 'hosted' };
 
 // ---------------------------------------------------------------------------
 // Project Lifecycle Orchestrator (sdd_host) — exercised through the exported
@@ -290,7 +303,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(listApprovalRequests(dataDir)).toHaveLength(1);
   });
 
-  // ── lockProject / promoteProject: execute-primary ───────────────────────────
+  // ── lockProject: execute-primary ────────────────────────────────────────────
 
   it('MASTER (instance-admin) locks directly: completed outcome carrying the lock record — the original 403 deadlock is gone', () => {
     seedProject('lock-now');
@@ -303,17 +316,6 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(outcome.summary).toContain('Locked project "lock-now"');
     // Executed directly — no approval request was ever created.
     expect(listApprovalRequests(dataDir)).toHaveLength(0);
-  });
-
-  it('a yes-valued project:write executes promote directly (not-locked on an unlocked project)', () => {
-    seedProject('promo-direct');
-    const writer = mintToken('pw', 'u-pw');
-    allow('u-pw', 'project:write', 'project', 'promo-direct', 'yes');
-
-    const outcome = promoteProject(cfg, writer, 'promo-direct');
-    expect(outcome.status).toBe('completed');
-    expect(outcome.action).toBe('project:promote');
-    expect(outcome.promote?.status).toBe('not-locked'); // reached executeApprovedPromote
   });
 
   it('an approval-valued project:write creates a pending request instead of executing', () => {
@@ -330,19 +332,17 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(queryAuditEvents(dataDir, { action: 'approval.request.created' })).toHaveLength(1);
   });
 
-  it('a no-valued (or unreachable) project:write is 403 for lock and promote', () => {
+  it('a no-valued (or unreachable) project:write is 403 for lock', () => {
     seedProject('proj-a');
     const reader = mintToken('ro', 'u-ro');
     allow('u-ro', 'project:read', 'project', 'proj-a', 'yes'); // read reach only
 
     expect(() => lockProject(cfg, reader, 'proj-a')).toThrow(ForbiddenError);
-    expect(() => promoteProject(cfg, reader, 'proj-a')).toThrow(ForbiddenError);
   });
 
   it('rejects an unknown project (after authorization resolves yes)', () => {
     // MASTER is instance-admin, so authorization passes and the failure is existence.
     expect(() => lockProject(cfg, MASTER, 'ghost')).toThrow(/unknown project/i);
-    expect(() => promoteProject(cfg, MASTER, 'ghost')).toThrow(/unknown project/i);
   });
 
   it('rejects an unknown project on the approval path too (no dangling requests)', () => {
@@ -352,18 +352,16 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(listApprovalRequests(dataDir)).toHaveLength(0);
   });
 
-  // ── lock/promote CONFINED to a chained subproject ────────────────────────────
+  // ── a member's lock is its own record's (stage 7) ─────────────────────────
   //
-  // An optional subproject qualifier ('a' or 'a::b' — the mount chain only) is
-  // forwarded to the admin plane's pre-authorized entry, which binds the CHAINED
-  // CHILD's tree instead of the project's own. Permission resolution and audit
-  // provenance stay anchored at the TOP project id: a qualifier narrows WHICH TREE
-  // is acted on, never WHICH GRANTS apply. An unresolvable qualifier must fail
-  // loudly — never fall back to the parent, which is the confinement bug itself.
+  // Since stage 7 a member is a hosted record of its own: locking a member is
+  // locking its record — its own tree, its own permission chain (a parent's
+  // grant reaches it by inheritance), its own audit. Nothing is ever written at
+  // the parent, and an unknown record fails loudly.
 
-  /** Provision `projectId` with a chained subproject mounted at packages/<mountId>
-   *  (itself provisioned so it locks on its own), plus a NON-chained in-tree
-   *  subsystem "plain". Returns both roots. */
+  /** Provision `projectId` with a member mounted at packages/<mountId> (itself
+   *  provisioned so it locks on its own) and registered as a hosted record, plus
+   *  a NON-member in-tree subsystem "plain". Returns both roots. */
   function seedChainedSubproject(projectId: string, mountId: string): { parent: string; child: string } {
     seedProject(projectId);
     const parent = existingProjectRoot(dataDir, projectId)!;
@@ -371,6 +369,8 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     runWithProjectRoot(child, () => hostCore.provisionProject(mountId));
     seedSubsystem(parent, 'plain'); // exists, but carries no projectPath
     invalidateSpecCache();
+    const upgrade = upgradeMemberRecords({ dataDir }, true);
+    expect(upgrade.applied, JSON.stringify(upgrade.plan.refusals)).toBe(true);
     return { parent, child };
   }
 
@@ -378,18 +378,18 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
   const readLock = (root: string) =>
     JSON.parse(fs.readFileSync(lockPathOf(root), 'utf8')) as { stateId: { digest: string }; status: string };
 
-  it('a qualified lock freezes the CHILD tree; the PARENT is never locked, and permission + audit stay at the TOP project', () => {
+  it('a member lock freezes the member tree through its own record; the PARENT is never locked; the grant is inherited and audit names the member', () => {
     const { parent, child } = seedChainedSubproject('confine-lock', 'billing');
-    // A writer scoped to the TOP project only — the qualifier confers nothing.
+    // An approver granted on the PARENT only — the member inherits it.
     const writer = mintToken('cw', 'u-cw');
-    allow('u-cw', 'project:write', 'project', 'confine-lock', 'yes');
+    allow('u-cw', 'approval:decide', 'project', 'confine-lock', 'yes');
 
-    const outcome = lockProject(cfg, writer, 'confine-lock', 'billing');
+    const outcome = lockProject(cfg, writer, 'billing');
 
     expect(outcome.status).toBe('completed');
     expect(outcome.action).toBe('project:lock');
     expect(outcome.lock?.status).toBe('ready');
-    expect(outcome.summary).toContain('subproject "billing"');
+    expect(outcome.summary).toContain('Locked project "billing"');
 
     // The lock record landed in the CHILD's own .wai/ at the CHILD's StateId …
     expect(fs.existsSync(lockPathOf(child))).toBe(true);
@@ -401,10 +401,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     // DID NOT HAPPEN: the PARENT tree was NOT locked — it has no record at all.
     expect(fs.existsSync(lockPathOf(parent))).toBe(false);
 
-    // Audit provenance anchors at the TOP project id (no per-subproject target).
+    // Audit names the member's own record.
     const events = queryAuditEvents(dataDir, { action: 'lifecycle.completed' });
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ projectId: 'confine-lock', target: 'confine-lock' });
+    expect(events[0]).toMatchObject({ projectId: 'billing', target: 'billing' });
   });
 
   it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
@@ -420,22 +420,148 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
-  it('a qualified promote reads and re-checks the CHILD’s lock (ready → promoted → stale on child drift)', () => {
+  it('a hosted lock certifies each member\'s subject through its gate identity, in `members` or the legacy form, and never writes `children`', () => {
+    // A member is never a subsystem (stage 3), so the members come from the
+    // project graph. Stage 5: each direct member's recorded subject is part of
+    // the parent's gate identity and is recorded in `members`; the legacy
+    // `children` copy is never written.
+    seedProject('hosted-pins');
+    const root = existingProjectRoot(dataDir, 'hosted-pins')!;
+    runWithProjectRoot(root, () => {
+      createMember('billing', 'packages/billing', undefined, 'project');
+      writeLegacyMount({
+        id: 'claims', name: 'claims', description: 'd', parentSystem: 'x', publicInterfaces: [], trustedLinks: [],
+        projectPath: 'packages/claims', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      } as SubsystemSpec, 'claims');
+    });
+    invalidateSpecCache();
+    const upgrade = upgradeMemberRecords({ dataDir }, true);
+    expect(upgrade.applied, JSON.stringify(upgrade.plan.refusals)).toBe(true);
+    // Each member approves its own tree first, through its own hosted record.
+    const billing = executeApprovedLock(cfg, 'billing', TEST_APPROVER);
+    const claims = executeApprovedLock(cfg, 'claims', TEST_APPROVER);
+    invalidateSpecCache();
+
+    const parent = executeApprovedLock(cfg, 'hosted-pins', TEST_APPROVER);
+    expect(parent.children).toBeUndefined();
+    expect(parent.format).toBe(3);
+    expect(parent.members).toMatchObject({
+      billing: { subject: pinOf(billing.stateId), state: 'approved' },
+      claims: { subject: pinOf(claims.stateId), state: 'approved' },
+    });
+    expect(pinOf(billing.stateId)).not.toBe(pinOf(claims.stateId));
+    // A member re-approving moves the parent's gate identity: the parent's lock is stale.
+    const memberLock = path.join(root, 'packages', 'billing', '.wai', 'lock.json');
+    fs.writeFileSync(memberLock, JSON.stringify({ ...billing, stateId: { ...billing.stateId, digest: 'f'.repeat(64) } }));
+    invalidateSpecCache();
+    expect(runWithProjectRoot(root, () => computeGateStateId())).not.toEqual(parent.stateId);
+  });
+
+  it('a hosted lock records the approval and writes NOTHING into the spec tree', () => {
+    // The local lock stopped ratcheting spec statuses; the hosted one had been
+    // left behind — and because a hosted lock also COMMITS AND PUSHES .wai/,
+    // that rewrite went straight into the repository. Hosted projects got the
+    // whole flood, published.
+    seedProject('hosted-baseline');
+    const root = existingProjectRoot(dataDir, 'hosted-baseline')!;
+    // A spec the old ratchet WOULD have rewritten: an explicit draft status.
+    // (A spec with no `status` at all loads as complete, so it is not promotable
+    // — the draft marker is what makes this fixture load-bearing.)
+    seedSubsystem(root, 'billing');
+    const billing = path.join(root, '.wai', 'specs', 'subsystems', 'billing.yaml');
+    fs.appendFileSync(billing, 'status: draft');
+    invalidateSpecCache();
+
+    const specsDir = path.join(root, '.wai', 'specs');
+    const snapshot = (): Map<string, string> => {
+      const out = new Map<string, string>();
+      const walk = (d: string): void => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          const p = path.join(d, e.name);
+          if (e.isDirectory()) walk(p);
+          else out.set(path.relative(specsDir, p), fs.readFileSync(p, 'utf8'));
+        }
+      };
+      walk(specsDir);
+      return out;
+    };
+    const before = snapshot();
+
+    executeApprovedLock(cfg, 'hosted-baseline', TEST_APPROVER);
+
+    // Every spec file is byte-identical…
+    const after = snapshot();
+    expect([...after.keys()].sort()).toEqual([...before.keys()].sort());
+    for (const [rel, content] of before) expect(after.get(rel)).toBe(content);
+
+    // …and the approval was recorded in the lock record instead: a digest per
+    // spec, plus the AUTHENTICATED identity the instance resolved. The hosted
+    // lock used to write the constant 'admin:master' and throw that away.
+    const lock = readLockRecordAt(root);
+    expect(lock).not.toBeNull();
+    expect(lock!.lockedBy).toEqual(TEST_APPROVER);
+    expect(Object.keys(lock!.specs!).length).toBeGreaterThan(0);
+    // The record carries the validator's gate identity, the one every staleness
+    // check later compares against.
+    expect(lock!.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
+    const { algorithm, digest } = runWithProjectRoot(root, () => computeGateStateId());
+    expect(lock!.stateId).toEqual({ algorithm, digest });
+    // Hosted creation declared the hosted project id as the project's id, and
+    // the lock records the id it approved.
+    expect(projectConfigRepositoryAt(root).load()?.id).toBe('hosted-baseline');
+    expect(lock!.projectId).toBe('hosted-baseline');
+  });
+
+  it("a member lock REFUSES the member's undeclared reference into its parent — judged from the member's own files", () => {
+    // A hosted subproject lock gates on errors. The child's gate judges its own
+    // references from its own files (stage 4): a reference into a project it
+    // declares neither as a member nor as an external is EXTERNAL_UNDECLARED.
+    const { parent, child } = seedChainedSubproject('confine-violation', 'billing');
+    const stamp = ["createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'"];
+    const writeLines = (file: string, lines: string[]): void => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, [...lines, ''].join('\n'));
+    };
+    writeLines(path.join(parent, '.wai', 'specs', 'subsystems', 'parent-sub.yaml'), [
+      'id: parent-sub', 'name: parent-sub', 'description: the parent domain', 'parentSystem: confine-violation',
+      'publicInterfaces:', '  - type: Custom', '    details: the published portal', '    component: parent-portal', ...stamp]);
+    writeLines(path.join(parent, '.wai', 'specs', 'components', 'parent-portal.yaml'), [
+      'id: parent-portal', 'name: parent-portal', 'description: the published portal', 'subsystem: parent-sub',
+      'componentType: Portal', 'portalType: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
+    writeLines(path.join(child, '.wai', 'specs', 'subsystems', 'k-core.yaml'), [
+      'id: k-core', 'name: k-core', 'description: the child domain', 'parentSystem: billing', ...stamp]);
+    writeLines(path.join(child, '.wai', 'specs', 'components', 'k-orch.yaml'), [
+      'id: k-orch', 'name: k-orch', 'description: crosses into the parent', 'subsystem: k-core',
+      'componentType: Orchestrator', 'owns: []', "dependsOn: ['parent::parent-portal']", ...stamp]);
+    invalidateSpecCache();
+
+    let refused: LockValidationError | undefined;
+    try {
+      executeApprovedLock(cfg, 'billing', TEST_APPROVER);
+    } catch (e) {
+      refused = e as LockValidationError;
+    }
+
+    expect(refused).toBeInstanceOf(LockValidationError);
+    expect(refused!.errors.map((e) => `${e.code} @${e.specId}`)).toContain('EXTERNAL_UNDECLARED @k-orch');
+    // Nothing was frozen.
+    expect(fs.existsSync(lockPathOf(child))).toBe(false);
+  });
+
+  it('a member lock CONFINES to the member tree: its own state governs, and drift makes only the member stale', () => {
     const { parent, child } = seedChainedSubproject('confine-promo', 'billing');
 
-    // No child lock yet → not-locked, even though the PARENT is locked.
+    // Locking the PARENT leaves the child unlocked — the trees are independent.
     lockProject(cfg, MASTER, 'confine-promo');
-    expect(promoteProject(cfg, MASTER, 'confine-promo', 'billing').promote?.status).toBe('not-locked');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('unlocked');
 
-    // Lock the child, then promote it: the child's own StateId matches.
-    lockProject(cfg, MASTER, 'confine-promo', 'billing');
-    const promoted = promoteProject(cfg, MASTER, 'confine-promo', 'billing');
-    expect(promoted.status).toBe('completed');
-    expect(promoted.promote?.status).toBe('ready');
-    expect(promoted.summary).toContain('subproject "billing"');
-    expect(readLock(child).status).toBe('promoted');
-    // The parent's own record is untouched by the child's promotion.
+    // Lock the child: its own record appears and the parent's is untouched.
+    const locked = lockProject(cfg, MASTER, 'billing');
+    expect(locked.status).toBe('completed');
+    expect(locked.summary).toContain('Locked project "billing"');
+    expect(readLock(child).status).toBe('ready');
     expect(readLock(parent).status).toBe('ready');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
 
     // Drift in the CHILD tree makes the CHILD's lock stale.
     fs.writeFileSync(
@@ -443,46 +569,33 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
       fs.readFileSync(path.join(child, '.wai', 'specs', '.index.yaml'), 'utf8').replace(/vision:.*/, 'vision: drifted'),
     );
     invalidateSpecCache();
-    expect(promoteProject(cfg, MASTER, 'confine-promo', 'billing').promote?.status).toBe('stale');
+    expect(runWithProjectRoot(child, () => hostCore.readLockState(computeGateStateId())).state).toBe('stale');
   });
 
-  it('an unknown or non-chained subproject qualifier FAILS LOUDLY — it never acts on the parent', () => {
+  it('an unknown record FAILS LOUDLY — an internal subsystem is no record, and nothing acts on the parent', () => {
     const { parent, child } = seedChainedSubproject('confine-bad', 'billing');
 
-    // Unknown mount, a subsystem carrying no projectPath, and a nested unknown all throw.
-    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'ghost')).toThrow(
-      /unknown subproject mount "ghost" on "confine-bad"/,
-    );
-    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'plain')).toThrow(/not a chained subproject/);
-    expect(() => lockProject(cfg, MASTER, 'confine-bad', 'billing::ghost')).toThrow(
-      /unknown subproject mount "ghost" on "confine-bad::billing"/,
-    );
-    expect(() => promoteProject(cfg, MASTER, 'confine-bad', 'ghost')).toThrow(/unknown subproject mount/);
-    expect(() => executeApprovedLock(cfg, 'confine-bad', 'ghost')).toThrow(/unknown subproject mount/);
-    expect(() => executeApprovedPromote(cfg, 'confine-bad', 'plain')).toThrow(/not a chained subproject/);
+    expect(() => lockProject(cfg, MASTER, 'ghost')).toThrow(/unknown project/i);
+    expect(() => lockProject(cfg, MASTER, 'plain')).toThrow(/unknown project/i);
+    expect(() => executeApprovedLock(cfg, 'ghost', TEST_APPROVER)).toThrow(/unknown project/i);
 
-    // DID NOT HAPPEN: nothing was locked anywhere — not the parent (the silent
-    // fallback that IS the bug) and not the child.
+    // DID NOT HAPPEN: nothing was locked anywhere.
     expect(fs.existsSync(lockPathOf(parent))).toBe(false);
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
-  it('the APPROVAL path stays confined: an approved qualified lock freezes the CHILD, never the parent', () => {
+  it('the APPROVAL path stays confined: an approved member lock freezes the member, never the parent', () => {
     const { parent, child } = seedChainedSubproject('confine-appr', 'billing');
     const requester = mintToken('ca', 'u-ca');
     allow('u-ca', 'project:write', 'project', 'confine-appr', 'approval');
 
-    // Approval is the one path where the REQUESTER does not perform the action, so
-    // the qualifier has to survive on the request itself — otherwise approving a
-    // subproject-scoped request would silently widen it to the whole project.
-    const outcome = lockProject(cfg, requester, 'confine-appr', 'billing');
+    // The request names the member's own record — the record id alone confines
+    // it, so no qualifier payload is recorded.
+    const outcome = lockProject(cfg, requester, 'billing');
     expect(outcome.status).toBe('pending-approval');
-    expect(outcome.approval?.projectId).toBe('confine-appr'); // permission scope stays TOP
-    // The approver must SEE the real scope before deciding.
+    expect(outcome.approval?.projectId).toBe('billing');
     expect(outcome.approval?.summary).toContain('billing');
-    // …and the qualifier is carried in the existing payload mechanism.
-    expect(outcome.approval?.payloadType).toBe('SubprojectScope');
-    expect(JSON.parse(outcome.approval!.payload!)).toEqual({ subproject: 'billing' });
+    expect(outcome.approval?.payloadType).toBeUndefined();
 
     // A DIFFERENT identity approves (self-approval is refused), which auto-executes.
     const decider = mintToken('cd', 'u-cd');
@@ -493,7 +606,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     });
     expect(decided.status).toBe('completed');
 
-    // CONFINED: the child froze; the parent did NOT — the widening this closes.
+    // CONFINED: the member froze; the parent did NOT.
     expect(fs.existsSync(lockPathOf(child))).toBe(true);
     expect(readLock(child).status).toBe('ready');
     expect(fs.existsSync(lockPathOf(parent))).toBe(false);
@@ -631,8 +744,8 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(decided.status).toBe('completed');
     // … the decidedBy is caller-derived (never the client-supplied value) …
     expect(decided.decidedBy?.userId).toBe('u-ad');
-    // … and the lock actually happened: a promote now finds a matching lock.
-    expect(promoteProject(cfg, MASTER, 'auto-lock').promote?.status).toBe('ready');
+    // … and the lock actually happened: the project's own record reads ready.
+    expect(runWithProjectRoot(existingProjectRoot(dataDir, 'auto-lock')!, () => hostCore.readLockState(computeGateStateId())).state).toBe('locked');
     expect(queryAuditEvents(dataDir, { action: 'approval.decided' })[0].level).toBe('security');
   });
 
@@ -654,8 +767,9 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     seedProject('self-proj');
     const selfTok = mintToken('self-tok', 'u-self');
     allow('u-self', 'project:write', 'project', 'self-proj', 'approval');
-    allow('u-self', 'approval:decide', 'instance', undefined, 'yes');
     const req = lockProject(cfg, selfTok, 'self-proj').approval!;
+    // Granted the decision only after requesting: still never their own request.
+    allow('u-self', 'approval:decide', 'instance', undefined, 'yes');
 
     expect(() => decideRequest(cfg, selfTok, decision(req.id, true))).toThrow(ForbiddenError);
   });

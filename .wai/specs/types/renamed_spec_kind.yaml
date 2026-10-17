@@ -1,0 +1,16 @@
+kind: enum
+id: renamed_spec_kind
+name: RenamedSpecKind
+description: The spec kinds a component rename moves to a new id.
+fields: []
+methods: []
+sourcePath: src/core/provision.ts
+values:
+  - name: component
+    description: The component itself
+  - name: interface
+    description: Its contract
+  - name: implementation
+    description: Its implementation
+createdAt: '2026-10-04T23:34:04.853Z'
+updatedAt: '2026-10-04T23:34:05.275Z'

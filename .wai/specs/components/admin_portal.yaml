@@ -3,10 +3,11 @@ name: Admin Portal
 description: >-
   Existing control-plane entrypoint: an authenticated HTTP admin API (separately bound from the data
   plane) for current project lifecycle, API-key lifecycle, pack management, producers, secrets, git
-  backing, and privileged lock/promote actions. Dispatches to existing orchestrators; the CLI
-  reaches the same workflows through this portal. Future user-bound identity and audit workflows are
-  isolated in identity_portal until fully designed and implemented. Never exposed on the public
-  data-plane surface.
+  backing, and the privileged lock action. Dispatches to existing orchestrators; it is the REMOTE
+  surface onto those workflows, while the local operator's CLI reaches the same workflows in-process
+  through local_admin_portal. Future user-bound identity and audit workflows are isolated in
+  identity_portal until fully designed and implemented. Never exposed on the public data-plane
+  surface.
 subsystem: sdd_host
 componentType: Portal
 owns: []
@@ -15,7 +16,14 @@ dependsOn:
   - admin_orchestrator
   - pack_orchestrator
   - project_lifecycle_orchestrator
-portalType: HTTP_API
+  - policy_repository
+transport: HTTP
+invokedBy:
+  kind: entry
+  caller: >-
+    Clients the host's listener admin_portal serves directly, routing "/identity" to
+    identity_portal; "/projects", "/instance" to project_policy_portal; "/landscape" to
+    landscape_portal; "/operations" to operations_portal
 status: complete
 createdAt: '2026-07-04T12:33:47.174Z'
-updatedAt: '2026-07-16T00:13:33.554Z'
+updatedAt: '2026-10-06T18:54:53.851Z'

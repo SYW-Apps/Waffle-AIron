@@ -1,0 +1,66 @@
+kind: value-object
+id: migration_command_options
+name: MigrationCommandOptions
+description: The options every family-migration command shares, plus the few one verb reads.
+subsystem: sdd_cli
+fields:
+  - name: report
+    type: bool
+    description: '--report: print the plan and write nothing.'
+    optional: true
+  - name: 'yes'
+    type: bool
+    description: '--yes: apply without asking; required in a non-interactive shell.'
+    optional: true
+  - name: description
+    type: string
+    description: 'member attach: what the member is to this project.'
+    optional: true
+  - name: into
+    type: string
+    description: >-
+      member internalize --into <subsystem>, member demote --home <subsystem>: the home subsystem
+      for the member's L0 vision.
+    optional: true
+  - name: packs
+    type: string
+    description: >-
+      member internalize / member demote --packs adopt|drop: what to do with packs only the member
+      selects.
+    optional: true
+  - name: exports
+    type: list<string>
+    description: >-
+      member internalize --export <name>…: public names of the member the parent exports afterwards,
+      beyond those the family uses.
+    optional: true
+  - name: path
+    type: string
+    description: 'subsystem externalize --path <dir>: the part''s root (a new directory, or an existing part''s).'
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      project rename --project <alias path>: the member whose id moves; the current project when
+      absent.
+    optional: true
+  - name: widen
+    type: bool
+    description: >-
+      member detach --widen: widen exactly the exports the family uses that the member exports only
+      to the family to the instance audience, shown in the plan, instead of refusing.
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      subsystem externalize --as part|project (stage 8): part, the default, is a storage move;
+      project composes the move with a promote.
+    optional: true
+  - name: id
+    type: string
+    description: 'member promote --id <id> (stage 8): the new project''s id; the alias when absent.'
+    optional: true
+methods: []
+sourcePath: src/commands/subsystem.ts
+createdAt: '2026-09-30T20:37:46.672Z'
+updatedAt: '2026-10-07T06:28:29.109Z'

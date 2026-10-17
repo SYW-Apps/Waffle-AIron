@@ -5,27 +5,34 @@ description: >-
   (unauthenticated start/complete with first-login user provisioning), plus credential-authenticated
   management of users, their role bindings, user-bound MCP/API tokens, identity-provider (SSO)
   configuration, and admin-only audit read/count. Authorization resolves through the permission
-  resolver (project:admin over the relevant scope, or the env-anchored instance-admin bypass) —
-  never stored grants. Follows the control-plane house pattern: every credential-bearing method
-  authenticates via the auth specialist before any effect. The SSO start/complete pair carries no
-  credential and derives trust entirely from the signed SSO state and the provider code exchange.
+  rules (project:admin over the relevant scope, or the env-anchored instance-admin bypass) — never
+  stored grants. Follows the control-plane house pattern: every credential-bearing method
+  authenticates via the authentication component before any effect. The SSO start/complete pair
+  carries no credential and derives trust entirely from the signed SSO state and the provider code
+  exchange.
 component: identity_orchestrator
 methods:
   - name: mintToken
     description: >-
-      Authenticate the caller and look up the token's owner user (not-found when absent; a
-      deactivated owner is rejected so a fresh token cannot revive revoked access). Require the
-      caller to be an instance-admin: the minted token ACTS AS the owner user's live permission,
-      which could exceed a non-super-admin minter's own authority (confused deputy), so only the
-      env-anchored instance-admin — who dominates every owner — may mint on another user's behalf (a
-      user mints their own single-project tokens via mintSelfToken). Mint a token narrowed to
-      request.projects; a subproject-qualified entry ('projectId::subsystemId') is validated at mint
-      time — the named subsystem must exist on that project and carry a projectPath (an unknown or
-      non-chained mount is rejected with guidance, never stored broken). The token carries no grants
-      and the resolver gates per project at use time. Persist only the hashed credential record,
-      append a redacted token.mint audit event, and return the plaintext exactly once.
-    signature: 'mintToken(credential: string, request: TokenMintRequest): string'
-    returns: string
+      Authenticate the caller and require it to be an instance-admin: the minted token ACTS AS the
+      owner user's live permission, which could exceed a non-super-admin minter's own authority
+      (confused deputy), so only the env-anchored instance-admin — who dominates every owner — may
+      mint on another user's behalf (a user mints their own single-project tokens via
+      mintSelfToken). A reserved built-in subject id is refused as the owner. request.projects is
+      REQUIRED and non-empty: a missing or empty list is rejected, and '*' is written to mean the
+      owner's full reach. Each entry is a hosted record id or '*' — a member is named by its own
+      record id since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) is
+      DEPRECATED: for one release it is accepted and stored as the member's record id (mapped
+      through the project repository's binding resolution; an alias that declares no member, or a
+      member no record holds, is rejected with guidance, never stored broken), and the answer says
+      so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. Look up the
+      owner's user record: a deactivated owner is rejected so a fresh token cannot revive revoked
+      access, and an owner id with no user record is a service principal, allowed by design and
+      given a synthesized service subject. The token carries no grants and permission rules gate per
+      record at use time. Persist only the hashed credential record, append a redacted token.mint
+      audit event, and return the plaintext exactly once with the mapping.
+    signature: 'mintToken(credential: string, request: TokenMintRequest): MintedToken'
+    returns: MintedToken
     params:
       - name: credential
         type: string
@@ -50,8 +57,8 @@ methods:
       tree (the units they may administer); deny when that set is empty. List hosted users, keeping
       only those whose home unit is an actionable unit in the visible set (an instance-admin sees
       all), optionally narrowed to one project's holders.
-    signature: 'listUsers(credential: string, project: string): HostedUserRecord[]'
-    returns: HostedUserRecord[]
+    signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
     params:
       - name: credential
         type: string
@@ -63,8 +70,8 @@ methods:
       Authenticate the caller and compute their project:admin visible scopes; deny when empty.
       Constrain the audit query to the caller's actionable project scopes (an instance-admin reads
       instance-wide) and return the redacted audit events.
-    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: credential
         type: string
@@ -75,8 +82,8 @@ methods:
       Authenticate the caller, require instance-wide project:admin for audit administration, apply
       the instance's active retention policy, append a redacted audit event for the prune itself,
       and return the number of events removed.
-    signature: 'pruneAuditEvents(credential: string): number'
-    returns: number
+    signature: 'pruneAuditEvents(credential: string): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -84,11 +91,11 @@ methods:
     description: >-
       Authenticate the caller, require project:admin over the target user's home unit (both the
       incoming and, on update, the existing home unit), REJECT a record claiming a reserved built-in
-      subject id (the persisted boot-reserved UUIDs or the legacy 'builtin:*' literals, via the auth
-      specialist's reserved-subject guard — an admin-created user must never inherit the built-in
-      bypass), create or update the hosted user (subject, status, home unit, roleBindings) through
-      the user repository, and append a redacted audit event distinguishing creation from update.
-      User PERMISSIONS are managed via role bindings + the assignment grid
+      subject id (the persisted boot-reserved UUIDs or the legacy 'builtin:*' literals, via the
+      reserved-subject guard of the authentication component — an admin-created user must never
+      inherit the built-in bypass), create or update the hosted user (subject, status, home unit,
+      roleBindings) through the user repository, and append a redacted audit event distinguishing
+      creation from update. User PERMISSIONS are managed via role bindings + the assignment grid
       (permission_admin_orchestrator), never stored on the user record.
     signature: 'upsertUser(credential: string, record: HostedUserRecord): HostedUserRecord'
     returns: HostedUserRecord
@@ -104,7 +111,7 @@ methods:
       Authenticate the caller and require project:admin over the target user's home unit (an
       instance-admin passes via bypass). Then set the user's lifecycle status through the user
       repository. When the new status is not 'active' (deactivation), revoke ALL of the user's
-      credentials via credential_registry.revokeAllForOwner AND all of their web sessions, so
+      credentials via credential_repository.revokeAllForOwner AND all of their web sessions, so
       existing tokens and live sessions can no longer authenticate, and append a security-level
       'user.deactivate' audit event including the revoked counts; the user record is retained for
       audit provenance. Returning a user to 'active' does NOT auto-restore any revoked tokens. For a
@@ -124,12 +131,12 @@ methods:
     description: >-
       Begin a headless SSO login: resolve the enabled identity-provider configuration through the
       policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
-      redirectUri via the auth specialist, build the provider authorization URL through the identity
-      provider adapter, append a best-effort sso.start (info) audit event, and return the
+      redirectUri via the authentication component, build the provider authorization URL through the
+      identity provider adapter, append a best-effort sso.start (info) audit event, and return the
       authorization URL. Starting a login is unauthenticated by nature — no caller credential is
       required or accepted; the signed state is the only integrity anchor carried into the callback.
-    signature: 'startSsoLogin(providerId: string, redirectUri: string): string'
-    returns: string
+    signature: 'startSsoLogin(providerId: string, redirectUri: string): async string'
+    returns: async string
     params:
       - name: providerId
         type: string
@@ -137,51 +144,49 @@ methods:
         type: string
   - name: completeSsoLogin
     description: >-
-      Complete a headless SSO login: verify the signed SSO state via the auth specialist (a tampered
-      or expired state is rejected), resolve the bound identity-provider configuration, exchange the
-      authorization code and resolve the external subject through the provider adapter, and read the
-      verified id_token's groups claim through the adapter (resolveGroups — meaningful only after
-      resolveSubject verified the same summary). ADMIN GROUPS: when the verified groups intersect
-      the provider's adminGroupClaims, the hosted user is provisioned/refreshed with a binding to
-      the built-in 'sso-admin' role at instance scope (which grants project:admin + project:create
-      instance-wide — never the *:* / instance-admin bypass, which is env-reserved to the built-in
-      admin account and can never appear on a user record or minted token); a later login after
-      dropping out of the group removes the binding again. Look up the hosted user by issuer +
-      external subject, provision a first-login active user record when absent (with the sso-admin
-      binding when in the admin group, otherwise empty roleBindings — an admin assigns
+      Complete a headless SSO login: verify the signed SSO state via the authentication component (a
+      tampered or expired state is rejected), resolve the bound identity-provider configuration,
+      exchange the authorization code and resolve the external subject through the provider adapter,
+      and read the verified id_token's groups claim through the adapter (resolveGroups — meaningful
+      only after resolveSubject verified the same summary). ADMIN GROUPS: when the verified groups
+      intersect the provider's adminGroupClaims, the hosted user is provisioned/refreshed with a
+      binding to the built-in 'sso-admin' role at instance scope (which grants project:admin +
+      project:create instance-wide — never the *:* / instance-admin bypass, which is env-reserved to
+      the built-in admin account and can never appear on a user record or minted token); a later
+      login after dropping out of the group removes the binding again. Look up the hosted user by
+      issuer + external subject, provision a first-login active user record when absent (with the
+      sso-admin binding when in the admin group, otherwise empty roleBindings — an admin assigns
       roles/permissions afterwards), reject re-login for an existing deactivated user before
       minting, then mint a grant-free user-bound MCP/API token (projects '*', acting as the user's
       live permission), persisting only its hashed credential record. Append a best-effort sso.login
       (security) audit event and return the plaintext token exactly once. Inlines first-login
       provisioning — there is no separate resolve-or-create method. Unauthenticated by nature: no
       caller credential is required or accepted.
-    signature: 'completeSsoLogin(state: string, code: string): string'
-    returns: string
+    signature: 'completeSsoLogin(state: string, code: string): async string'
+    returns: async string
     params:
       - name: state
         type: string
       - name: code
         type: string
-  - name: listIdentityProviders
+  - name: listProviders
     description: >-
       Authenticate the caller, require instance-wide project:admin (the env-anchored instance-admin
       passes via bypass; a delegated project:admin@instance also passes) for identity-provider
       administration, and return every configured identity provider by forwarding to the policy
       repository. Not audited (a read).
-    signature: 'listIdentityProviders(credential: string): IdentityProviderConfig[]'
-    returns: IdentityProviderConfig[]
+    signature: 'listProviders(credential: string): list<IdentityProviderConfig>'
+    returns: list<IdentityProviderConfig>
     params:
       - name: credential
         type: string
-  - name: upsertIdentityProvider
+  - name: upsertProvider
     description: >-
       Authenticate the caller, require instance-wide project:admin for identity-provider
       administration, create or update one identity-provider configuration through the policy
       repository, append a redacted idp.upsert (security) audit event, and return the stored config.
       The config carries a clientSecretRef, never a raw secret.
-    signature: >-
-      upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
-      IdentityProviderConfig
+    signature: 'upsertProvider(credential: string, config: IdentityProviderConfig): IdentityProviderConfig'
     returns: IdentityProviderConfig
     params:
       - name: credential
@@ -190,12 +195,12 @@ methods:
         type: IdentityProviderConfig
     guarantees:
       - atomic
-  - name: removeIdentityProvider
+  - name: removeProvider
     description: >-
       Authenticate the caller, require instance-wide project:admin for identity-provider
       administration, remove one identity-provider configuration by id through the policy repository
       (an unknown id is rejected), and append a redacted idp.remove (security) audit event.
-    signature: 'removeIdentityProvider(credential: string, id: string): void'
+    signature: 'removeProvider(credential: string, id: string): void'
     returns: void
     params:
       - name: credential
@@ -209,8 +214,8 @@ methods:
       Authenticate the caller and compute their project:admin visible scopes; deny when empty.
       Constrain the query to the caller's actionable project scopes (an instance-admin counts
       instance-wide) and return the count of redacted audit events. Not audited (a read).
-    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
-    returns: number
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: credential
         type: string
@@ -221,13 +226,13 @@ methods:
       Self-service single-project MCP token mint. Authenticate the caller (a ws_ session or token)
       and mint a token OWNED BY the caller (ownerSubject = createdBySubject = the caller's subject,
       so deactivating the caller revokes it via revokeAllForOwner) narrowed to exactly one project —
-      optionally subproject-qualified ('projectId::subsystemId', validated at mint time: the named
-      subsystem must exist and carry a projectPath), scoping the caller's own token into a chained
-      subproject; the token carries no grants — it acts as the caller's OWN live permission on that
-      project (the resolver gates read vs write at use time; the write flag is advisory for the
-      token label). Persist only the hashed record, append a token.mint.self audit event, and return
-      the plaintext once. Separate from the caller's login session.
-    signature: 'mintSelfToken(credential: string, projectId: string, write: boolean): string'
+      optionally member-qualified ('projectId::alias', validated at mint time: each alias must
+      declare a member, in `members` or a legacy L1 mount), scoping the caller's own token into a
+      member project; the token carries no grants — it acts as the caller's OWN live permission on
+      that project (permission rules gate read vs write at use time; the write flag is advisory for
+      the token label). Persist only the hashed record, append a token.mint.self audit event, and
+      return the plaintext once. Separate from the caller's login session.
+    signature: 'mintSelfToken(credential: string, projectId: string, write: bool): string'
     returns: string
     params:
       - name: credential
@@ -235,14 +240,14 @@ methods:
       - name: projectId
         type: string
       - name: write
-        type: boolean
+        type: bool
   - name: listSelfTokens
     description: >-
       Authenticate the caller and return the caller's OWN minted credential records
-      (ownerSubject.userId = caller) through the credential registry, redacted (hashed token only).
-      A read; not audited.
-    signature: 'listSelfTokens(credential: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+      (ownerSubject.userId = caller) through the credential repository, redacted (hashed token
+      only). A read; not audited.
+    signature: 'listSelfTokens(credential: string): list<ApiKeyRecord>'
+    returns: list<ApiKeyRecord>
     params:
       - name: credential
         type: string
@@ -275,6 +280,33 @@ methods:
       choreography reused by the identity and web planes.
     signature: 'appendAuditBestEffort(event: AuditEvent): void'
     returns: void
+  - name: auditSignIn
+    description: >-
+      Record a sign-in or sign-out event (category 'auth'), best-effort through
+      appendAuditBestEffort: the actor is the resolved subject, or none while no user is resolved
+      yet (a login start, a sign-out by session id), which records the anonymous local service
+      actor. The web plane records its browser sign-in events through it, so a sign-in event is
+      built in one place.
+    signature: >-
+      auditSignIn(actor: PrincipalSubject?, action: string, level: AuditLevel, over?: AuditEvent):
+      void
+    returns: void
+    params:
+      - name: actor
+        type: PrincipalSubject?
+        description: The resolved subject, or null when none is resolved yet.
+      - name: action
+        type: string
+        description: The audited action, e.g. web.signin.
+      - name: level
+        type: AuditLevel
+        description: The event level.
+      - name: over
+        type: AuditEvent
+        description: 'Fields laid over the event (a partial event: a target, metadata).'
+        optional: true
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-07-24T18:21:05.649Z'
+updatedAt: '2026-10-04T23:41:17.317Z'

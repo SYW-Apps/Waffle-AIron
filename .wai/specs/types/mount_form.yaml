@@ -1,0 +1,14 @@
+kind: enum
+id: mount_form
+name: MountForm
+description: How a parent declares a member root.
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: members
+    description: A members entry of its project.yaml
+  - name: mount
+    description: A legacy L1 subsystem carrying projectPath (DEPRECATED_MOUNT_FORM)
+createdAt: '2026-10-04T23:33:22.866Z'
+updatedAt: '2026-10-04T23:33:23.329Z'

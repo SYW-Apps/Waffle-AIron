@@ -1,0 +1,14 @@
+id: project_config_index
+name: Project Config Index
+description: >-
+  Read path over the project configuration: the whole config, the governing project type, the
+  registered packs and whether global packs apply, the recorded profile selection, and the output
+  targets. A projection over the store, so a read is never stale.
+subsystem: sdd_core
+componentType: Index
+owns: []
+dependsOn:
+  - project_config_store
+status: complete
+createdAt: '2026-09-13T01:31:14.198Z'
+updatedAt: '2026-09-13T13:02:26.285Z'

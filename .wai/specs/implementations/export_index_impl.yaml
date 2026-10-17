@@ -1,0 +1,124 @@
+id: export_index_impl
+name: Export Index Implementation
+description: >-
+  src/core/exports.ts. Projects the export tables the scan resolved and recorded on each root
+  (through export_resolver, inside the scan) and the reference bindings the scan recorded, so a
+  table is resolved once per scan however many consumers read it, and a consumer's usage is read off
+  the bindings rather than re-derived.
+contract: iexport_index
+sourcePath: src/core/exports.ts
+methods:
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Read the project roots the current scan recorded, with their resolved subsystem tables
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: >-
+          Find the table under the subsystem's key among the roots' subsystem tables — a subsystem
+          key is unique to the root that declares it
+        type: local
+      - stepNumber: 3
+        description: Answer that table, or an empty one for a subsystem the tree does not have
+        type: return
+        outcome: ResolvedExportTable
+    detail: full
+    symbol: resolveSubsystemExportTable
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Read the project roots the current scan recorded, with their resolved L0 tables
+        type: call
+        targetComponent: spec_index
+        targetMethod: listProjectRoots
+      - stepNumber: 2
+        description: Pick the root with the given key — the bound root when none is given
+        type: local
+      - stepNumber: 3
+        description: Answer its recorded L0 table, or an empty one for a root with no L0 or a key no root has
+        type: return
+        outcome: ResolvedExportTable
+    detail: full
+    symbol: resolveProjectExportTable
+  - name: usage
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph, whose cross-project references carry what the scan bound them to
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+      - stepNumber: 2
+        description: Keep the references the consumer makes into the producer
+        type: local
+      - stepNumber: 3
+        description: Does the consumer reach the producer at all?
+        type: branch
+        condition: no reference remains
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer an empty usage
+        type: return
+        outcome: empty
+      - stepNumber: 5
+        label: count
+        description: >-
+          Count each reference that bound to a public name under that name, with the member it
+          reaches (its contract method or capability, or `type`) and, per member, the referring spec
+          (memberSpecs) — so a rename of one member names the specs that reach it, not every spec
+          that reaches the name; every reference that bound to none — unexported, or undeclared — is
+          unexported
+        type: local
+      - stepNumber: 6
+        description: >-
+          Answer the usage, names sorted, each name's members sorted, each name's referring specs
+          sorted and each member's referring specs sorted
+        type: return
+        outcome: ExportUsage
+    detail: full
+    symbol: exportUsageOf
+  - name: pinnedUsage
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph, whose authored references keep each reference's written form,
+          binding and position
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          Keep the consumer's authored references bound outside through the alias: `alias::name`
+          written through it, and bare names its `use` on the alias imports (form import, binding
+          outside, supplier the alias)
+        type: local
+      - stepNumber: 3
+        label: count
+        description: >-
+          Count each under the public name it spells, with the member its position reaches — a call
+          step's, declared call's or dispatch binding's method, a capability as `capability:<name>`,
+          `type` at a type position, each method an `implements` of the extension point uses
+          (project_family_index.implementedMethods), nothing for a bare dependsOn — and the
+          referring specs (sorted), name-wide and per member reached (memberSpecs), so a pin can
+          name who uses a member the snapshot no longer carries and a rename names who reaches the
+          member it moves
+        type: local
+      - stepNumber: 4
+        description: >-
+          For an implements position: the methods the implementing contract uses of the extension
+          point
+        type: call
+        targetComponent: project_family_index
+        targetMethod: implementedMethods
+      - stepNumber: 5
+        description: >-
+          Answer the usage with no unexported references, names sorted, each name's members sorted
+          and each member's referring specs sorted
+        type: return
+        outcome: ExportUsage
+    detail: full
+    symbol: pinnedUsageOf
+status: complete
+createdAt: '2026-09-26T16:09:07.864Z'
+updatedAt: '2026-10-08T08:27:03.257Z'

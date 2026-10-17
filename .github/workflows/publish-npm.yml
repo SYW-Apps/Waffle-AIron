@@ -26,6 +26,10 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
+    outputs:
+      version:
+        description: 'The exact version that was published (e.g. 5.1.2 or 5.1.2-dev.3)'
+        value: ${{ jobs.publish.outputs.version }}
   workflow_dispatch:
     inputs:
       version:
@@ -51,6 +55,10 @@ jobs:
   publish:
     name: Publish (public, with provenance)
     runs-on: ubuntu-latest
+    # Exposed to callers (release.yml's post-publish verify installs exactly
+    # this version from the registry).
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -85,8 +93,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The React web app (web/) is a separate package: build it FIRST so the
+      # embed step copies it to dist/webapp.html. WAIRON_REQUIRE_WEBAPP makes a
+      # missing bundle fail the build instead of silently shipping the legacy UI.
+      - name: Build web app
+        run: npm run build:web
+
       - name: Build
         run: npm run build
+        env:
+          WAIRON_REQUIRE_WEBAPP: '1'
+
+      - name: Package ships the web app
+        shell: bash
+        run: |
+          npm pack --dry-run --json > pack.json
+          grep -q '"dist/webapp.html"' pack.json || { echo "::error::dist/webapp.html is missing from the package"; exit 1; }
+          rm -f pack.json
 
       # Align package.json with the release version in the CI checkout only.
       # Not committed — the tarball carries the right version, git stays clean.

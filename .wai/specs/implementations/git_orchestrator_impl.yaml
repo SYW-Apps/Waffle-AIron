@@ -10,7 +10,9 @@ methods:
   - name: enable
     narrative:
       - stepNumber: 1
-        description: Clone the remote into the bound project directory
+        description: >-
+          Clone the remote into the bound project directory, handing the adapter the token the
+          caller resolved (the adapter's injected credential)
         type: call
         targetComponent: git_adapter
         targetMethod: clone
@@ -20,14 +22,21 @@ methods:
         targetComponent: git_adapter
         targetMethod: ensureWorkingBranch
       - stepNumber: 3
+        description: >-
+          Keep the container's local connection config out of commits, and make sure the approval
+          record is not — it must reach the remote
+        type: call
+        targetComponent: git_adapter
+        targetMethod: excludeLocalFiles
+      - stepNumber: 4
         description: Build the GitConfig (enabled, remote, defaultBranch, workingBranch)
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Persist the git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: write
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return once enabled
         type: return
         outcome: enabled
@@ -36,7 +45,7 @@ methods:
       - stepNumber: 1
         description: Clear the git-backing config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: clear
       - stepNumber: 2
         description: Return once disabled
@@ -47,7 +56,7 @@ methods:
       - stepNumber: 1
         description: Read the git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: read
       - stepNumber: 2
         description: If not git-backed, do nothing
@@ -77,7 +86,7 @@ methods:
       - stepNumber: 1
         description: Read the git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: read
       - stepNumber: 2
         description: If not git-backed, publish nothing
@@ -91,13 +100,15 @@ methods:
         outcome: not published
       - stepNumber: 4
         description: >-
-          Commit ONLY the scoped subpath (default .wai/) — pathspec-confined staging, never `git add
-          -A`, so a shared repository's own code is never committed by wairon
+          Commit ONLY the scoped pathspecs (default ['.wai/']) as one commit — pathspec-confined
+          staging AND a pathspec-confined commit, never `git add -A`, so neither a shared
+          repository's own code nor a path someone else staged is committed by wairon; a member's
+          pathspec is its own <path>/.wai/, a family migration's every touched project's
         type: call
         targetComponent: git_adapter
         targetMethod: commitScoped
       - stepNumber: 5
-        description: If the scoped path was clean (no commit produced), publish nothing
+        description: If every scoped path was clean (no commit produced), publish nothing
         type: branch
         condition: the scoped commit produced no commit (clean path)
         onTrueStep: 6
@@ -117,9 +128,16 @@ methods:
         targetComponent: git_adapter
         targetMethod: compareUrl
       - stepNumber: 9
+        description: >-
+          Record the sync time in the git config: write it back with lastSyncAt set to now, so the
+          periodic sync and the status report can tell when the backup last went out
+        type: call
+        targetComponent: git_config_store
+        targetMethod: write
+      - stepNumber: 10
         description: Assemble the GitPublish (published, commitSha, compareUrl)
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the publish result
         type: return
         outcome: GitPublish
@@ -128,7 +146,7 @@ methods:
       - stepNumber: 1
         description: Read the git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: read
       - stepNumber: 2
         description: If not git-backed, report a disabled status
@@ -159,7 +177,7 @@ methods:
       - stepNumber: 1
         description: Read the git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: read
       - stepNumber: 2
         description: If not git-backed, reject — a sync cadence needs a bound repository
@@ -177,7 +195,7 @@ methods:
       - stepNumber: 5
         description: Persist the updated git config
         type: call
-        targetComponent: git_config_registry
+        targetComponent: git_config_store
         targetMethod: write
       - stepNumber: 6
         description: Return once persisted
@@ -185,4 +203,4 @@ methods:
         outcome: sync setting persisted
 status: complete
 createdAt: '2026-07-04T16:33:44.730Z'
-updatedAt: '2026-07-16T15:25:13.846Z'
+updatedAt: '2026-10-17T16:24:57.732Z'

@@ -1,11 +1,12 @@
 id: source_analysis_adapter_impl
 name: Source Analysis Adapter Implementation
 description: >-
-  Tiered source-file analysis with zero mandatory parser dependencies. The TypeScript compiler is
-  this component's bound technology, but the binding is opportunistic: dynamically resolved from the
-  analyzed project's node_modules first, wairon's own installation second, and simply absent
-  otherwise — pattern-table and generic-scan tiers keep conformance functional (at a recorded lower
-  grade) on hosted checkouts without node_modules and on any language.
+  Tiered source-file analysis. The TypeScript compiler is this component's bound technology and
+  wairon's one parser dependency: the analyzed project's own compiler is used when it ships the
+  JavaScript compiler API (TypeScript 5 or 6), and wairon's own copy otherwise — so a project on
+  TypeScript 7 (whose native compiler ships no JavaScript API), or with no TypeScript at all, is
+  still read at exact grade. Pattern-table and generic-scan tiers keep conformance functional, at a
+  recorded lower grade, for every other language and for a file whose exact analysis fails.
 contract: isource_analysis_adapter
 sourcePath: src/core/source-analysis.ts
 technologies:
@@ -15,37 +16,354 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Deduplicate the distinct sourcePaths across all implementations and resolve each against
-          the project root, classifying absolute or parent-escaping paths as escaped (containment,
-          mirroring the projectPath rule) and nonexistent files as missing
+          Walk the declared source roots for the files no spec need name: resolve each root within
+          the project root (an absolute or parent-escaping root is refused by containment and never
+          walked), take a file root as itself and descend a directory root recursively without
+          entering a directory named node_modules or one whose name begins with a dot, and keep each
+          file, once and as a canonical project-relative key, whose extension names a language the
+          analyzer knows and that is not at, or under, an exclude entry. Declaring no root finds
+          nothing, which is what keeps the unclaimed-source check opt-in
         type: local
       - stepNumber: 2
-        description: Read each remaining file as text, classifying binary or unreadable content as unreadable
+        description: >-
+          Deduplicate the distinct source paths the specs name — each implementation's sourcePath,
+          each method's own sourcePath and each simPath, then each type's sourcePath and each type
+          method's own sourcePath — append the walked rootFiles, and resolve each against the
+          project root, classifying absolute or parent-escaping paths as escaped (containment,
+          mirroring the projectPath rule) and nonexistent files as missing
         type: local
       - stepNumber: 3
+        label: readLocalPackages
         description: >-
-          Select the analyzer per file: exact AST when the TypeScript compiler module resolves
-          dynamically for ts/js (analyzed project's node_modules first, wairon's own installation
-          second, never bundled); else the file language's declarative pattern table (built-in
-          tables merged under extension-pack registrations); else the generic word-boundary scan
+          Read the repository's own packages: the root package.json and every workspace it declares
+          (a plain directory, or one trailing /* level), refusing any that escapes the project root
+          or sits under node_modules. For each package read its name and its entry points — the
+          `exports` main entry and plain subpath exports (string targets, or the first of the
+          types/import/require/default conditions), else module, main and types — and map each to
+          the source file it was built from: the file itself when it is a source file, else, under
+          the package tsconfig's outDir, the same relative path under its rootDir with the build
+          extension (.js, .d.ts, .mjs, .cjs) swapped for .ts or .tsx. Record each specifier (`name`,
+          `name/sub`) whose entry maps to an existing file inside the project as its canonical key;
+          a package or entry that cannot be read or mapped records nothing, so its imports stay
+          unresolved exactly as a third-party package's do
         type: local
       - stepNumber: 4
-        description: >-
-          Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
-          destructuring bindings, object-literal keys, import bindings, export specifiers with
-          export-* barrels chased through relative specifiers using a visited set), weak anchors
-          (exact string literals and property-access references), exported names, and import module
-          specifiers
+        description: Read each remaining file as text, classifying binary or unreadable content as unreadable
         type: local
       - stepNumber: 5
+        description: >-
+          Select the analyzer per file: exact AST for ts/js through the TypeScript compiler module —
+          the analyzed project's own when it resolves from the project's package.json, loads,
+          carries the JavaScript compiler API (createSourceFile, createProgram) and is a major
+          version below 7, else wairon's own dependency; the loaded module is remembered under what
+          it depends on (the resolved package.json's path, version and modification time), so
+          installing, upgrading or removing the project's typescript is seen by the next run of a
+          long-lived process, and a module left in the require cache by the previous install is
+          evicted before the new one loads; else the file language's declarative pattern table
+          (built-in tables merged under extension-pack registrations); else the generic
+          word-boundary scan. A Python file is read through its pattern table and, beside it, the
+          Python signature reader: a tokenizer that honours strings, comments, brackets and line
+          continuations reads each `def` (its parameters, the receiver of a method set aside —
+          `self`, or `cls` for a classmethod — with each name, its annotation as written and whether
+          a caller may leave it out; its return annotation; whether it is async), the class each
+          sits in and that class's members (a leading underscore private, @staticmethod and
+          @classmethod static, @property an accessor, `__init__` the constructor), each body's call
+          sites by receiver shape (a bare call, `self.<method>()`, `self.<field>.<method>()`, a call
+          through a name), the annotated type of each instance field (an annotation, or the
+          annotated constructor parameter it is assigned from) and of each annotated name, and the
+          module's imports with the local name each binds (`from .x import Y`, `from . import x`,
+          `import a.b as c`), and which top-level classes the module names outside their own `class`
+          block (source_file_facts.classReferences) — still pattern grade, the checks it read for
+          recorded in source_file_facts.reads. What it cannot read it leaves unset, so a check never
+          reads silence as a pass
+        type: local
+      - stepNumber: 6
+        description: >-
+          Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
+          destructuring bindings, object-literal keys, import bindings, export specifiers), weak
+          anchors (exact string literals and property-access references), exported names, import
+          module specifiers, and — at exact grade — the runtime import BINDINGS by local name (which
+          module each came from, which were bound as a whole namespace, which the import renamed),
+          the runtime RE-EXPORT bindings name by name (a named export-from with both sides of its
+          rename, a star with * on both sides), which is what lets a reader follow a republished
+          name — aliased or not — to the module that wrote it, the EXPORT ALIASES the file publishes
+          with no specifier of its own (each runtime `export { local as exported }` specifier, and
+          each identifier-valued property `{ exported: local }` or `{ exported }` of an exported
+          top-level object literal under that object's name), the module each TYPE-ONLY binding came
+          from, kept apart because a type binding can never be a call origin though it is what a
+          declared type resolves through, the type names each instance FIELD is declared with from
+          class property declarations and constructor parameter properties, the type names each
+          locally BOUND name is declared with from parameters and annotated variable declarations,
+          both recording nothing where the declaration names no type outright, since an inferred
+          type is not a declared one and a destructured binding binds the type's properties rather
+          than the type, the type each named function-like RETURNS where the code settles it (a
+          return annotation naming a type outright, Promise unwrapped, else one return statement
+          constructing a plainly named class; disagreeing same-named functions record nothing), the
+          call SITES of each named function-like with the shape each call was written in — a bare
+          name, a plain-identifier receiver, the this.<field> receiver whose declared type can be
+          followed, the new Class(...) receiver whose class name can be, the fn(...) receiver whose
+          function's return can be, or the this receiver inside a top-level named class's own method
+          — unioned per name AND kept body by body with where each body is bound (module scope, a
+          member of a top-level named class or of an object literal a top-level variable is bound
+          to, or nested), so same-named functions in one file stay apart, and, before any
+          republication is folded in, whether the file declared nothing of its own and only
+          re-exported, which is what makes it a pure re-export barrel
+        type: local
+      - stepNumber: 7
+        label: readSignaturesAndRoutes
+        description: >-
+          Beside those facts, read at exact grade the parameters each named function-like with a
+          body DECLARES — its name unless destructured, its annotation as written, whether a caller
+          may leave it out, whether its annotation names a platform transport class (a request, a
+          response, a socket, a URL or its headers, resolved or not — parameter_fact.transport), the
+          member names and literal keys the body reads off it at any depth of a chain, the string
+          literal a method of that chain is called with (`url.searchParams.get('limit')`), the
+          property names a destructuring of such a read binds at any depth, and the same read off a
+          local its value flows into (through `??`, `||`, `await`, `new URL(…)`, `new
+          URLSearchParams(…)`, `JSON.parse(…)`) or off what a function of this file it is passed to
+          reads and returns (parameter_fact.reads), the member names the body reads directly off it,
+          the first link of every chain (parameter_fact.members), whether a request handle is handed
+          WHOLE — as a call's first argument, to any function but a collaborator's method (a callee
+          through `this.<field>` or another parameter) — whose result the body binds to a local and
+          then uses whole (parameter_fact.handedWhole), and whether it is PROVABLY unused: named,
+          with no identifier of that name in the body or in another parameter's default value and no
+          read of `arguments` (a shadowing local counts as a use, which can only keep a parameter
+          judged) — and the routes it serves, read two ways. The guard idiom: an `if` whose
+          conditions, together with every enclosing `if`'s, compare `<request>.method` with a string
+          and `parts[i]` / `parts.length` with literals, every compared value a string literal or
+          one this file's constants, concatenations and template literals settle; where the function
+          strips a prefix before splitting the path (`.slice(BASE.length)`, `.slice('/v1'.length)`,
+          `.substring(BASE.length)`, `.replace(BASE, '')`) and that prefix settles, its segments are
+          folded in front of each route, marked fullPath. The table idiom: every entry of a route
+          table the function names — a top-level constant array of object literals each pairing a
+          method (a `method` or `verb` property, else any property whose value is an HTTP verb) with
+          a path (a `path`, `pattern`, `route` or `url` property, else any property whose value is a
+          path or a regular-expression literal: a `/a/:b` or `/a/{b}` template, or an expression
+          anchored with ^ whose segments are literals or capture groups, the groups being the
+          wildcards), or a top-level constant object keyed `VERB /path`, an array entry spreading
+          another table and an object entry another object, each followed through this file's
+          constants — each marked fullPath. An object table's key written as a template literal or a
+          concatenation over constants settles like any compared value; a table the function returns
+          or states in place unnamed (`return [ … ]`, an arrow's expression body) is read as one it
+          names; and a top-level constant that IS a route table records its routes under its own
+          name, so a router linkage may name the table itself. Each table entry is marked table. The
+          ONE prefix a function strips off a path anywhere in its body (`.slice(BASE.length)`,
+          `.substring(…)`, `.substr(…)`, `.replace(BASE, '')`), where exactly one settles, is
+          recorded by function name (source_file_facts.routePrefixes): what a route table read by
+          the same router is written under. The names each top-level constant array or object
+          literal spreads into itself (`[...ingestRoutes, ...statsRoutes]`), as the code spells
+          them, are recorded by constant name (source_file_facts.tableSpreads): which table another
+          dispatches as a part of itself. A body that neither speaks of a method or a verb nor
+          writes an HTTP verb out is no router. A table any of whose entries cannot be settled is
+          read as no table at all, never as part of one: a route is never invented. Beside each
+          body's signature, record its return annotation as written, whitespace-normalized, or null
+          where it annotates none (source_file_facts.functionReturns), one entry per body in
+          signature order; and for each top-level named class, its members as its public surface
+          reads them — a method or a function-valued property, an accessor, a field or the
+          constructor, public, protected, private or #private, static, override, a computed name
+          (source_file_facts.classMembers); and which of those classes the file's own code names
+          outside their own declaration — constructed, extended or implemented, annotated with,
+          tested by instanceof, passed or returned as a value, an export clause aside
+          (source_file_facts.classReferences)
+        type: local
+      - stepNumber: 8
+        label: chaseReexports
+        description: >-
+          Chase the re-export barrels through their relative specifiers, and their package
+          specifiers through the local-package map, with a visited set: merge every export-*
+          target's exported names into the declaration tier, and carry the measured BODY —
+          complexity and call sites, and the module-scope body itself, since an export names the
+          module binding and never a member — of every name a barrel republishes, named re-export
+          and star alike, since the two spellings republish the same way. Carry each EXPORT ALIAS's
+          body onto the name it publishes the same way, but only where its local name settles on
+          exactly one: a module-scope body of this file with no nested same-named one, or a runtime
+          non-namespace import binding whose module holds such a body under the imported name; a
+          property alias carries it as a member of its object, which is what an exportedVia handle
+          reaches. A local name that settles on nothing leaves the published name bodiless rather
+          than guessed. A carried site keeps the file it was READ in, so its bare names and
+          receivers resolve in the real module's scope and never in the barrel's
+        type: local
+      - stepNumber: 9
+        label: resolveCalls
+        description: >-
+          Resolve every call with the type checker: build one program over every exact-grade ts/js
+          file of the run, under the compiler options of the project's tsconfig.json when one is
+          readable (its module resolution, paths and baseUrl), with JavaScript allowed, a fixed ES
+          library and no ambient @types, reusing each parsed source file from a cache keyed on the
+          compiler module, the file's path and its exact text — so a changed file, or a different
+          compiler, is never answered from a stale parse. For each call expression of an analyzed
+          file record a ResolvedCallFact: the callee followed through parentheses, non-null
+          assertions, casts and satisfies, and through .call/.apply/.bind to the function they are
+          invoked on; the declarations its resolved signature and its symbol name, kept when they
+          lie inside the project root and outside node_modules; for a declaration in an interface or
+          a type shape, the project classes that realize it (the ones whose implements clause names
+          it when any does, else every class declaring the member whose instance type the checker
+          finds assignable to the shape); the innermost named function-like the call sits in and its
+          top-level container; and unresolved when the code made the call land nowhere this analysis
+          can name — no declaration answers because the receiver or the callee is typed any, unknown
+          or not at all, or no declaration of the project does because a computed key names no
+          single member (anything but a literal, or an expression the checker types as one literal —
+          whose VALUE then names the member, never the variable holding it) or the receiver as
+          written is cast to a type with an index signature — together with, for an unresolved call,
+          the project classes its receiver's ORIGINAL type lands on: the receiver with every cast,
+          assertion, non-null mark and parenthesis taken off, each class that type is or that
+          realizes the interface or shape it is, as receivers. A call into a dependency or the
+          language library records no target and is not unresolved. Beside the calls, record each
+          REFERENCE the code takes as a value — a property access, element access or name in an
+          argument, an initializer, an assigned, returned or spread value, an array element, a
+          concise arrow body, or the receiver of .bind (or of .call/.apply not invoked on the spot)
+          — whose symbol is a callable function or method of the project, as a ResolvedCallFact
+          marked reference with the same targets and enclosing body; and each member read by NAME in
+          such a position off a receiver the code made opaque — any or unknown at any link of its
+          chain, however it came to be: a cast, an untyped or any-typed parameter, a function result
+          typed any — where the checker names no declaration for it (`const f = (store as
+          any).save`), as a ResolvedCallFact marked reference and unresolved under the member's
+          name, with the classes its receiver's original type lands on as receivers, so it fails
+          closed however the value is invoked later. Beside both, record each ELEMENT ACCESS in any
+          other position than a callee whose receiver's ORIGINAL type — every cast taken off, a type
+          with members of its own — is a project class or a shape project classes realize, when what
+          it reads is no declaration the checker can name (its key names no single member, or a
+          literal key is read off a receiver cast to any, unknown or an index signature): a
+          ResolvedCallFact marked reference and unresolved, under the literal's name or none, with
+          those classes as receivers — a literal key naming a method of the receiver as written is a
+          plain reference with that method's targets. Then resolve the calls of every project source
+          file those calls and references land in that is no root of the run — a helper module no
+          spec names — transitively, and keep them apart as reached calls. A program the compiler
+          cannot build leaves every file without resolved calls, and the rules fall back to the
+          shape facts. Last, for every project source file of the program — the roots and every
+          project file they pull in — record what it imports: each specifier of an import, an
+          export-from, an import-equals, a require or a dynamic import, resolved by the compiler's
+          module resolution under the same options; a specifier resolving to a project source file
+          (no declaration file, nothing under node_modules) is kept as that file's canonical key,
+          and a bare one that does not (never a relative path or a node: builtin) as a package
+        type: local
+      - stepNumber: 10
+        label: checkerReadings
+        description: >-
+          With the same program, three readings more. The RECEIVER is read the way the code means
+          it: a call to a name nothing declares, spelled `await` with one argument — the parser's
+          reading of `await (x)` outside an async function — is that argument, see-through like
+          parentheses, and a receiver chain is opaque wherever one of its links is; the original
+          type has its nullability set aside, so an optional field reads as the class it holds; a
+          name bound once by a const declaration is read through its initializer when its own type
+          lands on no class; and an interface or type shape no class realizes lands, as a receiver,
+          on the shape in the file declaring it — what a component realized by a factory is typed
+          by. A call on a receiver typed by an index signature that has no property of the call's
+          name lands on no declaration and is unresolved, exactly as a cast to one is; and a call
+          whose every landing is a member of an interface or type shape no project class realizes is
+          marked port. The SIGNATURES: each parameter of each named function-like with a body gets
+          the kind of value the checker says it takes (string, number, boolean, list, object or
+          function, nullability set aside; none where no one kind settles; for an object, the DATA
+          property names its type has, a method set aside, as parameter_fact.fields; whether that
+          type admits any value — any, unknown, object, {}, an index signature alone — as
+          parameter_fact.opaque; for a parameter named as a request handle (req, request, ctx,
+          context, event, url), its reads again, the checker following a helper it is passed to into
+          any project file no implementation claims, unioned onto the walk's parameter_fact.reads; a
+          platform class the fixed ES library leaves out — URL, Request, Response, Headers,
+          IncomingMessage, ServerResponse, Buffer and their kin — an object where the checker cannot
+          resolve it), joined onto the parameter facts in the order the walk met the functions,
+          wherever both read the same functions with the same number of parameters. The ROUTES of
+          every such function whose body speaks of a method or a verb — both idioms compare one —
+          are re-read with the checker settling each compared value — a constant another module
+          exports, a table spread from another module, and any expression the checker types as one
+          string literal — and replace the syntactic reading of that function. And the CROSS-PROJECT
+          IMPORTS: each import declaration of a root file, type-only or not, whose module lies in
+          ANOTHER project — the nearest folder above the file the specifier resolves to (or would,
+          for a relative specifier resolving to nothing) that holds a .wai/project.yaml is not the
+          analyzed project's root, nothing under node_modules — each recorded as a
+          CrossProjectImportFact (the specifier, the name, the other project's root, the line,
+          whether it is type-only): one that resolves to nothing — the module missing, or a name
+          imported from it whose alias the checker resolves to no declaration — as it is, and one
+          that resolves under each name it binds (`*` for a namespace import, none for a side-effect
+          import), marked resolved, with the module it lands in relative to that project's root
+        type: local
+      - stepNumber: 11
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 6
-        description: Return the assembled CodeModel (per-file facts plus the resolved project root)
+      - stepNumber: 12
+        description: >-
+          Return the assembled CodeModel: per-file facts, the resolved project root, the walked
+          root-file list the unclaimed-source rule judges, the local-package map every import
+          resolution reads, and — where the checker reached project files the run holds no facts for
+          — their resolved calls as reachedCalls, keyed by canonical path, and — where the checker
+          was loaded — what every own file of the program imports as reachedImports (ModuleImports:
+          the project files and the packages), keyed by canonical path; and outsideNames: every
+          identifier, comments stripped, of each source file of the project the run analyzed no
+          facts for — its tests, a composition root, scripts — read by a bounded walk of the project
+          root that enters no dependency, build-output, cache or hidden folder; what lets a public
+          verb nothing uses be told from one code outside the design calls
         type: return
         outcome: CodeModel
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve each declared test root within the project root and refuse an absolute or
+          parent-escaping one rather than walking it, on the same containment terms as the source
+          walk; declaring none answers empty without reading a file
+        type: local
+      - stepNumber: 2
+        description: >-
+          Walk those roots for test files, skipping node_modules and dot-directories, and read each
+          one: its named-import names (both sides of a rename), its import bindings with the module
+          each came from (static imports that open a statement, so a fixture's quoted source is not
+          read as the test's own import, and destructured dynamic imports), and its words
+        type: local
+      - stepNumber: 3
+        description: >-
+          For each method take the name to search for — its `symbol` when it declares one, otherwise
+          its own name — and the file realizing it when it carries a sourcePath; a method given more
+          than once becomes one search over every file it names
+        type: local
+      - stepNumber: 4
+        description: >-
+          Collect the test files that IMPORT it and, separately, those that only mention it. With no
+          realizing file, an import is any binding of the name and a mention any word, as before.
+          With one, an import counts only when the binding's module IS that file under the symbol,
+          or re-exports it from there — named, aliased or not, or through a star, followed through
+          every chain of re-exports (a module that cannot be read re-exports nothing) — or is a
+          namespace import of such a module in a file naming the symbol. A file that binds the name
+          to another module is neither: the name in it is that module's function, and counting it is
+          how removing an adapter named like its provider once listed every test of the provider. A
+          file that names the symbol and binds it nowhere is a mention — how a test driving the
+          method through a portal shows up
+        type: local
+      - stepNumber: 5
+        description: Decide whether the bare name discriminates
+        type: branch
+        condition: the mention count exceeds a tenth of the walked test files
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Withhold the mention list and mark it indiscriminate: a name like `project` or `status`
+          matches most of the suite, and a list that long is not an answer
+        type: local
+      - stepNumber: 7
+        description: >-
+          Answer with one entry per method that any test names, carrying the imported and mentioned
+          lists and why a list was withheld. A method nothing references contributes no entry — an
+          entry whose every list is empty is not an answer, and the report field it feeds promises
+          to be empty when nothing references them. A withheld mention list still counts as naming,
+          because saying the name is too common IS the answer
+        type: return
+        outcome: found
+  - name: compilerIdentity
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the project's own compiler package (one with the JavaScript compiler API, below
+          the native release): when it loads, answer its version as the project's
+        type: local
+      - stepNumber: 2
+        description: >-
+          Otherwise resolve wairon's own copy: answer its version as wairon's, or none when that too
+          fails to load
+        type: return
+        outcome: compiler_identity?
+    symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-07-11T19:14:23.286Z'
+updatedAt: '2026-10-17T19:37:46.969Z'

@@ -7,8 +7,8 @@ methods:
     description: >-
       Idempotently render the GraphModel onto the board as shapes + connectors under a 'wairon
       architecture' frame, authenticating with the resolved Miro token.
-    signature: 'sync(graph: GraphModel, boardId: string): void'
-    returns: void
+    signature: 'sync(graph: GraphModel, boardId: string): async void'
+    returns: async void
 status: complete
 createdAt: '2026-07-04T18:04:00.542Z'
-updatedAt: '2026-07-04T18:06:52.451Z'
+updatedAt: '2026-10-04T10:34:51.381Z'

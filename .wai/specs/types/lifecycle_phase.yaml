@@ -1,0 +1,23 @@
+kind: enum
+id: lifecycle_phase
+name: LifecyclePhase
+description: >-
+  The flow a declared lifecycle entrypoint roots. Beyond init and shutdown, the execution-model
+  roots open the reachability walk to systems that are not request/response. Only init flows feed
+  the durable-Store hydration check.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: init
+    description: Invoked at startup
+  - name: shutdown
+    description: Invoked at shutdown
+  - name: cyclic
+    description: Invoked every scan or tick (the PLC or game-loop model)
+  - name: interrupt
+    description: Invoked by a hardware or OS interrupt
+  - name: scheduled
+    description: Invoked by a timer or cron
+createdAt: '2026-10-04T23:32:55.971Z'
+updatedAt: '2026-10-04T23:32:56.421Z'

@@ -12,11 +12,11 @@ methods:
     description: >-
       Register programmatic pack rules after the built-ins (so a later pack's rules run last); each
       is validated to be rule-shaped before it is added.
-    signature: 'registerPackRules(packRules: SddRule[]): void'
+    signature: 'registerPackRules(packRules: list<SddRule>): void'
     returns: void
     params:
       - name: packRules
-        type: SddRule[]
+        type: list<SddRule>
 status: complete
 createdAt: '2026-07-14T19:17:14.262Z'
-updatedAt: '2026-07-14T20:23:49.332Z'
+updatedAt: '2026-10-04T10:19:26.945Z'

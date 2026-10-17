@@ -1,0 +1,24 @@
+kind: enum
+id: approval_state
+name: ApprovalState
+description: >-
+  What `wairon lock-check` found about a repository's approval: the lock state, plus the case where
+  there is no tree to approve.
+subsystem: sdd_cli
+fields: []
+methods: []
+sourcePath: src/commands/lock.ts
+values:
+  - name: no-tree
+    description: No .wai/specs in this repository
+  - name: unlocked
+    description: A tree nobody ever approved
+  - name: locked
+    description: The approval still covers this design
+  - name: stale
+    description: >-
+      The design, or something it was approved under (doctrine, declared inputs, composition, a
+      direct member's approval), moved past the approval, or the approval predates the current gate
+      identity; the message tells the two apart
+createdAt: '2026-10-04T23:13:06.467Z'
+updatedAt: '2026-10-04T23:13:06.874Z'

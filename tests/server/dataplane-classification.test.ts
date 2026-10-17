@@ -1,0 +1,164 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createMcpServer } from '../../src/mcp/server.js';
+import { setProjectRoot } from '../../src/utils/fs.js';
+import { invalidateSpecCache } from '../../src/core/specs.js';
+import {
+  requiredDataPlaneCapability,
+  isExplicitlyClassifiedTool,
+  toolScope,
+  mcpChangeChannels,
+} from '../../src/server/request.js';
+
+// ---------------------------------------------------------------------------
+// Host Request Orchestrator — data-plane tool classification (step 48).
+//
+// The permission gate classifies a tool as a read or a write, and anything it
+// does not recognize fails closed as a write. That default is a safety net, not a
+// classification: `sdd_list_external_interfaces` and the topology tools fell into
+// it and demanded project:write for a read. Every tool the hosted server
+// advertises must be classified on purpose — including WHERE it acts, which is
+// where it acts.
+// ---------------------------------------------------------------------------
+
+const READS_WITHOUT_A_READ_PREFIX = [
+  'listAgents',
+  'getAgent',
+  'listDomains',
+  'validateTopology',
+  'getProjectConfig',
+];
+
+describe('data-plane tool classification', () => {
+  let rootDir: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+    rootDir = undefined;
+  });
+
+  it('gates a read that carries no read prefix as a read', () => {
+    for (const name of READS_WITHOUT_A_READ_PREFIX) {
+      expect(requiredDataPlaneCapability(name)).toBe('project:read');
+    }
+  });
+
+  it('gates the member tools as tree-scoped writes, by their prefixes', () => {
+    for (const name of ['sdd_add_member', 'sdd_move_member', 'sdd_internalize_member', 'sdd_externalize_subsystem']) {
+      expect(requiredDataPlaneCapability(name)).toBe('project:write');
+      expect(toolScope(name)).toBe('tree');
+      expect(isExplicitlyClassifiedTool(name)).toBe(true);
+    }
+  });
+
+  it('gates the stage-6 family-migration tools as tree-scoped writes — a dryRun call included, since a tool\'s class is its name\'s', () => {
+    const migrationTools = [
+      'sdd_attach_member', 'sdd_detach_member', 'sdd_adopt_member', 'sdd_rename_project',
+      'sdd_rename_member_alias', 'sdd_internalize_member', 'sdd_externalize_subsystem',
+    ];
+    for (const name of migrationTools) {
+      expect(requiredDataPlaneCapability(name), name).toBe('project:write');
+      expect(toolScope(name), name).toBe('tree');
+      expect(isExplicitlyClassifiedTool(name), name).toBe(true);
+      const dryRun = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name, arguments: { dryRun: true } } };
+      // A successful call wakes the bound project's channel, as every write does.
+      const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
+      expect(mcpChangeChannels(dryRun, 'proj', success), name).toEqual(['project:proj']);
+    }
+  });
+
+  it('gates sdd_rename_component as a tree-scoped write, on purpose', () => {
+    expect(requiredDataPlaneCapability('sdd_rename_component')).toBe('project:write');
+    expect(toolScope('sdd_rename_component')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_rename_component')).toBe(true);
+  });
+
+  it('gates the externals tools on the bound tree: sdd_pin_externals a write, sdd_get_externals_status a read', () => {
+    expect(requiredDataPlaneCapability('sdd_pin_externals')).toBe('project:write');
+    expect(toolScope('sdd_pin_externals')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_pin_externals')).toBe(true);
+    expect(requiredDataPlaneCapability('sdd_get_externals_status')).toBe('project:read');
+    expect(toolScope('sdd_get_externals_status')).toBe('tree');
+  });
+
+  it('gates a never-listed rename tool as a tree-scoped write by its sdd_rename_ prefix alone, not a hand-kept name list', () => {
+    expect(requiredDataPlaneCapability('sdd_rename_anything')).toBe('project:write');
+    expect(toolScope('sdd_rename_anything')).toBe('tree');
+    expect(isExplicitlyClassifiedTool('sdd_rename_anything')).toBe(true);
+  });
+
+  it('classifies sdd_host_pack_impact on purpose: a record-level read the ops orchestrator gates, waking no channel', () => {
+    expect(isExplicitlyClassifiedTool('sdd_host_pack_impact')).toBe(true);
+    expect(toolScope('sdd_host_pack_impact')).toBe('record');
+    const call = { jsonrpc: '2.0', id: 7, method: 'tools/call', params: { name: 'sdd_host_pack_impact', arguments: {} } };
+    const success = { jsonrpc: '2.0', id: 7, result: { content: [{ type: 'text', text: '{}' }] } };
+    expect(mcpChangeChannels(call, 'proj', success)).toEqual([]);
+  });
+
+  it('still fails closed for a name nobody classified', () => {
+    expect(requiredDataPlaneCapability('sdd_brand_new_tool')).toBe('project:write');
+    expect(isExplicitlyClassifiedTool('sdd_brand_new_tool')).toBe(false);
+    expect(toolScope('sdd_brand_new_tool')).toBeUndefined();
+  });
+
+  it('classifies and scopes every tool the hosted server advertises on purpose — none leans on a fail-closed default', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-classify-'));
+    fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
+    const now = new Date().toISOString();
+    fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name: 'classify', projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {}, createdAt: now, updatedAt: now,
+    }));
+    setProjectRoot(rootDir);
+
+    const server = createMcpServer({ hostedTools: true });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'classification-test', version: '0.0.1' });
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.length).toBeGreaterThan(0);
+      expect(tools.map((t) => t.name).filter((name) => !isExplicitlyClassifiedTool(name))).toEqual([]);
+      expect(tools.map((t) => t.name).filter((name) => toolScope(name) === undefined)).toEqual([]);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
+describe('declared tool scope', () => {
+  // Since stage 7 a member is a record of its own: a credential bound to a
+  // member acts on the member's own tree AND its own record, so nothing is
+  // confined by scope any more — the scope only says where a tool acts.
+  it('declares the tools that act on the bound tree as tree-scoped', () => {
+    for (const name of [
+      'sdd_get_status',
+      'sdd_update_spec',
+      'sdd_validate_tree',
+      'listAgents',
+      'sdd_host_lock_project',
+      'sdd_host_export_tree',
+      'sdd_host_import_tree',
+    ]) {
+      expect(toolScope(name)).toBe('tree');
+    }
+  });
+
+  it('declares the tools that act on the project record as record-scoped', () => {
+    for (const name of [
+      'sdd_host_initialize_project',
+      'sdd_host_get_approval_status',
+      'sdd_host_commit_project',
+      'sdd_landscape_list_visible_surfaces',
+    ]) {
+      expect(toolScope(name)).toBe('record');
+    }
+  });
+});

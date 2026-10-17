@@ -1,0 +1,14 @@
+kind: enum
+id: pack_impact_direction
+name: PackImpactDirection
+description: Which way a measured pack write goes.
+fields: []
+methods: []
+sourcePath: src/models/pack-impact.ts
+values:
+  - name: apply
+    description: The write adds or replaces the pack
+  - name: remove
+    description: It drops the pack; the findings read as what the pack accounts for
+createdAt: '2026-10-04T23:33:55.503Z'
+updatedAt: '2026-10-04T23:33:55.921Z'

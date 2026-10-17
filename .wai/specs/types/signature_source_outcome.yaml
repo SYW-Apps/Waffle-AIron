@@ -1,0 +1,23 @@
+kind: enum
+id: signature_source_outcome
+name: SignatureSourceOutcome
+description: What resolving one method's signatureFrom found.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/core/signature-sources.ts
+values:
+  - name: resolved
+    description: Exactly one reading resolved
+  - name: unresolved
+    description: >-
+      Neither reading finds a contract method or a signature type; a type of another kind is named
+      in detail
+  - name: ambiguous
+    description: It resolves both as a contract method and as a signature type; both are named in candidates
+  - name: chained
+    description: The source names a signatureFrom of its own
+  - name: restated
+    description: The stored method also states params or returns; the source's are in force either way
+createdAt: '2026-10-04T23:33:40.536Z'
+updatedAt: '2026-10-04T23:33:41.094Z'

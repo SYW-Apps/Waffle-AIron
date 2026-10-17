@@ -1,16 +1,30 @@
-schemaVersion: "1.0.0"
-id: "cli_skills_adapter_impl"
-name: "CLI Skills Adapter Implementation"
-description: "Concrete implementation forwarding skills exporting requests to the skills portal."
-contract: "icli_skills_adapter"
-sourcePath: "src/commands/skills.ts"
+id: cli_skills_adapter_impl
+name: CLI Skills Adapter Implementation
+description: Concrete implementation forwarding skills exporting requests to the skills portal.
+contract: icli_skills_adapter
+sourcePath: src/commands/adapters/skills.ts
 methods:
-  - name: "exportSddSkills"
+  - name: exportSddSkills
     narrative:
       - stepNumber: 1
-        description: "Call exportSddSkills on the skills portal"
-        type: "call"
-        targetComponent: "skills_portal"
-        targetMethod: "exportSddSkills"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+        description: Call exportSddSkills on the skills portal
+        type: call
+        targetComponent: skills_portal
+        targetMethod: exportSddSkills
+  - name: listSkillNames
+    narrative:
+      - stepNumber: 1
+        description: Call listSkillNames on the skills portal
+        type: call
+        targetComponent: skills_portal
+        targetMethod: listSkillNames
+  - name: checkSkillFreshness
+    narrative:
+      - stepNumber: 1
+        description: Call checkSkillFreshness on the skills portal
+        type: call
+        targetComponent: skills_portal
+        targetMethod: checkSkillFreshness
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-09-25T21:14:01.482Z'

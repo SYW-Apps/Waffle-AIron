@@ -4,8 +4,12 @@ name: ValidationIssue
 description: A single validation finding produced by the spec validator
 fields:
   - name: severity
-    type: string
-    description: Issue severity — error or warning
+    type: IssueSeverity
+    description: >-
+      Issue severity after project overrides. A notice is reported on every surface that lists
+      findings, beside errors and warnings and never mixed into them, but never makes a result
+      invalid and never fails the --ci gate; a project raises a code from notice to warning or
+      error, or lowers one to notice, through rules.sddRuleSeverity.
     optional: false
   - name: code
     type: string
@@ -24,18 +28,35 @@ fields:
     description: Related spec id, when the issue concerns a spec node
     optional: true
   - name: draftContext
-    type: Boolean
+    type: bool
     description: >-
       True when the issue was raised on a draft/design spec (or an ancestor) — lets the --ci gate
       waive warnings that merely reflect declared, unfinished work.
     optional: true
-  - name: crossTreeContext
-    type: Boolean
+  - name: resolution
+    type: ReferenceResolution
     description: >-
-      True when the issue reflects a reference/sourcePath that resolves only in the (absent) parent
-      tree, because this is a chained subproject validated standalone — downgraded to a warning and
-      waived by --ci (the parent root is the authoritative gate).
+      On a finding about a cross-project reference: how the owner's gate resolved it (outcome,
+      owner, call site, canonical target, input digest, reason), decided before the severity. It
+      replaces the retired surfaceResolved flag, which existed only so the resolve-through-parent
+      merge could tell a contract verdict from a resolution failure.
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      In a family run: the key of the project whose gate (or whose external, for a composition
+      finding) the finding belongs to — '' for the family root. The finding's message is that
+      gate's, verbatim; the run only prefixes it. Absent on the owner's own run.
+    optional: true
+  - name: advisory
+    type: bool
+    description: >-
+      True on a finding reported beside a gate rather than by it — the live comparison of an
+      external with its producer (family_validator.advise). Printed and counted with its severity,
+      but never part of a failure decision: `valid` and `validate --ci` both ignore it, because the
+      pin is the reproducible gate and a live producer is not.
     optional: true
 methods: []
+sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-12T11:27:06.332Z'
+updatedAt: '2026-10-06T10:07:25.991Z'

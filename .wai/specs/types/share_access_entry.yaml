@@ -31,9 +31,11 @@ fields:
     type: string
     optional: true
   - name: outcome
-    type: string
-    description: served | denied-disabled | denied-expired | not-found | denied-download.
+    type: ShareAccessOutcome
+    description: How the access ended.
     optional: false
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareAccessEntry
 createdAt: '2026-07-17T22:32:36.503Z'
-updatedAt: '2026-07-17T22:32:36.561Z'
+updatedAt: '2026-10-07T06:28:54.809Z'

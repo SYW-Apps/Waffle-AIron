@@ -6,31 +6,690 @@ methods:
   - name: loadSystemSpec
     description: Calls loadSystemSpec on the core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
-  - name: createChainedSubsystem
+    returns: SystemSpec?
+  - name: moveMember
     description: >-
-      Calls createChainedSubsystem on the core portal to wire a chained subsystem in the parent and
-      scaffold its child project.
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+      Forward to spec_maintenance_portal.moveMember: relocate a member's directory and point its
+      `members` entry there.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
-  - name: moveSubsystemProject
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
+  - name: composeAgentBrief
     description: >-
-      Calls moveSubsystemProject on the core portal to move an external subsystem's directory and
-      update its projectPath link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
-    returns: void
-  - name: externalizeSubsystem
+      Calls composeAgentBrief on core portal — the live delegation brief backing `wairon agent
+      brief` and the `wairon agent customize` scaffold seed.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+  - name: exportSpecTree
     description: >-
-      Calls externalizeSubsystem on the core portal to migrate an internal subsystem into a
-      standalone subproject.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
-    returns: void
-  - name: internalizeSubsystem
+      Pack the local project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive. Forwarded to the core portal.
+    signature: 'exportSpecTree(includeDerived?: bool, allowPartial?: bool): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: bool
+        optional: true
+      - name: allowPartial
+        type: bool
+        description: >-
+          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
+          out in the result, instead of refusing the whole export.
+        optional: true
+  - name: importSpecTree
     description: >-
-      Calls internalizeSubsystem on the core portal to migrate an external subsystem back into the
-      parent tree.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
+      Import a .waitree archive into a local project root under an explicit policy. Forwarded to the
+      core portal. The CLI does NOT set the executable-entry guard: a developer extracting an
+      archive from an instance they chose to trust is the trusted-filesystem tier, the same tier
+      `wairon packs add` installs code packs through.
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
+  - name: loadProjectConfig
+    description: The local project's configuration, or null when it has none. Forwarded to the core portal.
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+    guarantees:
+      - idempotent
+  - name: createProjectConfig
+    description: >-
+      Write the configuration `wairon init` composed, for a project that has none. Forwarded to the
+      core portal.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
     returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: setExecutionTier
+    description: Set `execution.tier` for `wairon execution set-tier`. Forwarded to the core portal.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: projectConfigExists
+    description: >-
+      Whether the local project has a configuration — the CLI's is-this-a-wairon-project guard.
+      Forwarded to the core portal.
+    signature: 'projectConfigExists(): bool'
+    returns: bool
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveAgentTopology
+    description: >-
+      The agent topology resolved from the current spec tree: the live records `wairon list`, `show`
+      and `generate` work from. Forwarded to the core portal.
+    signature: 'resolveAgentTopology(): list<AgentRecord>'
+    returns: list<AgentRecord>
+    params: []
+    guarantees:
+      - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      Complete the bound project's bootstrap without overwriting anything: the default configuration
+      and the L0 system spec, each only when absent. A configuration it writes declares the given
+      id, else the chosen name slugified. Forwarded to the core portal.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a chained child's mount subsystem
+          id; omitted, the chosen name slugified
+        optional: true
+      - name: vision
+        type: string
+        description: The vision an L0 written here carries; omitted, a placeholder naming the project
+        optional: true
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: >-
+      Forward to the core portal: the direct members of a project root, one level deep — its
+      `members` entries and, for one release, its legacy L1 mounts — each as its directory, alias
+      and form.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: defaultPackSelections
+    description: >-
+      The store packs that apply by default, shaped as selections to seed into a new project's
+      configuration. Forwarded to the core portal.
+    signature: 'defaultPackSelections(): list<PackSelection>'
+    returns: list<PackSelection>
+    params: []
+    guarantees:
+      - idempotent
+  - name: readLockState
+    description: Forward to core_portal.readLockState with the gate identity the caller computed now
+    signature: 'readLockState(current: StateId): LockStatus'
+    returns: LockStatus
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
+  - name: retireSpecialists
+    description: >-
+      Forward to core_portal.retireSpecialists: plan, and with apply write, the migration off the
+      retired Specialist stereotype
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
+  - name: repairForeignStepFields
+    description: >-
+      Forward to core_portal.repairForeignStepFields: plan, and with apply write, the removal of
+      every narrative-step field its own step type cannot have
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: renderDiagram
+    description: >-
+      Calls renderDiagram on core portal: render the spec tree into the requested format and answer
+      the artifact as a string. The CLI reaches diagram rendering through here rather than importing
+      the canvas and exporter modules directly — those live in another subsystem, and an adapter is
+      what a subsystem boundary is crossed with.
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
+    returns: string
+    params:
+      - name: format
+        type: DiagramFormat
+        description: The format to render
+      - name: relations
+        type: list<ProjectRelations>
+        description: >-
+          The family's relation health for the canvas; omitted (`--no-health`), the canvas says it
+          was not checked
+        optional: true
+  - name: generateAll
+    description: >-
+      Calls generateAll on core portal: write every agent's file for every configured target. The
+      CLI reaches generation through here rather than importing the exporters module, which is
+      another subsystem's.
+    signature: >-
+      generateAll(agents: list<AgentRecord>, config: ProjectConfig, options?: GenerateOptions):
+      list<GenerateSummary>
+    returns: list<GenerateSummary>
+    params:
+      - name: agents
+        type: list<AgentRecord>
+        description: Every agent to write
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
+      - name: options
+        type: GenerateOptions
+        description: What this run may vary
+        optional: true
+  - name: resolveExpectedOutputPaths
+    description: >-
+      Calls resolveExpectedOutputPaths on core portal: which files a generate run would own, without
+      writing any.
+    signature: 'resolveExpectedOutputPaths(agents: list<AgentRecord>, config: ProjectConfig): set<string>'
+    returns: set<string>
+    params:
+      - name: agents
+        type: list<AgentRecord>
+        description: The agents whose outputs to enumerate
+      - name: config
+        type: ProjectConfig
+        description: The project's configuration
+  - name: resolveDomains
+    description: >-
+      Calls resolve on the topology repository: every domain this project has, derived and
+      registered alike.
+    signature: 'resolveDomains(): list<Domain>'
+    returns: list<Domain>
+    params: []
+  - name: addDomain
+    description: >-
+      Calls addFreeStanding on the topology repository: register a domain the spec tree does not
+      imply.
+    signature: 'addDomain(domain: Domain): void'
+    returns: void
+    params:
+      - name: domain
+        type: Domain
+        description: The domain to register
+  - name: removeDomain
+    description: 'Calls removeFreeStanding on the topology repository: unregister a free-standing domain.'
+    signature: 'removeDomain(id: string): void'
+    returns: void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: detectDomainCandidates
+    description: >-
+      Calls the domain detector: which directories look like domains nobody has registered.
+      Proposals only.
+    signature: >-
+      detectDomainCandidates(projectRoot: string, trackedPaths?: set<string>, trackedIds?:
+      set<string>): list<DetectedDomainCandidate>
+    returns: list<DetectedDomainCandidate>
+    params:
+      - name: projectRoot
+        type: string
+        description: The repository root to scan
+      - name: trackedPaths
+        type: set<string>
+        description: Paths already claimed by a registered domain
+        optional: true
+      - name: trackedIds
+        type: set<string>
+        description: Domain ids already in use
+        optional: true
+  - name: deriveExecutionProfile
+    description: What an agent's work is like, for `wairon execution show`. Forwarded to the core portal.
+    signature: 'deriveExecutionProfile(agent: AgentRecord): ExecutionProfile'
+    returns: ExecutionProfile
+    params:
+      - name: agent
+        type: AgentRecord
+        description: The resolved agent whose work shape is wanted
+    guarantees:
+      - idempotent
+  - name: resolveBudget
+    description: >-
+      What that work earns under the project's dial, for `wairon execution show`. Forwarded to the
+      core portal.
+    signature: >-
+      resolveBudget(profile: ExecutionProfile, config: ExecutionConfig, agentId: string):
+      ExecutionBudget?
+    returns: ExecutionBudget?
+    params:
+      - name: profile
+        type: ExecutionProfile
+        description: What the work is like
+      - name: config
+        type: ExecutionConfig
+        description: The project's dial and its per-agent overrides
+      - name: agentId
+        type: string
+        description: Which agent, so its override can be found
+    guarantees:
+      - idempotent
+  - name: globalGuideFilePath
+    description: >-
+      Where an AI tool keeps its machine-wide configuration, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'globalGuideFilePath(target: string): string?'
+    returns: string?
+    params:
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: localGuideFilePath
+    description: >-
+      Where an AI tool keeps its per-project configuration, for `wairon init` and `wairon doctor`.
+      Forwarded to the core portal.
+    signature: 'localGuideFilePath(projectRoot: string, target: string): string?'
+    returns: string?
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    guarantees:
+      - idempotent
+  - name: injectGuide
+    description: >-
+      Put the wairon guide into a tool's configuration file, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'injectGuide(filePath: string, scope: GuideScope): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file
+      - name: scope
+        type: GuideScope
+        description: 'Which kind of guide file it is: a user-level one or a project''s own'
+    effect: write
+  - name: writeRootGuideDelegator
+    description: >-
+      Write the repository-root pointer at the in-project guide, for `wairon init`. Forwarded to the
+      core portal.
+    signature: 'writeRootGuideDelegator(projectRoot: string, target: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: target
+        type: string
+        description: The AI tool
+    effect: write
+  - name: reinjectLocalGuides
+    description: >-
+      Refresh the in-project guides, for `wairon generate` and `wairon doctor --fix`. Forwarded to
+      the core portal.
+    signature: 'reinjectLocalGuides(projectRoot: string, targets: list<string>): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targets
+        type: list<string>
+        description: The AI tools to refresh
+    effect: write
+  - name: readStampVersion
+    description: >-
+      The wairon version stamped in generated content, for `wairon doctor`'s staleness check.
+      Forwarded to the core portal.
+    signature: 'readStampVersion(content: string): string?'
+    returns: string?
+    params:
+      - name: content
+        type: string
+        description: Generated content
+    guarantees:
+      - idempotent
+  - name: syncContextFiles
+    description: >-
+      Rebuild the derived context documents, for `wairon generate`, `wairon init` and `wairon doctor
+      --fix`. Forwarded to the core portal.
+    signature: 'syncContextFiles(): SyncResult'
+    returns: SyncResult
+    params: []
+    effect: write
+  - name: hasContext
+    description: >-
+      Whether the project keeps a context directory, so `wairon generate` owes it the derived
+      context documents. Forwarded to the core portal.
+    signature: 'hasContext(): bool'
+    returns: bool
+    params: []
+    guarantees:
+      - idempotent
+  - name: derivedDocPaths
+    description: >-
+      Where the derived context documents live, for `wairon doctor`'s staleness report. Forwarded to
+      the core portal.
+    signature: 'derivedDocPaths(): list<string>'
+    returns: list<string>
+    params: []
+    guarantees:
+      - idempotent
+  - name: getStatusReport
+    description: >-
+      How complete the spec tree is, for `wairon status`, marked up with the terminal's own colours
+      — and whether it could be reported on, which is what decides the exit code. Forwarded to the
+      core portal.
+    signature: 'getStatusReport(options: StatusOptions, decor: StatusDecor): StatusReport'
+    returns: StatusReport
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing
+    guarantees:
+      - idempotent
+  - name: approvalVerdict
+    description: >-
+      Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
+      tree the validator computed (members whose pin moved, members drifted or never approved, and
+      the stage-5 upgrade note).
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params:
+      - name: approvals
+        type: list<ProjectApproval>
+        description: The pin tree from the validator adapter's familyApprovals
+        optional: true
+    guarantees:
+      - idempotent
+  - name: findLegacySpecFiles
+    description: >-
+      Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
+      as stored under a legacy name
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      Forward to spec_maintenance_portal.findChainingSubprojectsMissingConfig: the chained
+      subprojects `wairon doctor` reports as unrunnable standalone
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Forward to spec_maintenance_portal.backfillChainedSubprojectConfigs: the `wairon doctor --fix`
+      repair
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: diagnoseProjectPacks
+    description: 'Forward to extension_portal.diagnoseProjectPacks: the pack situation `wairon doctor` reports'
+    signature: 'diagnoseProjectPacks(): PackDiagnosis'
+    returns: PackDiagnosis
+    params: []
+  - name: resolveChainingParent
+    description: >-
+      Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
+      root and mounting subsystem id), or null for a top root and when the bound request may not
+      read above its root.
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params: []
+  - name: projectFamily
+    description: 'Forward to spec_tree_portal.projectFamily: the project graph of the bound root''s scan.'
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table, the
+      bound root's or a member's.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: createMember
+    description: >-
+      Forward to spec_maintenance_portal.createMember: create a member at a source in the members
+      grammar — a part by default, a project with `as: project` (stage 8; a project with the bound
+      project's required packs, once) — and declare it in the bound project's `members`; answers
+      what was created, or with `report` what would be (nothing written).
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
+    returns: MemberCreation
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: source
+        type: string
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: Answer the plan and write nothing (`--report`)
+        optional: true
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
+      members' included (keyed by project id)
+    signature: 'loadTypeSpecs(): list<TypeSpec>'
+    returns: list<TypeSpec>
+    params: []
+  - name: advanceMember
+    description: >-
+      Forward to spec_maintenance_portal.advanceMember: move a git member's pinned commit (`wairon
+      member update`).
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
+    returns: MemberAdvance
+    params:
+      - name: alias
+        type: string
+        description: A git member's alias
+      - name: ref
+        type: string
+        description: The ref to follow
+        optional: true
+      - name: commit
+        type: string
+        description: An exact commit
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Report and write nothing
+        optional: true
+  - name: repairSignatures
+    description: >-
+      Forward to core_portal.repairSignatures: plan, and with apply write, the regeneration of
+      stored signature texts from their params and the removal of restatements equal to a method's
+      signature source.
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: repairTypeSpellings
+    description: >-
+      Forward to core_portal.repairTypeSpellings: plan, and with apply write, the rewrite of stored
+      type positions into their canonical spelling, with the int proposals and the positions needing
+      an author beside it.
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the rewrite; false plans without writing
+  - name: migrateReachability
+    description: >-
+      Forward to spec_maintenance_portal.migrateReachability: plan, and with apply write, the bound
+      project's migration onto the reachability model.
+    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
+    returns: ReachabilityMigrationPlan
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
+  - name: setNetwork
+    description: >-
+      Declare or remove the project's network for `wairon network declare|undeclare`. Forwarded to
+      the core portal.
+    signatureFrom: project_config_portal.setNetwork
+    guarantees:
+      - idempotent
+  - name: renameField
+    description: >-
+      Forward to spec_maintenance_portal.renameField: rename a field of a type and every reference
+      to it
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
+    returns: FieldRename
+    params:
+      - name: typeId
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: renameParam
+    description: >-
+      Forward to spec_maintenance_portal.renameParam: rename a parameter of a contract method,
+      keeping its old name in the parameter's rename trace
+    signature: >-
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
+    returns: ParamRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: renameMethod
+    description: >-
+      Forward to spec_maintenance_portal.renameMethod: rename a contract method and every reference
+      to it, keeping its old name in its rename trace — or, with dryRun, answer what it would do
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name, an identifier in the tree's method casing
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: seedDemoTree
+    description: >-
+      Seed the example spec tree into the currently bound project root, for `wairon host demo`.
+      Forwarded to the core portal.
+    signature: 'seedDemoTree(): void'
+    returns: void
+    params: []
+    effect: write
+  - name: staleDerivedDocs
+    description: >-
+      The derived context documents whose content a regenerate would change, for `wairon doctor`.
+      Forwarded to the core portal.
+    signature: 'staleDerivedDocs(): list<string>'
+    returns: list<string>
+    params: []
+    guarantees:
+      - idempotent
+  - name: inspectLock
+    description: >-
+      Forward to spec_tree_portal.inspectLock: the bound project's spec-tree write lock as `wairon
+      doctor` reports it, or none
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-05T18:44:44.075Z'
+updatedAt: '2026-10-09T17:03:30.272Z'

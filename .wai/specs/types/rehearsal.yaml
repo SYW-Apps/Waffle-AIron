@@ -1,0 +1,61 @@
+kind: value-object
+id: rehearsal
+name: Rehearsal
+description: >-
+  A private copy of a family's .wai trees on which a migration's writes are performed before
+  anything live moves: the family's layout mirrored from its top root under one temporary directory,
+  so every member path, containment check and relative source path resolves there exactly as it does
+  live. It holds no source code — the verbs write only under .wai/ — and it is the plan's evidence:
+  its difference from the live trees IS the plan's file changes. Discarded after a dry run, a
+  refusal or a commit.
+subsystem: sdd_migrations
+fields:
+  - name: id
+    type: string
+    description: Short random id (8 hex), shared by the transaction the rehearsal becomes.
+    optional: false
+  - name: directory
+    type: string
+    description: >-
+      The rehearsal's root in the OS temporary directory (`wairon-migration-<id>`); outside the
+      family, so a dry run writes nothing into it.
+    optional: false
+  - name: familyRoot
+    type: string
+    description: The live top root the layout is mirrored from.
+    optional: false
+  - name: roots
+    type: map<string, string>
+    description: Each copied project's live root → its rehearsal root.
+    optional: false
+  - name: baseDigests
+    type: map<string, string>
+    description: >-
+      Each copied live file (absolute) → sha256 of its bytes when copied: the base every FileChange
+      is planned against.
+    optional: false
+  - name: areas
+    type: list<string>
+    description: >-
+      The scope's areas when it named any (the hosted member upgrade: the host store files): only
+      these, per copied owner, are compared. Absent for a family migration, which compares every
+      .wai tree.
+    optional: true
+  - name: whole
+    type: list<string>
+    description: >-
+      The scope's owners copied whole (a relocated project's old directory and its new root): every
+      file under them, whatever the file, is compared, so a move reads as deletes at the old place
+      and creates at the new. Absent for every other transaction.
+    optional: true
+  - name: base
+    type: string
+    description: >-
+      Stage 8: the directory the rehearsal lays every owner out under (the nearest common ancestor
+      of the coordinator and every owner, a sibling checkout included); an owner's image is
+      <directory>/<its path from base>. Absent reads as the family root.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:23.894Z'
+updatedAt: '2026-10-04T10:20:55.819Z'

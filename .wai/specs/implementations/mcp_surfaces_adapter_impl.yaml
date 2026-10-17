@@ -1,16 +1,60 @@
 id: mcp_surfaces_adapter_impl
 name: MCP Surfaces Adapter Implementation
-description: In-process forwarding to the surface portal, alongside the server's other client adapters.
+description: >-
+  sdd_mcp's client hop into sdd_surfaces, in a module of its own: identity re-exports of the surface
+  portal. The MCP server imports this module.
 contract: imcp_surfaces_adapter
-sourcePath: src/mcp/server.ts
+sourcePath: src/mcp/adapters/surfaces.ts
 methods:
-  - name: listExternalInterfaces
+  - name: pinExternals
     narrative:
       - stepNumber: 1
-        description: Forward the discovery read to the surface-exchange subsystem's published portal
+        description: Forward the pin to the surface-exchange subsystem's published portal
         type: call
         targetComponent: surface_portal
-        targetMethod: listExternalInterfaces
+        targetMethod: pinExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward the status read to the surface-exchange subsystem's published portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: getExternalsStatus
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: declareExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: removeExternal
+  - name: updateExternalUse
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: updateExternalUse
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listConsumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: diffSurface
 status: complete
 createdAt: '2026-07-24T18:14:33.463Z'
-updatedAt: '2026-07-24T20:48:49.566Z'
+updatedAt: '2026-10-07T10:59:32.077Z'

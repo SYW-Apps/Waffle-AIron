@@ -1,0 +1,101 @@
+id: mcp_network_orchestrator_impl
+name: MCP Network Orchestrator Implementation
+description: The network tools' workflows, beside the externals workflows.
+contract: imcp_network_orchestrator
+sourcePath: src/mcp/network.ts
+methods:
+  - name: flows
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask for the matrix as JSON, the selection being the request's (the family at a project
+          that declares members, within its reach)
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: flows
+      - stepNumber: 2
+        description: >-
+          Ask whether the bound project is a member of an enclosing family: at a member's own root
+          the matrix is the family's, narrowed to the member, and the member's own parties are keyed
+          under its alias there (`<alias>::<component>`)
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 3
+        description: >-
+          Read `to` as a party the way the network commands read one (flow-matrix partyName): the
+          name as written; the bound project's own id written as a prefix (`<project>::<component>`,
+          `<project>::<portal>.<verb>`) naming its own party; and, at a member's root, a bare name
+          of the member's own (a component, a subsystem, `portal.verb`) and its own id as a prefix
+          both read as `<alias>::<name>`, the key the matrix gives it there. Parse the document's
+          flows and keep only those whose called end one of those spellings denotes
+          (flow_party.isNamed: its project, subsystem, component, workload or portal.verb) when `to`
+          is given — so a member's own Portal filters the same rows `wairon network why` reads from
+          the same folder
+        type: local
+      - stepNumber: 4
+        description: Is the answer empty for a name it was filtered by?
+        type: branch
+        condition: '`to` is given and no flow lands in it'
+        onFalseStep: 8
+      - stepNumber: 5
+        description: >-
+          Ask the network portal to explain a flow from outside to `to`, which names every party the
+          design does not know
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: why
+      - stepNumber: 6
+        description: Does the explanation name `to` as a party the design does not know?
+        type: branch
+        condition: the explanation lists `to` among its unknown parties
+        onFalseStep: 8
+      - stepNumber: 7
+        label: unknown-party
+        description: >-
+          Refuse, naming the party and how a party is named, so an empty answer always means no flow
+          lands there and never a name that resolved to nothing
+        type: throw
+        error: 'unknown party: nothing in the design is named so'
+      - stepNumber: 8
+        label: answer
+        description: Answer them, as text and structured content
+        type: return
+        outcome: list<NetworkFlow>
+  - name: explain
+    narrative:
+      - stepNumber: 1
+        description: Explain the pair
+        type: call
+        targetComponent: mcp_network_adapter
+        targetMethod: why
+      - stepNumber: 2
+        description: Answer the explanation, as text and structured content
+        type: return
+        outcome: FlowExplanation
+  - name: declare
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project's configuration: a declaration it already holds keeps its description
+          when none is given
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          The declaration: a NetworkDeclaration with the given description (else the one already
+          declared) when declared, else none
+        type: local
+      - stepNumber: 3
+        description: Write it through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 4
+        description: Answer whether it wrote
+        type: return
+        outcome: bool
+status: complete
+createdAt: '2026-10-06T13:15:29.445Z'
+updatedAt: '2026-10-08T08:32:46.725Z'

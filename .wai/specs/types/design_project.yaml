@@ -1,0 +1,34 @@
+kind: value-object
+id: design_project
+name: DesignProject
+description: >-
+  The exported project's L0: what it is for and what it shares. Whether it is a program or a library
+  is not stated: that is a packaging decision outside the design, and a consumer reads it from the
+  facts the document carries (lifecycle roots, Portal endpoints, this export table).
+subsystem: sdd_surfaces
+fields:
+  - name: name
+    type: string
+    optional: false
+  - name: vision
+    type: string
+    optional: false
+  - name: boundaries
+    type: list<string>
+    description: 'Each boundary as text (a named boundary as `name: description`)'
+    optional: false
+  - name: requirements
+    type: list<string>
+    description: The global requirements, each as text
+    optional: false
+  - name: targetLanguage
+    type: string
+    optional: true
+  - name: exports
+    type: list<DesignExportEntry>
+    description: 'The resolved L0 export table: everything the project shares with other projects'
+    optional: false
+methods: []
+sourcePath: src/models/design-export.ts
+createdAt: '2026-10-04T13:53:02.328Z'
+updatedAt: '2026-10-04T15:39:05.980Z'

@@ -1,0 +1,14 @@
+kind: enum
+id: pack_kind
+name: PackKind
+description: The two kinds of extension pack.
+fields: []
+methods: []
+sourcePath: src/commands/packs.ts
+values:
+  - name: declarative
+    description: 'Data only: profiles, patterns, rules as declarations'
+  - name: code
+    description: 'An executable entry built against @wairon/sdk: programmatic rules'
+createdAt: '2026-10-04T23:34:18.730Z'
+updatedAt: '2026-10-04T23:34:19.179Z'

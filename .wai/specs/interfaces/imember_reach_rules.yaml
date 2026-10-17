@@ -1,0 +1,113 @@
+id: imember_reach_rules
+name: Member Reach Rules Interface
+description: >-
+  Pure, deterministic rules over supplied values: the world after a membership change, the reach
+  comparison across it, and the token qualifier rewrite.
+component: member_reach_rules
+methods:
+  - name: relink
+    description: >-
+      The permission world with the given parent links added, the given member ids unlinked (their
+      parent link removed), the given placements added (a detached member becomes a family root
+      placed in its former family root's units), and every placement of the given unplaced projects
+      removed (an adopted project becomes a member and takes its units from its new family root).
+      Assignments, roles and units are untouched — a membership change moves no setting, only the
+      chain.
+    signature: >-
+      relink(world: PermissionWorld, added: list<ProjectParentLink>, removed: list<string>,
+      placements: list<ProjectPlacement>, unplaced: list<string>): PermissionWorld
+    returns: PermissionWorld
+    params:
+      - name: world
+        type: PermissionWorld
+      - name: added
+        type: list<ProjectParentLink>
+      - name: removed
+        type: list<string>
+        description: Member record ids whose parent link is removed
+      - name: placements
+        type: list<ProjectPlacement>
+        description: Placements to add (empty for every change but a detach)
+      - name: unplaced
+        type: list<string>
+        description: Project ids whose placements are removed (empty for every change but an adopt)
+    guarantees:
+      - idempotent
+  - name: compare
+    description: >-
+      For every subject (each user record as its permission subject — its id, its diverged subject
+      id as alias, its role bindings — plus one subject with no settings of its own, standing for
+      everyone else) and every capability, resolve the before side (beforeId in before; 'no' when
+      beforeId is null — no record) and the after side (afterId in after; 'no' when null) and answer
+      each row with equal set. Callers keep all rows (the upgrade's proof) or only unequal ones (a
+      reach listing).
+    signature: >-
+      compare(users: list<HostedUserRecord>, before: PermissionWorld, beforeId: string?, after:
+      PermissionWorld, afterId: string?): list<ReachComparison>
+    returns: list<ReachComparison>
+    params:
+      - name: users
+        type: list<HostedUserRecord>
+      - name: before
+        type: PermissionWorld
+      - name: beforeId
+        type: string?
+        description: >-
+          The project resolved before (the family root at upgrade; the member before a change; null
+          when it had no record)
+      - name: after
+        type: PermissionWorld
+      - name: afterId
+        type: string?
+        description: The project resolved after (null when it will have no record)
+    guarantees:
+      - idempotent
+  - name: narrowing
+    description: >-
+      Rewrite one API key's member-QUALIFIED entries ('platform::billing', one alias per hop) to the
+      record id of the member whose qualifier equals it; every other entry ('*', a project id —
+      which already covers its members through the chain) is kept; duplicates collapse, order kept.
+      Answers null when no entry is qualified, otherwise the rewrite and its documented widening
+      (record-level tools on the member's own record, within the member only).
+    signature: 'narrowing(key: ApiKeyRecord, members: list<PlannedMemberRecord>): PlannedNarrowing?'
+    returns: PlannedNarrowing?
+    params:
+      - name: key
+        type: ApiKeyRecord
+      - name: members
+        type: list<PlannedMemberRecord>
+    guarantees:
+      - idempotent
+  - name: carryPlan
+    description: >-
+      Pure: the subsystem settings a promote or an externalize moves from the parent into the new
+      project. For each subject, the parent's project:write assignments (yes or no) at
+      `<parentId>/<subsystem>` for every moved subsystem fold into one rule on the new project's
+      scope — carried when one subsystem names the subject, the most restrictive value (no over yes)
+      when several do; inherit carries nothing; a subject already holding a project:write setting on
+      the new project keeps it and nothing is carried for it. Every role binding of a user anchored
+      at a moved subsystem is listed as not carried: a role only grants, so leaving it out can only
+      narrow.
+    signature: >-
+      carryPlan(users: list<HostedUserRecord>, world: PermissionWorld, parentId: string, memberId:
+      string, moved: list<string>): list<CarriedSubsystemRule>
+    returns: list<CarriedSubsystemRule>
+    params:
+      - name: users
+        type: list<HostedUserRecord>
+      - name: world
+        type: PermissionWorld
+      - name: parentId
+        type: string
+        description: The record the subsystems leave
+      - name: memberId
+        type: string
+        description: The new project's id
+      - name: moved
+        type: list<string>
+        description: The subsystem ids that move into the new project
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-10-01T16:56:27.256Z'
+updatedAt: '2026-10-04T10:19:04.296Z'

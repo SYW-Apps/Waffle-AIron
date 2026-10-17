@@ -10,7 +10,9 @@ methods:
     description: >-
       Create or update one project placement: stamp id and createdAt on create and validate that the
       target unitId resolves to an existing organization unit. Persist the full placement collection
-      durably and refresh the store.
+      durably and refresh the store. The registry owns one aggregate and reads no project record, so
+      whether the project is a MEMBER (which takes its units from its family root and is never
+      placed) is checked by every placing workflow before it calls here.
     signature: 'placeProject(placement: ProjectPlacement): ProjectPlacement'
     returns: ProjectPlacement
     params:
@@ -52,8 +54,8 @@ methods:
       exposeTo[] reference to a moved id across all units, persist the renamed subtree durably, and
       return the old->new id remap for every moved unit so the caller can rewrite external
       references.
-    signature: 'reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[]'
-    returns: UnitIdRemap[]
+    signature: 'reparentUnit(unitId: string, newParentId?: string): list<UnitIdRemap>'
+    returns: list<UnitIdRemap>
     params:
       - name: unitId
         type: string
@@ -83,4 +85,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-09T22:05:44.376Z'
-updatedAt: '2026-07-15T21:19:38.331Z'
+updatedAt: '2026-10-04T10:19:08.936Z'

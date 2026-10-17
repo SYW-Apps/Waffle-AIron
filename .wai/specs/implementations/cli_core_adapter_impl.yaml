@@ -2,43 +2,403 @@ id: cli_core_adapter_impl
 name: CLI Core Adapter Implementation
 description: Concrete implementation forwarding spec loading requests to the core portal.
 contract: icli_core_adapter
-sourcePath: src/commands/subsystem.ts
+sourcePath: src/commands/adapters/core.ts
 methods:
   - name: loadSystemSpec
     narrative:
       - stepNumber: 1
         description: Call loadSystemSpec on the core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
-  - name: createChainedSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Forward chained-subsystem creation to the core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: createChainedSubsystem
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
         description: Forward subproject relocation to the core portal
         type: call
-        targetComponent: core_portal
-        targetMethod: moveSubsystemProject
-  - name: externalizeSubsystem
+        targetComponent: spec_maintenance_portal
+        targetMethod: moveMember
+  - name: composeAgentBrief
     narrative:
       - stepNumber: 1
-        description: Forward subsystem externalization to the core portal
+        description: Forward the brief composition to the core portal
         type: call
-        targetComponent: core_portal
-        targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
+        targetComponent: agent_context_portal
+        targetMethod: composeAgentBrief
+  - name: exportSpecTree
     narrative:
       - stepNumber: 1
-        description: Forward subsystem internalization to the core portal
+        description: Forward the spec-tree export to the core portal.
         type: call
-        targetComponent: core_portal
-        targetMethod: internalizeSubsystem
+        targetComponent: spec_tree_portal
+        targetMethod: exportSpecTree
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the spec-tree import to the core portal, passing the caller's policy through
+          unchanged — notably WITHOUT the executable-entry guard, which is the over-the-wire tier's
+          rule, not the trusted filesystem's.
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: importSpecTree
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: createProjectConfig
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setExecutionTier
+  - name: projectConfigExists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+  - name: resolveAgentTopology
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: resolveAgentTopology
+  - name: ensureProjectInitialized
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: ensureProjectInitialized
+  - name: listDirectChainedSubprojects
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: listDirectChainedSubprojects
+  - name: defaultPackSelections
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: defaultPackSelections
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Forward the lock-state read, with the caller's gate identity, to the core portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: readLockState
+  - name: retireSpecialists
+    narrative:
+      - stepNumber: 1
+        description: Forward the Specialist retirement, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: retireSpecialists
+  - name: repairForeignStepFields
+    narrative:
+      - stepNumber: 1
+        description: Forward the narrative-step repair, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: repairForeignStepFields
+  - name: renderDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's diagram rendering
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: renderDiagram
+  - name: generateAll
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's generation
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: generateAll
+  - name: resolveExpectedOutputPaths
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's path enumeration
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: resolveExpectedOutputPaths
+  - name: resolveDomains
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: resolveDomains
+  - name: addDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: addDomain
+  - name: removeDomain
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: removeDomain
+  - name: detectDomainCandidates
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: detectDomainCandidates
+  - name: deriveExecutionProfile
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: deriveExecutionProfile
+  - name: resolveBudget
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: resolveBudget
+  - name: globalGuideFilePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: globalGuideFilePath
+  - name: localGuideFilePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: localGuideFilePath
+  - name: injectGuide
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: injectGuide
+  - name: writeRootGuideDelegator
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: writeRootGuideDelegator
+  - name: reinjectLocalGuides
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: reinjectLocalGuides
+  - name: readStampVersion
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: readStampVersion
+  - name: syncContextFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: syncContextFiles
+  - name: hasContext
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: hasContext
+  - name: derivedDocPaths
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: derivedDocPaths
+  - name: getStatusReport
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getStatusReport
+  - name: approvalVerdict
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalVerdict
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findLegacySpecFiles
+  - name: findChainingSubprojectsMissingConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findChainingSubprojectsMissingConfig
+  - name: backfillChainedSubprojectConfigs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: backfillChainedSubprojectConfigs
+  - name: diagnoseProjectPacks
+    narrative:
+      - stepNumber: 1
+        description: Forward to the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: diagnoseProjectPacks
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: createMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: createMember
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpecs on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadTypeSpecs
+  - name: advanceMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: advanceMember
+  - name: repairSignatures
+    narrative:
+      - stepNumber: 1
+        description: Forward the signature repair, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: repairSignatures
+  - name: repairTypeSpellings
+    narrative:
+      - stepNumber: 1
+        description: Forward the type-spelling repair, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: repairTypeSpellings
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward the reachability migration, planned or applied, to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: setNetwork
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameField
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameParam
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: renameMethod
+  - name: seedDemoTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the seeding to the core portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: seedDemoTree
+  - name: staleDerivedDocs
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the core portal
+        type: call
+        targetComponent: agent_context_portal
+        targetMethod: staleDerivedDocs
+  - name: inspectLock
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: inspectLock
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T19:14:21.824Z'
+updatedAt: '2026-10-09T16:55:52.751Z'

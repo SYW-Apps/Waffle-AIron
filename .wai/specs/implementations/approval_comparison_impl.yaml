@@ -1,0 +1,313 @@
+id: approval_comparison_impl
+name: Approval Comparison Implementation
+description: >-
+  The approval arithmetic in src/core/approval.ts: free functions over a project root, holding
+  nothing between calls. Each read defaults its root to the bound project, which is why callers that
+  have one tree pass nothing. From format 3 a spec's approved digest is its DESIGN digest — the
+  parsed spec's design view in canonical form — so code linkage, whitespace and timestamps never
+  move it; a format-2 record keeps its raw-content digests (CRLF normalized to LF, so a commit
+  checked out on Windows and Linux compares equal) and is compared in that reading until it is
+  re-locked or re-expressed.
+contract: iapproval_comparison
+sourcePath: src/core/approval.ts
+methods:
+  - name: captureApprovedSpecs
+    narrative:
+      - stepNumber: 1
+        description: Read the bytes of every spec file of the tree through the spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: snapshot
+      - stepNumber: 2
+        description: >-
+          Parse each file's spec, keep only the keys its kind's schema reads — a key the loader
+          drops (UNKNOWN_SPEC_KEY) is no design, and the gate identity, which digests the loaded
+          specs, never sees it either, so the per-spec digests and the gate cannot disagree over one
+          — and project it to its design view — implementation_spec.designView, type_spec.designView
+          or component_spec.designView for those kinds, every other kind with createdAt and
+          updatedAt dropped — then canonicalize it (stable key order) and digest it, keying by the
+          path relative to the project root (a part's file under `members/<alias>/…`). A file that
+          does not parse is digested in the content reading instead, so it is still recorded and any
+          edit to it still shows
+        type: local
+      - stepNumber: 3
+        description: >-
+          When the re-lock is scoped to named files, read the project graph through the spec loader
+          for the root project's parts, so a part's file is approved under its storage-independent
+          key rather than its path
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
+          Read the record already on file, so a scoped approval carries forward the digests it is
+          not re-capturing rather than dropping them
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
+      - stepNumber: 5
+        description: Answer with the digest map to write into the record
+        type: return
+        outcome: captured
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record under the given root
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 2
+        description: Decide whether there is anything to compare against
+        type: branch
+        condition: the project carries no record
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer null — never approved is a different answer from approved and drifted, and a caller
+          has to tell them apart
+        type: return
+        outcome: unapproved
+      - stepNumber: 4
+        description: >-
+          Digest the tree as it stands in the reading the record names — design digests (schema-read
+          keys only) when its specsReading is `design`, raw-content digests (CRLF normalized) when
+          it names none, a record written before format 3 — and compare against the digests the
+          record carries: a path the record does not cover is added, one whose digest differs is
+          changed (a design digest recorded over a key the schema does not read still matches the
+          file as it stands), one the record covers that is gone is removed, and the rest are
+          unchanged; then pair each added path with a removed one of the same digest (in path order,
+          each used once) as a move — storage moved, content did not — taking both out of added and
+          removed and counting the new path as unchanged
+        type: local
+      - stepNumber: 5
+        description: 'Answer with the lists: added, changed, removed, unchanged and moved'
+        type: return
+        outcome: compared
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the approval record under the given root, answering null when the project carries
+          none
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record under the given root
+        type: call
+        targetComponent: lock_store
+        targetMethod: readAt
+      - stepNumber: 2
+        description: >-
+          Answer the record's covered paths as a set for membership tests, or null when there is no
+          record
+        type: return
+        outcome: settled
+  - name: verdict
+    narrative:
+      - stepNumber: 1
+        description: Read the approval on record
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: approvalRecord
+      - stepNumber: 2
+        description: Decide whether this project has ever been approved
+        type: branch
+        condition: there is no approval record
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer silence, not drift. A tree still being designed has no approval by definition, and
+          saying so on every status would be noise standing where news should be
+        type: return
+        outcome: never approved
+      - stepNumber: 4
+        description: >-
+          Name who approved it and when, in the form a reviewer can match against the commit that
+          carries the lock (lock_record.approvalStamp: `<lockedAt> by <approver>`, `at an unrecorded
+          time` / `an unrecorded approver` for a record that carries neither — never `undefined by
+          unknown`). A projection over the record's own fields, so it needs nothing beyond the
+          record already in hand
+        type: local
+      - stepNumber: 5
+        description: >-
+          From the approvals the caller passed, when it passed any: take the root's own entry. When
+          it carries a release verdict, that is the whole cause: carried — `approved under <old>,
+          re-validated under <new>: still approved` (`wairon lock` refreshes the record's release
+          stamp without a review); not carried — release_verdict.staleSentence: its reason when it
+          has one (a record from before gate parts, a newer or invalid stamp, parts that do not
+          break down the identity), else `the new release finds N issue(s) in the approved design`
+          with the first few named, never the generic candidate list. With no release verdict, an
+          approval an older release recorded that still holds says so in one notice
+          (lock_record.carriedNotice: approved under <old>; this release judges the design by the
+          same rules). When the entry carries partsIgnored, one notice says the record's gate parts
+          are ignored; when it carries stampProblem, one notice names the stamp and that `wairon
+          lock` replaces it. Else note when it is upgraded — the lock was taken under an earlier
+          gate identity. For a format-2 lock that is stale under its own algorithm, say that it
+          predates code linkage leaving the approval and something it covered moved since — the
+          design, or only code linkage, which can no longer be told apart — so it takes one re-lock,
+          after which linkage never drifts it again; for an earlier identity, say the identity
+          gained inputs — rather than implying the design moved. Then take the direct members
+          (parent = the root) whose pin moved, and those drifted or never approved. A moved pin is a
+          change this project must re-approve even when none of its OWN specs shifted; a drifted or
+          never-approved member is the member's to lock, named so the parent knows before it locks
+        type: local
+      - stepNumber: 6
+        description: Compare the tree against what was approved
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: diffAgainstApproval
+      - stepNumber: 7
+        description: Decide whether that comparison can be made at all
+        type: branch
+        condition: the record predates per-spec approval
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Say exactly that: the lock proves the tree validated, not which specs still match it, and
+          re-locking is what records the difference — with the member and upgrade notes appended.
+          Drift when a member's pin moved or the identity was upgraded
+        type: return
+        outcome: coarse lock
+      - stepNumber: 9
+        description: >-
+          Answer the verdict, naming the specs that actually moved rather than a count — a number
+          tells somebody that something changed, a list tells them what to look at: the text names
+          every one up to forty, and past forty the first forty, the count of the rest and the
+          command that lists them all (`wairon status --all`) — never a cut list that reads as the
+          whole account — and `moved` carries every one (`~` changed, `+` added, `-` removed) for a
+          caller that wants it as data — with the member, release and upgrade notes appended, and
+          report drift when the specs moved, a member's pin moved, the identity was upgraded, or the
+          root's own entry is drifted. When no own spec moved but the root's own entry is drifted,
+          "no spec has changed since" never stands alone: it goes on to say what the approval owes —
+          the entry's `owed` sentence when it carries one (a moved project id, an external never
+          pinned or used beyond its pin, a selected pack that cannot load) with the remedy; else the
+          release verdict's findings; else the inputs that moved, named from the entry's inputsMoved
+          (the network declaration, the rule tuning, the packs, a consumed contract's pin,
+          `composition`, a member's approval), and only for a record from before gate parts the
+          candidate list — and that one `wairon lock` re-approves the unchanged design — so status
+          never reads approved while `lock-check` refuses. A carried release reads approved, with
+          its one line. A member that is merely drifted or never approved is named but is not this
+          project's drift. A format-2 lock that still holds gets one more line: it is read in its
+          original reading, and `wairon doctor --fix` carries it into the design reading without a
+          review (approval_comparison.reexpress), after which adding or moving a sourcePath never
+          drifts it. When the approval holds (the root's own entry is approved) yet some spec files
+          differ in bytes from the approved ones — a record read in the content reading sees a moved
+          authoring status or code linkage as a changed file, which the approval itself leaves out —
+          the verdict says so in those words ("the approval still holds", the differing files named,
+          and only what the approval leaves out moved) instead of "changed since approval" beside
+          "approved", and reports no drift.
+        type: return
+        outcome: verdict
+    symbol: approvalVerdict
+  - name: reexpress
+    narrative:
+      - stepNumber: 1
+        description: Read the approval record of the bound project
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
+      - stepNumber: 2
+        description: >-
+          Is there an earlier-reading record whose certified identity still holds: a record that
+          names no design reading (format 2), or one taken in the earlier design reading (its
+          stateId under the earlier design gate algorithm), whose stateId equals gate.asRecorded —
+          the identity it certified recomputed over the tree as it stands?
+        type: branch
+        condition: >-
+          the record exists, is format 2 or in the earlier design reading, and record.stateId equals
+          gate.asRecorded
+        onFalseStep: 6
+      - stepNumber: 3
+        description: Take the design-reading digests of the tree as it stands
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 4
+        description: >-
+          Build the carried record: lockedAt, lockedBy, validatorVersion, validationResult, code,
+          members, projectId and the git provenance exactly as recorded; stateId = gate without
+          asRecorded; specs = the design digests; specsReading = design; format = 3; reexpressed = {
+          at: now, fromAlgorithm: the record's algorithm, fromReading: content or design as the
+          record named, by: the command }
+        type: local
+      - stepNumber: 5
+        description: Answer the carried record for the caller to write
+        type: return
+        outcome: carried
+      - stepNumber: 6
+        label: tree-unchanged
+        description: >-
+          Is it a format-2 record whose every own spec file still matches its raw-content digest —
+          none added, changed or removed? Then only the gate it was judged under moved, never the
+          tree
+        type: branch
+        condition: >-
+          the record exists, names no design reading, and diffAgainstApproval in the content reading
+          is empty
+        onFalseStep: 10
+      - stepNumber: 7
+        description: Take the design-reading digests of the tree as it stands
+        type: call
+        targetComponent: approval_comparison
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 8
+        description: >-
+          Build the carried record as in step 4, except that stateId stays the identity the record
+          certified: the reading is carried, the claim is not, so the lock still reads stale — for
+          the gate that moved — until one `wairon lock` re-approves it
+        type: local
+      - stepNumber: 9
+        description: Answer the reading-only carried record for the caller to write
+        type: return
+        outcome: reading carried
+      - stepNumber: 10
+        label: unprovable
+        description: >-
+          Answer null: nothing to carry (no record, or already in the current reading) or nothing
+          proves the tree unchanged (something the record covered moved), so only a human re-lock
+          can record the approval anew
+        type: return
+        outcome: not carried
+  - name: approvedStatuses
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer an empty map unless the record names the design reading and carries per-spec
+          digests
+        type: branch
+        condition: record.specsReading is design and record.specs is present
+        onFalseStep: 5
+      - stepNumber: 2
+        description: >-
+          Read each own spec file of the root (its key, kind and content) through the spec loader's
+          snapshot, a member project's files left out
+        type: call
+        targetComponent: spec_loader
+        targetMethod: snapshot
+      - stepNumber: 3
+        description: >-
+          For each file the record holds a digest for: parse it, take its design view with the
+          status put back as each candidate (none, draft, design, complete) in turn, and when one
+          digests to the recorded digest, record that status (none as complete) under `<kind>:<id>`
+          — a file matching no candidate moved in its design and is left out
+        type: local
+      - stepNumber: 4
+        description: Answer the map
+        type: return
+        outcome: statuses
+      - stepNumber: 5
+        label: none
+        description: >-
+          Answer an empty map: a record in another reading carries no design digests to recover
+          statuses from
+        type: return
+        outcome: empty
+status: complete
+createdAt: '2026-09-20T15:19:32.451Z'
+updatedAt: '2026-10-17T16:24:16.468Z'

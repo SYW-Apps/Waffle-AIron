@@ -23,14 +23,15 @@ fields:
     description: Pack name (convenience mirror of manifest.name)
     optional: false
   - name: kind
-    type: string
-    description: '"declarative" | "code"'
+    type: PackKind
+    description: The pack variant.
     optional: false
   - name: entryCount
-    type: number
+    type: int
     description: Number of files written
     optional: false
 methods: []
 componentClass: sdk_orchestrator
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:12:40.241Z'
-updatedAt: '2026-07-21T18:12:40.373Z'
+updatedAt: '2026-10-07T06:28:16.412Z'

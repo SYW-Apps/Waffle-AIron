@@ -3,17 +3,17 @@ name: Project Ops Orchestrator Interface
 description: >-
   Contract for the operational forwarding seam. Every method takes the caller's credential first (a
   browser session id or a bearer token — both resolve to a Principal upstream) and forwards 1:1 to
-  the owning orchestrator, whose resolver gate applies unchanged: global packs / instance policy /
-  exposure → instance-level project:admin; per-project pack install/remove, producers, git binding
-  administration → project:admin over the project; per-project pack listing → project:read; policy
-  evaluate/reconcile, git sync/commit → project:write; the audit reads filter to the caller's
+  the owning orchestrator, whose permission-rules gate applies unchanged: global packs / instance
+  policy / exposure → instance-level project:admin; per-project pack install/remove, producers, git
+  binding administration → project:admin over the project; per-project pack listing → project:read;
+  policy evaluate/reconcile, git sync/commit → project:write; the audit reads filter to the caller's
   project:admin visible scopes.
 component: project_ops_orchestrator
 methods:
   - name: listGlobalPacks
     description: Forward to pack_orchestrator.listGlobalPacks (instance-level project:admin upstream).
-    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -41,8 +41,8 @@ methods:
         type: string
   - name: listProjectPacks
     description: Forward to pack_orchestrator.listProjectPacks (project:read over the project upstream).
-    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -116,8 +116,8 @@ methods:
         type: string
   - name: listProducers
     description: Forward to admin_orchestrator.listProducers (project:admin over the project upstream).
-    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'listProducers(credential: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: credential
         type: string
@@ -151,8 +151,8 @@ methods:
         type: string
   - name: produceProducer
     description: Forward to admin_orchestrator.produceProducer (project:admin over the project upstream).
-    signature: 'produceProducer(credential: string, project: string, target: string): void'
-    returns: void
+    signature: 'produceProducer(credential: string, project: string, target: string): async void'
+    returns: async void
     params:
       - name: credential
         type: string
@@ -172,7 +172,7 @@ methods:
   - name: enableGit
     description: Forward to admin_orchestrator.enableGit (project:admin over the project upstream).
     signature: >-
-      enableGit(credential: string, project: string, remote: string, branch: string):
+      enableGit(credential: string, project: string, remote: string, branch: string, pat?: string):
       HostedProjectRecord
     returns: HostedProjectRecord
     params:
@@ -184,6 +184,12 @@ methods:
         type: string
       - name: branch
         type: string
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the remote, when reaching it needs one. Stored as a secret,
+          never kept on the binding.
+        optional: true
   - name: disableGit
     description: Forward to admin_orchestrator.disableGit (project:admin over the project upstream).
     signature: 'disableGit(credential: string, project: string): void'
@@ -207,7 +213,7 @@ methods:
       Forward to admin_orchestrator.commitProject — the deliberate .wai/-scoped commit+push
       primitive (project:write over the project upstream).
     signature: >-
-      commitProject(credential: string, project: string, subsystem: string, message: string):
+      commitProject(credential: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -224,8 +230,8 @@ methods:
   - name: configureGitSync
     description: Forward to admin_orchestrator.configureGitSync (project:admin over the project upstream).
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: int, skipIfClean?:
+      bool): void
     returns: void
     params:
       - name: credential
@@ -233,17 +239,17 @@ methods:
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
   - name: queryAuditEvents
     description: >-
       Forward to identity_orchestrator.queryAuditEvents (filtered to the caller's project:admin
       visible scopes upstream).
-    signature: 'queryAuditEvents(credential: string, query: AuditQuery): AuditEvent[]'
-    returns: AuditEvent[]
+    signature: 'queryAuditEvents(credential: string, query: AuditQuery): list<AuditEvent>'
+    returns: list<AuditEvent>
     params:
       - name: credential
         type: string
@@ -251,15 +257,17 @@ methods:
         type: AuditQuery
   - name: countAuditEvents
     description: Forward to identity_orchestrator.countAuditEvents (scoped identically to queryAuditEvents).
-    signature: 'countAuditEvents(credential: string, query: AuditQuery): number'
-    returns: number
+    signature: 'countAuditEvents(credential: string, query: AuditQuery): int'
+    returns: int
     params:
       - name: credential
         type: string
       - name: query
         type: AuditQuery
   - name: getExposurePolicy
-    description: Forward to operations_orchestrator.getExposurePolicy (instance-level project:admin upstream).
+    description: >-
+      Forward to exposure_policy_orchestrator.getExposurePolicy (instance-level project:admin
+      upstream).
     signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
     returns: HostExposurePolicy
     params:
@@ -267,8 +275,8 @@ methods:
         type: string
   - name: setExposurePolicy
     description: >-
-      Forward to operations_orchestrator.setExposurePolicy (instance-level project:admin upstream;
-      audited there).
+      Forward to exposure_policy_orchestrator.setExposurePolicy (instance-level project:admin
+      upstream; audited there).
     signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
     returns: HostExposurePolicy
     params:
@@ -278,10 +286,10 @@ methods:
         type: HostExposurePolicy
   - name: listBackingBindings
     description: >-
-      Forward to git_backing_orchestrator.listBackingBindings (filtered to the caller's
-      project:admin reach upstream).
-    signature: 'listBackingBindings(credential: string): GitBackingBinding[]'
-    returns: GitBackingBinding[]
+      Forward to git_backing_orchestrator.listBindings (filtered to the caller's project:admin reach
+      upstream).
+    signature: 'listBackingBindings(credential: string): list<GitBackingBinding>'
+    returns: list<GitBackingBinding>
     params:
       - name: credential
         type: string
@@ -289,13 +297,21 @@ methods:
     description: >-
       Forward to git_backing_orchestrator.bindScope (project:admin over the binding's scope
       upstream).
-    signature: 'bindBackingScope(credential: string, binding: GitBackingBinding): GitBackingBinding'
+    signature: >-
+      bindBackingScope(credential: string, binding: GitBackingBinding, pat?: string):
+      GitBackingBinding
     returns: GitBackingBinding
     params:
       - name: credential
         type: string
       - name: binding
         type: GitBackingBinding
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the backing remote, when reaching it needs one. Stored as a
+          secret, never kept on the binding.
+        optional: true
   - name: unbindBackingScope
     description: >-
       Forward to git_backing_orchestrator.unbindScope (project:admin over the binding's own scope
@@ -309,10 +325,10 @@ methods:
         type: string
   - name: syncBackingScope
     description: >-
-      Forward to git_backing_orchestrator.syncBackingScope (project:admin over the binding's own
-      scope upstream).
-    signature: 'syncBackingScope(credential: string, bindingId: string): boolean'
-    returns: boolean
+      Forward to git_backing_orchestrator.syncScope (project:admin over the binding's own scope
+      upstream).
+    signature: 'syncBackingScope(credential: string, bindingId: string): bool'
+    returns: bool
     params:
       - name: credential
         type: string
@@ -353,15 +369,15 @@ methods:
         optional: true
   - name: listAvailableProfiles
     description: Forward to pack_orchestrator.listAvailableProfiles with the caller's credential.
-    signature: 'listAvailableProfiles(credential: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listAvailableProfiles(credential: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
   - name: listAdoptableProjectPacks
     description: Forward to pack_orchestrator.listAdoptableProjectPacks with the caller's credential.
-    signature: 'listAdoptableProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listAdoptableProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -406,13 +422,87 @@ methods:
     description: >-
       Forward to pack_orchestrator.listProjectProfiles with the caller's credential (project:read
       over the project upstream).
-    signature: 'listProjectProfiles(credential: string, project: string): AvailableProfile[]'
-    returns: AvailableProfile[]
+    signature: 'listProjectProfiles(credential: string, project: string): list<AvailableProfile>'
+    returns: list<AvailableProfile>
     params:
       - name: credential
         type: string
       - name: project
         type: string
+  - name: exportProjectTree
+    description: Forward to admin_orchestrator.exportProjectTree (project:read over the project upstream).
+    signature: >-
+      exportProjectTree(credential: string, project: string, includeDerived?: bool, allowPartial?:
+      bool): TreeExportResult
+    returns: TreeExportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: includeDerived
+        type: bool
+        optional: true
+      - name: allowPartial
+        type: bool
+        description: >-
+          Pack whatever CAN be packed when a chained subproject cannot be, and list the mounts left
+          out in the result, instead of refusing the whole export.
+        optional: true
+  - name: importProjectTree
+    description: >-
+      Forward to admin_orchestrator.importProjectTree (project:admin over the project upstream;
+      executable entries always refused).
+    signature: >-
+      importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
+      bool): TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: replaceExisting
+        type: bool
+        optional: true
+  - name: previewProjectPack
+    description: >-
+      Forward to pack_orchestrator.previewProjectPack: what installing (content given) or adopting
+      (content omitted) a declarative pack would change on the project, writing nothing
+      (project:read over the project upstream).
+    signature: >-
+      previewProjectPack(credential: string, project: string, name: string, content?: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Forward to pack_orchestrator.previewProjectPackRemoval: what removing a registered pack would
+      change on the project, writing nothing (project:read over the project upstream).
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-16T15:30:37.725Z'
-updatedAt: '2026-07-24T23:30:48.615Z'
+updatedAt: '2026-10-04T10:32:10.867Z'

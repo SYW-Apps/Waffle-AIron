@@ -1,0 +1,24 @@
+id: pack_store_adapter
+name: Pack Store Adapter
+description: >-
+  The filesystem boundary for this wairon install's pack STORE — the machine-wide pool of installed
+  packs (WAIRON_PACKS_DIR, else ~/.wairon/packs), laid out as <name>/<version>/ so several versions
+  of a pack coexist and different projects can select different ones. Owns installing a materialized
+  pack directory into the store, uninstalling one, enumerating what is installed, resolving a
+  selection by name (latest installed version when none is pinned), and computing the content digest
+  that gives a pack its identity. Alongside each installed pack it records an install record
+  (origin, digest, wairon version, timestamp) — the origin is what lets a project selection carry a
+  `source`, so a fresh machine or CI runner can obtain the same doctrine. Installed is NOT applied:
+  nothing here governs a project until that project selects it. Distinct from the pack source
+  adapter, which is the read boundary for LOADING a pack manifest; this one manages the installation
+  area.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn:
+  - pack_source_adapter
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-29T17:41:33.113Z'
+updatedAt: '2026-08-11T17:05:58.661Z'

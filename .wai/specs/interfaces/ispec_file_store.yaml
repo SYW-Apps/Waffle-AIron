@@ -1,21 +1,27 @@
 id: ispec_file_store
 name: Spec File Store Interface
 description: >-
-  Contract for raw YAML spec-file I/O: path-addressed reads/writes and directory listings, flat and
-  recursive.
+  Contract for spec-document file I/O: path-addressed reads and writes, and the recursive walk of a
+  spec directory. Paths are resolved by the caller and taken as given — the store is not bound to
+  one specs directory.
 component: spec_file_store
 methods:
   - name: read
     description: >-
-      Read and parse the YAML document at the given project-relative spec path, or null when absent
-      or empty.
+      Read and parse the spec document at the given path (resolved by the caller), or null when
+      absent or empty. The read is remembered — a digest of the bytes this process last saw of the
+      document — so a later write of it can tell whether another session changed it in between.
     signature: 'read(specPath: string): json | null'
-    returns: json | null
+    returns: any
     effect: read
   - name: write
     description: >-
-      Serialize the document as YAML and write it to the spec path, creating parent directories as
-      needed.
+      Serialize the document in the spec storage format and write it to the given path, creating
+      parent directories as needed. The write passes the tree write guard every write into a .wai
+      tree passes: the tree's write lock is held around it (taken for this one write unless this
+      process already holds it), and a spec document that changed on disk since this process last
+      read or wrote it is REFUSED (spec-write-conflict) instead of replacing what another session
+      wrote — nothing is written to it, and the caller is told to run again.
     signature: 'write(specPath: string, document: json): void'
     returns: void
     effect: write
@@ -24,17 +30,83 @@ methods:
       Recursively list YAML spec files under the given directory tree (empty when the root is
       absent).
     signature: 'listTree(directory: string): string[]'
-    returns: string[]
+    returns: list<string>
     effect: read
   - name: findChainingParent
     description: >-
-      The filesystem walk realizing chaining-parent detection: from the bound root, examine
-      ancestors (bounded depth) for a spec directory containing a subsystem spec whose projectPath
-      resolves exactly to the bound root; return its root and subsystem id, or null. File I/O lives
-      here — the store is the only spec-tree component that touches the disk.
+      The filesystem walk realizing membership detection: from the bound root, examine ancestors
+      (bounded depth) for a project that declares the bound root as a member — a `members` entry of
+      its configuration (read through that ancestor's per-root binding, as the scan reads a root's
+      configuration) or, for one release, a legacy L1 subsystem spec whose projectPath resolves
+      exactly to the bound root — and return its root, the alias it declares the bound root under
+      and the form, or null. File I/O lives here — the store is the only spec-tree component that
+      touches the disk.
     signature: 'findChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
+    effect: read
+  - name: remove
+    description: >-
+      Delete the spec document at the given path, under the tree's write lock, and prune the parent
+      directories the deletion left empty, stopping before the specs root so the root itself
+      survives an emptied tree. Answers false when there was no file there, so a caller can tell
+      "deleted" from "was never there" without a separate existence check. The root is a PARAMETER,
+      not something the store works out: `paths.specsDir` is configurable and this component never
+      reads `project.yaml`, so a store left to infer the boundary would delete the specs directory
+      itself.
+    signature: 'remove(specPath: string, specsRoot: string): bool'
+    returns: bool
+    params:
+      - name: specPath
+        type: string
+        description: The spec document's path, resolved by the caller as for read and write
+      - name: specsRoot
+        type: string
+        description: >-
+          The specs directory the prune stops before; the caller resolves it, because the store
+          reads no project configuration of its own
+    effect: write
+  - name: lockTree
+    description: >-
+      Take the write lock of the spec tree under the given project root, across every process on the
+      machine: a lock file beside the tree created exclusively, held until unlockTree. A process
+      already holding it takes it again (reentrant, counted). Another holder is waited for; a lock
+      left by a process that is gone, older than any write could take, or unreadable (no holder can
+      be read from it) and older than a short grace, is broken. Refused after a bounded wait, naming
+      the holder, so a stuck writer never hangs a session. The same lock guards every single write
+      into a .wai tree made outside such a hold: the store installs the guard into the shared file
+      helper, so a CLI command, a migration's swap, doctor --fix and the hosted server never write
+      past it.
+    signature: 'lockTree(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+        description: The project root whose spec tree is locked
+    effect: io
+  - name: unlockTree
+    description: >-
+      Release one hold of the write lock of the spec tree under the given project root; the lock
+      file goes with the last hold. Releasing a lock this process does not hold does nothing.
+    signature: 'unlockTree(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+        description: The project root whose spec tree is unlocked
+    effect: io
+  - name: inspectLock
+    description: >-
+      The write lock of the spec tree under the given project root as its file stands — the holder
+      it names, how old it is, whether that holder is live, gone or unreadable, and whether the next
+      write breaks it — or none when no lock file is there. Reads only: a lock the next write would
+      break is named so, never removed here.
+    signature: 'inspectLock(root: string): TreeLockState?'
+    returns: TreeLockState?
+    params:
+      - name: root
+        type: string
+        description: The project root whose tree lock is read
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-07-24T18:01:45.212Z'
+updatedAt: '2026-10-09T16:55:38.273Z'

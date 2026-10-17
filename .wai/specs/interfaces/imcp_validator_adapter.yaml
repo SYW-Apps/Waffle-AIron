@@ -1,12 +1,76 @@
-schemaVersion: "1.0.0"
-id: "imcp_validator_adapter"
-name: "MCP Validator Adapter Interface"
-description: "Adapter contract for MCP to run spec validations."
-component: "mcp_validator_adapter"
+id: imcp_validator_adapter
+name: MCP Validator Adapter Interface
+description: Adapter contract for MCP to run spec validations.
+component: mcp_validator_adapter
 methods:
-  - name: "validateSddTree"
-    description: "Calls validateSddTree on validator portal"
-    signature: "validateSddTree(): ValidationResult"
-    returns: "ValidationResult"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - name: validateProject
+    description: >-
+      Forward the owner's gate to the validator portal: the bound project judged from its own files
+      alone
+    signature: 'validateProject(): ValidationResult'
+    returns: ValidationResult
+  - name: validateRegistry
+    description: >-
+      Forward to validator_portal.validateRegistry: judge the agent registry under the project's
+      rule severities
+    signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: registry
+        type: Registry
+      - name: rules
+        type: RulesConfig
+    invokedBy:
+      kind: runtime
+      caller: >-
+        A connected AI client calling the MCP server's validateTopology tool, which createMcpServer
+        registers but mcp_portal does not yet model, so no narrative carries this hop.
+  - name: validateFamily
+    description: >-
+      Forward the family run to the validator portal: every selected project's own gate verbatim,
+      the composition findings and the family checks
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The tool call''s switches: family, recursive, subsystem'
+  - name: measurePackImpact
+    description: >-
+      Forward to validator_portal.measurePackImpact: what one pack write would change on the bound
+      project, writing nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
+  - name: familyApprovals
+    description: >-
+      Forward to validator_portal.familyApprovals: the bound project's pin tree, each project's
+      approval state computed at its own root — what sdd_get_status prints beside the completeness
+      report. On the hosted data plane the caller has bound a root within the credential's reach
+      before asking.
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
+    params:
+      - name: depth
+        type: int
+        description: 'Member levels to include: omitted = every level the status report covers'
+        optional: true
+    guarantees:
+      - idempotent
+  - name: adviseExternals
+    description: >-
+      Forward to validator_portal.adviseExternals: the advisory live comparison of the bound
+      project's externals the run did not compose.
+    signature: 'adviseExternals(composed?: list<string>): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: composed
+        type: list<string>
+        description: Aliases the run already composed as part of its gate
+        optional: true
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-10-06T18:55:15.180Z'

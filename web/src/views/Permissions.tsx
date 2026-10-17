@@ -16,6 +16,7 @@ import {
   PERMISSION_VALUES,
   userLabel,
   type Capability,
+  type EffectivePermission,
   type HostedUserRecord,
   type OrganizationUnitRecord,
   type PermissionAssignment,
@@ -46,7 +47,39 @@ function buildScopes(units: OrganizationUnitRecord[], projects: ProjectRecord[])
 
 function scopeText(kind: ScopeKind, id: string | undefined): string {
   if (kind === 'instance') return 'instance';
+  if (kind === 'subsystem') {
+    const at = (id ?? '').indexOf('/');
+    return at > 0 ? `Subsystem · ${(id ?? '').slice(0, at)} › ${(id ?? '').slice(at + 1)}` : `subsystem:${id ?? ''}`;
+  }
   return `${kind}:${id ?? ''}`;
+}
+
+/** A subsystem scope carries only project:write, as yes or no (or inherit to defer to the project). */
+const SUBSYSTEM_VALUES: PermissionValue[] = ['inherit', 'yes', 'no'];
+
+/** The subsystems a project's tree declares now, read from its level-1 graph (a member's own are left out). */
+function useProjectSubsystems(projectId: string | null) {
+  return useAsync<string[]>(
+    () => (projectId
+      ? get<{ nodes: { id: string; kind: string }[] }>(`/web/graph?tier=project&projectId=${encodeURIComponent(projectId)}&level=1`)
+        .then((g) => g.nodes.filter((n) => n.kind === 'subsystem' && !n.id.includes('::')).map((n) => n.id).sort())
+        .catch(() => [])
+      : Promise.resolve([])),
+    [projectId],
+  );
+}
+
+/** The rung an explanation names, in words. */
+function decidedText(p: EffectivePermission): string {
+  const setting = {
+    'instance-admin': 'the instance-admin bypass',
+    user: 'a user setting',
+    role: 'a role',
+    'everyone-default': 'the everyone-default',
+    'instance-default': 'the instance default',
+  }[p.source];
+  if (p.source === 'instance-admin' || p.source === 'instance-default' || !p.decidedScopeKind) return setting;
+  return `${setting} at ${scopeText(p.decidedScopeKind, p.decidedScopeId)}`;
 }
 
 /**
@@ -103,9 +136,20 @@ function AssignmentForm(props: {
   const [userId, setUserId] = useState('');
   const effectiveUserId = userId || (props.users[0]?.id ?? '');
   const [scopeKey, setScopeKey] = useState(props.scopes[0]?.key ?? 'instance:');
+  const [subsystem, setSubsystem] = useState('');
   const [capability, setCapability] = useState<Capability>(CAPABILITIES[0]);
   const [value, setValue] = useState<PermissionValue>('yes');
-  const scope = props.scopes.find((s) => s.key === scopeKey) ?? props.scopes[0];
+  const [explained, setExplained] = useState<EffectivePermission | null>(null);
+  const picked = props.scopes.find((s) => s.key === scopeKey) ?? props.scopes[0];
+  // A project scope offers its subsystems: a subsystem rule is one more scope
+  // kind on the same grid, carrying only project:write as yes or no.
+  const subsystems = useProjectSubsystems(picked.kind === 'project' ? picked.id : null);
+  const onSubsystem = picked.kind === 'project' && subsystem !== '';
+  const scope = onSubsystem
+    ? { kind: 'subsystem' as ScopeKind, id: `${picked.id}/${subsystem}` }
+    : { kind: picked.kind, id: picked.id };
+  const effectiveCapability: Capability = onSubsystem ? 'project:write' : capability;
+  const effectiveValue: PermissionValue = onSubsystem && !SUBSYSTEM_VALUES.includes(value) ? 'yes' : value;
 
   async function apply() {
     // The user select carries the RECORD id (what the Users list shows); the
@@ -115,13 +159,19 @@ function AssignmentForm(props: {
       ...(subjectKind === 'user' ? { subjectId: effectiveUserId } : {}),
       scopeKind: scope.kind,
       scopeId: scope.kind === 'instance' ? undefined : scope.id,
-      capability,
-      value,
+      capability: effectiveCapability,
+      value: effectiveValue,
     });
     toast.ok(
-      `${subjectKind === 'everyone' ? 'Everyone' : 'User'}: ${capability} = ${value} at ${scopeText(scope.kind, scope.id)}`,
+      `${subjectKind === 'everyone' ? 'Everyone' : 'User'}: ${effectiveCapability} = ${effectiveValue} at ${scopeText(scope.kind, scope.id)}`,
     );
     props.onSaved();
+  }
+
+  // The check beside the form: why this user can or cannot act at this scope.
+  async function check() {
+    const q = new URLSearchParams({ userId: effectiveUserId, capability: effectiveCapability, scopeKind: scope.kind, scopeId: scope.id });
+    setExplained(await get<EffectivePermission>(`/web/admin/permissions/explain?${q.toString()}`));
   }
 
   return (
@@ -154,22 +204,44 @@ function AssignmentForm(props: {
         <Field label="Scope">
           <Select
             value={scopeKey}
-            onChange={setScopeKey}
+            onChange={(v) => {
+              setScopeKey(v);
+              setSubsystem('');
+              setExplained(null);
+            }}
             options={props.scopes.map((s) => ({ value: s.key, label: s.label }))}
           />
         </Field>
+        {picked.kind === 'project' && (
+          <Field label="Subsystem">
+            <Select
+              value={subsystem}
+              onChange={(v) => {
+                setSubsystem(v);
+                setExplained(null);
+              }}
+              options={[
+                { value: '', label: '(the whole project)' },
+                ...(subsystems.data ?? []).map((s) => ({ value: s, label: `Subsystem · ${picked.id} › ${s}` })),
+              ]}
+            />
+          </Field>
+        )}
         <Field label="Capability">
           <Select
-            value={capability}
-            onChange={(v) => setCapability(v as Capability)}
-            options={CAPABILITIES.map((c) => ({ value: c, label: c }))}
+            value={effectiveCapability}
+            onChange={(v) => {
+              setCapability(v as Capability);
+              setExplained(null);
+            }}
+            options={(onSubsystem ? (['project:write'] as Capability[]) : CAPABILITIES).map((c) => ({ value: c, label: c }))}
           />
         </Field>
         <Field label="Value">
           <Select
-            value={value}
+            value={effectiveValue}
             onChange={(v) => setValue(v as PermissionValue)}
-            options={PERMISSION_VALUES.map((v) => ({ value: v, label: v }))}
+            options={(onSubsystem ? SUBSYSTEM_VALUES : PERMISSION_VALUES).map((v) => ({ value: v, label: v }))}
           />
         </Field>
         <div className="row-form-action">
@@ -181,8 +253,20 @@ function AssignmentForm(props: {
           >
             Apply
           </AsyncButton>
+          {subjectKind === 'user' && (
+            <AsyncButton variant="ghost" action={check} onError={toast.bad} disabled={!effectiveUserId}>
+              Check
+            </AsyncButton>
+          )}
         </div>
       </div>
+      {explained && (
+        <p className="hint">
+          Effective <code>{effectiveCapability}</code> at {scopeText(scope.kind, scope.id)}:{' '}
+          <PermValueBadge value={explained.value} /> — decided by {decidedText(explained)}.
+          {explained.scopeNote && <Badge tone="warn">{explained.scopeNote}</Badge>}
+        </p>
+      )}
     </div>
   );
 }
@@ -252,7 +336,12 @@ export function Permissions() {
     {
       key: 'scope',
       header: 'Scope',
-      cell: (a: PermissionAssignment) => <code>{scopeText(a.scopeKind, a.scopeId)}</code>,
+      cell: (a: PermissionAssignment) => (
+        <div className="cell-stack">
+          <code>{scopeText(a.scopeKind, a.scopeId)}</code>
+          {a.scopeNote && <Badge tone="warn">{a.scopeNote}</Badge>}
+        </div>
+      ),
     },
     { key: 'cap', header: 'Capability', cell: (a: PermissionAssignment) => <code>{a.capability}</code> },
     { key: 'val', header: 'Value', cell: (a: PermissionAssignment) => <PermValueBadge value={a.value} /> },

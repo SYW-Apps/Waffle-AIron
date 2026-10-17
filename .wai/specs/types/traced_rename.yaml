@@ -1,0 +1,19 @@
+kind: value-object
+id: traced_rename
+name: TracedRename
+description: >-
+  One name a rename trace carries forward between two snapshots of a producer: the former name and
+  the current one — a field of a type, or a parameter of a contract method.
+fields:
+  - name: from
+    type: string
+    description: The former name the trace records
+    optional: false
+  - name: to
+    type: string
+    description: The name it carries now
+    optional: false
+methods: []
+sourcePath: src/models/surface-references.ts
+createdAt: '2026-10-07T22:00:59.719Z'
+updatedAt: '2026-10-07T22:01:00.741Z'

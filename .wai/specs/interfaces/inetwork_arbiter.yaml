@@ -1,0 +1,60 @@
+id: inetwork_arbiter
+name: Network Arbiter Interface
+description: Judges a reach model against the network rules.
+component: network_arbiter
+methods:
+  - name: judge
+    description: >-
+      The network findings of a reach model, each sited at the verb or call it names. Only a network
+      transport is judged. A family-scoped model is also judged for proof (ENTRY_UNPROVEN) and for
+      enclosure (ENTRY_SCOPE_UNBOUNDED); an own-scoped model is not, because one project alone
+      cannot see its siblings. Pure.
+    signature: 'judge(model: ReachModel): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params:
+      - name: model
+        type: ReachModel
+        description: The model to judge
+    guarantees:
+      - idempotent
+    findings:
+      - code: GATEWAY_BYPASSED
+        severity: error
+        summary: >-
+          Inside a declared network, a non-gateway Portal takes an entry from outside it, or a
+          modelled call from outside the network lands on one
+      - code: MULTIPLE_GATEWAYS
+        severity: notice
+        summary: >-
+          A declared network has more than one gateway Portal taking entries from outside it:
+          allowed, not recommended
+      - code: ENTRY_SCOPE_UNBOUNDED
+        severity: notice
+        summary: >-
+          A network-scoped entry with no declared network around it: the family is the implicit
+          boundary, so the verb is not isolated and its flows cannot be narrowed by a network
+      - code: ENTRY_UNPROVEN
+        severity: warning
+        summary: >-
+          A network-scoped entry whose verb no modelled caller inside that boundary reaches (allow
+          it, with the reason, for a genuinely unmodelled in-network caller)
+      - code: EXPORT_BEYOND_NETWORK
+        severity: warning
+        summary: >-
+          An export at an audience wider than project on a network-transport verb that callers
+          beyond the network cannot reach
+  - name: familyCodes
+    description: >-
+      Every code judge reports, for the lint-allow audit. The family run judges each of them over
+      every member (ENTRY_UNPROVEN and ENTRY_SCOPE_UNBOUNDED only there), so an allow of one is a
+      known code on any spec, and only the family run, which sees every finding of them, can tell
+      that it covers nothing. Pure.
+    signature: 'familyCodes(): list<string>'
+    returns: list<string>
+    params: []
+    guarantees:
+      - idempotent
+    effect: none
+status: complete
+createdAt: '2026-10-06T12:57:54.915Z'
+updatedAt: '2026-10-06T18:31:41.250Z'

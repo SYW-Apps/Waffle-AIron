@@ -5,18 +5,26 @@ description: >-
   read by the rule index.
 component: rule_store
 methods:
-  - name: addRule
+  - name: add
     description: Append a rule to the held set (registration order preserved).
-    signature: 'addRule(rule: SddRule): void'
+    signature: 'add(rule: SddRule): void'
     returns: void
     params:
       - name: rule
         type: SddRule
-  - name: listRules
+  - name: list
     description: Return every held rule in registration order.
-    signature: 'listRules(): SddRule[]'
-    returns: SddRule[]
+    signature: 'list(): list<SddRule>'
+    returns: list<SddRule>
     params: []
+  - name: clear
+    description: Empty the held set, so a new validation run seeds its rules from nothing.
+    signature: 'clear(): void'
+    returns: void
+    params: []
+    effect: write
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-14T19:17:10.227Z'
-updatedAt: '2026-07-14T20:23:49.423Z'
+updatedAt: '2026-10-04T10:19:27.325Z'

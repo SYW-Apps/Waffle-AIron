@@ -12,43 +12,40 @@ fields:
     description: Stable policy id, usually "default" for the hosted instance.
     optional: false
   - name: requiredGlobalPacks
-    type: string[]
+    type: list<string>
     description: Server-global declarative packs that must be active for every project using global packs.
     optional: false
   - name: defaultProjectPacks
-    type: string[]
+    type: list<string>
     description: >-
       Declarative project packs applied to newly initialized projects unless policy or caller opts
       out.
     optional: false
   - name: allowedProfileIds
-    type: string[]
+    type: list<string>
     description: >-
       Profile ids users may select during project initialization. Empty means any profile
       contributed by allowed packs is selectable.
     optional: true
   - name: requiredProfileIds
-    type: string[]
+    type: list<string>
     description: Profile ids automatically applied to every new project.
     optional: true
   - name: blockedPackNames
-    type: string[]
+    type: list<string>
     description: Pack names that must not be installed or activated through hosted project workflows.
     optional: true
   - name: requireProfileSelection
-    type: boolean
+    type: bool
     description: Whether hosted project initialization must ask for and record an explicit profile selection.
     optional: false
   - name: enforcementMode
-    type: string
+    type: PackEnforcementMode
     description: >-
-      Enforcement posture, validated against a CLOSED SET at setPackPolicy time (an unknown value is
-      rejected — never silently treated as non-enforcing): "warn" (initialize even if non-compliant
-      and attach findings), "block" (reject a non-compliant initialization), or "auto_reconcile"
-      (initialize and permit AUTOMATIC application of missing required/default packs). NOTE: the
-      explicit reconcileProjectPolicy action applies resolvable missing required/default packs
-      regardless of this mode; enforcementMode governs init-time blocking and automatic
-      reconciliation only.
+      Enforcement posture, validated at setPackPolicy time (an unknown value is rejected, never
+      silently treated as non-enforcing). The explicit reconcileProjectPolicy action applies
+      resolvable missing required/default packs regardless of this mode; enforcementMode governs
+      init-time blocking and automatic reconciliation only.
     optional: false
   - name: updatedAt
     type: string
@@ -59,5 +56,6 @@ fields:
     description: Identity that last changed the policy.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:41.777Z'
-updatedAt: '2026-07-22T17:27:47.523Z'
+updatedAt: '2026-10-04T23:53:27.927Z'

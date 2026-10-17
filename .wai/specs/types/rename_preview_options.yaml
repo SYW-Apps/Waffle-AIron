@@ -1,0 +1,20 @@
+kind: value-object
+id: rename_preview_options
+name: RenamePreviewOptions
+description: >-
+  The options `wairon method rename-param` and `wairon type rename-field` read: a dry run, and the
+  folders to search for consumer checkouts the rename breaks.
+subsystem: sdd_cli
+fields:
+  - name: dryRun
+    type: bool
+    description: '--dry-run: print what the rename would move, respell and break, and write nothing'
+    optional: true
+  - name: search
+    type: list<string>
+    description: '--search <dir...>: folders to scan for consumer checkouts outside the family'
+    optional: true
+methods: []
+sourcePath: src/commands/method.ts
+createdAt: '2026-10-08T08:26:29.394Z'
+updatedAt: '2026-10-08T08:26:30.183Z'

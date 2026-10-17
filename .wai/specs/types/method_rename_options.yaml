@@ -1,0 +1,24 @@
+kind: value-object
+id: method_rename_options
+name: MethodRenameOptions
+description: The options `wairon method rename` reads.
+subsystem: sdd_cli
+fields:
+  - name: dryRun
+    type: bool
+    description: '--dry-run: print what the rename would move, retarget and break, and write nothing'
+    optional: true
+  - name: search
+    type: list<string>
+    description: '--search <dir...>: folders to scan for consumer checkouts outside the family'
+    optional: true
+  - name: pinSymbol
+    type: bool
+    description: >-
+      --no-pin-symbol sets it false: an implementation that declares no symbol is not pinned to the
+      old name (code not written yet)
+    optional: true
+methods: []
+sourcePath: src/commands/method.ts
+createdAt: '2026-10-07T18:41:49.665Z'
+updatedAt: '2026-10-07T18:41:50.333Z'

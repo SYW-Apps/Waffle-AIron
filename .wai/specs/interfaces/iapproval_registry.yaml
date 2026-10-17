@@ -1,8 +1,8 @@
 id: iapproval_registry
 name: Approval Registry Interface
 description: >-
-  Private write-path contract for creating, deciding, completing, and expiring hosted approval
-  requests. The registry owns the pending-and-unexpired state invariants and the
+  Private write-path contract for creating, deciding, completing, cancelling, and expiring hosted
+  approval requests. The registry owns the pending-and-unexpired state invariants and the
   decidedBy/decidedAt/decisionReason stamping; it performs no authorization (the self-approval check
   is the orchestrator's job).
 component: approval_registry
@@ -34,23 +34,48 @@ methods:
   - name: markCompleted
     description: >-
       Transition an approved request to completed after its privileged workflow has executed
-      successfully; only an approved request may become completed.
-    signature: 'markCompleted(id: string): ApprovalRequest'
+      successfully; only an approved request may become completed. When the workflow reports what it
+      changed (an executed project:init's executionSummary), the summary is stored on the completed
+      request in the same write.
+    signature: 'markCompleted(id: string, executionSummary?: string): ApprovalRequest'
     returns: ApprovalRequest
     params:
       - name: id
         type: string
+      - name: executionSummary
+        type: string
+        description: >-
+          What the executed workflow changed, recorded on the completed request (a project:init's
+          applied packs and governing profile)
+        optional: true
     guarantees:
       - atomic
   - name: expirePending
     description: >-
       Flip every pending request whose expiresAt is at or before the supplied now-timestamp to
       expired and return the number expired.
-    signature: 'expirePending(now: string): number'
-    returns: number
+    signature: 'expirePending(now: string): int'
+    returns: int
     params:
       - name: now
         type: string
+  - name: cancel
+    description: >-
+      Transition an approved request to cancelled when its privileged workflow refused because the
+      request no longer describes what would be done (a project:lock whose pinned gate identity
+      moved), recording why as its executionSummary in the same write; only an approved request may
+      be cancelled. A cancelled request is final: it is never executed, and the requester asks
+      again.
+    signature: 'cancel(id: string, reason: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+      - name: reason
+        type: string
+        description: Why the approved request can no longer execute, recorded on it as its executionSummary
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T19:30:39.410Z'
-updatedAt: '2026-07-09T19:32:58.248Z'
+updatedAt: '2026-10-04T10:28:12.657Z'

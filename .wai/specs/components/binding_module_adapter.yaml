@@ -1,0 +1,19 @@
+id: binding_module_adapter
+name: Binding Module Adapter
+description: >-
+  Reads the binding modules implementations name (implementation_spec.bindings) — the hand-written
+  files through which a consumer's code reaches another project's library — and answers the exported
+  declarations each holds: functions with their parameter names, and interfaces, classes, object
+  types and enums with their members, each with the `alias::name` its doc comment names. Reads code,
+  never specs; containment-checked within the project root. A declaration reader of its own, at the
+  pattern grade: a binding module is a declaration file (signatures and shapes, no logic), so it
+  reads TypeScript and JavaScript declarations by their syntax without the compiler, which stays the
+  source analysis adapter's technology; a file in any other language is answered unsupported, never
+  guessed at.
+subsystem: sdd_validator
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-08T08:21:40.288Z'
+updatedAt: '2026-10-08T08:21:40.971Z'

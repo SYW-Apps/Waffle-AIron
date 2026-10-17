@@ -1,0 +1,23 @@
+kind: value-object
+id: module_imports
+name: ModuleImports
+description: >-
+  What one source file imports, as the type checker's module resolution answers it: the project
+  files its specifiers resolve to, and the bare package specifiers that resolve to none of them.
+  What lets a rule read an unowned module's imports as its importer's.
+subsystem: sdd_validator
+fields:
+  - name: packages
+    type: list<string>
+    description: >-
+      Each bare package specifier the file names (an import, an export-from, a require or a dynamic
+      import), as written; never a relative path or a node: builtin
+    optional: false
+  - name: files
+    type: list<string>
+    description: Each project source file an import of the file resolves to, by canonical key
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-08T08:30:19.357Z'
+updatedAt: '2026-10-08T08:30:20.112Z'

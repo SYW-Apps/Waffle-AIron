@@ -1,0 +1,234 @@
+id: state_hash_impl
+name: State Hash Implementation
+description: Deterministic content hash of the spec tree.
+contract: istate_hash
+sourcePath: src/core/statehash.ts
+methods:
+  - name: compute
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: >-
+          Put each loaded kind into identity order: by spec id, and for the duplicate-id case by
+          canonical content, compared by codepoint rather than by a locale-aware collation. The
+          loaders hand back whatever order the filesystem walked the spec files in, and that order
+          differs between platforms, so without this the same tree digests differently on each and a
+          lock taken on one machine reads stale on another. Only WHOLE specs are reordered: the
+          arrays inside a spec (narrative steps, params) are ordered by meaning, and sorting those
+          would hide a real design change from the digest.
+        type: local
+      - stepNumber: 8
+        description: Canonicalize the ordered specs (stable key ordering, normalized serialization)
+        type: local
+      - stepNumber: 9
+        description: Digest the canonical form into a StateId (algorithm and hex digest)
+        type: local
+      - stepNumber: 10
+        description: Return the StateId
+        type: return
+        outcome: StateId
+    symbol: computeStateId
+  - name: ownTree
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: >-
+          Keep only the specs the bound root owns (owner key empty). A member's specs carry the
+          member's key and are left out: they are that member's lock's, and reach this project's
+          gate identity only as the member's composition subject
+        type: local
+      - stepNumber: 9
+        description: >-
+          Put each kind into identity order exactly as compute does (by id, then canonical content,
+          compared by codepoint), canonicalize, and digest with sha256 in hex
+        type: local
+      - stepNumber: 10
+        description: 'Return the StateId {algorithm: ''sha256'', digest}'
+        type: return
+        outcome: StateId (own content)
+    symbol: computeOwnStateId
+  - name: ownDesign
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: >-
+          Keep only the specs the bound root owns (owner key empty), exactly as ownTree selects
+          them: a member's specs are its own lock's
+        type: local
+      - stepNumber: 9
+        description: >-
+          Project each kept spec to its design view: an implementation through
+          implementation_spec.designView, a type through type_spec.designView, a component through
+          component_spec.designView, a subsystem through subsystem_spec.designView, a contract
+          through interface_spec.designView (each leaving status out: readiness is not design), and
+          every other kind with createdAt and updatedAt dropped. A part's implementation needs no
+          re-expression of its paths from the part's root, because the paths are linkage and the
+          view leaves them out
+        type: local
+      - stepNumber: 10
+        description: >-
+          Put each kind into identity order exactly as ownTree does (by id, then canonical content,
+          compared by codepoint), canonicalize, and digest with sha256 in hex
+        type: local
+      - stepNumber: 11
+        description: 'Return the StateId {algorithm: ''sha256-design-2'', digest}'
+        type: return
+        outcome: StateId (own design)
+    symbol: computeOwnDesignStateId
+  - name: ownDesignAsRecorded
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Load type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: Read the scan's project graph for the owner of every spec key
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 8
+        description: Keep only the specs the bound root owns, exactly as ownDesign selects them
+        type: local
+      - stepNumber: 9
+        description: >-
+          Project each kept spec to the EARLIER design view: its design view as ownDesign takes it,
+          with the spec's status put back — approvedStatus's entry for `<kind>:<id>` when it names
+          one (an absent stored status reads as complete, as the loader parses it), else the status
+          the spec has now
+        type: local
+      - stepNumber: 10
+        description: >-
+          Put each kind into identity order exactly as ownDesign does, canonicalize, and digest with
+          sha256 in hex
+        type: local
+      - stepNumber: 11
+        description: 'Return the StateId {algorithm: ''sha256-design'', digest}'
+        type: return
+        outcome: StateId (own design, earlier reading)
+    symbol: computeOwnDesignStateIdAsRecorded
+status: complete
+createdAt: '2026-07-04T12:54:31.981Z'
+updatedAt: '2026-10-06T23:03:53.323Z'

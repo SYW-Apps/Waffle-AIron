@@ -1,0 +1,33 @@
+kind: value-object
+id: candidate_verdict
+name: CandidateVerdict
+description: >-
+  The write gate's verdict on one component candidate, split by severity: errors refuse the write,
+  warnings and notices ride along as the write's notices, each still named by its severity.
+fields:
+  - name: errors
+    type: list<ValidationIssue>
+    description: Intrinsic violations; the write is refused, and each names its rule code
+    optional: false
+  - name: warnings
+    type: list<ValidationIssue>
+    description: Intrinsic advisories such as MISSING_DURABILITY; surfaced, never blocking
+    optional: false
+  - name: notices
+    type: list<ValidationIssue>
+    description: >-
+      Intrinsic findings a project set to notice severity; surfaced beside the warnings, never
+      blocking
+    optional: false
+methods:
+  - name: formatCandidateRefusal
+    signature: 'formatCandidateRefusal(): string'
+    returns: string
+    description: >-
+      The refusal an agent reads when the verdict holds errors: each error's code and message, then
+      the remedy — nothing was written, fix the fields and retry, and on an existing spec remove a
+      field with sdd_update_spec's unset rather than null. Pure over the verdict's own errors;
+      written as one message because the authoring seam's channel is a thrown error's text.
+sourcePath: src/models/candidate.ts
+createdAt: '2026-09-14T06:03:51.301Z'
+updatedAt: '2026-10-04T10:19:54.505Z'

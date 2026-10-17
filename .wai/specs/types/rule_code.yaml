@@ -11,13 +11,26 @@ fields:
     description: Stable issue code, e.g. UNKNOWN_PATTERN_REF.
     optional: false
   - name: defaultSeverity
-    type: string
-    description: error | warning (before user severity overrides).
+    type: IssueSeverity
+    description: >-
+      The severity before user overrides. A code that defaults to notice is reported but never fails
+      the gate, until a project raises it through rules.sddRuleSeverity.
     optional: false
   - name: summary
     type: string
     description: One-line description of what the code flags.
     optional: false
+  - name: carryable
+    type: bool
+    description: >-
+      This code may appear in the conformance debt register (rules.conformance.carried) — the
+      allowlist that keeps the register from becoming a second, general-purpose lint.allow. A code
+      earns it by MEASURING this project's own code against its own spec at a site the finding can
+      name, so paying it means changing code or spec; a doctrine, soundness or configuration finding
+      says the design is illegal rather than unfinished and is never carryable. Naming an
+      uncarryable code in the register is UNCARRYABLE_FINDING, an error.
+    optional: true
 methods: []
+sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:56:14.460Z'
-updatedAt: '2026-07-14T18:56:14.511Z'
+updatedAt: '2026-10-04T23:39:47.166Z'

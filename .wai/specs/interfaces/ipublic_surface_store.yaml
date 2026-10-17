@@ -11,18 +11,32 @@ methods:
       Load the persisted public-surface snapshot set, keyed by project id, from the
       public-surfaces.json file under the hosted data root and hold it as the authoritative
       in-memory representation, returning it.
-    signature: 'load(): ProjectPublicSurfaceSnapshot[]'
-    returns: ProjectPublicSurfaceSnapshot[]
+    signature: 'load(): list<ProjectPublicSurfaceSnapshot>'
+    returns: list<ProjectPublicSurfaceSnapshot>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory snapshot set to the supplied complete set after the registry has
       persisted it.
-    signature: 'replaceAll(snapshots: ProjectPublicSurfaceSnapshot[]): void'
+    signature: 'replaceAll(snapshots: list<ProjectPublicSurfaceSnapshot>): void'
     returns: void
     params:
       - name: snapshots
-        type: ProjectPublicSurfaceSnapshot[]
+        type: list<ProjectPublicSurfaceSnapshot>
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: load
+      reason: >-
+        The read-through store's hydration is called by the repository FACADE, not by a member:
+        every exported facade function in src/server/surfaces.ts constructs the store, calls load(),
+        and only then forwards to the registry or index. A Repository facade narrative is held to a
+        single call step (FACADE_FORWARDING), so that hydration call has nowhere to live in the
+        model and load has no modelled caller. The shape that fixes it already exists in this tree —
+        surface_repository.hydrate forwards to surface_registry.hydrateFromFiles — and this family
+        predates it. Modelling the hydration that way (or letting the facade doctrine carry a
+        hydrate-then-forward pair) is the decision owed; declaring a call from the registry or index
+        would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:06:03.875Z'
-updatedAt: '2026-07-09T22:13:24.037Z'
+updatedAt: '2026-10-04T10:19:24.025Z'

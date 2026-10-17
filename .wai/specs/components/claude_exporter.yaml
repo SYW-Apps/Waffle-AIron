@@ -1,0 +1,25 @@
+id: claude_exporter
+name: Claude Agent File Exporter
+description: >-
+  Writes an agent's file in the format Claude Code reads, and the format four targets share:
+  `claude`, `cursor`, `copilot` and `codex` all resolve here, differing only in where the file lands
+  and whether an execution budget is emitted. That sharing is why the exporter takes options rather
+  than being copied three times — four tools that happen to read the same markdown-with-frontmatter
+  shape are one format, not four.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+lint:
+  allow:
+    - code: UNUSED_COMPONENT
+      reason: >-
+        Reached polymorphically, which the narrative vocabulary cannot name.
+        `exporter_resolver.getExporter` answers with one of three exporters and
+        `agent_file_generator` calls `export` on whichever came back — the whole point of the seam
+        is that the generator does not know which. A call step naming this component would claim the
+        generator always reaches it, which is false for six of the seven configured targets. The
+        dependency is real and declared on the resolver; only the call site is indirect.
+status: complete
+createdAt: '2026-09-20T19:45:07.070Z'
+updatedAt: '2026-09-20T19:50:50.223Z'

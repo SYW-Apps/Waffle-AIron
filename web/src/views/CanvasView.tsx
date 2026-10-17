@@ -32,7 +32,7 @@ export function CanvasView({
     [projectId],
     [`project:${projectId}`, 'projects'],
   );
-  const { themeId, appearance } = useSettings();
+  const { themeId, appearance, customThemes } = useSettings();
   // Hosted app has a /projects/<id>/specs editor to deep-link into; the local-dev
   // canvas (ctx.local) does not, so the "Open in Specs" affordance stays hidden there.
   const { ctx } = useSession();
@@ -41,7 +41,7 @@ export function CanvasView({
   // semantic content colors; the SELECTED app palette is overlaid on the
   // chrome via CSS-variable overrides.
   const canvasTheme = engineTheme(appearance);
-  const canvasVars = useMemo(() => engineVars(themeId, appearance), [themeId, appearance]);
+  const canvasVars = useMemo(() => engineVars(themeId, appearance, customThemes), [themeId, appearance, customThemes]);
 
   const navigate = useNavigate();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -75,6 +75,21 @@ export function CanvasView({
   }, [location.hash]);
   const hashCmdRef = useRef(hashCmd);
   hashCmdRef.current = hashCmd;
+
+  /** The network view's URL for this project, keeping the unit ancestry. */
+  const networkUrl = (): string => {
+    const up = unitPrefixRef.current;
+    return '/canvas/' + (up ? up + '/' : '') + encodeURIComponent(projectIdRef.current) + '/network';
+  };
+
+  // A project whose diagram config opens on the network view (defaultView:
+  // network) lands there — unless the visitor just came back to the components.
+  useEffect(() => {
+    const diagram = (model as { system?: { diagram?: { defaultView?: string } } } | undefined)?.system?.diagram;
+    const back = (location.state as { components?: boolean } | null)?.components;
+    if (diagram?.defaultView === 'network' && route === '' && !back) navigate(networkUrl(), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model]);
 
   // Mount (or remount) whenever a fresh model arrives; tear down on unmount.
   // NOTE: `route` is intentionally NOT a dependency — drill-down must not remount
@@ -115,18 +130,24 @@ export function CanvasView({
           '_blank',
           'noopener',
         ),
-      // Stage G: deep-link the focused spec into the hosted Specs value editor.
-      // Encodes the qualified id as path segments (`::` → `/`, no %3A) so the
-      // editor URL mirrors the same hierarchy the canvas uses. Undefined in
-      // local-dev (no /projects route) so the engine hides the button.
-      onOpenSpec: isLocal
-        ? undefined
-        : (kind: string, id: string) => {
-            const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
-            navigate(
-              '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + kind + (idPath ? '/' + idPath : ''),
-            );
-          },
+      // Stage G: deep-link the focused spec into the Specs value editor. Encodes
+      // the qualified id as path segments (`::` → `/`, no %3A) so the editor URL
+      // mirrors the same hierarchy the canvas uses. The editor lives at a
+      // different route per mode: the hosted app scopes it to a project
+      // (/projects/<id>/specs/…), the local dev shell has only one project and
+      // mounts it at /specs/… — the button itself is the same affordance.
+      onOpenSpec: (kind: string, id: string) => {
+        const idPath = id ? id.split('::').map(encodeURIComponent).join('/') : '';
+        const tail = kind + (idPath ? '/' + idPath : '');
+        navigate(isLocal ? '/specs/' + tail : '/projects/' + encodeURIComponent(projectIdRef.current) + '/specs/' + tail);
+      },
+      // A project node carrying a record id (a member, or an external whose hosted
+      // record the caller may read) opens that project's own page. The server
+      // stamps recordId only on records the caller may read, so a node without
+      // one never offers the link.
+      onOpenProject: (recordId: string) => navigate('/projects/' + encodeURIComponent(recordId)),
+      // The Network mode tab opens the derived network view (/canvas/<project>/network).
+      onOpenNetwork: () => navigate(networkUrl()),
       // Stage G: focus a component / open a method's narrative modal when the URL hash asks.
       initialFlow: hashCmdRef.current.flow,
       initialSelect: hashCmdRef.current.select,

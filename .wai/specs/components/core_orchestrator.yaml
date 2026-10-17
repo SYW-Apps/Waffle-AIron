@@ -1,14 +1,31 @@
 id: core_orchestrator
 name: Core Orchestrator
-description: Orchestrates spec loading and manipulation in the core subsystem.
+description: >-
+  Orchestrates spec loading and manipulation in the core subsystem: loads and saves specs through
+  the spec loader; provisions, moves and renames them; computes the tree's content identity; reads
+  and writes the lock record and resolves the lock state against the gate identity its caller
+  passes; and migrates components off retired stereotypes.
 subsystem: sdd_core
 componentType: Orchestrator
 owns: []
 dependsOn:
   - spec_loader
-  - state_hash_specialist
-  - lock_registry
-  - diagram_specialist
+  - state_hash
+  - lock_store
+  - architecture_diagrams
+  - project_config_repository
+  - variant_registry_adapter
+  - extension_orchestrator
+  - git_source_adapter
+lint:
+  allow:
+    - code: INCOHESIVE_METHODS
+      reason: >-
+        NOT the pure forwarder the rule now exempts, and this allow no longer claims to be one: 13
+        of its 45 narrated methods hold flow of their own, so it is a facade with workflows in it
+        rather than a switchboard. The allow stands on different ground, and stands permanently:
+        this is the library's ONE entry point for embedders, and splitting it along the call groups
+        would publish several entry points where the package deliberately has one.
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-04T15:59:10.250Z'
+updatedAt: '2026-10-02T20:28:44.179Z'

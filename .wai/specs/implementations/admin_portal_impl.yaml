@@ -3,6 +3,7 @@ name: Admin Portal Implementation
 description: 'Control-plane HTTP boundary: forwards each admin operation to the admin orchestrator.'
 contract: iadmin_portal
 sourcePath: src/server/http.ts
+router: routeAdmin
 methods:
   - name: createProject
     narrative:
@@ -53,13 +54,6 @@ methods:
         type: call
         targetComponent: admin_orchestrator
         targetMethod: lockProject
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Forward to the admin orchestrator
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: promoteProject
   - name: generateDiagram
     narrative:
       - stepNumber: 1
@@ -210,6 +204,38 @@ methods:
         targetComponent: project_lifecycle_orchestrator
         targetMethod: executeApprovedRequest
     symbol: executeApprovedRequest
+  - name: exportProjectTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the admin orchestrator with the master credential, answering the archive bytes
+          as an application/zip download.
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: exportProjectTree
+    detail: calls-only
+  - name: importProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Forward the raw application/zip body to the admin orchestrator with the master credential.
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: importProjectTree
+    detail: calls-only
+  - name: previewProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPack
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPackRemoval
 status: complete
 createdAt: '2026-07-04T12:53:08.445Z'
-updatedAt: '2026-07-16T00:14:12.872Z'
+updatedAt: '2026-10-09T11:40:11.062Z'

@@ -1,0 +1,47 @@
+id: iedge_verdicts
+name: Edge Verdicts Interface
+description: >-
+  The doctrine family's verdict on a dependsOn edge that is not declared yet, for the rules that ask
+  whether a hop could be skipped. A contract of its own beside idoctrine_rules, because that
+  contract lists the family's rules one method each, and this is not a rule: it reports nothing, it
+  answers a question with the same judgements the edge rules report with.
+component: doctrine_rules
+methods:
+  - name: directEdgeRefusals
+    description: >-
+      Would doctrine allow this edge? The finding codes the doctrine family would report if the
+      caller depended on the target and called the given method on it directly — empty when the edge
+      and the call are legal; with no method, the edge alone is judged. The edge is classified
+      exactly as a declared one (library, intra-subsystem or boundary crossing, retirement, the
+      governing pack profile's allowedEdges licence) and then judged by the same judgements the edge
+      rules report with: the language bridge and purity bound of a library call, the subsystem
+      boundary, the entry-point, data-layer and dependency-class matrix (which a licensed pair
+      skips, as a declared edge does), member visibility, pack forbid-edge assertions, and on the
+      call the Portal write shortcut and the Supervisor shared-data bound, each with its own reading
+      of an untagged method. A retired end, or an edge to the caller itself, is never legal. It
+      reports nothing: it answers the question a forwarder raises — could its caller make the call
+      itself — without a second table of what is legal that could drift from the rules. Project
+      severity overrides are not read: a code turned off is a choice about reporting, not a change
+      of doctrine.
+    signature: >-
+      directEdgeRefusals(ctx: RuleContext, caller: ComponentSpec, target: ComponentSpec, method?:
+      string): list<string>
+    returns: list<string>
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model
+      - name: caller
+        type: ComponentSpec
+        description: The component that would depend on the target
+      - name: target
+        type: ComponentSpec
+        description: The component it would depend on and call
+      - name: method
+        type: string
+        description: The target's method the caller would call; omitted to judge the edge alone
+        optional: true
+    effect: none
+status: complete
+createdAt: '2026-10-16T17:40:57.933Z'
+updatedAt: '2026-10-16T17:41:01.313Z'

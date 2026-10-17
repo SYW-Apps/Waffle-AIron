@@ -3,10 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized, isProjectInitialized, loadProjectConfig } from '../config/loader.js';
-import { aiDir } from '../utils/fs.js';
-import { WaironError } from '../utils/errors.js';
+import { assertProjectInitialized, isProjectInitialized } from '../config/paths.js';
+import { loadProjectConfig } from '../core/index.js';
+import { aiDir, getProjectRoot, isOutsideRoot, backupBeside, withLineEndings, resolveProjectBinding } from '../utils/fs.js';
+import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
+import { effectiveProjectId } from '../models/project.js';
 
 /** The Gemini/Antigravity home dir. Precedence: override > GEMINI_CONFIG_DIR > ~/.gemini. */
 function geminiGlobalDir(override?: string): string {
@@ -24,7 +26,9 @@ function geminiGlobalDir(override?: string): string {
  * Claude (the tools never load). That mis-targeting was the long-standing reason the sdd_* tools were invisible.
  */
 export function claudeMcpConfigPath(useGlobal: boolean, override?: string): string {
-  if (!useGlobal) return path.join(process.cwd(), '.mcp.json');
+  // The BOUND project's root (the binding rule), not the cwd: run from a
+  // subfolder, `.mcp.json` still lands where Claude reads it — the project root.
+  if (!useGlobal) return path.join(getProjectRoot(), '.mcp.json');
   const dir = override || process.env['CLAUDE_CONFIG_DIR'];
   return dir ? path.join(dir, '.claude.json') : path.join(os.homedir(), '.claude.json');
 }
@@ -67,45 +71,55 @@ export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): vo
 // wairon mcp serve
 // ---------------------------------------------------------------------------
 
+/** The binding as every surface announces it: `project <id> at <root>`. */
+function bindingLine(root: string): string {
+  let id: string | null = null;
+  try {
+    const config = loadProjectConfig();
+    if (config) id = effectiveProjectId(config);
+  } catch { /* an unreadable configuration names no id */ }
+  return `project ${id ?? path.basename(root)} at ${root}`;
+}
+
+/**
+ * The root `mcp serve` attaches to, and HOW it resolved: a pinned
+ * WAIRON_PROJECT_DIR holding a .wai, else the binding rule from the cwd (the
+ * root every CLI command and `wairon dev` bind), else a cwd holding a .wai of
+ * its own (not yet bootstrapped), else the cwd.
+ */
+function serveRoot(cwd: string, envDir: string | undefined): { root: string; how: string } {
+  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) return { root: path.resolve(envDir), how: 'WAIRON_PROJECT_DIR (pinned at install)' };
+  const binding = resolveProjectBinding(cwd);
+  // An ancestor binding is observable here; roots (if the client sends them)
+  // can still correct it post-connect via scopeToClientWorkspace.
+  if (binding?.via === 'here') return { root: binding.root, how: 'cwd' };
+  if (binding?.via === 'ancestor') return { root: binding.root, how: `walked up to ancestor inside the repository — cwd (${cwd}) holds no project` };
+  if (binding) return { root: binding.root, how: `walked up past the repository root to the project that declares it as a member — cwd (${cwd})` };
+  if (fs.existsSync(path.join(cwd, '.wai'))) return { root: cwd, how: 'cwd (its .wai holds no L0 yet)' };
+  return { root: cwd, how: 'cwd (no project binds this folder)' };
+}
+
 export async function runMcpServe(): Promise<void> {
   // A host (e.g. Antigravity) may launch this server with a cwd that is NOT the
   // project — especially a globally-registered server shared across projects.
   // Resolve the project root explicitly so the sdd_* tools operate on the right
-  // .wai/ tree: WAIRON_PROJECT_DIR env > nearest .wai/ above cwd > cwd.
-  const { setProjectRoot, getProjectRoot, findProjectRoot } = await import('../utils/fs.js');
+  // .wai/ tree: WAIRON_PROJECT_DIR env > the binding rule from cwd > cwd.
+  const { setProjectRoot, getProjectRoot } = await import('../utils/fs.js');
   const cwd = path.resolve(process.cwd());
   const envDir = process.env['WAIRON_PROJECT_DIR'];
 
   // Resolve the project root and record HOW we got it, so the stderr log makes a
-  // silent mis-attachment (walking up to an ANCESTOR .wai) observable.
-  let resolved: string;
-  let how: string;
-  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) {
-    resolved = path.resolve(envDir);
-    how = 'WAIRON_PROJECT_DIR (pinned at install)';
-  } else {
-    const found = findProjectRoot(cwd);
-    if (found && found === cwd) {
-      resolved = found;
-      how = 'cwd';
-    } else if (found) {
-      resolved = found;
-      // cwd has no .wai of its own — we climbed to an ancestor. For nested
-      // projects this can attach to the WRONG tree; roots (if the client sends
-      // them) will correct it post-connect via scopeToClientWorkspace.
-      how = `walked up to ancestor — cwd (${cwd}) has no .wai`;
-    } else {
-      resolved = cwd;
-      how = 'cwd (no .wai found anywhere above)';
-    }
-  }
+  // silent mis-attachment (walking up to an ANCESTOR .wai) observable. The walk
+  // is the binding rule every CLI command and `wairon dev` use — never past the
+  // repository root unless an ancestor declares the crossing as a member.
+  const { root: resolved, how } = serveRoot(cwd, envDir);
   setProjectRoot(resolved);
 
   const initialized = isProjectInitialized();
   // Log to stderr (never stdout — stdout is the JSON-RPC channel). Visible in the
   // host's MCP server logs, so you can confirm which project the server attached to.
   process.stderr.write(
-    `[wairon mcp] v${WAIRON_VERSION} — project root: ${getProjectRoot()} [via ${how}] ` +
+    `[wairon mcp] v${WAIRON_VERSION} — ${bindingLine(getProjectRoot())} [via ${how}] ` +
     `(.wai ${initialized ? 'found' : 'NOT found — sdd_* tools will report no project'})\n`,
   );
 
@@ -128,6 +142,104 @@ export interface McpInstallOptions {
   global?:  boolean;
   /** Explicit config dir to install into (highest precedence; validated). Requires backend. */
   configDir?: string;
+  /** Register a HOSTED http entry against this instance instead of the local stdio server. */
+  hostedUrl?: string;
+  /** Hosted only: the project selector to carry on the entry. */
+  hostedProject?: string;
+  /** Hosted only: the bearer to carry; falls back to the stored credential for the instance. */
+  hostedToken?: string;
+}
+
+/** What kind of wairon server an agent's MCP configuration is attached to. */
+export type McpSourceKind = 'local' | 'hosted';
+
+/** What the agent's own MCP configuration says wairon is attached to. */
+export interface DetectedMcpSource {
+  kind: McpSourceKind;
+  /** The config file the entry was read from — named in output so a surprise is traceable. */
+  configPath: string;
+  url?: string;
+  projectId?: string;
+  token?: string;
+}
+
+/** The config files an AI tool may define the wairon MCP server in, in precedence order. */
+function mcpConfigCandidates(cwd: string): string[] {
+  return [
+    path.join(cwd, '.mcp.json'),
+    claudeMcpConfigPath(true),
+    path.join(cwd, '.gemini', 'settings.json'),
+    path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json'),
+  ];
+}
+
+/**
+ * cli_mcp_adapter.detectHostedMcpSource — read the wairon entry out of the
+ * agent's own MCP configuration and report what it points at.
+ *
+ * This is what lets `wairon remote` attach without a second round of
+ * configuration: if the agent already works against a hosted project, the CLI
+ * can address the SAME project with the SAME credential, and the two cannot
+ * drift apart. Purely a read, and deliberately total — an unparseable agent
+ * config must never break an ordinary wairon command, so anything unreadable
+ * simply contributes nothing.
+ */
+export function detectHostedMcpSource(cwd: string = process.cwd()): DetectedMcpSource | null {
+  for (const configPath of mcpConfigCandidates(cwd)) {
+    let entry: Record<string, unknown> | undefined;
+    try {
+      if (!fs.existsSync(configPath)) continue;
+      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+        mcpServers?: Record<string, Record<string, unknown>>;
+      };
+      entry = parsed.mcpServers?.['wairon'];
+    } catch {
+      continue; // unreadable or malformed — not our problem to report here
+    }
+    if (!entry) continue;
+
+    const url = typeof entry.url === 'string' ? entry.url : undefined;
+    if (!url) return { kind: 'local', configPath };
+
+    const headers = (entry.headers ?? {}) as Record<string, unknown>;
+    const source: DetectedMcpSource = { kind: 'hosted', configPath, url: mcpBaseUrl(url) };
+    const project = headerValue(headers, 'x-wairon-project') ?? projectFromQuery(url);
+    if (project) source.projectId = project;
+    const authorization = headerValue(headers, 'authorization');
+    const bearer = authorization && /^bearer\s+/i.test(authorization)
+      ? authorization.replace(/^bearer\s+/i, '').trim()
+      : undefined;
+    if (bearer) source.token = bearer;
+    return source;
+  }
+  return null;
+}
+
+/** Case-insensitive header lookup (config files are hand-edited). */
+function headerValue(headers: Record<string, unknown>, name: string): string | undefined {
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === name && typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/** The `?project=` selector carried on an endpoint URL, when it has one. */
+function projectFromQuery(endpoint: string): string | undefined {
+  try {
+    return new URL(endpoint).searchParams.get('project') ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An MCP endpoint URL reduced to the instance base the CLI addresses. */
+function mcpBaseUrl(endpoint: string): string {
+  try {
+    const parsed = new URL(endpoint);
+    return `${parsed.origin}${parsed.pathname.replace(/\/mcp\/?$/, '').replace(/\/+$/, '')}`;
+  } catch {
+    return endpoint.replace(/\/mcp\/?(\?.*)?$/, '').replace(/\/+$/, '');
+  }
 }
 
 /**
@@ -147,57 +259,84 @@ export function normalizeBackend(input: string): 'claude' | 'gemini' {
   );
 }
 
-export async function runMcpInstall(options: McpInstallOptions = {}): Promise<void> {
-  assertProjectInitialized();
+/** The AI assistants an MCP install writes a server entry for. */
+export type McpBackend = 'claude' | 'gemini';
 
+/**
+ * mcp_config_write — one write an MCP install would make, stated before it is
+ * made: the backend, the file, whether that file lies outside the project root
+ * (a configuration every project on the machine shares), and the wairon entry
+ * the file holds now beside the one it would hold.
+ */
+export interface McpConfigWrite {
+  backend: McpBackend;
+  path: string;
+  outsideProject: boolean;
+  /** The wairon entry the file holds now; undefined when none (or no readable file). */
+  before?: unknown;
+  after: Record<string, unknown>;
+  upToDate: boolean;
+}
+
+/** One resolved backend's write, with what writing it needs. */
+interface InstallTarget extends McpConfigWrite {
+  configBase: string;
+  settings: Record<string, unknown>;
+  useGlobal: boolean;
+}
+
+/** Steps 2-3 of installMcpServer: the explicit --backend, else the configured targets' backends, else Claude. */
+function resolveBackends(options: McpInstallOptions): ('claude' | 'gemini')[] {
+  if (options.backend) return [normalizeBackend(options.backend)];
+  const backends: ('claude' | 'gemini')[] = [];
+  try {
+    // A missing configuration contributes nothing, like an unreadable one.
+    const config = loadProjectConfig();
+    const enabledTypes = (config?.targets ?? [])
+      .filter((t) => !('enabled' in t) || t.enabled)
+      .map((t) => t.type);
+    if (enabledTypes.includes('claude')) backends.push('claude');
+    if (enabledTypes.includes('gemini') || enabledTypes.includes('agy')) backends.push('gemini');
+  } catch {
+    // Fallback if config loading fails
+  }
+  return backends.length ? backends : ['claude'];
+}
+
+/**
+ * Steps 1-10 of installMcpServer, writing nothing: per backend, the file it
+ * loads server definitions from, what that file holds, and the entry an
+ * install would put there. planMcpInstall answers exactly this, so a caller's
+ * plan and the install it confirms can never disagree.
+ */
+function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
+  // A LOCAL entry serves this checkout's spec tree, so it needs one. A HOSTED
+  // entry serves the instance's tree: a hosted user has no checkout, and the
+  // entry is written here without creating anything else.
+  if (!options.hostedUrl) assertProjectInitialized();
   if (options.configDir && !options.backend) {
     throw new WaironError('--config-dir requires --backend (claude or gemini), since a config dir is agent-specific.');
   }
-
-  let backends: ('claude' | 'gemini')[] = [];
-  if (options.backend) {
-    backends = [normalizeBackend(options.backend)];
-  } else {
-    try {
-      const config = loadProjectConfig();
-      const enabledTypes = config.targets
-        .filter((t) => !('enabled' in t) || t.enabled)
-        .map((t) => t.type);
-
-      if (enabledTypes.includes('claude')) {
-        backends.push('claude');
-      }
-      if (enabledTypes.includes('gemini') || enabledTypes.includes('agy')) {
-        backends.push('gemini');
-      }
-    } catch {
-      // Fallback if config loading fails
-    }
-    if (backends.length === 0) {
-      backends = ['claude']; // Default fallback
-    }
-  }
-
-  for (const backend of backends) {
+  const root = getProjectRoot();
+  return resolveBackends(options).map((backend) => {
     if (options.configDir) validateConfigDir(options.configDir, backend);
     // An explicit --config-dir implies a global-style install into that dir.
-    const useGlobal = options.global || !!options.configDir;
+    const useGlobal = !!(options.global || options.configDir);
 
     // ── Resolve where to write settings ──────────────────────────────────────
     let configBase: string;
     let settingsPath: string;
-
     if (backend === 'gemini') {
       if (useGlobal) {
         // Global install (opt-in): just the Antigravity home MCP config. We do NOT
         // install a plugin — a plugin named "wairon" collides with the "wairon" MCP
-        // server. (Any leftover plugin from older installs is cleaned up by
+        // server. (Any leftover plugin from older installs is retired by
         // `wairon doctor --fix`, not here — install only installs.)
         configBase = path.join(geminiGlobalDir(options.configDir), 'antigravity-cli');
         settingsPath = path.join(configBase, 'mcp_config.json');
       } else {
         // Project-local Gemini/Antigravity settings — stays within the project.
-        configBase = path.join(process.cwd(), '.gemini');
+        configBase = path.join(root, '.gemini');
         settingsPath = path.join(configBase, 'settings.json');
       }
     } else {
@@ -216,83 +355,158 @@ export async function runMcpInstall(options: McpInstallOptions = {}): Promise<vo
         logger.warn(`Could not parse ${settingsPath} — starting fresh.`);
       }
     }
-
-    // ── Build the desired mcpServers entry ────────────────────────────────────
     const mcpServers = (settings['mcpServers'] ?? {}) as Record<string, unknown>;
-    const agentLabel = backend === 'gemini' ? 'Antigravity' : 'Claude';
 
     const isPackaged = typeof (process as any).pkg !== 'undefined';
     const scriptPath = process.argv[1] ? path.resolve(process.argv[1]).replace(/\\/g, '/') : null;
     const useDirectNode = !isPackaged && scriptPath && (scriptPath.endsWith('.js') || scriptPath.endsWith('.ts'));
 
-    // Project-local installs know the exact project, so pin it: the server then
-    // attaches deterministically regardless of the cwd the host spawns it with,
-    // and never silently climbs to an ancestor .wai (e.g. a parent repo's tree).
-    // Global installs are intentionally shared across projects, so they stay
-    // unpinned and rely on MCP roots / cwd to scope per session.
-    const env: Record<string, string> = useGlobal
-      ? {}
-      : { WAIRON_PROJECT_DIR: process.cwd().replace(/\\/g, '/') };
+    // A HOSTED registration points the agent at an INSTANCE rather than at this
+    // checkout: the same http endpoint, bearer and project selector the CLI's
+    // remote surface uses, so `wairon remote` can read this entry back and the
+    // agent and CLI provably work on the same project.
+    const desiredEntry: Record<string, unknown> = options.hostedUrl
+      ? hostedMcpEntry(options)
+      : useGlobal
+        ? machineEntry(useDirectNode ? scriptPath : null)
+        : projectEntry(root, useDirectNode ? scriptPath : null);
 
-    const desiredEntry = useDirectNode
-      ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env }
-      : { command: 'wairon', args: ['mcp', 'serve'], env };
+    const existingEntry = mcpServers['wairon'];
+    return {
+      backend,
+      path: settingsPath,
+      outsideProject: isOutsideRoot(root, settingsPath),
+      ...(existingEntry !== undefined ? { before: existingEntry } : {}),
+      after: desiredEntry,
+      upToDate: !!existingEntry && JSON.stringify(existingEntry) === JSON.stringify(desiredEntry),
+      configBase,
+      settings,
+      useGlobal,
+    };
+  });
+}
 
+/**
+ * The entry of a machine-wide (user-scope) registration: machine-specific by
+ * nature, so it names the running CLI by its absolute path when it runs as a
+ * script, and stays unpinned — it is shared across projects and scopes per
+ * session through MCP roots and the cwd.
+ */
+function machineEntry(scriptPath: string | null): Record<string, unknown> {
+  return scriptPath
+    ? { command: 'node', args: [scriptPath, 'mcp', 'serve'], env: {} }
+    : { command: 'wairon', args: ['mcp', 'serve'], env: {} };
+}
+
+/**
+ * The entry of a project-scoped registration (.mcp.json, .gemini/settings.json).
+ * That file is committed and shared, so it holds nothing machine-specific: the
+ * CLI by a path relative to the project when the running script lives inside it
+ * (a checkout of wairon itself), else `wairon` on the PATH. It carries no
+ * absolute project pin either: the host starts a project's server in that
+ * project, where the server attaches to the cwd's own .wai.
+ */
+function projectEntry(root: string, scriptPath: string | null): Record<string, unknown> {
+  if (scriptPath && !isOutsideRoot(root, scriptPath)) {
+    const relative = path.relative(root, scriptPath).replace(/\\/g, '/');
+    return { command: 'node', args: [`./${relative}`, 'mcp', 'serve'] };
+  }
+  return { command: 'wairon', args: ['mcp', 'serve'] };
+}
+
+/**
+ * planInstall — what runMcpInstall would write for these options, computed the
+ * same way and writing nothing: one entry per resolved backend, naming the file,
+ * whether it lies outside the project root, and the wairon entry before and
+ * after. The plan a caller prints and confirms before an install may touch a
+ * machine-wide file.
+ */
+export function planMcpInstall(options: McpInstallOptions): McpConfigWrite[] {
+  return resolveInstallTargets(options).map(({ backend, path: file, outsideProject, before, after, upToDate }) => ({
+    backend, path: file, outsideProject, ...(before !== undefined ? { before } : {}), after, upToDate,
+  }));
+}
+
+export function runMcpInstall(options: McpInstallOptions = {}): void {
+  for (const target of resolveInstallTargets(options)) {
+    const agentLabel = target.backend === 'gemini' ? 'Antigravity' : 'Claude';
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
     // stale path from a moved repo or an earlier machine), rewrite it instead of
     // skipping. Skipping is exactly how a broken `command`/`args` path survives
     // and leaves the agent with no wairon tools.
-    const existingEntry = mcpServers['wairon'];
-    if (existingEntry && JSON.stringify(existingEntry) === JSON.stringify(desiredEntry)) {
-      logger.info(`wairon MCP server already registered (up to date) for ${agentLabel} in ${chalk.gray(settingsPath)}.`);
+    if (target.upToDate) {
+      logger.info(`wairon MCP server already registered (up to date) for ${agentLabel} in ${chalk.gray(target.path)}.`);
       continue;
     }
-    const wasStale = !!existingEntry;
-
-    mcpServers['wairon'] = desiredEntry;
-    settings['mcpServers'] = mcpServers;
-
-    // ── Write back ────────────────────────────────────────────────────────────
-    if (!fs.existsSync(configBase)) fs.mkdirSync(configBase, { recursive: true });
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-
-    logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(settingsPath)}.`);
-    logger.blank();
-    logger.info('AI tools using this config will have access to these wairon tools:');
-    logger.info('  listAgents · getAgent · listDomains · validateTopology · getProjectConfig');
-    logger.info('  sdd_initialize_system · sdd_add_subsystem · sdd_add_component · sdd_define_interface');
-    logger.info('  sdd_write_narrative · sdd_validate_tree · sdd_get_status');
-    logger.blank();
-    const restartApp = backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
-    logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
-
-    // A project-scoped .mcp.json server needs a one-time trust approval the next
-    // time Claude launches in this project (it shows as "⏸ Pending approval").
-    if (backend === 'claude' && !useGlobal) {
-      logger.warn('Claude shows project .mcp.json servers as "⏸ Pending approval" — approve wairon once on next launch (or run `claude` and accept the trust prompt).');
-    }
-
-    // Antigravity loads MCP from its global mcp_config.json, NOT the project's
-    // .gemini/settings.json — so a project-local install won't surface tools there.
-    if (backend === 'gemini' && !useGlobal) {
-      logger.warn('Note: Antigravity (agy) reads MCP servers from its global ~/.gemini/antigravity-cli/mcp_config.json, not this project file.');
-      logger.warn('If the agent cannot see the sdd_* tools, run: ' + chalk.bold('wairon mcp install --backend gemini --global'));
-    }
-    logger.blank();
+    writeInstallTarget(target);
+    reportInstalled(target, agentLabel);
   }
+}
+
+/**
+ * Step 11: write the entry under mcpServers.wairon, every other key kept. A
+ * file outside the project root that already exists is first copied beside
+ * itself, so a machine-wide configuration is never replaced without its
+ * previous value kept.
+ */
+function writeInstallTarget(target: InstallTarget): void {
+  const mcpServers = (target.settings['mcpServers'] ?? {}) as Record<string, unknown>;
+  mcpServers['wairon'] = target.after;
+  target.settings['mcpServers'] = mcpServers;
+  if (!fs.existsSync(target.configBase)) fs.mkdirSync(target.configBase, { recursive: true });
+  if (target.outsideProject && fs.existsSync(target.path)) {
+    logger.info(`Backed up ${chalk.gray(target.path)} to ${chalk.cyan(backupBeside(target.path))} before replacing it (outside the project root).`);
+  }
+  // Keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
+  fs.writeFileSync(target.path, withLineEndings(target.path, JSON.stringify(target.settings, null, 2) + '\n'));
+}
+
+/** Step 12: where it wrote, what the entry points at, and what the agent must do to pick it up. */
+function reportInstalled(target: InstallTarget, agentLabel: string): void {
+  const wasStale = target.before !== undefined;
+  logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(target.path)}.`);
+  logger.blank();
+  // A pointer, not a list: a hand-kept list of tool names went stale every
+  // time a tool was added (it named 12 of 37). The server lists its own tools.
+  logger.info('AI tools using this config get the wairon MCP server: the sdd_* spec-authoring, validation, member and');
+  logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools"), shipped with the package (node_modules/@wairon/cli/docs/cli.md) and at https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/cli.md');
+  logger.blank();
+  const restartApp = target.backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
+  logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
+
+  // A project-scoped .mcp.json server needs a one-time trust approval the next
+  // time Claude launches in this project (it shows as "⏸ Pending approval").
+  if (target.backend === 'claude' && !target.useGlobal) {
+    logger.warn('Claude shows project .mcp.json servers as "⏸ Pending approval" — approve wairon once on next launch (or run `claude` and accept the trust prompt).');
+  }
+
+  // A hosted entry carries the bearer. A project-scoped file is usually
+  // committed, so say plainly that this one must not be.
+  if (target.after['type'] === 'http' && !target.useGlobal) {
+    logger.warn(`${target.path} now holds your hosted credential: keep it out of version control (add it to .gitignore), or install with --global instead.`);
+  }
+
+  // Antigravity loads MCP from its global mcp_config.json, NOT the project's
+  // .gemini/settings.json — so a project-local install won't surface tools there.
+  if (target.backend === 'gemini' && !target.useGlobal) {
+    logger.warn('Note: Antigravity (agy) reads MCP servers from its global ~/.gemini/antigravity-cli/mcp_config.json, not this project file.');
+    logger.warn('If the agent cannot see the sdd_* tools, run: ' + chalk.bold('wairon mcp install --backend gemini --global'));
+  }
+  logger.blank();
 }
 
 // ---------------------------------------------------------------------------
 // wairon mcp status  — show whether the MCP server is configured
 // ---------------------------------------------------------------------------
 
-export async function runMcpStatus(): Promise<void> {
+export function runMcpStatus(): void {
   assertProjectInitialized();
 
   const projectConfig = loadProjectConfig();
+  if (!projectConfig) throw new ProjectNotInitializedError();
   const claudeProject = claudeMcpConfigPath(false);
   const claudeGlobal  = claudeMcpConfigPath(true);
-  const geminiProject = path.join(process.cwd(), '.gemini', 'settings.json');
+  const geminiProject = path.join(getProjectRoot(), '.gemini', 'settings.json');
   const geminiGlobal  = path.join(geminiGlobalDir(), 'antigravity-cli', 'mcp_config.json');
 
   logger.blank();
@@ -337,23 +551,59 @@ export async function runMcpStatus(): Promise<void> {
 }
 
 /**
- * Remove the legacy global Antigravity plugin (~/.gemini/config/plugins/wairon)
- * if present. A plugin named "wairon" collides with the "wairon" MCP server in
- * Antigravity ("server wairon is not allowed in this context"); we no longer
- * install one. This is a cleanup/migration helper (called by `wairon doctor
- * --fix`), not part of install. Returns true if a plugin was removed.
+ * The hosted (http) MCP entry: the instance's /mcp endpoint plus the headers the
+ * data plane reads — the bearer it authenticates, and the project it binds. The
+ * token comes from the flag, else the machine's stored credential for that
+ * instance, so `wairon login` once is enough to wire an agent.
  */
-export function removeLegacyGlobalPlugin(): boolean {
-  const home = process.env['USERPROFILE'] ?? process.env['HOME'] ?? os.homedir();
-  const pluginDir = path.join(home, '.gemini', 'config', 'plugins', 'wairon');
-  try {
-    if (fs.existsSync(pluginDir)) {
-      fs.rmSync(pluginDir, { recursive: true, force: true });
-      logger.info(`Removed legacy global Antigravity plugin at ${chalk.gray(pluginDir)} (it collides with the wairon MCP server).`);
-      return true;
-    }
-  } catch (e) {
-    logger.warn(`Could not remove legacy wairon Antigravity plugin: ${String(e)}`);
+function hostedMcpEntry(options: McpInstallOptions): Record<string, unknown> {
+  const base = options.hostedUrl!.replace(/\/+$/, '');
+  // The credential is RESOLVED BY THE CALLER, never read here: this adapter's
+  // job is the config file, and reaching into the credential store would make
+  // it depend on state it has no business knowing about.
+  const token = (options.hostedToken ?? '').trim();
+  if (!token) {
+    throw new WaironError(
+      `No credential for ${base}. Run \`wairon login ${base}\` first, or pass --token.`,
+    );
   }
-  return false;
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (options.hostedProject) headers['X-Wairon-Project'] = options.hostedProject;
+  return { type: 'http', url: `${base}/mcp`, headers };
+}
+
+/** Where a legacy global Antigravity plugin would sit, under the same gemini home a global install writes into. */
+function legacyPluginDir(): string {
+  return path.join(geminiGlobalDir(), 'config', 'plugins', 'wairon');
+}
+
+/**
+ * The legacy global Antigravity plugin (`<gemini home>/config/plugins/wairon`),
+ * or null when there is none. A plugin named "wairon" collides with the
+ * "wairon" MCP server in Antigravity ("server wairon is not allowed in this
+ * context"); we no longer install one, and `wairon doctor --fix` retires it.
+ */
+export function findLegacyPlugin(): string | null {
+  const dir = legacyPluginDir();
+  return fs.existsSync(dir) ? dir : null;
+}
+
+/**
+ * Retire the legacy plugin WITHOUT deleting it: move it out of the plugins
+ * directory (where it would still load) to
+ * `<gemini home>/config/wairon-plugin.wairon-backup-<timestamp>`, and answer
+ * that path; null when there was none, or when the move failed (warned).
+ */
+export function retireLegacyPlugin(): string | null {
+  const dir = findLegacyPlugin();
+  if (!dir) return null;
+  const backup = path.join(path.dirname(path.dirname(dir)), `wairon-plugin.wairon-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+  try {
+    fs.renameSync(dir, backup);
+    logger.info(`Moved the legacy global Antigravity plugin ${chalk.gray(dir)} aside to ${chalk.cyan(backup)} (it collides with the wairon MCP server).`);
+    return backup;
+  } catch (e) {
+    logger.warn(`Could not move the legacy wairon Antigravity plugin aside: ${String(e)}`);
+    return null;
+  }
 }

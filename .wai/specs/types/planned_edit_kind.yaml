@@ -1,0 +1,31 @@
+kind: enum
+id: planned_edit_kind
+name: PlannedEditKind
+description: What kind of semantic change a migration's planned edit makes in one owner project.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: id
+    description: An id moved
+  - name: member
+    description: A member declared, rekeyed or removed
+  - name: external
+    description: An external declared, rekeyed, repointed or removed
+  - name: reference
+    description: A reference respelled
+  - name: export
+    description: An L0 export added or re-pointed
+  - name: pin
+    description: A pin carried, taken or removed
+  - name: move
+    description: Specs moved between projects
+  - name: delete
+    description: Files deleted that have no home
+  - name: promote
+    description: A part's project content created in place
+  - name: demote
+    description: A project's project content removed
+createdAt: '2026-10-04T23:24:26.565Z'
+updatedAt: '2026-10-04T23:24:26.964Z'

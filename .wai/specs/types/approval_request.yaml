@@ -14,12 +14,15 @@ fields:
   - name: kind
     type: string
     description: >-
-      Requested action kind, such as "project:init", "project:lock", "project:promote",
-      "token:mint", "pack:install", or "policy:change".
+      Requested action kind, such as "project:init", "project:lock", "token:mint", "pack:install",
+      or "policy:change".
     optional: false
   - name: status
-    type: string
-    description: 'Lifecycle status: "pending", "approved", "denied", "expired", "completed", or "cancelled".'
+    type: ApprovalRequestStatus
+    description: >-
+      Lifecycle status. An approved request is cancelled when its execution refused because the
+      request no longer describes what would be done (a project:lock whose gateStateId no longer
+      matches the tree); executionSummary then says why, and the requester asks again.
     optional: false
   - name: requestedBy
     type: PrincipalSubject
@@ -40,17 +43,18 @@ fields:
   - name: payloadType
     type: string
     description: >-
-      Redacted payload type identifier, such as ProjectInitRequest or TokenMintRequest — or the
-      subproject-scope shape a project:lock / project:promote request records when the requester was
-      bound to a chained subproject, so the approved execution stays confined to that child tree.
+      Redacted payload type identifier, such as ProjectInitRequest or TokenMintRequest. (Before
+      stage 7 a project:lock request could record a member-qualifier scope shape; such a pending
+      request is mapped to the member's own record for one release. Since stage 7 a lock request
+      names the member's record id and records no qualifier.)
     optional: true
   - name: payload
     type: string
     description: >-
       Small redacted serialized payload required to execute the approved action. Must never contain
-      raw secrets or bearer tokens. For a subproject-scoped lock/promote request this carries the
-      mount-chain qualifier the execution forwards, which is why an approval can never widen the
-      scope the requester was bound to.
+      raw secrets or bearer tokens. A project:lock request carries none since stage 7 — the
+      request's record id confines it; a pre-upgrade qualifier payload is read for one release and
+      mapped to the member's record, never wider.
     optional: true
   - name: createdAt
     type: string
@@ -72,6 +76,29 @@ fields:
     type: string
     description: Optional reason supplied when approving or denying the request.
     optional: true
+  - name: executionSummary
+    type: string
+    description: >-
+      Set when an approved project:init is executed: one line per pack the instance policy applied
+      and for the governing-profile step, each with its headline doctrine changes and finding totals
+      (from the init's GovernedProjectCreation), so whoever reads the approval — getApprovalStatus,
+      awaitApproval, the decider — sees what the unattended init changed. The full impacts are in
+      the init's GovernedProjectCreation; the project.init.policy audit event records a compact
+      form. On a CANCELLED request it records why the approved execution refused instead (a
+      project:lock: "the design changed since it was requested (requested <id>, now <id>); request
+      the lock again"). Absent for every other kind and before execution.
+    optional: true
+  - name: gateStateId
+    type: string
+    description: >-
+      A project:lock request only: the gate identity of the tree the request was made about,
+      captured when the request was created and rendered `<algorithm>:<digest>`. The approved
+      execution refuses when the tree's gate identity no longer matches it — an approver decides
+      about the design the requester asked about, and an approval must never certify a design nobody
+      asked to have approved — and the request is cancelled with that reason. Absent on a request
+      created before stage 5, which executes against the tree as it then stands.
+    optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-07-25T17:26:50.256Z'
+updatedAt: '2026-10-04T23:38:43.387Z'

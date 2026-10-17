@@ -3,17 +3,62 @@ name: Project Write Registry Implementation
 description: 'Write path over the project store''s backing file: root allocation and record create/remove.'
 contract: iproject_write_registry
 sourcePath: src/server/projects.ts
+injectedParams:
+  - dataDir
 methods:
   - name: create
     narrative: []
     intent: >-
       Validates the id shape (path-traversal safe), refuses an existing id, creates
       <dataDir>/projects/<id>, and persists an active HostedProjectRecord.
+    calls:
+      - project_store.read
+      - project_store.write
     symbol: createProjectRecord
   - name: remove
     narrative: []
-    intent: Deletes the record and recursively removes the isolated project tree; a missing id is a no-op.
+    intent: >-
+      Loads the persisted set; for a family root refuses while a member record names it as parent,
+      then deletes the record and recursively removes its isolated tree; for a member record deletes
+      only the record and never touches its directory (it lies inside the parent's tree). A missing
+      id is a no-op.
+    calls:
+      - project_store.read
+      - project_store.write
     symbol: removeProjectRecord
+  - name: register
+    narrative: []
+    intent: >-
+      Validates the id shape and refuses a malformed one, loads the persisted set, and replaces the
+      record holding the id (keeping its createdAt) or appends a new active record pointing at the
+      given rootPath, then persists the set.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: registerProjectRecord
+  - name: registerMember
+    narrative: []
+    intent: >-
+      Validates the id shape, requires parentProjectId and a relative memberPath that does not
+      escape its parent, loads the persisted set, refuses an id held by a family root record and a
+      parent no record holds, then replaces the member record holding the id (keeping its createdAt,
+      replacing parentProjectId and memberPath) or appends a new active member record, never
+      persisting a rootPath and never creating or copying a directory; persists the set.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: registerMemberRecord
+  - name: setStatus
+    narrative: []
+    intent: >-
+      Refuses a status other than active or disabled and an unknown id; loads the persisted set,
+      sets the record's status — recording the reason as disabledReason when a disabled status comes
+      with one, and clearing it when the record is active again — and persists the set. Touches no
+      directory.
+    calls:
+      - project_store.read
+      - project_store.write
+    symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-07-19T09:01:00.672Z'
+updatedAt: '2026-10-02T23:58:12.807Z'

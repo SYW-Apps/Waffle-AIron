@@ -8,9 +8,19 @@ methods:
     signature: 'configure(target: string, parentPageId: string): void'
     returns: void
   - name: produce
-    description: Produce the bound project to a target.
-    signature: 'produce(target: string, diagramUrl: string): void'
+    description: >-
+      Produce the bound project to a target, handing the producer portal the token the host
+      resolved.
+    signature: 'produce(target: string, diagramUrl: string, token: string): void'
     returns: void
+    params:
+      - name: target
+        type: string
+      - name: diagramUrl
+        type: string
+      - name: token
+        type: string
+        description: The token the host resolved from its own secret repository
   - name: remove
     description: Remove a producer target.
     signature: 'remove(target: string): void'
@@ -18,7 +28,7 @@ methods:
   - name: list
     description: List configured producers.
     signature: 'list(): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
 status: complete
 createdAt: '2026-07-04T17:37:50.419Z'
-updatedAt: '2026-07-04T17:42:04.109Z'
+updatedAt: '2026-10-04T10:18:53.157Z'

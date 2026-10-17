@@ -16,7 +16,9 @@ methods:
       write-temp-then-rename, refresh the store, and return the stored snapshot. Persistence
       failures leave the previous set intact. Redaction and authorization are enforced by the
       orchestrator, not here.
+    calls:
+      - public_surface_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:08:17.769Z'
-updatedAt: '2026-07-09T22:13:40.683Z'
+updatedAt: '2026-09-19T21:26:58.042Z'

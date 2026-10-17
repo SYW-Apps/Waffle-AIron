@@ -1,6 +1,126 @@
 import { SddRule, RuleCode } from './types.js';
-import { SDD_RULES } from './index.js';
-import { lintAllowsRule } from './lint-allows.js';
+
+import { hierarchyRule } from './integrity/hierarchy-integrity.js';
+import { reservedIdSegmentsRule } from './integrity/reserved-id-segments.js';
+import { memberNamesRule } from './integrity/member-names.js';
+import { localIdsRule } from './integrity/local-ids.js';
+import { projectIdentityRule } from './integrity/project-identity.js';
+import { roundtripRule } from './integrity/roundtrip-serialization.js';
+import { typeDeclarationsRule } from './integrity/type-declarations.js';
+import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
+import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
+import { signatureSourcesRule } from './integrity/signature-sources.js';
+import { signatureTypesRule } from './integrity/signature-types.js';
+import { signatureTextRule } from './integrity/signature-text.js';
+import { typeExpressionsRule } from './integrity/type-expressions.js';
+import { enumTypesRule } from './integrity/enum-types.js';
+import { namedScalarTypesRule } from './integrity/named-scalar-types.js';
+import { renameTracesRule } from './integrity/rename-traces.js';
+import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
+import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
+import { implementsContractsRule } from './integrity/implements-contracts.js';
+import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
+import { exportTablesRule } from './integrity/export-tables.js';
+import { externalDeclarationsRule } from './integrity/external-declarations.js';
+import { referenceFormsRule } from './integrity/reference-forms.js';
+import { memberDeclarationsRule } from './integrity/member-declarations.js';
+import { projectBoundariesRule } from './doctrine/project-boundaries.js';
+import { lintAllowsRule } from './integrity/lint-allows.js';
+import { contractSymmetryRule } from './narrative/contract-symmetry.js';
+import { narrativeTargetReferencesRule } from './narrative/narrative-target-references.js';
+import { crossTreeReferencesRule } from './narrative/cross-tree-references.js';
+import { surfaceReferenceBackingRule } from './narrative/surface-reference-backing.js';
+import { guaranteeTokensRule } from './narrative/guarantee-tokens.js';
+import { narrativeStepConfigRule } from './narrative/narrative-step-config.js';
+import { narrativeReachabilityRule } from './narrative/narrative-reachability.js';
+import { narrativeJumpEdgesRule } from './narrative/narrative-jump-edges.js';
+import { meaninglessBranchesRule } from './narrative/meaningless-branches.js';
+import { inescapableCyclesRule } from './narrative/inescapable-cycles.js';
+import { unconditionalCallCyclesRule } from './narrative/unconditional-call-cycles.js';
+import { narrativeDetailRule } from './narrative/narrative-detail.js';
+import { detailSufficiencyRule } from './narrative/detail-sufficiency.js';
+import { portalFieldsRule } from './intrinsic/portal-fields.js';
+import { durabilityDeclarationRule } from './intrinsic/durability-declaration.js';
+import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
+import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
+import { portalsRule } from './doctrine/portal-endpoints.js';
+import { nonPortalEndpointsRule } from './doctrine/non-portal-endpoints.js';
+import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
+import { authSourceWiringRule } from './doctrine/auth-source-wiring.js';
+import { subsystemBoundaryDepsRule } from './doctrine/subsystem-boundary-dependencies.js';
+import { libraryCallsRule } from './doctrine/library-calls.js';
+import { logicDependencyClassRule } from './doctrine/logic-dependency-class.js';
+import { dataBlockDepsRule } from './doctrine/data-block-dependencies.js';
+import { entrypointDepsRule } from './doctrine/entrypoint-dependencies.js';
+import { portalWriteShortcutRule } from './doctrine/portal-write-shortcut.js';
+import { supervisorSharedDataRule } from './doctrine/supervisor-shared-data.js';
+import { lifecycleEffectClosureRule } from './doctrine/lifecycle-effect-closure.js';
+import { patternMembershipRule } from './doctrine/pattern-membership.js';
+import { patternContainmentRule } from './doctrine/pattern-containment.js';
+import { unownedBlocksRule } from './doctrine/unowned-blocks.js';
+import { memberVisibilityRule } from './doctrine/member-visibility.js';
+import { facadeForwardingRule } from './doctrine/facade-forwarding.js';
+import { profileRegistrationRule } from './extension/profile-registration.js';
+import { profileStereotypeFencingRule } from './extension/profile-stereotype-fencing.js';
+import { packProfileStereotypesRule } from './extension/pack-profile-stereotypes.js';
+import { patternReferencesRule } from './extension/pattern-references.js';
+import { variantReferencesRule } from './extension/component-variants.js';
+import { assertionForbiddenEdgesRule } from './extension/assertion-forbidden-edges.js';
+import { assertionRequiredFieldsRule } from './extension/assertion-required-fields.js';
+import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shapes.js';
+import { packResolutionRule } from './extension/pack-resolution.js';
+import { reproducibilityRule } from './extension/pack-reproducibility.js';
+import { packRequirementsRule } from './extension/pack-requirements.js';
+import { packDeprecationsRule } from './extension/pack-deprecations.js';
+import { cyclesRule } from './wiring/dependency-cycles.js';
+import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
+import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
+import { lifecycleRule } from './wiring/lifecycle-entrypoints.js';
+import { entryDeclarationsRule } from './wiring/entry-declarations.js';
+import { networkBoundariesRule } from './wiring/network-boundaries.js';
+import { adapterTransportRule } from './wiring/adapter-transport.js';
+import { reachabilityRule } from './wiring/unused-detection.js';
+import { invokedByDescriptionRule } from './wiring/invoked-by-description.js';
+import { unusedTypesRule } from './wiring/unused-types.js';
+import { durabilityRule } from './wiring/durability-round-trip.js';
+import { untypedSeamRule } from './wiring/untyped-seams.js';
+import { proseClaimRule } from './wiring/prose-claims.js';
+import { uniqueInvariantIdsRule } from './wiring/unique-invariant-ids.js';
+import { invariantBackingRule } from './wiring/invariant-backing.js';
+import { invariantReferencesRule } from './wiring/invariant-references.js';
+import { eventTopologyRule } from './wiring/event-topology.js';
+import { sourceFileLinkageRule } from './conformance/source-file-linkage.js';
+import { methodRealizationRule } from './conformance/method-realization.js';
+import { findingRealizationRule } from './conformance/finding-realization.js';
+import { callConformanceRule } from './conformance/call-conformance.js';
+import { hiddenStateRule } from './conformance/hidden-state.js';
+import { dependencyConformanceRule } from './conformance/dependency-conformance.js';
+import { portalImportsRule } from './conformance/portal-imports.js';
+import { integrationSimDeclarationRule } from './conformance/integration-sim-declaration.js';
+import { integrationSimFileRule } from './conformance/integration-sim-file.js';
+import { integrationSimWiringRule } from './conformance/integration-sim-wiring.js';
+import { integrationSimCoverageRule } from './conformance/integration-sim-coverage.js';
+import { typeRealizationRule } from './conformance/type-realization.js';
+import { typeShapeRule } from './conformance/type-shape.js';
+import { enumValuesRule } from './conformance/enum-values.js';
+import { paramConformanceRule } from './conformance/param-conformance.js';
+import { asyncConformanceRule } from './conformance/async-conformance.js';
+import { bindingModulesRule } from './conformance/binding-modules.js';
+import { routeCoverageRule } from './conformance/route-coverage.js';
+import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
+import { exportConformanceRule } from './conformance/export-conformance.js';
+import { carriedDebtRule } from './conformance/carried-debt.js';
+import { couplingRule } from './heuristic/coupling-health.js';
+import { narrativeLanguageConstructsRule } from './heuristic/narrative-language-constructs.js';
+import { technologyBindingRule } from './heuristic/technology-binding.js';
+import { technologyRule } from './heuristic/technology-boundaries.js';
+import { namingRule } from './heuristic/naming-conventions.js';
+import { complexityRule } from './heuristic/complexity-and-metadata.js';
+import { narrativeComplexityRule } from './heuristic/narrative-complexity.js';
+import { namingDisciplineRule } from './heuristic/naming-discipline.js';
+import { methodCohesionRule } from './heuristic/method-cohesion.js';
+import { removableForwarderRule } from './heuristic/removable-forwarder.js';
+import { signatureSourceSuggestionsRule } from './heuristic/signature-source-suggestions.js';
 
 // ---------------------------------------------------------------------------
 // Rule repository (rule_store + rule_registry + rule_index + rule_repository).
@@ -9,6 +129,263 @@ import { lintAllowsRule } from './lint-allows.js';
 // each run, never persisted. `wairon rules list` and the validator read the
 // composed run sequence and the aggregate known-code set from here.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// The registry. Order matters only for issue-list readability (hierarchy first,
+// heuristics last) — rules are independent.
+// ---------------------------------------------------------------------------
+
+export const SDD_RULES: SddRule[] = [
+  hierarchyRule,
+  // Namespace integrity right after hierarchy: unresolvable/unwritable ids
+  // explain many downstream findings, so surface them early in the list. Two
+  // questions of the same ids: the segment no id may spend, and whether a
+  // local id names one spec (and reads apart from the project's aliases).
+  reservedIdSegmentsRule,
+  memberNamesRule,
+  localIdsRule,
+  // The project's own id, beside the spec ids: declared, well-formed, and the
+  // one its lock approved.
+  projectIdentityRule,
+  roundtripRule,
+  // The type vocabulary in three questions: what a type declares about
+  // itself, then the identifiers its fields name, then the ones its
+  // contracts' signatures name.
+  typeDeclarationsRule,
+  fieldTypeReferencesRule,
+  signatureTypeReferencesRule,
+  signatureSourcesRule,
+  signatureTypesRule,
+  signatureTextRule,
+  // The type grammar beside the signatures: how each stored type position is
+  // spelled, then what an enum and a named scalar may hold.
+  typeExpressionsRule,
+  enumTypesRule,
+  namedScalarTypesRule,
+  // The rename traces: a former key a consumer resolves must name one element.
+  renameTracesRule,
+  // Contracts and the targets narratives name, in four questions with one
+  // owner each: does the implementation mirror its contract, does a target
+  // inside this tree resolve, does a target that leaves it pin to exactly one
+  // declared surface, and does that surface back what the step asks of it.
+  contractSymmetryRule,
+  narrativeTargetReferencesRule,
+  crossTreeReferencesRule,
+  surfaceReferenceBackingRule,
+  // Vocabulary check right after contracts: an unknown token explains why the
+  // consistency findings around it are absent, so surface them together.
+  guaranteeTokensRule,
+  // Narrative control flow in three questions: does each step carry the
+  // config its type requires, can every step be reached (and do the regions
+  // nest), and where do the jump edges land. The last two run behind the
+  // first's soundness verdict.
+  narrativeStepConfigRule,
+  narrativeReachabilityRule,
+  narrativeJumpEdgesRule,
+  // Antipatterns right after flow soundness: they read the same step graphs
+  // and only make sense once the graphs are structurally valid. Three things
+  // structure alone can prove, in widening scope: a decision that decides
+  // nothing, a step cycle nothing leaves, and a call cycle with no guard.
+  meaninglessBranchesRule,
+  inescapableCyclesRule,
+  unconditionalCallCyclesRule,
+  // The detail dial in two questions: does a method carry the detail its level
+  // promises, and is that level low enough to be hiding something.
+  narrativeDetailRule,
+  detailSufficiencyRule,
+  // Field shape before endpoint bindings: a Portal-only field on the wrong
+  // stereotype explains the endpoint findings around it, and this half is
+  // spec-scoped so the write boundary refuses it first.
+  portalFieldsRule,
+  // Endpoints from both sides: a Portal binds every method to its transport,
+  // and nothing that is not a Portal may bind one at all.
+  portalsRule,
+  nonPortalEndpointsRule,
+  // Cross-call auth rides with the portal family, in two questions: does a
+  // call into an authed Portal present a credential properly, and does the
+  // source it names resolve to a provider it is wired to.
+  portalCallAuthRule,
+  authSourceWiringRule,
+  // Dependencies in five questions, one owner each: where an edge is
+  // allowed to LAND (the boundary, and what an unresolved id means), then
+  // the intra-subsystem matrix by the layer that answers for it — an
+  // Orchestrator's declared class, the data blocks, the entry points and
+  // the process layer — and finally the Portal read-face guard, the one
+  // that reads narratives and dispatch tables rather than dependsOn.
+  subsystemBoundaryDepsRule,
+  // A library call (an exported InProcess Portal of another project) is the
+  // one cross-boundary edge no Adapter is asked for: purity and the language
+  // bridge judge it instead.
+  libraryCallsRule,
+  logicDependencyClassRule,
+  dataBlockDepsRule,
+  entrypointDepsRule,
+  portalWriteShortcutRule,
+  // The process layer's data reach and the lifecycle effect's closure, both
+  // read from narratives against the callee's declared effect.
+  supervisorSharedDataRule,
+  lifecycleEffectClosureRule,
+  // Patterns in four questions: who may own and what a claim must name,
+  // what each pattern must contain, which data blocks are left standing
+  // alone, and who may see a private member.
+  patternMembershipRule,
+  patternContainmentRule,
+  unownedBlocksRule,
+  memberVisibilityRule,
+  // Facade shape rides with pattern ownership: same §7 doctrine, narrative side.
+  facadeForwardingRule,
+  // Profiles in three questions, three owners: is the name real (the
+  // project's config), does the built-in family doctrine allow this
+  // stereotype (wairon), does the pack's declared doctrine allow it (the pack).
+  profileRegistrationRule,
+  profileStereotypeFencingRule,
+  packProfileStereotypesRule,
+  patternReferencesRule,
+  variantReferencesRule,
+  // Pack-instantiated declarative doctrine rides with the pack-reference
+  // family: same data source, same provenance-bearing findings. One rule per
+  // assertion kind — the kind is what a pack author writes, and each kind
+  // asks its own question of its own collection.
+  assertionForbiddenEdgesRule,
+  assertionRequiredFieldsRule,
+  assertionEndpointShapesRule,
+  // The published surface in four questions: what backs the entry, who it is
+  // published to, whether a contract realizing another project's extension
+  // point declares its every method, and whether the contract an entry binds
+  // is that component's own. The export kind is derived from the backing
+  // Portal's transport, so no rule compares an authored one.
+  publicSurfaceBindingRule,
+  publicSurfaceConsumersRule,
+  implementsContractsRule,
+  publicSurfaceBoundContractRule,
+  // The export tables the resolver settled: what the published names bind.
+  exportTablesRule,
+  // The project graph in five questions: does every declared external
+  // resolve, is every reference written in a form that survives a re-root, is
+  // every member declared in project.yaml, does every reference into another
+  // project go through a declared dependency and a public name, and do the
+  // projects depend on each other without a loop.
+  externalDeclarationsRule,
+  referenceFormsRule,
+  memberDeclarationsRule,
+  projectBoundariesRule,
+  cyclesRule,
+  // Semantic-edge family: dispatch/lifecycle validity BEFORE reachability so a
+  // reader sees the broken edge finding next to the unused-detection fallout
+  // it explains.
+  dispatchTableBindingsRule,
+  dispatchStepRoutingRule,
+  lifecycleRule,
+  // The declared entries' shape and prose before the walk their declarations
+  // seed, then the walk, then the network verdicts over what reaches each
+  // verb, then the types no walk can reach.
+  entryDeclarationsRule,
+  invokedByDescriptionRule,
+  reachabilityRule,
+  networkBoundariesRule,
+  adapterTransportRule,
+  unusedTypesRule,
+  // The declaration (spec-scoped, refused at the write boundary) before the
+  // round-trip consequences it enables.
+  durabilityDeclarationRule,
+  // The other spec-scoped stereotype declarations ride with it: a
+  // dependencyClass only on an Orchestrator, and no retired stereotype.
+  logicDeclarationRule,
+  retiredStereotypesRule,
+  durabilityRule,
+  untypedSeamRule,
+  proseClaimRule,
+  // Invariant registry rides with the semantic-edge family: declared entity
+  // invariants must be asserted on every write path (declarations, not
+  // proofs). Three questions of one registry: are the entity's ids unique,
+  // does each invariant reach every write path of its owner, and does every
+  // asserted reference name something declared.
+  uniqueInvariantIdsRule,
+  invariantBackingRule,
+  invariantReferencesRule,
+  // Pub/sub completeness: emitted topics need subscribers and vice versa.
+  eventTopologyRule,
+  // Code↔spec: structural conformance consumes the injected CodeModel (built
+  // by the source analysis adapter next to the surface snapshots) and asks it
+  // three questions — does the spec name files that exist, does the file
+  // contain the method, does it report the codes the method declares;
+  // dependency conformance lifts its import edges onto the declared
+  // dependsOn/owns graph.
+  sourceFileLinkageRule,
+  methodRealizationRule,
+  findingRealizationRule,
+  // Level 3 opener: narrative call steps must be realized as callees of the
+  // realized function (set membership, exact grade).
+  callConformanceRule,
+  // The fields-vs-Store criterion: mutable module state in logic-only files.
+  hiddenStateRule,
+  dependencyConformanceRule,
+  // Where a declared crossing LANDS: on the target subsystem's portal file.
+  portalImportsRule,
+  // Integration wiring proof rides after the code↔spec family: it consumes
+  // the same code model and speaks about the same sourcePath modules. Four
+  // questions about one harness, in the order a reader meets them: is one
+  // expected here, does the declared one exist, does it wire the real
+  // modules, does it name every narrated path.
+  integrationSimDeclarationRule,
+  integrationSimFileRule,
+  integrationSimWiringRule,
+  integrationSimCoverageRule,
+  // The data model's own claim on code — does the file hold the type, and is
+  // it the SHAPE the spec claims — then the SIGNATURE, the third reading:
+  // does the code take the arguments the contract promises. And then the
+  // question no spec can ask from the spec side: which files are named by
+  // nothing at all. Last in the family because that one reads what all the
+  // others named.
+  typeRealizationRule,
+  typeShapeRule,
+  // An enum's values beside the data shape, and whether the call completes
+  // later beside the signature: the same readings, of their own facts.
+  enumValuesRule,
+  paramConformanceRule,
+  asyncConformanceRule,
+  routeCoverageRule,
+  unclaimedSourceRule,
+  exportConformanceRule,
+  // A consumer's hand-written binding module against the pins it binds.
+  bindingModulesRule,
+  couplingRule,
+  // Target-language fit: what a NARRATIVE may describe. What a contract may
+  // name is the neutral type grammar's (type-expressions), not a language's.
+  narrativeLanguageConstructsRule,
+  // The declaration before the consequences: which stereotype may bind a
+  // technology at all, then where its name may appear.
+  technologyBindingRule,
+  technologyRule,
+  namingRule,
+  complexityRule,
+  // The doctrine heuristics ride with the structural caps: same subject
+  // (size, name, shape), judgements rather than errors, and they read the
+  // same complexity dial.
+  narrativeComplexityRule,
+  namingDisciplineRule,
+  methodCohesionRule,
+  removableForwarderRule,
+  signatureSourceSuggestionsRule,
+  // Pack resolution and reproducibility run late: they are about project
+  // CONFIGURATION (does the declared pack set resolve, and can it be reproduced
+  // elsewhere?) rather than spec content.
+  packResolutionRule,
+  reproducibilityRule,
+  // The syntax of this project's own composition.requirePolicies (governance
+  // stage): configuration too, and the family run cannot judge a member against
+  // a requirement that does not parse.
+  packRequirementsRule,
+  // The fields a loaded pack still declares that wairon has deprecated: about
+  // the packs' configuration too, and only ever a notice.
+  packDeprecationsRule,
+  // MUST run last, in this order: each audits what the earlier rules did
+  // with a declared exception. The debt register first (which carried
+  // findings the conformance family actually matched), then the allows
+  // (which suppressions any rule actually consumed).
+  carriedDebtRule,
+  lintAllowsRule,
+];
 
 let ruleSet: SddRule[] = [];
 
@@ -22,24 +399,76 @@ function listRules(): SddRule[] {
   return ruleSet;
 }
 
-/** rule_registry: seed the built-in SDD rule set, resetting the set for a fresh run. */
-export function registerBuiltinRules(): void {
+/** rule_store: empty the held set, so a new validation run seeds its rules from nothing. Repository-internal. */
+function clear(): void {
   ruleSet = [];
+}
+
+/** rule_registry: seed the built-in SDD rule set, starting from an empty set so a repeated run never holds a rule twice. */
+function registryRegisterBuiltinRules(): void {
+  clear();
   for (const rule of SDD_RULES) addRule(rule);
 }
 
 /** rule_registry: register programmatic pack rules after the built-ins (project pack order is precedence). */
-export function registerPackRules(packRules: SddRule[]): void {
+function registryRegisterPackRules(packRules: SddRule[]): void {
   for (const rule of packRules) addRule(rule);
 }
 
-/** rule_index: the ordered run sequence — registration order with the lint-allows audit forced last. */
-export function ruleSequence(): SddRule[] {
-  const base = ruleSet.filter(r => r !== lintAllowsRule);
-  return ruleSet.includes(lintAllowsRule) ? [...base, lintAllowsRule] : base;
+/**
+ * rule_index: the ordered run sequence — registration order with the two
+ * audits of declared exceptions forced last, debt register before allows.
+ * Both read what the earlier rules did, so a pack rule registered after the
+ * built-ins must still run before them.
+ */
+function indexRuleSequence(): SddRule[] {
+  const audits = [carriedDebtRule, lintAllowsRule].filter(r => ruleSet.includes(r));
+  return [...ruleSet.filter(r => !audits.includes(r)), ...audits];
+}
+
+/**
+ * rule_index: the registered rules that are INTRINSIC to a single spec
+ * (`scope: 'spec'`) — those whose verdict reads a spec's own fields and no
+ * cross-spec relationship. This is the subset the candidate validator runs
+ * against a not-yet-written spec, so the default ('tree') is the safe answer: a
+ * rule that has not declared itself intrinsic is never handed a one-spec
+ * context. Pack rules participate on the same terms.
+ */
+function indexSpecScopedRules(): SddRule[] {
+  return indexRuleSequence().filter(r => r.scope === 'spec');
 }
 
 /** rule_index: every issue code any registered rule can emit — the lint.allow validation set. */
-export function knownIssueCodes(): RuleCode[] {
+function indexKnownIssueCodes(): RuleCode[] {
   return listRules().flatMap(r => r.codes);
+}
+
+// ── rule_repository: the facade (1:1 forwarding) ───────────────────────────
+// The only names this module exports for the rule set. Each forwards to its
+// member, so the repository -> registry/index hop is a call the facade's
+// narrative names rather than the member's own body.
+
+/** Seed the built-in rule set through the repository facade. */
+export function registerBuiltinRules(): void {
+  registryRegisterBuiltinRules();
+}
+
+/** Register pack rules after the built-ins through the repository facade. */
+export function registerPackRules(packRules: SddRule[]): void {
+  registryRegisterPackRules(packRules);
+}
+
+/** The ordered run sequence, through the repository facade. */
+export function ruleSequence(): SddRule[] {
+  return indexRuleSequence();
+}
+
+/** The spec-intrinsic rules, through the repository facade. */
+export function specScopedRules(): SddRule[] {
+  return indexSpecScopedRules();
+}
+
+/** Every issue code a registered rule can emit, through the repository facade. */
+export function knownIssueCodes(): RuleCode[] {
+  return indexKnownIssueCodes();
 }

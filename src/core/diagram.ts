@@ -11,17 +11,19 @@ import {
   InterfaceSpec,
   ImplementationSpec,
   PATTERN_TYPES,
+  isOwnComponentEntry,
+  type ProjectRelations,
 } from '../models/index.js';
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
 import { generateDrawioXml, generateExcalidrawScene } from './diagram-export.js';
-import { validateSddTree, type ValidationIssue } from './validation.js';
-import { loadProjectConfig } from '../config/loader.js';
+import { validateProject, type ValidationIssue } from './validation.js';
+import { projectConfigRepository } from '../config/project-config.js';
 // Pure interface types for the web UI graph payload. Type-only import: erased at
 // compile time, so this adds no runtime core→server coupling.
 import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types.js';
 
 // ---------------------------------------------------------------------------
-// Diagram Specialist entrypoint (sdd_core diagram_specialist)
+// Architecture diagrams entrypoint (sdd_core architecture_diagrams)
 //
 // Render the current (request-scoped) project's spec tree into a diagram
 // artifact STRING — the engine behind `wairon diagram`, reused by the hosting
@@ -29,9 +31,13 @@ import type { WebGraphModel, WebGraphNode, LandscapeEdge } from '../server/types
 // all formats are self-contained.
 // ---------------------------------------------------------------------------
 
-export function renderDiagram(format: string): string {
+/** The formats the architecture diagram renders to. */
+export type DiagramFormat = 'canvas' | 'mermaid' | 'drawio' | 'excalidraw';
+
+export function renderDiagram(format: DiagramFormat, relations?: ProjectRelations[]): string {
   switch (format) {
-    case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues()));
+    // Only the canvas carries relation health; the other formats ignore it.
+    case 'canvas':     return renderCanvasHtml(buildCanvasModel(diagramIssues(), relations));
     case 'mermaid':    return generateComponentDiagram();
     case 'drawio':     return generateDrawioXml(buildCanvasModel());
     case 'excalidraw': return generateExcalidrawScene(buildCanvasModel());
@@ -44,16 +50,18 @@ export function renderDiagram(format: string): string {
  * The full CanvasModel for the current (request-scoped) project — the same model
  * `renderDiagram('canvas')` renders to the standalone HTML, but returned as data
  * so the React web app can mount the shared renderer directly (no iframe) and,
- * later, receive it in on-demand scope slices. Pure derivation, no side effects.
+ * later, receive it in on-demand scope slices. Pure derivation, no side effects;
+ * relation health is drawn only when passed in.
  */
-export function buildCanvasDataModel(): CanvasModel {
-  return buildCanvasModel(diagramIssues());
+export function buildCanvasDataModel(relations?: ProjectRelations[]): CanvasModel {
+  return buildCanvasModel(diagramIssues(), relations);
 }
 
 function diagramIssues(): ValidationIssue[] {
   try {
-    const config = loadProjectConfig();
-    return validateSddTree({ rules: config.rules, projectType: config.projectType }).issues;
+    const config = projectConfigRepository.load();
+    if (!config) return [];
+    return validateProject({ rules: config.rules, projectType: config.projectType }).issues;
   } catch {
     return [];
   }
@@ -223,7 +231,8 @@ export function loadSpecGraph(): SpecGraph {
   const implementations = loadImplementationSpecs();
   const publicComponents = new Set<string>();
   for (const sub of subsystems) {
-    for (const pi of sub.publicInterfaces) {
+    // Own component entries only: a re-export names another subsystem's component.
+    for (const pi of sub.publicInterfaces.filter(isOwnComponentEntry)) {
       if (pi.component) publicComponents.add(pi.component);
     }
   }
@@ -281,9 +290,15 @@ function nodeDecl(id: string, label: string, comp: ComponentSpec): string {
 
 function stereotypeClass(comp: ComponentSpec): string {
   switch (comp.componentType) {
+    // Retired stereotypes stay drawn until migrated; a Gateway is no pattern.
+    case 'Specialist':
+    case 'Gateway':
+      return 'retired';
     case 'Portal':
     case 'Observer':
       return 'entry';
+    case 'Query':
+      return 'query';
     case 'Store':
     case 'Index':
     case 'Registry':
@@ -291,7 +306,6 @@ function stereotypeClass(comp: ComponentSpec): string {
     case 'Adapter':
       return 'adapter';
     case 'Repository':
-    case 'Gateway':
     case 'FeatureComponent':
     case 'RouterComponent':
       return 'pattern';
@@ -304,8 +318,10 @@ const CLASS_DEFS = [
   'classDef entry fill:#eef4ff,stroke:#4a7dcf,color:#1a2b4a;',
   'classDef logic fill:#f4effd,stroke:#8a63c9,color:#2d1f45;',
   'classDef data fill:#fdf6e3,stroke:#c9963f,color:#4a3517;',
+  'classDef query fill:#fbeee4,stroke:#b0643a,color:#3b1d08;',
   'classDef adapter fill:#eef8f1,stroke:#4f9e6b,color:#173322;',
   'classDef pattern fill:#f6f8fa,stroke:#6a737d,color:#24292e;',
+  'classDef retired fill:#efedeb,stroke:#8a817c,color:#35302b,stroke-dasharray:3 3;',
   'classDef publicSurface stroke-width:3px;',
 ];
 
@@ -598,6 +614,20 @@ export function generateSequenceDiagram(
               lines.push(`  ${portalId}->>${serverId}: ${escapeLabel(binding.method)}()`);
             }
           }
+          break;
+        }
+        case 'register': {
+          // Runtime-callback handoff: a dashed arrow labeled "register", no
+          // activation and no walk — registration is not an invocation, so the
+          // callback's own flow is not part of this sequence.
+          if (!step.targetComponent || !step.targetMethod) break;
+          const regTarget = componentById.get(step.targetComponent);
+          if (!regTarget) {
+            lines.push(`  Note over ${selfId}: ${escapeLabel(`registers callback on unknown "${step.targetComponent}"`)}`);
+            break;
+          }
+          const regTargetId = declare(regTarget);
+          lines.push(`  ${selfId}--)${regTargetId}: ${escapeLabel(`register ${step.targetMethod}()`)}`);
           break;
         }
         case 'call': {

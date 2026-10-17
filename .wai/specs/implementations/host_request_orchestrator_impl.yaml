@@ -1,16 +1,21 @@
 id: host_request_orchestrator_impl
 name: Host Request Orchestrator Implementation
 description: >-
-  Per-request data-plane workflow: authenticate, resolve and bind the authorized project scope, then
-  dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
-  (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_promote_project,
-  sdd_host_get_approval_status, sdd_host_await_approval) to the project lifecycle orchestrator, the
-  hosted landscape discovery tools to the surface exchange orchestrator (currentProjectId = the
-  bound project), and every other tool to the scoped MCP server after enforcing the granular
-  data-plane permission through the authorization specialist (project:read for reads, project:write
-  for writes — unknown tools fail closed as writes) over the bound project.
+  Per-request data-plane workflow: authenticate, resolve and bind the authorized hosted record (a
+  member is a record of its own since stage 7), resolve the request's reach into the record's family
+  per record, then dispatch the sdd_* call — routing the execute-primary project-lifecycle tools to
+  the project lifecycle orchestrator, the hosted landscape discovery tools to the surface exchange
+  orchestrator (currentProjectId = the bound record), and every other tool to the scoped MCP server
+  after enforcing the granular data-plane permission through the authorization component
+  (project:read for reads, project:write for writes — unknown tools fail closed as writes) over the
+  bound record; after an applied family-shape tool succeeds, the family's member records are
+  reconciled.
 contract: ihost_request_orchestrator
 sourcePath: src/server/request.ts
+injectedParams:
+  - cfg
+  - req
+  - res
 methods:
   - name: viewDiagram
     narrative:
@@ -20,13 +25,17 @@ methods:
       - stepNumber: 2
         description: Verify the token (signature + expiry); rejects if invalid
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: verifyViewToken
       - stepNumber: 3
         description: Resolve the granted project's isolated root and bind it
         type: local
       - stepNumber: 4
-        description: Render the canvas in scope
+        description: >-
+          Render the canvas in scope. It carries no relation health — the canvas says health was not
+          checked: a view token is a bearer capability for one record with no principal behind it,
+          so every member and producer beyond that record is out of its reach and could only be
+          reported unavailable
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
@@ -38,275 +47,209 @@ methods:
         type: return
         outcome: canvas html response
     symbol: handleViewDiagram
-  - name: handleRequest
+  - name: dispatchProjectLifecycleTool
     narrative:
       - stepNumber: 1
-        description: Extract the bearer token from the request Authorization header
+        description: >-
+          Read the single JSON-RPC message from the decoded body, together with the called tool
+          name, its decoded arguments, and the request id the response must echo
         type: local
       - stepNumber: 2
         description: >-
-          Authenticate the token to a principal (resolving its subject, projects narrowing, and
-          permissionSubject)
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticate
+          Only the execute-primary project-lifecycle tools, the hosted landscape tools and the
+          hosted project-ops tools (packs/policy/producer/commit) are served here; every other tool
+          belongs to the scoped MCP server
+        type: branch
+        condition: >-
+          the message is not a tools/call, or the called tool is not one of the sdd_host_*
+          project-lifecycle or project-ops tools or the hosted landscape tools
+        onTrueStep: 3
+        onFalseStep: 4
       - stepNumber: 3
-        description: If the principal is unauthenticated, reject
-        type: branch
-        condition: principal is unauthenticated
-        onTrueStep: 4
-        onFalseStep: 5
+        description: Answer with nothing, so the caller falls through to the scoped sdd_* MCP server
+        type: return
+        outcome: not a tool this dispatch serves
       - stepNumber: 4
-        description: Return 401 Unauthorized
-        type: return
-        outcome: 401 Unauthorized
-      - stepNumber: 5
-        description: Read the optional project selector from the request
-        type: local
-      - stepNumber: 6
-        description: >-
-          Resolve the full authorized binding through the project repository — the root to bind (the
-          mounted chained-child root for a subproject-qualified narrowing/selector), the TOP project
-          id (permission + audit anchor), and the bound mount chain; cross-project access rejected
-        type: call
-        targetComponent: project_registry
-        targetMethod: resolveBinding
-      - stepNumber: 7
-        description: If no authorized root resolved, reject cross-project access
-        type: branch
-        condition: resolved root is empty (project not authorized)
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
-        description: Return 403 Forbidden
-        type: return
-        outcome: 403 Forbidden
-      - stepNumber: 9
-        description: Bind the request-scoped project root
-        type: local
-      - stepNumber: 10
-        description: >-
-          Confine a subproject-qualified credential. These tools act on the project RECORD or its
-          repository, never on the bound tree, so serving them would let a token scoped to one
-          chained child reach the whole parent — the qualifier would narrow nothing. The two
-          TREE-scoped lifecycle tools (lock, promote) are excluded: they are confined instead by
-          forwarding the qualifier.
-        type: branch
-        condition: >-
-          the resolved binding carries a subproject qualifier AND the called tool acts on the hosted
-          project RECORD (initialize, approval status, await approval, or any of the six project-ops
-          tools: pack list/install, policy evaluate/reconcile, produce, commit)
-        onFalseStep: 12
-      - stepNumber: 11
-        description: >-
-          Refuse as an isError tool result (HTTP still 200, and the refusal still flows through the
-          SAME best-effort audit path) naming the tool and the bound qualifier, and stating that it
-          acts on the whole project so an unqualified credential is required. Never a silent success
-          and never a partial action.
-        type: return
-        outcome: refused record-level tool on a subproject-qualified binding
-      - stepNumber: 12
-        description: >-
-          If the called tool is an execute-primary project-lifecycle tool, a hosted landscape tool,
-          or a hosted project-ops tool (packs/policy/producer/commit), dispatch it to the matching
-          orchestrator instead of the scoped MCP server
-        type: branch
-        condition: >-
-          the called tool is one of the sdd_host_* project-lifecycle or project-ops tools or the
-          hosted landscape tools
-        onTrueStep: 13
-        onFalseStep: 46
-      - stepNumber: 13
         description: Dispatch by tool name to the matching orchestrator method
         type: switch
         'on': the called tool name
         cases:
           - value: sdd_host_initialize_project
-            step: 14
+            step: 5
           - value: sdd_host_lock_project
-            step: 16
-          - value: sdd_host_promote_project
-            step: 18
+            step: 7
           - value: sdd_host_get_approval_status
-            step: 20
+            step: 9
           - value: sdd_host_await_approval
-            step: 22
+            step: 11
           - value: sdd_landscape_list_reachable_projects
-            step: 24
+            step: 13
           - value: sdd_landscape_list_reachable_project_interfaces
-            step: 26
+            step: 15
           - value: sdd_landscape_list_visible_surfaces
-            step: 28
+            step: 17
           - value: sdd_landscape_get_project_surface
-            step: 30
+            step: 19
           - value: sdd_host_pack_list
-            step: 32
+            step: 21
           - value: sdd_host_pack_install
-            step: 34
+            step: 23
           - value: sdd_host_policy_evaluate
-            step: 36
+            step: 25
           - value: sdd_host_policy_reconcile
-            step: 38
+            step: 27
           - value: sdd_host_produce
-            step: 40
+            step: 29
           - value: sdd_host_commit_project
-            step: 42
-        defaultStep: 14
-      - stepNumber: 14
+            step: 31
+          - value: sdd_host_export_tree
+            step: 33
+          - value: sdd_host_import_tree
+            step: 35
+          - value: sdd_host_pack_impact
+            step: 37
+        defaultStep: 5
+      - stepNumber: 5
         description: >-
           Execute-or-request project initialization, passing the credential and decoded tool
           arguments; returns a ProjectActionOutcome
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: initializeProject
-      - stepNumber: 15
+      - stepNumber: 6
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 16
+        toStep: 39
+      - stepNumber: 7
         description: >-
-          Execute-or-request a project lock, passing the credential, the TOP project id, AND the
-          bound subproject qualifier when the binding carries one — so a qualified credential
-          freezes exactly the child tree it is scoped to, while permission resolution and audit stay
-          anchored at the top project.
+          Execute-or-request a project lock on the BOUND record — a member's own record when a
+          member is bound, so its lock request, approval page and status are its own; the qualifier
+          argument is no longer passed (a member is never reached through its parent)
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: lockProject
-      - stepNumber: 17
+      - stepNumber: 8
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 18
-        description: >-
-          Execute-or-request a project promotion, passing the credential, the TOP project id, AND
-          the bound subproject qualifier when the binding carries one — the lock/StateId re-check
-          then concerns that child tree, with permission and audit still anchored at the top
-          project.
-        type: call
-        targetComponent: project_lifecycle_orchestrator
-        targetMethod: promoteProject
-      - stepNumber: 19
-        description: Continue to shape the response
-        type: jump
-        toStep: 44
-      - stepNumber: 20
+        toStep: 39
+      - stepNumber: 9
         description: Get the approval-request status, passing the credential and request id
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: getApprovalStatus
-      - stepNumber: 21
+      - stepNumber: 10
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 22
+        toStep: 39
+      - stepNumber: 11
         description: >-
           Long-poll for a decision on the caller's approval request, passing the credential, request
           id, and timeout
         type: call
         targetComponent: project_lifecycle_orchestrator
         targetMethod: awaitApproval
-      - stepNumber: 23
+      - stepNumber: 12
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 24
+        toStep: 39
+      - stepNumber: 13
         description: Dispatch the reachable-projects discovery with currentProjectId = the bound project
         type: call
         targetComponent: surface_exchange_orchestrator
         targetMethod: listReachableProjectsForMcp
-      - stepNumber: 25
+      - stepNumber: 14
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 26
+        toStep: 39
+      - stepNumber: 15
         description: >-
           Dispatch the reachable-target interface discovery (currentProjectId = bound project,
           target from arguments)
         type: call
         targetComponent: surface_exchange_orchestrator
         targetMethod: listReachableProjectInterfacesForMcp
-      - stepNumber: 27
+      - stepNumber: 16
         description: Continue to shape the response (reachable-interfaces path)
         type: jump
-        toStep: 44
-      - stepNumber: 28
+        toStep: 39
+      - stepNumber: 17
         description: >-
           Dispatch the visibility-resolved discovery catalog (currentProjectId = the BOUND project;
           never from arguments)
         type: call
         targetComponent: surface_exchange_orchestrator
         targetMethod: listVisibleSurfaces
-      - stepNumber: 29
+      - stepNumber: 18
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 30
+        toStep: 39
+      - stepNumber: 19
         description: >-
           Dispatch the contract-grade surface fetch (currentProjectId = the BOUND project;
           targetProjectId from arguments)
         type: call
         targetComponent: surface_exchange_orchestrator
         targetMethod: getProjectSurfaceForMcp
-      - stepNumber: 31
+      - stepNumber: 20
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 32
+        toStep: 39
+      - stepNumber: 21
         description: >-
           Dispatch the per-project pack listing (project = the BOUND project) — project:read gated
           upstream
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: listProjectPacks
-      - stepNumber: 33
+      - stepNumber: 22
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 34
+        toStep: 39
+      - stepNumber: 23
         description: >-
           Dispatch the per-project declarative pack install (project = the BOUND project,
           name/content from arguments) — project:admin gated upstream
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: installProjectPack
-      - stepNumber: 35
+      - stepNumber: 24
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 36
+        toStep: 39
+      - stepNumber: 25
         description: >-
           Dispatch the pack/profile compliance evaluation (projectId = the BOUND project) —
           project:write gated upstream
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: evaluateProjectPolicy
-      - stepNumber: 37
+      - stepNumber: 26
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 38
+        toStep: 39
+      - stepNumber: 27
         description: >-
           Dispatch the pack/profile policy reconciliation (projectId = the BOUND project) —
           project:write gated upstream
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: reconcileProjectPolicy
-      - stepNumber: 39
+      - stepNumber: 28
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 40
+        toStep: 39
+      - stepNumber: 29
         description: >-
           Dispatch the producer projection run (project = the BOUND project, target from arguments)
           — project:admin gated upstream
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: produceProducer
-      - stepNumber: 41
+      - stepNumber: 30
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 42
+        toStep: 39
+      - stepNumber: 31
         description: >-
           Dispatch the deliberate .wai/-scoped commit+push (project = the BOUND project — the data
           plane binds ONE project so no project argument exists; optional subsystem + message from
@@ -314,88 +257,402 @@ methods:
         type: call
         targetComponent: project_ops_orchestrator
         targetMethod: commitProject
-      - stepNumber: 43
+      - stepNumber: 32
         description: Continue to shape the response
         type: jump
-        toStep: 44
-      - stepNumber: 44
+        toStep: 39
+      - stepNumber: 33
+        description: >-
+          Export the BOUND record's tree as a .waitree archive — a member's own tree when a member
+          is bound — project:read gated upstream. The bytes are base64-encoded into the tool result,
+          bounded by the same body cap every data-plane response is.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: exportProjectTree
+      - stepNumber: 34
+        description: Continue to shape the response
+        type: jump
+        toStep: 39
+      - stepNumber: 35
+        description: >-
+          Import a base64-decoded .waitree archive into the BOUND record's tree — project:admin
+          gated upstream, executable entries always refused, and the replaced tree backed up.
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: importProjectTree
+      - stepNumber: 36
+        description: Continue to shape the response
+        type: jump
+        toStep: 39
+      - stepNumber: 37
+        label: pack_impact
+        description: >-
+          Dispatch the per-project pack impact preview (project = the BOUND project; name, and the
+          declarative content when installing, from arguments) — writes nothing; project:read gated
+          upstream. sdd_host_pack_install itself stays an unattended write whose answer says it
+          applied, without the report
+        type: call
+        targetComponent: project_ops_orchestrator
+        targetMethod: previewProjectPack
+      - stepNumber: 38
+        description: Continue to shape the response
+        type: jump
+        toStep: 39
+      - stepNumber: 39
         description: Shape the project-lifecycle or landscape result into the JSON-RPC tool response envelope
         type: local
-      - stepNumber: 45
-        description: >-
-          Continue to the shared audit-event build step, skipping the ordinary permission gate and
-          scoped MCP server dispatch
-        type: jump
-        toStep: 52
-      - stepNumber: 46
-        description: >-
-          Classify the called sdd_* tool: a read ONLY when its name starts with sdd_get_ or
-          sdd_validate_ (required capability project:read); ANY other tool — the explicit write
-          prefixes
-          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_)
-          AND any unrecognized or newly added name — is treated as a write requiring project:write
-          (fail closed: an unknown tool never falls through to read-level gating)
-        type: local
-      - stepNumber: 47
-        description: >-
-          Resolve the caller's required capability (project:read or project:write) over the bound
-          project through the authorization specialist
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 48
-        description: >-
-          If the effective value is not yes, reject with a clear MCP error that the required
-          data-plane permission is missing for the bound project
-        type: branch
-        condition: the effective value is not yes
-        onTrueStep: 49
-        onFalseStep: 50
-      - stepNumber: 49
-        description: >-
-          Reject with a clear MCP error that the required data-plane permission is missing for the
-          bound project
-        type: throw
-        error: >-
-          Forbidden — the caller lacks the required data-plane permission (project:read or
-          project:write) for this project
-      - stepNumber: 50
-        description: Instantiate the scoped sdd_* MCP server
-        type: call
-        targetComponent: host_mcp_adapter
-        targetMethod: createScopedServer
-      - stepNumber: 51
-        description: Connect the scoped server to the request transport and process the JSON-RPC message
-        type: local
-      - stepNumber: 52
+      - stepNumber: 40
+        description: Return the JSON-RPC tool response envelope the caller sends
+        type: return
+        outcome: the JSON-RPC tool response envelope
+    symbol: dispatchProjectLifecycleTool
+  - name: auditToolCall
+    narrative:
+      - stepNumber: 1
         description: >-
           Build the redacted AuditEvent (action mcp.tool.call, actor and tokenId from the principal,
-          project id, tool name as target, outcome)
+          the bound record's id as projectId — the member's own id when a member was bound — the
+          family root a deprecated qualifier named as composition, tool name as target, outcome)
         type: local
-      - stepNumber: 53
+      - stepNumber: 2
         description: Append the audit event without letting a failure fail the request
         type: try
-        endStep: 55
+        endStep: 3
         catches:
           - error: audit append failure
-            step: 56
-      - stepNumber: 54
+            step: 5
+      - stepNumber: 3
         description: Append the redacted mcp.tool.call audit event under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 55
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 57
-      - stepNumber: 56
+      - stepNumber: 4
+        description: On a successful append, return without entering the audit-failure handler below
+        type: return
+        outcome: audit event appended
+      - stepNumber: 5
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 57
+      - stepNumber: 6
+        description: The append failure was recorded as a server diagnostic; the request is unaffected
+        type: return
+        outcome: audit append failure recorded, request unaffected
+    symbol: auditToolCall
+  - name: handle
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Take the credential the HTTP layer resolved and passed in (a bearer token, or a
+          web-session id bridged from the browser cookie); when none was passed, extract the bearer
+          token from the request's Authorization header
+        type: local
+      - stepNumber: 2
+        description: >-
+          When the credential is a web-session id (the browser cookie's session bridged into the
+          request), resolve it to its principal through the session authentication instead of the
+          next step's token authentication
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 3
+        description: >-
+          Authenticate the token to a principal (resolving its subject, projects narrowing, and
+          permissionSubject)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticate
+      - stepNumber: 4
+        description: If the principal is unauthenticated, reject
+        type: branch
+        condition: principal is unauthenticated
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return 401 Unauthorized
+        type: return
+        outcome: 401 Unauthorized
+      - stepNumber: 6
+        description: Read the optional project selector from the request
+        type: local
+      - stepNumber: 7
+        description: >-
+          Resolve the authorized binding through the project repository: the bound hosted RECORD (a
+          member is a record of its own, bound by its own id), its root, its family root id, and —
+          for one release — the deprecated member qualifier that resolved it; a narrowing entry
+          naming a project covers its members (projects nest like units); cross-project access
+          rejected
+        type: call
+        targetComponent: project_repository
+        targetMethod: resolveBinding
+      - stepNumber: 8
+        description: If no authorized root resolved, reject cross-project access
+        type: branch
+        condition: resolved root is empty (project not authorized)
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Return 403 Forbidden
+        type: return
+        outcome: 403 Forbidden
+      - stepNumber: 10
+        description: >-
+          Read the bound project's hosted family: its family root and every member record, with
+          their roots
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 11
+        description: >-
+          Resolve the request's REACH into that family per record, each through its own chain (its
+          own scope, its parents', the family root's units): which family projects the principal may
+          read, which it may write at the project rung, and the subsystem rungs it meets in each (a
+          subsystem carrying a setting that applies to the principal, with project:write resolved at
+          it)
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 12
+        description: >-
+          Ask of each family record whether it was retired as a part (stage 8): its folder holds no
+          project any more and is written under its parent's record's reach
+        type: call
+        targetComponent: project_repository
+        targetMethod: isRetiredPart
+      - stepNumber: 13
+        description: >-
+          Bind the request-scoped project root together with the request's reach: the family root's
+          root, the readable family roots, and the WRITE REACH — the family roots the request may
+          not write at the project rung, and each subsystem rung met in a family record as its root,
+          subsystem, writable or not, and the rung that decided it. The reach never changes any
+          project's own verdict — validation's owner gate reads only the bound project's own files
+          and pins (stage 4) — it bounds what a family run may compose, what a reach-gated read
+          (externals status, pinning) may open, which members a family migration may write (a
+          migration that would have to write a project outside the writable set refuses
+          family-partial, and one that would reshape a project holding a subsystem the request may
+          not change refuses subsystem-denied, each named), and which subsystems a spec write may
+          land in (the spec writers refuse a spec of a subsystem the request may not change, naming
+          every one the write would have touched, before anything is written; a spec of no subsystem
+          — the L0, a system-level type — follows the project rung). A member record retired as a
+          part (stage 8: disabled, its folder holding no project content) is no project of its own
+          any more: its folder is written under its parent's record's reach, and its subsystems are
+          its parent's, under the parent's subsystem rules. With no subsystem settings the write
+          reach is exactly the unwritable roots it always was. The caller must gate on reach itself.
+        type: local
+      - stepNumber: 14
+        label: recover-migrations
+        description: >-
+          Family upkeep before the tool: roll back any family migration a crash left unfinished
+          under the bound family's roots, and audit each rollback — owned by member registration,
+          which also reconciles after the tool. Housekeeping that runs whatever the credential's
+          permission; a failure is logged and never fails the request
+        type: call
+        targetComponent: member_registration
+        targetMethod: recover
+      - stepNumber: 15
+        label: dispatch
+        description: >-
+          Offer the call to the project-lifecycle, landscape and project-ops dispatch, which serves
+          it from the matching orchestrator instead of the scoped MCP server
+        type: call
+        targetComponent: host_request_orchestrator
+        targetMethod: dispatchProjectLifecycleTool
+      - stepNumber: 16
+        description: >-
+          A tool the dispatch serves answers with a response envelope: continue to the shared
+          audit-event step, skipping the ordinary permission gate and scoped MCP server dispatch. A
+          tool it does not serve answers with nothing and falls through to both.
+        type: branch
+        condition: the dispatch answered with a response envelope
+        onTrueStep: 36
+        onFalseStep: 17
+      - stepNumber: 17
+        description: >-
+          Classify the called tool: a read when its name starts with sdd_get_ or sdd_validate_
+          (sdd_get_externals_status and sdd_get_network_flows among them), or when it is one of the
+          explicitly listed read tools — the topology reads listAgents, getAgent, listDomains,
+          validateTopology and getProjectConfig, and sdd_explain_flow — requiring project:read; ANY
+          other tool — the explicit write prefixes
+          (sdd_add_/sdd_update_/sdd_delete_/sdd_write_/sdd_define_/sdd_set_/sdd_initialize_/sdd_externalize_/sdd_internalize_/sdd_move_/sdd_rename_/sdd_pin_/sdd_attach_/sdd_detach_/sdd_adopt_/sdd_promote_/sdd_demote_),
+          AND any unrecognized or newly added name — is treated as a write requiring project:write
+          (fail closed: an unknown tool never falls through to read-level gating, and a tool added
+          later is a write by its prefix rather than by a hand-kept list — sdd_add_member,
+          sdd_move_member, sdd_internalize_member and the stage-6 family-migration tools among them,
+          a dryRun call included, since the tool's class is its name's and never its arguments'). A
+          write is SUBSYSTEM-SCOPED when every file it changes is a spec written through the core's
+          spec writers, which judge each spec against the write reach: sdd_add_subsystem,
+          sdd_add_component, sdd_add_type, sdd_define_interface, sdd_write_narrative,
+          sdd_set_endpoints, sdd_set_public_interfaces, sdd_update_spec, sdd_delete_spec,
+          sdd_rename_component, sdd_rename_method and sdd_move_methods, listed one by one; every
+          other write needs the project rung (fail closed). Every explicit read and every explicit
+          write prefix declares scope tree, so sdd_pin_externals, sdd_get_externals_status, the
+          network reads and the family-migration tools act on the bound (possibly narrowed) tree
+        type: local
+      - stepNumber: 18
+        description: >-
+          Resolve the caller's required capability (project:read or project:write) over the bound
+          project through the authorization component
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 19
+        description: >-
+          Decide whether the call may proceed: the project rung's yes admits it; a subsystem-scoped
+          write is also admitted when the reach lists a subsystem of the bound record the principal
+          may write — where its specs then land is judged spec by spec by the core's writers against
+          the bound write reach
+        type: branch
+        condition: >-
+          the effective value is not yes, and the call is not a subsystem-scoped write for which the
+          reach lists a writable subsystem of the bound record
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
+        description: >-
+          Reject with a clear MCP error that the required data-plane permission is missing for the
+          bound project, naming the rung that decided it
+        type: throw
+        error: >-
+          Forbidden — the caller lacks the required data-plane permission (project:read or
+          project:write) for this project, decided at <rung>
+      - stepNumber: 21
+        description: >-
+          Is the call membership-changing — sdd_attach_member, sdd_adopt_member, sdd_detach_member,
+          sdd_rename_project, stage 8's sdd_promote_member and sdd_demote_member,
+          sdd_externalize_subsystem as a project (and sdd_add_member with a source), dry run or
+          applied? On hosted, membership decides reach (a member inherits its parent's access; a
+          part is reached through its parent's record), and a detach or an adopt must move storage
+          between isolated roots, so these are handled first
+        type: branch
+        condition: >-
+          the called tool is sdd_attach_member, sdd_adopt_member, sdd_detach_member,
+          sdd_rename_project, sdd_promote_member, sdd_demote_member, sdd_externalize_subsystem with
+          as project, or sdd_add_member with a source
+        onFalseStep: 32
+      - stepNumber: 22
+        description: Is it a detach?
+        type: branch
+        condition: the called tool is sdd_detach_member
+        onFalseStep: 25
+      - stepNumber: 23
+        description: >-
+          Serve the hosted detach whole through member registration — it relocates the member into
+          an isolated root of its own in one transaction with the family edits and host stores, and
+          answers the plan (dry run) or the applied detachment with the principals who lose access,
+          as the tool result; the scoped server never runs it on hosted
+        type: call
+        targetComponent: member_registration
+        targetMethod: detach
+      - stepNumber: 24
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 36
+      - stepNumber: 25
+        description: Is it an adopt?
+        type: branch
+        condition: the called tool is sdd_adopt_member
+        onFalseStep: 28
+      - stepNumber: 26
+        description: >-
+          Serve the hosted adopt whole through member registration — detach's inverse: it relocates
+          the source.hosted project back into the bound project's tree at the member path in one
+          transaction, converts its record into a member, removes its own placements, and answers
+          the plan (dry run) or the applied adoption with every reach change, as the tool result
+        type: call
+        targetComponent: member_registration
+        targetMethod: adopt
+      - stepNumber: 27
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 36
+      - stepNumber: 28
+        label: screen
+        description: >-
+          Screen it: for attach, promote and an externalize as a project, list every principal who
+          gains access through the new parent, and for promote and an externalize as a project every
+          subsystem setting the move carries onto the new project (from `<project>/<subsystem>`, per
+          subject and value, a collapse with the most restrictive value, a role binding as not
+          carried); for demote, every principal a member-own setting denied who now reaches the part
+          through the parent's record and every token narrowed to the member alone that loses its
+          reach; for a project rename, decide whether the hosted model refuses it (a family root's
+          rename); a member declared with a source.path or source.git is refused on hosted (isolated
+          roots reach each other only by source.hosted)
+        type: call
+        targetComponent: member_registration
+        targetMethod: screen
+      - stepNumber: 29
+        description: Does the hosted model refuse it?
+        type: branch
+        condition: the screen carries a refusal
+        onFalseStep: 32
+      - stepNumber: 30
+        description: >-
+          Answer an isError tool result (HTTP still 200) with the refusal — "renaming a hosted
+          family root's id is not supported; a member can be renamed, or the root recreated";
+          nothing is dispatched
+        type: local
+      - stepNumber: 31
+        description: Continue to the shared audit step
+        type: jump
+        toStep: 36
+      - stepNumber: 32
+        label: serve
+        description: Instantiate the scoped sdd_* MCP server
+        type: call
+        targetComponent: host_mcp_adapter
+        targetMethod: createScopedServer
+      - stepNumber: 33
+        description: >-
+          Connect the scoped server to the request transport and process the JSON-RPC message; a
+          screened DRY-RUN result carries the screen's reach changes and carried subsystem settings
+          beside the plan (who gains or loses access, and which subsystem rules the new project
+          takes), so a human approves the membership change with its access consequences in view
+        type: local
+      - stepNumber: 34
+        description: >-
+          Did an APPLIED family-shape tool succeed — sdd_add_member, sdd_move_member, or a stage-6
+          family migration the scoped server ran (attach, adopt, rename project, rename alias,
+          internalize, externalize; a hosted detach is served by member registration above) called
+          without dryRun? Those change which projects the family holds or where, so the hosted
+          records must follow
+        type: branch
+        condition: the call was an applied family-shape tool and its outcome is success
+        onFalseStep: 36
+      - stepNumber: 35
+        description: >-
+          Reconcile the family's member records with the family on disk — register new members
+          (placed like their family root, no grants), relocate moved ones, disable departed ones —
+          audit every touched project naming it with the bound project as composition, and publish
+          one commit covering every touched project's .wai/ when the family is git-backed (touched =
+          the owners the tool's report names as written). A reconciliation failure is logged and
+          audited, never turns the tool's success into a failure
+        type: call
+        targetComponent: member_registration
+        targetMethod: reconcile
+      - stepNumber: 36
+        label: audit
+        description: Audit the handled data-plane tool call on the shared best-effort path
+        type: call
+        targetComponent: host_request_orchestrator
+        targetMethod: auditToolCall
+      - stepNumber: 37
         description: Return the MCP response
         type: return
         outcome: MCP response
     symbol: handleMcpRequest
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        dispatchProjectLifecycleTool lists 38 steps because it IS the hosted data plane's tool
+        table: one guard, one switch, and sixteen arms of two steps each — a call to the
+        orchestrator that owns the tool, then the jump back to the one envelope-shaping step. Its
+        cognitive score is 18 and every arm is flat. The count is the length of a closed list of
+        tool names, not the size of a job: splitting it by owning orchestrator would invent three
+        sub-dispatchers where src/server/request.ts has one switch, and would have to invent a
+        default arm for each of them — today the single default IS sdd_host_get_approval_status, so
+        two of the three new defaults would be unreachable code deciding what an impossible tool
+        name does. Same shape and same reasoning as cli_runner.runPack and
+        rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-07-25T16:37:12.221Z'
+updatedAt: '2026-10-17T16:25:07.091Z'

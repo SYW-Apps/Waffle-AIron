@@ -1,0 +1,40 @@
+kind: value-object
+id: export_context
+name: ExportContext
+description: >-
+  Everything an exporter needs to write one agent's file, assembled by the generator so no exporter
+  has to reach back into the topology for it. This is the boundary `base.ts` names in prose: the
+  core knows agents, templates and topology rules; an exporter knows one tool's file format and
+  where that tool looks. Everything tool-specific is downstream of this type, which is why adding a
+  target is a new exporter and not a change to the core.
+fields:
+  - name: agent
+    type: AgentRecord
+    description: The agent being written, as the registry holds it.
+    optional: false
+  - name: template
+    type: Template
+    description: The template its instructions were rendered from.
+    optional: false
+  - name: renderedInstructions
+    type: string
+    description: >-
+      The instruction body, already rendered — an exporter formats and places it, it never renders
+      it.
+    optional: false
+  - name: projectRoot
+    type: string
+    description: The root every output path is resolved within.
+    optional: false
+  - name: target
+    type: TargetConfig
+    description: The configured target this write is for, which is what selected the exporter.
+    optional: false
+  - name: budget
+    type: ExecutionBudget
+    description: The agent's execution budget, when the target emits one; absent when it does not.
+    optional: true
+methods: []
+sourcePath: src/exporters/base.ts
+createdAt: '2026-09-20T19:44:41.238Z'
+updatedAt: '2026-09-20T19:44:41.477Z'

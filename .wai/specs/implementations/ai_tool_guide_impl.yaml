@@ -1,0 +1,225 @@
+id: ai_tool_guide_impl
+name: AI Tool Guide Implementation
+description: >-
+  src/utils/ai-guide.ts. Both guide bodies are literals in this file rather than templates, because
+  what they say is a decision about how agents should behave and belongs somewhere a reviewer sees
+  it change. The injected text always says `wairon` literally and never a development path: the
+  guide is documentation for whoever reads it next, not a command line for this machine.
+contract: iai_tool_guide
+sourcePath: src/utils/ai-guide.ts
+methods:
+  - name: globalPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the tool's machine-wide configuration file, preferring the environment override the
+          tool sets for account aliases over the default directory — the same override the MCP
+          installer honours, so the two never disagree about where a tool lives. An unknown tool
+          answers nothing rather than guessing a path
+        type: return
+        outcome: path or nothing
+    symbol: globalGuideFilePath
+  - name: localPath
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the tool's configuration file inside this project. An unknown tool answers nothing
+          rather than guessing a path
+        type: return
+        outcome: path or nothing
+    symbol: localGuideFilePath
+  - name: inject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Choose which guide this is: the machine-wide one, which must stay inert in projects that
+          have no spec tree, or the in-project one, which addresses an agent already operating
+          inside one
+        type: local
+      - stepNumber: 2
+        description: Ask for the stamp that says which build wrote this
+        type: call
+        targetComponent: version_stamp
+        targetMethod: render
+      - stepNumber: 3
+        description: >-
+          Read whatever is in the file today, treating an absent file as empty rather than as a
+          failure
+        type: local
+      - stepNumber: 4
+        description: Remove any section already there
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: strip
+      - stepNumber: 5
+        description: >-
+          Append the marked section to what is left, creating the directories if this is the first
+          write, and keep the file's line endings (the shared file helper: CRLF stays CRLF, a new
+          file follows the convention around it). Stripping before appending is what makes this
+          idempotent — running it twice leaves one section, not two
+        type: local
+      - stepNumber: 6
+        description: Done
+        type: return
+        outcome: injected
+    symbol: injectGuide
+  - name: strip
+    narrative:
+      - stepNumber: 1
+        description: Find the opening and closing markers
+        type: local
+      - stepNumber: 2
+        description: Decide whether there is a section to remove
+        type: branch
+        condition: both markers are present
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Answer everything before the opening marker joined to everything after the closing one, so
+          whatever a person wrote around the section survives exactly
+        type: return
+        outcome: stripped
+      - stepNumber: 4
+        description: >-
+          Answer the content unchanged. A file with no markers is one we have never written to, not
+          a broken one
+        type: return
+        outcome: unchanged
+    symbol: stripGuideSection
+  - name: writeDelegator
+    narrative:
+      - stepNumber: 1
+        label: block
+        description: >-
+          Pick the target's root file and compose wairon's block for it, wrapped in the root-pointer
+          markers (`<!-- wairon-root-start -->` … `<!-- wairon-root-end -->`): for claude CLAUDE.md,
+          the `@.claude/CLAUDE.md` import and the short pointer text; for gemini and agy GEMINI.md,
+          the stamped guide inlined (those tools do not expand imports); .cursorrules,
+          .github/copilot-instructions.md and .codexrules a pointer at the target's own folder. A
+          target that has no root file writes nothing
+        type: local
+      - stepNumber: 2
+        description: Read the root file as it stands, an absent file read as empty
+        type: local
+      - stepNumber: 3
+        label: marked
+        description: Does the file already hold wairon's marked block?
+        type: branch
+        condition: both root-pointer markers are present
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Replace exactly the marked block, markers included, with the new one; every byte before
+          and after it is kept as it is
+        type: local
+      - stepNumber: 5
+        description: Write it
+        type: jump
+        toStep: 10
+      - stepNumber: 6
+        label: legacy
+        description: >-
+          Does the file open with the unmarked pointer an earlier release wrote — recognised by its
+          exact text, line endings and trailing blank lines aside (for GEMINI.md: the `# Wairon SDD
+          Project` heading over a guide section)?
+        type: branch
+        condition: the file starts with an earlier release's unmarked pointer
+        onFalseStep: 9
+      - stepNumber: 7
+        description: >-
+          Migrate it: replace that legacy text with the marked block and keep whatever the user
+          wrote after it byte for byte
+        type: local
+      - stepNumber: 8
+        description: Write it
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        label: append
+        description: >-
+          The user's own file (or none): keep its content exactly and add the marked block after it,
+          separated by a blank line. For claude the block leaves the import line out when the user's
+          own text already imports @.claude/CLAUDE.md, so the guide is never loaded twice
+        type: local
+      - stepNumber: 10
+        label: write
+        description: >-
+          Write the file only when its content changed, keeping its line endings as every wairon
+          writer does (CRLF stays CRLF)
+        type: local
+      - stepNumber: 11
+        description: Done
+        type: return
+        outcome: written
+    symbol: writeRootGuideDelegator
+  - name: refreshLocal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each target asked for, skip any name that is not a tool we inject into — an unknown
+          target is ignored rather than refused, because callers pass whatever the project has
+          configured
+        type: local
+      - stepNumber: 2
+        description: Find where that tool's in-project configuration lives
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: localPath
+      - stepNumber: 3
+        description: >-
+          Write the in-project guide there. Note this INSTALLS where none existed rather than only
+          refreshing what is already present: a known target that a project has configured is one we
+          write for, and the marker fence is what makes doing so safe
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: inject
+      - stepNumber: 4
+        description: >-
+          Write the repository-root pointer for that target as well, so the root file and the real
+          guide can never drift apart — refreshing one without the other is how a root ends up
+          pointing at something that no longer says what it claims
+        type: call
+        targetComponent: ai_tool_guide
+        targetMethod: writeDelegator
+      - stepNumber: 5
+        description: >-
+          Answer the guide paths actually written, without repeats, so a caller reports exactly what
+          it touched instead of claiming to have refreshed everything asked for
+        type: return
+        outcome: refreshed
+    symbol: reinjectLocalGuides
+  - name: body
+    narrative:
+      - stepNumber: 1
+        description: Return the global guide body for the global scope, else the local guide body
+        type: return
+        outcome: the guide body
+    symbol: guideBody
+  - name: registerServer
+    narrative:
+      - stepNumber: 1
+        description: Read <projectRoot>/.mcp.json when it exists
+        type: local
+      - stepNumber: 2
+        description: Is it unparsable, or does its mcpServers already hold a wairon entry?
+        type: branch
+        condition: the file cannot be parsed, or mcpServers.wairon is set
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Leave it exactly as it is: nothing written'
+        type: return
+        outcome: none
+      - stepNumber: 4
+        description: >-
+          Set mcpServers.wairon to the portable entry { command: wairon, args: [mcp, serve] }, every
+          other key kept, and write the file
+        type: local
+      - stepNumber: 5
+        description: Answer the path written
+        type: return
+        outcome: the .mcp.json path
+    symbol: registerProjectServer
+status: complete
+createdAt: '2026-09-23T00:11:34.495Z'
+updatedAt: '2026-10-08T08:26:17.093Z'

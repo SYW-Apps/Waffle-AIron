@@ -1,207 +1,24 @@
 id: spec_validator_impl
 name: Spec Validator Implementation
-description: Concrete implementation of the Spec Validator Interface containing validation logic and rules.
+description: >-
+  The validation workflow in src/core/validation.ts; its write-gate half,
+  validateComponentCandidate, lives in src/core/rules/candidate.ts.
 contract: ispec_validator
 sourcePath: src/core/validation.ts
 simPath: tests/core/validation.test.ts
 methods:
-  - name: validateSddTree
-    narrative:
-      - stepNumber: 1
-        description: Clear loader issues
-        type: local
-      - stepNumber: 2
-        description: Load system spec
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadSystemSpec
-      - stepNumber: 3
-        description: Load subsystem specs
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 4
-        description: Load component specs
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadComponentSpecs
-      - stepNumber: 5
-        description: Load interface specs
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 6
-        description: Load implementation specs
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 7
-        description: Load type specs
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadTypeSpecs
-      - stepNumber: 8
-        description: >-
-          Load the available surface snapshots via the surfaces adapter — unresolved cross-tree and
-          remote adapter references resolve against them (SURFACE_STALE warning on StateId mismatch;
-          CROSS_TREE_REF_UNRESOLVED remains only for references no snapshot covers)
-        type: call
-        targetComponent: validator_surfaces_adapter
-        targetMethod: loadSurfaceSnapshots
-      - stepNumber: 9
-        description: >-
-          Build the source code model via the source analysis adapter — every distinct L4 sourcePath
-          resolved and containment-checked within the project root, analyzed at the best available
-          grade (exact | pattern | generic); the structural-conformance rules consume it purely from
-          the rule context (the surface-snapshots injection pattern)
-        type: call
-        targetComponent: source_analysis_adapter
-        targetMethod: buildCodeModel
-      - stepNumber: 10
-        description: Integrate Zod schema loader errors
-        type: local
-      - stepNumber: 11
-        description: >-
-          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
-          in-scope spec through the writer relativization + schema pipeline via the core adapter (no
-          I/O), reporting ROUNDTRIP_SERIALIZATION errors so validate predicts every write lock would
-          refuse
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: dryRunSerializeSpecs
-      - stepNumber: 12
-        description: >-
-          Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
-          the known subsystems) and return early
-        type: local
-      - stepNumber: 13
-        description: >-
-          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
-          and pattern definitions — to populate the rule context's ext for this run
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectExtensions
-      - stepNumber: 14
-        description: Seed the built-in SDD conformance rule set into the in-memory rule set
-        type: call
-        targetComponent: rule_repository
-        targetMethod: registerBuiltinRules
-      - stepNumber: 15
-        description: >-
-          Register the loaded programmatic pack rules after the built-ins (project pack order is
-          precedence)
-        type: call
-        targetComponent: rule_repository
-        targetMethod: registerPackRules
-      - stepNumber: 16
-        description: Read the composed, ordered rule run sequence to execute
-        type: call
-        targetComponent: rule_repository
-        targetMethod: ruleSequence
-      - stepNumber: 17
-        description: >-
-          Read the aggregate known-issue-code set into the rule context, so lint.allow references
-          are validated against every code the active rules can emit (UNKNOWN_LINT_ALLOW_CODE)
-        type: call
-        targetComponent: rule_repository
-        targetMethod: knownIssueCodes
-      - stepNumber: 18
-        description: >-
-          Run hierarchy, namespace-hygiene, round-trip, type-reference, contract (incl. cross-tree
-          ref recognition), narrative, boundary, graph, naming, documentation, complexity,
-          semantic-edge rules (dispatch-table capability contracts and guarantee backing, dispatch-
-          and lifecycle-rooted reachability — lifecycle roots now spanning init/shutdown plus the
-          cyclic/interrupt/scheduled execution models — durability round-trip hydration with a
-          non-flooded boot graph and the four-mode durability axis required on every Store, untyped
-          cross-subsystem seams with dispatch-table exemption, prose-claim realization), invariant
-          backing (a declared entity invariant — type.invariants, anchored via componentClass — must
-          be asserted by a narrative step on every write-effect method of the owning component:
-          UNASSERTED_INVARIANT / INVARIANT_UNANCHORED warnings, declarations checked while
-          enforcement is never proven; dangling assertsInvariants references are
-          UNKNOWN_INVARIANT_REF errors), event topology (declared emits/subscribesTo bindings plus
-          MessageBus endpoint directions must pair by topic — every emitted topic has a subscriber
-          and every subscription a source: UNCONSUMED_TOPIC / UNSOURCED_SUBSCRIPTION warnings,
-          silent on trees declaring no event edges), narrative antipatterns (a step-graph cycle with
-          no exit edge and no return/throw member is a provable non-terminating loop —
-          INESCAPABLE_CYCLE; a branch or switch whose arms all target the same step decides nothing
-          — MEANINGLESS_BRANCH; a method-level call cycle across components in which every call edge
-          is unavoidable on all entry-to-exit paths of its narrative is provable unbounded recursion
-          — UNCONDITIONAL_CALL_CYCLE, dispatch steps resolved through their portal tables; prose
-          loop conditions are never judged — only structural inescapability is claimed), facade
-          forwarding (a Repository/Gateway facade method whose authored narrative is anything other
-          than exactly one call step targeting an owned member contains logic that belongs inside a
-          member block — FACADE_FORWARDING warning, the standard's mechanically-enforced 1:1 facade
-          rule), narrative detail-sufficiency (a method whose realized function's measured
-          cyclomatic complexity exceeds the configured threshold while its spec sits below detail:
-          full with no narrative — UNNARRATED_COMPLEXITY, emitted from exact-grade analysis only so
-          weaker grades never guess; an explicit detail declaration below a full-floor logic
-          stereotype with no narrative — DETAIL_BELOW_STEREOTYPE; both honest lints about UNDECLARED
-          behavior, not proofs, and both lint.allow-suppressible), structural-conformance rules
-          (sourcePaths resolve within the project root to real files; every contract method is
-          realized in its file at the implementation's conformance tier — declared | anchored | off
-          — honoring per-method symbol overrides, with analysis grade carried on findings),
-          call-step realization (Level 3 opener: each narrative call step of an exactly-analyzed,
-          non-off method must appear as a callee of the realized function — set membership over
-          direct callees closed transitively through same-file named helpers, honoring the target
-          method's symbol override and N:1 identity forwarding; CALL_STEP_UNREALIZED warning, order
-          and arguments deliberately unverified), dependency-conformance rules (runtime imports
-          between component-mapped files must be justified by declared dependsOn/owns edges — or,
-          across subsystems, by a declared edge to the target subsystem's published surface —
-          UNDECLARED_DEPENDENCY; declared collaborator edges with no realizing import between
-          exactly-analyzed files surface as UNREALIZED_DEPENDENCY), integration-conformance rules (a
-          committed L4 simPath harness must exist inside the project root — SIM_FILE_MISSING — and
-          its exact-grade import graph must reach the component's own sourcePath module and each
-          direct dependency's module, any module of the target subsystem for cross-subsystem edges,
-          technology-boundary fakes sanctioned — UNWIRED_INTEGRATION_SIM; declaring the first
-          simPath in a subsystem activates MISSING_INTEGRATION_SIM for its other complete non-leaf
-          implementations; wiring proven, execution stays CI's job; a harness may additionally claim
-          per-component path coverage via sim:<component>.<method>[:<label>] string anchors — once
-          opted in, every narrated method's happy anchor and every labeled throw path's anchor are
-          expected: SIM_PATH_UNCOVERED), the declarative-assertion rule (pack-instantiated instances
-          of the closed assertion kinds — forbid-edge, require-field over top-level and ext.*
-          fields, endpoint-shape transport and address patterns — evaluated with the pack's
-          namespaced <PACK>_<CODE> finding codes, declared severities, and stated reasons: the
-          hosted-safe doctrine channel), the pattern-reference rule (a component's patterns[] must
-          each resolve to a loaded pack PatternDef — UNKNOWN_PATTERN_REF — with a version-mismatch
-          warning), and the guarantee-token rule (the guarantee vocabulary is open: every token an
-          L3 method declares or a narrative step asserts must be a builtin guarantee or one a loaded
-          pack declares in its guarantees list — UNKNOWN_GUARANTEE warning, because a token nobody
-          declares can never be backed by the consistency checks), every finding first passing the
-          designDepth gate (expectation codes below the subsystem's or project's declared design
-          depth are skipped; soundness of authored content always applies) and severity resolution
-          (explicit project sddRuleSeverity, else the governing pack profile's, else draft-context
-          downgrade, else the rule default), each rule's check running against the shared rule
-          context
-        type: local
-      - stepNumber: 19
-        description: >-
-          Chained-subproject reference honesty: when this root is a chained subproject of a
-          discoverable parent (detected via the loader's findChainingParent), cross-tree references
-          COVERED by a vendored surface snapshot validate at FULL strength — contract mismatches and
-          boundary violations stay errors, because a snapshot IS the verifiable contract — while
-          each cross-tree reference NO snapshot covers is reported as ONE precise
-          UNVERIFIED_EXTERNAL_REF warning replacing the former blanket downgrade of the
-          reference-resolution family (undefined-type, invalid dependency/subsystem/target-component
-          references, undeclared-dependency-call, unresolved cross-tree refs), marked
-          crossTreeContext (--ci waives it) and naming the unverifiable reference plus the remedy
-          (re-lock the parent so fresh family/sibling snapshots ship, or inspect via
-          list-external-interfaces). The code↔spec conformance family (missing-source-file,
-          unrealized-method, undeclared-dependency and kin) KEEPS the crossTreeContext downgrade —
-          source paths stored relative to the parent root genuinely cannot resolve standalone. One
-          CHAINED_SUBPROJECT_CONTEXT notice is prepended, counting the unverified references — full
-          cross-tree verification runs from the parent root
-        type: local
-      - stepNumber: 20
-        description: Return the aggregated validation result
-        type: return
-        outcome: ValidationResult
   - name: validateRegistry
     narrative:
       - stepNumber: 1
         description: Validate agent ID uniqueness
         type: local
       - stepNumber: 2
-        description: Validate per-agent properties like owned paths
+        description: >-
+          Validate per-agent properties like owned paths. A component implementer derived from the
+          spec tree that owns no code path yet has no sourcePath planned: the condition
+          MISSING_SOURCE_PATH reports, so a notice (an error under rules.conformance.requireCode)
+          whose remedy is the planned sourcePath; any other non-meta agent without ownedPaths is a
+          warning naming the paths or the meta/guardian tag.
         type: local
       - stepNumber: 3
         description: Check for overlapping workspace file ownerships
@@ -251,34 +68,69 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 8
         description: >-
-          Load the available surface snapshots via the surfaces adapter, identical to
-          validateSddTree
+          Load the bound root's own foreign surface snapshots via the surfaces adapter, identical to
+          validateProject
         type: call
         targetComponent: validator_surfaces_adapter
-        targetMethod: loadSurfaceSnapshots
+        targetMethod: listSnapshots
       - stepNumber: 9
-        description: Build the source code model via the source analysis adapter, identical to validateSddTree
+        description: >-
+          Read the bound project's pinned externals via the surfaces adapter, identical to
+          validateProject — the lock gate judges cross-project references against the pins alone,
+          never an ancestor
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 10
+        description: >-
+          Read the binding modules the implementations name through the binding module adapter,
+          identical to validateProject
+        type: call
+        targetComponent: binding_module_adapter
+        targetMethod: readBindingModules
+      - stepNumber: 11
+        description: Build the source code model via the source analysis adapter, identical to validateProject
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: buildCodeModel
-      - stepNumber: 10
-        description: >-
-          Round-trip serializability: the registered roundtrip-serialization rule dry-runs every
-          in-scope spec through the writer pipeline via the core adapter, identical to
-          validateSddTree
+      - stepNumber: 12
+        description: Gather the round-trip findings for the rule context, identical to validateProject
         type: call
         targetComponent: validator_core_adapter
         targetMethod: dryRunSerializeSpecs
-      - stepNumber: 11
+      - stepNumber: 13
         description: Treat every spec as complete (suppress the draft severity relaxation), mutating nothing
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
-          Run the same active rule sequence as validateSddTree at full strictness, including
-          namespace-hygiene, round-trip, naming, documentation, complexity, and the semantic-edge
-          rules
+          Read the bound project's configuration through the core adapter for its by-name pack
+          selections, identical to validateProject
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 15
+        description: >-
+          Build the rule context and run the same rule sequence as validateProject at full
+          strictness — the owner's gate alone: a contained member's specs are its own lock's, never
+          this one's
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
+        description: >-
+          Digest the code analyzer's doctrine: the rules of the sequence that judge code and the
+          project's rules.conformance tuning
+        type: call
+        targetComponent: gate_identity
+        targetMethod: analyzer
+      - stepNumber: 17
+        description: >-
+          Summarize the code half into the result's `analysis`: the codes declared by the rules that
+          judge code, the counts per severity among the issues carrying them, and the analyzer
+          identity — the wairon version, the doctrine digest just computed, and the weakest analysis
+          grade the code model applied to any file it analyzed (none when it analyzed none). Nothing
+          is removed from the issues: callers other than the lock see the run unchanged, and the
+          lock partitions it with ValidationResult.designOnly
+        type: local
+      - stepNumber: 18
         description: Return the as-complete validation result
         type: return
         outcome: as-complete ValidationResult
@@ -309,14 +161,826 @@ methods:
         type: return
         outcome: rule set
     detail: calls-only
+  - name: validateComponentCandidate
+    sourcePath: src/core/rules/candidate.ts
+    narrative:
+      - stepNumber: 1
+        description: Seed the built-in rules
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 2
+        description: Do the loaded packs carry programmatic rules?
+        type: branch
+        condition: the loaded packs carry programmatic rules
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Register the pack rules after the built-ins, so pack-registered spec-scoped rules gate
+          writes too
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerPackRules
+      - stepNumber: 4
+        label: gather-codes
+        description: >-
+          Gather the known issue codes of the registered rules and the loaded declarative
+          assertions, as validateSddTree does, so any rule reading them sees the same set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 5
+        description: >-
+          Build a rule context holding only the candidate: a stub system spec (only its
+          targetLanguage is ever read, and a candidate carries none), no other specs, no round-trip
+          findings, the known codes, the project's rules config and project type, and the loaded
+          packs
+        type: local
+      - stepNumber: 6
+        description: Read the spec-scoped rules in run order
+        type: call
+        targetComponent: rule_repository
+        targetMethod: specScopedRules
+      - stepNumber: 7
+        description: For each spec-scoped rule
+        type: loop
+        loopKind: forEach
+        over: the spec-scoped rules
+        endStep: 8
+      - stepNumber: 8
+        label: run-check
+        description: Run the rule's check against the candidate context
+        type: local
+      - stepNumber: 9
+        description: >-
+          Keep only findings about the candidate (no spec id, or the candidate's id), so a rule that
+          misdeclares its scope cannot smuggle in a finding about another spec
+        type: local
+      - stepNumber: 10
+        description: >-
+          Return the verdict split by severity: errors refuse the write, warnings and notices ride
+          along as the write's notices, each list kept apart
+        type: return
+        outcome: CandidateVerdict
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Compute the DESIGN identity of the bound project's OWN specs through the core adapter —
+          code linkage and timestamps left out, its parts' specs included (stage 8: a part is the
+          project's own subsystems, wherever stored), never a project member's, whose subject stands
+          for it below
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeOwnDesignId
+      - stepNumber: 2
+        description: >-
+          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
+          and pattern definitions — the doctrine the gate identity covers
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 3
+        description: >-
+          Read the bound project's configuration through the core adapter for its projectType, rule
+          tuning and composition block
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Take the gate config from the configuration's projectType, rules, composition and network
+          declaration, empty when the project has no configuration or its configuration fails its
+          schema: the tree identity still stands on its own
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the bound root's own consumed contract inputs through the core adapter: its stored
+          surface snapshots, pinned external snapshots and externals lock, as canonical content keys
+          — never a member's, never an ancestor's
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: consumedContractInputs
+      - stepNumber: 6
+        description: >-
+          Read the project graph for the PROJECT members the bound root declares DIRECTLY —
+          contained ones, referenced `../` and git ones (opened at their sibling checkout or the
+          fetch cache at the pinned commit) and, for one release, legacy mounts — each with its
+          alias and directory. A referenced `hosted:` member is not read here: only the hosting
+          server can resolve it, so it would make the identity differ locally and hosted; it is
+          covered through its pin in the bound project's externals lock, which is a consumed
+          contract input of the identity, never its live subject. Parts are not read here: their
+          content is already in the own identity. Deeper members are not read: they reach this
+          identity through each direct member's subject
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 7
+        description: For each direct member
+        type: loop
+        loopKind: forEach
+        over: the bound root's direct members
+        endStep: 9
+      - stepNumber: 8
+        description: >-
+          Read the member's own lock record from its directory — one small file, no scan, no
+          validation
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 9
+        description: >-
+          Its composition subject is that record's approval subject (lock_record.approvalSubject),
+          rendered `<algorithm>:<digest>` — the member's gate identity at the moment its owner
+          APPROVED it, the decision its owner made: a release stamp `wairon lock` refreshed without
+          a re-approval keeps the subject the approval had, so a member's restamp never moves this
+          identity; `never` when the member carries no record or has no project on disk. Recorded,
+          not recomputed: the member's live edits are the member's to re-approve, and recomputing
+          here would load the member's tree into every parent identity
+        type: local
+      - stepNumber: 10
+        description: Seed the built-in SDD rule set into the in-memory rule set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 11
+        description: >-
+          Read the rule sequence: the built-in rules (gate_identity.compute keeps only those that
+          judge design). No pack rule is registered yet; pack rules enter the identity through the
+          extensions
+        type: call
+        targetComponent: rule_repository
+        targetMethod: ruleSequence
+      - stepNumber: 12
+        description: >-
+          Compute the gate identity from the own content identity, the extensions, the built-in
+          rules, the own consumed contract inputs, the gate config and the members' subjects
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 13
+        description: >-
+          Digest each input of that identity on its own and carry them as the answer's `parts`: the
+          lock records them (gateParts), and a later check compares them input by input — to name
+          the input that moved, and to judge a change of the wairon release alone by re-validation
+          rather than by digest
+        type: call
+        targetComponent: gate_identity
+        targetMethod: parts
+      - stepNumber: 14
+        label: readOwnRecord
+        description: Read the bound project's own lock record, to know which gate algorithm it was taken under
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 15
+        description: >-
+          Was it taken under the previous, full-content gate algorithm
+          (`sha256+content+doctrine+inputs+members`, a format-2 record)? Then it must be judged as
+          it was taken, never forced into a re-lock of an unchanged design
+        type: branch
+        condition: the record exists and its stateId.algorithm is the full-content gate algorithm
+        onFalseStep: 19
+      - stepNumber: 16
+        description: >-
+          Compute the full-content identity of the own specs (code linkage included), the content
+          reading that record was taken in
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeOwnStateId
+      - stepNumber: 17
+        description: >-
+          Recompute the gate identity from that full-content identity and the SAME doctrine, inputs,
+          gate config and members' subjects — gate_identity.compute marks it with the previous
+          algorithm because its content is a full-content identity — and carry it as the answer's
+          asRecorded
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 18
+        description: That record is judged; answer
+        type: jump
+        toStep: 23
+      - stepNumber: 19
+        label: earlierDesign
+        description: >-
+          Was it taken in the earlier design reading (`sha256+design+doctrine+inputs+members`,
+          status still in the view)? Then it is judged as it was taken too, with each spec's status
+          as approved, so a tree in which nothing but a status moved still matches it
+        type: branch
+        condition: the record exists and its stateId.algorithm is the earlier design gate algorithm
+        onFalseStep: 23
+      - stepNumber: 20
+        description: Recover each own spec's approved status from the record's design digests
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvedStatuses
+      - stepNumber: 21
+        description: Compute the own design identity in the earlier reading, statuses put back as approved
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: computeOwnDesignIdAsRecorded
+      - stepNumber: 22
+        description: >-
+          Recompute the gate identity from it and the SAME doctrine, inputs, gate config and
+          members' subjects — gate_identity.compute marks it with the earlier design gate algorithm
+          — and carry it as the answer's asRecorded
+        type: call
+        targetComponent: gate_identity
+        targetMethod: compute
+      - stepNumber: 23
+        label: answer
+        description: >-
+          Return the gate identity, with asRecorded when the record on disk was taken under an
+          earlier algorithm this release still recomputes
+        type: return
+        outcome: StateId (the gate identity)
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the methods and the declared test roots to the source analyzer, which walks them
+          under the same containment rules as the source walk
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: findTestsReferencing
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Return a copy of the rule set's built-in profile ids
+        type: return
+        outcome: success
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Return a copy of the rule set's built-in project kinds
+        type: return
+        outcome: success
+  - name: validateProject
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Set the loader's recursion depth through the core adapter: the scan reads the bound
+          project and the members it contains, because the project's own references into a contained
+          member are judged against that member's L0 table. Nothing above the bound root is read
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
+        description: >-
+          Clear the loader's diagnostics and cached index through the core adapter, so the run reads
+          the tree from disk
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: clearLoaderIssues
+      - stepNumber: 3
+        description: >-
+          Read the bound root's configuration through the core adapter, to know whether it is a
+          project or a part (stage 8)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Is the bound root a non-contained part opened alone? (A contained part has no
+          configuration; opening its directory resolves to the parent's root)
+        type: branch
+        condition: the configuration is a part's (ProjectConfig.isPart)
+        onFalseStep: 14
+      - stepNumber: 5
+        description: >-
+          Read the part's pinned parent — its lock's parent entry and the excerpt it names — from
+          the part's own files; the parent's live tree is never read, so the verdict is the same
+          with or without the parent on disk
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: pinnedParent
+      - stepNumber: 6
+        description: Is there a pinned parent to judge against?
+        type: branch
+        condition: an excerpt is pinned and readable
+        onFalseStep: 12
+      - stepNumber: 7
+        label: part-signature-facts
+        description: >-
+          Read what the part's own scan's signature resolution recorded through the core adapter:
+          the restatements and stale texts only the stored form shows, which are the part's own
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: signatureFacts
+      - stepNumber: 8
+        label: part-type-spellings
+        description: >-
+          Read what the part's own scan's type canonicalisation recorded through the core adapter:
+          the part's own stored aliases and non-canonical positions (the excerpt's are the parent's,
+          judged by the parent's gate)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: typeSpellingFacts
+      - stepNumber: 9
+        label: part-signatures
+        description: >-
+          Resolve the signatures of the part's own specs together with the excerpt's through the
+          core adapter: the excerpt's documents are stored forms whose sourced methods carry no
+          params of their own, and a part's own method may take its signature from a parent's, which
+          the part's scan alone could not bind. The resolved specs are the ones the rules read; the
+          run's signature facts are this resolution's source facts on the part's own methods (other
+          than the restatements, which the stored form alone shows) together with the part's own
+          restated facts and stale texts read in the step before
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveSignatures
+      - stepNumber: 10
+        label: alone
+        description: >-
+          Judge the part alone against the pin: its own specs are the specs judged; the excerpt's
+          specs join the rule context as read-only context (findings on them are dropped — they are
+          the parent's to judge); the governing configuration is the excerpt's projectType, rules
+          and pack selections, each pack loaded at its pinned version and digest (one that cannot be
+          is EXTERNAL_CHECK_UNAVAILABLE, never judged by whatever version the machine holds). The
+          rules run exactly as below, except those flagged needsWholeTree (SddRule.needsWholeTree:
+          their verdict needs specs the excerpt does not carry), which are skipped and named; a
+          reference into the parent the excerpt does not carry is EXTERNAL_CHECK_UNAVAILABLE (used
+          since the pin: re-pin), never a pass. Add PART_JUDGED_ALONE (notice) naming the parent,
+          the pin's digest and the skipped rules: the full verdict is always the parent's
+        type: local
+      - stepNumber: 11
+        description: Return the part's verdict — the same with or without its parent on disk
+        type: return
+        outcome: the part's verdict against its pin
+      - stepNumber: 12
+        label: unpinned
+        description: >-
+          Nothing to judge against: report PART_UNPINNED (warning) "part of <parent>; validate from
+          the parent" — with the hint that `wairon externals pin` here, with the parent on disk,
+          pins it — and judge nothing else: a part's specs are its parent's subsystems, and they
+          mean nothing without it
+        type: local
+      - stepNumber: 13
+        description: Return the one finding
+        type: return
+        outcome: PART_UNPINNED only
+      - stepNumber: 14
+        label: project
+        description: Load system spec
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 15
+        description: Load subsystem specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 16
+        description: Load component specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 17
+        description: Load interface specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 18
+        description: Load implementation specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 19
+        description: Load type specs
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 20
+        description: >-
+          Load the bound root's own foreign surface snapshots (exchanged or authored imports) via
+          the surfaces adapter — what a reference into a foreign provider is checked against. No
+          member's snapshots are read: the mount-pool lookup is retired with resolve-through-parent
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listSnapshots
+      - stepNumber: 21
+        label: pins
+        description: >-
+          Read the bound project's pinned externals via the surfaces adapter — each declared alias
+          with its lock entry and the snapshot it names, from the project's own
+          .wai/externals.lock.yaml and .wai/externals/ only. A reference into a project outside the
+          scan is judged against these and nothing else: the producer is never read here, so the
+          verdict is the same with or without the family on disk
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 22
+        label: bindings
+        description: >-
+          Read the binding modules the bound project's implementations name
+          (implementation_spec.bindings) through the binding module adapter, each once, contained
+          within the project root — what binding conformance compares with the pins just read; a
+          reach-only run reads none
+        type: call
+        targetComponent: binding_module_adapter
+        targetMethod: readBindingModules
+      - stepNumber: 23
+        description: >-
+          When a binding module was read and the bound project declares a live member: read, via the
+          surfaces adapter, each live member projected at the approval it is judged against
+          (ctx.memberApprovedSurfaces) — what binding conformance names a name the member dropped
+          since against; a reach-only run, and a run that read no binding module, read none
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: memberApprovedSurfaces
+      - stepNumber: 24
+        description: >-
+          Build the source code model via the source analysis adapter — every distinct source path
+          of the bound project's own implementations (a contained member's paths are relative to its
+          root and are its own gate's) resolved and containment-checked within the project root,
+          analyzed at the best available grade
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 25
+        description: >-
+          Read, through the core adapter, the spec files unchanged since the approval — the specs
+          the rules are shown as complete (none when the tree was never approved, and an unreadable
+          approval never breaks validation)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: settledSpecPaths
+      - stepNumber: 26
+        description: Relate each settled file to the spec stored in it through the core adapter's spec index
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 27
+        description: >-
+          Integrate the loader's schema and parse diagnostics, read through the core adapter — only
+          those on the bound project's own files: a diagnostic on a contained member's file is that
+          member's gate's
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 28
+        description: >-
+          Reject a --subsystem scope that names no loaded subsystem (SUBSYSTEM_NOT_FOUND, listing
+          the known subsystems) and return early
+        type: local
+      - stepNumber: 29
+        description: >-
+          Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
+          and pattern definitions — to populate the rule context's ext for this run
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 30
+        description: >-
+          Gather the round-trip findings: dry-run every in-scope spec through the writer's
+          relativization and schema pipeline via the core adapter (no I/O) and keep the findings for
+          the rule context, where the roundtrip-serialization rule reports them
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: dryRunSerializeSpecs
+      - stepNumber: 31
+        description: Seed the built-in SDD conformance rule set into the in-memory rule set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 32
+        description: >-
+          Register the loaded programmatic pack rules after the built-ins (project pack order is
+          precedence)
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerPackRules
+      - stepNumber: 33
+        description: Read the composed, ordered rule run sequence to execute
+        type: call
+        targetComponent: rule_repository
+        targetMethod: ruleSequence
+      - stepNumber: 34
+        description: >-
+          Gather the known issue codes of every registered rule and declarative assertion for the
+          lint-allows audit, with each code's default severity (so the audit can tell an allow
+          naming an error from a stale one), and the subset the rules declare CARRYABLE for the
+          conformance debt register
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 35
+        description: >-
+          Read the bound project's configuration through the core adapter for its by-name pack
+          selections and its identity; its rule severities and projectType are supplied by the
+          caller
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 36
+        description: >-
+          Read the bound root's lock record through the core adapter for the project id it recorded;
+          an unlocked root, or a record written before project ids existed, records none
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 37
+        description: >-
+          Resolve the project's identity with project_config.identity(the lock's projectId) — the
+          effective id, where it came from, and its problems (defaulted, ambiguous, changed) — for
+          the project-identity rule. A root with no readable configuration carries no identity
+        type: local
+      - stepNumber: 38
+        description: >-
+          Load the component-variant registry through the core adapter, for the variant rules in the
+          rule context
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectVariants
+      - stepNumber: 39
+        description: For each loaded subsystem
+        type: loop
+        loopKind: forEach
+        over: the loaded subsystems
+        endStep: 40
+      - stepNumber: 40
+        label: subsystem-exports
+        description: >-
+          Read the subsystem's resolved export table through the core adapter — the resolver's
+          problems are the export-tables rule's facts
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 41
+        description: Read the project's resolved L0 export table through the core adapter
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 42
+        label: project-family
+        description: >-
+          Read the project graph of this scan through the core adapter: the bound project and the
+          members it contains, the owner of every spec, the cross-project references with how the
+          scan bound each (local, exported, unexported, undeclared, outside, unresolved), and the
+          identity problems. It is the bound project's own graph from every root: nothing above the
+          bound root is in it
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 43
+        description: For each contained member
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes other than the bound root
+        endStep: 44
+      - stepNumber: 44
+        label: member-exports
+        description: >-
+          Read the member's resolved L0 export table through the core adapter: its public names are
+          what the bound project's references into it land on (a widening re-export among its
+          problems is the export-tables rule's fact)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 45
+        description: >-
+          For each pair of projects the graph's cross-project references connect whose consumer is
+          the bound project
+        type: loop
+        loopKind: forEach
+        over: the distinct (bound project, producer) pairs of the graph's cross-project references
+        endStep: 46
+      - stepNumber: 46
+        label: pair-usage
+        description: >-
+          Map the bound project's references into the producer onto the producer's public names
+          through the core adapter — the unexported ones resolve as missing
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: exportUsage
+      - stepNumber: 47
+        label: signature-facts
+        description: >-
+          Read what the scan's signature resolution recorded through the core adapter: the sources
+          it met and the stored texts their params contradict — the loaded specs are already
+          resolved, so the stored form is visible only here
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: signatureFacts
+      - stepNumber: 48
+        label: type-spelling-facts
+        description: >-
+          Read what the scan's type canonicalisation recorded through the core adapter: the stored
+          positions that are aliases and the ones that are not canonical — the loaded specs already
+          hold canonical text, so the stored spellings are visible only here
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: typeSpellingFacts
+      - stepNumber: 49
+        description: >-
+          Read the retired reachability forms the scan met while it read them compatibly
+          (portalType, listener mounts, retired invokedBy kinds) through the core adapter, for the
+          entry-declarations rule
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: retiredReachFacts
+      - stepNumber: 50
+        description: >-
+          Build the rule context from the gathered inputs: the loaded specs and their lookup maps,
+          the signature facts, the type-spelling facts, the foreign surface snapshots, the pinned
+          externals, the code model, the round-trip findings, the known issue codes, the pack data
+          (the by-name pack selections from the options when a dry run supplies them, else the
+          stored configuration's; and the bound project's OWN composition.requirePolicies, for the
+          pack-requirements rule to check their syntax), the project identity, the export tables,
+          the project graph and the export usages, and the lint-allow bookkeeping. Its
+          resolveCrossProject decides every cross-project reference's outcome before any severity;
+          its addIssue drops a finding on a spec a contained member owns, then applies the
+          designDepth gate, severity resolution (the project's sddRuleSeverity, else the governing
+          pack profile's, else the draft-context downgrade, else the rule default), a matching lint
+          allow or debt-register entry (an error is never silenced or carried), and attaches the
+          reference resolution a cross-project finding carries. A parent's composition block is
+          never read here: a parent's requirements do not reach any member's own gate, and whether
+          members adopt this project's requirements is the family run's question
+        type: local
+      - stepNumber: 51
+        description: For each rule in the run sequence
+        type: loop
+        loopKind: forEach
+        over: the rule run sequence read in step 20 (built-ins, then pack rules, lint-allows last)
+        endStep: 52
+      - stepNumber: 52
+        label: run-rule
+        description: >-
+          Run the rule's check against the rule context; the rule reports its findings through
+          ctx.addIssue
+        type: local
+      - stepNumber: 53
+        label: hint
+        description: Does the project declare externals?
+        type: branch
+        condition: the pinned externals read in step 10 are not empty
+        onFalseStep: 55
+      - stepNumber: 54
+        description: >-
+          Add the one-line hint to the result: its externals were judged against their pins alone;
+          the advisory live comparison beside this verdict reads their live producers (offline), and
+          `wairon externals status` is the opt-in live gate. A hint, not a finding: it never changes
+          the verdict — and it never sends a project without members to `validate --family`, which
+          composes nothing more for it
+        type: local
+      - stepNumber: 55
+        label: code-reading
+        description: >-
+          Ask which compiler an exact-grade analysis read the code with, through the source analysis
+          adapter, for the one-line code reading the result carries beside the hint: the weakest
+          grade any analyzed file was read at and, at exact grade, that compiler's version and
+          whether it is the project's own or wairon's copy — or that no source file the design names
+          exists yet. Never a finding: it changes no verdict. Then, per language, the grade its
+          files were read at and what that reading checked — methods, params, returns, public
+          members, imports, calls, routes, data types at exact grade; below it, what the file's
+          reader says it read (source_file_facts.reads) — and what it did not, said by name. Routes
+          are read only out of a router a Portal names, so a language whose exact-grade code
+          realizes a Portal binding HTTP endpoints whose implementation names no router claims
+          routes only where one is named, and counts those Portals among what it did not check (each
+          judged by its realizing class's public methods alone). And the same in a few words for the
+          closing verdict line (validation_result.codeCompact), so a passing run never implies more
+          was checked than was. A family run carries each project's reading on its verdict
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: compilerIdentity
+      - stepNumber: 56
+        label: done
+        description: Return the project's verdict — the same from every root
+        type: return
+        outcome: ValidationResult
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: 'Read the bound project''s configuration: its network declaration, when it makes one'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Build the rule context exactly as validateProject builds it (the same loads, scope and
+          scan), running no rule
+        type: local
+      - stepNumber: 3
+        description: Project the project's own reach model from it
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: project
+      - stepNumber: 4
+        description: Answer it
+        type: return
+        outcome: the project's own reach model
+    symbol: ownReachModel
+  - name: validateDesign
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Run the owner's gate with the options given, each spec judged at the status it is authored
+          with (the run validateProject makes)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Summarise its code half with the analyzer that took it — the codes the code-judging rules
+          declare, counted per severity, with the analyzer's doctrine digest and the weakest grade —
+          exactly as validateAsComplete does
+        type: local
+      - stepNumber: 3
+        description: Answer the result with its analysis
+        type: return
+        outcome: ValidationResult
+  - name: introducedFindings
+    sourcePath: src/core/rules/candidate.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's spec index through the core adapter: the tree the candidate is
+          judged in, its stored version included
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
+        description: >-
+          Seed the built-in rules, so the doctrine and route rules are registered under the codes
+          and severities validate uses
+        type: call
+        targetComponent: rule_repository
+        targetMethod: registerBuiltinRules
+      - stepNumber: 3
+        description: >-
+          Gather the known issue codes of the registered rules, as validateSddTree does, so a rule
+          reading them sees the same set
+        type: call
+        targetComponent: rule_repository
+        targetMethod: knownIssueCodes
+      - stepNumber: 4
+        description: >-
+          Build two rule contexts over that index — the tree as stored, and the tree with the
+          candidate in place of the spec of its kind and id (added when there is none) and every
+          other changed component in place of its stored one — each with the project's rules config
+          and project type
+        type: local
+      - stepNumber: 5
+        description: >-
+          For each of the two contexts, run the dependency-edge doctrine and the Portal endpoint
+          rule over it
+        type: loop
+        loopKind: forEach
+        over: the stored context and the candidate context
+        endStep: 9
+      - stepNumber: 6
+        description: >-
+          Judge the edges at the entry points: a Portal or Observer reaching the data layer,
+          anything depending on a Portal, a View or Supervisor reaching what it may not
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: entrypointDependencies
+      - stepNumber: 7
+        description: >-
+          Judge the data layer's edges: a Store, Registry, Adapter or Query depending on what its
+          stereotype forbids
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: dataBlockDependencies
+      - stepNumber: 8
+        description: >-
+          Judge the edges that leave their subsystem: a non-Adapter crossing without a trustedLink,
+          a target outside the published surface, a target that is not a Portal
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: subsystemBoundaryDependencies
+      - stepNumber: 9
+        description: Judge the Portals' endpoints, for two bound methods sharing one HTTP route
+        type: call
+        targetComponent: doctrine_rules
+        targetMethod: portalEndpoints
+      - stepNumber: 10
+        description: >-
+          Keep the findings the candidate's context raises and the stored one did not, keyed by
+          code, spec and message, restricted to what no later write in the authoring order can cure:
+          an edge between two existing blocks whose stereotypes forbid it, a cross-subsystem edge
+          whose target is not a Portal (every boundary finding on that edge), and a route two bound
+          methods share. A boundary finding on an edge into a Portal is curable and is kept as a
+          warning
+        type: local
+      - stepNumber: 11
+        description: >-
+          Return the verdict split by severity: an error refuses the write, a warning or notice (a
+          code the project tuned down) rides along as one of its notices
+        type: return
+        outcome: CandidateVerdict
 lint:
   allow:
-    - code: CALL_STEP_UNREALIZED
+    - code: EXCESSIVE_NARRATIVE_STEPS
       reason: >-
-        The dry-run serialization and the known-issue-code set are executed through the REGISTERED
-        RULE SEQUENCE (the roundtrip rule and rule-context construction), not as direct calls from
-        the validate functions — the narrative names the semantic edges the run performs. Revisit
-        when Level 3 models call indirection.
+        validateProject gathers every input the rule context needs before it runs a single rule, and
+        each core or surfaces read is a narrated call on the validator's own client adapters rather
+        than an unnamed local: the recursion depth, the loader reset, six spec reads, the foreign
+        snapshots and the pins, the code model, the approval's settled files and their index, the
+        loader diagnostics, the packs, the round-trip findings, four rule-repository reads, the
+        configuration, the lock record, the variant registry, the export tables, the project graph
+        and the export usages. Folding calls into prose would hide exactly the cross-subsystem hops
+        those adapters exist to make visible; the count tracks how many inputs a project's own gate
+        has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:08:10.060Z'
+updatedAt: '2026-10-17T19:37:15.369Z'

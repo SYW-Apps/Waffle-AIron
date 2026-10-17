@@ -23,15 +23,15 @@ import { routeAdmin } from '../../src/server/http.js';
 import { getWebGraph } from '../../src/server/web.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { createProject } from '../../src/server/admin.js';
-import { mintUserToken, allow, seedUnit } from './helpers.js';
+import { mintUserToken, allow, seedUnit, seedExportedSurface, type SeededExport } from './helpers.js';
 import { createProjectRecord } from '../../src/server/projects.js';
-import { hostCore } from '../../src/server/adapters.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
 import { getPublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type {
   ApiKeyRecord,
@@ -77,7 +77,6 @@ function relationRec(over: Partial<ProjectRelationRecord> = {}): ProjectRelation
     sourceProjectId: 'src',
     targetProjectId: 'dst',
     kind: 'consumes',
-    sourceAdapter: 'src_client_adapter',
     targetPublicInterface: { projectId: 'dst', systemInterfaceId: 'dst-api', reason: 'needs it' },
     reason: 'declared dependency',
     status: 'active',
@@ -124,12 +123,10 @@ describe('landscape orchestrator (sdd_host)', () => {
 
   /** Seed L0 publicInterfaces into a provisioned project's raw system spec. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function seedSurface(root: string, ifaces: any[]): void {
-    const p = path.join(root, '.wai', 'specs', '.index.yaml');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = readYamlFile(p) as any;
-    raw.publicInterfaces = ifaces;
-    writeYamlFile(p, raw);
+  function seedSurface(root: string, ifaces: SeededExport[]): void {
+    // The landscape reads the RESOLVED export table, so each entry is backed
+    // by a published Portal the resolver can bind.
+    seedExportedSurface(root, ifaces);
   }
 
   /** Create a hosted project at the REGISTRY level (no placement) and return its
@@ -191,14 +188,12 @@ describe('landscape orchestrator (sdd_host)', () => {
         subsystem: 'billing',
         interface: 'ibilling_portal',
         component: 'billing_portal',
-        // Method given as an object carrying a full signature + narrative — only
-        // the NAME may survive redaction:
+        // The contract carries full signatures — only the method NAMES, the
+        // HTTP paths and the type names may survive redaction:
         methods: [
-          { name: 'createInvoice', signature: 'createInvoice(x): y', narrative: 'secret private steps' },
-          'listInvoices',
+          { name: 'createInvoice', http: { method: 'POST', path: '/invoices' }, params: [{ name: 'line', type: 'LineItem' }], returns: 'Invoice' },
+          { name: 'listInvoices', http: { method: 'GET', path: '/invoices/{id}' }, returns: 'Invoice[]' },
         ],
-        endpoints: ['/invoices', '/invoices/{id}'],
-        publicTypes: ['Invoice', { name: 'LineItem' }],
         details: 'Billing public surface',
       },
     ]);
@@ -218,7 +213,7 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(iface.stability).toBe('stable');
     expect(iface.methods).toEqual(['createInvoice', 'listInvoices']);
     expect(iface.endpoints).toEqual(['/invoices', '/invoices/{id}']);
-    expect(iface.publicTypes).toEqual(['Invoice', 'LineItem']);
+    expect(iface.publicTypes?.sort()).toEqual(['Invoice', 'LineItem']);
     expect(iface.details).toBe('Billing public surface');
 
     // Redaction: private references / narratives / signatures never leak.
@@ -241,19 +236,14 @@ describe('landscape orchestrator (sdd_host)', () => {
 
   it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
     const rec = project('resolve-proj');
-    const subDir = path.join(rec.rootPath, '.wai', 'specs', 'subsystems');
-    fs.mkdirSync(subDir, { recursive: true });
-    writeYamlFile(path.join(subDir, 'sub1.yaml'), {
-      id: 'sub1',
-      name: 'Sub One',
-      description: 'a subsystem',
-      parentSystem: 'resolve-proj',
-      publicInterfaces: [{ type: 'GraphQL', details: 'from subsystem', interface: 'igql_portal', component: 'gql_portal' }],
-      status: 'complete',
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    });
-    seedSurface(rec.rootPath, [{ id: 'gql', name: 'GraphQL API', subsystem: 'sub1', interface: 'igql_portal' }]);
+    // sub1 publishes gql_portal through igql_portal as GraphQL; the L0 entry
+    // then names only the subsystem and the interface, and inherits the rest.
+    seedSurface(rec.rootPath, [{ id: 'gql', subsystem: 'sub1', component: 'gql_portal', interface: 'igql_portal', type: 'GraphQL', details: 'from subsystem' }]);
+    const indexPath = path.join(rec.rootPath, '.wai', 'specs', '.index.yaml');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const system = readYamlFile(indexPath) as any;
+    system.publicInterfaces = [{ id: 'gql', name: 'GraphQL API', subsystem: 'sub1', interface: 'igql_portal' }];
+    writeYamlFile(indexPath, system);
 
     const snap = refreshPublicSurface(cfg, MASTER, 'resolve-proj');
     expect(snap.interfaces).toHaveLength(1);
@@ -318,6 +308,38 @@ describe('landscape orchestrator (sdd_host)', () => {
     removeRelation(cfg, MASTER, stored.id);
     expect(listRelations(cfg, MASTER, 'h-src')).toHaveLength(0);
     expect(queryAuditEvents(dataDir, { action: 'relation.remove' }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('upsertRelation: the server records createdBy and createdAt, and an update keeps the original creator', () => {
+    const dst = project('c-dst');
+    project('c-src');
+    seedSurface(dst.rootPath, [{ id: 'dst-api', name: 'DST', type: 'REST', details: 'd' }]);
+    refreshPublicSurface(cfg, MASTER, 'c-dst');
+    const asked = {
+      sourceProjectId: 'c-src',
+      targetProjectId: 'c-dst',
+      targetPublicInterface: { projectId: 'c-dst', systemInterfaceId: 'dst-api', reason: 'r' },
+    };
+
+    const before = Date.now();
+    const created = upsertRelation(cfg, MASTER, relationRec({
+      ...asked,
+      createdAt: '1999-01-01T00:00:00.000Z',
+      createdBy: { userId: 'someone-else', kind: 'human', issuer: 'local' },
+    }));
+    expect(created.createdBy.userId).not.toBe('someone-else');
+    expect(Date.parse(created.createdAt)).toBeGreaterThanOrEqual(before - 1000);
+
+    const updated = upsertRelation(cfg, MASTER, relationRec({
+      ...asked,
+      id: created.id,
+      reason: 'changed',
+      createdAt: '2000-01-01T00:00:00.000Z',
+      createdBy: { userId: 'another', kind: 'human', issuer: 'local' },
+    }));
+    expect(updated.reason).toBe('changed');
+    expect(updated.createdBy).toEqual(created.createdBy);
+    expect(updated.createdAt).toBe(created.createdAt);
   });
 
   it('listRelations / removeRelation: gated by landscape grants', () => {
@@ -447,7 +469,13 @@ describe('landscape orchestrator (sdd_host)', () => {
   it('getProjectSurfaceForMcp + listVisibleSurfaces: cross-tenant is grant-gated once units exist', () => {
     project('s3-a');
     const b = project('s3-b');
-    seedSurface(b.rootPath, [{ id: 'b-api', name: 'B API', type: 'REST', details: 'd' }]);
+    // One entry reaches partners; the other declares no audience, so it takes
+    // the resolver's default, instance — the projector's default, which no
+    // longer reaches across tenants the way the landscape's old 'public' did.
+    seedSurface(b.rootPath, [
+      { id: 'b-api', name: 'B API', type: 'REST', details: 'd', audience: 'partner' },
+      { id: 'b-internal', name: 'B Internal', type: 'REST', details: 'd' },
+    ]);
     refreshPublicSurface(cfg, MASTER, 's3-b');
 
     // Two tenant roots, no grant: invisible.
@@ -463,8 +491,10 @@ describe('landscape orchestrator (sdd_host)', () => {
     const catalog = listVisibleSurfaces(cfg, MASTER, 's3-a');
     const entry = catalog.find((e) => e.projectId === 's3-b');
     expect(entry?.distance).toBe('partner');
-    // The stored summary's default audience ('public' → external) covers partner.
+    // A partner-audience entry covers partner distance; an entry with the
+    // default audience (instance) does not.
     expect(entry?.interfaces.some((i) => i.id === 'b-api')).toBe(true);
+    expect(entry?.interfaces.some((i) => i.id === 'b-internal')).toBe(false);
 
     const snapshot = getProjectSurfaceForMcp(cfg, MASTER, 's3-a', 's3-b');
     expect(snapshot.origin).toBe('exchanged');
@@ -692,9 +722,9 @@ describe('landscape diagram specialist (pure buildGraph)', () => {
       [{ projectId: 'p2', stateId: 's', systemName: 'P2', interfaces: [{ id: 'p2-api', name: 'P2 API', type: 'REST', audience: 'public', methods: [], details: '' }], exportedAt: '' }],
       [
         // Relation to a KNOWN interface node.
-        { id: 'r1', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'consumes', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'p2-api', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+        { id: 'r1', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'consumes', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'p2-api', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
         // Relation whose target interface node is ABSENT → falls back to the project node.
-        { id: 'r2', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'depends_on', sourceAdapter: 'a', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'missing', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
+        { id: 'r2', sourceProjectId: 'p1', targetProjectId: 'p2', kind: 'depends_on', targetPublicInterface: { projectId: 'p2', systemInterfaceId: 'missing', reason: 'r' }, reason: 'r', status: 'active', createdAt: '', createdBy: subject },
       ],
     );
 
@@ -772,11 +802,7 @@ describe('landscape portal (sdd_host http)', () => {
   }
 
   function seedSurface(root: string, id: string): void {
-    const p = path.join(root, '.wai', 'specs', '.index.yaml');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = readYamlFile(p) as any;
-    raw.publicInterfaces = [{ id, name: id, type: 'REST', details: 'd' }];
-    writeYamlFile(p, raw);
+    seedExportedSurface(root, [{ id, name: id, type: 'REST', details: 'd' }]);
   }
 
   it('the seven landscape endpoints respond with the correct statuses through routeAdmin', async () => {
@@ -813,7 +839,6 @@ describe('landscape portal (sdd_host http)', () => {
         sourceProjectId: 'src-proj',
         targetProjectId: 'dst-proj',
         kind: 'consumes',
-        sourceAdapter: 'src_client_adapter',
         targetPublicInterface: { projectId: 'dst-proj', systemInterfaceId: 'dst-api', reason: 'r' },
         reason: 'r',
         status: 'active',

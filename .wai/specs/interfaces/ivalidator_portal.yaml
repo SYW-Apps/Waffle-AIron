@@ -3,10 +3,28 @@ name: Validator Portal Interface
 description: Inbound Portal contract for validator subsystem.
 component: validator_portal
 methods:
-  - name: validateSddTree
-    description: Performs full SDD tree validation
-    signature: 'validateSddTree(): ValidationResult'
+  - name: validateProject
+    description: >-
+      The owner's gate: validate the bound project from its own files alone — its specs,
+      configuration, code, lock, externals lock and pins, and the export tables of the members it
+      contains — and answer with every finding. The same verdict from every root, with or without
+      its family on disk; a finding about a cross-project reference carries its structured
+      resolution. Passing nothing validates the project on its own configuration.
+    signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary; a bare RulesConfig is accepted here too, for callers that only
+          override severities
+        optional: true
+      - name: projectType
+        type: string
+        description: >-
+          The project type whose doctrine applies, when it is not carried on the options; defaults
+          to backend
+        optional: true
   - name: validateRegistry
     description: Validates registry
     signature: 'validateRegistry(registry: Registry, rules: RulesConfig): ValidationResult'
@@ -17,17 +35,248 @@ methods:
     returns: ValidationResult
   - name: validateAsComplete
     description: >-
-      Run the conformance gate at full strictness, treating every spec as complete (no draft
-      severity relaxation) without mutating any spec. The as-complete gate a lock requires.
-    signature: 'validateAsComplete(): ValidationResult'
+      The owner's gate at full strictness: every spec is judged as though complete, so the
+      completeness rules that relax while a spec is draft apply as errors. This is the gate behind
+      `wairon lock`, and it is `validateProject` with `treatAllAsComplete` set — named separately
+      because a gate that a caller can accidentally run in the relaxed mode is not a gate. It judges
+      the bound project alone: a member's own findings are its own lock's, never its parent's (stage
+      4, confirmed); the parent's gate identity still hashes member content until stage 5 (see
+      computeGateStateId).
+    signature: 'validateAsComplete(options?: ValidationOptions): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          What this run may vary; `treatAllAsComplete` is set by this method and not the caller's to
+          unset
+        optional: true
   - name: listRules
     description: >-
       List the active conformance rule set (built-ins plus loaded pack rules) for `wairon rules
       list`.
-    signature: 'listRules(): SddRule[]'
-    returns: SddRule[]
+    signature: 'listRules(): list<SddRule>'
+    returns: list<SddRule>
     params: []
+  - name: validateComponentCandidate
+    description: >-
+      Judge one component before it is written: run the spec-scoped rules against it and return the
+      verdict split by severity. The write-boundary half of the rule set, with the same rules, codes
+      and messages as validate, for the verdicts that need no tree. sdd_authoring's gated workflow
+      calls it through its own client adapter before any component spec reaches disk — on a create
+      directly, and on an update as the hook injected into the delta write — and refuses the write
+      when the verdict holds an error.
+    signature: >-
+      validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
+      CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component about to be written
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
+  - name: computeGateStateId
+    description: >-
+      Forward to spec_validator.computeGateStateId: the gate identity a lock records and every
+      staleness check compares — the project's own DESIGN identity (code linkage out), the design
+      doctrine, its own consumed contract inputs, its `composition`, and each direct member's
+      composition subject (read from the member's own lock record). Rules that judge code are not
+      part of it. Carries asRecorded when the lock on disk is a format-2 one, which
+      core_orchestrator.readLockState also accepts.
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
+  - name: findTestsReferencing
+    description: >-
+      Published: the tests that encode a given set of methods, so a write that changes or deletes
+      one can say which tests it just invalidated.
+    signature: >-
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
+    params:
+      - name: methods
+        type: list<MethodImplementation>
+        description: The methods to look for
+      - name: projectRoot
+        type: string
+        description: The root the test roots are resolved within
+      - name: testRoots
+        type: list<string>
+        description: Project-relative test directories; empty answers empty
+    guarantees:
+      - idempotent
+  - name: builtinProfileIds
+    description: >-
+      Published read: the ids of wairon's built-in architectural profiles, the built-in half of what
+      a projectType may name.
+    signature: 'builtinProfileIds(): list<string>'
+    returns: list<string>
+    params: []
+  - name: builtinProjectKinds
+    description: >-
+      Published read: the ids of wairon's built-in composite project kinds — projectType values that
+      are not architectural profiles.
+    signature: 'builtinProjectKinds(): list<string>'
+    returns: list<string>
+    params: []
+  - name: validateFamily
+    description: >-
+      The family run: every selected project's own gate verbatim under its project key, the
+      composition of each project's externals against their live producers, and the family checks.
+      `wairon validate` at a project that declares members, and `--family` anywhere, call this; the
+      owner's gate is validateProject.
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: >-
+          The run's switches; `family` makes the walk up explicit, `memberDepth` bounds the member
+          levels
+  - name: measurePackImpact
+    description: >-
+      What one pack write would change on the bound project, measured before it happens: the pack's
+      doctrine against wairon's defaults, the profiles of it that would govern, and the owner's-gate
+      findings that differ between the current and the candidate configuration. The report every
+      pack-selecting surface shows before it writes (`wairon pack use`/`add`, an install that moves
+      a floating selection, the MCP and hosted pack tools) and `wairon pack impact` shows on demand.
+      Writes nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
+    guarantees:
+      - idempotent
+  - name: measurePackDoctrine
+    description: >-
+      What one pack changes against wairon's defaults, with no project to validate — the doctrine
+      half alone (an init request evaluated before the project exists). Writes nothing.
+    signature: 'measurePackDoctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+    guarantees:
+      - idempotent
+  - name: familyApprovals
+    description: >-
+      Forward to family_validator.approvals: the bound project's pin tree — its own approval state
+      and each member's within `depth` levels, each computed at the member's own root, with each
+      member's subject and how its parent pinned it. The one source the lock workflow (depth 1:
+      record `members`, enforce requireApprovedMembers), `wairon status` and sdd_get_status read, so
+      they cannot disagree. Writes nothing. Hosted callers must gate on reach themselves before
+      asking about a family.
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
+    params:
+      - name: depth
+        type: int
+        description: 'Member levels to include: 1 = direct members, omitted = every level'
+        optional: true
+    guarantees:
+      - idempotent
+  - name: familyRelations
+    description: >-
+      Forward to family_validator.relations: the bound family's relation health — each project
+      member's externals status read at its own root, stamped with when, a project that could not be
+      opened answered with its reason — what the canvas colours its consumption edges from. Writes
+      nothing. Callers grant the reach first (a hosted request keeps its credential's).
+    signature: 'familyRelations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
+    params: []
+    guarantees:
+      - idempotent
+  - name: adviseExternals
+    description: >-
+      Published: the advisory live comparison of the bound project's externals the run did not
+      compose (family_validator.advise) — EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED,
+      EXTERNAL_LIVE_UNCOMPARED, every one marked advisory. Plain `validate`, `status` and their MCP
+      twins append it beside the gate's own findings; it never decides `valid` or `--ci`.
+    signatureFrom: family_validator.advise
+  - name: reachModel
+    description: >-
+      Forward to family_validator.reachModel: what reaches each Portal verb of the bound project
+      (or, at a project that declares members, of its family), and from where. It is the one input
+      of every derived networking output (the flow matrix, policies, diagrams, the observed-flow
+      check, a flow's explanation), so those outputs and the validator's network verdicts read the
+      same facts. Writes nothing. Callers grant the reach first (a hosted request keeps its
+      credential's).
+    signature: 'reachModel(options: ValidationOptions): ReachModel'
+    returns: ReachModel
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The selection: member depth and reach'
+    guarantees:
+      - idempotent
+    effect: read
+  - name: unpinnedExternals
+    description: >-
+      The bound project's declared externals (and referenced project members) that were never pinned
+      — no entry in its externals lock, so nothing records what its design is judged against; a part
+      is no producer and is left out. What `wairon lock` refuses to approve over: an unpinned
+      external is never a pass, so never an approval either. Reads the bound root's own files;
+      writes nothing.
+    signature: 'unpinnedExternals(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
+  - name: unrecordedExternalUses
+    description: >-
+      The uses of each pinned external of the bound project that its pin does not record ("used now,
+      but not in the lock"), keyed by alias, each `<name>` or `<name>.<method>` — counted offline
+      from its own pins and references. What `wairon lock` refuses to approve over exactly as it
+      refuses a never-pinned external: the pin records none of these uses, so a producer that broke
+      one could not be told. Writes nothing.
+    signature: 'unrecordedExternalUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
+  - name: implementsProblem
+    description: >-
+      What `validate` would say of a contract declaring `implements: <ref>`, without writing it: an
+      undeclared alias, a name the producer does not export, or one exported for calling rather than
+      with role implement — one sentence prefixed with its code, or null. What sdd_update_spec
+      reports on a write (a dry run included) that sets `implements`. Writes nothing.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
+  - name: introducedFindings
+    description: >-
+      Judge one component or contract about to be written in its tree: the doctrine edges and route
+      collisions the write itself introduces, split by severity. sdd_authoring's gated workflow
+      calls it through its own client adapter on a create and on a delta, and refuses the write when
+      the verdict holds an error.
+    signature: >-
+      introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
+      CandidateOptions, others?: list<ComponentSpec>): CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec written
+      - name: candidate
+        type: ComponentSpec | InterfaceSpec
+        description: The spec about to be written, merged and carried
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
+      - name: others
+        type: list<ComponentSpec>
+        description: The other components the same write changes
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T20:09:04.994Z'
+updatedAt: '2026-10-09T00:30:21.137Z'

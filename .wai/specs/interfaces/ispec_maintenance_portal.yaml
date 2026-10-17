@@ -1,0 +1,402 @@
+id: ispec_maintenance_portal
+name: Spec Maintenance Portal Interface
+description: >-
+  The mechanical spec writes of sdd_core: renames, subproject relocation, doctor repairs, tree
+  import and provisioning.
+component: spec_maintenance_portal
+methods:
+  - name: provisionProject
+    description: >-
+      Bootstrap a fresh isolated project at the bound root: default project.yaml (declaring the id,
+      `name` slugified) plus an L0 system spec named `name`.
+    signature: 'provisionProject(name: string): void'
+    returns: void
+  - name: moveMember
+    description: >-
+      Published write: relocate a member's directory and point its `members` entry there (a legacy
+      mount is moved into `members` first). Routed through the core orchestrator.
+    signature: 'moveMember(alias: string, newPath: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
+  - name: externalizeSubsystem
+    description: >-
+      Published write: move an internal subsystem out into a part (stage 8 default) or, with `as:
+      project`, into a member project declared in `members`. Routed through the core orchestrator.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem
+      - name: path
+        type: string
+        description: The part's root, relative to the bound root
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+  - name: internalizeMember
+    description: >-
+      Published write: take a member back into the bound project whole — every subsystem and
+      project-level type — sending its own metadata to the destination's homes and listing what it
+      deletes, and remove its declaration. Routed through the core orchestrator. The family
+      migration (sdd_migrations) is its caller: it plans the consumers of the member elsewhere in
+      the family and runs this inside a staged transaction.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where the member's own metadata goes
+  - name: importSpecTree
+    description: >-
+      Imports a .waitree archive into a project root under an explicit import policy, backing up any
+      tree it replaces
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
+  - name: ensureProjectInitialized
+    description: >-
+      Write path for completing a project's bootstrap non-destructively (wairon init, the generate
+      cascade): the default configuration and the L0 system spec, each only when absent. A
+      configuration it writes declares the given id, else the chosen name slugified.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a chained child's mount subsystem
+          id; omitted, the chosen name slugified
+        optional: true
+      - name: vision
+        type: string
+        description: The vision an L0 written here carries; omitted, a placeholder naming the project
+        optional: true
+    guarantees:
+      - idempotent
+  - name: renameComponent
+    description: 'Forward to core_orchestrator.renameComponent: rename a component and every reference to it'
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: retireSpecialists
+    description: >-
+      Forward to core_orchestrator.retireSpecialists: plan, and with apply write, the migration off
+      the retired Specialist stereotype
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
+  - name: renameMethod
+    description: 'Forward to core_orchestrator.renameMethod: rename a contract method and every reference to it'
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: repairForeignStepFields
+    description: >-
+      Forward to core_orchestrator.repairForeignStepFields: plan, and with apply write, the removal
+      of every narrative-step field its own step type cannot have. Without apply nothing is written.
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: findLegacySpecFiles
+    description: >-
+      Published read: the bound tree's spec files stored under a legacy (undotted) name, each with
+      the name the current layout expects — what `wairon doctor` reports and `validate` warns about
+      before a migration.
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      Published read: the chained subproject directories under a root that hold a spec tree but no
+      project configuration.
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Published repair: write a project configuration for every chained subproject under a root that
+      has a spec tree but none, leaving its specs untouched; answers the directories repaired.
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: moveMountToMembers
+    description: >-
+      Published write: move one legacy L1 mount of the bound project into its `members` (path and
+      description), deleting the L1 document; idempotent. Routed through the core orchestrator.
+      Returns whether it wrote.
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Published write: re-save one spec with every reference in its canonical stage-3 form, targets
+      unchanged; idempotent. Routed through the core orchestrator. Returns whether the stored text
+      changed.
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+  - name: createMember
+    description: >-
+      Published write: create a member of the bound project at a source in the members grammar — a
+      part by default, a project with `as: project` (stage 8: creating the project content is what
+      makes it one) — and declare it in `members`; with `report`, the plan, refused exactly as the
+      write would be, and nothing written. Routed through the core orchestrator.
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
+    returns: MemberCreation
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: source
+        type: string
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+  - name: rewriteReferences
+    description: >-
+      Published write: respell references at parsed positions of one spec of the family, each edit
+      replacing exactly its text at exactly its position; refused whole when an edit's text is not
+      there. Answers whether the stored text changed. Routed through the core orchestrator.
+    signature: 'rewriteReferences(kind: WritableSpecKind, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: list<ReferenceEdit>
+        description: The edits for this spec
+    guarantees:
+      - idempotent
+  - name: promoteMember
+    description: >-
+      Published write: promote a part of the bound project to a project in place (stage 8). Routed
+      through the core orchestrator.
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: The new project's id
+        optional: true
+  - name: demoteMember
+    description: >-
+      Published write: demote a project member of the bound project to a part in place (stage 8).
+      Routed through the core orchestrator.
+    signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its metadata goes
+  - name: updateMember
+    description: >-
+      Published write: change an existing member's `as`, source or description (stage 8). Routed
+      through the core orchestrator.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set
+  - name: advanceMember
+    description: >-
+      Published write: move a git member's pinned commit — `wairon member update` (stage 8). Routed
+      through the core orchestrator.
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
+    returns: MemberAdvance
+    params:
+      - name: alias
+        type: string
+        description: A git member's alias
+      - name: ref
+        type: string
+        description: The ref to follow
+        optional: true
+      - name: commit
+        type: string
+        description: An exact commit
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Report and write nothing
+        optional: true
+  - name: repairSignatures
+    description: >-
+      Forward to core_orchestrator.repairSignatures: plan, and with apply write, the regeneration of
+      every stored signature text its params contradict and the removal of every restatement equal
+      to its method's signature source. Without apply nothing is written.
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: repairTypeSpellings
+    description: >-
+      Forward to core_orchestrator.repairTypeSpellings: plan, and with apply write, the rewrite of
+      every stored type position that is an alias into its canonical spelling, with int proposed
+      (never written) for number positions whose name plainly says an integer and the positions only
+      an author can settle listed. Without apply nothing is written.
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the rewrite; false plans without writing
+  - name: renameType
+    description: 'Forward to core_orchestrator.renameType: rename a type and every reference to it'
+    signatureFrom: core_orchestrator.renameType
+  - name: migrateReachability
+    description: >-
+      Forward to reachability_migration.migrate: plan, and with apply write, the bound project's
+      migration onto the reachability model (transports, listener mounts into Portal-level entries
+      and implementation routers, retired invokedBy kinds, authored export types, in-process Custom
+      endpoints, retired lint allows). Without apply nothing is written.
+    signatureFrom: reachability_migration.migrate
+  - name: renameField
+    description: 'Forward to core_orchestrator.renameField: rename a field of a type and every reference to it'
+    signatureFrom: core_orchestrator.renameField
+  - name: renameParam
+    description: >-
+      Forward to core_orchestrator.renameParam: rename a parameter of a contract method, keeping its
+      old name in the parameter's rename trace
+    signatureFrom: core_orchestrator.renameParam
+  - name: findOrphanedSpecFiles
+    description: >-
+      Published read: the bound tree's spec files left standing while its specs folder holds no L0 —
+      what `validate` reports as an error and `lock-check` refuses, instead of reading the tree as
+      empty.
+    signature: 'findOrphanedSpecFiles(): list<string>'
+    returns: list<string>
+    params: []
+  - name: seedDemoTree
+    description: >-
+      Writes the ShopFlow example spec tree into the currently bound project root — the content
+      `wairon host demo` creates a demo project with
+    signature: 'seedDemoTree(): void'
+    returns: void
+    params: []
+    effect: write
+  - name: renameSpecId
+    description: >-
+      Forward to core_orchestrator.renameSpecId: rename one contract or implementation on its own
+      and every reference to it
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+status: complete
+createdAt: '2026-09-25T17:33:03.747Z'
+updatedAt: '2026-10-09T17:03:26.317Z'

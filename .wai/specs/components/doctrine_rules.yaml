@@ -1,0 +1,19 @@
+id: doctrine_rules
+name: Doctrine Rules
+description: >-
+  Judges the architecture standard's stereotype and pattern doctrine: Portal endpoints and
+  cross-call auth, stereotype dependency rules, pattern ownership, and 1:1 facade forwarding. Pure
+  logic (dependencyClass: pure, the arbiter variant): it holds no state (the rule set belongs to the
+  rule Repository), does no I/O and runs no workflow. Its verdicts are not type methods, because the
+  rule set is open (packs register rules at runtime) and most verdicts read many specs. Beside its
+  rules it answers one question for other rules (iedge_verdicts): whether an edge that is not
+  declared yet would be legal, composed from the same edge judgements its rules report with.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+variant: arbiter
+status: complete
+createdAt: '2026-09-14T05:42:14.207Z'
+updatedAt: '2026-10-16T17:41:26.315Z'

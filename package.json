@@ -24,9 +24,21 @@
     "wai": "./dist/cli/index.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "schemas",
+    "README.md",
+    "docs/*.md",
+    "!docs/release-qa.md",
+    "docs/standards/**",
+    "docs/design/supervisor-doctrine.md",
+    "docs/design/pack-scoping.md",
+    "docs/design/connecting-agent-entrypoint.md",
+    "docs/design/execution-budgets.md",
+    "docs/design/approval-baseline.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md"
   ],
   "workspaces": [
     "sdk"
@@ -38,14 +50,16 @@
     "dev": "tsx src/cli/index.ts",
     "build:sdk": "npm --prefix sdk run build",
     "prebuild": "npm --prefix sdk run build",
-    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\" && node scripts/embed-web.mjs",
+    "build": "tsup && node -e \"const fs=require('fs'); fs.cpSync('src/templates','dist/templates',{recursive:true});\" && node scripts/embed-web.mjs && node scripts/design-schema.mjs",
     "gen:canvas": "node scripts/gen-canvas-engine.mjs",
     "build:web": "node scripts/gen-canvas-engine.mjs && npm --prefix web install --no-audit --no-fund && npm --prefix web run build",
     "build:all": "npm run build:web && npm run build",
     "build:watch": "tsup --watch",
     "build:binary": "npm run build && pkg dist/cli/index.js --config package.json --target node20-linux-x64,node20-win-x64,node20-macos-x64 --output wairon --compress GZip",
     "typecheck": "tsc --noEmit",
+    "typecheck:web": "npm --prefix web install --no-audit --no-fund && npm --prefix web run typecheck",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "rimraf dist"
@@ -65,8 +79,10 @@
     "inquirer": "^8.2.6",
     "js-yaml": "^4.1.0",
     "ora": "^5.4.1",
-    "zod": "^3.23.8",
-    "swagger-ui-dist": "^5.32.9"
+    "swagger-ui-dist": "^5.32.9",
+    "typescript": "^5.5.2",
+    "yaml": "^2.9.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/inquirer": "^8.2.10",
@@ -75,11 +91,12 @@
     "@vitest/coverage-v8": "^4.1.9",
     "@wairon/sdk": "*",
     "@yao-pkg/pkg": "^5.12.0",
+    "ajv": "^8.20.0",
     "cytoscape": "^3.34.0",
     "rimraf": "^5.0.7",
     "tsup": "^8.1.0",
     "tsx": "^4.15.7",
-    "typescript": "^5.5.2",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "zod-to-json-schema": "^3.25.2"
   }
 }

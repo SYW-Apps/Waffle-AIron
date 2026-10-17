@@ -1,0 +1,61 @@
+id: icli_network_adapter
+name: CLI Network Adapter Interface
+description: Forwards onto the network portal.
+component: cli_network_adapter
+methods:
+  - name: flows
+    description: 'Forward to network_portal.flows: the allowed-flows matrix.'
+    signature: 'flows(options: ValidationOptions, format: NetworkOutputFormat): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: format
+        type: NetworkOutputFormat
+  - name: policy
+    description: 'Forward to network_portal.policy: generated policy.'
+    signature: >-
+      policy(options: ValidationOptions, bindingsPath: string, format: NetworkOutputFormat):
+      NetworkDocument
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: bindingsPath
+        type: string
+      - name: format
+        type: NetworkOutputFormat
+  - name: diagram
+    description: 'Forward to network_portal.diagram: the Mermaid picture.'
+    signature: 'diagram(options: ValidationOptions): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+  - name: check
+    description: 'Forward to network_portal.check: observed flows against the matrix.'
+    signature: >-
+      check(options: ValidationOptions, observedPath: string, bindingsPath: string?):
+      FlowCheckReport
+    returns: FlowCheckReport
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: observedPath
+        type: string
+      - name: bindingsPath
+        type: string?
+  - name: why
+    description: 'Forward to network_portal.why: why one party may reach another.'
+    signature: 'why(options: ValidationOptions, from: string, to: string): FlowExplanation'
+    returns: FlowExplanation
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: from
+        type: string
+      - name: to
+        type: string
+status: complete
+createdAt: '2026-10-06T13:12:55.775Z'
+updatedAt: '2026-10-06T13:13:04.178Z'

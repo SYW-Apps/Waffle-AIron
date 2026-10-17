@@ -1,0 +1,18 @@
+kind: enum
+id: project_approval_state
+name: ProjectApprovalState
+description: >-
+  A member project's approval as judged at its own root. A part has no lock of its own and records
+  approved: its parent's approval is its approval.
+fields: []
+methods: []
+sourcePath: src/models/lock.ts
+values:
+  - name: approved
+    description: Its lock matches its own gate identity, recomputed at its own root
+  - name: drifted
+    description: It has a lock, and its gate identity moved since
+  - name: never
+    description: No lock, or no project on disk at the declared path
+createdAt: '2026-10-04T23:13:08.699Z'
+updatedAt: '2026-10-04T23:13:09.077Z'

@@ -1,0 +1,21 @@
+kind: enum
+id: share_view_outcome
+name: ShareViewOutcome
+description: >-
+  How resolving a share token for its captured view ended. A view is never a download, so it is
+  never denied one.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: served
+    description: The view was served
+  - name: denied-disabled
+    description: The link is disabled
+  - name: denied-expired
+    description: The link has expired
+  - name: not-found
+    description: No such link
+createdAt: '2026-10-04T23:18:33.854Z'
+updatedAt: '2026-10-04T23:18:34.278Z'

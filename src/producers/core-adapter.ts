@@ -1,6 +1,8 @@
 // ---------------------------------------------------------------------------
 // Producer Core Client Adapter (sdd_producers → sdd_core) — reuse the spec
-// loaders and the diagram engine, scoped to the bound project.
+// loaders and the diagram engine, scoped to the bound project. Identity
+// re-exports of the core portals: the hop lands on what sdd_core publishes,
+// never on the module behind it.
 // ---------------------------------------------------------------------------
 
 export {
@@ -8,6 +10,6 @@ export {
   loadSubsystemSpecs,
   loadComponentSpecs,
   loadInterfaceSpecs,
-  loadImplementationSpecs,
-} from '../core/specs.js';
-export { renderDiagram } from '../core/diagram.js';
+  loadTypeSpecs,
+  renderDiagram,
+} from '../core/index.js';

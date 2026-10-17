@@ -15,5 +15,6 @@ fields:
     description: Pinned pattern version; omit to accept any resolved version.
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-14T18:56:25.520Z'
-updatedAt: '2026-07-14T18:56:25.563Z'
+updatedAt: '2026-09-19T11:07:12.931Z'

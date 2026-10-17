@@ -13,17 +13,26 @@ methods:
       not), stamp a random id and createdAt on create, replace any existing binding covering the
       SAME scope (at most one per scope — a re-bind is a replacement, never a duplicate), persist
       the collection atomically, and return the stored binding.
+    calls:
+      - git_backing_store.load
+      - git_backing_store.replaceAll
   - name: removeBinding
     narrative: []
     intent: >-
       Filter the binding with the given id out of the collection (an absent id is a no-op) and
       persist atomically. The backing repository itself is untouched.
+    calls:
+      - git_backing_store.load
+      - git_backing_store.replaceAll
   - name: touchSync
     narrative: []
     intent: >-
       Set lastSyncAt on the binding with the given id (an absent id is a no-op) and persist
       atomically.
+    calls:
+      - git_backing_store.load
+      - git_backing_store.replaceAll
 detail: intent
 status: complete
 createdAt: '2026-07-16T15:39:53.590Z'
-updatedAt: '2026-07-16T15:48:49.481Z'
+updatedAt: '2026-09-19T21:26:56.859Z'

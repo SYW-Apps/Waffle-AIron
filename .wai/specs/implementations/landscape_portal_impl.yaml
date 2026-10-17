@@ -4,7 +4,10 @@ description: >-
   Control-plane HTTP boundary for hosted landscape: forwards each organization, placement,
   public-surface, relation, and graph operation to the landscape orchestrator.
 contract: ilandscape_portal
-sourcePath: src/server/landscape.ts
+sourcePath: src/server/landscape-portal.ts
+injectedParams:
+  - cfg
+router: handleLandscapeRequest
 methods:
   - name: upsertUnit
     narrative:
@@ -47,7 +50,7 @@ methods:
         description: Forward to the landscape orchestrator
         type: call
         targetComponent: landscape_orchestrator
-        targetMethod: generateLandscape
+        targetMethod: generate
   - name: removeRelation
     narrative:
       - stepNumber: 1
@@ -74,4 +77,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T22:08:59.746Z'
-updatedAt: '2026-07-23T22:35:43.512Z'
+updatedAt: '2026-10-06T18:55:16.403Z'

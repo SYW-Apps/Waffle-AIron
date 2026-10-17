@@ -16,18 +16,19 @@ fields:
     description: Initial version (default 0.1.0)
     optional: true
   - name: kind
-    type: string
-    description: '"declarative" | "code"'
+    type: PackKind
+    description: The pack variant.
     optional: false
   - name: targetDir
     type: string
     description: Directory to scaffold the pack project into
     optional: false
   - name: withSkill
-    type: boolean
+    type: bool
     description: Include a skills/<id>/SKILL.md stub
     optional: true
 methods: []
-componentClass: pack_scaffold_specialist
+componentClass: pack_scaffold
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:12:50.242Z'
-updatedAt: '2026-07-21T18:12:50.371Z'
+updatedAt: '2026-10-07T06:28:17.907Z'

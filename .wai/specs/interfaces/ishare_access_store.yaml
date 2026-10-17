@@ -5,8 +5,8 @@ component: share_access_store
 methods:
   - name: load
     description: Load the persisted access-log collection; a missing file yields an empty set.
-    signature: 'load(): ShareAccessEntry[]'
-    returns: ShareAccessEntry[]
+    signature: 'load(): list<ShareAccessEntry>'
+    returns: list<ShareAccessEntry>
     params: []
   - name: append
     description: Append one entry and persist the collection via write-temp-then-rename.
@@ -19,4 +19,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-17T22:29:31.826Z'
-updatedAt: '2026-07-18T10:10:39.436Z'
+updatedAt: '2026-10-04T10:19:30.146Z'

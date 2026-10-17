@@ -1,0 +1,17 @@
+kind: enum
+id: project_id_origin
+name: ProjectIdOrigin
+description: Where a family node's id came from.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: declared
+    description: Its configuration declares one
+  - name: name
+    description: Its name, slugified
+  - name: none
+    description: Neither yields one
+createdAt: '2026-10-04T23:33:21.223Z'
+updatedAt: '2026-10-04T23:33:21.729Z'

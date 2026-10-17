@@ -1,0 +1,19 @@
+kind: enum
+id: recovery_action
+name: RecoveryAction
+description: What doctor did about one unfinished migration transaction.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: pending
+    description: 'Reported only: --fix was not given'
+  - name: rolled-back
+    description: Every live file restored from its backup
+  - name: cleaned
+    description: It had committed; only its transaction directories remained, and were removed
+  - name: refused
+    description: An owner or the coordinator is out of reach, or a backup is missing
+createdAt: '2026-10-04T23:24:30.866Z'
+updatedAt: '2026-10-04T23:24:31.416Z'

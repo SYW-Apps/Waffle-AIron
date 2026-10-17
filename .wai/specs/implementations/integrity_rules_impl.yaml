@@ -1,0 +1,1507 @@
+id: integrity_rules_impl
+name: Integrity Rules Implementation
+description: The integrity rule family's methods, one per rule file under src/core/rules/integrity/.
+contract: iintegrity_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: hierarchyIntegrity
+    sourcePath: src/core/rules/integrity/hierarchy-integrity.ts
+    narrative:
+      - stepNumber: 1
+        label: l1Start
+        description: For each loaded subsystem, check whether it is in draft or design status (informational).
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 4
+      - stepNumber: 2
+        description: 'Branch: is the subsystem''s status draft or design?'
+        type: branch
+        condition: sub.isDraft()
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report DRAFT_SUBSYSTEM_WARNING (warning; draft context true) naming the subsystem as being
+          in draft/design status.
+        type: local
+      - stepNumber: 4
+        label: l1End
+        description: Continue with the next subsystem.
+        type: local
+      - stepNumber: 5
+        label: l2Start
+        description: For each loaded component, check whether it (or an ancestor) is in draft or design status.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 8
+      - stepNumber: 6
+        description: 'Branch: does ctx.isComponentDraft report the component as draft?'
+        type: branch
+        condition: ctx.isComponentDraft(comp.id) is true
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report DRAFT_COMPONENT_WARNING (warning; draft context true) naming the component as being
+          in draft/design status.
+        type: local
+      - stepNumber: 8
+        label: l2End
+        description: Continue with the next component.
+        type: local
+      - stepNumber: 9
+        label: l3Start
+        description: For each loaded subsystem, check that it references the L0 system.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 12
+      - stepNumber: 10
+        description: 'Branch: is the subsystem orphaned from the L0 system?'
+        type: branch
+        condition: >-
+          sub.parentSystem is missing, or it is set but does not equal the system name while the
+          subsystem id carries no "::" namespace hop (a root-level subsystem)
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report ORPHANED_SUBSYSTEM (warning; draft context from sub.isDraft()) naming the subsystem
+          and the system it fails to reference.
+        type: local
+      - stepNumber: 12
+        label: l3End
+        description: Continue with the next subsystem.
+        type: local
+      - stepNumber: 13
+        label: l4Start
+        description: For each loaded component, check that its declared subsystem exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.components
+        endStep: 16
+      - stepNumber: 14
+        description: 'Branch: does comp.subsystem reference a non-existent subsystem?'
+        type: branch
+        condition: ctx.subsystemIds does not contain comp.subsystem
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Report INVALID_SUBSYSTEM_REFERENCE (error; draft context from
+          ctx.isComponentDraft(comp.id)) naming the component and the non-existent subsystem it
+          references.
+        type: local
+      - stepNumber: 16
+        label: l4End
+        description: Continue with the next component.
+        type: local
+      - stepNumber: 17
+        label: l5Start
+        description: For each loaded interface, check that its owning component exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 20
+      - stepNumber: 18
+        description: 'Branch: does intf.component reference a non-existent component?'
+        type: branch
+        condition: ctx.componentIds does not contain intf.component
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Report INVALID_COMPONENT_REFERENCE (error; draft context from
+          ctx.isComponentDraft(intf.component) or the interface's own draft/design status) naming
+          the interface and the non-existent component it references.
+        type: local
+      - stepNumber: 20
+        label: l5End
+        description: Continue with the next interface.
+        type: local
+      - stepNumber: 21
+        label: l6Start
+        description: For each loaded implementation, check that its contract interface exists.
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 24
+      - stepNumber: 22
+        description: 'Branch: does impl.contract reference a non-existent interface?'
+        type: branch
+        condition: ctx.interfaceIds does not contain impl.contract
+        onFalseStep: 24
+      - stepNumber: 23
+        description: >-
+          Report INVALID_INTERFACE_REFERENCE (error; draft context ctx.isImplementationDraft(impl),
+          which here is the implementation's own draft/design status since its contract does not
+          resolve) naming the implementation and the non-existent interface contract it references.
+        type: local
+      - stepNumber: 24
+        label: l6End
+        description: Continue with the next implementation.
+        type: local
+    symbol: check
+    exportedVia: hierarchyRule
+  - name: roundtripSerialization
+    sourcePath: src/core/rules/integrity/roundtrip-serialization.ts
+    narrative:
+      - stepNumber: 1
+        label: rtStart
+        description: For each writer dry-run finding gathered by the validator before rules run (no I/O here).
+        type: loop
+        loopKind: forEach
+        over: ctx.roundTripIssues
+        endStep: 2
+      - stepNumber: 2
+        label: rtEnd
+        description: Report ROUNDTRIP_SERIALIZATION (error) using the issue's own message and specId verbatim.
+        type: local
+    symbol: check
+    exportedVia: roundtripRule
+  - name: lintAllows
+    sourcePath: src/core/rules/integrity/lint-allows.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the codes only the family run judges over every member (network_arbiter.familyCodes):
+          an allow of one is a known code here, and only the family run can tell that it covers
+          nothing
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: familyCodes
+      - stepNumber: 2
+        label: laStart
+        description: For each per-spec lint.allow entry gathered by the validator.
+        type: loop
+        loopKind: forEach
+        over: ctx.lintAllows
+        endStep: 21
+      - stepNumber: 3
+        description: 'Branch: does no registered rule emit a.code?'
+        type: branch
+        condition: ctx.knownIssueCodes does not contain a.code, and neither do the family codes
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Report UNKNOWN_LINT_ALLOW_CODE (warning) naming the spec and the unknown allowed code.
+        type: local
+      - stepNumber: 5
+        description: Continue with the next lint allow (mirrors the source's continue).
+        type: jump
+        toStep: 21
+      - stepNumber: 6
+        label: laErrorCheck
+        description: >-
+          Ask ctx.sitesReported for what this run DID report of that code on that spec: the sites
+          its findings named, whether any of them named none, and whether any landed as an error;
+          isError = one landed as an error, or none fired there and ctx.severityOf(a.code, a.specId)
+          is error
+        type: local
+      - stepNumber: 7
+        label: laErrorAllow
+        description: >-
+          Branch: does the allow name a code that is an error on this spec? Errors always surface,
+          so such an allow covers nothing whether or not it matched a finding
+        type: branch
+        condition: isError
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
+          it names one, and its stated reason: the code is an error (and whether it fired here), and
+          an error cannot be allowed — lint.allow silences warnings and notices only, so fix what
+          the finding names or remove the allow; a project may re-tune the code's severity in
+          rules.sddRuleSeverity
+        type: local
+      - stepNumber: 9
+        description: Continue with the next lint allow.
+        type: jump
+        toStep: 21
+      - stepNumber: 10
+        label: laKnownCode
+        description: 'Branch: did the allow match no finding this run?'
+        type: branch
+        condition: a.used is false
+        onFalseStep: 21
+      - stepNumber: 11
+        label: laFamily
+        description: >-
+          A family code this gate saw no finding of is not judged stale here: its findings may come
+          from the family run, which judges the allow (family_validator.checkReach)
+        type: branch
+        condition: a.code is not one of the family codes
+        onFalseStep: 21
+      - stepNumber: 12
+        description: >-
+          Read what step 5 gathered of the run's findings of that code on that spec: the sites they
+          named, and whether any of them named none.
+        type: local
+      - stepNumber: 13
+        label: laSiteCheck
+        description: 'Branch: does the allow name a site for a code whose findings carry none?'
+        type: branch
+        condition: a.at is set and the run named no site, only unsited findings
+        onFalseStep: 16
+      - stepNumber: 14
+        description: Explain it as an allow that must not name a site at all — drop the `at`.
+        type: local
+      - stepNumber: 15
+        description: Go to the report with that explanation.
+        type: jump
+        toStep: 20
+      - stepNumber: 16
+        label: laSites
+        description: 'Branch: did that code fire at sites this allow does not name?'
+        type: branch
+        condition: the run named one or more sites
+        onFalseStep: 19
+      - stepNumber: 17
+        description: >-
+          Explain it as the wrong occurrence, listing the sites that did fire: retarget an allow
+          that names one, or give an `at` to an allow that names none — one per site, each with its
+          own reason.
+        type: local
+      - stepNumber: 18
+        description: Go to the report with that explanation.
+        type: jump
+        toStep: 20
+      - stepNumber: 19
+        label: laGone
+        description: >-
+          Explain it as a finding that did not fire at all this run — the stale allow, and the only
+          shape this audit used to know.
+        type: local
+      - stepNumber: 20
+        label: laReport
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) naming the spec, the allowed code, the site it names if
+          it names one, its stated reason, and that explanation.
+        type: local
+      - stepNumber: 21
+        label: laEnd
+        description: Continue with the next lint allow.
+        type: local
+    symbol: check
+    exportedVia: lintAllowsRule
+  - name: typeDeclarations
+    sourcePath: src/core/rules/integrity/type-declarations.ts
+    narrative:
+      - stepNumber: 1
+        label: types
+        description: >-
+          For each loaded type, check what it declares about itself: its owning subsystem and
+          whether it models anything at all.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Find sub = ctx.subsystems matching t.subsystem by id, and compute isDraftCtx as true when
+          sub exists and its status is "draft" or "design", else false.
+        type: local
+      - stepNumber: 3
+        description: 'Branch: does the type declare a subsystem that ctx.subsystemIds does not contain?'
+        type: branch
+        condition: t.subsystem is set and ctx.subsystemIds does not contain it
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Report INVALID_SUBSYSTEM_REFERENCE (error; isDraftCtx) naming the type and the
+          non-existent subsystem it references.
+        type: local
+      - stepNumber: 5
+        label: checkHollow
+        description: >-
+          Branch: does the type model nothing — no fields, no methods, no enum values, no signature
+          returns and no named scalar holds?
+        type: branch
+        condition: >-
+          the type has no fields, no methods, no values, no returns and no holds (each absent or an
+          empty list)
+        onFalseStep: 1
+      - stepNumber: 6
+        label: typesEnd
+        description: >-
+          Report HOLLOW_TYPE (warning; isDraftCtx) naming the type and its kind as a placeholder
+          with nothing to inform implementers or the ERD.
+        type: local
+    symbol: check
+    exportedVia: typeDeclarationsRule
+  - name: fieldTypeReferences
+    sourcePath: src/core/rules/integrity/field-type-references.ts
+    narrative:
+      - stepNumber: 1
+        label: types
+        description: For each loaded type, resolve the type identifiers its fields name.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          Find sub = ctx.subsystems matching t.subsystem by id, and compute isDraftCtx as true when
+          sub exists and its status is "draft" or "design", else false.
+        type: local
+      - stepNumber: 3
+        description: 'Branch: does the type declare a fields list at all?'
+        type: branch
+        condition: t.fields is set
+        onFalseStep: 1
+      - stepNumber: 4
+        label: fields
+        description: For each field declared on the type.
+        type: loop
+        loopKind: forEach
+        over: t.fields
+        endStep: 8
+      - stepNumber: 5
+        description: >-
+          refs = t.fieldTypeRefs(field.type) — the type identifiers the field's type names, with the
+          type's own generic parameters already left out.
+        type: local
+      - stepNumber: 6
+        label: refs
+        description: For each type identifier the field's type names.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 8
+      - stepNumber: 7
+        description: 'Branch: does the reference fail to resolve?'
+        type: branch
+        condition: >-
+          ctx.isTypeResolved(ref, no generics) is false (the reference resolves to neither a builtin
+          nor a defined type; t.fieldTypeRefs already left the type's own generic parameters out)
+        onFalseStep: 6
+      - stepNumber: 8
+        label: refsEnd
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the type, the field, and the
+          undefined reference.
+        type: local
+    symbol: check
+    exportedVia: fieldTypeReferencesRule
+  - name: signatureTypeReferences
+    sourcePath: src/core/rules/integrity/signature-type-references.ts
+    narrative:
+      - stepNumber: 1
+        label: interfaces
+        description: For each loaded interface, check every method signature's type references.
+        type: loop
+        loopKind: forEach
+        over: ctx.interfaces
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          Compute isDraftCtx as ctx.isComponentDraft(intf.component) or the interface's own status
+          being "draft"/"design"; interfaceGenerics = intf.genericParameters().
+        type: local
+      - stepNumber: 3
+        label: methods
+        description: For each method on the interface.
+        type: loop
+        loopKind: forEach
+        over: intf.methods
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Skip a method that takes its signature from a source: its params are its source's, judged
+          once where the source declares them.
+        type: branch
+        condition: m names no signatureFrom
+        onFalseStep: 3
+      - stepNumber: 5
+        description: >-
+          methodGenerics = m.genericParameters(); allGenerics = the union of interfaceGenerics and
+          methodGenerics; refs = m.typeRefs().
+        type: local
+      - stepNumber: 6
+        label: refs
+        description: For each type identifier the method's signature names.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 8
+      - stepNumber: 7
+        description: 'Branch: does the reference fail to resolve?'
+        type: branch
+        condition: >-
+          ctx.isTypeResolved(ref, allGenerics) is false (the reference does not resolve to a
+          builtin, an in-scope generic, or a defined type)
+        onFalseStep: 6
+      - stepNumber: 8
+        label: refsEnd
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) naming the method, the interface, and
+          the undefined reference.
+        type: local
+      - stepNumber: 9
+        label: types
+        description: For each loaded type, check the type references its structured signatures name.
+        type: loop
+        loopKind: forEach
+        over: ctx.types
+        endStep: 13
+      - stepNumber: 10
+        description: >-
+          isDraftCtx = the owning subsystem (t.subsystem in ctx.subsystems) having status draft or
+          design; typeGenerics = t.genericParameters(); refs = m.typeRefs() for every method m of t
+          that carries params (its params and returns), then t.signatureTypeRefs() (a signature
+          type's params and returns; none on an entity or a value-object).
+        type: local
+      - stepNumber: 11
+        label: typeRefs
+        description: For each type identifier those signatures name.
+        type: loop
+        loopKind: forEach
+        over: refs
+        endStep: 13
+      - stepNumber: 12
+        description: 'Branch: does the reference fail to resolve?'
+        type: branch
+        condition: ctx.isTypeResolved(ref, typeGenerics) is false
+        onFalseStep: 11
+      - stepNumber: 13
+        label: typeRefsEnd
+        description: >-
+          Report UNDEFINED_TYPE_REFERENCE (error; isDraftCtx) on the type, naming the type method or
+          the signature type and the undefined reference.
+        type: local
+    symbol: check
+    exportedVia: signatureTypeReferencesRule
+  - name: reservedIdSegments
+    sourcePath: src/core/rules/integrity/reserved-id-segments.ts
+    narrative:
+      - stepNumber: 1
+        label: ridStart
+        description: >-
+          For each spec id in the tree, with the kind label its findings name it by (ctx.specIds():
+          the subsystem, component, interface, implementation and type ids, in that order).
+        type: loop
+        loopKind: forEach
+        over: ctx.specIds()
+        endStep: 3
+      - stepNumber: 2
+        description: 'Branch: is the id in scope and does it spend a segment on the reserved keyword?'
+        type: branch
+        condition: >-
+          the id is in scope (ctx.isSpecInScope) and its "::" segments include the reserved keyword
+          "super"
+        onFalseStep: 1
+      - stepNumber: 3
+        label: ridReport
+        description: >-
+          Report RESERVED_ID_SEGMENT (error) naming the id and its kind label, and warning that a
+          stored reference to it would be consumed as a namespace hop and resolve to a different
+          spec.
+        type: local
+    symbol: check
+    exportedVia: reservedIdSegmentsRule
+  - name: publicSurfaceBinding
+    sourcePath: src/core/rules/integrity/public-surface-binding.ts
+    narrative:
+      - stepNumber: 1
+        label: psbSubStart
+        description: For each loaded subsystem, check what backs every declared public interface entry.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 12
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: psbPiStart
+        description: >-
+          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
+          `typeDef`; a re-export or a type export is the export-tables rule's to judge.
+        type: loop
+        loopKind: forEach
+        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
+        endStep: 12
+      - stepNumber: 4
+        description: 'Branch: is pi.component unset?'
+        type: branch
+        condition: the entry declares no backing component (pi.component is unset)
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Report PUBLIC_INTERFACE_UNBOUND (error; isDraftCtx) naming the subsystem and the entry's
+          declared type, with no backing component bound.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 3
+      - stepNumber: 7
+        label: psbHasComponent
+        description: backing = ctx.componentMap.get(pi.component).
+        type: local
+      - stepNumber: 8
+        description: 'Branch: does pi.component resolve to no existing component?'
+        type: branch
+        condition: no component matches pi.component in ctx.componentMap (backing is undefined)
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_COMPONENT (error; isDraftCtx) naming the subsystem and the
+          non-existent component pi.component references.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 3
+      - stepNumber: 11
+        label: psbOwnership
+        description: >-
+          Branch: does the subsystem own the backing component — is backing.subsystem equal to
+          sub.id, or does it start with sub.id + "::"?
+        type: branch
+        condition: the subsystem does not own the backing component (isSubsystemOwner is false)
+        onFalseStep: 3
+      - stepNumber: 12
+        label: psbForeignReport
+        description: >-
+          Report PUBLIC_INTERFACE_FOREIGN_COMPONENT (error; isDraftCtx) naming the subsystem, the
+          component, and the subsystem it actually belongs to — a subsystem may only publish its own
+          components.
+        type: local
+    symbol: check
+    exportedVia: publicSurfaceBindingRule
+  - name: publicSurfaceBoundContract
+    sourcePath: src/core/rules/integrity/public-surface-bound-contract.ts
+    narrative:
+      - stepNumber: 1
+        label: pscSubStart
+        description: >-
+          For each loaded subsystem, check the L3 interface every declared public interface entry
+          binds.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 11
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: pscPiStart
+        description: >-
+          For each OWN component entry declared on the subsystem — an entry with neither `from` nor
+          `typeDef`; a re-export's narrowing is the export-tables rule's to judge.
+        type: loop
+        loopKind: forEach
+        over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
+        endStep: 11
+      - stepNumber: 4
+        description: 'Branch: does the entry bind an L3 interface at all?'
+        type: branch
+        condition: the entry names a bound L3 interface (pi.interface is set)
+        onFalseStep: 3
+      - stepNumber: 5
+        description: >-
+          Branch: public-surface-binding's preconditions, restated — does the entry name a component
+          that resolves? Against an entry that names nothing real the ownership comparison is
+          trivially true for every interface, so it can only misfire: continue with the next entry.
+        type: branch
+        condition: the entry names a backing component and ctx.componentMap has it
+        onFalseStep: 3
+      - stepNumber: 6
+        description: intf = ctx.interfaceMap.get(pi.interface).
+        type: local
+      - stepNumber: 7
+        description: 'Branch: does pi.interface resolve to no existing interface?'
+        type: branch
+        condition: no interface matches pi.interface in ctx.interfaceMap (intf is undefined)
+        onTrueStep: 8
+        onFalseStep: 10
+      - stepNumber: 8
+        label: pscMissingInterface
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem and the
+          non-existent interface pi.interface references.
+        type: local
+      - stepNumber: 9
+        description: Continue with the next public interface entry (already resolved as missing).
+        type: jump
+        toStep: 3
+      - stepNumber: 10
+        label: pscInterfaceOwner
+        description: >-
+          Branch: does the resolved interface belong to a different component than the one the entry
+          publishes?
+        type: branch
+        condition: >-
+          the resolved interface belongs to a different component than pi.component (intf.component
+          !== pi.component)
+        onFalseStep: 3
+      - stepNumber: 11
+        label: pscForeignInterface
+        description: >-
+          Report PUBLIC_INTERFACE_INVALID_INTERFACE (error; isDraftCtx) naming the subsystem, the
+          interface pi.interface, the component it is bound to (pi.component), and the component it
+          actually belongs to (intf.component).
+        type: local
+    symbol: check
+    exportedVia: publicSurfaceBoundContractRule
+  - name: publicSurfaceConsumers
+    sourcePath: src/core/rules/integrity/public-surface-consumers.ts
+    narrative:
+      - stepNumber: 1
+        label: entry
+        description: >-
+          For each loaded subsystem, each of its publicInterfaces entries, and each subsystem id
+          that entry's consumers names
+        type: loop
+        loopKind: forEach
+        over: every consumers id of every publicInterfaces entry of every subsystem in ctx.subsystems
+        endStep: 3
+      - stepNumber: 2
+        description: Does the id name a subsystem of this tree?
+        type: branch
+        condition: no subsystem in ctx.subsystems has that id
+        onFalseStep: 1
+      - stepNumber: 3
+        label: unknown
+        description: >-
+          Report PUBLIC_INTERFACE_UNKNOWN_CONSUMER (error, on the declaring subsystem's id; draft
+          context when that subsystem is draft) naming the entry's component and the consumer id
+          that resolves to no subsystem
+        type: local
+      - stepNumber: 4
+        description: 'Done: every consumers id resolved or reported'
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: publicSurfaceConsumersRule
+  - name: projectIdentity
+    sourcePath: src/core/rules/integrity/project-identity.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project identity the validator resolved into the rule context
+          (ctx.projectIdentity)
+        type: local
+      - stepNumber: 2
+        description: Is there an identity to judge?
+        type: branch
+        condition: the context carries no project identity (no readable configuration)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          No identity of the root's own to judge: judged (a member's id is the family run's check,
+          family_validator.checkMembers)
+        type: jump
+        toStep: 12
+      - stepNumber: 4
+        label: defaulted
+        description: Does the identity carry a defaulted problem?
+        type: branch
+        condition: the identity's problems include one of kind defaulted
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report PROJECT_ID_DEFAULTED (notice), naming the display name and the id derived from it,
+          that no save writes it into project.yaml for the project, that stage 3 requires an
+          explicit id, and how to declare one
+        type: local
+      - stepNumber: 6
+        label: ambiguous
+        description: Does the identity carry an ambiguous problem?
+        type: branch
+        condition: the identity's problems include one of kind ambiguous
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Report PROJECT_ID_AMBIGUOUS (warning) with the problem's detail: the display name that
+          yields no slug, or the declared id and the grammar it breaks
+        type: local
+      - stepNumber: 8
+        label: renamed
+        description: Does the identity carry a renamed problem?
+        type: branch
+        condition: the identity's problems include one of kind renamed
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report PROJECT_ID_RENAMED (notice), naming the id the lock approved, the id project.yaml
+          declares now and that the rename moved the approved one into previousIds, and that only
+          the re-lock is owed; a lock taken now clears it
+        type: local
+      - stepNumber: 10
+        label: changed
+        description: Does the identity carry a changed problem?
+        type: branch
+        condition: the identity's problems include one of kind changed
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report PROJECT_ID_CHANGED (error), naming the id the lock approved and the id project.yaml
+          resolves to now, and the two ways out: restore the approved id, or rename deliberately and
+          re-lock
+        type: local
+      - stepNumber: 12
+        label: judged
+        description: The identity is judged
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: projectIdentityRule
+  - name: exportTables
+    sourcePath: src/core/rules/integrity/export-tables.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the export tables the validator resolved into the rule context (ctx.exportTables)
+        type: local
+      - stepNumber: 2
+        description: Are there tables to judge?
+        type: branch
+        condition: the context carries no export tables (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no tables
+      - stepNumber: 4
+        label: each-problem
+        description: For each problem of each table
+        type: loop
+        loopKind: forEach
+        over: the problems every table records
+        endStep: 17
+      - stepNumber: 5
+        description: >-
+          Report by the problem's kind, anchored to the table's owner (a subsystem, or the L0 system
+          spec), in the owner's draft context
+        type: switch
+        'on': the problem's kind
+        cases:
+          - value: duplicate
+            step: 6
+          - value: named-cycle
+            step: 8
+          - value: wildcard-cycle
+            step: 10
+          - value: invalid
+            step: 12
+          - value: unconsumable
+            step: 14
+          - value: widens
+            step: 16
+        defaultStep: 17
+      - stepNumber: 6
+        label: duplicate
+        description: >-
+          Report EXPORT_ID_DUPLICATE (error), naming the public name and the targets competing for
+          it, and that the name is left out of the table until one wildcard is narrowed or an
+          explicit entry picks the target
+        type: local
+      - stepNumber: 7
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 8
+        label: named-cycle
+        description: >-
+          Report EXPORT_CYCLE (error), naming the public name and the levels on the loop: the chain
+          never reaches a component or type
+        type: local
+      - stepNumber: 9
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 10
+        label: wildcard-cycle
+        description: >-
+          Report EXPORT_CYCLE (warning), naming the levels that re-export each other through
+          wildcards: the tables resolved to their union, but the levels form one circular module
+          surface
+        type: local
+      - stepNumber: 11
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 12
+        label: invalid
+        description: >-
+          Report EXPORT_INVALID (error), naming the entry and what is wrong with it — and, for a
+          named re-export whose source no longer exports the item but records it in a rename trace,
+          the name the source renamed it to ("did you mean"), so the re-export is fixed by following
+          the rename
+        type: local
+      - stepNumber: 13
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 14
+        label: unconsumable
+        description: >-
+          Report EXPORT_UNCONSUMABLE (error since stage 4), naming the public name and the target's
+          stereotype: only a Portal (a gateway is a Portal variant) or an Observer can serve a
+          caller across the boundary
+        type: local
+      - stepNumber: 15
+        description: Next problem
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        label: widens
+        description: >-
+          Report EXPORT_WIDENS_AUDIENCE (error), naming the public name, the audience the L0 entry
+          declares and the narrower audience of the member's or external's export it re-exports: a
+          re-export can narrow reach, never widen it, as `pub use` of a `pub(crate)` item does not
+          compile
+        type: local
+      - stepNumber: 17
+        label: reported
+        description: The problem is reported
+        type: local
+      - stepNumber: 18
+        label: audiences
+        description: >-
+          For each entry of the bound project's own L0 table exported to `department`: report
+          EXPORT_AUDIENCE_NARROW (notice) naming the public name, that a path, git or hosted
+          consumer outside the family is read at `instance` and does not see it, that only this
+          project's family — and, on a hosted instance, the units of the owning department — can,
+          and that whether any consumer is hosted cannot be told from this tree: widen it to
+          instance if a sibling checkout or a git consumer uses it, or keep it (and allow the
+          notice) when its consumers are hosted department units. A notice, never failing the gate:
+          the audience may be exactly what is meant
+        type: local
+      - stepNumber: 19
+        description: Every problem is judged
+        type: return
+        outcome: judged
+    symbol: check
+    exportedVia: exportTablesRule
+  - name: referenceForms
+    sourcePath: src/core/rules/integrity/reference-forms.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: each-reference
+        description: For each reference an author wrote in a deprecated form
+        type: loop
+        loopKind: forEach
+        over: >-
+          the bound root's authored references in a leading, super or path form — except a
+          two-segment `x::y` that binds nowhere, which is the current `alias::name` form with an
+          alias the project does not declare (EXTERNAL_UNDECLARED says so; reading it as a member
+          path would misdescribe it) — and its bare names whose first segment (before `::` or `.`)
+          is the project's own id (a self-prefix)
+        endStep: 5
+      - stepNumber: 5
+        label: reported
+        description: >-
+          Report DEPRECATED_REFERENCE_FORM (notice) on the referring spec, in its draft context,
+          naming the position, the form as written, what it bound to, and the rewrite to write
+          instead (a bare local id, or `alias::publicName`) — or, when it has none, why (its target
+          lies outside the scan, or nothing names its first segment)
+        type: local
+      - stepNumber: 6
+        description: Every authored reference is reported
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: referenceFormsRule
+  - name: externalDeclarations
+    sourcePath: src/core/rules/integrity/external-declarations.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: each-external
+        description: >-
+          For each external the bound project declares (a contained member's declarations are its
+          own gate's: the findings name no spec, so the rule selects the bound root's node instead
+          of relying on the owner filter)
+        type: loop
+        loopKind: forEach
+        over: the bound root node's bound externals
+        endStep: 7
+      - stepNumber: 5
+        description: Is it unresolved?
+        type: branch
+        condition: >-
+          the external's sourceKind is unresolved, and the bound root holds no pin for it
+          (ctx.pinnedExternals has no entry and snapshot for the alias): a pin is what its gate
+          judges against, and nothing is climbed to find the producer
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report EXTERNAL_UNRESOLVED (notice), naming the declaring project, the alias, the producer
+          id and the external's problem (a malformed alias or id, an alias `members` already
+          declares, no family project and no source.path, two family projects answering to the id,
+          or a family project at source.path answering to another id), and how to fix it in
+          .wai/project.yaml. When the problem is that no project this root contains answers to the
+          id and nothing is pinned, say the true reason: a parent or sibling is never climbed to
+          from this project's own gate, so the pin is the only thing it is judged against — run
+          `wairon externals pin <alias>` here (or give it a source.path)
+        type: local
+      - stepNumber: 7
+        label: checked
+        description: The external's declaration is checked
+        type: local
+      - stepNumber: 8
+        label: each-import
+        description: >-
+          For each name an external or member of the bound project imports by name (a `*` imports
+          whatever is exported, so it lists nothing to check)
+        type: loop
+        loopKind: forEach
+        over: the named `use` entries of the bound root's externals and members
+        endStep: 13
+      - stepNumber: 9
+        description: >-
+          Is it exported? Look the name up by nameKey among the public names the producer exports to
+          this project: a contained member's resolved L0 table, an external's pinned snapshot
+          (ctx.pinnedExternals) — an external with no pin is skipped here, its references already
+          report EXTERNAL_CHECK_UNAVAILABLE
+        type: branch
+        condition: the producer's table is known and carries no public name with that nameKey
+        onFalseStep: 11
+      - stepNumber: 10
+        label: unimported
+        description: >-
+          Report IMPORT_UNRESOLVED (error) naming the declaring project, the alias, the name and the
+          closest public names the producer does export
+        type: local
+      - stepNumber: 11
+        label: shadow-check
+        description: >-
+          Does a spec of the bound project itself share the name's nameKey (its own components,
+          interfaces and types from the rule context)?
+        type: branch
+        condition: the project owns a spec whose id has the name's nameKey
+        onFalseStep: 13
+      - stepNumber: 12
+        label: shadowed
+        description: >-
+          Report IMPORT_SHADOWED_BY_LOCAL (error) naming the declaring project, the alias, the name
+          and the local spec that hides it: every bare reference binds the local spec, so the named
+          import never takes effect — rename one, or drop the import
+        type: local
+      - stepNumber: 13
+        label: import-checked
+        description: The import is checked
+        type: local
+      - stepNumber: 14
+        description: Every declaration is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: externalDeclarationsRule
+  - name: localIds
+    sourcePath: src/core/rules/integrity/local-ids.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: duplicates
+        description: For each duplicate-spec problem the scan met
+        type: loop
+        loopKind: forEach
+        over: the graph's duplicate-spec problems
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Report DUPLICATE_SPEC_ID (error) on the key, when it is in scope, naming the project and
+          both files that declare it, and that every reference to it could mean either — rename one
+          of them
+        type: local
+      - stepNumber: 6
+        label: shadows
+        description: For each project of the family
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes
+        endStep: 9
+      - stepNumber: 7
+        description: Does a spec the project owns have a local id equal to one of its aliases?
+        type: branch
+        condition: >-
+          some key the project owns (ProjectFamily.owners) has a local id equal to a key of the
+          node's alias table
+        onFalseStep: 9
+      - stepNumber: 8
+        label: shadow-reported
+        description: >-
+          Report LOCAL_ID_SHADOWS_PROJECT (warning) on each such spec, in scope and in its draft
+          context, naming the local id, the member or external the alias names, and that a bare `x`
+          is the local spec while `x::name` reaches the other project — rename the spec or the alias
+        type: local
+      - stepNumber: 9
+        label: project-judged
+        description: The project's ids are judged
+        type: local
+      - stepNumber: 10
+        description: Every id is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: localIdsRule
+  - name: memberDeclarations
+    sourcePath: src/core/rules/integrity/member-declarations.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the project graph from the rule context (ctx.projectFamily)
+        type: local
+      - stepNumber: 2
+        description: Is there a graph to read?
+        type: branch
+        condition: the context carries no project graph (a candidate run)
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to judge: report nothing'
+        type: return
+        outcome: no graph
+      - stepNumber: 4
+        label: members
+        description: For each member the family declares in the legacy form
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes carrying a legacy mount
+        endStep: 5
+      - stepNumber: 5
+        label: reported
+        description: >-
+          Report DEPRECATED_MOUNT_FORM (notice) on the member's key, naming the parent, the mount's
+          alias and path, the `members` entry that replaces it (`<alias>: <path>`), and each field
+          the mount carries beyond its description — publicInterfaces, trustedLinks, consumers, lint
+          and any other — that `doctor --fix` moves into the member or stops on; a mount whose alias
+          the parent's `members` also declares is reported as ignored, the `members` entry being the
+          declaration
+        type: local
+      - stepNumber: 6
+        label: kinds
+        description: Then each stage-8 member problem at the bound root
+        type: loop
+        loopKind: forEach
+        over: >-
+          the bound root's declared members using the deprecated long-form `path`, then its
+          part-unavailable and kind-mismatch problems (stage 8; a member's own members are that
+          member's gate's)
+        endStep: 7
+      - stepNumber: 7
+        label: kind-report
+        description: >-
+          Report it: a long-form `path` as DEPRECATED_MOUNT_FORM (notice) naming the `source` (or
+          shorthand) doctor --fix writes; a kind-mismatch as MEMBER_KIND_MISMATCH (error) naming the
+          alias, what the content makes it and what contradicts it, and the fix (drop or correct the
+          `as`, member promote / demote, add the id or move the fields to the parent, write or
+          correct the PartOf, drop the `use`); a part-unavailable as PART_UNAVAILABLE (error) naming
+          the storage, the directory or source and why
+        type: local
+      - stepNumber: 8
+        description: Every member declaration is judged
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: memberDeclarationsRule
+  - name: signatureText
+    sourcePath: src/core/rules/integrity/signature-text.ts
+    narrative:
+      - stepNumber: 1
+        description: For each stale text the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.staleTexts, in scope
+        endStep: 2
+      - stepNumber: 2
+        description: >-
+          Report SIGNATURE_TEXT_STALE at the method on its interface or type, quoting the stored
+          text and the derived one, and naming doctor --fix as the repair
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTextRule
+  - name: signatureTypes
+    sourcePath: src/core/rules/integrity/signature-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Is it a signature?
+        type: branch
+        condition: the type's kind is signature
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report SIGNATURE_TYPE_MEMBERS naming every member a signature cannot carry — fields,
+          methods, invariants, componentClass, database, table, linkedEntity — and a missing returns
+        type: local
+      - stepNumber: 4
+        description: >-
+          On an entity or value-object, report SIGNATURE_TYPE_MEMBERS when it carries params or
+          returns
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureTypesRule
+  - name: signatureSources
+    sourcePath: src/core/rules/integrity/signature-sources.ts
+    narrative:
+      - stepNumber: 1
+        description: For each source fact the loader recorded
+        type: loop
+        loopKind: forEach
+        over: ctx.signatureFacts.sources, in scope
+        endStep: 14
+      - stepNumber: 2
+        description: Dispatch on what resolving the source found
+        type: switch
+        'on': fact.outcome
+        cases:
+          - value: unresolved
+            step: 3
+          - value: chained
+            step: 7
+          - value: restated
+            step: 9
+          - value: ambiguous
+            step: 5
+        defaultStep: 12
+      - stepNumber: 3
+        label: unresolved
+        description: >-
+          Report SIGNATURE_SOURCE_UNRESOLVED at the method, naming what the source matched if
+          anything — a type of another kind, or nothing — and, for an exported contract's method
+          (`alias::name.method`) the producer renamed, the name its rename trace carries it to (read
+          from the pin, else a contained member's live table), so the fix reads "follow the rename";
+          the message names an exported contract's method among the valid sources
+        type: local
+      - stepNumber: 4
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 5
+        label: ambiguous
+        description: >-
+          Report SIGNATURE_SOURCE_AMBIGUOUS at the method, naming both candidates — the contract
+          method and the signature type the value resolves to — and telling the author to qualify
+          the reference so only one reading matches
+        type: local
+      - stepNumber: 6
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 7
+        label: chained
+        description: >-
+          Report SIGNATURE_SOURCE_CHAINED at the method, naming the source's own source and, when
+          that is a signature type, suggesting it be named directly
+        type: local
+      - stepNumber: 8
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 9
+        label: restated
+        description: >-
+          Does the restatement differ from the source? An equal one is only redundant, left to the
+          doctor's repair. Either way the edge is judged on the resolved fact the loader records
+          right after every restated one, never here, so it is reported once
+        type: branch
+        condition: fact.differs
+        onFalseStep: 14
+      - stepNumber: 10
+        description: Report SIGNATURE_SOURCE_RESTATED at the method, naming what differs
+        type: local
+      - stepNumber: 11
+        description: Done with this fact
+        type: jump
+        toStep: 14
+      - stepNumber: 12
+        label: edge
+        description: Is a method source off the design's edges?
+        type: branch
+        condition: >-
+          the fact's form is method and the source lives in the owning component's own project, and
+          the target's component is in neither the owning component's dependsOn nor its owns
+          (ctx.componentMap). Another project's export — `alias::name.method`, whether the alias is
+          a declared external (an `export` source) or a member whose export resolves to its
+          component — is reached through the declared relation to that project, never a dependsOn
+          edge: one reference, one verdict, whichever relation names it. (An extension point a
+          consumer implements is the clearest case: the producer calls the implementer, so a
+          dependsOn on the producer's component would claim a call in the wrong direction.)
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Report SIGNATURE_SOURCE_OFF_EDGE at the method, naming the target's component and the edge
+          that would license it
+        type: local
+      - stepNumber: 14
+        label: next
+        description: Move on to the next fact
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: signatureSourcesRule
+  - name: typeExpressions
+    sourcePath: src/core/rules/integrity/type-expressions.ts
+    narrative:
+      - stepNumber: 1
+        description: Are there type-spelling facts to judge?
+        type: branch
+        condition: the run carries ctx.typeSpellingFacts (a candidate run does not)
+        onFalseStep: 6
+      - stepNumber: 2
+        description: For each recorded problem
+        type: loop
+        loopKind: forEach
+        over: ctx.typeSpellingFacts.problems, in scope
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          Report the problem as a warning under its own code (TYPE_EXPRESSION_INVALID,
+          TYPE_POSITION_INVALID, TYPE_FORM_UNSUPPORTED or TYPE_NOT_NEUTRAL) on the spec holding it,
+          at the method or field its path names, with the position's text, what is wrong and the
+          replacement it names — a warning on load whatever the code, since the writer already
+          refuses each of them at write time
+        type: local
+      - stepNumber: 4
+        description: For each recorded respelling
+        type: loop
+        loopKind: forEach
+        over: ctx.typeSpellingFacts.respellings, in scope
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Report TYPE_SPELLING_STALE on the spec holding it, at the method or field its path names,
+          with the written and the canonical text, saying any save or doctor --fix rewrites it
+        type: local
+      - stepNumber: 6
+        label: done
+        description: Nothing else to judge
+        type: return
+        outcome: void
+    detail: full
+    symbol: check
+    exportedVia: typeExpressionsRule
+  - name: enumTypes
+    sourcePath: src/core/rules/integrity/enum-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Is it an enum?
+        type: branch
+        condition: the type's kind is enum
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report ENUM_MEMBERS naming what is wrong: no values; each pair of values equal by nameKey;
+          each member an enum cannot carry — fields, params, returns, invariants, componentClass,
+          database, table, linkedEntity
+        type: local
+      - stepNumber: 4
+        description: On a type of any other kind, report ENUM_MEMBERS when it carries values
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: enumTypesRule
+  - name: namedScalarTypes
+    sourcePath: src/core/rules/integrity/named-scalar-types.ts
+    narrative:
+      - stepNumber: 1
+        description: For each loaded type
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope
+        endStep: 4
+      - stepNumber: 2
+        description: Does it declare holds?
+        type: branch
+        condition: the type's holds is set
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Report NAMED_SCALAR_MEMBERS naming what is wrong: holds on a kind other than value-object
+          (an entity, an enum or a signature type, where it means nothing); each member a named
+          scalar cannot carry beside it — fields, componentClass, database, table, linkedEntity.
+          Whether holds names a primitive is left to type-expressions
+        type: local
+      - stepNumber: 4
+        description: Nothing to judge on a type without holds
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: namedScalarTypesRule
+  - name: renameTraces
+    sourcePath: src/core/rules/integrity/rename-traces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Collect the live keys by kind: component, interface and implementation ids, type ids per
+          owner, and `<interface>.<method>` for every declared contract method
+        type: local
+      - stepNumber: 2
+        description: For each element in scope that carries a rename trace
+        type: loop
+        loopKind: forEach
+        over: >-
+          the components, interfaces, implementations and types with previousIds, and the contract
+          methods with previousNames, in scope
+        endStep: 6
+      - stepNumber: 3
+        description: For each entry of its trace
+        type: loop
+        loopKind: forEach
+        over: the element's trace entries
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Does the entry name the element's own current key, a live element of the same kind, or one
+          another element of that kind already claimed?
+        type: branch
+        condition: >-
+          the entry is the element's own key, a live key of the element's kind (a type within its
+          owner), or it was already claimed by another element's trace
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report RENAME_TRACE_CONFLICT on the element, naming the entry and the other holder (or,
+          for its own current name, that a trace holds former names only and the entry is to be
+          unset), and the way out: rename the newcomer, or unset the entry and accept that a
+          consumer reads a delete plus an add
+        type: local
+      - stepNumber: 6
+        description: Record the entry as claimed by this element
+        type: local
+      - stepNumber: 7
+        description: 'Done: every conflict reported'
+        type: return
+    symbol: check
+    exportedVia: renameTracesRule
+  - name: implementsContracts
+    sourcePath: src/core/rules/integrity/implements-contracts.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each interface in ctx.interfaces within scope that declares `implements`
+        type: loop
+        loopKind: forEach
+        over: the in-scope interfaces of ctx.interfaces that declare implements
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Resolve the reference to its contract entry (rule_context.resolveCrossProject, then the
+          entry's methods)
+        type: local
+      - stepNumber: 3
+        description: An unresolved or unexported reference is project-boundaries' finding
+        type: branch
+        condition: the reference resolved to an entry exported with role implement
+        onFalseStep: 1
+      - stepNumber: 4
+        label: methods
+        description: For each method of the extension point
+        type: loop
+        loopKind: forEach
+        over: the entry's methods
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          Does the interface declare it with the same params and returns? Types are compared
+          semantically, not by spelling: every type expression in canonical form, the extension
+          point's named types read as the public names its producer exports them by, and the
+          implementer's `alias::name` and the bare name its `use` imports from that alias both read
+          as `name` — so `geo::coordinate` and the producer's own `coordinate` are one type
+        type: branch
+        condition: the interface lacks the method, or declares it with other params or returns
+        onFalseStep: 4
+      - stepNumber: 6
+        label: methodsEnd
+        description: >-
+          Report IMPLEMENTS_MISMATCH (error, on intf.id, sited at the method; draft context when
+          intf.status is draft or design) naming the extension point, the method and what differs —
+          and, when the interface lacks the method but still declares a former name the producer's
+          rename trace records for it, that it was renamed from that name, to rename it
+        type: local
+    symbol: check
+    exportedVia: implementsContractsRule
+  - name: memberNames
+    sourcePath: src/core/rules/integrity/member-names.ts
+    narrative:
+      - stepNumber: 1
+        label: holders
+        description: >-
+          For each interface and each type in scope, with the effective target language of its
+          subsystem (ctx.targetLanguageFor) and that subsystem's method casing
+        type: loop
+        loopKind: forEach
+        over: the interfaces and types in scope
+        endStep: 5
+      - stepNumber: 2
+        description: >-
+          Gather its named members by where they live: the methods of the contract or type, each
+          method's parameters, and the type's fields
+        type: local
+      - stepNumber: 3
+        description: >-
+          Report DUPLICATE_MEMBER_NAME (error) once for every name two members of one place share,
+          naming the place and the name: a lookup by name would bind one of them at random
+        type: local
+      - stepNumber: 4
+        description: >-
+          Ask identifier.reservedIn for every method, parameter and field name against the target
+          language, by its kind
+        type: local
+      - stepNumber: 5
+        label: reserved
+        description: >-
+          Report RESERVED_IDENTIFIER (error) for each name the language reserves, carrying
+          identifier.reservedIn's sentence: the language and an alternative that fits the casing
+        type: local
+      - stepNumber: 6
+        description: 'Done: every duplicate and every reserved word reported'
+        type: return
+    symbol: check
+    exportedVia: memberNamesRule
+status: complete
+createdAt: '2026-09-14T23:14:34.746Z'
+updatedAt: '2026-10-08T18:55:06.742Z'

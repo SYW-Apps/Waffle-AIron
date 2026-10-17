@@ -1,0 +1,61 @@
+kind: value-object
+id: spec_read_result
+name: SpecReadResult
+description: >-
+  What a spec read answers with: the STORED spec, and beside it the derived markers a read may
+  attach. They are kept separate rather than folded in, so nothing derived can be mistaken for
+  something stored and written back. The text rendering folds them into the spec, as it always has,
+  for a client that reads no structured content. An `alias::name` read resolves through the alias
+  table the way a write does: a member's spec is read under its key; an EXTERNAL's is read from the
+  pinned snapshot this project holds of it, the answer then carrying the pinnedSnapshot marker and
+  the snapshot's entry as its spec — read-only, never a spec of this tree. A system read by
+  `alias::system` (or the member's L0 name) answers a MEMBER project's own L0 with the memberProject
+  marker; it never answers this project's L0 under another project's id.
+subsystem: sdd_mcp
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The kind of spec read.
+    optional: false
+  - name: id
+    type: string
+    description: The id it was read by.
+    optional: false
+  - name: spec
+    type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+    description: The stored spec, exactly as it is held, minus the derived markers beside it.
+    optional: false
+  - name: partialResult
+    type: PartialMethodResult?
+    description: Present only when a methods filter narrowed the read.
+    optional: true
+  - name: variantGuidance
+    type: VariantDef?
+    description: >-
+      Derived, read-only guidance for a variant-tagged component, resolved from the variant registry
+      rather than stored on the spec. Never written back.
+    optional: true
+  - name: pinnedSnapshot
+    type: PinnedSpecRead?
+    description: >-
+      Present only when the id named an external through its alias: the read came from the pin
+      (alias, producer, snapshot file, StateId), and the spec is the pinned entry — read-only,
+      written from the producer's own root.
+    optional: true
+  - name: memberProject
+    type: ProjectSystemRead?
+    description: >-
+      Present only when a system read named a member project through its alias: the spec is that
+      member's own L0 as stored at its root (its export table included) — read-only, written from
+      the member's own root.
+    optional: true
+methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No named declaration: the answer is the inline zod output schema getSpecOutput of
+        sdd_get_spec in src/mcp/server.ts (a plain const of zod fields, no type alias), so there is
+        no symbol a sourcePath could bind.
+createdAt: '2026-09-19T23:05:27.992Z'
+updatedAt: '2026-10-15T16:03:20.271Z'

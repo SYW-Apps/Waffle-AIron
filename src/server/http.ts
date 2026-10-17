@@ -1,24 +1,26 @@
 import * as http from 'http';
+import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
-import { sendJson, bearerToken } from './httpio.js';
-import { handleWebRequest, sessionCookieValue, startDevSession, setSessionCookie } from './web.js';
+import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
+import { handleWebRequest, startDevSession } from './web.js';
 import { getRealtimeHub, channelsForWebMutation, publishChange } from './realtime.js';
-import { serveSharedView, serveSharedModel, serveSharedOpenApi, serveSharedDownload } from './sharehttp.js';
+import { handleShareRequest } from './sharehttp.js';
 import * as admin from './admin.js';
 import * as packs from './packs.js';
-import { ensureInstanceIdentity } from './instance.js';
-import { createUnit, getOrganizationUnit } from './organization.js';
-import * as identity from './identity.js';
+import * as backupSchedule from './backup-schedule.js';
+import { bootstrapInstance } from './instance-bootstrap.js';
+import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
-import * as landscape from './landscape.js';
-import * as operations from './operations.js';
-import { AdminAuthError, LockValidationError, runPeriodicGitSync } from './admin.js';
-import { runPeriodicBackingSync } from './gitbacking.js';
-import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy, PrincipalSubject } from './types.js';
+import * as policyPortal from './policy-portal.js';
+import * as landscapePortal from './landscape-portal.js';
+import * as operationsPortal from './operations-portal.js';
+import { AdminAuthError, LockValidationError, UnauthenticatedError, ForbiddenError } from './errors.js';
+import { migratePermissionModel } from './migration.js';
+import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Host HTTP Portal + Host Server (sdd_host)
@@ -170,10 +172,14 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/admin/share/refresh',
   '/web/admin/share/update',
   '/web/admin/share/remove',
+  '/web/admin/approvals/decide',
   '/web/projects/packs',
   '/web/projects/packs/upload',
   '/web/projects/packs/remove',
   '/web/projects/packs/adopt',
+  '/web/projects/packs/impact',
+  '/web/projects/packs/removal-impact',
+  '/web/projects/tree/import',
   '/web/projects/policy/reconcile',
   '/web/projects/producers',
   '/web/projects/producers/remove',
@@ -183,11 +189,11 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/git/sync',
   '/web/projects/git/commit',
   '/web/projects/git/sync-config',
+  '/web/projects/config',
   '/web/tokens',
   '/web/tokens/revoke',
   '/web/projects',
   '/web/projects/lock',
-  '/web/projects/promote',
   '/web/projects/destroy',
 ]);
 
@@ -222,22 +228,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
       sendJson(res, 404, { error: 'not found' });
       return;
     }
-    const parts = url.pathname.split('/').filter(Boolean); // ['share', token, sub?, kind?]
-    const token = decodeURIComponent(parts[1] ?? '');
-    const sub = parts[2];
-    if (!token) {
-      sendJson(res, 404, { error: 'not found' });
-    } else if (!sub) {
-      serveSharedView(cfg, token, req, res);
-    } else if (sub === 'model') {
-      serveSharedModel(cfg, token, req, res);
-    } else if (sub === 'openapi') {
-      serveSharedOpenApi(cfg, token, req, res);
-    } else if (sub === 'download' && parts[3]) {
-      serveSharedDownload(cfg, token, decodeURIComponent(parts[3]), req, res);
-    } else {
-      sendJson(res, 404, { error: 'not found' });
-    }
+    handleShareRequest(cfg, req, res);
     return;
   }
 
@@ -316,15 +307,21 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     }
     const secureCookie = exposure.requireTls;
 
-    // DEV auto-login (strictly devMode): on a cookieless GET, transparently establish
+    // DEV auto-login (strictly devMode): on any bearerless GET, transparently establish
     // the local-developer session and install the cookie inline BEFORE dispatch, so
-    // the REUSED client lands signed-in and never sees a 401 / login screen. Excludes
-    // /web/dev-login itself (that route mints + redirects on its own). Never runs in
-    // hosted mode — so a hosted server sets no session cookie here.
+    // the REUSED client lands signed-in and never sees a 401 / login screen. The
+    // presented cookie is OVERRIDDEN rather than trusted: session cookies are not
+    // port-scoped, so a stale wairon_session from another project's dev server, a
+    // hosted instance on the same host, a wiped ephemeral dev data dir, or an expired
+    // session would otherwise resolve to nothing here and wedge the dev UI on a login
+    // screen that has no login method (devMode configures none). The mint is
+    // idempotent, so the Set-Cookie only goes out when the value actually changes.
+    // Excludes /web/dev-login itself (that route mints + redirects on its own). Never
+    // runs in hosted mode — so a hosted server sets no session cookie here.
     let sessionCredential = credential;
-    if (devMode && req.method === 'GET' && !cookie && url.pathname !== '/web/dev-login') {
+    if (devMode && req.method === 'GET' && !bearer && url.pathname !== '/web/dev-login') {
       const devSessionId = startDevSession(cfg);
-      res.setHeader('set-cookie', setSessionCookie(devSessionId, secureCookie));
+      if (devSessionId !== cookie) res.setHeader('set-cookie', setSessionCookie(devSessionId, secureCookie));
       sessionCredential = devSessionId;
     }
 
@@ -335,19 +332,23 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
         // data (a bare refetch), and a spurious nudge after a failed mutation is
         // harmless — the refetch just returns the unchanged, scope-filtered view.
         if (req.method === 'POST' && res.statusCode < 400) {
-          for (const ch of channelsForWebMutation(url.pathname, body)) publishChange(ch);
+          for (const ch of channelsForWebMutation(url.pathname, body, url.searchParams.get('projectId') ?? undefined)) {
+            publishChange(ch);
+          }
         }
       });
-    // The .wpack upload routes carry a raw application/zip body — read it as a
-    // Buffer (bounded by the same cap) instead of JSON-parsing it. Every other
-    // POST route stays JSON.
-    const isPackUpload =
+    // The .wpack and .waitree upload routes carry a raw application/zip body —
+    // read it as a Buffer (bounded by the same cap) instead of JSON-parsing it.
+    // Every other POST route stays JSON.
+    const isArchiveUpload =
       req.method === 'POST' &&
-      (url.pathname === '/web/admin/packs/upload' || url.pathname === '/web/projects/packs/upload');
+      (url.pathname === '/web/admin/packs/upload' ||
+        url.pathname === '/web/projects/packs/upload' ||
+        url.pathname === '/web/projects/tree/import');
     const readInput: Promise<unknown> =
       req.method !== 'POST'
         ? Promise.resolve(undefined)
-        : isPackUpload
+        : isArchiveUpload
           ? readRawBody(req)
           : readBody(req);
     readInput
@@ -382,13 +383,13 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
 // The compatible default posture lives with the exposure repository
 // (policy.ts) so the admin edit surface and this gate share one source.
 
-/** Read an optional <dataDir>/exposure-policy.json override (a partial policy);
- *  absent/malformed yields undefined so the compatible default stands. */
+/** Read the optional persisted exposure override through the policy repository
+ *  (a partial policy is fine); absent/malformed yields undefined so the
+ *  compatible default stands — the gate never fails a request over it. */
 function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | undefined {
   try {
-    const raw = fs.readFileSync(path.join(dataDir, 'exposure-policy.json'), 'utf8');
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as Partial<HostExposurePolicy>) : undefined;
+    const stored: unknown = policy.getExposurePolicyRecord(dataDir);
+    return stored && typeof stored === 'object' ? (stored as Partial<HostExposurePolicy>) : undefined;
   } catch {
     return undefined;
   }
@@ -399,7 +400,7 @@ function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | 
  *  default so unset flags keep current (mounted) behavior. */
 export function resolveExposurePolicy(cfg: HostConfig): HostExposurePolicy {
   const override = cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir);
-  return { ...policy.COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+  return policy.effectiveExposure(override);
 }
 
 // ── Admin plane ───────────────────────────────────────────────────────────
@@ -421,11 +422,11 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     const body: any = req.method === 'POST' || req.method === 'PUT' ? (await readBody(req)) ?? {} : {};
 
     // Identity control plane rides the admin listener behind identityApiEnabled
-    // (see identity.ts). It owns its own error → status mapping, so it returns
+    // (see identity-portal.ts). It owns its own error → status mapping, so it returns
     // before the admin catch. A disabled flag answers 404 (surface not mounted).
     if (parts[0] === 'identity') {
       if (!exposure.identityApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      identity.handleIdentityRequest(cfg, cred, req, res, body, url);
+      identityPortal.handleIdentityRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -437,7 +438,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // mapping, returning before the admin catch.
     if (parts[0] === 'projects' || parts[0] === 'instance') {
       if (!exposure.projectPolicyApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      policy.handlePolicyRequest(cfg, cred, req, res, body, url);
+      policyPortal.handlePolicyRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -447,7 +448,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // admin blocks below are never shadowed.
     if (parts[0] === 'landscape') {
       if (!exposure.landscapeApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      landscape.handleLandscapeRequest(cfg, cred, req, res, body, url);
+      landscapePortal.handleLandscapeRequest(cfg, cred, req, res, body, url);
       return;
     }
 
@@ -457,7 +458,7 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     // 'operations', never 'admin', so the admin blocks below are never shadowed.
     if (parts[0] === 'operations') {
       if (!exposure.operationsApiEnabled) return sendJson(res, 404, { error: 'not found' });
-      operations.handleOperationsRequest(cfg, cred, req, res, url);
+      operationsPortal.handleOperationsRequest(cfg, cred, req, res, url);
       return;
     }
 
@@ -468,8 +469,30 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         admin.destroyProject(cfg, cred, parts[2]);
         return sendJson(res, 200, { ok: true });
       }
+      // GET /admin/projects/:id/tree — download the whole spec tree as a
+      // .waitree archive. POST the same path — replace it from one. The archive
+      // rides base64 in the JSON body here rather than as a raw upload: the
+      // admin plane is uniformly JSON, and the browser/CLI paths that want a
+      // raw stream use /web/projects/tree/import.
+      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'tree') {
+        const allowPartial = url.searchParams.get('allowPartial') === '1';
+        const exported = admin.exportProjectTree(cfg, cred, parts[2], undefined, allowPartial);
+        res.writeHead(200, {
+          'content-type': 'application/zip',
+          'content-disposition': `attachment; filename="${exported.suggestedFileName}"`,
+        });
+        res.end(Buffer.from(exported.archive));
+        return;
+      }
+      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'tree') {
+        const archive = Buffer.from(String(body.archiveBase64 ?? ''), 'base64');
+        return sendJson(
+          res,
+          200,
+          admin.importProjectTree(cfg, cred, parts[2], archive, body.replaceExisting === true),
+        );
+      }
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'lock') return sendJson(res, 200, admin.lockProject(cfg, cred, parts[2]));
-      if (req.method === 'POST' && parts.length === 4 && parts[3] === 'promote') return sendJson(res, 200, admin.promoteProject(cfg, cred, parts[2]));
       if (req.method === 'POST' && parts.length === 4 && parts[3] === 'git') return sendJson(res, 201, admin.enableGit(cfg, cred, parts[2], body.remote, body.branch ?? 'main', body.pat));
       if (req.method === 'DELETE' && parts.length === 4 && parts[3] === 'git') {
         admin.disableGit(cfg, cred, parts[2]);
@@ -517,6 +540,17 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
       if (req.method === 'DELETE' && parts.length === 5 && parts[3] === 'packs') {
         packs.removeProjectPack(cfg, cred, parts[2], parts[4]);
         return sendJson(res, 200, { ok: true });
+      }
+      // POST /admin/projects/{id}/packs/{name}/impact — what installing the YAML in
+      // the body (or, with no body content, adopting the server-global pack) would
+      // change; POST …/removal-impact — what removing it would. Both write nothing
+      // (project:read), and are what a client shows before the PUT / DELETE above.
+      if (req.method === 'POST' && parts.length === 6 && parts[3] === 'packs' && parts[5] === 'impact') {
+        const content = typeof body?.content === 'string' ? body.content : undefined;
+        return sendJson(res, 200, packs.previewProjectPack(cfg, cred, parts[2], parts[4], content));
+      }
+      if (req.method === 'POST' && parts.length === 6 && parts[3] === 'packs' && parts[5] === 'removal-impact') {
+        return sendJson(res, 200, packs.previewProjectPackRemoval(cfg, cred, parts[2], parts[4]));
       }
     }
 
@@ -594,8 +628,8 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
         }
         return sendJson(res, 404, { error: 'not found' });
       } catch (err) {
-        if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-        if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
+        if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+        if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
         const msg = err instanceof Error ? err.message : String(err);
         if (/not found/i.test(msg)) return sendJson(res, 404, { error: msg });
         return sendJson(res, 400, { error: msg });
@@ -605,12 +639,16 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
     sendJson(res, 404, { error: 'not found' });
   } catch (err) {
     if (err instanceof PayloadTooLargeError) return sendJson(res, 413, { error: err.message });
-    if (err instanceof identity.UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
+    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
     // Scope denials from the Phase 6 admin lifecycle throw ForbiddenError; map it
     // to 403 like every other plane (AdminAuthError stays 403 for compatibility).
-    if (err instanceof identity.ForbiddenError) return sendJson(res, 403, { error: err.message });
+    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: err.message });
     if (err instanceof AdminAuthError) return sendJson(res, 403, { error: 'forbidden' });
     if (err instanceof LockValidationError) return sendJson(res, 409, { error: err.message, errors: err.errors });
+    // A lock that refused before writing (the design moved since it was
+    // requested, an input moved while it ran, or a required member is not
+    // approved) is a conflict with the tree's state, not a malformed request.
+    if (err instanceof Error && err.name === 'LockRefusedError') return sendJson(res, 409, { error: err.message });
     sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
   }
 }
@@ -621,36 +659,124 @@ export interface HostServerHandle {
   close(): void;
 }
 
-/** The stable id of the synthetic local development unit `wairon dev` boots
- *  with, so dev projects can always be placed (unitId is required at creation). */
-export const DEV_UNIT_ID = 'local';
+// ihost_server.init — the lifecycle entrypoint's contract name, realized by
+// the instance_bootstrap Orchestrator (src/server/instance-bootstrap.ts).
+export { bootstrapInstance as init };
 
 /**
- * One-time boot initialization — the sdd_host lifecycle init entrypoint, run
- * BEFORE the listeners bind (idempotent):
- *   1. Seed-or-load the persisted instance identity: the first boot generates
- *      the boot-reserved built-in subject UUIDs into <dataDir>/instance.json;
- *      every later boot loads them unchanged.
- *   2. Under devMode, ensure the synthetic local development organization unit
- *      exists so dev projects can always be placed.
+ * Warn, at startup, when the data dir still holds pre-permission-model shapes.
+ *
+ * `wairon host doctor --fix` is operator-invoked and never automatic, so an
+ * instance can upgrade and keep serving unmigrated records. The consequences are
+ * severe and previously silent: legacy users and API tokens resolve to ZERO
+ * permissions, projects placed in no unit are invisible to every unit-scoped
+ * grant, and units written before slugs existed took the organizations page down
+ * with `undefined.localeCompare` — a minified TypeError that named neither the
+ * cause nor the remedy. An operator should not have to reverse-engineer a stack
+ * trace to discover a migration is pending.
+ *
+ * The migration's DRY RUN is reused as the detector rather than re-implementing
+ * the checks: it is already the authority on which shapes are stale, and a second
+ * implementation would drift from it. Dry-run mode only reports — it writes
+ * nothing, so this never mutates data on startup.
+ *
+ * Diagnostics must never prevent a server from starting, so every failure here is
+ * swallowed: a broken check is not a reason to refuse connections.
  */
-export function initHostInstance(cfg: HostConfig): void {
-  ensureInstanceIdentity(cfg.dataDir);
-  if (cfg.devMode && !getOrganizationUnit(cfg.dataDir, DEV_UNIT_ID)) {
-    const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
-    createUnit(cfg.dataDir, {
-      id: DEV_UNIT_ID,
-      name: 'Local Development',
-      kind: 'team',
-      slug: DEV_UNIT_ID, // a root unit's qualified id IS its slug
-      status: 'active',
-      createdAt: '',
-      createdBy: system,
-    });
+export function warnIfDataDirUnmigrated(cfg: HostConfig): void {
+  try {
+    const report = migratePermissionModel(cfg.dataDir, false);
+    if (report.findings.length === 0) return;
+
+    console.error(
+      `[wairon migrate] ${report.findings.length} legacy data shape(s) found in ${cfg.dataDir} — `
+      + 'this instance has NOT been migrated to the permission model. Legacy users and tokens '
+      + 'resolve to zero permissions until you run: wairon host doctor --fix '
+      + '(run it without --fix first for a dry run).',
+    );
+    // Cap the per-finding detail: a large unmigrated instance can report many, and
+    // burying the remedy under hundreds of lines defeats the point of saying it.
+    const shown = report.findings.slice(0, 10);
+    for (const finding of shown) {
+      console.error(`[wairon migrate]   ${finding.area}: ${finding.detail}`);
+    }
+    if (report.findings.length > shown.length) {
+      console.error(`[wairon migrate]   … and ${report.findings.length - shown.length} more (see \`wairon host doctor\`).`);
+    }
+  } catch (err) {
+    console.error(`[wairon migrate] migration check skipped: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
-// ihost_server.init — the lifecycle entrypoint's contract name.
-export { initHostInstance as init };
+
+/**
+ * Log one line when the exposure policy names an adminApiMode that no longer
+ * exists (local_only, private_network, public): it reads as enabled, since each
+ * only ever meant "served" and where the admin API listens is adminHost. Reads
+ * only; a failure never prevents the server from starting.
+ */
+function warnIfAdminApiModeRetired(cfg: HostConfig): void {
+  try {
+    const stored = (cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir))?.adminApiMode as string | undefined;
+    if (stored === undefined || stored === 'disabled' || stored === 'enabled') return;
+    console.error(`[wairon exposure] adminApiMode "${stored}" is deprecated and reads as "enabled" — set "enabled" (or "disabled"); where the admin API listens is --admin-host.`);
+  } catch {
+    /* a diagnostic never stops the server */
+  }
+}
+
+/**
+ * One startup line about the web UI, so an operator never meets a bare 404:
+ * when the exposure policy leaves it off, where to turn it on; when it is on,
+ * how a person signs in (the built-in admin account, the enabled identity
+ * providers), or that no sign-in method is configured yet. The dev server is
+ * always on and signs in by itself, so it is skipped. Reads only; any failure
+ * is swallowed so it never prevents the server from starting.
+ */
+export function noteWebUiPosture(cfg: HostConfig): void {
+  if (cfg.devMode === true) return;
+  try {
+    const guide = 'see "Web UI and sign-in" in docs/cli.md';
+    if (!resolveExposurePolicy(cfg).webUiEnabled) {
+      console.log(
+        `[wairon web UI] off — set "webUiEnabled": true in ${path.join(cfg.dataDir, 'exposure-policy.json')} `
+          + `(or in the admin UI) to serve it at / on the data plane; ${guide}.`,
+      );
+      return;
+    }
+    const methods: string[] = [];
+    if (cfg.builtinAdminUser && cfg.builtinAdminPassword) methods.push('the built-in admin account');
+    const providers = policy.listIdentityProviderRecords(cfg.dataDir).filter((p) => p.enabled).map((p) => p.id);
+    if (providers.length) methods.push(`single sign-on (${providers.join(', ')})`);
+    console.log(
+      methods.length
+        ? `[wairon web UI] on at / on the data plane; sign in with ${methods.join(' or ')}.`
+        : '[wairon web UI] on at / on the data plane, but nobody can sign in yet: set WAIRON_ADMIN_USER and '
+          + `WAIRON_ADMIN_PASSWORD, or configure an identity provider (WAIRON_OIDC_ISSUER …); ${guide}.`,
+    );
+  } catch {
+    /* a diagnostic never stops the server */
+  }
+}
+
+/**
+ * Count the hosted families' members that hold no record yet and, when any do,
+ * log one line saying how many await `wairon host doctor --fix` (until then
+ * they are reached only through the deprecated member-qualified selectors).
+ * Reads only; any failure is swallowed so it never prevents the server from
+ * starting.
+ */
+export function warnIfMembersPending(cfg: HostConfig): void {
+  try {
+    const count = memberRegistration.pending(cfg.dataDir);
+    if (count === 0) return;
+    console.error(
+      `[wairon members] ${count} member(s) of hosted families hold no project record yet and await `
+      + '`wairon host doctor --fix` (run it without --fix first for the plan).',
+    );
+  } catch (err) {
+    console.error(`[wairon members] member check skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
@@ -681,7 +807,19 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   }
   // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
   // identity (and, under devMode, the synthetic local development unit).
-  initHostInstance(cfg);
+  bootstrapInstance(cfg);
+
+  warnIfDataDirUnmigrated(cfg);
+  // Step 4: before serving, roll back what a crash left unfinished under the
+  // data directory (a crashed member upgrade, a hosted detach or adopt) —
+  // audited and logged; a failure never prevents the server from starting.
+  memberRegistration.recoverData(cfg, true);
+  // Step 5: members that hold no record yet await `wairon host doctor --fix`.
+  warnIfMembersPending(cfg);
+  // A stored exposure policy still naming a retired adminApiMode reads as enabled.
+  warnIfAdminApiModeRetired(cfg);
+  // Step 7: say whether the web UI is served and how a person signs in to it.
+  noteWebUiPosture(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {
@@ -696,30 +834,16 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
 
-  // Periodic git-backup timer: each tick sweeps the git-bound projects (a
+  // Periodic backup schedule: each tick sweeps the git-bound projects (a
   // .wai/-scoped commit+push per due project, skip-if-clean — a quiet project
   // never commits noise) AND the container-level backup bindings whose interval
   // has elapsed. Both sweeps are pre-authorized internals; per-item failures
-  // are recorded inside them and never abort a sweep. unref() so the timer
-  // never keeps a closing process alive.
-  const GIT_SYNC_TICK_MS = 60_000;
-  const gitSyncTimer = setInterval(() => {
-    try {
-      runPeriodicGitSync(cfg);
-    } catch (err) {
-      console.error('[git-sync] project sweep failed: ' + (err instanceof Error ? err.message : String(err)));
-    }
-    try {
-      runPeriodicBackingSync(cfg);
-    } catch (err) {
-      console.error('[git-backing] backing sweep failed: ' + (err instanceof Error ? err.message : String(err)));
-    }
-  }, GIT_SYNC_TICK_MS);
-  gitSyncTimer.unref();
+  // are recorded inside them and never abort the other.
+  backupSchedule.start(cfg);
 
   return {
     close() {
-      clearInterval(gitSyncTimer);
+      backupSchedule.stop();
       getRealtimeHub().closeAll();
       dataServer.close();
       adminServer.close();

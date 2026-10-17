@@ -1,0 +1,29 @@
+kind: value-object
+id: spec_write_hooks
+name: SpecWriteHooks
+description: >-
+  The hooks an authoring caller injects into a spec write. Inversion rather than a direct call: the
+  rule engine already reads the spec store, so a store that called the rule engine back would close
+  the cycle. It also keeps mechanical re-saves ungated by construction — status promotion, layout
+  normalization and migrations pass no hooks and behave exactly as before, which is what lets a spec
+  authored before a rule existed still load and still be repaired.
+fields: []
+methods:
+  - name: gate
+    signature: 'gate(kind: string, merged: object): string[]'
+    returns: list<string>
+    description: >-
+      Judge the fully merged spec immediately before it is persisted, and throw to refuse the write.
+      Returns any notices to surface alongside the write's own.
+  - name: assess
+    signature: 'assess(kind: string, merged: object): string[]'
+    returns: list<string>
+    description: >-
+      Judge a spec the same way `gate` does but answer with the rule codes instead of throwing, so a
+      caller can ask whether a shape WOULD be legal without attempting the write. This exists for
+      the move's alternatives search: the store holds the tree and can enumerate candidate homes,
+      the gate holds the judgement, and neither can answer alone. Using `gate` for the same question
+      would mean driving a search on caught exceptions.
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-18T21:13:19.876Z'
+updatedAt: '2026-10-04T10:21:10.324Z'

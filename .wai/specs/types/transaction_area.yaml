@@ -1,0 +1,15 @@
+kind: enum
+id: transaction_area
+name: TransactionArea
+description: The two areas a migration transaction keeps files in, under its transaction directory.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: staged
+    description: New content, written and synced before anything live moves, then swapped in
+  - name: backup
+    description: The live files as they were, for a roll back
+createdAt: '2026-10-04T23:24:33.073Z'
+updatedAt: '2026-10-04T23:24:33.543Z'

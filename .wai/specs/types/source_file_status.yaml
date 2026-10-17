@@ -1,0 +1,19 @@
+kind: enum
+id: source_file_status
+name: SourceFileStatus
+description: Whether a source file a spec names could be read for analysis.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: analyzed
+    description: Read and analyzed
+  - name: missing
+    description: The path resolves to no file
+  - name: escaped
+    description: An absolute or parent-escaping path, refused by containment
+  - name: unreadable
+    description: Binary, or the read failed
+createdAt: '2026-10-04T23:13:17.266Z'
+updatedAt: '2026-10-04T23:13:17.641Z'

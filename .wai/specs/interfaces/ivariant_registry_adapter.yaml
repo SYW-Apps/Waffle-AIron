@@ -1,15 +1,80 @@
 id: ivariant_registry_adapter
 name: Variant Registry Adapter Interface
-description: Loads and merges the component-variant registry (global + project) into the VariantDef set.
+description: >-
+  Loads and merges the component-variant registry (built-in, global and project) into the VariantDef
+  set, and rewrites the project's own variant files.
 component: variant_registry_adapter
 methods:
   - name: loadProjectVariants
     description: >-
-      Load the component-variant registry governing the current project: the global variants
-      (WAIRON_VARIANTS_DIR) then the project's .wai/variants/, project winning on an id collision.
-    signature: 'loadProjectVariants(): VariantDef[]'
-    returns: VariantDef[]
+      Load the component-variant registry governing the current project: wairon's built-in variants,
+      then the global variants (WAIRON_VARIANTS_DIR, else ~/.wairon/variants), then the project's
+      .wai/variants/, a later layer winning on an id collision.
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
     params: []
+  - name: resolveVariantGuidance
+    description: >-
+      Resolve ONE component's variant guidance: the variant it declares, the core stereotype that
+      variant specializes, the implementation guidance, and the same-variant SIBLING components.
+      Null when the component declares no variant or one that does not resolve. The siblings travel
+      with the guidance because that is the entire payoff of a variant — every component of the same
+      kind gets implemented alike instead of reinvented per instance.
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
+    params:
+      - name: component
+        type: ComponentSpec
+        description: The component whose variant to resolve.
+      - name: allComponents
+        type: list<ComponentSpec>
+        description: Every component, for finding same-variant siblings.
+      - name: variantsById
+        type: list<VariantDef>
+        description: The loaded variant registry, keyed by id.
+  - name: composeVariantGuidance
+    description: >-
+      Compose the "Component variants" block injected into an owner/implementer agent for its
+      variant-tagged components — empty when none declare a known variant. Lives here rather than in
+      the agent resolver so the generated-agent renderer and the MCP spec-read path share ONE
+      implementation: a hosted agent and a local session are told the same thing about a variant by
+      construction, not by two copies staying in step.
+    signature: >-
+      composeVariantGuidance(comps: list<ComponentSpec>, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): string
+    returns: string
+    params:
+      - name: comps
+        type: list<ComponentSpec>
+        description: The agent's own components.
+      - name: allComponents
+        type: list<ComponentSpec>
+        description: Every component, for finding same-variant siblings.
+      - name: variantsById
+        type: list<VariantDef>
+        description: The loaded variant registry, keyed by id.
+  - name: listProjectVariants
+    description: >-
+      The variants the project's own .wai/variants/ files define, without the built-in or global
+      layers: the variants a migration may rewrite.
+    signature: 'listProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
+    params: []
+  - name: rebaseProjectVariants
+    description: >-
+      Rewrite the base of every project variant whose base is fromBase to toBase, in place in its
+      .wai/variants/ file, keeping the file's other content; returns the ids rebased.
+    signature: 'rebaseProjectVariants(fromBase: string, toBase: string): list<string>'
+    returns: list<string>
+    params:
+      - name: fromBase
+        type: string
+        description: The retired base stereotype
+      - name: toBase
+        type: string
+        description: The stereotype that replaces it
 status: complete
 createdAt: '2026-07-15T12:24:19.110Z'
-updatedAt: '2026-07-15T12:26:32.646Z'
+updatedAt: '2026-10-17T16:34:57.816Z'

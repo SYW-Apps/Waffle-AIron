@@ -1,0 +1,20 @@
+kind: value-object
+id: domains_add_options
+name: DomainsAddOptions
+description: >-
+  What `wairon domains add` was given. Both fields are optional because either can be derived from
+  the other — an id from a path, a path from an id — and requiring both would make the common case
+  wordier than it needs to be.
+fields:
+  - name: path
+    type: string
+    description: The directory the domain owns, relative to the project root.
+    optional: true
+  - name: id
+    type: string
+    description: The id to register it under; derived from the path when omitted.
+    optional: true
+methods: []
+sourcePath: src/commands/domains.ts
+createdAt: '2026-09-20T22:10:26.193Z'
+updatedAt: '2026-09-20T22:10:26.202Z'

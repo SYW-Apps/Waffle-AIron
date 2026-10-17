@@ -1,0 +1,15 @@
+kind: enum
+id: project_action
+name: ProjectAction
+description: The hosted project lifecycle actions that run execute-primary.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: project:init
+    description: Initialize a project's spec tree
+  - name: project:lock
+    description: Approve a project's design
+createdAt: '2026-10-04T23:18:19.271Z'
+updatedAt: '2026-10-04T23:18:19.686Z'

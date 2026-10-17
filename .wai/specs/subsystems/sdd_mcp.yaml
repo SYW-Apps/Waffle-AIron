@@ -1,10 +1,24 @@
-id: "sdd_mcp"
-name: "SDD MCP Server"
-description: "Hosts the stdio Model Context Protocol (MCP) server, exposing the sdd_* authoring, validation, and status tools for AI specification manipulation."
-parentSystem: "Waffle-AIron"
+id: sdd_mcp
+name: SDD MCP Server
+description: >-
+  Hosts the stdio Model Context Protocol (MCP) server, exposing the sdd_* authoring, validation, and
+  status tools for AI specification manipulation.
+parentSystem: Waffle-AIron
 publicInterfaces:
-  - type: "Custom"
-    component: "mcp_portal"
-    details: "Model Context Protocol over stdio (JSON-RPC): sdd_* authoring, validation, and status tools consumed by AI host tools (Claude Code, Gemini CLI, ...)."
-createdAt: "2026-06-10T19:28:00.000Z"
-updatedAt: "2026-07-02T00:00:00.000Z"
+  - details: >-
+      Model Context Protocol JSON-RPC (over stdio, or carried by the hosted data plane): sdd_*
+      authoring, validation, and status tools consumed by AI host tools (Claude Code, Gemini CLI,
+      ...).
+    component: mcp_portal
+  - details: >-
+      In-process hosting of the MCP server: build a server for the bound project with the sdd_*
+      surface mounted (the hosted data plane, one per request), or serve it over this process's
+      stdio (`wairon mcp serve`).
+    component: mcp_hosting_portal
+    consumers:
+      - sdd_cli
+      - sdd_host
+trustedLinks: []
+status: complete
+createdAt: '2026-06-10T19:28:00.000Z'
+updatedAt: '2026-10-06T19:01:54.811Z'

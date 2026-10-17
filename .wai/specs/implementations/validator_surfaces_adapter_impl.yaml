@@ -1,17 +1,61 @@
 id: validator_surfaces_adapter_impl
 name: Validator Surfaces Adapter Implementation
-description: Surface loading for validation-time resolution.
+description: >-
+  sdd_validator's client hop into sdd_surfaces, in a module of its own: identity re-exports of the
+  surface portal. The validator imports this module, so its calls into surfaces land here.
 contract: ivalidator_surfaces_adapter
-sourcePath: src/core/validation.ts
+sourcePath: src/core/adapters/validator-surfaces.ts
 simPath: tests/core/validation.test.ts
 methods:
-  - name: loadSurfaceSnapshots
+  - name: listSnapshots
     narrative:
       - stepNumber: 1
         description: Call listSnapshots on the surface portal
         type: call
         targetComponent: surface_portal
         targetMethod: listSnapshots
+  - name: listPinnedExternals
+    narrative:
+      - stepNumber: 1
+        description: Call listPinnedExternals on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: listPinnedExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Call getExternalsStatus on the surface portal, passing `offline` through
+        type: call
+        targetComponent: surface_portal
+        targetMethod: getExternalsStatus
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Call pinnedParent on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: pinnedParent
+  - name: unrecordedUses
+    narrative:
+      - stepNumber: 1
+        description: Call unrecordedUses on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: unrecordedUses
+  - name: memberApprovedSurfaces
+    narrative:
+      - stepNumber: 1
+        description: Call memberApprovedSurfaces on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: memberApprovedSurfaces
+  - name: memberStatuses
+    narrative:
+      - stepNumber: 1
+        description: Call memberStatuses on the surface portal
+        type: call
+        targetComponent: surface_portal
+        targetMethod: memberStatuses
 status: complete
 createdAt: '2026-07-10T23:16:00.415Z'
-updatedAt: '2026-07-18T22:34:35.230Z'
+updatedAt: '2026-10-09T11:38:47.990Z'

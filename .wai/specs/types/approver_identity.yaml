@@ -1,0 +1,39 @@
+kind: value-object
+id: approver_identity
+name: ApproverIdentity
+description: >-
+  Who approved a lock, and HOW that identity was established — because the two are different claims.
+  A `hosted` identity was authenticated by the instance that issued the caller's credential; `git`
+  and `os` are self-declared, read from the machine's own config; `legacy` is a record written
+  before this shape existed, carrying an opaque string. Recording the source keeps the record honest
+  about how much it proves instead of leaving a bare name to imply more than it can. The actual
+  proof is the commit that introduces the lock record — signed commits or a protected branch
+  establish it; no field inside the file ever can.
+fields:
+  - name: id
+    type: string
+    description: Git author line, hosted subject id, or user@hostname — per `source`.
+    optional: false
+  - name: name
+    type: string
+    description: Display name when the source carries one separately from the id.
+    optional: true
+  - name: source
+    type: ApproverSource
+    description: How the identity was established.
+    optional: false
+methods:
+  - name: label
+    signature: 'label(): string'
+    returns: string
+    description: >-
+      The identity as a line to show: the name beside the id when both are known, and marked as
+      authenticated when the instance that issued the credential vouched for it. A self-declared
+      identity read off a machine and one an instance authenticated are different claims, and a
+      reader has to be able to tell them apart at a glance. Pure projection over the type's own
+      fields, so it lives here rather than on the store that happens to persist it — which is also
+      what lets a CLI command render an approver without reaching into sdd_core's lock store.
+    symbol: describeApprover
+sourcePath: src/models/lock.ts
+createdAt: '2026-09-12T00:19:23.550Z'
+updatedAt: '2026-10-04T23:38:44.357Z'

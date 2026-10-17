@@ -1,0 +1,177 @@
+id: architecture_diagrams_impl
+name: Architecture Diagrams Implementation
+description: Renders the spec tree into the requested diagram format as a string.
+contract: iarchitecture_diagrams
+sourcePath: src/core/diagram.ts
+methods:
+  - name: render
+    narrative:
+      - stepNumber: 1
+        description: Dispatch on the requested format
+        type: switch
+        'on': format
+        cases:
+          - value: canvas
+            step: 2
+          - value: mermaid
+            step: 5
+          - value: drawio
+            step: 12
+          - value: excalidraw
+            step: 15
+        defaultStep: 18
+      - stepNumber: 2
+        label: canvas
+        description: >-
+          Build the architecture, type ERD and database canvas model — the canvas reads the spec
+          tree itself, system through type specs — with the tree's validation findings and the
+          relation health passed in (none when omitted)
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: build
+      - stepNumber: 3
+        description: >-
+          Draw the model as a single self-contained page — markup, styles and the interaction engine
+          embedded, including line-routing controls, obstacle-aware curved edges, per-edge
+          orthogonal lanes and the resizable details sidebar — so it opens from disk with no server
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: render
+      - stepNumber: 4
+        description: Return the canvas HTML
+        type: return
+        outcome: canvas HTML
+      - stepNumber: 5
+        label: mermaid
+        description: 'The Mermaid diagram reads its spec graph directly: load the system spec'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 6
+        description: Load the subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 7
+        description: Load the component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 8
+        description: Load the interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 9
+        description: Load the implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 10
+        description: Render the Mermaid component diagram from that graph
+        type: local
+      - stepNumber: 11
+        description: Return the Mermaid markdown
+        type: return
+        outcome: Mermaid markdown
+      - stepNumber: 12
+        label: drawio
+        description: Build the canvas model (no findings, no relation health)
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: build
+      - stepNumber: 13
+        description: Arrange the model and encode it as draw.io XML
+        type: call
+        targetComponent: diagram_codec
+        targetMethod: generateDrawioXml
+      - stepNumber: 14
+        description: Return the draw.io XML
+        type: return
+        outcome: draw.io XML
+      - stepNumber: 15
+        label: excalidraw
+        description: Build the canvas model (no findings, no relation health)
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: build
+      - stepNumber: 16
+        description: Arrange the model and encode it as an Excalidraw scene
+        type: call
+        targetComponent: diagram_codec
+        targetMethod: generateExcalidrawScene
+      - stepNumber: 17
+        description: Return the Excalidraw scene
+        type: return
+        outcome: Excalidraw scene
+      - stepNumber: 18
+        label: unsupported
+        description: Reject an unsupported format
+        type: throw
+        error: Unsupported diagram format
+    symbol: renderDiagram
+  - name: buildGraphModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the canvas model of the bound project — the canvas reads the spec tree itself,
+          system through type specs — and traverse it rather than the specs
+        type: call
+        targetComponent: spec_canvas
+        targetMethod: build
+      - stepNumber: 2
+        description: >-
+          Build the WebGraphNode set from the canvas model, tagging each with its level-of-detail
+          depth: subsystems at level 1 (parent = the project/system), components at level 2 (parent
+          = their subsystem), interfaces and types at level 3 (parent = their component), and
+          implementations at level 4 (parent = the component realizing the implementation's contract
+          interface), each carrying kind, label, projectId context, and status. Keep only nodes
+          whose level is at or below the requested detail level (level 0 yields just the
+          project/system root).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Build the LandscapeEdge-shaped edges between the INCLUDED nodes only: containment edges
+          from a subsystem to its components (and project to subsystems), ownership edges from a
+          component to its owned member blocks, its interfaces, and its implementations, and
+          depends_on edges from a component to its collaborators; drop any edge whose endpoint was
+          filtered out above the requested level.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Assemble the WebGraphModel: tier 'project', the filtered nodes and edges, level = the
+          requested detail level, generatedAt = now, scope = the project/system name.
+        type: local
+      - stepNumber: 5
+        description: Return the project-tier web graph model
+        type: return
+        outcome: web graph model
+    detail: full
+  - name: buildCanvasDataModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the canvas model from the loaded specs, the tree's current findings and the relation
+          health passed in (none when omitted) — the same model the canvas render embeds
+        type: local
+      - stepNumber: 2
+        description: Return it as data
+        type: return
+        outcome: success
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/core/diagram.ts -> src/core/validation.ts
+      reason: >-
+        The canvas issue overlay invokes validateSddTree directly (diagramIssues); the proper shape
+        is issues passed in by the caller, which removes this edge — cross-subsystem refactor
+        candidate (architecture_diagrams is sdd_core, the validator is sdd_validator).
+    - code: UNDECLARED_DEPENDENCY
+      at: src/core/diagram.ts -> src/config/project-config.ts
+      reason: >-
+        The same overlay reads the project configuration (through project_config_repository) only to
+        hand that validateSddTree call its rules and projectType, so this edge goes with the one
+        above, in the same refactor.
+status: complete
+createdAt: '2026-07-04T15:59:34.318Z'
+updatedAt: '2026-10-04T19:59:29.048Z'

@@ -1,0 +1,22 @@
+kind: enum
+id: surface_audience
+name: SurfaceAudience
+description: >-
+  How far a published item travels, narrowest first. Each audience covers every one before it, so a
+  ceiling of instance also admits department and project consumers.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: project
+    description: 'Family-internal: exported only into the project''s own members'
+  - name: department
+    description: The owning organization unit's subtree
+  - name: instance
+    description: The whole hosted instance (the default ceiling)
+  - name: partner
+    description: Grant-gated, across tenants
+  - name: external
+    description: Publicly consumable, third-party facing
+createdAt: '2026-10-04T23:11:11.905Z'
+updatedAt: '2026-10-04T23:11:31.680Z'

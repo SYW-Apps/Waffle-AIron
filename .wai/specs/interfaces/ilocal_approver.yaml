@@ -1,0 +1,20 @@
+id: ilocal_approver
+name: Approver Identity Interface
+description: >-
+  One question, asked of the machine: who is taking this lock? Callers that already know — a hosted
+  instance holding an authenticated principal — do not ask.
+component: local_approver
+methods:
+  - name: resolve
+    description: >-
+      The identity to record for a lock taken on this machine. Never throws and never prompts — a
+      lock must not fail because a name could not be resolved — so the worst case is `unknown@host`
+      marked `source: 'os'`, which is still an honest statement of what is known.
+    signature: 'resolve(): ApproverIdentity'
+    returns: ApproverIdentity
+    params: []
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-21T10:06:54.715Z'
+updatedAt: '2026-09-21T10:08:00.018Z'

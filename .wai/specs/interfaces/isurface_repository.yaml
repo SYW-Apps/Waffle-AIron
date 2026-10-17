@@ -1,41 +1,22 @@
 id: isurface_repository
 name: Surface Repository Interface
 description: >-
-  Facade contract for the stored surface-snapshot aggregate; consumers never touch the owned
-  store/registry/index directly.
+  Facade contract for the stored surface-snapshot aggregate; consumers never touch the owned store
+  or fs adapter directly.
 component: surface_repository
 methods:
   - name: saveSnapshot
-    description: Upsert a snapshot (persisted to .wai/surfaces/ and reflected in the projection).
-    signature: 'saveSnapshot(snapshot: SurfaceSnapshot): void'
-    returns: void
-    params:
-      - name: snapshot
-        type: SurfaceSnapshot
+    description: Upsert a snapshot, persisted to .wai/surfaces/.
+    signatureFrom: surface_store.put
   - name: getSnapshot
     description: Snapshot by producing project name, or null.
-    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
-    params:
-      - name: projectName
-        type: string
+    signatureFrom: surface_store.get
   - name: listSnapshots
-    description: All stored snapshots.
-    signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    description: All stored snapshots at the bound root.
+    signatureFrom: surface_store.list
   - name: removeSnapshot
-    description: Delete the named project's snapshot (file and projection).
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
-    params:
-      - name: projectName
-        type: string
-  - name: hydrate
-    description: >-
-      Rebuild the in-memory projection from the persisted snapshot files (the subsystem's init
-      lifecycle flow).
-    signature: 'hydrate(): void'
-    returns: void
+    description: Delete the named project's snapshot.
+    signatureFrom: surface_store.remove
 status: complete
 createdAt: '2026-07-10T23:13:27.580Z'
-updatedAt: '2026-07-11T09:04:02.688Z'
+updatedAt: '2026-10-04T22:34:14.785Z'

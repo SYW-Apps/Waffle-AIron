@@ -1,13 +1,16 @@
 id: surface_store
 name: Surface Store
 description: >-
-  Authoritative in-memory holding of the parsed surface snapshots. A ram-projection: rebuilt from
-  the snapshot files through the fs adapter, never restored from its own state.
+  Authoritative state for this project's stored surface snapshots (.wai/surfaces/). Read-through:
+  every read is the file read through the surface fs adapter and every write goes straight to the
+  file, nothing is held in memory, so there is nothing to hydrate and no copy to go stale across
+  processes.
 subsystem: sdd_surfaces
 componentType: Store
 owns: []
-dependsOn: []
-durability: ram-projection
+dependsOn:
+  - surface_fs_adapter
+durability: read-through
 status: complete
 createdAt: '2026-07-10T23:12:17.571Z'
-updatedAt: '2026-07-11T09:04:02.292Z'
+updatedAt: '2026-10-04T22:34:03.819Z'

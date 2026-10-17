@@ -5,22 +5,23 @@ component: surface_fs_adapter
 methods:
   - name: readAllSnapshots
     description: Parse every snapshot file under .wai/surfaces/ (missing dir yields empty).
-    signature: 'readAllSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    signature: 'readAllSnapshots(): list<SurfaceSnapshot>'
+    returns: list<SurfaceSnapshot>
+    params: []
   - name: writeSnapshot
-    description: Write/overwrite one snapshot file named by producing project.
-    signature: 'writeSnapshot(snapshot: SurfaceSnapshot): void'
-    returns: void
+    description: Write/overwrite one snapshot file named by producing project; answers the file's path.
+    signature: 'writeSnapshot(snapshot: SurfaceSnapshot): string'
+    returns: string
     params:
       - name: snapshot
         type: SurfaceSnapshot
   - name: deleteSnapshot
-    description: Remove a snapshot file.
-    signature: 'deleteSnapshot(projectName: string): boolean'
-    returns: boolean
+    description: Remove a snapshot file; whether one existed.
+    signature: 'deleteSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
 status: complete
 createdAt: '2026-07-10T23:13:41.939Z'
-updatedAt: '2026-07-11T09:04:02.482Z'
+updatedAt: '2026-10-04T22:34:12.275Z'

@@ -1,0 +1,19 @@
+kind: value-object
+id: field_rename_reading
+name: FieldRenameReading
+description: >-
+  The field renames inside one used member's closure between a consumer's pinned snapshot and the
+  producer's live one, and whether they are the member's whole change.
+fields:
+  - name: renames
+    type: list<string>
+    description: Each rename, read `field "<type>.<old>" renamed to "<new>"`
+    optional: false
+  - name: renameOnly
+    type: bool
+    description: Whether undoing the renames gives back the pinned member digest exactly
+    optional: false
+methods: []
+sourcePath: src/models/surface-references.ts
+createdAt: '2026-10-07T22:01:02.902Z'
+updatedAt: '2026-10-07T22:01:03.858Z'

@@ -9,8 +9,8 @@
  *   node examples/wrapper/wrapper.js [path-to-project]
  * (defaults to ./demo-project)
  *
- * Embedding requires a built checkout of this repo as a `file:` dependency
- * (wairon is distributed as standalone CLI binaries, not on npm).
+ * Outside this repo, depend on `@wairon/cli` from npm and
+ * `require('@wairon/cli')` instead of the built checkout below.
  */
 const path = require('path');
 const wairon = require('../../dist/index.js');
@@ -35,7 +35,7 @@ for (const err of extensions.errors) {
   process.exit(2);
 }
 
-const result = wairon.validateSddTree({ extensions });
+const result = wairon.validateProject({ extensions });
 
 const errors = result.issues.filter((i) => i.severity === 'error');
 const warnings = result.issues.filter((i) => i.severity === 'warning');

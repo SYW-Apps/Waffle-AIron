@@ -10,8 +10,8 @@ methods:
     narrative: []
     intent: >-
       Return the browser session whose id matches from the store's authoritative set, or null when
-      none matches. A pure read; performs no expiry enforcement (the auth specialist rejects expired
-      sessions on resolution).
+      none matches. A pure read; performs no expiry enforcement (the authentication component
+      rejects expired sessions on resolution).
   - name: listBySubject
     narrative: []
     intent: >-
@@ -21,4 +21,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-11T11:35:00.991Z'
-updatedAt: '2026-07-11T11:44:41.182Z'
+updatedAt: '2026-09-15T20:49:09.502Z'

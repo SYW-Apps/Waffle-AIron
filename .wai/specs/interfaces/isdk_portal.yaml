@@ -1,24 +1,22 @@
 id: isdk_portal
 name: SDK Portal Interface
 description: >-
-  The published `@wairon/sdk` library API — four capabilities, each a 1:1 forward to the SDK
-  orchestrator with no logic of its own. This is the in-process facade cross-subsystem consumers
-  (sdd_cli, sdd_host) reach through their client Adapters, and the surface the package's index
-  re-exports (alongside the pure authoring + rule-authoring types).
+  The published `@wairon/sdk` library API — the pack-authoring capabilities plus the spec-tree
+  archive capabilities, each a 1:1 forward to the SDK orchestrator with no logic of its own. This is
+  the in-process facade cross-subsystem consumers (sdd_cli, sdd_core, sdd_host) reach through their
+  client Adapters, and the surface the package's index re-exports (alongside the pure authoring +
+  rule-authoring types).
 component: sdk_portal
 methods:
   - name: scaffoldPack
     description: >-
       Scaffold a new pack project (declarative or code) into a directory; returns the created file
       paths.
-    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
-    returns: string[]
+    signature: 'scaffoldPack(request: pack_scaffold_request): list<string>'
+    returns: list<string>
     params:
       - name: request
         type: pack_scaffold_request
-    endpoint:
-      transport: Custom
-      address: '@wairon/sdk#scaffoldPack'
   - name: buildPack
     description: Build an installable .wpack archive from a pack directory.
     signature: 'buildPack(sourceDir: string): PackBuildResult'
@@ -26,9 +24,6 @@ methods:
     params:
       - name: sourceDir
         type: string
-    endpoint:
-      transport: Custom
-      address: '@wairon/sdk#buildPack'
   - name: inspectArchive
     description: Inspect + verify a .wpack archive without extracting it.
     signature: 'inspectArchive(archive: bytes): PackArchiveInfo'
@@ -36,13 +31,10 @@ methods:
     params:
       - name: archive
         type: bytes
-    endpoint:
-      transport: Custom
-      address: '@wairon/sdk#inspectArchive'
   - name: extractPack
     description: Safely extract a .wpack archive into a destination directory under enforced limits.
     signature: >-
-      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
       PackExtractionResult
     returns: PackExtractionResult
     params:
@@ -53,9 +45,60 @@ methods:
       - name: limits
         type: pack_extraction_limits
         optional: true
-    endpoint:
-      transport: Custom
-      address: '@wairon/sdk#extractPack'
+  - name: buildTreeArchive
+    description: Pack a project's spec tree — the supplied roots' .wai directories — into a .waitree archive.
+    signature: >-
+      buildTreeArchive(roots: list<tree_root_source>, projectName: string, stateId?: string,
+      includeDerived?: bool): TreeBuildResult
+    returns: TreeBuildResult
+    params:
+      - name: roots
+        type: list<tree_root_source>
+      - name: projectName
+        type: string
+      - name: stateId
+        type: string
+        optional: true
+      - name: includeDerived
+        type: bool
+        optional: true
+  - name: inspectTreeArchive
+    description: Inspect a .waitree archive without extracting it.
+    signature: 'inspectTreeArchive(archive: bytes): TreeArchiveInfo'
+    returns: TreeArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractTreeArchive
+    description: >-
+      Safely extract a .waitree archive into a destination project root under enforced limits,
+      optionally refusing executable entries.
+    signature: >-
+      extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
+      refuseExecutableEntries?: bool): TreeExtractionResult
+    returns: TreeExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+      - name: refuseExecutableEntries
+        type: bool
+        optional: true
+  - name: defineRule
+    description: >-
+      Published: author a code-pack conformance rule with full type inference. Returns the rule
+      unchanged — the identity is the point, so a code pack gets typed authoring against @wairon/sdk
+      without importing anything from wairon core.
+    signature: 'defineRule(rule: pack_rule): pack_rule'
+    returns: pack_rule
+    params:
+      - name: rule
+        type: pack_rule
+        description: The rule as authored
 status: complete
 createdAt: '2026-07-21T18:13:58.018Z'
-updatedAt: '2026-07-21T19:26:05.453Z'
+updatedAt: '2026-10-06T18:55:13.109Z'

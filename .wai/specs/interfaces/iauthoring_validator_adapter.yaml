@@ -1,0 +1,104 @@
+id: iauthoring_validator_adapter
+name: Core Validator Client Adapter Interface
+description: >-
+  Client adapter to sdd_validator: the component candidate gate, forwarded 1:1 to the validator
+  portal. Nothing else of the validator's surface is needed on this side of the boundary — sdd_core
+  runs no tree validation of its own.
+component: authoring_validator_adapter
+methods:
+  - name: validateComponentCandidate
+    description: >-
+      Judge one component that is not yet written against the spec-scoped rules, and return the
+      verdict split by severity. Forwarded to the validator portal.
+    signature: >-
+      validateComponentCandidate(candidate: ComponentSpec, opts?: CandidateOptions):
+      CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: candidate
+        type: ComponentSpec
+        description: The component as it would be written
+      - name: opts
+        type: CandidateOptions
+        description: The project's rule severities and project type to judge with
+        optional: true
+    guarantees:
+      - idempotent
+  - name: findTestsReferencing
+    description: >-
+      Forward the test search to the validator portal, so a gated write can name the tests that
+      encode a method it just changed or deleted. Answers empty when the project declares no test
+      roots — the search must never be the thing that fails a write.
+    signature: >-
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
+    params:
+      - name: methods
+        type: list<MethodImplementation>
+        description: The methods the write changed or deleted
+      - name: projectRoot
+        type: string
+        description: The root the test roots are resolved within
+      - name: testRoots
+        type: list<string>
+        description: Project-relative test directories from the project's conformance settings
+    guarantees:
+      - idempotent
+  - name: implementsProblem
+    description: >-
+      What validate would say of a contract declaring `implements: <ref>`, without writing it.
+      Forwarded to the validator portal.
+    signature: 'implementsProblem(ref: string): string?'
+    returns: string?
+    params:
+      - name: ref
+        type: string
+        description: The `alias::name` the contract would implement
+    effect: read
+  - name: introducedFindings
+    description: >-
+      Forward a write's in-tree judgement to the validator portal: the doctrine edges and route
+      collisions the candidate introduces.
+    signature: >-
+      introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
+      CandidateOptions, others?: list<ComponentSpec>): CandidateVerdict
+    returns: CandidateVerdict
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec written
+      - name: candidate
+        type: ComponentSpec | InterfaceSpec
+        description: The spec about to be written, merged and carried
+      - name: opts
+        type: CandidateOptions
+        description: Rules config, project type and loaded packs
+        optional: true
+      - name: others
+        type: list<ComponentSpec>
+        description: The other components the same write changes
+        optional: true
+  - name: validateProject
+    description: >-
+      Forward a whole-tree judgement to the validator portal: the owner's gate of the bound project
+      — what a move's rehearsal reads on both sides of the move
+    signature: 'validateProject(options?: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: What this run may vary; omitted, the project's own configuration
+        optional: true
+    effect: read
+  - name: listRules
+    description: >-
+      Forward to the validator portal: the active rule set, to tell the findings that judge code (a
+      rehearsal copy holds no code) from the design's
+    signature: 'listRules(): list<SddRule>'
+    returns: list<SddRule>
+    params: []
+    effect: read
+status: complete
+createdAt: '2026-09-18T21:11:59.866Z'
+updatedAt: '2026-10-09T17:09:38.077Z'

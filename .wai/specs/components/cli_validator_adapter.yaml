@@ -6,7 +6,10 @@ componentType: Adapter
 owns: []
 dependsOn:
   - validator_portal
-  - core_portal
+  - project_config_portal
+  - agent_context_portal
+  - spec_maintenance_portal
+  - approval_portal
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-11T20:29:52.273Z'
+updatedAt: '2026-10-09T00:18:35.330Z'

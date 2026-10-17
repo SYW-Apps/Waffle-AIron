@@ -1,0 +1,26 @@
+kind: enum
+id: export_problem_kind
+name: ExportProblemKind
+description: >-
+  What is wrong with an export-table entry. The export-tables rule maps each kind to its finding
+  code.
+fields: []
+methods: []
+sourcePath: src/models/exports.ts
+values:
+  - name: duplicate
+    description: Two entries bind one public name (EXPORT_ID_DUPLICATE, error)
+  - name: named-cycle
+    description: A named re-export chain never reaches a component or type (EXPORT_CYCLE, error)
+  - name: wildcard-cycle
+    description: A wildcard re-export cycle (EXPORT_CYCLE, warning)
+  - name: invalid
+    description: The entry cannot be read as written (EXPORT_INVALID, notice)
+  - name: unconsumable
+    description: Nothing outside can consume what the entry exports (EXPORT_UNCONSUMABLE, notice)
+  - name: widens
+    description: >-
+      An L0 entry declares a wider audience than the member or external export it re-exports
+      (EXPORT_WIDENS_AUDIENCE, error)
+createdAt: '2026-10-04T23:12:59.559Z'
+updatedAt: '2026-10-04T23:12:59.964Z'

@@ -1,0 +1,14 @@
+kind: enum
+id: effort_tier
+name: EffortTier
+description: A reasoning-effort tier within a model tier, where the host tool supports one. Least first.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: low
+  - name: medium
+  - name: high
+  - name: xhigh
+createdAt: '2026-10-04T23:12:34.208Z'
+updatedAt: '2026-10-04T23:12:34.666Z'

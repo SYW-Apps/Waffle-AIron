@@ -1,7 +1,8 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { assertProjectInitialized } from '../config/loader.js';
-import { exportSddSkills, listSkillNames } from '../core/skills.js';
+import { assertProjectInitialized } from '../config/paths.js';
+// cli_skills_adapter — the skills portal, reached through the adapter's own module.
+import { exportSddSkills, listSkillNames } from './adapters/skills.js';
 
 // ---------------------------------------------------------------------------
 // skills command
@@ -10,7 +11,7 @@ import { exportSddSkills, listSkillNames } from '../core/skills.js';
 // into each active target's skills directory and run in-session.
 // ---------------------------------------------------------------------------
 
-export async function runSkillsList(): Promise<void> {
+export function runSkillsList(): void {
   assertProjectInitialized();
   const names = listSkillNames();
   logger.header(`SDD Skills (${names.length})`);
@@ -20,7 +21,7 @@ export async function runSkillsList(): Promise<void> {
   }
 }
 
-export async function runSkillsInstall(): Promise<void> {
+export function runSkillsInstall(): void {
   assertProjectInitialized();
   const result = exportSddSkills();
 

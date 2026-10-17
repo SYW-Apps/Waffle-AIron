@@ -1,0 +1,21 @@
+id: export_index
+name: Export Index
+description: >-
+  Read face of the spec repository for export tables. The tables are resolved once per scan, inside
+  it — the Spec Index resolves every project's L1 and L0 tables through the pure export resolver
+  before it binds any `alias::name` against them — and this Index projects what the scan recorded:
+  one subsystem's table, one project's table, and one consumer's usage of one producer (the
+  references the scan bound into it, counted by the public names they bound to). Problems come back
+  as the facts the resolver recorded, for the validator to judge. Nothing is resolved twice and
+  nothing is stale: the projection is dropped with the scan. It depends on the Spec Index and the
+  Project Family Index of the same Repository — the sanctioned exceptional case of an Index
+  projecting another Index, never in a cycle (the family index depends on the Spec Index alone).
+subsystem: sdd_core
+componentType: Index
+owns: []
+dependsOn:
+  - spec_index
+  - project_family_index
+status: complete
+createdAt: '2026-09-26T16:08:20.637Z'
+updatedAt: '2026-09-27T10:37:38.546Z'

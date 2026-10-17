@@ -1,6 +1,16 @@
-import { aiDir, writeFile, writeFileIfChanged, readFileOrNull, pathExists } from '../utils/fs.js';
-import { GLOBAL_GUIDE_BODY } from '../utils/ai-guide.js';
+import { aiDir, writeFileIfChanged, readFileOrNull, pathExists, fromProjectRoot } from '../utils/fs.js';
+import { guideBody } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
+// STATIC: the lazy require this replaced was documented as breaking a circular
+// dependency, but the projector imports nothing from here — there is no cycle
+// to break, and the lazy form does not resolve once the module is bundled.
+//
+// Through the projector, not ./domains.js or ./topology.js: "which domains
+// exist" spans the spec tree as well as the configuration, so it is neither the
+// registry's question nor the facade's. Both of those answer half of it, which
+// is exactly why a consumer must not be the place the two halves are joined.
+import { resolveDomains } from './domain_projector.js';
+import { projectConfigRepository } from '../config/project-config.js';
 
 // ---------------------------------------------------------------------------
 // Context — shared project context under .wai/context/
@@ -11,8 +21,17 @@ import { versionStamp } from './stamp.js';
 //   domains.md        ← auto-generated: domain list from registry
 //   wairon-guide.md   ← auto-generated: importable reference for AI tools
 //
-// The generated files are rebuilt by syncContextFiles() which is called by
-// `wairon generate` and `wairon init`.
+// The generated files are rebuilt by syncContextFiles(), which `wairon init`
+// and `wairon doctor --fix` call unconditionally and `wairon generate` calls
+// whenever the directory exists (hasContext).
+//
+// The two human-edited documents are READ here and never written. There is
+// deliberately no write path for them and none is wanted: overwriting what
+// somebody wrote about their own system is the one unrecoverable thing this
+// directory could do, and a write function that exists is a write function
+// something eventually calls. `writeProjectContext` and
+// `writeArchitectureContext` were exactly that — exported, callable, and
+// called by nothing for as long as they existed.
 // ---------------------------------------------------------------------------
 
 export function contextDir(...segments: string[]): string {
@@ -31,16 +50,20 @@ export const CONTEXT_PATHS = {
 // Presence checks
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether this project keeps a context directory at all — the condition under
+ * which the derived documents are owed. Gated on the directory, not on the
+ * human-written project.md: a project nobody described still carries a
+ * derived guide, and `generate` left it stale while `doctor --fix` (which
+ * syncs unconditionally) kept it current, so the two disagreed about when a
+ * derived document was owed.
+ */
 export function hasContext(): boolean {
-  return pathExists(CONTEXT_PATHS.projectMd());
-}
-
-export function hasArchitectureContext(): boolean {
-  return pathExists(CONTEXT_PATHS.architectureMd());
+  return pathExists(CONTEXT_PATHS.dir());
 }
 
 // ---------------------------------------------------------------------------
-// Raw reads / writes (human-edited files)
+// Raw reads (human-edited files) — read-only by design; see the header note
 // ---------------------------------------------------------------------------
 
 export function readProjectContext(): string | null {
@@ -51,12 +74,58 @@ export function readArchitectureContext(): string | null {
   return readFileOrNull(CONTEXT_PATHS.architectureMd());
 }
 
-export function writeProjectContext(content: string): void {
-  writeFile(CONTEXT_PATHS.projectMd(), content);
+// ---------------------------------------------------------------------------
+// Writes for the two DERIVED files, and where they live
+//
+// Both go through the write-only-if-changed primitive and answer whether the
+// content actually differed, which is what keeps a regenerate free of diffs
+// when no design moved — a file rewritten with identical bytes is still a
+// modified file to git.
+// ---------------------------------------------------------------------------
+
+export function writeDomainsDoc(content: string): boolean {
+  return writeFileIfChanged(CONTEXT_PATHS.domainsMd(), content);
 }
 
-export function writeArchitectureContext(content: string): void {
-  writeFile(CONTEXT_PATHS.architectureMd(), content);
+export function writeGuideDoc(content: string): boolean {
+  return writeFileIfChanged(CONTEXT_PATHS.waironGuideMd(), content);
+}
+
+/**
+ * Where the two DERIVED documents live — `wairon doctor` compares their version
+ * stamps against the running build. The derived pair only: a caller reporting on
+ * generated files has no business being handed the paths of the two a person
+ * wrote, and would report them stale for having no stamp.
+ */
+export function derivedDocPaths(): string[] {
+  return [CONTEXT_PATHS.waironGuideMd(), CONTEXT_PATHS.domainsMd()];
+}
+
+/**
+ * context_composer.staleDocs — the derived documents whose content differs
+ * from what a regenerate would write now (line endings aside): a file stamped
+ * by this very release can still be stale in content — the project context it
+ * embeds, the domain map. A missing file is not stale here (the caller reports
+ * it missing). Read-only.
+ */
+export function staleDerivedDocs(): string[] {
+  // Step 1: each derived document as a regenerate would write it now.
+  const rendered: Array<[string, () => string]> = [
+    [CONTEXT_PATHS.waironGuideMd(), renderWaironGuide],
+    [CONTEXT_PATHS.domainsMd(), renderDomainsDoc],
+  ];
+  const out: string[] = [];
+  for (const [file, render] of rendered) {
+    // Step 2: the file on disk.
+    const onDisk = readFileOrNull(file);
+    if (onDisk === null) continue;
+    let now: string;
+    try { now = render(); } catch { continue; }
+    // Step 3: stale when the content differs, line endings aside.
+    const lf = (text: string): string => text.replace(/\r\n/g, '\n');
+    if (lf(onDisk) !== lf(now)) out.push(file);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,17 +137,17 @@ export function writeArchitectureContext(content: string): void {
  * Imported lazily to avoid circular deps at module load time.
  */
 export function renderDomainsDoc(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
   const domains = resolveDomains();
 
-  const today = new Date().toISOString().split('T')[0];
+  // NO generation timestamp. A generator must be a pure function of the spec
+  // tree: stamping the clock made `wairon generate` non-idempotent, so running
+  // it twice across midnight rewrote this file with no design change behind it —
+  // committed churn carrying nothing git does not already know from the commit.
   const lines: string[] = [
     versionStamp(),
     `# Domains`,
     ``,
     `> Auto-generated by wairon. The human developer rebuilds this with \`wairon generate\`.  `,
-    `> Last updated: ${today}`,
     ``,
   ];
 
@@ -104,17 +173,16 @@ export function renderDomainsDoc(): string {
  * awareness. Contains: project context + domain map + wairon usage guide.
  */
 export function renderWaironGuide(): string {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { loadProjectConfig } = require('../config/loader.js') as typeof import('../config/loader.js');
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { resolveDomains } = require('./domains.js') as typeof import('./domains.js');
-
+  // The same static import `renderDomainsDoc` uses. This site kept a lazy
+  // `require` after that one went static, so the two renderers reached the same
+  // answer by two different mechanisms — and the lazy one does not resolve in a
+  // bundle at all.
   const domains = resolveDomains();
 
   let projectName = 'this project';
   try {
-    projectName = loadProjectConfig().name;
-  } catch { /* not initialized or broken — use fallback */ }
+    projectName = projectConfigRepository.load()?.name ?? projectName;
+  } catch { /* a configuration that fails the schema — use the fallback */ }
 
   const projectCtx = readProjectContext();
   const archCtx = readArchitectureContext();
@@ -164,7 +232,7 @@ export function renderWaironGuide(): string {
   lines.push('');
 
   // MCP server note (when installed in this project's .claude/settings.json)
-  const mcpSettingsPath = require('path').join(process.cwd(), '.claude', 'settings.json');
+  const mcpSettingsPath = fromProjectRoot('.claude', 'settings.json');
   let mcpInstalled = false;
   try {
     const s = JSON.parse(require('fs').readFileSync(mcpSettingsPath, 'utf8'));
@@ -176,7 +244,8 @@ export function renderWaironGuide(): string {
     lines.push('');
     lines.push('The **wairon MCP server** is active in this project. The tools are self-describing; call them directly:');
     lines.push('');
-    lines.push('- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_set_subsystem_project_path`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`.');
+    lines.push('- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`.');
+    lines.push('- Members (declared in project.yaml `members`; a PART by default — this project\'s own subsystems stored elsewhere, by local id — or a PROJECT, referenced as `alias::name`): `sdd_add_member`, `sdd_move_member`; and the family migrations, each with `dryRun` (run it first and show the plan; applied, it writes every project or none and never locks): `sdd_promote_member` / `sdd_demote_member` (a part made a project in place, and back), `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias`, `sdd_internalize_member`, `sdd_externalize_subsystem`.');
     lines.push('- Reading & maintenance: `sdd_get_spec`, `sdd_update_spec`, `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.');
     lines.push('- Topology: `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig`.');
     lines.push('');
@@ -187,7 +256,7 @@ export function renderWaironGuide(): string {
   }
 
   // Full wairon usage guide
-  lines.push(GLOBAL_GUIDE_BODY);
+  lines.push(guideBody('global'));
   lines.push('');
 
   return lines.join('\n');
@@ -210,8 +279,12 @@ export function syncContextFiles(): SyncResult {
   const domainsContent  = renderDomainsDoc();
   const guideContent    = renderWaironGuide();
 
-  const domainsUpdated  = writeFileIfChanged(CONTEXT_PATHS.domainsMd(),     domainsContent);
-  const guideUpdated    = writeFileIfChanged(CONTEXT_PATHS.waironGuideMd(),  guideContent);
+  // Through the store's own writes, not writeFileIfChanged inline: the
+  // write-only-if-changed rule and the path each document lives at are the
+  // store's to state once, and a renderer that reached the primitive directly
+  // would be a second place they could drift.
+  const domainsUpdated  = writeDomainsDoc(domainsContent);
+  const guideUpdated    = writeGuideDoc(guideContent);
 
   return { domainsUpdated, guideUpdated };
 }

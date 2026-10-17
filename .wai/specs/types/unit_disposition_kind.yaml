@@ -1,0 +1,21 @@
+kind: enum
+id: unit_disposition_kind
+name: UnitDispositionKind
+description: >-
+  What happens to a removed organization unit's child units and project placements. A unit is never
+  silently cascade-deleted.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: migrate
+    description: Content moves to an existing targetUnitId
+  - name: alternative
+    description: A new sibling is created and the content moves into it (how a rename or replace is expressed)
+  - name: absorb
+    description: Content moves to the parent unit
+  - name: cascade
+    description: The unit is deleted with its whole subtree and their placements
+createdAt: '2026-10-04T23:18:13.584Z'
+updatedAt: '2026-10-04T23:18:13.997Z'

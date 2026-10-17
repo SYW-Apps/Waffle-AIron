@@ -1,0 +1,17 @@
+id: billing-orch-impl
+name: Billing orch impl
+description: Charges once
+contract: ibilling-orch
+methods:
+  - name: charge
+    narrative:
+      - stepNumber: 1
+        description: Record the charge for the order
+        type: local
+      - stepNumber: 2
+        description: Charged
+        type: return
+        outcome: success
+status: complete
+createdAt: '2026-10-17T11:46:27.430Z'
+updatedAt: '2026-10-17T11:46:28.460Z'

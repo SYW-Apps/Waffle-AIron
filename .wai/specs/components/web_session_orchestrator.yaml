@@ -1,0 +1,40 @@
+id: web_session_orchestrator
+name: Web Session Orchestrator
+description: >-
+  Owns the unified web UI's browser-session lifecycle: SSO sign-in (start/complete), the built-in
+  super-admin password sign-in (env-anchored, verified constant-time by the authentication component
+  behind a transient in-memory failed-attempt throttle — the ONLY path to an env-anchored
+  instance-admin session), sign-out on one device and on all of them, the local-developer session,
+  the session-principal context projection, and the unauthenticated pre-auth login-options
+  projection (WebLoginOptions: whether password login is configured plus one { id, displayName }
+  entry per ENABLED identity provider — never secrets, clientIds, or endpoint config). It creates
+  and deletes browser sessions through the web session repository, reads identity-provider
+  configuration through the policy repository, and provisions first-login users through the user
+  repository — including the adminGroupClaims -> built-in sso-admin role-binding refresh on SSO
+  completion. The live level-of-detail graph and the project canvas are NOT here: they are the web
+  graph orchestrator's own contract, which the portal reaches directly rather than through a hop
+  that forwards and nothing else. It carries NO per-page workflows either: every actual page
+  (authoring, approvals, users, audit, policy, landscape) is the served client app calling the
+  EXISTING scoped /mcp data plane and the existing identity/landscape/operations/policy
+  control-plane portals, authenticated by the session cookie (the session-as-credential auth
+  bridge); admin-chrome visibility for delegated/SSO admins is driven client-side by their
+  project:admin visible scopes, not by the coarse instance-admin context flag. Audit appends are
+  best-effort and never fail the primary action.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - authentication
+  - identity_provider_adapter
+  - user_repository
+  - policy_repository
+  - web_session_repository
+  - audit_repository
+  - identity_orchestrator
+  - operations_orchestrator
+  - project_lifecycle_orchestrator
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-11T11:31:49.793Z'
+updatedAt: '2026-09-18T16:54:45.216Z'

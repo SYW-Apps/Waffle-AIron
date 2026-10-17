@@ -25,11 +25,11 @@ fields:
     description: Domain the agent belongs to (absent = global root)
     optional: true
   - name: ownedPaths
-    type: string[]
+    type: list<string>
     description: Glob patterns of the files this agent owns
     optional: false
   - name: tags
-    type: string[]
+    type: list<string>
     description: Classification tags (meta, guardian, architect, …)
     optional: false
   - name: variantGuidance
@@ -39,6 +39,56 @@ fields:
       integration): each component's variant guidance + same-variant siblings, injected into the
       agent context. Empty when none.
     optional: true
+  - name: status
+    type: AgentStatus
+    description: >-
+      Whether this agent is active or retired. Always present — a record written without one is
+      active, so the absence of a decision is never mistaken for a retirement.
+    optional: false
+  - name: createdAt
+    type: string
+    description: >-
+      When this agent was first registered. Store-managed: the write decides it and no author sets
+      it.
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this agent was last written. Store-managed.
+    optional: false
+  - name: delegatesTo
+    type: list<string>
+    description: >-
+      A member project's delegating owner only: the ids of the member's own agents, each qualified
+      by the alias this project declares the member under (`<alias>::<agentId>`), resolved from the
+      member's topology at the member's own root. REFERENCES, never copies: nothing of the member's
+      agents is rendered into this layer, and a brief for one of them composes at the member's root
+      (composeAgentBrief).
+    optional: true
+  - name: description
+    type: string
+    description: Short description of what this agent is responsible for.
+    optional: false
+  - name: bundleOrigin
+    type: string
+    description: The bundle this agent was created as part of, if any.
+    optional: true
+  - name: readPaths
+    type: list<string>
+    description: 'Paths this agent may read but does not own (default: an empty list).'
+    optional: false
+  - name: writePaths
+    type: list<string>
+    description: 'Paths this agent may write to but does not own (default: an empty list).'
+    optional: false
+  - name: dependencies
+    type: list<string>
+    description: 'Ids of related agents this agent should be aware of (default: an empty list).'
+    optional: false
+  - name: targets
+    type: list<string>
+    description: 'The output targets that receive this agent''s generated file (default: claude).'
+    optional: false
 methods: []
+sourcePath: src/models/agent.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-15T12:23:47.402Z'
+updatedAt: '2026-10-04T23:40:55.617Z'

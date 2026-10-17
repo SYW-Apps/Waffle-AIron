@@ -1,10 +1,12 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import * as identity from '../../src/server/identity.js';
-import { UnauthenticatedError, ForbiddenError } from '../../src/server/identity.js';
+import * as identityPortal from '../../src/server/identity-portal.js';
+import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
 import { authenticate, authenticateSession } from '../../src/server/auth.js';
 import {
   createCredential,
@@ -13,12 +15,12 @@ import {
   revokeAllForOwner,
 } from '../../src/server/credentials.js';
 import { createWebSession, getWebSessionById } from '../../src/server/websessions.js';
-import { createProjectRecord } from '../../src/server/projects.js';
+import { createProjectRecord, registerMemberRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { createUnit, placeProject } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
-import { appendAuditEvent, queryAuditEvents as auditQuery, DEFAULT_AUDIT_POLICY } from '../../src/server/audit.js';
+import { appendAuditEvent, queryAuditEvents as auditQuery, effectiveAuditPolicy } from '../../src/server/audit.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -146,7 +148,10 @@ describe('identity orchestrator (sdd_host)', () => {
   it('mints a token as instance-admin: returns plaintext, persists a hashed narrowing-only record, and audits token.mint', () => {
     createProjectRecord(dataDir, 'proj-a');
 
-    const token = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const minted = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
+    const token = minted.token;
+    // Nothing was mapped: every entry was stored as asked.
+    expect(minted.mapped).toEqual([]);
 
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
     const rec = persistedByHash(hashToken(token));
@@ -174,6 +179,31 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/instance admin/i);
   });
 
+  it('rejects a mint that names no projects, or an empty list: the list is required and `*` is the full reach', () => {
+    const missing = { ownerUserId: 'u-owner', label: 't' } as unknown as identity.TokenMintRequest;
+    expect(() => identity.mintToken(cfg, MASTER, missing)).toThrow(/projects is required.*'\*'/);
+    expect(() => identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: [] })).toThrow(/projects is required/);
+    expect(listCredentials(dataDir, '*')).toHaveLength(0);
+    // `*` written out is the full reach.
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['*'] }).token).toMatch(/^wk_/);
+  });
+
+  it('the identity portal answers 400 to a POST /identity/tokens body with no projects', async () => {
+    let status = 0;
+    let body = '';
+    const res = {
+      writeHead(code: number) { status = code; return res; },
+      end(text: string) { body = text; },
+    } as unknown as ServerResponse;
+    await identityPortal.handleIdentityRequest(
+      cfg, MASTER, { method: 'POST' } as IncomingMessage, res,
+      { ownerUserId: 'u-owner', label: 't' }, new URL('http://localhost/identity/tokens'),
+    );
+    expect(status).toBe(400);
+    expect(JSON.parse(body).error).toMatch(/projects is required/);
+    expect(listCredentials(dataDir, '*')).toHaveLength(0);
+  });
+
   it('rejects a mint whose narrowing references an unknown project', () => {
     // admin passes the gate, so the failure is the project-existence check.
     expect(() =>
@@ -184,7 +214,7 @@ describe('identity orchestrator (sdd_host)', () => {
   it('rejects a mint whose OWNER claims a reserved built-in subject id (legacy literal or persisted UUID)', () => {
     const instance = ensureInstanceIdentity(dataDir);
     for (const ownerUserId of ['builtin:superadmin', 'builtin:localdev', instance.superadminUserId, instance.localDevUserId]) {
-      expect(() => identity.mintToken(cfg, MASTER, { ownerUserId, label: 't' })).toThrow(/reserved/i);
+      expect(() => identity.mintToken(cfg, MASTER, { ownerUserId, label: 't', projects: ['*'] })).toThrow(/reserved/i);
     }
   });
 
@@ -227,36 +257,49 @@ describe('identity orchestrator (sdd_host)', () => {
     }
   });
 
-  // ── subproject-qualified narrowing (validated at MINT time) ────────────────
+  // ── member-qualified narrowing (deprecated; mapped at MINT time) ──────────
   //
-  // A narrowing entry / mintSelfToken projectId MAY be subproject-qualified
-  // ('projectId::subsystemId', nested mounts composing): the named subsystem
-  // must exist on that project and carry a projectPath, validated at MINT time
-  // so a broken mount is never stored; permission keeps resolving over the TOP
-  // project (the qualifier narrows reach, never grants).
+  // Since stage 7 a member is a hosted record named by its own id. A
+  // member-qualified entry ('projectId::alias', nested members one alias per
+  // hop) is accepted for one release and STORED as the member's record id; an
+  // alias that declares no member, an internal subsystem, or a member no record
+  // holds is rejected with guidance, never stored broken.
 
-  describe('subproject-qualified narrowing', () => {
+  describe('member-qualified narrowing (deprecated)', () => {
     beforeEach(() => {
       const projRoot = createProjectRecord(dataDir, 'proj-a').rootPath;
       const billingDir = seedChainedMount(projRoot, 'billing', 'packages/billing');
       seedChainedMount(billingDir, 'payments', 'sub/payments'); // nested chain
       seedSubsystem(projRoot, 'plain'); // exists, but NOT chained (no projectPath)
+      // The stage-7 records of the two members.
+      registerMemberRecord(dataDir, { id: 'billing', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'proj-a', memberPath: 'packages/billing' });
+      registerMemberRecord(dataDir, { id: 'payments', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'billing', memberPath: 'sub/payments' });
     });
 
-    it('mintToken accepts valid qualified entries (nested included) and stores them verbatim', () => {
-      const token = identity.mintToken(cfg, MASTER, {
+    it('mintToken accepts qualified entries (nested included) and stores the members\' record ids', () => {
+      const minted = identity.mintToken(cfg, MASTER, {
         ownerUserId: 'u-owner',
         label: 'sub token',
         projects: ['proj-a::billing', 'proj-a::billing::payments'],
       });
-      const rec = persistedByHash(hashToken(token));
-      expect(rec!.projects).toEqual(['proj-a::billing', 'proj-a::billing::payments']);
+      const rec = persistedByHash(hashToken(minted.token));
+      expect(rec!.projects).toEqual(['billing', 'payments']);
+      // The caller is told what each deprecated qualified entry was stored as.
+      expect(minted.mapped).toEqual(['proj-a::billing -> billing', 'proj-a::billing::payments -> payments']);
+    });
+
+    it('mintToken rejects a qualified entry whose member holds no record yet, pointing at host doctor', () => {
+      const projRoot = createProjectRecord(dataDir, 'proj-b').rootPath;
+      seedChainedMount(projRoot, 'ledger', 'packages/ledger');
+      expect(() =>
+        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-b::ledger'] }),
+      ).toThrow(/holds no hosted record yet.*host doctor --fix/);
     });
 
     it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {
       expect(() =>
         identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::ghost'] }),
-      ).toThrow(/unknown subproject mount "ghost" on "proj-a"/);
+      ).toThrow(/unknown member "ghost" on "proj-a"/);
       // The failed mint persisted nothing.
       expect(listCredentials(dataDir, '*').some((r) => r.projects.includes('proj-a::ghost'))).toBe(false);
     });
@@ -264,31 +307,30 @@ describe('identity orchestrator (sdd_host)', () => {
     it('mintToken rejects a NON-CHAINED subsystem (exists, but carries no projectPath)', () => {
       expect(() =>
         identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::plain'] }),
-      ).toThrow(/not a chained subproject/);
+      ).toThrow(/an internal subsystem is not a member/);
     });
 
-    it('mintSelfToken mints a qualified token: permission anchors on the TOP project, entry stored verbatim', () => {
-      // The caller holds read over the TOP project only — that is what the
-      // qualifier narrows, so the mint is authorized.
+    it('mintSelfToken maps a qualified id to the member record; the parent grant reaches it by inheritance', () => {
+      // The caller holds read over the PARENT only — inherited by the member.
       const caller = tokenWith('project:read', 'project', 'proj-a');
       const token = identity.mintSelfToken(cfg, caller, 'proj-a::billing', false);
       const rec = persistedByHash(hashToken(token));
-      expect(rec!.projects).toEqual(['proj-a::billing']);
-      expect(rec!.label).toContain('proj-a::billing');
+      expect(rec!.projects).toEqual(['billing']);
+      expect(rec!.label).toContain('billing');
       expect(auditQuery(dataDir, { action: 'token.mint.self' })).toHaveLength(1);
     });
 
     it('mintSelfToken rejects an unknown or non-chained mount with guidance (self-mint variant)', () => {
       const caller = tokenWith('project:read', 'project', 'proj-a');
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::ghost', false)).toThrow(
-        /unknown subproject mount "ghost" on "proj-a"/,
+        /unknown member "ghost" on "proj-a"/,
       );
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::plain', false)).toThrow(
-        /not a chained subproject/,
+        /an internal subsystem is not a member/,
       );
     });
 
-    it('mintSelfToken authorization anchors on the TOP project: no proj-a read → 403 even for a valid mount', () => {
+    it('mintSelfToken authorization resolves over the member chain: no read anywhere on it → 403', () => {
       const caller = plainToken(); // owner with NO assignments at all
       expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::billing', false)).toThrow(ForbiddenError);
     });
@@ -460,7 +502,7 @@ describe('identity orchestrator (sdd_host)', () => {
   // ── queryAuditEvents authorization ──────────────────────────────────────────
 
   it('returns audit events for a project:admin caller and rejects one without', () => {
-    appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'token.mint', level: 'security' }), effectiveAuditPolicy());
 
     const reader = tokenWith('project:admin', 'instance');
     expect(identity.queryAuditEvents(cfg, reader, {}).length).toBeGreaterThanOrEqual(1);
@@ -478,9 +520,9 @@ describe('identity orchestrator (sdd_host)', () => {
     createProjectRecord(dataDir, 'acme');
     placeProject(dataDir, placement('acme', tenant.id));
 
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.acme', projectId: 'acme' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.other', projectId: 'other' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'evt.global' }), DEFAULT_AUDIT_POLICY); // instance-level, no projectId
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.acme', projectId: 'acme' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.other', projectId: 'other' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'evt.global' }), effectiveAuditPolicy()); // instance-level, no projectId
 
     // A project-scoped admin reads ONLY its own project's events.
     const scoped = tokenWith('project:admin', 'project', 'acme');
@@ -505,10 +547,10 @@ describe('identity orchestrator (sdd_host)', () => {
 
   it('queryAuditEvents: a unit-scoped admin sees only its subtree events, never another unit\'s or instance-level ones', () => {
     seedOrg(dataDir);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.web', projectId: 'p-web' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.eng', projectId: 'p-eng' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), DEFAULT_AUDIT_POLICY);
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), DEFAULT_AUDIT_POLICY); // no projectId
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.web', projectId: 'p-web' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.eng', projectId: 'p-eng' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.sales', projectId: 'p-sales' }), effectiveAuditPolicy());
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.global' }), effectiveAuditPolicy()); // no projectId
 
     const caller = tokenWith('project:admin', 'unit', ENG);
 
@@ -588,14 +630,14 @@ describe('identity orchestrator (sdd_host)', () => {
     ).toThrow(/instance admin/i);
 
     // MASTER mints; the owner's authority resolves live from THEIR assignments.
-    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] })).toMatch(/^wk_/);
+    expect(identity.mintToken(cfg, MASTER, { ownerUserId: 'u-o', label: 't', projects: ['p-web'] }).token).toMatch(/^wk_/);
   });
 
   // ── pruneAuditEvents ─────────────────────────────────────────────────────────
 
   it('prunes expired audit events as admin and audits audit.prune', () => {
     const old = new Date(Date.now() - 100 * 86_400_000).toISOString(); // beyond 90d retention
-    appendAuditEvent(dataDir, mkEvent({ action: 'a.old', timestamp: old }), DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(dataDir, mkEvent({ action: 'a.old', timestamp: old }), effectiveAuditPolicy());
 
     const removed = identity.pruneAuditEvents(cfg, MASTER);
     expect(removed).toBeGreaterThanOrEqual(1);
@@ -665,7 +707,7 @@ describe('identity orchestrator (sdd_host)', () => {
   // ── authentication ──────────────────────────────────────────────────────────
 
   it('throws an unauthenticated error for a bogus token and for no credential', () => {
-    const req = { ownerUserId: 'u', label: 't' };
+    const req = { ownerUserId: 'u', label: 't', projects: ['*'] };
     expect(() => identity.mintToken(cfg, 'not-a-real-token', req)).toThrow(UnauthenticatedError);
     expect(() => identity.mintToken(cfg, null, req)).toThrow(UnauthenticatedError);
   });

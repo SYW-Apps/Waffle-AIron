@@ -1,16 +1,17 @@
 id: isdk_orchestrator
 name: SDK Orchestrator Interface
 description: >-
-  The four pack-authoring/archive workflows, delegating format decisions to the codec, template
-  rendering to the scaffold specialist, and all I/O to the archive adapter. Stateless.
+  The pack-authoring/archive workflows plus the spec-tree archive workflows, delegating format
+  decisions to the codecs, template rendering to pack_scaffold, and all I/O to the archive adapter.
+  Stateless.
 component: sdk_orchestrator
 methods:
   - name: scaffoldPack
     description: >-
-      Render the scaffold file map (specialist) and write it under the target directory (adapter);
-      return the created file paths.
-    signature: 'scaffoldPack(request: PackScaffoldRequest): string[]'
-    returns: string[]
+      Render the scaffold file map (pack_scaffold) and write it under the target directory
+      (adapter); return the created file paths.
+    signature: 'scaffoldPack(request: pack_scaffold_request): list<string>'
+    returns: list<string>
     params:
       - name: request
         type: pack_scaffold_request
@@ -42,7 +43,7 @@ methods:
       (adapter), and return where it landed + the parsed manifest. Omitted limits fall back to the
       codec default profile.
     signature: >-
-      extractPack(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      extractPack(archive: bytes, destDir: string, limits?: pack_extraction_limits):
       PackExtractionResult
     returns: PackExtractionResult
     params:
@@ -53,6 +54,65 @@ methods:
       - name: limits
         type: pack_extraction_limits
         optional: true
+  - name: buildTreeArchive
+    description: >-
+      Read every supplied tree root's .wai directory (adapter), keep only portable design state
+      (tree codec), prefix each root's files with its project-relative path, seal the envelope and
+      assemble the files into a .waitree (adapter). Returns the archive bytes + sealed manifest +
+      suggested file name.
+    signature: >-
+      buildTreeArchive(roots: list<tree_root_source>, projectName: string, stateId?: string,
+      includeDerived?: bool): TreeBuildResult
+    returns: TreeBuildResult
+    params:
+      - name: roots
+        type: list<tree_root_source>
+        description: >-
+          Every root to pack, top project first — discovered by the caller, which owns chaining
+          knowledge
+      - name: projectName
+        type: string
+      - name: stateId
+        type: string
+        description: The exporting tree's content state, stamped as provenance
+        optional: true
+      - name: includeDerived
+        type: bool
+        description: Pack regenerable artifacts too (default false)
+        optional: true
+  - name: inspectTreeArchive
+    description: >-
+      Enumerate entries (adapter), parse + version-check the wairon-tree.yaml envelope (tree codec),
+      and return a TreeArchiveInfo WITHOUT extracting anything — so a caller can show, or refuse,
+      what an archive holds before a byte is decompressed.
+    signature: 'inspectTreeArchive(archive: bytes): TreeArchiveInfo'
+    returns: TreeArchiveInfo
+    params:
+      - name: archive
+        type: bytes
+  - name: extractTreeArchive
+    description: >-
+      Enumerate entries (adapter), compute a safe extraction plan under `limits` (tree codec —
+      rejecting unsafe/oversized archives), optionally refuse executable entries, inflate the
+      approved entries, verify integrity, and write the tree under destDir (adapter). Omitted limits
+      fall back to the codec's tree profile. Writes only; replacing or preserving an existing tree
+      is the caller's policy.
+    signature: >-
+      extractTreeArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits,
+      refuseExecutableEntries?: bool): TreeExtractionResult
+    returns: TreeExtractionResult
+    params:
+      - name: archive
+        type: bytes
+      - name: destDir
+        type: string
+      - name: limits
+        type: pack_extraction_limits
+        optional: true
+      - name: refuseExecutableEntries
+        type: bool
+        description: Apply the portable-path guard — set by any surface accepting an archive over the wire
+        optional: true
 status: complete
 createdAt: '2026-07-21T18:13:51.375Z'
-updatedAt: '2026-07-21T20:43:27.575Z'
+updatedAt: '2026-10-04T10:19:27.757Z'

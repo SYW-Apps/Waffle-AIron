@@ -7,41 +7,21 @@ component: git_backing_repository
 methods:
   - name: upsertBinding
     description: 'Facade: create or replace the binding for a scope through the registry.'
-    signature: 'upsertBinding(binding: GitBackingBinding): GitBackingBinding'
-    returns: GitBackingBinding
-    params:
-      - name: binding
-        type: GitBackingBinding
+    signatureFrom: git_backing_registry.upsertBinding
     guarantees:
       - atomic
   - name: removeBinding
     description: 'Facade: remove one binding by id through the registry.'
-    signature: 'removeBinding(bindingId: string): void'
-    returns: void
-    params:
-      - name: bindingId
-        type: string
+    signatureFrom: git_backing_registry.removeBinding
   - name: touchSync
     description: 'Facade: record lastSyncAt through the registry.'
-    signature: 'touchSync(bindingId: string, syncedAt: string): void'
-    returns: void
-    params:
-      - name: bindingId
-        type: string
-      - name: syncedAt
-        type: string
+    signatureFrom: git_backing_registry.touchSync
   - name: listBindings
     description: 'Facade: list every stored binding through the index.'
-    signature: 'listBindings(): GitBackingBinding[]'
-    returns: GitBackingBinding[]
-    params: []
+    signatureFrom: git_backing_index.listBindings
   - name: getBinding
     description: 'Facade: one binding by id through the index, or null.'
-    signature: 'getBinding(bindingId: string): GitBackingBinding | null'
-    returns: GitBackingBinding | null
-    params:
-      - name: bindingId
-        type: string
+    signatureFrom: git_backing_index.getBinding
 status: complete
 createdAt: '2026-07-16T15:39:09.744Z'
-updatedAt: '2026-07-16T15:48:49.145Z'
+updatedAt: '2026-10-03T21:09:46.344Z'

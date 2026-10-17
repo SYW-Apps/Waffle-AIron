@@ -1,0 +1,25 @@
+id: remote_orchestrator
+name: Remote Migration Orchestrator
+description: >-
+  Resolves an instance, project and credential for `wairon remote`, then drives the hosted surface:
+  push/pull migrate a spec tree in either direction, attach records a standing binding, detach
+  removes it, status reports what is attached and how it resolved. Credentials come from flags, the
+  environment, the recorded binding, or the agent's own MCP configuration, without ever printing a
+  secret.
+
+
+  A checkout attached to a hosted project has NO local spec tree, so the commands that read one run
+  against the hosted tree instead — validate, status and lock each have a remote counterpart here.
+  Everything else stays honestly local: a command that needs files on disk fails with guidance to
+  pull first, rather than silently doing nothing.
+subsystem: sdd_cli
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - cli_remote_adapter
+  - cli_core_adapter
+  - remote_binding_store
+  - cli_mcp_adapter
+status: complete
+createdAt: '2026-08-12T18:31:45.498Z'
+updatedAt: '2026-09-11T23:03:01.397Z'

@@ -6,14 +6,57 @@ methods:
   - name: resolveAgentTopology
     description: >-
       Resolve the LAYERED agent topology for THIS project's own layer only: the system architect,
-      one owner per LOCAL subsystem, and exactly ONE delegating owner per chained subproject (a
-      projectPath subsystem) — never enumerating a subproject's internals, which belong to its own
-      layer generated in its .wai. Federated subprojects carry a :: namespace prefix and are
-      excluded here. Component-implementer agents are emitted only when
-      generateComponentImplementers is enabled. Keeps each .claude/agents (and the context every
-      session loads) proportional to a single layer instead of the whole deep tree.
+      one owner per LOCAL subsystem, and exactly ONE delegating owner per member project — never
+      enumerating a member's internals, which belong to its own layer. The delegating owner lists
+      the member's own agents BY REFERENCE (delegatesTo: `<alias>::<agentId>`, resolved from the
+      member's topology at the member's own root, ids only), never copying them. A member's specs
+      carry a :: namespace prefix and are excluded here. Component-implementer agents are emitted
+      only when generateComponentImplementers is enabled — a legacy escape hatch: component-level
+      delegation is served as live briefs (composeAgentBrief), not files. Keeps each generated agent
+      set (and the context every session loads) proportional to a single layer instead of the whole
+      deep tree.
     signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
+    returns: list<AgentRecord>
+  - name: composeAgentBrief
+    description: >-
+      Compose the LIVE delegation brief for one resolved agent. An id qualified `<alias>::<agentId>`
+      whose alias names a direct member composes AT THE MEMBER'S ROOT (brief-through-mount): the
+      member's own topology, templates, guidance and configuration, exactly the brief that member's
+      own session would get, with ownedPaths, readPaths, codeFence and sharedPaths re-expressed
+      under the member's directory and `root` naming it — so a member's brief never grows with the
+      family (context-proportional). The rest may itself be qualified, one member hop at a time.
+      Otherwise: resolve the current topology, locate the record by id, load its instruction
+      template through the template source adapter, render the record's variables into it (scope
+      fence, domain context, variant guidance), fold in the code write fence — exact files the agent
+      alone owns (never a folder glob), the shared files it may touch for its own needs with the
+      rule that governs them, and the stop-and-report line for a shared file that would need a
+      responsibility of its own —, for a Portal the handler shape its code takes and, for every
+      implementer, that injectedParams are code linkage it declares once its code takes such a
+      parameter, the optional user-owned project guidance file (.wai/agents/<agentId>.md, read live)
+      and, when a type dialect is shipped for the language the agent's implementations are written
+      in, the type mapping (how the contracts' neutral types are spelled in that language), and
+      return the structured AgentBrief — rendered instructions plus
+      ownedPaths/readPaths/codeFence/sharedPaths and typeMapping. Always reflects the CURRENT spec
+      tree and guidance, so a re-lock or a guidance edit changes the next call's result with no
+      session restart; an unknown agentId (or an alias that names no direct member) throws. A hosted
+      caller must gate on reach itself before asking for a member's brief.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id (e.g. sdd_core-owner, system-architect).
+  - name: loadRegistry
+    description: >-
+      The derived agent topology in the Registry shape older callers expect. There is no registry
+      FILE — the agents come from the spec tree — so this is `resolveAgentTopology` wrapped, and it
+      belongs here rather than in a store for exactly that reason: it derives, it does not read. An
+      uninitialized project answers an empty registry rather than throwing.
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-12T12:09:50.624Z'
+updatedAt: '2026-10-09T11:22:02.340Z'

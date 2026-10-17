@@ -1,0 +1,280 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { setProjectRoot, runWithProjectRoot } from '../../src/utils/fs.js';
+import { saveSystemSpec, saveSpec, loadSubsystemSpec, invalidateSpecCache } from '../../src/core/specs.js';
+import { provisionProject, ensureProjectInitialized, backfillChainedSubprojectConfigs, externalizeSubsystem, createMember } from '../../src/core/provision.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
+import { isProjectInitialized, aiPathsAt } from '../../src/config/paths.js';
+import type { SubsystemSpec } from '../../src/models/index.js';
+
+// ---------------------------------------------------------------------------
+// Provisioning and the loader wrappers, now writing project.yaml only through
+// the project config Repository (stage 2a-0). Creation completes what is
+// missing and never overwrites a configuration a project already has.
+// ---------------------------------------------------------------------------
+
+const NOW = '2026-09-13T10:00:00.000Z';
+const MARKER = '# untouched-marker';
+const roots: string[] = [];
+
+afterEach(() => {
+  setProjectRoot(null);
+  invalidateSpecCache();
+  while (roots.length) fs.rmSync(roots.pop()!, { recursive: true, force: true });
+});
+
+function tempRoot(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-prov-'));
+  roots.push(dir);
+  return dir;
+}
+
+/** Leave a valid project.yaml carrying a comment any rewrite would drop. */
+function writeConfig(dir: string, name: string, ...extra: string[]): void {
+  fs.mkdirSync(path.join(dir, '.wai'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), [
+    MARKER,
+    'schemaVersion: 1.0.0',
+    `name: ${name}`,
+    'targets: []',
+    'rules: {}',
+    `createdAt: '${NOW}'`,
+    `updatedAt: '${NOW}'`,
+    ...extra,
+  ].join('\n') + '\n');
+}
+
+function untouched(dir: string): boolean {
+  return fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8').includes(MARKER);
+}
+
+function saveL0(name: string): void {
+  saveSystemSpec({ schemaVersion: '1.0.0', name, vision: 'v', boundaries: [], globalRequirements: [], createdAt: NOW, updatedAt: NOW });
+}
+
+function subsystem(id: string, name: string, projectPath?: string): SubsystemSpec {
+  return {
+    id,
+    name,
+    description: `subsystem ${id}`,
+    parentSystem: 'root-system',
+    publicInterfaces: [],
+    projectPath,
+    trustedLinks: [],
+    status: 'draft',
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+describe('provisioning through the project config Repository', () => {
+  it('provisionProject writes the L0 and a default configuration', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+
+    provisionProject('demo');
+
+    expect(projectConfigRepositoryAt(root).load()?.name).toBe('demo');
+    expect(fs.existsSync(path.join(root, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  });
+
+  it('provisionProject refuses a root that already has a configuration', () => {
+    const root = tempRoot();
+    writeConfig(root, 'existing');
+    setProjectRoot(root);
+
+    expect(() => provisionProject('other')).toThrow(/already exists/);
+    expect(untouched(root)).toBe(true);
+  });
+
+  it('provisionProject refusing a configured root leaves its project.yaml and L0 byte-identical', () => {
+    const root = tempRoot();
+    writeConfig(root, 'existing');
+    setProjectRoot(root);
+    saveL0('existing-tree');
+    const configFile = path.join(root, '.wai', 'project.yaml');
+    const l0File = path.join(root, '.wai', 'specs', '.index.yaml');
+    const configBefore = fs.readFileSync(configFile);
+    const l0Before = fs.readFileSync(l0File);
+
+    expect(() => provisionProject('other')).toThrow(/already exists/);
+
+    expect(fs.readFileSync(configFile).equals(configBefore)).toBe(true);
+    expect(fs.readFileSync(l0File).equals(l0Before)).toBe(true);
+  });
+
+  it('ensureProjectInitialized keeps an existing configuration and completes the L0', () => {
+    const root = tempRoot();
+    writeConfig(root, 'existing');
+    setProjectRoot(root);
+
+    expect(ensureProjectInitialized('fallback')).toEqual({ wroteConfig: false, wroteSystem: true });
+    expect(untouched(root)).toBe(true);
+    expect(fs.existsSync(path.join(root, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  });
+
+  it('ensureProjectInitialized names a created configuration after the existing L0', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('tree-name');
+
+    expect(ensureProjectInitialized('fallback')).toEqual({ wroteConfig: true, wroteSystem: false });
+    expect(projectConfigRepositoryAt(root).load()?.name).toBe('tree-name');
+  });
+
+  it('backfill creates a missing child configuration and leaves an existing one alone', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSpec('subsystem', subsystem('alpha', 'alpha', 'packages/alpha'));
+    saveSpec('subsystem', subsystem('beta', 'beta', 'packages/beta'));
+    const alpha = path.join(root, 'packages', 'alpha');
+    const beta = path.join(root, 'packages', 'beta');
+    fs.mkdirSync(path.join(alpha, '.wai', 'specs'), { recursive: true });
+    fs.mkdirSync(path.join(beta, '.wai', 'specs'), { recursive: true });
+    writeConfig(beta, 'beta-own');
+
+    const backfilled = backfillChainedSubprojectConfigs(root);
+
+    expect(backfilled.map((dir) => path.basename(dir))).toEqual(['alpha']);
+    expect(projectConfigRepositoryAt(alpha).load()?.name).toBe('alpha');
+    expect(untouched(beta)).toBe(true);
+  });
+
+  it('createMember keeps an existing member configuration', () => {
+    const root = tempRoot();
+    writeConfig(root, 'root');
+    setProjectRoot(root);
+    saveL0('root-system');
+    const child = path.join(root, 'packages', 'billing');
+    writeConfig(child, 'billing-own');
+
+    createMember('billing', 'packages/billing', undefined, 'project');
+
+    expect(untouched(child)).toBe(true);
+    expect(fs.existsSync(path.join(child, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  });
+
+  it('externalizeSubsystem creates the child configuration named after the subsystem', () => {
+    const root = tempRoot();
+    writeConfig(root, 'root');
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
+
+    externalizeSubsystem('core', 'packages/core', 'project');
+
+    const child = path.join(root, 'packages', 'core');
+    expect(projectConfigRepositoryAt(child).load()?.name).toBe('Core Service');
+    expect(fs.existsSync(path.join(child, '.wai', 'specs', '.index.yaml'))).toBe(true);
+  });
+
+  it('externalizeSubsystem refuses a child that already has a configuration, before moving anything', () => {
+    const root = tempRoot();
+    writeConfig(root, 'root');
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
+    const child = path.join(root, 'packages', 'core');
+    writeConfig(child, 'core-own');
+
+    expect(() => externalizeSubsystem('core', 'packages/core', 'project')).toThrow(/already holds a configuration/);
+
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('core')?.projectPath).toBeUndefined();
+    expect(fs.existsSync(path.join(root, '.wai', 'specs', 'core'))).toBe(true);
+    expect(untouched(child)).toBe(true);
+    expect(fs.existsSync(path.join(child, '.wai', 'specs'))).toBe(false);
+  });
+});
+
+describe('loader wrappers over the project config Repository', () => {
+  it('loader isProjectInitialized reflects whether the project has a configuration', () => {
+    const root = tempRoot();
+    runWithProjectRoot(root, () => {
+      expect(isProjectInitialized()).toBe(false);
+    });
+    writeConfig(root, 'demo');
+    runWithProjectRoot(root, () => {
+      expect(isProjectInitialized()).toBe(true);
+    });
+  });
+
+  it('loader aiPathsAt resolves specsDir through the configuration of that root', () => {
+    const root = tempRoot();
+    writeConfig(root, 'demo', 'paths:', '  specsDir: design/specs');
+
+    expect(aiPathsAt(root).specsDir()).toBe(path.resolve(root, 'design/specs'));
+    expect(aiPathsAt(root).specsSystem()).toBe(path.join(path.resolve(root, 'design/specs'), '.index.yaml'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Stage 2a: every provisioning writer declares the project's id. A fresh
+// project gets its name slugified; a member is identified by the alias its
+// parent declares it under, never by its display name.
+// ---------------------------------------------------------------------------
+
+describe('provisioning writes the project id', () => {
+  it('provisionProject declares the name slugified (a hosted id stays itself)', () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+
+    provisionProject('acme-billing');
+
+    expect(projectConfigRepositoryAt(root).load()?.id).toBe('acme-billing');
+  });
+
+  it('ensureProjectInitialized declares the given id, else the chosen name slugified', () => {
+    const given = tempRoot();
+    setProjectRoot(given);
+    ensureProjectInitialized('Billing Service', 'billing');
+    expect(projectConfigRepositoryAt(given).load()?.id).toBe('billing');
+
+    const derived = tempRoot();
+    setProjectRoot(derived);
+    saveL0('Ledger Tree');
+    ensureProjectInitialized('fallback');
+    expect(projectConfigRepositoryAt(derived).load()?.id).toBe('ledger-tree');
+  });
+
+  it('createMember identifies the member by its alias, whatever its description says', () => {
+    const root = tempRoot();
+    writeConfig(root, 'root');
+    setProjectRoot(root);
+    saveL0('root-system');
+
+    createMember('billing', 'packages/billing', 'Billing Service', 'project');
+
+    const child = projectConfigRepositoryAt(path.join(root, 'packages', 'billing')).load();
+    expect(child?.name).toBe('billing');
+    expect(child?.id).toBe('billing');
+  });
+
+  it('externalizeSubsystem identifies the child by the subsystem id', () => {
+    const root = tempRoot();
+    writeConfig(root, 'root');
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSpec('subsystem', subsystem('core', 'Core Service'));
+
+    externalizeSubsystem('core', 'packages/core', 'project');
+
+    expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
+  });
+
+  it("backfill identifies a member by its alias (here a legacy mount's subsystem id)", () => {
+    const root = tempRoot();
+    setProjectRoot(root);
+    saveL0('root-system');
+    saveSpec('subsystem', subsystem('ledger', 'Ledger', 'packages/general-ledger'));
+    const child = path.join(root, 'packages', 'general-ledger');
+    fs.mkdirSync(path.join(child, '.wai', 'specs'), { recursive: true });
+
+    backfillChainedSubprojectConfigs(root);
+
+    expect(projectConfigRepositoryAt(child).load()?.id).toBe('ledger');
+  });
+});

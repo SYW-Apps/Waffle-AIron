@@ -3,7 +3,9 @@ id: role_binding
 name: RoleBinding
 description: >-
   Binds a role to a user within a scope. An unscoped binding (no scopeId) applies instance-wide; a
-  scoped binding applies within that unit/project subtree.
+  scoped binding applies within that unit/project subtree; a binding at a subsystem scope applies at
+  that subsystem only, and confers only the role's project:write there (the one capability a
+  subsystem carries).
 subsystem: sdd_host
 fields:
   - name: roleId
@@ -11,13 +13,16 @@ fields:
     description: The bound role's id.
     optional: false
   - name: scopeKind
-    type: string
-    description: instance | unit | project; absent = instance-wide.
+    type: ScopeKind
+    description: The kind of scope the binding is anchored at; absent = instance-wide.
     optional: true
   - name: scopeId
     type: string
-    description: Qualified unit/project id the role applies within; absent = instance-wide.
+    description: >-
+      Qualified unit/project id the role applies within, or `<projectId>/<subsystemId>` for a
+      subsystem scope; absent = instance-wide.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-15T20:25:21.004Z'
-updatedAt: '2026-07-15T20:25:21.056Z'
+updatedAt: '2026-10-04T23:38:32.073Z'

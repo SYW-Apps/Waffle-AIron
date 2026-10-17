@@ -1,0 +1,32 @@
+kind: value-object
+id: surface_change
+name: SurfaceChange
+description: >-
+  One entry of a public-surface changelog: a public name (and the contract method, for a change
+  inside a contract) that was added, removed, renamed (from the former name the rename trace
+  records) or changed, with a one-line reading. What a producer writes release notes from.
+fields:
+  - name: kind
+    type: surface_change_kind
+    description: What moved.
+    optional: false
+  - name: name
+    type: string
+    description: The public name, as the newer surface spells it (the older one for a removal).
+    optional: false
+  - name: member
+    type: string
+    description: The contract method, for a change inside a contract; absent for the name as a whole.
+    optional: true
+  - name: from
+    type: string
+    description: The former name a rename was traced from.
+    optional: true
+  - name: detail
+    type: string
+    description: What changed, said in one line (old and new signature for a signature change).
+    optional: false
+methods: []
+sourcePath: src/models/surface-references.ts
+createdAt: '2026-10-07T06:38:29.547Z'
+updatedAt: '2026-10-07T06:38:30.319Z'

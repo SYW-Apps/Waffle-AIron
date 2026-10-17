@@ -22,32 +22,151 @@ fields:
     optional: false
   - name: sourcePath
     type: string
-    description: Concrete source file realizing it
+    description: >-
+      Concrete source file realizing it, and the default for every method that names no sourcePath
+      of its own. Relative to the root of the project that holds the spec; for a chained
+      subproject's implementation, that subproject's own root.
     optional: true
   - name: detail
-    type: string
-    description: 'Narrative detail default: full | calls-only | intent'
+    type: NarrativeDetail
+    description: Narrative detail default for its methods
     optional: true
   - name: methods
-    type: object[]
+    type: list<MethodImplementation>
     description: >-
-      Per-method L5 narratives (steps, detail, intent). A dispatch step routes a named capability
-      through a target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY)
-      and traversed by reachability, unlike a bare call to the generic handle. Each method may also
-      override the conformance tier and bind an explicit realizing symbol (code-level name) for
-      intent-language renames — e.g. a store's put realized by saveSnapshot.
+      Per-method L5 narratives (see method_implementation): name, sourcePath, narrative steps,
+      detail, intent, conformance, symbol. A dispatch step routes a named capability through a
+      target Portal's dispatch table — validated against that table (UNSERVED_CAPABILITY) and
+      traversed by reachability, unlike a bare call to the generic handle. A register step
+      (targetComponent + targetMethod, target resolved exactly like a call step against a declared
+      dependency's contract) hands the target method to the runtime as a callback — a
+      deferred-invocation edge: unused-detection treats the registered method as reached wherever
+      its registering narrative is (so the callback correctly returns to unused if its registrar
+      does), while call-graph conformance exempts register steps from CALL_STEP_UNREALIZED because a
+      registration references the callback rather than invoking it. Each method may also name its
+      own source file, override the conformance tier, and bind an explicit realizing symbol
+      (code-level name) for intent-language renames — e.g. a store's put realized by saveSnapshot.
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete
-    optional: true
+    type: SpecStatus
+    description: >-
+      How far it is through design (an omitted status is parsed as complete). Readiness only: it
+      never enters the approval (designView leaves it out)
+    optional: false
   - name: conformance
+    type: ConformanceTier
+    description: >-
+      Structural-conformance tier default for all contract methods (omitted = stereotype default:
+      Portal anchored, else declared). The existence check of every named source file always
+      applies.
+    optional: true
+  - name: simPath
     type: string
     description: >-
-      Structural-conformance tier default for all contract methods: declared | anchored | off
-      (omitted = stereotype default: Portal → anchored, else declared). off skips method realization
-      checks; the sourcePath file-existence check always applies.
+      The committed integration-sim harness file (project-relative, shareable N:1); integration
+      conformance proves it exists and that its import graph wires this component's real modules and
+      each direct dependency's
     optional: true
-methods: []
+  - name: technologies
+    type: list<Technology>
+    description: >-
+      External technologies this implementation binds to (e.g. mysql), each a bare name or `{ name,
+      matches }` (see technology); its component's ownership tree becomes each technology's home,
+      which the technology-boundaries rule enforces by matching each technology's tokens
+    optional: true
+  - name: lint
+    type: LintConfig
+    description: >-
+      This spec's own acknowledged findings — validator results its author looked at and accepted,
+      each with a reason.
+    optional: true
+  - name: ext
+    type: any
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
+      the core, preserved verbatim through load and save.
+    optional: true
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
+  - name: injectedParams
+    type: list<string>
+    description: >-
+      Parameter names this realization takes BEFORE the ones its contract declares — a config
+      object, a data root, the transport handles a portal is handed. Supplied by whatever wires the
+      component up, never by the caller the contract describes, which is why they belong to the
+      realization and not to the contract: another realization of the same contract may hold them as
+      fields instead. Declared rather than guessed, because a leading parameter the contract does
+      not name is otherwise indistinguishable from one it named under a different name —
+      `seed(config)` realized as `bootstrapInstance(cfg)` reads as a dropped parameter to anything
+      that infers. A leading parameter this list does not name is a finding.
+    optional: true
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this implementation held before, oldest first. Written only by the
+      rename tools (renameComponent moves <id>_impl with its component), never by an author, and
+      never rewritten or bound as a reference. The design export shows it as `formerly`. Another
+      implementation may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a
+      hand edit); unsetting it releases those ids.
+    optional: true
+  - name: router
+    type: string
+    description: >-
+      Portal-only code linkage: the router entry this Portal's own file exports — the table or
+      function the server actually dispatches; a class's method is written `Class.method`. Whatever
+      process serves the Portal hands it its requests through this entry, which replaces the retired
+      listener mount's `via`. Route coverage reads the routes out of it, completing a route's
+      unconstrained leading segment from the first segments of the Portal's own HTTP endpoint paths.
+      Export conformance holds the file to it (UNREALIZED_EXPORT_HANDLE), and an import of it is
+      declared publication, not an undeclared crossing. Outside the approval, like every linkage
+      field
+    optional: true
+  - name: bindings
+    type: list<string>
+    description: >-
+      The hand-written binding modules (project-relative, shareable N:1) through which this
+      realization reaches another project's code — a typed binding to a native library, a client
+      stub declaring a producer's functions and types — the one place where the consumer's code
+      spells the producer's names. Code linkage, outside the approval like sourcePath: naming or
+      moving one never reopens it. Binding conformance compares each with the pinned snapshots of
+      the externals this implementation's component reaches (function and method names, their
+      parameter names and arity, type field names), so a re-pin that renames, removes or reshapes a
+      name the binding still declares is reported with the rename the snapshot traces. A binding
+      named by one component's implementations alone is in that component's brief fence; one several
+      components name is listed as shared.
+    optional: true
+methods:
+  - name: sourceFiles
+    signature: 'sourceFiles(): string[]'
+    returns: list<string>
+    description: >-
+      Every source file this implementation names — its own sourcePath and each method's —
+      deduplicated, in declaration order. The simPath harness is not a source file of the
+      implementation and is not included.
+    symbol: implementationSourceFiles
+  - name: designView
+    signature: 'designView(): ImplementationSpec'
+    params: []
+    returns: ImplementationSpec
+    description: >-
+      This implementation as the approval sees it: the design it states with its CODE LINKAGE, its
+      readiness and its volatile metadata left out. Linkage is every field that says where or how
+      the design is realized in code rather than what the design is — its own sourcePath and
+      simPath, its router, its injectedParams, its spec-level conformance tier, and on each method
+      the method's sourcePath, symbol, exportedVia and conformance tier; readiness is its status
+      (draft/design/complete says how far authoring is, never what the design says); the volatile
+      metadata is createdAt and updatedAt. Everything else stays: the contract, technologies (the
+      vendor binding is design: TECH_LEAKAGE judges it), the detail dial, each method's narrative,
+      intent and declared calls, the rename trace, lint and ext. Pure: over the spec's own fields;
+      the same spec always gives the same view, so a sourcePath added, moved or removed, or a status
+      promoted, never changes it.
+    symbol: implementationDesignView
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-11T17:53:39.341Z'
+updatedAt: '2026-10-09T16:54:35.834Z'

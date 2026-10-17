@@ -1,0 +1,20 @@
+kind: enum
+id: design_depth
+name: DesignDepth
+description: >-
+  How deep the design must go before a subsystem counts as complete, shallowest first. The project
+  sets it in rules.designDepth; a subsystem may override it.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: components
+    description: Components (L2) are enough
+  - name: interfaces
+    description: Every component has its contract (L3)
+  - name: implementations
+    description: Every contract has an implementation (L4)
+  - name: narratives
+    description: Every method has its narrative (L5)
+createdAt: '2026-10-04T23:13:24.106Z'
+updatedAt: '2026-10-04T23:13:24.529Z'

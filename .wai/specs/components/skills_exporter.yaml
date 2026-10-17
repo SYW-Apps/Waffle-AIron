@@ -1,8 +1,12 @@
 id: skills_exporter
 name: Skills Exporter
 description: >-
-  Copies the static SDD AI Skill definitions to user-approved local AI CLI configuration
-  directories.
+  Copies the SDD AI Skill definitions to user-approved local AI CLI configuration directories,
+  COMPOSING each builtin with any pack sections that extend it (`## Platform: <pack>`, in pack load
+  order) and installing genuinely new pack skills namespaced beside them. Freshness is compared
+  against what it WOULD write rather than against the raw template — an extended builtin
+  legitimately differs from its template, and comparing to the template would report it stale
+  forever.
 subsystem: sdd_skills
 componentType: Adapter
 owns: []
@@ -10,4 +14,4 @@ dependsOn:
   - skills_core_adapter
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-07-14T20:13:59.352Z'
+updatedAt: '2026-07-29T20:58:33.345Z'

@@ -1,13 +1,16 @@
 id: surfaces_core_adapter
 name: Surfaces Core Client Adapter
 description: >-
-  Client adapter reading the spec tree (system, subsystems, components, interfaces, types) from the
-  core subsystem's published portal for the projector's derivations.
+  Client adapter reading the spec tree (system, subsystems, components, interfaces, types), the
+  resolved project export table and the project's configuration from the core subsystem's published
+  portals for the projector's derivations.
 subsystem: sdd_surfaces
 componentType: Adapter
 owns: []
 dependsOn:
-  - core_portal
+  - spec_tree_portal
+  - approval_portal
+  - project_config_portal
 status: complete
 createdAt: '2026-07-10T23:12:29.792Z'
-updatedAt: '2026-07-11T09:04:02.037Z'
+updatedAt: '2026-09-26T16:09:58.340Z'

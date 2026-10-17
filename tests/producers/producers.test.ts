@@ -67,15 +67,17 @@ describe('graph projection', () => {
 
 describe('miro client (mocked API)', () => {
   it('clears the wairon frame, then creates a frame, shapes, and connectors', async () => {
-    process.env.WAIRON_MIRO_TOKEN = 'miro_test';
+    // The environment holds a DIFFERENT token: the adapter must present the one it
+    // was handed and never go looking for another.
+    process.env.WAIRON_MIRO_TOKEN = 'env_token_must_not_be_used';
     delete process.env.WAIRON_DATA_DIR;
-    const calls: { method: string; path: string; body?: any }[] = [];
+    const calls: { method: string; path: string; body?: any; auth?: string }[] = [];
     const originalFetch = global.fetch;
     const jsonRes = (obj: any) => ({ ok: true, status: 200, json: async () => obj, text: async () => JSON.stringify(obj) });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     global.fetch = (async (url: string, init: any) => {
       const p = new URL(url).pathname;
-      calls.push({ method: init.method, path: p, body: init.body ? JSON.parse(init.body) : undefined });
+      calls.push({ method: init.method, path: p, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers.Authorization });
       if (init.method === 'GET') return jsonRes({ data: [], cursor: undefined }); // empty board
       if (init.method === 'POST' && p.endsWith('/frames')) return jsonRes({ id: 'frame-1' });
       if (init.method === 'POST' && p.endsWith('/shapes')) return jsonRes({ id: `shape-${calls.length}` });
@@ -84,6 +86,7 @@ describe('miro client (mocked API)', () => {
 
     try {
       await miro.sync(
+        'miro_test',
         {
           nodes: [
             { id: 'a', label: 'A', subsystem: 's1', componentType: 'Portal' },
@@ -100,15 +103,17 @@ describe('miro client (mocked API)', () => {
       // the connector links the two created shapes, parented to the frame
       expect(connectors[0].body.startItem.id).toMatch(/^shape-/);
       expect(connectors[0].body.endItem.id).toMatch(/^shape-/);
+      // Every call presented the injected token, never the environment's.
+      expect(new Set(calls.map((c) => c.auth))).toEqual(new Set(['Bearer miro_test']));
     } finally {
       global.fetch = originalFetch;
     }
   });
 
-  it('rejects when no Miro token is configured', async () => {
-    delete process.env.WAIRON_MIRO_TOKEN;
+  it('rejects when the caller hands in no token, even with one in the environment', async () => {
+    process.env.WAIRON_MIRO_TOKEN = 'env_token_must_not_be_used';
     delete process.env.WAIRON_DATA_DIR;
-    await expect(miro.sync({ nodes: [], edges: [] }, 'board-1')).rejects.toThrow(/Miro token/);
+    await expect(miro.sync('', { nodes: [], edges: [] }, 'board-1')).rejects.toThrow(/Miro token/);
   });
 });
 
@@ -148,14 +153,14 @@ describe('secret resolver', () => {
 
 describe('notion client (mocked API)', () => {
   it('creates the wairon-specs page and its children', async () => {
-    process.env.WAIRON_NOTION_TOKEN = 'secret_test';
-    const calls: { method: string; path: string; body?: any }[] = [];
+    process.env.WAIRON_NOTION_TOKEN = 'env_token_must_not_be_used';
+    const calls: { method: string; path: string; body?: any; auth?: string }[] = [];
     const originalFetch = global.fetch;
     const jsonRes = (obj: any) => ({ ok: true, status: 200, json: async () => obj, text: async () => JSON.stringify(obj) });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     global.fetch = (async (url: string, init: any) => {
       const p = new URL(url).pathname.replace('/v1', '');
-      calls.push({ method: init.method, path: p, body: init.body ? JSON.parse(init.body) : undefined });
+      calls.push({ method: init.method, path: p, body: init.body ? JSON.parse(init.body) : undefined, auth: init.headers.Authorization });
       if (init.method === 'GET') return jsonRes({ results: [], has_more: false }); // no existing page
       if (init.method === 'POST' && p === '/pages') return jsonRes({ id: `page-${calls.length}` });
       return jsonRes({ ok: true });
@@ -163,6 +168,7 @@ describe('notion client (mocked API)', () => {
 
     try {
       await sync(
+        'secret_test',
         { title: 'wairon specs', body: '# Root\n\ntext', children: [{ title: 'Billing', body: '# Billing', children: [] }] },
         'parent-page-id',
       );
@@ -171,14 +177,15 @@ describe('notion client (mocked API)', () => {
       expect(created[0].body.properties.title.title[0].text.content).toBe('wairon specs');
       expect(created[0].body.parent.page_id).toBe('parent-page-id');
       expect(created[1].body.properties.title.title[0].text.content).toBe('Billing');
+      expect(new Set(calls.map((c) => c.auth))).toEqual(new Set(['Bearer secret_test']));
     } finally {
       global.fetch = originalFetch;
     }
   });
 
-  it('rejects when no Notion token is configured', async () => {
-    delete process.env.WAIRON_NOTION_TOKEN;
+  it('rejects when the caller hands in no token, even with one in the environment', async () => {
+    process.env.WAIRON_NOTION_TOKEN = 'env_token_must_not_be_used';
     delete process.env.WAIRON_DATA_DIR;
-    await expect(sync({ title: 't', body: '', children: [] }, 'p')).rejects.toThrow(/Notion token/);
+    await expect(sync('', { title: 't', body: '', children: [] }, 'p')).rejects.toThrow(/Notion token/);
   });
 });

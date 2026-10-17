@@ -6,27 +6,27 @@ methods:
   - name: loadSystemSpec
     description: Loads the system spec via core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Loads subsystem specs via core portal
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Loads component specs via core portal
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Loads interface specs via core portal
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Loads implementation specs via core portal
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadTypeSpecs
     description: Loads type specs via core portal
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: dryRunSerializeSpecs
     description: >-
       Dry-runs every loaded spec through the writer relativization + schema pipeline via the core
@@ -34,7 +34,7 @@ methods:
       visibility of every write lock would reject. Accepts the validation run's scope predicate so
       scoped runs pay scoped cost.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
   - name: loadProjectExtensions
     description: >-
       Load the governing extension packs (global then project) via the core portal, returning the
@@ -43,6 +43,265 @@ methods:
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
+  - name: loadProjectConfig
+    description: >-
+      The bound project's configuration, or null when it has none. Forwarded to the core portal;
+      validation reads its rule severities, including a parent project's when resolving through the
+      parent.
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+    guarantees:
+      - idempotent
+  - name: consumedContractInputs
+    description: >-
+      Forward to core_portal.consumedContractInputs: the consumed contract inputs of the bound root
+      alone (never a member's)
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
+    params: []
+  - name: settledSpecPaths
+    description: >-
+      Forward to approval_portal.settledSpecPaths: the spec files unchanged since the approval, or
+      null when the tree was never approved
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
+    params:
+      - name: root
+        type: string
+        optional: true
+  - name: getLoaderIssues
+    description: 'Forward to spec_tree_portal.getLoaderIssues: the loader''s diagnostics for the tree just read'
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forward to spec_tree_portal.clearLoaderIssues: start the run's read from disk with no stale
+      diagnostics
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: scanAllSpecs
+    description: >-
+      Forward to spec_tree_portal.scanAllSpecs: set the run's recursion depth, and read the index
+      relating each spec to its file
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        optional: true
+  - name: loadProjectVariants
+    description: >-
+      Forward to extension_portal.loadProjectVariants: the variant registry the variant rules judge
+      against
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
+    params: []
+  - name: readLockRecord
+    description: >-
+      Forward to approval_portal.readLockRecord: the bound root's lock record, or null when it is
+      unlocked or the record cannot be read. The validator reads the project id the lock recorded,
+      to judge the project's identity against it.
+    signature: 'readLockRecord(): LockRecord?'
+    returns: LockRecord?
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveSubsystemExports
+    description: >-
+      Forward to spec_tree_portal.resolveSubsystemExports: one subsystem's resolved export table
+      with the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      Forward to spec_tree_portal.resolveProjectExports: the project's resolved L0 export table with
+      the problems met resolving it, which the export-tables rule judges.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: projectFamily
+    description: 'Forward to the core portal: the project graph of the current scan, for the family rules.'
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
+  - name: exportUsage
+    description: >-
+      Forward to the core portal: one project's references into another, mapped onto the producer's
+      public names or not.
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+    guarantees:
+      - idempotent
+  - name: loadExtensionsFor
+    description: >-
+      The packs that would govern the bound project under a given configuration, with an optional
+      candidate manifest — through the core extension portal. Writes nothing.
+    signature: 'loadExtensionsFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: config
+        type: ProjectConfig
+        description: The configuration to load for
+      - name: candidate
+        type: PackCandidate
+        description: The pack write being measured, when its manifest is supplied
+        optional: true
+  - name: packManifest
+    description: The manifest one pack entry resolves to, or null — through the core extension portal.
+    signature: 'packManifest(entry: PackSelection | PackPath): ExtensionPack?'
+    returns: ExtensionPack?
+    params:
+      - name: entry
+        type: PackSelection | PackPath
+        description: A by-name selection or a legacy path reference
+  - name: computeOwnStateId
+    description: >-
+      Forward to approval_portal.computeOwnStateId: the full-content identity of the bound project's
+      own specs (code linkage included), never a member's — recomputed only to judge a format-2 lock
+      under its own algorithm.
+    signature: 'computeOwnStateId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: approvalRecord
+    description: >-
+      Forward to approval_portal.approvalRecord: the lock record another project root carries (a
+      direct member's, for its composition subject; a member's parent's, for its pin), or null when
+      it has none. Read from that root alone — no scan, no validation — which is what keeps a
+      parent's gate identity proportional to its own tree plus one small file per direct member.
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: root
+        type: string
+        description: The project root whose record to read; the bound root when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: signatureFacts
+    description: >-
+      Forward to the core portal: what the current scan's signature resolution recorded, the sources
+      it met and the stored texts their params contradict.
+    signature: 'signatureFacts(): SignatureFacts'
+    returns: SignatureFacts
+    params: []
+  - name: resolveSignatures
+    description: >-
+      Forward to the core portal: resolve the signatures of specs read outside the scan — a part's
+      own specs together with its pinned parent excerpt — as the scan resolves its own, answering
+      the resolved interfaces and types and the facts.
+    signature: >-
+      resolveSignatures(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
+      list<TypeSpec>): SignatureResolution
+    returns: SignatureResolution
+    params:
+      - name: interfaces
+        type: list<InterfaceSpec>
+        description: The interfaces to resolve, stored or already resolved
+      - name: components
+        type: list<ComponentSpec>
+        description: The components a method source's head is read against
+      - name: types
+        type: list<TypeSpec>
+        description: The types, the signature types among them
+    guarantees:
+      - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      Forward to the core portal: what the current scan's type canonicalisation recorded, the stored
+      positions that are aliases and the ones that are not canonical at all.
+    signature: 'typeSpellingFacts(): TypeSpellingFacts'
+    returns: TypeSpellingFacts
+    params: []
+  - name: computeOwnDesignId
+    description: >-
+      Forward to approval_portal.computeOwnDesignId: the design identity of the bound project's own
+      specs — the content half of the gate identity from format 3 on.
+    signature: 'computeOwnDesignId(): StateId'
+    returns: StateId
+    params: []
+    guarantees:
+      - idempotent
+  - name: retiredReachFacts
+    description: >-
+      Forward to the core portal: what the current scan met in the forms the reachability model
+      retired, with what each stored spec held there.
+    signature: 'retiredReachFacts(): list<RetiredReachFact>'
+    returns: list<RetiredReachFact>
+    params: []
+    guarantees:
+      - idempotent
+  - name: computeOwnDesignIdAsRecorded
+    description: >-
+      Forward to approval_portal.computeOwnDesignIdAsRecorded: the own design identity in the
+      earlier design reading, status put back as approved.
+    signature: 'computeOwnDesignIdAsRecorded(approvedStatus: map<string, SpecStatus>): StateId'
+    returns: StateId
+    params:
+      - name: approvedStatus
+        type: map<string, SpecStatus>
+        description: Each spec's approved status, keyed `<kind>:<id>`
+    guarantees:
+      - idempotent
+  - name: approvedStatuses
+    description: 'Forward to approval_portal.approvedStatuses: each own spec''s status as the record approved it.'
+    signature: 'approvedStatuses(record: LockRecord): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record
+    guarantees:
+      - idempotent
+  - name: resolveChainingParent
+    description: >-
+      Forward to the core portal: the bound root's chaining parent (the parent root that declares it
+      as a member, and its alias there), or null at a top root or when the request may not read
+      above its root. Read by the derived networking alone, to compose a member's view from its
+      enclosing family; the owner's gate never climbs.
+    signature: 'resolveChainingParent(): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params: []
+    guarantees:
+      - idempotent
+  - name: diffAgainstApproval
+    description: >-
+      Forward to approval_portal.diffAgainstApproval: which own spec files moved since the approval
+      on record, or null when there is none (or it predates per-spec digests).
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-14T19:21:19.038Z'
+updatedAt: '2026-10-08T08:36:45.169Z'

@@ -1,0 +1,35 @@
+kind: value-object
+id: pack_rule
+name: SddRule
+description: >-
+  A programmatic conformance rule shipped by a code pack, as @wairon/sdk publishes its authoring
+  contract: the runtime shape { name, description?, codes, check } that wairon's extension loader
+  duck-types when it loads a pack.cjs.
+subsystem: sdd_sdk
+fields:
+  - name: name
+    type: string
+    description: Stable kebab-case rule id
+    optional: false
+  - name: description
+    type: string
+    description: 'One line: what the rule enforces and why'
+    optional: true
+  - name: codes
+    type: list<string>
+    description: The issue codes this rule can emit
+    optional: false
+methods:
+  - name: check
+    signature: 'check(ctx: pack_rule_context): list<pack_rule_finding>'
+    params:
+      - name: ctx
+        type: pack_rule_context
+    returns: list<pack_rule_finding>
+    description: >-
+      Inspect the spec tree and return the rule's findings, empty when clean; reads the context and
+      never mutates it.
+componentClass: sdk_portal
+sourcePath: sdk/src/authoring.ts
+createdAt: '2026-10-04T18:23:26.755Z'
+updatedAt: '2026-10-04T18:23:52.349Z'

@@ -12,7 +12,7 @@ methods:
       - stepNumber: 2
         description: Persist the producer config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: write
       - stepNumber: 3
         description: Return once configured
@@ -23,7 +23,7 @@ methods:
       - stepNumber: 1
         description: Read the target's config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: read
       - stepNumber: 2
         description: If the target is not configured, reject
@@ -47,10 +47,12 @@ methods:
       - stepNumber: 5
         description: Project the spec tree into a DocPage tree
         type: call
-        targetComponent: spec_projection_specialist
+        targetComponent: spec_doc_pages
         targetMethod: project
       - stepNumber: 6
-        description: Push the DocPage tree to Notion
+        description: >-
+          Push the DocPage tree to Notion, handing the adapter the token the caller resolved (its
+          injected credential)
         type: call
         targetComponent: notion_adapter
         targetMethod: sync
@@ -61,10 +63,12 @@ methods:
       - stepNumber: 8
         description: Project the architecture into a GraphModel
         type: call
-        targetComponent: spec_projection_specialist
+        targetComponent: spec_doc_pages
         targetMethod: projectGraph
       - stepNumber: 9
-        description: Render the graph onto the Miro board
+        description: >-
+          Render the graph onto the Miro board, handing the adapter the token the caller resolved
+          (its injected credential)
         type: call
         targetComponent: miro_adapter
         targetMethod: sync
@@ -81,7 +85,7 @@ methods:
       - stepNumber: 1
         description: Clear the target's config
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: clear
       - stepNumber: 2
         description: Return once removed
@@ -92,8 +96,8 @@ methods:
       - stepNumber: 1
         description: List the configured producers
         type: call
-        targetComponent: producer_config_registry
+        targetComponent: producer_config_store
         targetMethod: list
 status: complete
 createdAt: '2026-07-04T17:40:06.027Z'
-updatedAt: '2026-07-04T18:04:32.210Z'
+updatedAt: '2026-09-25T22:02:02.913Z'

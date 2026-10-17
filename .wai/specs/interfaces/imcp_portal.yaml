@@ -5,114 +5,1311 @@ description: >-
   exposed over MCP stdio (JSON-RPC).
 component: mcp_portal
 methods:
-  - name: createMcpServer
-    description: Initializes and registers the MCP server (tool registration + stdio transport)
-    signature: 'createMcpServer(): McpServer'
-    returns: McpServer
+  - name: initializeSystem
+    description: >-
+      Tool: initialize the L0 system specification. The answer carries the write receipt as
+      structured content beside the sentence, so a caller learns what was written without parsing
+      English; the sentence itself is unchanged, for a client that understands no structured
+      content.
+    signature: 'initializeSystem(spec: SystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: 'stdio json-rpc: server bootstrap (wairon mcp serve)'
-  - name: sdd_initialize_system
-    description: 'Tool: initialize the L0 system specification'
-    signature: 'sdd_initialize_system(spec: SystemSpec): void'
-    returns: void
+      transport: JSONRPC
+      method: tools/call sdd_initialize_system
+    previousNames:
+      - imcp_portal.sdd_initialize_system
+  - name: addSubsystem
+    description: >-
+      Tool: add an L1 subsystem under the system boundary. A subsystem is never a mount: a
+      `projectPath` in the input is refused, naming sdd_add_member, which declares a member project
+      in project.yaml `members`. The input may state the spec's lifecycle status, so a subsystem can
+      be authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
+    signature: 'addSubsystem(spec: SubsystemSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_initialize_system
-  - name: sdd_add_subsystem
-    description: 'Tool: add an L1 subsystem under the system boundary'
-    signature: 'sdd_add_subsystem(spec: SubsystemSpec): void'
-    returns: void
+      transport: JSONRPC
+      method: tools/call sdd_add_subsystem
+    previousNames:
+      - imcp_portal.sdd_add_subsystem
+  - name: addComponent
+    description: >-
+      Tool: add an L2 component under a subsystem. A Portal states its `transport` (the retired
+      portalType and listener `mounts` are no longer accepted), an `abi` only when it is InProcess,
+      and, only when callers outside the design reach it, a Portal-level `invokedBy` entry with its
+      scope. The tool never defaults an entry: a blanket entry the author did not decide would hide
+      unreached verbs. A component may state its variant (a gateway is a Portal with the gateway
+      variant), so it is authored in one call. An Adapter may state the transport it calls its
+      target Portal over; when it states none and the Portals its dependsOn names share one
+      transport, the tool fills it in from them and says so (a stated transport that disagrees with
+      the target's is ADAPTER_TRANSPORT_MISMATCH). The input may state the spec's lifecycle status,
+      so a component can be authored straight at design or complete instead of being born draft and
+      needing a follow-up edit nobody remembers. An unstated status means draft for a new spec and
+      the stored status for a re-authoring, and a stated status that would lower the stored one is
+      refused by name: reopening a frozen spec is an update, not a restatement. The answer carries
+      the write receipt as structured content beside the sentence, so a caller learns the status
+      written and whether a spec already held that id without parsing English; the sentence itself
+      is unchanged.
+    signature: 'addComponent(spec: ComponentSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_subsystem
-  - name: sdd_add_component
-    description: 'Tool: add an L2 component under a subsystem'
-    signature: 'sdd_add_component(spec: ComponentSpec): void'
-    returns: void
+      transport: JSONRPC
+      method: tools/call sdd_add_component
+    previousNames:
+      - imcp_portal.sdd_add_component
+  - name: defineInterface
+    description: >-
+      Tool: define an L3 interface contract for a component. Each method states its signature one of
+      three ways: structured params with returns (the signature text is then DERIVED and written by
+      the server — a text the caller passes is ignored, and a notice names one that differed), a
+      signatureFrom naming its source — a signature type, or `component.method` along a
+      dependsOn/owns edge — with neither params nor returns (both together are refused,
+      SIGNATURE_SOURCE_RESTATED), or, for a method without params, a prose signature with returns.
+      Every param type and returns is written in the neutral type grammar; today's spellings (`T[]`,
+      `T | null`, `Promise<T>`, `boolean`, `Record<K, V>`, ...) are accepted and stored canonical,
+      the receipt's respellings naming each, and a position that is not canonical is refused with
+      its replacement (`number`: int or float?; an inline function type: a signature type; a literal
+      union: an enum). The input may state the spec's lifecycle status, so a contract can be
+      authored straight at design or complete instead of being born draft and needing a follow-up
+      edit nobody remembers. An unstated status means draft for a new spec and the stored status for
+      a re-authoring, and a stated status that would lower the stored one is refused by name —
+      reopening a frozen spec is an update, not a restatement. The answer carries the write receipt
+      as structured content beside the sentence, so a caller learns the status written and whether a
+      spec already held that id without parsing English; the sentence itself is unchanged.
+    signature: 'defineInterface(spec: InterfaceSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_add_component
-  - name: sdd_define_interface
-    description: 'Tool: define an L3 interface contract for a component'
-    signature: 'sdd_define_interface(spec: InterfaceSpec): void'
-    returns: void
+      transport: JSONRPC
+      method: tools/call sdd_define_interface
+    previousNames:
+      - imcp_portal.sdd_define_interface
+  - name: writeNarrative
+    description: >-
+      Tool: write an L4 implementation spec with L5 method narratives. The input may state the
+      spec's lifecycle status, so an implementation can be authored straight at design or complete
+      instead of being born draft and needing a follow-up edit nobody remembers. An unstated status
+      means draft for a new spec and the stored status for a re-authoring, and a stated status that
+      would lower the stored one is refused by name — reopening a frozen spec is an update, not a
+      restatement. The answer carries the write receipt as structured content beside the sentence,
+      so a caller learns the status written and whether a spec already held that id without parsing
+      English; the sentence itself is unchanged.
+    signature: 'writeNarrative(spec: ImplementationSpec): SpecWriteReceipt'
+    returns: SpecWriteReceipt
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_define_interface
-  - name: sdd_write_narrative
-    description: 'Tool: write an L4 implementation spec with L5 method narratives'
-    signature: 'sdd_write_narrative(spec: ImplementationSpec): void'
-    returns: void
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_write_narrative
-  - name: sdd_validate_tree
-    description: 'Tool: run the architecture-conformance gate over the spec tree'
-    signature: 'sdd_validate_tree(): ValidationResult'
+      transport: JSONRPC
+      method: tools/call sdd_write_narrative
+    previousNames:
+      - imcp_portal.sdd_write_narrative
+  - name: validateTree
+    description: >-
+      Tool: validate and answer with every finding, split into errors, warnings and notices (three
+      separate lists, in the structured content and the text block alike). Notices never make the
+      tree invalid. At a project that declares members it is the family run — every selected
+      project's own gate verbatim under its project key, the composition of each project's externals
+      against their live producers, and the family checks — unless `recursive` is false, which asks
+      for the owner's gate alone; at any other project it is the owner's gate, unless `family` is
+      true. The hosted data plane serves this same tool, so a hosted verdict is the same function's:
+      a member-qualified credential binds the member root and gets the member's own gate (its family
+      run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
+      one member by its key. An unfinished family-migration transaction under the bound root adds a
+      notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
+    signature: 'validateTree(subsystem?: string, recursive?: bool, family?: bool): ValidationResult'
     returns: ValidationResult
+    params:
+      - name: subsystem
+        type: string
+        description: Validate only this subsystem's slice of the tree; omitted validates all of it
+        optional: true
+      - name: recursive
+        type: bool
+        description: >-
+          At a project that declares members: false asks for the owner's gate alone instead of the
+          family run
+        optional: true
+      - name: family
+        type: bool
+        description: >-
+          Ask for the family run at any project; at a member this composes its externals against
+          their live producers, within the request's reach
+        optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_validate_tree
-  - name: sdd_get_status
-    description: 'Tool: completeness status dashboard of the spec tree'
-    signature: 'sdd_get_status(): string'
+      transport: JSONRPC
+      method: tools/call sdd_validate_tree
+    previousNames:
+      - imcp_portal.sdd_validate_tree
+  - name: getStatus
+    description: >-
+      Tool: the spec tree as a structure, with each level's completeness; each member prints as a
+      project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
+      descending into members. On a stale server the answer LEADS with the staleness — whether the
+      build on disk changed and whether spec writes are refused because its schemas changed — so the
+      first call of a session surfaces it before anything is written; an unfinished family-migration
+      transaction under the bound root leads likewise, one notice line each, pointing at `wairon
+      doctor --fix`.
+    signature: 'getStatus(subsystem?: string, recursive?: bool): string'
     returns: string
+    params:
+      - name: subsystem
+        type: string
+        description: Report only this subsystem's slice of the tree; omitted reports all of it
+        optional: true
+      - name: recursive
+        type: bool
+        description: Descend into the members this project declares
+        optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_get_status
-  - name: sdd_move_subsystem_project
-    description: 'Tool: relocate an external subsystem''s subproject directory and update its projectPath link'
-    signature: 'sdd_move_subsystem_project(subsystemId: string, newProjectPath: string): void'
-    returns: void
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_move_subsystem_project
-  - name: sdd_externalize_subsystem
+      transport: JSONRPC
+      method: tools/call sdd_get_status
+    previousNames:
+      - imcp_portal.sdd_get_status
+  - name: externalizeSubsystem
     description: >-
-      Tool: migrate an internal subsystem into a standalone subproject at projectPath (moves specs,
-      mounts via projectPath, rewrites references)
-    signature: 'sdd_externalize_subsystem(subsystem: string, projectPath: string): void'
-    returns: void
+      Tool: move an internal subsystem out to the path. By default (stage 8) into a PART — a storage
+      move: the subsystem's specs move to that directory (a new part, or the existing part there),
+      and nothing else changes: no reference, export, external or lock entry, the same verdict. With
+      `as: project`, into a member PROJECT instead, family-wide and all-or-nothing — the move
+      followed by a promote: what crosses the new boundary exported and imported, references
+      respelled `alias::name`, the new member's external for this project pinned, and every other
+      family project's references checked to still resolve (a reference that would need a component
+      made public refuses the plan). dryRun answers the plan and writes nothing; run it first and
+      show the plan. Never locks: the answer names the projects to re-lock.
+    signature: >-
+      externalizeSubsystem(subsystem: string, path: string, as?: string, dryRun?: bool):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: subsystem
+        type: string
+        description: The subsystem to move out
+      - name: path
+        type: string
+        description: The part's root, relative to the bound project (a new directory, or an existing part's)
+      - name: as
+        type: string
+        description: part (default) or project
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
     endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_externalize_subsystem
-  - name: sdd_internalize_subsystem
-    description: >-
-      Tool: migrate an external subsystem's specs back into the parent tree and delete its child
-      .wai project
-    signature: 'sdd_internalize_subsystem(subsystem: string): void'
-    returns: void
-    endpoint:
-      transport: Custom
-      address: mcp tools/call sdd_internalize_subsystem
+      transport: JSONRPC
+      method: tools/call sdd_externalize_subsystem
+    previousNames:
+      - imcp_portal.sdd_externalize_subsystem
   - name: listResources
-    description: 'MCP resource: list the built-in SDD skills the server publishes as read-only resources.'
-    signature: 'listResources(): SkillResourceDescriptor[]'
-    returns: SkillResourceDescriptor[]
+    description: >-
+      MCP resource: list everything the server publishes as read-only resources — the built-in SDD
+      skills (wairon-skill://) plus one live agent-brief resource per agent in the current topology
+      (wairon-agent://).
+    signature: 'listResources(): list<SkillResourceDescriptor>'
+    returns: list<SkillResourceDescriptor>
     params: []
     endpoint:
-      transport: Custom
-      address: mcp resources/list (built-in SDD skills)
+      transport: JSONRPC
+      method: resources/list
   - name: readResource
-    description: 'MCP resource: read one published built-in SDD skill''s content by resource id.'
+    description: >-
+      MCP resource: read one published resource by id — a wairon-skill:// id returns the
+      (pack-composed) skill markdown, a wairon-agent:// id returns that agent's live brief composed
+      from the current spec tree.
     signature: 'readResource(resourceId: string): string'
     returns: string
     params:
       - name: resourceId
         type: string
-        description: The MCP resource id / skill id to read.
+        description: The MCP resource id — a skill id or wairon-agent:// agent id.
     endpoint:
-      transport: Custom
-      address: mcp resources/read (built-in SDD skill)
-  - name: sdd_list_external_interfaces
+      transport: JSONRPC
+      method: resources/read
+  - name: getAgentBrief
     description: >-
-      List the bound project's consumable external surfaces (parent family, siblings, foreign
-      imports) as discovery entries with origin, provenance, and freshness — the tool an agent
-      inside a subproject uses to SEE its outward world instead of discovering it by failed
-      reference resolution.
-    signature: 'sdd_list_external_interfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
+      Tool: compose the LIVE delegation brief for one resolved agent (rendered instructions +
+      ownedPaths/readPaths scope). The dynamic replacement for generated per-component agent files:
+      an orchestrating session fetches a brief and spawns a generic subagent with it — always fresh
+      after a re-lock, no session restart, identical over stdio and the hosted data plane.
+    signature: 'getAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+        description: The resolved agent id (list via listAgents or resources/list).
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_get_agent_brief
+    previousNames:
+      - imcp_portal.sdd_get_agent_brief
+  - name: renameComponent
+    description: >-
+      Tool: rename a component and rewrite every reference to it; the interfaces and implementations
+      named after it move to the new ids, and every other contract and implementation of the
+      component keeps its id and follows the component's folder. Reports the specs moved and the
+      specs rewritten. With dryRun it answers what the rename would do and writes nothing.
+    signature: 'renameComponent(id: string, newId: string, dryRun?: bool): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: id
+        type: string
+        description: The component to rename (namespaced if needed)
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, rewrite, keep and rekey, and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_component
+    previousNames:
+      - imcp_portal.sdd_rename_component
+  - name: renameMethod
+    description: >-
+      Tool: rename a contract method and retarget every reference to it; the method moves on the
+      component's interfaces and their implementations, carrying its narrative and bindings. Reports
+      the specs moved, the specs retargeted, the specs whose prose still names it, and every
+      consumer of an export publishing the method whose specs call it (breaks) — the family in reach
+      and, with search, the consumer checkouts in the named folders. dryRun answers all of it and
+      writes nothing.
+    signature: >-
+      renameMethod(id: string, method: string, newName: string, pinSymbol?: bool, dryRun?: bool,
+      search?: list<string>): MethodRename
+    returns: MethodRename
+    params:
+      - name: id
+        type: string
+        description: The component whose method is renamed (namespaced if needed)
+      - name: method
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
+          one of whose contracts implements another project's extension point, whose producer names
+          those methods
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, retarget and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling
+          checkouts)
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_method
+    previousNames:
+      - imcp_portal.sdd_rename_method
+  - name: updateSpec
+    description: >-
+      Tool: patch an existing spec with a granular delta. The delta merges onto the spec as STORED —
+      a sourced method carries only its signatureFrom — and a method's signature text is derived
+      from its params on the write, never taken from the delta. Adopting a source on a method that
+      states params means unsetting its params and returns in the same delta, or the write is
+      refused (SIGNATURE_SOURCE_RESTATED). A type position the delta writes as an alias is stored
+      canonical and named in the report's respellings; one it writes that is not canonical is
+      refused with its replacement, while a stored one it leaves alone is not judged. The delta's
+      arrays UPSERT by element identity rather than replace, so a delta naming one element leaves
+      the others intact, and it is deliberately open below its top level — a key that is not a field
+      at its depth is named back under NO EFFECT instead of being silently dropped. The answer
+      carries the change report as structured content beside the rendered sentence, from the one
+      report, so the prose can never disagree with the data.
+    signature: >-
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The spec kind to patch
+      - name: id
+        type: string
+        description: The stored spec's id, namespaced if needed
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: bool
+        description: >-
+          Ask what the delta would do instead of doing it: the whole write runs, the candidate gate
+          included, and not one byte of the stored file moves
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when the delta removes
+          contract methods
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_update_spec
+    previousNames:
+      - imcp_portal.sdd_update_spec
+  - name: setEndpoints
+    description: >-
+      Tool: bind concrete wire endpoints to existing L3 contract methods, for a Portal whose
+      transport requires them (every transport but InProcess and Custom), run after
+      sdd_define_interface. The caller picks the Portal's own transport and fills that transport's
+      address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or
+      3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with,
+      which the OpenAPI export uses in place of its convention; the binding is checked against the
+      endpoint schema before the contract is saved. A binding for an InProcess Portal is refused:
+      its verbs are its contract methods.
+    signature: >-
+      setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool, search?:
+      list<string>): SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: interfaceId
+        type: string
+        description: The L3 contract to bind, as the tool's interface argument names it
+      - name: endpoints
+        type: list<EndpointBinding>
+        description: >-
+          One binding per method: the method NAME (not the HTTP verb), the transport, and that
+          transport's address fields
+      - name: dryRun
+        type: bool
+        description: Answer the change report the binding would give and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, read when a binding moves a
+          route: the move names the consumers it breaks, as a rename does
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_set_endpoints
+    previousNames:
+      - imcp_portal.sdd_set_endpoints
+  - name: setPublicInterfaces
+    description: >-
+      Tool: set — replace — an existing subsystem's export table: own items binding a component (and
+      optionally the contract) that realizes them, or a type the subsystem owns, and re-exports
+      naming another subsystem in `from` with one component, interface narrowing or type, optionally
+      renamed with `as` — `from` alone re-exports everything that subsystem exports. `type` and
+      `details` are required on an own component item and optional on a re-export, which inherits
+      its target's. The tool for backfilling bindings once a subsystem's components exist, because a
+      cross-subsystem dependency may only target a published public component.
+    signature: >-
+      setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: subsystemId
+        type: string
+        description: The L1 subsystem to update, as the tool's subsystem argument names it
+      - name: publicInterfaces
+        type: list<PublicInterface>
+        description: The full replacement list of published surfaces for this subsystem
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_set_public_interfaces
+    previousNames:
+      - imcp_portal.sdd_set_public_interfaces
+  - name: getSpec
+    description: >-
+      Tool: read the parsed contents of one stored spec, without filesystem path searching. A
+      contract's methods come back in their STORED form — a method that takes its signature from a
+      source carries the source, not its params — so the answer can be re-authored from as it is. A
+      methods filter reads only the named methods of a contract, an implementation or a type — a
+      forty-method spec fetched whole to look at one of them is the read side of the same waste a
+      restatement is on the write side — and the answer then carries a partial-result marker naming
+      what was left out, which must never be re-authored from. For a variant-tagged component the
+      answer also carries derived, read-only variant guidance, and for a contract with sourced
+      methods the derived, read-only resolved signatures (each sourced method's resolved params,
+      returns and text, and the source they came from). The structured content keeps every derived
+      marker SEPARATE from the stored spec, so nothing derived can be written back by accident; the
+      text block folds them in as it always has.
+    signature: 'getSpec(kind: WritableSpecKind, id: string, methods?: list<string>): SpecReadResult'
+    returns: SpecReadResult
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec to read
+      - name: id
+        type: string
+        description: >-
+          The id to read it by; the L0 system spec is a singleton, named by the system name or
+          "system"
+      - name: methods
+        type: list<string>
+        description: Return only these methods by name; omit it for the whole spec
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_get_spec
+    previousNames:
+      - imcp_portal.sdd_get_spec
+  - name: addType
+    description: >-
+      Tool: define a type — an entity or value-object, the data the components operate on, a
+      signature, a named function type, or an enum, a closed ordered set of named values (`values:
+      [{name, description?}]`, with optional pure methods and nothing else — ENUM_MEMBERS). A
+      value-object may instead be a named scalar: `holds: <primitive>` (string, int, float, bool,
+      bytes, date, datetime or duration) in place of fields, a newtype or type alias in every
+      language (NAMED_SCALAR_MEMBERS beside fields or on another kind). Entities are owned by a
+      subsystem; a shared value object, signature or enum names none and is system-level. Fields are
+      data; methods are PURE intrinsic behaviour only, because anything needing a collaborator
+      belongs on a component that takes the entity as an argument, and a type method may carry
+      structured params, which then derive its signature text as a contract method's do. A signature
+      carries params and returns and nothing else (SIGNATURE_TYPE_MEMBERS); a contract method takes
+      it by naming it as its signatureFrom. Every type position is written in the neutral type
+      grammar (string, int, float, bool, bytes, date, datetime, duration, void, any; list<T>,
+      set<T>, map<K, V>; `T?`; `A | B` of named types; `async T` on a returns); today's spellings
+      are accepted and stored canonical, the receipt's respellings naming each, and a position that
+      is not canonical is refused with its replacement (`number`: int or float?). A type may also
+      CLAIM code: a sourcePath names the file holding its declaration and a symbol binds the
+      code-level name, and the file must then resolve with the declaration anchored in it. The
+      answer carries the write receipt as structured content beside the sentence.
+    signature: 'addType(spec: TypeSpec, dryRun?: bool): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: spec
+        type: TypeSpec
+        description: >-
+          The type to define: its kind, id, name, owning subsystem, fields, pure methods,
+          invariants, database bindings and code claim
+      - name: dryRun
+        type: bool
+        description: Answer the receipt the write would give — every judgement run — and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_add_type
+    previousNames:
+      - imcp_portal.sdd_add_type
+  - name: moveMethods
+    description: >-
+      Tool: move contract methods from one component to another, carrying each method's narrative,
+      calls and bindings, and re-pointing every reference that named the old home. A target without
+      a contract receives one, i<target>, and a target contract without an implementation receives
+      <target>_impl (inheriting the source implementation's sourcePath) when implementation entries
+      travel; the report names what it created. One all-or-nothing gated write: if a rule refuses
+      the move, nothing is written and the report names the rule plus where these methods could live
+      instead, cheapest legal home first. A dry run runs the whole move, gate included, and reports
+      what it would have done.
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component the methods belong to (namespaced if needed)
+      - name: to
+        type: string
+        description: The component that should receive them (namespaced if needed)
+      - name: methods
+        type: list<string>
+        description: The method names to move; every one must exist on the source contract
+      - name: dryRun
+        type: bool
+        description: Answer with what the move would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_move_methods
+    previousNames:
+      - imcp_portal.sdd_move_methods
+  - name: deleteSpec
+    description: >-
+      Tool: delete a spec and everything it contains — a contract with its implementations, a
+      component with its contracts and owned members, a subsystem with its components and types —
+      pruning the folders the deletion leaves empty. Refused, naming every reference, while a spec
+      outside that set still references what would go: those are the invalid references the deletion
+      itself would introduce, and `force` deletes anyway, leaving them for validate to report.
+      Refused outright, the dry run included: a spec of another project (a member's, deleted from
+      that member's own root, whose folder the refusal names), an id no spec of the kind holds (the
+      refusal names what it might have meant) and the L0. Like a rename it reports `published` —
+      every public name a consumer reaches what goes through — and `breaks`, the consumers in reach
+      (and in the `search` folders) whose specs reach one. `dryRun` answers the same plan and
+      removes nothing.
+    signature: >-
+      deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool, search?:
+      list<string>): SpecDeletion
+    returns: SpecDeletion
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: 'The kind of spec to delete (never system: the L0 is not deleted)'
+      - name: id
+        type: string
+        description: The id of the spec to delete (namespaced if needed)
+      - name: dryRun
+        type: bool
+        description: Answer with the plan — what would be removed, what references it — and remove nothing
+        optional: true
+      - name: force
+        type: bool
+        description: >-
+          Delete even though other specs still reference what goes, leaving those references for
+          validate to report
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family (e.g. the folder holding sibling
+          checkouts)
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_delete_spec
+    previousNames:
+      - imcp_portal.sdd_delete_spec
+  - name: getProjectConfig
+    description: >-
+      Tool: the bound project's configuration as it was resolved — the rule severities, project type
+      and paths a validate or a write will actually use. Answers null when the project has none,
+      rather than assuming defaults, so a caller can tell an unconfigured project from a
+      default-configured one.
+    signature: 'getProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+    endpoint:
+      transport: JSONRPC
+      method: tools/call getProjectConfig
+  - name: pinExternals
+    description: >-
+      Tool (scope: tree, a write): pin the bound project's declared externals — the named aliases,
+      else all — into .wai/externals/<alias>.yaml and .wai/externals.lock.yaml, recording each used
+      member's signature digest. Answers one outcome per alias (pinned, unchanged, unresolved,
+      unreachable) with its unexported references.
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: aliases
+        type: list<string>
+        description: The aliases to pin; all declared externals when omitted
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_pin_externals
+    previousNames:
+      - imcp_portal.sdd_pin_externals
+  - name: getExternalsStatus
+    description: >-
+      Tool (scope: tree, a read): each declared external's pin compared with its live producer at
+      signature level — unchanged, changed, renamed (with the name it was renamed to, from the
+      producer's rename trace), removed, unlocked — each external's health (incompatible |
+      unavailable | drifted | ok), and EXTERNAL_CHECK_UNAVAILABLE for anything that cannot be
+      compared, never a pass. Writes nothing.
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_get_externals_status
+    previousNames:
+      - imcp_portal.sdd_get_externals_status
+  - name: addMember
+    description: >-
+      Tool: create a member of the bound project at `source`, in the one members grammar:
+      `services/scheduler` (contained), `../admin` (a sibling checkout),
+      `git@host:acme/payments.git` (a git repository, pinned at its default branch head unless
+      `#<commit>` is given). By default a PART (stage 8): a piece of this project stored in another
+      folder or repository, whose subsystems are this project's own (local ids, the ordinary
+      subsystem rules, this project's lock); it gets only a specs folder, plus a configuration
+      naming this project when it is not contained. With `as: project` an independent PROJECT
+      instead: its project content is created — a project.yaml declaring the alias as its id, its
+      L0, and the bound project's required packs (composition.requirePolicies) once — and it is
+      reached only as `alias::name` through its L0 exports. What a member is follows from that
+      content. A git member is not scaffolded; the repository's content decides what it is.
+      Boundaries are earned: create a part unless the piece needs its own team, release, approval or
+      public surface; `sdd_promote_member` makes one later. The answer states what was created and
+      applied.
+    signature: 'addMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
+    returns: MemberCreation
+    params:
+      - name: alias
+        type: string
+        description: The member's alias ([a-z0-9-_]+); a project's new id
+      - name: source
+        type: string
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_add_member
+    previousNames:
+      - imcp_portal.sdd_add_member
+  - name: moveMember
+    description: >-
+      Tool: relocate a member's directory on disk and point its `members` entry there (a member
+      still declared in the legacy L1 form is moved into `members` first).
+    signature: 'moveMember(alias: string, newPath: string): void'
+    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The member's new root, relative to the bound project
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_move_member
+    previousNames:
+      - imcp_portal.sdd_move_member
+  - name: internalizeMember
+    description: >-
+      Tool: fold a member — every subsystem of it — back into the bound project, sending its own
+      metadata to the destination (its L0 vision to the `into` subsystem's description; its
+      requirements, boundaries and databases to the bound L0; its language, profile and depth onto
+      the moved subsystems; its members and externals to the bound project's; its packs adopted or
+      dropped as `packs` says) and re-pointing every other family project that consumed it at the
+      bound project. What has no home — its lock, pins, derived outputs — is listed as deleted.
+      All-or-nothing; dryRun answers the plan and writes nothing; run it first and show the plan.
+      Never locks.
+    signature: >-
+      internalizeMember(alias: string, into?: string, packs?: string, exports?: list<string>,
+      dryRun?: bool): FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: into
+        type: string
+        description: The home subsystem for the member's L0 vision; required when it holds several subsystems
+        optional: true
+      - name: packs
+        type: string
+        description: 'adopt | drop: packs only the member selects'
+        optional: true
+      - name: exports
+        type: list<string>
+        description: Extra public names of the member the bound project exports afterwards
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_internalize_member
+    previousNames:
+      - imcp_portal.sdd_internalize_member
+  - name: packImpact
+    description: >-
+      Tool: what selecting (or updating to) an installed pack would change on the bound project,
+      writing nothing — the pack's doctrine against wairon's defaults (rules loosened, raised,
+      turned off or added; profiles, stereotype fencing, edge licenses, patterns, guarantees and
+      language tables added, redefined or removed), which of its profiles would govern, and the
+      findings that change here. Nothing in it is a finding.
+    signature: 'packImpact(pack: string, version?: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: pack
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: An exact version; omitted, the latest installed
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_pack_impact
+    previousNames:
+      - imcp_portal.sdd_pack_impact
+  - name: attachMember
+    description: >-
+      Tool: make an existing project at the path a member of the bound project, keeping its L0,
+      subsystems, packs and lock (sdd_add_member scaffolds a new one instead). Refused when its id
+      collides with a family project's. All-or-nothing; dryRun answers the plan and writes nothing.
+      Never locks.
+    signature: >-
+      attachMember(alias: string, path: string, description?: string, dryRun?: bool):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The alias to declare
+      - name: path
+        type: string
+        description: The project's root, relative to the bound project
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_attach_member
+    previousNames:
+      - imcp_portal.sdd_attach_member
+  - name: renameProject
+    description: >-
+      Tool: move a project's id — the bound project's, or a member's named by its alias path — and
+      every reference to the old id across the family (aliases that were the id, their references
+      and re-exports, externals naming it, pins). The whole family must be in reach. Every project
+      it writes must be re-locked; the answer names them. All-or-nothing; dryRun answers the plan
+      and writes nothing; run it first and show the plan.
+    signature: 'renameProject(newId: string, project?: string, dryRun?: bool): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: newId
+        type: string
+        description: The new project id
+      - name: project
+        type: string
+        description: The member's alias path from the bound project; the bound project when omitted
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_project
+    previousNames:
+      - imcp_portal.sdd_rename_project
+  - name: renameMemberAlias
+    description: >-
+      Tool: rename one alias of the bound project (a member or an external) and respell the bound
+      project's references through it; nothing in any member or sibling changes. All-or-nothing;
+      dryRun answers the plan and writes nothing. Never locks.
+    signature: 'renameMemberAlias(alias: string, newAlias: string, dryRun?: bool): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The alias as declared now
+      - name: newAlias
+        type: string
+        description: The new alias
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_member_alias
+    previousNames:
+      - imcp_portal.sdd_rename_member_alias
+  - name: detachMember
+    description: >-
+      Tool: take a member out of the family; the bound project and every family consumer then reach
+      it as an external by path, pinned. No reference text changes. Refused (audience-too-narrow,
+      each export named with its users) while a family project uses an export the member gives the
+      family alone, unless widen is set: then exactly those used exports are widened to the instance
+      audience in the member's L0, each shown in the plan. All-or-nothing; dryRun answers the plan
+      and writes nothing. Never locks.
+    signature: 'detachMember(alias: string, widen?: bool, dryRun?: bool): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: widen
+        type: bool
+        description: Widen the used family-only exports to instance instead of refusing
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_detach_member
+    previousNames:
+      - imcp_portal.sdd_detach_member
+  - name: adoptMember
+    description: >-
+      Tool: make the bound project's external a member — sdd_detach_member's inverse. Locally the
+      external is found by a path inside the bound project; on a hosted instance it names a project
+      by source.hosted and path says where to adopt it (the hosting server relocates it there).
+      All-or-nothing; dryRun answers the plan and writes nothing. Never locks.
+    signature: 'adoptMember(alias: string, path?: string, dryRun?: bool): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: path
+        type: string
+        description: >-
+          Hosted: the member path to adopt a source.hosted external at, relative to the bound
+          project; a source.path external is adopted where it is
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_adopt_member
+    previousNames:
+      - imcp_portal.sdd_adopt_member
+  - name: promoteMember
+    description: >-
+      Tool: promote a part of the bound project to an independent project in place (stage 8) — its
+      files stay where they are; it gets an id, an L0 exporting exactly what the rest of the project
+      uses of it, its references across the new boundary respelled `alias::name`, the parent
+      declared as its external, and pins on both sides. Refused (each reason listed) for a part
+      fetched from git, a trusted link that would cross the new boundary, a used component its
+      subsystem does not publish, or an id already taken. All-or-nothing; dryRun answers the plan
+      and writes nothing — run it first and show the plan. Never locks: the answer names the project
+      to re-lock and the new one to lock.
+    signature: 'promoteMember(alias: string, id?: string, dryRun?: bool): FamilyMigrationReport'
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: 'The new project''s id (default: the alias)'
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_promote_member
+    previousNames:
+      - imcp_portal.sdd_promote_member
+  - name: demoteMember
+    description: >-
+      Tool: demote a project member of the bound project to a part in place (stage 8) —
+      sdd_promote_member's inverse: its files stay where they are; its own metadata goes to the
+      homes the destination names (as sdd_internalize_member sends it), its L0, lock and pins end,
+      its references across the old boundary become local ids, and its configuration is reduced to
+      naming its parent. Refused while another family project consumes it (a part has no exports —
+      each consumer listed), for a member fetched from git, or for internalize's reasons.
+      All-or-nothing; dryRun answers the plan and writes nothing — run it first and show the plan.
+      Never locks.
+    signature: >-
+      demoteMember(alias: string, destination?: InternalizeDestination, dryRun?: bool):
+      FamilyMigrationReport
+    returns: FamilyMigrationReport
+    params:
+      - name: alias
+        type: string
+        description: The project member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where its own metadata goes (its home subsystem, packs to adopt or drop)
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_demote_member
+    previousNames:
+      - imcp_portal.sdd_demote_member
+  - name: renameType
+    description: >-
+      Tool: rename a type and rewrite every type position, signatureFrom and export entry naming it;
+      the old id joins the type's rename trace (previousIds), and an export entry that derived its
+      public name from the old id keeps it through `as`. Refuses an id another type of the same
+      owner holds or retired. Reports the specs rewritten, the public names kept, the debt-register
+      edits, `publishedIn` (every public name a consumer reaches the type through: an exported type
+      that is or embeds it, an exported contract whose methods name one in their signature closure)
+      and `breaks`: the consumers in reach (family members included, and checkouts in the `search`
+      folders) whose specs reach one of those — a contract they depend on as a whole included —
+      narrowed to what carries the type, as sdd_rename_field and sdd_rename_param name theirs. With
+      dryRun it answers what the rename would do and writes nothing.
+    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
+    returns: TypeRename
+    params:
+      - name: id
+        type: string
+        description: The type to rename (qualified by its owning subsystem if needed)
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_type
+    previousNames:
+      - imcp_portal.sdd_rename_type
+  - name: addExternal
+    description: >-
+      Tool (scope: tree, a write): declare one external of the bound project in .wai/project.yaml —
+      the alias its specs will reference as `alias::name` and where the producer is, in the one
+      location grammar members use (a `#<commit>` on a git source fixes the ref the pin follows) —
+      then check it against the producer it reaches (the id it answers to, the `use` names it
+      exports) and pin it unless pin is false. Refusals are one sentence naming the accepted form.
+      Use it instead of editing .wai/project.yaml by hand.
+    signature: >-
+      addExternal(alias: string, source?: string, project?: string, ref?: string, dir?: string,
+      use?: list<string>, description?: string, pin?: bool, dryRun?: bool): ExternalAddition
+    returns: ExternalAddition
+    params:
+      - name: alias
+        type: string
+        description: >-
+          The alias specs will reference the producer by (`alias::name`): [a-z0-9-_]+, not already a
+          member or external
+      - name: source
+        type: string
+        description: >-
+          Where the producer is: `../sibling`, `hosted:<id>`, `<git url>` or `<git url>#<commit>`;
+          omit when the family provides it
+        optional: true
+      - name: project
+        type: string
+        description: The producer's project id when it differs from the alias
+        optional: true
+      - name: ref
+        type: string
+        description: 'git only: the branch, tag or full commit the pin follows'
+        optional: true
+      - name: dir
+        type: string
+        description: 'git only: the producer''s root inside the repository'
+        optional: true
+      - name: use
+        type: list<string>
+        description: Public names to import bare (`*` for all)
+        optional: true
+      - name: description
+        type: string
+        description: What the producer is to this project
+        optional: true
+      - name: pin
+        type: bool
+        description: Pin right after declaring (default true)
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what would be declared, writing nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_add_external
+    previousNames:
+      - imcp_portal.sdd_add_external
+  - name: getNetworkFlows
+    description: >-
+      Tool (scope: tree, a read): the allowed-flows matrix derived from the design. It lists who
+      reaches which Portal verb, over which transport and binding, through which networks and
+      gateway, on what evidence (a modelled call, or a declared entry); a flow the gate refuses
+      carries refusedBy with the findings and is never allowed. It is optionally filtered to the
+      flows into one project, Portal or verb. Only network transports produce flows. Writes nothing.
+    signature: 'getNetworkFlows(to: string?): list<NetworkFlow>'
+    returns: list<NetworkFlow>
+    params:
+      - name: to
+        type: string?
+        description: Keep only the flows into this project, project::portal or project::portal.verb
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_get_network_flows
+    previousNames:
+      - imcp_portal.sdd_get_network_flows
+  - name: explainFlow
+    description: >-
+      Tool (scope: tree, a read): why one party may reach another, from the design: each allowing
+      flow with its chain from the entry or modelled call through every gateway, or why not, said as
+      what it is — an unknown party name, a flow the gate refuses (with its findings), a
+      collaborator reached in-process (never a network flow), or that nothing allows it. Writes
+      nothing.
+    signature: 'explainFlow(from: string, to: string): FlowExplanation'
+    returns: FlowExplanation
+    params:
+      - name: from
+        type: string
+        description: A project, a project::component, or outside
+      - name: to
+        type: string
+        description: A project, a project::portal or a project::portal.verb
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_explain_flow
+    previousNames:
+      - imcp_portal.sdd_explain_flow
+  - name: setNetwork
+    description: >-
+      Tool (scope: tree, a write): declare (declared: true, with an optional description) or remove
+      (declared: false) the bound project's `network` in .wai/project.yaml: that this project and
+      every member below it form one isolated network boundary. It changes which rules fire
+      (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so run sdd_validate_tree after it; it is part of the
+      gate identity, so the human re-locks. Use it instead of editing .wai/project.yaml by hand.
+      Answers whether it wrote.
+    signature: 'setNetwork(declared: bool, description?: string?): bool'
+    returns: bool
+    params:
+      - name: declared
+        type: bool
+        description: true declares the network, false removes the declaration
+      - name: description
+        type: string?
+        description: >-
+          What the network encloses, in the project's words (shown on the network diagram); only
+          with declared
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_set_network
+  - name: removeExternal
+    description: >-
+      Tool (scope: tree, a write): remove one external of the bound project — its declaration in
+      .wai/project.yaml and its pin (lock entry and snapshot) together, so no orphaned pin is left;
+      an orphaned pin alone is removed too. A refusal is one sentence. Use it instead of editing
+      .wai/project.yaml by hand.
+    signature: 'removeExternal(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_remove_external
+  - name: updateExternal
+    description: >-
+      Tool (scope: tree, a write): add and remove `use` imports of one declared external, so the
+      project's specs may name the producer's public names bare (an `implements` of another
+      project's trait may then spell the producer's types as the producer does). An added name is
+      checked against what the producer exports to this project; refusals are one sentence naming
+      the closest exported names or the audience. Use it instead of editing .wai/project.yaml by
+      hand.
+    signature: >-
+      updateExternal(alias: string, addUse?: list<string>, removeUse?: list<string>, dryRun?: bool):
+      ExternalUseChange
+    returns: ExternalUseChange
+    params:
+      - name: alias
+        type: string
+        description: The declared external whose `use` changes
+      - name: addUse
+        type: list<string>
+        description: Public names to import bare (`*` for all)
+        optional: true
+      - name: removeUse
+        type: list<string>
+        description: Names to stop importing
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the resulting list, writing nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_update_external
+  - name: renameField
+    description: >-
+      Tool: rename a field of a type and respell every reference to it (a foreign key's `references:
+      <type>.<field>`); the old name joins the field's rename trace (previousNames), which the
+      design export shows as `formerly`. Refuses a name another field of the type holds or retired.
+      Reports the specs rewritten, the public names carrying the field (publishedIn) and, as
+      `breaks`, the consumers — family members included, plus checkouts in the searched folders —
+      whose specs reach one. With dryRun it answers all of that and writes nothing.
+    signature: >-
+      renameField(id: string, field: string, newName: string, dryRun?: bool, search?: list<string>):
+      FieldRename
+    returns: FieldRename
+    params:
+      - name: id
+        type: string
+        description: The type whose field is renamed (qualified by its owning subsystem if needed)
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_field
+  - name: renameParam
+    description: >-
+      Tool: rename a parameter of a contract method; the old name joins the parameter's rename trace
+      (previousNames), which the design export shows as `formerly`, each signature is re-derived and
+      an HTTP path placeholder that bound the parameter is respelled — on the method's own binding
+      and on every method whose signatureFrom takes its signature. Refuses a name another parameter
+      of the method holds or retired. Reports the interfaces it moved in, the placeholders
+      respelled, the public names publishing the method and, as `breaks`, the consumers — family
+      members included, plus checkouts in the searched folders — that call it. With dryRun it
+      answers all of that and writes nothing.
+    signature: >-
+      renameParam(id: string, method: string, param: string, newName: string, dryRun?: bool,
+      search?: list<string>): ParamRename
+    returns: ParamRename
+    params:
+      - name: id
+        type: string
+        description: The component whose contract method's parameter is renamed (namespaced if needed)
+      - name: method
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move, respell and break, and write nothing
+        optional: true
+      - name: search
+        type: list<string>
+        description: >-
+          Folders to scan for consumer checkouts outside the family, relative to the bound project
+          root or absolute
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_param
+  - name: listConsumers
+    description: >-
+      Tool (scope: tree, a read): who consumes the bound project — the producer's answer to "who
+      breaks if I change my surface": the family projects in reach that declare it, and with search
+      the project roots in the named folders that declare it by path or git (a sibling checkout).
+      Each with its alias, the names it uses and the names it still writes that are no longer
+      exported. A hosted request may not search folders.
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_list_consumers
+  - name: diffSurface
+    description: >-
+      Tool (scope: tree, a read): the bound project's public-surface changelog against its last
+      committed approval (or a named git revision, or a saved native snapshot): names and contract
+      methods added, removed, renamed (traced) and changed in signature — what release notes are
+      written from.
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_surface_diff
+  - name: renameSpec
+    description: >-
+      Tool: rename one contract (interface) or one implementation on its own — the ids a component
+      rename keeps when they are not derived from the component's (i<id>, <id>_impl) — and rewrite
+      every reference to it: an implementation's contract, an export entry's interface (a public
+      name derived from the old id is kept with `as`), lint allows and debt-register entries keyed
+      on it. The spec moves to its new id and file, its old id in its rename trace. Refuses, writing
+      nothing: another kind, a spec that does not exist or lives in another project, a new id
+      outside the grammar (an interface id begins with i), taken or retired. With dryRun it answers
+      what it would do and writes nothing.
+    signature: 'renameSpec(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_rename_spec
+  - name: moveSpec
+    description: >-
+      Tool: move a component or a type to another subsystem with everything that follows it — and,
+      with `together`, more specs of the same kind in the same call: a connected cluster whose edges
+      no single move could keep inside one subsystem, judged together and planned by one dry run. A
+      component takes the members it owns, its contracts and their implementations (their files move
+      to the new subsystem's folder); ids do not change, so references by id stay, and what names
+      the old subsystem follows — its export entries and lifecycle entrypoints for the moved
+      components, an L0 re-export from it. A type takes its file, its L1 export entries and every
+      reference qualified by the old subsystem, in either spelling (`old::type`, `old.type`) and
+      wherever it stands in a type expression; omit subsystem to make a type system-level. Gated: a
+      move that would create a forbidden doctrine edge or a cross-subsystem edge into a non-Portal
+      is refused with the rule's words — naming the collaborators to move `together` — and a curable
+      boundary finding is named as a notice. With dryRun it answers the plan and writes nothing.
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
+      list<string>): SpecMove
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
+      - name: together
+        type: list<string>
+        description: >-
+          More specs of the same kind that move with it to the same subsystem, judged with it as one
+          move
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:27.410Z'
+updatedAt: '2026-10-09T16:51:05.092Z'

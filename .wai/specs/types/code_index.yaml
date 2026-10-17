@@ -1,0 +1,170 @@
+kind: value-object
+id: code_index
+name: CodeIndex
+description: >-
+  The run's source-code model keyed for lookup: every path's analysis facts and the three anchor
+  tiers a realization check reads, derived once per run behind rule_context.codeIndex. Eight rules
+  each rebuilt this map for themselves, with subtly different shapes; this is the reconciled one.
+  The model holds one entry per canonical key, and were it to hold two the later one answers —
+  exactly as the keyed maps the rules built did.
+subsystem: sdd_validator
+fields:
+  - name: paths
+    type: set<string>
+    description: Every canonical path the model holds — the closed set an import specifier is resolved against
+    optional: false
+  - name: exactPaths
+    type: set<string>
+    description: >-
+      The paths analyzed at exact AST grade: the only files an import graph may accuse from, a
+      measured function be read in, or a module-scope binding be judged in
+    optional: false
+  - name: packages
+    type: map<string, string>
+    description: >-
+      The model's local-package map (code_model.packages, empty when it has none) — handed to every
+      import resolution the index and the rules make, so a specifier naming a package of this
+      repository resolves like a relative one
+    optional: false
+methods:
+  - name: factsAt
+    signature: 'factsAt(path: string): SourceFileFacts | undefined'
+    returns: SourceFileFacts?
+    description: >-
+      The analysis facts for a source path, by its canonical key; undefined when the run analyzed no
+      such path
+  - name: declarationsAt
+    signature: 'declarationsAt(path: string): Set<string>'
+    returns: set<string>
+    description: >-
+      Declaration-tier anchors of a file: its declaredNames together with its exportedNames — what
+      the declared conformance tier is satisfied by; empty for a path the run never analyzed
+  - name: anchorsAt
+    signature: 'anchorsAt(path: string): Set<string>'
+    returns: set<string>
+    description: >-
+      Anchored-tier anchors of a file: the declarations together with its anchoredNames — what the
+      anchored conformance tier is satisfied by
+  - name: findingAnchorsAt
+    signature: 'findingAnchorsAt(path: string): Set<string>'
+    returns: set<string>
+    description: >-
+      The weak anchors of a file alone — string literals and property-access names, without the
+      declarations — which is where a contract method's declared finding code must appear
+  - name: originOf
+    signature: 'originOf(site: CallSiteFact, from: string): Set<string>'
+    returns: set<string>
+    description: >-
+      The files the function a call site invokes IS written in, resolved against the closed path
+      set, or EMPTY when a pure model cannot say — which is an answer of its own and never a denial.
+      `from` is the file the site was read in, a carried site naming its own. Four shapes resolve: a
+      bare call on an import binding lands in the module that binding came from; a bare call on a
+      locally declared name lands in that file; a member call through a NAMESPACE import binding
+      lands in that module; a member call through a VALUE binding lands in that module only when the
+      module declares the invoked name too, since the property could otherwise have been attached
+      anywhere. Every landing is widened by the modules it republishes, so a call through a barrel
+      still lands where the function lives; a receiver that is not a plain identifier, a specifier
+      outside the closed set, a name with no binding at all, and any file below exact grade resolve
+      to nothing. This is the PROVEN tier, and the only one an accusation may be built on
+  - name: possibleOriginsOf
+    signature: 'possibleOriginsOf(site: CallSiteFact, from: string): Set<string>'
+    returns: set<string>
+    description: >-
+      Every file the function a call site invokes CAN have been written in: the proven origins,
+      widened for the six receivers the code writes down. A this.<field>.<method>() site widens by
+      the modules that declare the field's declared TYPE (its type-only or runtime import binding,
+      else this file when it declares that name); a new Class(...).<method>() site widens by the
+      module the CLASS NAME came from (its runtime import binding — a constructed class is a value,
+      never a type-only one — else this file when it declares that class); a plain <name>.<method>()
+      site widens by the modules that declare the type the file ANNOTATES that name with — a
+      parameter's annotation or an annotated variable declaration's, resolved exactly as a field's
+      declared type is; a receiver CHAIN (this.<field>.<property>....<method>() or
+      <name>.<property>....<method>()) widens by following each link through what the code declares
+      it to be — the root's field or annotated type, then each property's declared type on the shape
+      that declares it (source_file_facts.memberTypesOf, read in the module the shape's name leads
+      to) — and then by the modules that declare the last link's type; a fn(...).<method>() site
+      widens by the module that declares the type fn RETURNS (source_file_facts.returnTypes, read in
+      the file fn's own origin is, the type name resolved there) — but only where that module holds
+      a BODY under the invoked name, so an interface's signature never counts; and a this.<method>()
+      site inside a class's own method widens by this file when the class holds a body under the
+      invoked name. A declared type is read as the NAME the code writes: a member-preserving utility
+      (Pick, Omit, Partial, Required, Readonly) is read as the type it wraps, since its members are
+      that type's members by the language's own definition, and a type alias declared in the file
+      that names one type outright (source_file_facts.aliasTargetOf) is followed that ONE hop,
+      landing on both the alias's module and the named type's. A declared type that is an INTERFACE
+      is followed one step further, to every file declaring a named class whose `implements` clause
+      names that same declaration (source_file_facts.implementsClauses, each name resolved where the
+      class's file writes it) — the shared contracts file, where the interface lives apart from
+      every class that realizes it. Anything further — a union, an intersection, a mapped or
+      conditional type, a second alias — is never expanded. All are possibilities and not facts: a
+      declared type says what a collaborator is and never which class ships the body, a constructed
+      class says where the class was written and never where a method it INHERITS from a base was, a
+      subclass may override what this.<method>() reaches, and an annotated name is read per FILE, so
+      same-named bindings in different functions union their declared types. Empty for a field or a
+      name the file annotates with nothing, for a chain link nothing declares, for a function whose
+      return the code does not settle, and for a class name it cannot place, exactly as the proven
+      tier is. A widened answer may only ACCEPT a call as realized; naming a file a call landed in
+      stays the proven tier's word alone, since a possibility can never accuse
+  - name: forwardsOf
+    signature: 'forwardsOf(path: string, name: string, container?: string): list<ForwardedName>'
+    params:
+      - name: path
+        type: string
+      - name: name
+        type: string
+      - name: container
+        type: string
+        description: >-
+          The exported object the name is a property of — an anchor's exportedVia handle — so a
+          property alias of that object is followed
+        optional: true
+    returns: list<ForwardedName>
+    description: >-
+      What a name a file publishes IS, followed through every forwarding the code writes down: the
+      pair itself, then for each export-from that republishes the name — named or star, aliased or
+      not (`export { a as b } from 'm'` makes the file's `b` m's `a`) — the module it comes from
+      under the name that module publishes it by; for each export alias publishing it with no
+      specifier (`export { a as b }`, or with `container` a property `{ b: a }` of that exported
+      object) the file's own local name, and where that local name is a runtime, non-namespace
+      import binding, the module it came from under the name it was imported by — transitively. A
+      star forwards only a name its module actually exports, and never a default. An aliased
+      forwarding forwards exactly as an unaliased one does: the spelling differs, the identity does
+      not. Specifiers outside the closed path set (local packages resolving through the package
+      map), files below exact grade (which record no forwarding names) and cycles end the walk.
+      PROVEN: every pair is written down in the code
+  - name: holdsAny
+    signature: 'holdsAny(files: list<string>): bool'
+    params:
+      - name: files
+        type: list<string>
+        description: Source files as a spec names them (project-relative)
+    returns: bool
+    description: >-
+      Whether realization has BEGUN for whatever names these files: true when at least one of them
+      resolves to a file the run analyzed or could read (any status but missing or escaped). The one
+      definition every code rule shares — an implementation has begun when any file it names (its
+      sourcePath or a method's) exists, a type when its own file or a method's exists; a simPath
+      harness does not count, it follows the code it wires. Before that a named file is planned, not
+      missing. Pure: over the index's own facts.
+  - name: implementorsOf
+    signature: 'implementorsOf(path: string, typeName: string): set<string>'
+    params:
+      - name: path
+        type: string
+        description: The file that declares the type
+      - name: typeName
+        type: string
+        description: The name it declares the type under
+    returns: set<string>
+    description: >-
+      Every analyzed file declaring a named class whose `implements` clause names the type
+      `typeName` declared in `path` — each clause name followed to the module that declares it where
+      the class's own file writes it (its import binding's specifier, type-only or runtime, else
+      that file itself) under the name that module publishes. `path` need not be a file the run
+      analyzed: a shared contracts file no spec names is met by its module path (the source
+      extension and a trailing `/index` dropped), so the interface in it still leads to the classes
+      that realize it, wherever they live. A POSSIBILITY, never a proven origin, since another class
+      may implement the interface just as well. Exact grade only; pure over the index's own facts.
+sourcePath: src/core/rules/types.ts
+createdAt: '2026-09-18T00:21:08.829Z'
+updatedAt: '2026-10-07T10:52:55.447Z'

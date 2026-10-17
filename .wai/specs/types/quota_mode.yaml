@@ -1,0 +1,17 @@
+kind: enum
+id: quota_mode
+name: QuotaMode
+description: >-
+  How an exceeded quota limit is labelled in the usage report. The quota policy is advisory: neither
+  mode blocks or throttles anything, and the two differ only in the label. A configured block —
+  retired until enforcement exists — reads as observe, with a deprecation warning.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: observe
+    description: Each exceeded limit is reported as an observation (the default)
+  - name: warn
+    description: Each exceeded limit is reported as a warning
+createdAt: '2026-10-04T23:52:54.405Z'
+updatedAt: '2026-10-05T00:07:42.905Z'

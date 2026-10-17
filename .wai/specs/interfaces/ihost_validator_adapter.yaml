@@ -1,16 +1,91 @@
 id: ihost_validator_adapter
 name: Host Validator Client Adapter Interface
 description: >-
-  Contract for the as-complete conformance run the lock flow requires, forwarded to the validator
-  portal.
+  Contract for the validator runs the hosted flows require: the as-complete conformance run the lock
+  flow and the web graph require, which reads the bound project's rule severities and projectType
+  through the host core adapter before forwarding the run to the validator portal; and the gate
+  identity a lock records and a lock check compares.
 component: host_validator_adapter
 methods:
   - name: validateAsComplete
     description: >-
-      Run the conformance gate at full strictness (treating all specs as complete) and return the
-      result.
+      Run the conformance gate at full strictness (treating all specs as complete) under the bound
+      project's own rule severities and projectType, read through the host core adapter, and return
+      the result. A hosted project is judged by its own configuration, never the host's, so the
+      caller passes nothing; a root with no configuration is refused as uninitialized.
     signature: 'validateAsComplete(): ValidationResult'
     returns: ValidationResult
+    params: []
+  - name: computeGateStateId
+    description: >-
+      Forward to validator_portal.computeGateStateId: the gate identity a lock records and every
+      staleness check compares
+    signature: 'computeGateStateId(): StateId'
+    returns: StateId
+    params: []
+  - name: builtinProfileIds
+    description: >-
+      List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
+      forwarded to the validator portal — the built-in half of the selectable-profile catalog.
+    signature: 'builtinProfileIds(): list<string>'
+    returns: list<string>
+    params: []
+  - name: builtinProjectKinds
+    description: >-
+      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
+      — legal projectType values that are not architectural profiles and carry no profile doctrine
+      of their own, forwarded to the validator portal. The counterpart of builtinProfileIds: the
+      hosted profile-application path must recognize a project kind as resolvable-as-is (no
+      contributing pack to adopt) instead of refusing it as an unknown profile.
+    signature: 'builtinProjectKinds(): list<string>'
+    returns: list<string>
+    params: []
+  - name: measurePackImpact
+    description: >-
+      Forward to validator_portal.measurePackImpact with the hosted project's root bound: what one
+      pack write would change on it, writing nothing.
+    signature: 'measurePackImpact(candidate: PackCandidate): PackImpact'
+    returns: PackImpact
+    params:
+      - name: candidate
+        type: PackCandidate
+        description: The pack write to measure
+  - name: measurePackDoctrine
+    description: >-
+      Forward to validator_portal.measurePackDoctrine: one pack's changes against wairon's defaults,
+      with no project.
+    signature: 'measurePackDoctrine(manifest: ExtensionPack): PackDoctrine'
+    returns: PackDoctrine
+    params:
+      - name: manifest
+        type: ExtensionPack
+        description: The parsed pack manifest
+  - name: familyApprovals
+    description: >-
+      Forward to validator_portal.familyApprovals: the bound tree's pin tree (its own approval state
+      and each member's within `depth` levels, each at the member's own root). The hosted lock asks
+      with depth 1 for the direct members it records; the caller has already bound a root it is
+      entitled to reach.
+    signature: 'familyApprovals(depth?: int): list<ProjectApproval>'
+    returns: list<ProjectApproval>
+    params:
+      - name: depth
+        type: int
+        description: 'Member levels to include: 1 = direct members'
+        optional: true
+    guarantees:
+      - idempotent
+  - name: familyRelations
+    description: >-
+      Forward to validator_portal.familyRelations: the bound family's relation health for the web
+      canvas and share snapshots. The caller has already bound a root it is entitled to reach and
+      granted the request's reach (the caller's listed projects), so a producer or member outside it
+      is answered unavailable, never read.
+    signature: 'familyRelations(): list<ProjectRelations>'
+    returns: list<ProjectRelations>
+    params: []
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:19.428Z'
-updatedAt: '2026-07-04T13:06:22.848Z'
+updatedAt: '2026-10-04T10:28:25.347Z'

@@ -9,8 +9,8 @@ methods:
     description: >-
       Load the persisted instance identity from instance.json under the hosted data root and hold it
       as the authoritative in-memory record; resolves null when the instance has never been seeded.
-    signature: 'load(): InstanceIdentity | null'
-    returns: InstanceIdentity | null
+    signature: 'load(): InstanceIdentity?'
+    returns: InstanceIdentity?
     params: []
   - name: replace
     description: Swap the in-memory record to the supplied identity after the registry has persisted it.
@@ -21,4 +21,4 @@ methods:
         type: InstanceIdentity
 status: complete
 createdAt: '2026-07-16T00:24:07.724Z'
-updatedAt: '2026-07-16T07:27:54.555Z'
+updatedAt: '2026-10-04T10:18:56.911Z'

@@ -1,0 +1,688 @@
+id: iintegrity_rules
+name: Integrity Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether the
+  spec tree holds together: references, the namespace grammar, the project's identity, the writer
+  round-trip, published surfaces, export tables and lint allows.
+component: integrity_rules
+methods:
+  - name: hierarchyIntegrity
+    description: >-
+      Rule hierarchy-integrity. Every subsystem references the system, every component an existing
+      subsystem, every interface an existing component, and every implementation an existing
+      interface contract. Draft/design specs are reported informationally.
+    signature: 'hierarchyIntegrity(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DRAFT_SUBSYSTEM_WARNING
+        severity: warning
+        summary: Subsystem is in draft/design status
+      - code: DRAFT_COMPONENT_WARNING
+        severity: warning
+        summary: Component is in draft/design status
+      - code: ORPHANED_SUBSYSTEM
+        severity: warning
+        summary: Subsystem does not reference the L0 system
+      - code: INVALID_SUBSYSTEM_REFERENCE
+        severity: error
+        summary: Reference to a non-existent subsystem
+      - code: INVALID_COMPONENT_REFERENCE
+        severity: error
+        summary: Interface references a non-existent component
+      - code: INVALID_INTERFACE_REFERENCE
+        severity: error
+        summary: Implementation references a non-existent interface contract
+  - name: reservedIdSegments
+    description: >-
+      Rule reserved-id-segments. No segment of a spec id may be the reserved namespace keyword
+      "super" — the :: grammar consumes it as a namespace hop, so a stored reference to such an id
+      resolves to a different spec.
+    signature: 'reservedIdSegments(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: RESERVED_ID_SEGMENT
+        severity: error
+        summary: Id uses the reserved namespace keyword "super"
+  - name: roundtripSerialization
+    description: >-
+      Rule roundtrip-serialization. Every loaded spec must re-serialize through the exact writer
+      pipeline (same relativization, same schema, no I/O) — validate must predict every refusal that
+      lock's status promotion or any later save would otherwise raise mid-write.
+    signature: 'roundtripSerialization(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ROUNDTRIP_SERIALIZATION
+        severity: error
+        summary: Spec cannot be re-serialized through the writer schema (any save or lock would refuse it)
+  - name: typeDeclarations
+    description: >-
+      Rule type-declarations. A type owned by a subsystem must reference an existing one, and a type
+      declaring neither fields nor methods (nor, for an enum, values, nor, for a signature type,
+      returns, nor, for a named scalar, the primitive it holds) is a placeholder that can inform
+      neither implementers nor the ERD.
+    signature: 'typeDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVALID_SUBSYSTEM_REFERENCE
+        severity: error
+        summary: Type references a non-existent owning subsystem
+      - code: HOLLOW_TYPE
+        severity: warning
+        summary: >-
+          Type declares no fields and no methods — a placeholder that informs neither implementers
+          nor the ERD
+  - name: fieldTypeReferences
+    description: >-
+      Rule field-type-references. Every type identifier a type field's declared type names must
+      resolve to a builtin or a defined entity/value-object type — the type's own generic parameters
+      are not field references.
+    signature: 'fieldTypeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDEFINED_TYPE_REFERENCE
+        severity: error
+        summary: Reference to a type that is not defined anywhere
+  - name: signatureTypeReferences
+    description: >-
+      Rule signature-type-references. Every type identifier a method signature names must resolve to
+      a builtin, a generic parameter in scope on the interface or the method, or a defined type: an
+      interface method's params and returns, a type method's params when it has them, and a
+      signature type's params and returns. A method that takes its signature from a source is
+      skipped — its params are its source's, judged once where the source declares them.
+    signature: 'signatureTypeReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNDEFINED_TYPE_REFERENCE
+        severity: error
+        summary: Reference to a type that is not defined anywhere
+  - name: publicSurfaceBinding
+    description: >-
+      Rule public-surface-binding. Every declared publicInterface names a backing component, that
+      component exists, and the subsystem owns it — a subsystem may only publish its own components.
+    signature: 'publicSurfaceBinding(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_UNBOUND
+        severity: error
+        summary: Public interface with no backing component
+      - code: PUBLIC_INTERFACE_INVALID_COMPONENT
+        severity: error
+        summary: Public interface references a non-existent component
+      - code: PUBLIC_INTERFACE_FOREIGN_COMPONENT
+        severity: error
+        summary: Subsystem publishing a component it does not own
+  - name: publicSurfaceBoundContract
+    description: >-
+      Rule public-surface-bound-contract. A publicInterface entry that binds an L3 interface must
+      bind one that exists and that belongs to the component the entry publishes.
+    signature: 'publicSurfaceBoundContract(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_INVALID_INTERFACE
+        severity: error
+        summary: Bound L3 interface missing or belonging to another component
+  - name: lintAllows
+    description: >-
+      Rule lint-allows. Per-spec lint suppressions (lint.allow) must name real issue codes and
+      actually suppress a finding — unknown codes and stale allows are flagged. An allow covers
+      exactly the occurrence it names: a finding that reports a site is silenced only by an allow
+      whose `at` is that site, a finding that reports none only by an allow that names none, and an
+      aggregating finding only by an allow whose `covers` lists every unit it reports — a unit
+      nobody listed is named back as new instead of inheriting a decision taken about its
+      neighbours. So a coarse allow left on a rule that names sites, and an allow whose site the run
+      no longer reports, are both UNUSED_LINT_ALLOW, and the finding names the sites that did fire.
+      Allows silence warnings and notices; errors always surface — so an allow naming a code that is
+      an error on its spec (it fired there as one, or its resolved severity is error) covers
+      nothing, and the finding says plainly that an error cannot be allowed rather than that the
+      code never fired. A code the family run judges over every member (network_arbiter.familyCodes,
+      ENTRY_UNPROVEN among them) is a known code on any spec, and an allow of one this gate saw no
+      finding of is the family run's to judge stale, not this gate's.
+    signature: 'lintAllows(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_LINT_ALLOW_CODE
+        severity: warning
+        summary: lint.allow names an issue code no registered rule emits
+      - code: UNUSED_LINT_ALLOW
+        severity: warning
+        summary: >-
+          lint.allow entry covers nothing this run — the code never fired, it fired at sites this
+          allow does not name, or it is an error, which no allow can cover
+  - name: publicSurfaceConsumers
+    description: >-
+      Rule public-surface-consumers. Every subsystem a published surface names as its consumer must
+      exist in the tree. A consumers list restricts who may depend on the surface, so an id that
+      names nothing locks the surface against a caller nobody can be — and a typo there silently
+      locks out the caller that was meant, which the boundary rule would then report against the
+      wrong party.
+    signature: 'publicSurfaceConsumers(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_UNKNOWN_CONSUMER
+        severity: error
+        summary: A published surface names as its consumer a subsystem the tree does not have
+  - name: projectIdentity
+    description: >-
+      Rule project-identity. The bound project is keyed on its id, so the id must be declared,
+      well-formed, stable and its own: a project that declares none answers to its display name
+      slugified until it writes one (PROJECT_ID_DEFAULTED), a project whose name yields no id or
+      whose declared id breaks the grammar has nothing reliable to key on (PROJECT_ID_AMBIGUOUS), an
+      id the rename migration moved from the one the lock approved is owed a re-lock and nothing
+      more (PROJECT_ID_RENAMED: the approved id is one of the configuration's previousIds), and any
+      other id that differs from the one the lock approved has moved under everything that keyed on
+      it (PROJECT_ID_CHANGED). It judges the bound project's own identity only. The family half — a
+      member with a defaulted id (named with its alias as the id to declare), a member with no id,
+      and two members resolving to one id — is a family check (family_validator.checkMembers), which
+      reads the family root's graph.
+    signature: 'projectIdentity(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PROJECT_ID_AMBIGUOUS
+        severity: warning
+        summary: 'Project has no usable id: its name yields no slug, or its declared id breaks the grammar'
+      - code: PROJECT_ID_CHANGED
+        severity: error
+        summary: Project id differs from the id the lock approved
+      - code: PROJECT_ID_DEFAULTED
+        severity: notice
+        summary: Project declares no id; it answers to one derived from its display name
+      - code: PROJECT_ID_RENAMED
+        severity: notice
+        summary: Project id was renamed from the id the lock approved; re-lock to approve the new id
+  - name: exportTables
+    description: >-
+      Rule export-tables. Every level's export table must resolve the way a module resolver resolves
+      `export … from`. One public name binds one target: EXPORT_ID_DUPLICATE when two wildcards (or
+      two explicit entries) bind a name to different targets, or two public names share one nameKey,
+      since a bare import could not tell them apart; the name is left out. No chain leads back to
+      itself: EXPORT_CYCLE, an error for a named chain that never reaches a component or type, a
+      warning for a wildcard cycle, which resolves to its union. Every entry names a source and an
+      item that exist, that the source exports and, for an own type, that the level owns (a
+      subsystem-owned type at L1, a project-level type with no subsystem for an L0 `{ typeDef }`
+      without `from`), under a public name of [a-z0-9-_]+, and an L0 wildcard re-export reaches at
+      least one name — a subsystem or project that exports nothing publishes nothing through it
+      (EXPORT_INVALID) — a named re-export whose source renamed the item names the new name. Every
+      exported component can serve what its role promises (EXPORT_UNCONSUMABLE, at L0 and for L1
+      re-exports): an entry consumers call must be a Portal (a gateway being a Portal variant) or an
+      Observer for events, and an entry consumers implement (role implement, an extension point) may
+      also be an Adapter whose realization consumers supply. An L0 entry that re-exports a member's
+      or an external's export never declares a wider audience than that export has
+      (EXPORT_WIDENS_AUDIENCE): a re-export can narrow reach, never widen it. An own L0 entry
+      exported to `department` is a notice (EXPORT_AUDIENCE_NARROW): outside a hosted instance only
+      the project's family sees it, and a sibling checkout or git consumer — read at `instance` — is
+      refused; whether its consumers are hosted cannot be told from the tree, so it never fails the
+      gate. An entry's export kind is derived from its backing Portal's transport and no longer
+      authored, so no rule compares an authored kind with the stereotype; the retired
+      public-surface-declared-type rule and its codes are gone. The rule judges the facts the export
+      resolver recorded in the scan, for the bound root's table and every contained member's, and
+      resolves nothing itself.
+    signature: 'exportTables(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXPORT_ID_DUPLICATE
+        severity: error
+        summary: >-
+          One public name bound to different targets by two wildcard re-exports or two explicit
+          entries
+      - code: EXPORT_CYCLE
+        severity: error
+        summary: >-
+          A re-export chain leads back to itself (a warning for a wildcard cycle, which resolves to
+          its union)
+      - code: EXPORT_INVALID
+        severity: error
+        summary: >-
+          An export entry names a missing source or item, an item its source does not export or its
+          level does not own, or a malformed public name
+      - code: EXPORT_UNCONSUMABLE
+        severity: error
+        summary: >-
+          An exported component that cannot serve its role: called but neither a Portal nor an
+          Observer, or implemented but neither a Portal nor an Adapter
+      - code: EXPORT_WIDENS_AUDIENCE
+        severity: error
+        summary: An L0 entry declares a wider audience than the member or external export it re-exports
+      - code: EXPORT_AUDIENCE_NARROW
+        severity: notice
+        summary: >-
+          An L0 entry is exported to `department`: outside a hosted instance only this project's
+          family sees it, and a path or git consumer is refused
+  - name: referenceForms
+    description: >-
+      Rule reference-forms. A cross-project reference is `alias::name` (or a bare name a `use`
+      imports): the alias is one of the referring project's members or externals, the name a public
+      name of that project's L0 table. The older forms still bind for one release and are reported
+      (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the
+      text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading
+      `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the
+      containing projects — a place in one family, not a name; a member path (`desktop::shell`
+      written inside desktop, `app_core::engine::x` written inside engine), a first segment the
+      referring project does not declare, read from the bound root; and a self-prefix — the
+      referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel`
+      inside registry), which `wairon doctor --fix` rewrites to the bare local id. Wairon's own
+      writer emits none of them. A form with no rewrite (its target is out of reach) is reported
+      with the reason. It reads the project graph's authored references, which the scan records
+      before binding erases the form.
+    signature: 'referenceForms(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPRECATED_REFERENCE_FORM
+        severity: notice
+        summary: >-
+          A reference written with a leading ::, super:: or a member path where a local id or
+          alias::name belongs
+  - name: externalDeclarations
+    description: >-
+      Rule external-declarations. Every external a project declares in project.yaml must be usable:
+      its alias fits [a-z0-9-_]+ (a dotted producer id needs an explicit alias) and is not also a
+      `members` key (one alias names one project), its producer id fits the project-id grammar, and
+      it has something to be judged against — a project of the scan answers to the id, source.path
+      names a directory (whose project, when it is in the scan, answers to the declared id), or the
+      project holds a pin for the alias. A declaration that fails is reported (EXTERNAL_UNRESOLVED)
+      with its reason, so a misspelled declaration never passes as declared. A member validated from
+      its own root that declares its parent or a sibling is not reported when it has pinned it: the
+      pin is what its gate judges against, and nothing is climbed to find the producer. Every name
+      an external's or a member's `use` lists by name must be a public name the producer exports to
+      this project — a contained member's live L0 table, an external's pin — compared by nameKey
+      (IMPORT_UNRESOLVED, naming the closest public names; a `use` on an unpinned external is left
+      to the pin's own EXTERNAL_CHECK_UNAVAILABLE), and must not share its nameKey with a spec of
+      the project itself (IMPORT_SHADOWED_BY_LOCAL: the local spec wins every bare reference, so the
+      named import can never take effect and says something false — rename one or drop the import).
+      A `*` import shadowed by locals is silent, as a glob import is in Rust. One code, one meaning:
+      IMPORT_UNRESOLVED is only a name the producer does not export, IMPORT_SHADOWED_BY_LOCAL only a
+      named import a local spec hides. A malformed `use` entry is the declaration's problem
+      (EXTERNAL_UNRESOLVED for an external, the member's for a member). The findings name no spec:
+      externals and members live in configuration. It reads the bound root's node of the project
+      graph, its alias-conflict problems, the members' export tables, the project's own spec ids and
+      ctx.pinnedExternals.
+    signature: 'externalDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: EXTERNAL_UNRESOLVED
+        severity: notice
+        summary: >-
+          A declared external whose alias is malformed or taken by a member, whose producer id is
+          malformed, or whose producer the family and its source.path do not provide
+      - code: IMPORT_UNRESOLVED
+        severity: error
+        summary: A `use` entry names a public name its producer does not export to this project
+      - code: IMPORT_SHADOWED_BY_LOCAL
+        severity: error
+        summary: >-
+          A named `use` import shares its name with a spec of the importing project, so the local
+          spec always wins and the import never takes effect
+  - name: localIds
+    description: >-
+      Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
+      local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the
+      loader kept, every reference to that key — local, or `alias::name` from another project —
+      could mean either, so the tree has no single reading. A local id equal to one of the project's
+      aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them
+      apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside
+      `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made
+      visible. It reads the project graph's owners, alias tables and duplicate-spec problems.
+    signature: 'localIds(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_SPEC_ID
+        severity: error
+        summary: Two spec files of one project declare the same id
+      - code: LOCAL_ID_SHADOWS_PROJECT
+        severity: warning
+        summary: >-
+          A local spec id equals one of the project's aliases (a member or external), so a bare id
+          and the alias read alike
+  - name: memberDeclarations
+    description: >-
+      Rule member-declarations. A project declares its members in project.yaml `members`, each by
+      one source in one grammar. A deprecated declaration form loads for one release and is reported
+      (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying projectPath — naming the
+      mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
+      --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
+      reported as ignored; and the deprecated long-form `path` key, naming the `source` (or
+      shorthand) `doctor --fix` rewrites it to. It also judges what each member of the bound project
+      IS against what is declared or written about it, from the scan's problems at the bound root (a
+      member's own members are that member's gate's): what a member is follows from its content — an
+      id, an L0 or a lock make it a project, anything else a part — and every contradiction is ONE
+      finding, MEMBER_KIND_MISMATCH (error), naming the alias and the contradiction: an asserted
+      `as` the content contradicts; a part whose configuration declares project fields (members,
+      externals, rules, extensions, composition, targets) without the id that would make it a
+      project (add the id, or move them to the parent); a non-contained part with no PartOf, or one
+      naming another project (opened alone it could not say what it belongs to); a contained member
+      declaring PartOf; a `use` on a member whose content is a part (its names are already this
+      project's own). A part whose files could not be read — its directory absent, or its git commit
+      not cached and not fetchable (offline, refused, unknown) — is PART_UNAVAILABLE (error): the
+      project's own subsystems are missing, so its verdict cannot be a pass. The member findings
+      name no spec: members live in configuration. It reads the project graph's nodes, their legacy
+      mounts, the bound root's declared members and its problems.
+    signature: 'memberDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DEPRECATED_MOUNT_FORM
+        severity: notice
+        summary: >-
+          A member declared in a deprecated form — an L1 subsystem carrying projectPath, or the
+          long-form `path` key — which doctor --fix rewrites to a `members` entry with one `source`.
+      - code: MEMBER_KIND_MISMATCH
+        severity: error
+        summary: >-
+          What a member's content makes it (an id, L0 or lock: a project; else a part) contradicts
+          what is declared or written about it: an asserted `as`, project fields in a part, a
+          missing or wrong PartOf, a `use` on a part.
+      - code: PART_UNAVAILABLE
+        severity: error
+        summary: >-
+          A part's files could not be read (absent directory, unpinned or unfetchable git commit):
+          the project's own subsystems are missing.
+  - name: signatureSources
+    description: >-
+      Rule signature-sources. Judges every signatureFrom the loader met, from ctx.signatureFacts
+      (the loaded specs are already resolved). The value is read both ways, as a contract method and
+      as a signature type: neither resolving — or only a type that is an entity or value-object — is
+      unresolved; both resolving is ambiguous, and the finding names both candidates and asks the
+      author to qualify the reference; a source that itself names a signatureFrom is a chain, which
+      is never followed (when that source's own source is a signature type, the finding names it as
+      the one to take directly); a method source in the method's own project whose component the
+      method's component does not name in dependsOn or owns is off the design's edges — another
+      project's export (`alias::name.method`) is licensed by the declared relation to that project,
+      an external or a member alike; a stored method that names a source and also states params or
+      returns that differ from the source's restates it, and the source's are in force. Every
+      finding sits at the method.
+    signature: 'signatureSources(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_SOURCE_UNRESOLVED
+        severity: error
+        summary: A method's signatureFrom names no contract method and no signature type
+      - code: SIGNATURE_SOURCE_CHAINED
+        severity: error
+        summary: A method's signature source takes its own signature from a source; sources do not chain
+      - code: SIGNATURE_SOURCE_OFF_EDGE
+        severity: error
+        summary: >-
+          A method takes its signature from a method of a component its own component neither
+          dependsOn nor owns
+      - code: SIGNATURE_SOURCE_RESTATED
+        severity: error
+        summary: >-
+          A method names a signature source and also states params or returns that differ from the
+          source's
+      - code: SIGNATURE_SOURCE_AMBIGUOUS
+        severity: error
+        summary: >-
+          A method's signatureFrom resolves both as a contract method and as a signature type;
+          qualify it
+  - name: signatureText
+    description: >-
+      Rule signature-text. A stored signature text that differs from the text its method's params
+      derive is stale: every reader is shown the derived text, but the file says something else, and
+      a file read on its own (a diff, a review, a lock approval) is misled. Reported per method,
+      from ctx.signatureFacts, for contract and type methods alike; `wairon doctor --fix`
+      regenerates the stored text, and any save of the spec writes the derived text too.
+    signature: 'signatureText(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_TEXT_STALE
+        severity: warning
+        summary: >-
+          A stored signature text differs from the text its params derive; doctor --fix regenerates
+          it
+  - name: signatureTypes
+    description: >-
+      Rule signature-types. A type of kind signature is a named function type and carries params and
+      one returns, nothing else: fields, methods, invariants, componentClass, database, table or
+      linkedEntity on it — or a returns missing from it — are reported; so are params or returns on
+      an entity or a value-object, where they mean nothing.
+    signature: 'signatureTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_TYPE_MEMBERS
+        severity: error
+        summary: >-
+          A signature type carries a member other than params and returns, or lacks returns; or a
+          data type carries params or returns
+  - name: typeExpressions
+    description: >-
+      Rule type-expressions. Reports what the scan's type canonicalisation recorded
+      (ctx.typeSpellingFacts), one finding per position, located by spec and path: a stored text
+      that does not parse (TYPE_EXPRESSION_INVALID); one that breaks a position rule — void, async
+      or result out of place, a map key that is not string, int or an enum, a named scalar's holds
+      that is not one primitive other than void and any, `T??` (TYPE_POSITION_INVALID); one using a
+      form the grammar leaves out — an inline object shape, an inline function type, a
+      string-literal union, a union mixing in a primitive or a collection, an intersection, a
+      utility type or a tuple (TYPE_FORM_UNSUPPORTED); one naming `number` or a legacy builtin with
+      no neutral meaning (TYPE_NOT_NEUTRAL); and one that is an alias of its canonical spelling
+      (TYPE_SPELLING_STALE, which any save or doctor --fix repairs). Every message names the
+      replacement: `number` asks "int or float?" (and says when the doctor repair proposes int), a
+      function type names a signature type, a literal union an enum (which the doctor repair
+      proposes), an inline object or a mixed union a named value-object. The writer refuses all but
+      the stale spelling at write time; on load every one of them is a warning — these findings are
+      how a tree that held them before the grammar existed is told, while it still loads, stays
+      lockable with its debt in view, and its consumers read the position as opaque any, which never
+      invents a shape. No finding when the run carries no facts (a candidate run).
+    signature: 'typeExpressions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TYPE_EXPRESSION_INVALID
+        severity: warning
+        summary: A structured type position does not parse under the type grammar
+      - code: TYPE_POSITION_INVALID
+        severity: warning
+        summary: >-
+          A type position breaks a position rule: void, async or result out of place, a non-scalar
+          map key, or T??
+      - code: TYPE_FORM_UNSUPPORTED
+        severity: warning
+        summary: >-
+          A type position uses a form the grammar leaves out — inline object, inline function type,
+          string-literal union, union mixing in a primitive or collection, intersection, utility
+          type or tuple — and the message names its named replacement
+      - code: TYPE_NOT_NEUTRAL
+        severity: warning
+        summary: >-
+          A type position names number (int or float?) or a legacy builtin with no neutral meaning,
+          and the message names the replacement
+      - code: TYPE_SPELLING_STALE
+        severity: warning
+        summary: >-
+          A stored type position is an alias of its canonical spelling; any save or doctor --fix
+          rewrites it
+  - name: enumTypes
+    description: >-
+      Rule enum-types. An enum is a closed, ordered set of named values with optional pure methods,
+      nothing else: an enum without values, with two values equal by reference_resolution.nameKey
+      (every language derives one identifier from both), or carrying fields, params, returns,
+      invariants, componentClass, database, table or linkedEntity is reported; so are values on a
+      type of any other kind, where they mean nothing.
+    signature: 'enumTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ENUM_MEMBERS
+        severity: error
+        summary: >-
+          An enum has no values, two values equal by nameKey, or a member it cannot carry; or a type
+          of another kind carries values
+  - name: namedScalarTypes
+    description: >-
+      Rule named-scalar-types. A named scalar is a value-object that declares `holds: <primitive>`
+      in place of fields — a newtype or type alias in every language. It models its value and
+      nothing else beside its pure methods and invariants: holds beside fields, componentClass,
+      database, table or linkedEntity is reported, and so is holds on an entity, an enum or a
+      signature type, where it means nothing. Whether holds names one of the primitives is the
+      type-expressions rule's question (TYPE_POSITION_INVALID on the holds position), never a second
+      voice here. Mirrors enum-types and signature-types: judged at validate time, on the type's own
+      fields.
+    signature: 'namedScalarTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: NAMED_SCALAR_MEMBERS
+        severity: error
+        summary: >-
+          A named scalar (a value-object holding a primitive) carries fields or a member it cannot
+          carry; or a type of another kind declares holds
+  - name: renameTraces
+    description: >-
+      Rule rename-traces. A rename trace (a spec's previousIds, a contract method's previousNames)
+      names keys that no longer exist, and is what lets a consumer of the design export tell a
+      rename from a delete plus an add; it must therefore be unambiguous. Reported: a trace entry
+      equal to a live key of the same kind (a component, interface or implementation id; a type id
+      within the same owner; `<interface>.<method>` of a declared method) — its holder's own current
+      key included, which a trace of former names can never hold — and one former key claimed by two
+      elements of the same kind. The rename tools and the gated write refuse both (id-retired,
+      name-retired), so a finding means a hand edit; the message names both holders and the way out
+      — rename the newcomer, or unset the trace entry and accept the delete plus an add a consumer
+      will read.
+    signature: 'renameTraces(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: RENAME_TRACE_CONFLICT
+        severity: warning
+        summary: >-
+          A rename-trace entry equals a live key of the same kind, or two elements claim one former
+          key
+  - name: implementsContracts
+    description: >-
+      Rule implements-contracts. An interface that declares `implements: alias::name` realizes
+      another project's extension point, so it must declare every method of that contract with the
+      same params and returns, read from the export the reference resolves to (a contained member's
+      live table, or a declared external's pin). Types are compared semantically, never by spelling:
+      the producer's own bare name and the consumer's `alias::name` (or the bare name its `use`
+      imports) are one type. Whether the reference resolves and names an entry exported with role
+      implement is project-boundaries' finding (EXTERNAL_NOT_EXPORTED); this rule judges the shape
+      once it resolves. Extra methods are the implementer's own and are not reported.
+    signature: 'implementsContracts(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: IMPLEMENTS_MISMATCH
+        severity: error
+        summary: >-
+          An interface implementing an extension point lacks one of its methods, or declares one
+          with different params or returns
+  - name: memberNames
+    description: >-
+      Rule member-names. The names inside a spec — a contract's methods and each method's
+      parameters, a type's fields and methods and each type method's parameters — must be unique
+      where they live (DUPLICATE_MEMBER_NAME: two methods of one contract, two parameters of one
+      method, two fields of one type; a loaded spec otherwise binds one of them at random wherever a
+      name is looked up), and never a word the spec's effective target language reserves for that
+      kind of identifier (RESERVED_IDENTIFIER, identifier.reservedIn: TypeScript and JavaScript
+      forbid a keyword as a parameter and constructor as a method, Rust its keywords everywhere, and
+      so on per language), because the implementation the brief asks for could not be written. The
+      message names the language and offers an alternative.
+    signature: 'memberNames(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_MEMBER_NAME
+        severity: error
+        summary: >-
+          Two methods of one contract or type, two parameters of one method, or two fields of one
+          type share a name
+      - code: RESERVED_IDENTIFIER
+        severity: error
+        summary: >-
+          A method, parameter or field name is a word the target language reserves for that kind of
+          identifier
+status: complete
+createdAt: '2026-09-14T06:05:51.190Z'
+updatedAt: '2026-10-08T18:55:08.682Z'

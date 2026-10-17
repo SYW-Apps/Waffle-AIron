@@ -5,7 +5,7 @@ description: >-
   root. publish forwards the SCOPED subpath (default .wai/) so staging never touches a shared
   repository's own code.
 contract: ihost_git_adapter
-sourcePath: src/server/adapters.ts
+sourcePath: src/server/adapters/git.ts
 methods:
   - name: enable
     narrative:
@@ -51,4 +51,4 @@ methods:
         targetMethod: configureSync
 status: complete
 createdAt: '2026-07-04T16:33:53.912Z'
-updatedAt: '2026-07-16T15:22:36.592Z'
+updatedAt: '2026-09-25T20:49:32.791Z'

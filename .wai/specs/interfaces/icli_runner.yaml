@@ -4,102 +4,168 @@ description: Interface contract for handling command line inputs and executing C
 component: cli_runner
 methods:
   - name: runInit
-    description: Initializes a new wairon workspace and exports static skills
+    description: >-
+      Initializes a new wairon workspace and exports static skills. Writes NO agent files:
+      component-implementer generation (generateComponentImplementers) and owner-file
+      materialization (materializeAgentFiles) both default OFF — per-subsystem agents are served as
+      live MCP briefs, and the injected guides + skills are the only per-tool artifacts.
     signature: 'runInit(options: { yes?: boolean }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runGenerate
-    description: Generates output configs/agents based on spec topology
+    description: >-
+      Reconciles THIS project's generated outputs to the configured state — and only this project's:
+      there is no cascade into members (stage 5). `--family` walks the members explicitly,
+      generating each member's own layer in its own root (bootstrapping a member that is not yet
+      runnable, non-destructively); without it nothing below the project is written. `--no-recurse`
+      is accepted for one release as the default it now is. Agent-file materialization is OPT-IN via
+      rules.materializeAgentFiles (default off): when ON, generates per-subsystem owner/architect
+      files rendered through the SAME live brief composition (so file, tool, and resource surfaces
+      are one text) and prunes stale managed files against the FULL resolved topology; when OFF (the
+      default), the desired state is ZERO agent files — any leftover wairon:managed agent files are
+      removed once, and only guides and skills are (re)injected. Hand-authored files and
+      .wai/agents/ guidance files are never touched either way. Generate writes nothing outside the
+      project root unless asked: a target whose output directory resolves outside it is named and
+      skipped, both write and prune, until `--global` is given — and then every file there it
+      replaces or prunes is first backed up beside itself. The derived context documents are kept
+      current whenever the project keeps a context directory, exactly as `doctor --fix` keeps them.
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
-      dryRun?: boolean }): Promise<void>
-    returns: Promise<void>
+      dryRun?: boolean; family?: boolean; global?: boolean }): Promise<void>
+    returns: async void
   - name: runValidate
-    description: Runs architectural validations on project configs and spec trees
-    signature: 'runValidate(options: { ci?: boolean }): Promise<void>'
-    returns: Promise<void>
+    description: >-
+      `wairon validate`: the registry, project-config and spec-tree checks. At a project that
+      declares members the spec-tree check is the family run (every project's own gate verbatim, the
+      composition of each project's externals and the family checks) unless --no-recursive asks for
+      the owner's gate alone; at any other project it is the owner's gate unless --family asks for
+      the family run, which composes its externals against their live producers within reach.
+    signature: >-
+      runValidate(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?: boolean
+      }): Promise<void>
+    returns: async void
   - name: runList
     description: Lists all dynamically resolved agents
     signature: 'runList(): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runShow
     description: Shows details for a single dynamically resolved agent
     signature: 'runShow(id: string): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runUpdate
     description: Checks for updates or performs self-updates
     signature: 'runUpdate(options: { check?: boolean; channel?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runHostProject
     description: >-
       Admin project lifecycle against the hosting control plane (create | list | destroy), reading
       the master credential from the environment.
-    signature: 'runHostProject(action: string, options: object): Promise<void>'
-    returns: Promise<void>
+    signature: >-
+      runHostProject(action: string, options: { id?: string; unit?: string; dataDir?: string }):
+      Promise<void>
+    returns: async void
   - name: runHostKey
     description: Admin API-key lifecycle against the hosting control plane (mint | revoke | list).
-    signature: 'runHostKey(action: string, options: object): Promise<void>'
-    returns: Promise<void>
+    signature: >-
+      runHostKey(action: string, options: { project?: string; owner?: string; label?: string; role?:
+      string; id?: string; dataDir?: string }): Promise<void>
+    returns: async void
   - name: runHostLock
     description: Validate-as-complete and write the commit-scoped lock record for a hosted project.
     signature: 'runHostLock(options: { project?: string }): Promise<void>'
-    returns: Promise<void>
-  - name: runHostPromote
-    description: Promote a locked project after re-checking that its current StateId still matches the lock.
-    signature: 'runHostPromote(options: { project?: string }): Promise<void>'
-    returns: Promise<void>
+    returns: async void
   - name: runProduce
     description: >-
       Project the local project's specs to a producer target (e.g. notion), resolving the credential
       from flag, env, or an interactive prompt.
     signature: 'runProduce(target: string, options: { page?: string; token?: string }): Promise<void>'
-    returns: Promise<void>
-  - name: runSubsystemAdd
+    returns: async void
+  - name: runMemberAdd
     description: >-
-      Add an L1 subsystem to the current project. With --project-path it creates an external
-      (chained) subproject: wires the parent subsystem spec and scaffolds an isolated child wairon
-      project at that path.
+      `wairon member add <alias> <source> [--project] [--description]`: create a member of the
+      current project at a source in the one members grammar — `services/scheduler` (contained),
+      `../admin` (a sibling checkout), `git@host:acme/payments.git[#<commit>]` (git, pinned at its
+      default branch head unless a commit is given) — a PART by default (stage 8: its subsystems are
+      this project's own), or with --project an isolated wairon project (its project content:
+      project.yaml declaring the alias as its id, its L0) — and declare it in this project's
+      project.yaml `members` by the shorthand. Replaces `wairon subsystem add --project-path`, which
+      wrote the L1 mount form.
     signature: >-
-      runSubsystemAdd(id: string, options: { projectPath?: string; name?: string; yes?: boolean }):
-      Promise<void>
-    returns: Promise<void>
-  - name: runSubsystemMove
+      runMemberAdd(alias: string, source: string, options: { description?: string, project?: boolean
+      }): Promise<void>
+    returns: async void
+  - name: runMemberMove
     description: >-
-      Relocate an external subsystem to a new directory: moves the subproject folder and updates its
-      projectPath link in one step (wairon subsystem move).
-    signature: 'runSubsystemMove(id: string, options: { projectPath?: string }): Promise<void>'
-    returns: Promise<void>
+      `wairon member move <alias> <path>`: relocate a member's directory and point its `members`
+      entry there in one step (a member still declared in the legacy L1 form is moved into `members`
+      first). Replaces `wairon subsystem move`.
+    signature: 'runMemberMove(alias: string, path: string): Promise<void>'
+    returns: async void
   - name: runSubsystemExternalize
     description: >-
-      Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs,
-      mounts via projectPath, rewrites references). Source code is moved by the user.
-    signature: 'runSubsystemExternalize(id: string, options: { projectPath?: string }): Promise<void>'
-    returns: Promise<void>
-  - name: runSubsystemInternalize
+      `wairon subsystem externalize <id> --path <dir> [--as part|project] [--report] [--yes]`: move
+      an internal subsystem's specs out to a folder. By default (stage 8) into a PART — a storage
+      move: a new part at the path (or the existing part there, which it joins), declared in
+      `members`, and nothing else changes (no reference, export, external or pin; the same verdict).
+      With `--as project` into a member PROJECT instead, family-wide and all-or-nothing: the move
+      followed by a promote — what crosses the new boundary exported and imported, references
+      respelled `alias::name`, the new member's external for this project pinned; a reference that
+      would need a component made public refuses the plan. It keeps its name because it acts on a
+      subsystem. Source code is moved by the user. Through runMigration.
+    signature: 'runSubsystemExternalize(id: string, options?: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: id
+        type: string
+        description: The subsystem
+      - name: options
+        type: MigrationCommandOptions
+        description: '--path (required by the command), --report, --yes'
+        optional: true
+  - name: runMemberInternalize
     description: >-
-      Migrate an external subsystem's specs back into the parent tree and delete its child .wai
-      project.
-    signature: 'runSubsystemInternalize(id: string): Promise<void>'
-    returns: Promise<void>
+      `wairon member internalize <alias> [--into <subsystem>] [--packs adopt|drop] [--export
+      <name>…] [--report] [--yes]`: fold a member — every subsystem of it — back into the current
+      project, sending its own metadata to the named homes and re-pointing every family consumer of
+      it at the current project. Through runMigration. Replaces the single-subsystem form, which
+      deleted the member's whole .wai.
+    signature: 'runMemberInternalize(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--into, --packs, --export, --report, --yes'
   - name: runSurface
     description: >-
-      Surface exchange commands: export (own surface, optionally as OpenAPI), import
-      (exchanged/authored foreign surface), list (stored snapshots), generate-children (write parent
-      snapshots into chained children). For an OpenAPI export of a multi-portal project, `--portal
-      <id>` selects one API; without it `--out` writes one file per portal and stdout lists the
-      available portals instead of printing nothing.
+      Surface exchange commands for foreign surfaces: export (own surface, optionally as OpenAPI),
+      import (exchanged/authored foreign surface) and list (stored snapshots). `externals` and `pin`
+      are gone since stage 3 — declared externals replace the family and sibling pins — and an
+      unknown action names `wairon externals list|status|pin` instead. For an OpenAPI export of a
+      multi-portal project, `--portal <id>` selects one API; without it `--out` writes one file per
+      portal and stdout lists the available portals instead of printing nothing.
     signature: >-
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
-    returns: Promise<void>
+    returns: async void
   - name: runPacks
     description: >-
       Deprecated alias of `wairon pack` for the add | list | remove subset — forwards to the packs
       adapter. Kept for back-compat; new usage should prefer `wairon pack`.
-    signature: 'runPacks(action: string): void'
-    returns: void
+    signature: 'runPacks(action: string, arg?: string, options?: PackCommandOptions): async void'
+    returns: async void
     params:
       - name: action
         type: string
+      - name: arg
+        type: string
+        description: The pack name or source the action works on
+        optional: true
+      - name: options
+        type: PackCommandOptions
+        description: The subcommand's flags; runPacks reads only `global`
+        optional: true
   - name: runRules
     description: Handle `wairon rules list`, printing the active conformance rule set.
     signature: 'runRules(): void'
@@ -112,33 +178,783 @@ methods:
     params: []
   - name: runVariants
     description: >-
-      Handle `wairon variants list`, printing the component variants declared in the registry
-      (global + project).
+      Handle `wairon variants list`, printing the component variants in the registry (built-in,
+      global and project).
     signature: 'runVariants(): void'
     returns: void
     params: []
   - name: runPack
     description: >-
-      Handle the unified `wairon pack <action>` (init | build | add | list | remove), dispatching to
-      the packs adapter. The primary pack UX; `wairon packs` remains as a deprecated alias
-      (runPacks).
-    signature: 'runPack(action: string): void'
-    returns: void
+      Handle the unified `wairon pack <action>` (init | build | install | uninstall | which | use |
+      unuse | impact | bundle | sync | add | list | remove), dispatching to the packs adapter;
+      `--yes` passes through to the commands that select or update a pack, which otherwise show its
+      impact and ask before writing. The primary pack UX; `wairon packs` remains as a deprecated
+      alias (runPacks) for add | list | remove.
+    signature: 'runPack(action: string, arg?: string, options?: PackCommandOptions): async void'
+    returns: async void
     params:
       - name: action
         type: string
+      - name: arg
+        type: string
+        description: The pack name, name@version or source the subcommand works on
+        optional: true
+      - name: options
+        type: PackCommandOptions
+        description: The subcommand's flags; each subcommand reads only the ones it takes
+        optional: true
   - name: runLock
     description: >-
-      The local `wairon lock` workflow: gate on the as-complete dry-run validation (refusing to
-      freeze an invalid tree), lock the tree through the lock adapter, and — when the tree mounts
-      chained children — regenerate the family and sibling surface snapshots into every child so a
-      locked parent ships fresh surfaces.
-    signature: 'runLock(options: LockOptions): void'
-    returns: void
+      The local `wairon lock` workflow: capture the gate identity BEFORE validating, gate on the
+      design half of the as-complete dry-run validation (refusing to freeze an invalid design), lock
+      the tree through the lock adapter (which refuses when composition.requireApprovedMembers finds
+      a direct member drifted or never approved, and when the identity moved while the lock ran),
+      and refresh THIS project's generated outputs. Code-conformance findings never refuse the lock:
+      they are recorded beside the approval (the record's `code`) and printed plainly — "code: N
+      errors, M warnings recorded beside the claim" — because CI enforces code conformance (`wairon
+      validate --ci` still fails on code errors), not the lock. A parent lock writes nothing into
+      its members — not their lock records, not their generated outputs: each member locks and
+      generates at its own root. Post-lock guidance points sessions at the live MCP briefs
+      (sdd_get_agent_brief) — it no longer instructs a session restart, because brief content is
+      composed per call and is already current.
+    signature: 'runLock(options: LockOptions): async void'
+    returns: async void
     params:
       - name: options
         type: LockOptions
-        description: 'CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive.'
+        description: >-
+          CLI flags: --yes (skip confirmation), --subsystem (scope narrowing), --recursive, --all
+          (list every changed spec instead of summarizing a long list).
+  - name: runAgent
+    description: >-
+      Handle `wairon agent <action> <id>`: `brief` prints the agent's LIVE delegation brief
+      (composed from the current tree — the CLI window into what sdd_get_agent_brief serves);
+      `customize` scaffolds the user-owned project guidance file .wai/agents/<id>.md from the
+      current brief (a header explaining that spec facts are inferred live plus the subsystem
+      description as a starting point) and REFUSES when the file already exists — it is user-owned,
+      never regenerated, never pruned.
+    signature: 'runAgent(action: string, id: string): async void'
+    returns: async void
+    params:
+      - name: action
+        type: string
+        description: brief | customize
+      - name: id
+        type: string
+        description: The resolved agent id.
+  - name: runRemote
+    description: >-
+      `wairon remote <action>` — the hosted-instance surface of a checkout. push/pull migrate a spec
+      tree in either direction; attach records a standing binding so ordinary commands run against
+      the hosted project; detach removes it; status reports what is attached and how it resolved.
+      Resolves the instance, project and credential from flags, the environment, the recorded
+      binding, or the agent's own MCP configuration, then routes to the remote orchestrator and
+      reports exactly what happened — including any backup a replaced tree can be undone from.
+    signature: 'runRemote(action: string, options?: remote_command_options): async void'
+    returns: async void
+    params:
+      - name: action
+        type: string
+        description: push | pull | attach | detach | status
+      - name: options
+        type: remote_command_options
+        optional: true
+  - name: runLogin
+    description: >-
+      `wairon login <url>` — store a bearer credential for a hosted instance in the USER's
+      credential store, so every checkout on this machine can reach it without repeating the token.
+      Takes the token from --token or a prompt, verifies it against the instance before storing (a
+      credential that does not work is a worse outcome than no credential), and never echoes it
+      back.
+    signature: 'runLogin(url: string, options?: remote_command_options): async void'
+    returns: async void
+    params:
+      - name: url
+        type: string
+      - name: options
+        type: remote_command_options
+        optional: true
+  - name: runLogout
+    description: >-
+      `wairon logout [url]` — forget the stored credential for an instance (or list what is stored
+      when no URL is given). Local only: it does NOT revoke the token on the instance, which the
+      output states plainly so nobody believes a leaked credential has been killed — revocation
+      lives in the hosted UI under Tokens.
+    signature: 'runLogout(url?: string): async void'
+    returns: async void
+    params:
+      - name: url
+        type: string
+        description: >-
+          The instance whose stored credential to forget; omitted lists the instances this machine
+          holds a credential for
+        optional: true
+  - name: runMcpServe
+    description: >-
+      `wairon mcp serve` — run the wairon MCP server on stdio for an AI tool that spawned it,
+      attached to the resolved project root.
+    signature: 'runMcpServe(): async void'
+    returns: async void
+    params: []
+  - name: runMcpInstall
+    description: >-
+      `wairon mcp install` — register the wairon MCP server with the configured AI tools: the LOCAL
+      stdio server over this checkout by default, or a HOSTED http entry when --hosted names an
+      instance, so the agent authors that instance's tree and `wairon remote` can read the same
+      entry back.
+    signature: 'runMcpInstall(options: mcp_install_options): void'
+    returns: void
+    params:
+      - name: options
+        type: mcp_install_options
+  - name: runMcpStatus
+    description: >-
+      `wairon mcp status` — report where a wairon MCP server is registered and what it points at
+      (local checkout or hosted instance), alongside what the CLI itself resolves.
+    signature: 'runMcpStatus(): void'
+    returns: void
+    params: []
+  - name: runStatus
+    description: >-
+      `wairon status` — print the spec tree's completeness dashboard. In an ATTACHED checkout there
+      is no local tree, so it reports the hosted project's instead, naming the instance so the two
+      are never confused.
+    signature: 'runStatus(options: status_command_options): async void'
+    returns: async void
+    params:
+      - name: options
+        type: status_command_options
+  - name: runExecutionShow
+    description: >-
+      `wairon execution show`: list every agent's execution allowance with the rationale that
+      produced it, under the project's current tier.
+    signature: 'runExecutionShow(): async void'
+    returns: async void
+    params: []
+  - name: runExecutionSetTier
+    description: >-
+      `wairon execution set-tier <tier>`: move the project's execution-budget dial and state what
+      the new tier costs.
+    signature: 'runExecutionSetTier(tier: string): async void'
+    returns: async void
+    params:
+      - name: tier
+        type: string
+  - name: runDoctor
+    description: >-
+      `wairon doctor`: a health check of the project (initialization and configuration, unfinished
+      family-migration transactions, spec conformance by its owner's gate, the chaining migration
+      still pending, generated guides and skills, the lock, MCP registration). With --fix it first
+      resolves every unfinished family-migration transaction under the root — rolling back each one
+      whose coordinator never committed, cleaning up each one that did — then applies the repairs it
+      can — regenerating stale guides, context and skills, registering the MCP server, retiring
+      Specialists into Orchestrators, migrating onto the reachability model — and then the chaining
+      migration, which it prints and applies only after confirmation (--yes answers it for a
+      non-interactive run; without either nothing of it is written). A repair that would write
+      OUTSIDE the project root — a machine-wide MCP configuration such as Antigravity's global
+      mcp_config.json, the legacy global plugin — is listed in its own plan with the file and the
+      old and new value, and needs its own confirmation: --yes covers it only together with
+      --global, a terminal asks, and a run with neither skips it and says so; a replaced file is
+      kept beside itself as <file>.wairon-backup-<timestamp>. With --report chaining it prints the
+      chaining plan per project; with --report composed-validation it prints what stage 4 changed in
+      each project's verdict (today's gate against the totals its lock recorded, and every new
+      finding with its reason); with --report reachability it prints the bound project's
+      reachability migration plan, each rewrite by its retired form and what it will not fix — each
+      report changes nothing and never combines with --fix.
+    signature: 'runDoctor(options?: DoctorOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: DoctorOptions
+        description: '--fix, --report <section>, --yes and --global; none given is a plain health check'
+        optional: true
+  - name: runLockCheck
+    description: >-
+      `wairon lock-check`: the merge gate. Ask the lock adapter whether the design in this working
+      tree is still the design the human approved, print the verdict, and exit non-zero when it is
+      not.
+
+
+      Deliberately NOT a flag on `wairon validate`. Validate answers a different question — is this
+      design legal — and answers it by running the whole rule set over the whole tree; a consumer
+      importing the reusable workflow runs this on every pull request and pays only for loading the
+      tree, hashing it and reading one committed JSON file. Overloading validate's exit code would
+      also make one red check mean two unrelated things.
+
+
+      It is optional by construction: only `stale` refuses by default, and `stale` cannot occur in a
+      project that never locked. `--strict` is what turns "never approved" into a failure, and a
+      project has to ask for it.
+    signature: 'runLockCheck(options: LockCheckOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: LockCheckOptions
+        description: >-
+          CLI flags: --strict (treat a repository with no approval, or no spec tree at all, as a
+          failure rather than a notice).
+        optional: false
+  - name: runDiagram
+    description: >-
+      `wairon diagram`: render the project's spec tree into a diagram artifact and write it out. The
+      canvas is a self-contained page that opens from disk; draw.io and Excalidraw are exchange
+      formats for tools the reader already has. Which format is asked for decides only the encoder —
+      every format draws the same arrangement of the same tree. The canvas also colours each
+      consumption edge by its relation's health — the family's relations compared with their live
+      producers, as of the time it was written — unless `--no-health` is given, when those edges are
+      drawn as not checked.
+    signature: 'runDiagram(options?: DiagramOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: DiagramOptions
+        description: The requested format and where to write the artifact
+        optional: true
+  - name: runDomainsList
+    description: >-
+      `wairon domains list`: show every domain this project has, derived and registered alike,
+      saying which is which — a reader deciding whether they can remove one needs to know it came
+      from a subsystem.
+    signature: 'runDomainsList(): async void'
+    returns: async void
+    params: []
+  - name: runDomainsScan
+    description: >-
+      `wairon domains scan`: show the directories that look like domains nobody has registered,
+      including the ones already covered so the answer reassures rather than appearing to have
+      missed them. Proposes only; `--add` is what registers.
+    signature: 'runDomainsScan(options?: DomainsScanOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: DomainsScanOptions
+        description: Whether to register the candidates rather than only show them
+        optional: true
+  - name: runDomainsAdd
+    description: >-
+      `wairon domains add`: register a free-standing domain. The id and the path each derive from
+      the other when only one is given. Refuses an id a subsystem already derives, because the
+      derived one would win every lookup and the added one would sit in the file doing nothing.
+    signature: 'runDomainsAdd(options?: DomainsAddOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: DomainsAddOptions
+        description: The path and id to register
+        optional: true
+  - name: runDomainsRemove
+    description: >-
+      `wairon domains remove`: unregister a free-standing domain. A derived one cannot be removed
+      here — the way to remove it is to remove its subsystem, and saying so is more useful than a
+      silent no-op.
+    signature: 'runDomainsRemove(id: string): async void'
+    returns: async void
+    params:
+      - name: id
+        type: string
+        description: The domain id to unregister
+  - name: runAliasesList
+    description: >-
+      `wairon aliases list`: show every supported short command name and whether it is active, opted
+      out, shadowed by something else on PATH, or simply missing.
+    signature: 'runAliasesList(): async void'
+    returns: async void
+    params: []
+  - name: runAliasesEnable
+    description: '`wairon aliases enable <name>`: create the alias and clear it from the opted-out list.'
+    signature: 'runAliasesEnable(alias: string): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The alias name to enable
+  - name: runAliasesDisable
+    description: >-
+      `wairon aliases disable <name>`: remove the alias and record the opt-out so a later install
+      does not recreate it.
+    signature: 'runAliasesDisable(alias: string): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The alias name to disable
+  - name: localStatus
+    description: >-
+      The local spec tree's completeness dashboard, printed to the terminal: a heading, the core
+      report marked up in the terminal's own colours with each member's approval state and pin (the
+      pin tree, computed by the validator at each project's own root so it agrees with the member's
+      own status), the lock's verdict underneath, and — when any external moved live, drifted or
+      could not be compared — an Externals section from the advisory live comparison
+      (validator_portal.adviseExternals) naming what moved, who uses it and the fix, while the pin
+      still gates. It renders nothing itself — the tree is drawn once, in core, and this supplies
+      only what colour each role should take.
+    signature: 'localStatus(options?: StatusOptions, listAll?: bool): async void'
+    returns: async void
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+        optional: true
+      - name: listAll
+        type: bool
+        description: List every spec that moved since the approval (`--all`) rather than the first few
+        optional: true
+  - name: runSkillsList
+    description: Handle `wairon skills list`, printing the built-in SDD skills.
+    signature: 'runSkillsList(): void'
+    returns: void
+    params: []
+  - name: runSkillsInstall
+    description: >-
+      Handle `wairon skills install`, exporting the SDD skills into every active target's skills
+      directory and reporting where they went and which targets have none.
+    signature: 'runSkillsInstall(): void'
+    returns: void
+    params: []
+  - name: runServe
+    description: >-
+      Boot the hosting server (`wairon serve`): seed the default identity provider from the
+      WAIRON_OIDC_* environment before the listeners bind, then start the data and admin planes and
+      run until signalled.
+    signature: >-
+      runServe(options: { host?: string; port?: string | number; adminHost?: string; adminPort?:
+      string | number; dataDir?: string; noAuth?: boolean }): Promise<void>
+    returns: async void
+  - name: runDev
+    description: >-
+      Run the local single-project developer server (`wairon dev`) over the current project:
+      register it as the one dev-mode project, start the loopback server with auth off, and
+      optionally open the browser.
+    signature: 'runDev(options: { port?: string | number; open?: boolean }): Promise<void>'
+    returns: async void
+  - name: runHostDemo
+    description: >-
+      Provision a demo project seeded with the example spec tree (`wairon host demo`), ensuring its
+      owner unit exists and, with --force, destroying an existing one first.
+    signature: >-
+      runHostDemo(options: { id?: string; unit?: string; force?: boolean; dataDir?: string }):
+      Promise<void>
+    returns: async void
+  - name: runHostPermission
+    description: >-
+      Permission assignments against the hosting control plane (set | list | remove), reading the
+      master credential from the environment. The scope comes from --project, --unit or --instance;
+      --project with --subsystem names a subsystem scope (`<project>/<subsystem>`), where only
+      project:write is accepted, as yes, no or inherit — a subsystem rule is set and cleared like
+      any other assignment.
+    signature: >-
+      runHostPermission(action: string, options: { user?: string; capability?: string; value?:
+      string; project?: string; subsystem?: string; unit?: string; instance?: boolean; id?: string;
+      dataDir?: string }): Promise<void>
+    returns: async void
+  - name: runHostProducer
+    description: Producer targets of a hosted project (configure | produce | remove | list).
+    signature: >-
+      runHostProducer(action: string, options: { project?: string; target?: string; page?: string;
+      dataDir?: string }): Promise<void>
+    returns: async void
+  - name: runHostSecret
+    description: Integration secrets of the instance (set | list); a listing shows key names only.
+    signature: >-
+      runHostSecret(action: string, options: { key?: string; value?: string; dataDir?: string }):
+      Promise<void>
+    returns: async void
+  - name: runHostPacks
+    description: Extension packs of the instance, or of one project with --project (list | install | remove).
+    signature: >-
+      runHostPacks(action: string, options: { project?: string; name?: string; file?: string;
+      dataDir?: string }): Promise<void>
+    returns: async void
+  - name: runHostGit
+    description: Git backing of a hosted project (enable | disable | sync | commit | status | sync-config).
+    signature: >-
+      runHostGit(action: string, options: { project?: string; remote?: string; branch?: string;
+      subsystem?: string; message?: string; interval?: string | number; skipIfClean?: boolean;
+      dataDir?: string }): Promise<void>
+    returns: async void
+  - name: runHostUnit
+    description: >-
+      Organization units of the hosted instance (create), reading the master credential from the
+      environment.
+    signature: >-
+      runHostUnit(action: string, options: { slug?: string; name?: string; kind?: string; parent?:
+      string; dataDir?: string }): Promise<void>
+    returns: async void
+  - name: runHostDoctor
+    description: >-
+      Inspect the hosted data dir for pre-permission-model shapes and for hosted families whose
+      members are not yet records, and with --fix migrate both (`wairon host doctor`): the
+      permission-model migration first, then the stage-7 member upgrade (records registered,
+      member-qualified key entries rewritten, nobody's reach changed), all or nothing.
+    signature: 'runHostDoctor(options: { fix?: boolean; dataDir?: string }): Promise<void>'
+    returns: async void
+  - name: runExternals
+    description: >-
+      `wairon externals <action> [alias…]`: add (`externals add <alias> [<source>]` — declare one
+      external in .wai/project.yaml from the one location grammar members use, `../sibling` |
+      `hosted:<id>` | `<git url>[#<commit>]`, with --project, --ref, --dir, --use, --description,
+      --no-pin and --dry-run; refused in one sentence naming the accepted form, checked against the
+      producer it reaches, pinned by default; exit 1 on a refusal), pin (pin the named declared
+      externals, else all, into .wai/externals/ and .wai/externals.lock.yaml, printing each alias's
+      outcome and its unexported references; exit 1 when an alias could not be pinned — unresolved
+      or unreachable — because its previous pin stays and nothing new was recorded), status (each
+      external's pin compared with its live producer at signature level — unchanged, changed,
+      renamed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE — a CI gate on the
+      LIVE producer for teams that want one: exit 1 when any external is incompatible, 2 when
+      nothing is incompatible but something could not be compared (never a pass), 0 otherwise, from
+      external_status.health), and list (the declared externals, how each resolves, and what is
+      pinned — a malformed declaration listed with its problem, never hidden). `--json` prints the
+      structured answer instead of the table, with the same exit code.
+    signature: 'runExternals(action: string, aliases: list<string>, options?: ExternalsOptions): async void'
+    returns: async void
+    params:
+      - name: action
+        type: string
+        description: add | pin | status | list
+      - name: aliases
+        type: list<string>
+        description: >-
+          pin/status: the declared externals to act on, empty for all; add: the alias, then the
+          source when given
+      - name: options
+        type: ExternalsOptions
+        description: '--json: print the structured answer instead of the table'
+        optional: true
+  - name: runMigration
+    description: >-
+      The one flow every family-migration command runs, so the verbs cannot drift apart: plan the
+      request; print the plan — its edits per owner, its refusals, its file changes, its notes and
+      the projects to re-lock; with --report drop it and stop; when it is refused, drop it and exit
+      non-zero; when it is empty, say so; otherwise ask (--yes answers; a non-interactive shell
+      without --yes stops, writing nothing), apply the confirmed plan, and print the outcome — the
+      projects to re-lock when it committed, the failure and that nothing changed when it did not,
+      or the files `wairon doctor --fix` must restore when a rollback could not. Never locks.
+    signature: 'runMigration(request: MigrationRequest, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: request
+        type: MigrationRequest
+        description: The verb and its arguments
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report and --yes'
+  - name: runMemberAttach
+    description: >-
+      `wairon member attach <alias> <path> [--description] [--report] [--yes]`: make the existing
+      project at the path a member of the current project, keeping its L0 and subsystems (unlike
+      `member add`, which scaffolds). Through runMigration.
+    signature: 'runMemberAttach(alias: string, path: string, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The alias to declare
+      - name: path
+        type: string
+        description: The project's root, relative to the current project
+      - name: options
+        type: MigrationCommandOptions
+        description: '--description, --report, --yes'
+  - name: runProjectRename
+    description: >-
+      `wairon project rename <new-id> [--project <alias path>] [--report] [--yes]`: move a project's
+      id — the current project's, or a member's named by its alias path — and every reference to the
+      old id across the family, listing every project to re-lock. Through runMigration.
+    signature: 'runProjectRename(newId: string, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: newId
+        type: string
+        description: The new project id
+      - name: options
+        type: MigrationCommandOptions
+        description: '--project, --report, --yes'
+  - name: runMemberRenameAlias
+    description: >-
+      `wairon member rename-alias <old> <new> [--report] [--yes]`: rename one alias of the current
+      project (a member or an external) and respell the current project's references through it;
+      nothing in any member or sibling changes. Through runMigration.
+    signature: >-
+      runMemberRenameAlias(alias: string, newAlias: string, options: MigrationCommandOptions): async
+      void
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The alias as declared now
+      - name: newAlias
+        type: string
+        description: The new alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report, --yes'
+  - name: runMemberDetach
+    description: >-
+      `wairon member detach <alias> [--widen] [--report] [--yes]`: take a member out of the family;
+      the current project and every family consumer then reach it as an external by path, pinned.
+      Refused while a family project uses an export the member gives the family alone, unless
+      --widen: then exactly those exports are widened to the instance audience, shown in the plan.
+      Through runMigration.
+    signature: 'runMemberDetach(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--widen, --report, --yes'
+  - name: runMemberAdopt
+    description: >-
+      `wairon member adopt <alias> [--report] [--yes]`: make the current project's external found by
+      a path inside it a member — detach's inverse. Through runMigration.
+    signature: 'runMemberAdopt(alias: string, options: MigrationCommandOptions): async void'
+    returns: async void
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: options
+        type: MigrationCommandOptions
+        description: '--report, --yes'
+  - name: runMemberPromote
+    description: >-
+      `wairon member promote <alias> [--id <id>] [--report] [--yes]` (stage 8): a part becomes an
+      independent project in place — its id, an export table for exactly what the rest of the
+      project uses, references respelled `alias::name`, pins on both sides, its own lock to take.
+      Plan first, confirmed, all-or-nothing, never locks. Through runMigration.
+    signature: >-
+      runMemberPromote(alias: string, options: MigrationCommandOptions & { id?: string }):
+      Promise<void>
+    returns: async void
+  - name: runMemberDemote
+    description: >-
+      `wairon member demote <alias> [--home <subsystem>] [--adopt-packs|--drop-packs] [--report]
+      [--yes]` (stage 8): a project member becomes a part of the current project in place —
+      promote's inverse; refused while another family project consumes it. Plan first, confirmed,
+      all-or-nothing, never locks. Through runMigration.
+    signature: 'runMemberDemote(alias: string, options: MigrationCommandOptions): Promise<void>'
+    returns: async void
+  - name: runMemberUpdate
+    description: >-
+      `wairon member update <alias> [--ref <ref> | --commit <sha>] [--report]` (stage 8): move a git
+      member's pinned commit to its ref's head (or the given ref or commit), first printing the
+      commits and the member's spec files added, changed and removed; --report prints and writes
+      nothing. The only way a git member's content changes. Never locks: the parent's lock reads
+      stale when the content moved.
+    signature: >-
+      runMemberUpdate(alias: string, options: { ref?: string, commit?: string, report?: boolean }):
+      Promise<void>
+    returns: async void
+  - name: runExport
+    description: >-
+      `wairon export [--out <file>]` — the bound project's design export as JSON: to the file when
+      --out names one (and the path written is reported), else to stdout, so it pipes into a
+      generator. Its approval verdict is the one `wairon lock-check` exits on, decided first against
+      the gate identity and handed to the export; a tree that is not approved still exports,
+      carrying its state (stale, unlocked) for the consumer to judge. Read-only: a tree without an
+      L0 is refused with the reason.
+    signature: 'runExport(out?: string): async void'
+    returns: async void
+    params:
+      - name: out
+        type: string
+        description: The file to write; stdout without it
+        optional: true
+  - name: cleanStaleBinary
+    description: >-
+      Remove the `.old` binary a previous self-update left beside a packaged (pkg) executable, or
+      the one named — once when the binary starts, and before each rename during `wairon update`. A
+      file still locked by the OS is left for the next start; a non-packaged install has nothing to
+      clean.
+    signature: 'cleanStaleBinary(oldPath?: string): void'
+    returns: void
+    params:
+      - name: oldPath
+        type: string
+        description: The leftover to remove; omitted, the running packaged executable's `.old` sibling
+        optional: true
+  - name: announceBinding
+    description: >-
+      Name the project a command is about to act on: `project <id> at <root>` on one line, on stderr
+      so a machine-readable stdout (`export`, `--json`) stays pure, and nothing under --silent.
+      Silent for a command that acts on no project (init, the hosted and login commands, `mcp serve`
+      and `dev`, which announce their own) and where no project binds the folder — the command
+      itself says that. A bound project whose .wai/project.yaml does not parse as YAML refuses the
+      command here, with one line naming the file, the line and the key (YamlSyntaxError) — every
+      command alike, none running on defaults — except doctor, which diagnoses the file in its own
+      words.
+    signature: 'announceBinding(commandPath: string): void'
+    returns: void
+    params:
+      - name: commandPath
+        type: string
+        description: The command as typed, its subcommands space-separated (`member promote`)
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The commander program's preAction hook in src/cli/index.ts (cli_portal), once before every
+        command's action runs — a hook the framework calls, not an action endpoint, so no portal
+        narrative steps into it.
+  - name: runNetworkFlows
+    description: >-
+      `wairon network flows [--format json|csv|markdown]`: print the allowed-flows matrix. When the
+      design fails the gate, every refused row is marked REFUSED with its findings, each finding is
+      printed to stderr, and no refused row reads as allowed.
+    signature: 'runNetworkFlows(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkPolicy
+    description: >-
+      `wairon network policy --bindings <file>`: generate Kubernetes NetworkPolicy from the
+      allowed-flows matrix and the team's bindings file. A flow the gate refuses (GATEWAY_BYPASSED,
+      ...) is never admitted: it is left out, the file's head names it with its findings, each
+      finding is printed, and the command exits non-zero, because a design that fails the gate has
+      no policy to commit.
+    signature: 'runNetworkPolicy(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkDiagram
+    description: >-
+      `wairon network diagram`: print (or write) the network picture as Mermaid: networks as nested
+      boundaries, gateways on them, an outside node, flows per workload pair. The input to a
+      threat-modelling session and the architecture page.
+    signature: 'runNetworkDiagram(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkCheck
+    description: >-
+      `wairon network check --observed <file> [--bindings <file>]`: compare observed live flows (a
+      service-mesh or eBPF export, or flow logs the team's tooling named) with the matrix; print the
+      unexpected flows, the unexercised ones and the unknown verbs, and exit non-zero when anything
+      unexpected was seen.
+    signature: 'runNetworkCheck(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkWhy
+    description: >-
+      `wairon network why <from> <to>`: print why one party may reach another, from the design: each
+      allowing flow's chain from its entry or modelled call through every gateway, or that nothing
+      allows it. Answers a firewall change request or an incident question in one command.
+    signature: 'runNetworkWhy(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkDeclare
+    description: >-
+      `wairon network declare [--description <text>]`: declare that this project and every member
+      below it form one isolated network boundary, in .wai/project.yaml, through the core adapter —
+      no hand edit. It changes which rules fire (GATEWAY_BYPASSED, ENTRY_UNPROVEN, ...), so the next
+      `wairon validate` judges the design as it will run, and the change is part of the gate
+      identity: re-lock afterwards.
+    signature: 'runNetworkDeclare(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runNetworkUndeclare
+    description: >-
+      `wairon network undeclare`: remove this project's network declaration from .wai/project.yaml,
+      through the core adapter. Re-lock afterwards.
+    signature: 'runNetworkUndeclare(options: NetworkCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: NetworkCommandOptions
+  - name: runTypeRenameField
+    description: >-
+      `wairon type rename-field <type> <field> <new-name> [--dry-run] [--search <dir...>]`: rename a
+      field of a type and respell every reference to it, the old name kept in the field's rename
+      trace (previousNames, `formerly` in the design export). Prints the specs rewritten (or, with
+      --dry-run, that it would rewrite), the public names carrying the field, and every consumer
+      whose specs reach one — the family in reach, members included, and the consumer checkouts in
+      the searched folders — as the projects whose code reading the old name breaks; a dry run ends
+      with "Nothing was written", a real one with the re-lock it owes; a refusal prints its reason
+      and exits non-zero.
+    signature: >-
+      runTypeRenameField(typeId: string, field: string, newName: string, options:
+      RenamePreviewOptions): async void
+    returns: async void
+    params:
+      - name: typeId
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: options
+        type: RenamePreviewOptions
+        description: '--dry-run and --search <dir...>'
+  - name: runMethodRenameParam
+    description: >-
+      `wairon method rename-param <component> <method> <param> <new-name> [--dry-run] [--search
+      <dir...>]`: rename a parameter of a contract method, the old name kept in the parameter's
+      rename trace (previousNames, `formerly` in the design export), each signature re-derived and
+      an HTTP path placeholder that bound it respelled — its own binding's and every follower's
+      through signatureFrom. Prints the move (or, with --dry-run, what would move), the interfaces
+      it moved in, the placeholders respelled, the export entries publishing the method and every
+      consumer whose specs call it — the family in reach, members included, and the consumer
+      checkouts in the searched folders — as the projects that must follow; a dry run ends with
+      "Nothing was written", a real one with the re-lock it owes; a refusal prints its reason and
+      exits non-zero.
+    signature: >-
+      runMethodRenameParam(componentId: string, methodName: string, param: string, newName: string,
+      options: RenamePreviewOptions): async void
+    returns: async void
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: options
+        type: RenamePreviewOptions
+        description: '--dry-run and --search <dir...>'
+  - name: runMethodRename
+    description: >-
+      `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>]
+      [--no-pin-symbol]`: rename a contract method and retarget every reference to it, the old name
+      kept in its rename trace (previousNames, `formerly` in the design export). Prints what moved
+      (or, with --dry-run, would move) and was retargeted, the prose left alone, the export entries
+      publishing it, and every consumer whose specs call it through one of them — the family in
+      reach and the consumer checkouts found in the searched folders — as the projects the rename
+      breaks; a refusal prints its reason and exits non-zero.
+    signature: >-
+      runMethodRename(componentId: string, methodName: string, newName: string, options:
+      MethodRenameOptions): async void
+    returns: async void
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: options
+        type: MethodRenameOptions
+        description: '--dry-run, --search <dir...> and --no-pin-symbol'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:06:35.332Z'
+updatedAt: '2026-10-08T08:26:37.487Z'

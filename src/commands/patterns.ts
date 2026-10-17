@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
-import { loadProjectExtensions } from '../core/extensions.js';
+import { loadProjectExtensions } from '../core/index.js';
 
 // ---------------------------------------------------------------------------
 // patterns command — the reusable, versioned architecture patterns declared by
@@ -9,7 +9,7 @@ import { loadProjectExtensions } from '../core/extensions.js';
 // component, and the declaring pack's own rules enforce its actual constraints.
 // ---------------------------------------------------------------------------
 
-export async function listPatterns(): Promise<void> {
+export function listPatterns(): void {
   const ext = loadProjectExtensions();
 
   console.log(chalk.bold(`\nReusable patterns (${ext.patterns.length})\n`));

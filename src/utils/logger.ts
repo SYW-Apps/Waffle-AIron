@@ -12,6 +12,11 @@ export function setLogLevel(level: LogLevel): void {
   currentLevel = level;
 }
 
+/** Whether --silent is in force: output a command writes itself, past the logger, is held back too. */
+export function isSilent(): boolean {
+  return currentLevel === 'silent';
+}
+
 function shouldLog(level: LogLevel): boolean {
   if (currentLevel === 'silent') return false;
   if (currentLevel === 'info') return level === 'info';
@@ -34,6 +39,16 @@ export const logger = {
   warn(message: string): void {
     if (shouldLog('info')) {
       console.warn(chalk.yellow('⚠') + '  ' + chalk.yellow(message));
+    }
+  },
+
+  /**
+   * A finding reported at `notice` severity: listed, never a failure. Kept
+   * visually apart from warn so a reader never mistakes one for the other.
+   */
+  notice(message: string): void {
+    if (shouldLog('info')) {
+      console.log(chalk.blue('◆') + '  ' + chalk.blue('notice ') + message);
     }
   },
 

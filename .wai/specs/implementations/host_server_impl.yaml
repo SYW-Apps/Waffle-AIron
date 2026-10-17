@@ -19,37 +19,73 @@ methods:
           secure default posture when it is unset
         type: local
       - stepNumber: 3
-        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
-        type: local
+        description: >-
+          Dry-run the permission-model migration and warn on the console when the data dir is
+          unmigrated; the dry run writes nothing and any failure is swallowed, so it never prevents
+          the server from starting
+        type: call
+        targetComponent: permission_model_migration
+        targetMethod: run
       - stepNumber: 4
         description: >-
+          Before serving, roll back every transaction a crash left unfinished under the data
+          directory — a crashed member upgrade, or a hosted detach or adopt the data directory
+          coordinated — auditing each and logging one line per transaction; any failure is logged
+          and never prevents the server from starting
+        type: call
+        targetComponent: member_registration
+        targetMethod: recoverData
+      - stepNumber: 5
+        description: >-
+          Count the hosted families' members that hold no record yet and, when any do, log one line
+          saying how many members await `wairon host doctor --fix` (until then they are reached only
+          through the deprecated member-qualified selectors); the count reads only, writes nothing,
+          and any failure is swallowed so it never prevents the server from starting
+        type: call
+        targetComponent: member_registration
+        targetMethod: pending
+      - stepNumber: 6
+        description: >-
+          When the exposure policy names a retired adminApiMode (local_only, private_network,
+          public), log one line that it is deprecated and reads as enabled, and that where the admin
+          API listens is the admin bind address; reads only, and any failure is swallowed
+        type: local
+      - stepNumber: 7
+        description: >-
+          Outside the dev server, log one line about the web UI so an operator never meets a bare
+          404: when the exposure policy leaves it off, where to turn it on (webUiEnabled in the data
+          dir's exposure-policy.json, or the admin UI) and the operator guide; when it is on, how a
+          person signs in — read the identity providers through the policy repository, and name the
+          built-in admin account (both admin user and password set) and each enabled provider, or
+          say that nobody can sign in yet. Reads only; any failure is swallowed so it never prevents
+          the server from starting
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 8
+        description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
+        type: local
+      - stepNumber: 9
+        description: >-
           Bind the admin-plane listener (separate, loopback-by-default bind); then, when
-          adminApiMode is not 'disabled', mount the control-plane routers on it per the resolved
-          exposure policy: the existing admin API (/admin/*), and — each only when its exposure flag
-          enables it — the identity/audit API, the project-policy API (/projects and /instance), the
+          adminApiMode is enabled, mount the control-plane routers on it per the resolved exposure
+          policy: the existing admin API (/admin/*), and — each only when its exposure flag enables
+          it — the identity/audit API, the project-policy API (/projects and /instance), the
           landscape API, the operations API (/operations/*), the approvals API, and the optional
           browser admin UI; a surface whose flag is disabled is not mounted and answers
           404/disabled. When adminApiMode is 'disabled', no control-plane router is mounted.
         type: local
-      - stepNumber: 5
+      - stepNumber: 10
         description: Begin accepting connections on both listeners
         type: local
-      - stepNumber: 6
+      - stepNumber: 11
         description: >-
-          Schedule the periodic git-backup timer: at each interval run the pre-authorized
-          .wai/-scoped backup sweep over the git-bound projects (skip-if-clean — a quiet project
-          never commits noise)
+          Start the periodic backup schedule (git-bound project sweep + container-level backing
+          sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: runPeriodicGitSync
-      - stepNumber: 7
-        description: >-
-          The same timer also sweeps the container-level backup bindings (unit container repos + the
-          instance-structure backup repo) whose interval has elapsed
-        type: call
-        targetComponent: git_backing_orchestrator
-        targetMethod: runPeriodicBackingSync
-      - stepNumber: 8
+        targetComponent: backup_schedule
+        targetMethod: start
+      - stepNumber: 12
         description: Return the running server handle
         type: return
         outcome: running
@@ -57,8 +93,10 @@ methods:
   - name: stop
     narrative:
       - stepNumber: 1
-        description: Cancel the periodic git-backup timer
-        type: local
+        description: Stop the periodic backup schedule
+        type: call
+        targetComponent: backup_schedule
+        targetMethod: stop
       - stepNumber: 2
         description: Stop accepting new connections and drain in-flight requests
         type: local
@@ -75,42 +113,17 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Seed-or-load the boot-reserved built-in subject UUIDs (first boot generates and persists
-          them to instance.json; later boots return the record unchanged)
+          Run the one-time instance bootstrap: seed-or-load the persisted instance identity and,
+          under devMode, ensure the synthetic local development unit exists, passing the running
+          instance's configuration
         type: call
-        targetComponent: instance_identity_repository
-        targetMethod: ensureSeeded
-        assertsGuarantees:
-          - idempotent
+        targetComponent: instance_bootstrap
+        targetMethod: seed
       - stepNumber: 2
-        description: If devMode is not enabled, skip the synthetic local development unit
-        type: branch
-        condition: config.devMode is enabled
-        onTrueStep: 3
-        onFalseStep: 6
-      - stepNumber: 3
-        description: Look up the synthetic local development unit
-        type: call
-        targetComponent: organization_repository
-        targetMethod: getUnit
-      - stepNumber: 4
-        description: If the synthetic local development unit already exists, skip creation
-        type: branch
-        condition: the synthetic local development unit already exists
-        onTrueStep: 6
-        onFalseStep: 5
-      - stepNumber: 5
-        description: >-
-          Create the synthetic local development unit so dev projects can always be placed (unitId
-          is required at creation)
-        type: call
-        targetComponent: organization_repository
-        targetMethod: createUnit
-      - stepNumber: 6
         description: Return once the instance is initialized
         type: return
         outcome: initialized
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-07-16T15:41:49.407Z'
+updatedAt: '2026-10-17T14:38:35.944Z'

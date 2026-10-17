@@ -1,10 +1,26 @@
-id: "validator_portal"
-name: "Validator Portal"
-description: "Inbound portal for the SDD validator subsystem."
-subsystem: "sdd_validator"
-componentType: "Portal"
-portalType: "Custom"
+id: validator_portal
+name: Validator Portal
+description: >-
+  Inbound portal for the SDD validator subsystem. Its two validation entries are the owner's gate
+  (validateProject) and the family run (validateFamily); the library entry (src/index.ts, the
+  embedding API a wrapper compiles its gate from) re-exports exactly those two names, and
+  `validateSddTree` leaves the public API with no alias — a deliberate break in a major release,
+  named in the CHANGELOG (stage 4). It also publishes the pre-write pack measurement
+  (measurePackImpact, governance stage), forwarded to pack_impact: a read, never a write.
+subsystem: sdd_validator
+componentType: Portal
+owns: []
 dependsOn:
-  - "spec_validator"
-createdAt: "2026-06-19T12:00:00Z"
-updatedAt: "2026-06-19T12:00:00Z"
+  - spec_validator
+  - family_validator
+  - pack_impact
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and wrappers that import the @wairon/cli package's library entry (main dist/index.js) and
+    run the gate (validateProject, validateFamily) and the rest of the validator contract in their
+    own process
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-10-06T19:13:35.080Z'

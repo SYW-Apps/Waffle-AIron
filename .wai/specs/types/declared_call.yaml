@@ -1,0 +1,20 @@
+kind: value-object
+id: declared_call
+name: DeclaredCall
+description: >-
+  One entry of a method's declared calls, read apart: the component the reference names and the
+  method on it. Spelled <component>.<method> — the spelling the conformance debt register and a lint
+  allow name a unit with.
+fields:
+  - name: compId
+    type: string
+    description: The component the reference names
+    optional: false
+  - name: methodName
+    type: string
+    description: The method on it
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-19T21:35:16.432Z'
+updatedAt: '2026-09-19T21:35:16.435Z'

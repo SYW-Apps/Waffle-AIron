@@ -6,27 +6,28 @@ description: >-
   unit, or instance-level project:admin for the instance binding and listings), and run a sync —
   mirror-export every subtree project's .wai/ tree (unit binding) or the instance-structure JSON
   collections excluding the secret store (instance binding) into the backing repo's working copy,
-  then commit+push skip-if-clean through the git backing adapter. Also exposes the pre-authorized
-  periodic sweep the host supervisor's timer drives. Writes are audited at security level
-  (bind/unbind) or info level (sync).
+  then commit+push skip-if-clean through the git backing adapter. Since stage 7 a member is a record
+  with no placement of its own (its units come through its family root), so a unit's subtree is
+  every family root placed in it PLUS every member record of those families, each mirrored as
+  projects/<its own id>/.wai/ from its own root — before stage 7 a member's .wai/ lay inside its
+  parent's tree but outside the parent's .wai/ and was never mirrored. The mirror working copy is
+  wairon's alone, which is why its commit may stage it wholesale; no project's repository is ever
+  staged that way. Also exposes the pre-authorized periodic sweep the host supervisor's timer
+  drives. Writes are audited at security level (bind/unbind) or info level (sync).
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
 dependsOn:
-  - auth_specialist
-  - authorization_specialist
+  - authentication
+  - authorization
   - git_backing_repository
   - git_backing_adapter
   - organization_repository
-  - project_registry
+  - project_repository
   - audit_repository
+  - secret_repository
 lint:
-  allow:
-    - code: UNUSED_METHOD
-      reason: >-
-        runPeriodicBackingSync is invoked by the host supervisor's periodic timer, scheduled in
-        host_server.start — a composition-root bootstrap method outside the modeled HTTP call chains
-        (see host_server's matching allow).
+  allow: []
 status: complete
 createdAt: '2026-07-16T15:38:36.519Z'
-updatedAt: '2026-07-16T17:41:49.258Z'
+updatedAt: '2026-10-03T17:50:35.401Z'

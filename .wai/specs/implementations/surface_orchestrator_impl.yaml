@@ -1,15 +1,21 @@
 id: surface_orchestrator_impl
 name: Surface Orchestrator Implementation
 description: >-
-  Surface-exchange workflows: projection, codec rendering, import, child delivery, and consumer
-  queries.
+  Surface-exchange workflows: projection, codec rendering, import, child-pulled pins, per-mount
+  snapshot reads, and consumer queries.
 contract: isurface_orchestrator
 sourcePath: src/core/surfaces.ts
 methods:
-  - name: exportSurface
+  - name: export
     narrative:
       - stepNumber: 1
-        description: Project the own gateway surface at the requested audience ceiling
+        description: >-
+          Project the own surface at the requested audience ceiling — for an OpenAPI rendering, with
+          every HTTP Portal of the bound project's own besides when the ceiling is `project` (a
+          service document: the L0 export table says what other wairon projects may consume, not
+          what the project's own API document describes; an unexported Portal is the project's
+          alone, so a document at a wider ceiling carries only what the table shares there, and a
+          member's Portal is that member's API)
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
@@ -21,7 +27,14 @@ methods:
       - stepNumber: 3
         description: >-
           Render the snapshot's HTTP entries as one OpenAPI 3.1 document per backing portal into
-          renderedSet
+          renderedSet, handing the codec the render context: each declared external's pinned
+          snapshot, each member project's surface as its L0 export table exports it now — a
+          contained member and a `../` sibling member alike, read where it is stored — and the bound
+          project's own surface under its own id (where a member's types written `<this project's
+          id>::name` — this project's L0 re-exports, the shape `member promote` writes — resolve),
+          so a schema's `alias::name` resolves for every project the design composes and the version
+          the project declares in its package manifest (package.json, else Cargo.toml or
+          pyproject.toml), read here
         type: call
         targetComponent: openapi_codec
         targetMethod: toOpenApiSet
@@ -30,8 +43,16 @@ methods:
           Populate the result's renderedSet with the per-portal documents; set `rendered` to that
           single document only when there is exactly one portal (one entry in the set), leaving
           `rendered` unset when multiple portals produced multiple documents. When portalId names a
-          portal, narrow the set to that one document; a portalId naming no portal is rejected
-          rather than silently ignored.
+          portal, narrow the set to that one document; a portalId naming no rendered document is
+          rejected rather than silently ignored — and when it names a Portal of this project the
+          ceiling left out, the refusal says why (a non-HTTP Portal no OpenAPI document describes;
+          an HTTP Portal not shared at that audience, with the fix: drop --audience, or export it at
+          the audience wanted) instead of calling it unknown. An OpenAPI export with no HTTP Portal
+          at all (an in-process library) asked to write a file is refused naming why — OpenAPI does
+          not apply — and the native snapshot is never written in its place. Every type a rendered
+          document still reads as `Unresolved type` is collected into the result's unresolvedTypes,
+          which the caller reports as a warning naming them — never a ✔ over a document whose
+          schemas are missing.
         type: local
       - stepNumber: 5
         description: An output path was given
@@ -40,10 +61,11 @@ methods:
         onFalseStep: 7
       - stepNumber: 6
         description: >-
-          Write the output path: the snapshot for native format; for openapi, the single document
-          when one portal remains (either the project has one, or portalId selected one), and
-          otherwise ONE FILE PER PORTAL — the out path's stem suffixed with each portalId — never
-          only the first document.
+          Write the output path: the snapshot for native format — as YAML, or as JSON when the path
+          ends in .json, so a file is always what its name says (both read back by import: JSON is
+          YAML); for openapi, the single document when one portal remains (either the project has
+          one, or portalId selected one), and otherwise ONE FILE PER PORTAL — the out path's stem
+          suffixed with each portalId — never only the first document.
         type: call
         targetComponent: surface_transfer_adapter
         targetMethod: writeSnapshotTo
@@ -51,7 +73,8 @@ methods:
         description: Return the projected snapshot
         type: return
         outcome: SurfaceSnapshot
-  - name: importSurface
+    symbol: exportSurface
+  - name: import
     narrative:
       - stepNumber: 1
         description: Read the foreign document from the source path
@@ -59,31 +82,37 @@ methods:
         targetComponent: surface_transfer_adapter
         targetMethod: readDocument
       - stepNumber: 2
+        description: Ask the codec whether the document is an OpenAPI spec
+        type: call
+        targetComponent: openapi_codec
+        targetMethod: recognizes
+      - stepNumber: 3
         description: The document is an OpenAPI spec
         type: branch
         condition: document parses as OpenAPI
-        onFalseStep: 5
-      - stepNumber: 3
+        onFalseStep: 6
+      - stepNumber: 4
         description: Decode the OpenAPI document into an authored snapshot
         type: call
         targetComponent: openapi_codec
         targetMethod: fromOpenApi
-      - stepNumber: 4
+      - stepNumber: 5
         description: Continue at persistence
         type: jump
-        toStep: 6
-      - stepNumber: 5
+        toStep: 7
+      - stepNumber: 6
         description: Parse the native surface-snapshot YAML and stamp the requested origin
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: Persist the imported snapshot into the repository
         type: call
         targetComponent: surface_repository
         targetMethod: saveSnapshot
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the imported snapshot
         type: return
         outcome: SurfaceSnapshot
+    symbol: importSurface
   - name: listSnapshots
     narrative:
       - stepNumber: 1
@@ -98,49 +127,6 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Load the subsystem specs to find chained children
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: For each subsystem with a projectPath (chained child)
-        type: loop
-        loopKind: forEach
-        over: chained child subsystems
-        endStep: 7
-      - stepNumber: 3
-        description: Project the family-scoped parent surface for this child
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectChildSurface
-      - stepNumber: 4
-        description: Write the family snapshot into the child project's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 5
-        description: For each SIBLING subsystem (every subsystem except this child's own mount)
-        type: loop
-        loopKind: forEach
-        over: sibling subsystems of this child
-        endStep: 7
-      - stepNumber: 6
-        description: Project the sibling subsystem's published surface at the family ceiling
-        type: call
-        targetComponent: surface_projector
-        targetMethod: projectSubsystemSurface
-      - stepNumber: 7
-        description: Write the sibling snapshot into the same child's .wai/surfaces/
-        type: call
-        targetComponent: surface_transfer_adapter
-        targetMethod: writeSnapshotTo
-      - stepNumber: 8
-        description: Return the written snapshot paths (family + siblings, per child)
-        type: return
-        outcome: written paths
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -148,54 +134,832 @@ methods:
         type: call
         targetComponent: surface_repository
         targetMethod: removeSnapshot
-  - name: listExternalInterfaces
+  - name: pinExternals
+    sourcePath: src/core/surfaces.ts
     narrative:
       - stepNumber: 1
-        description: Read all vendored surface snapshots from the repository
+        description: Read the bound root's configuration through the core
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Is the bound root a part (stage 8)? A part declares no externals: what it pins is its
+          parent
+        type: branch
+        condition: the configuration is a part's (ProjectConfig.isPart)
+        onFalseStep: 5
+      - stepNumber: 3
+        description: 'Pin the part''s parent instead: its excerpt, into the part''s lock `parent` entry'
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinParent
+      - stepNumber: 4
+        description: Answer the parent's outcome
+        type: return
+        outcome: ExternalPin[]
+      - stepNumber: 5
+        label: externals
+        description: >-
+          Resolve the bound project's declared externals and its referenced project members (a git
+          or hosted source; a `../` sibling member is composed live like a contained one and never
+          pinned) through the core: each bound to its producer (family, source.path, git at its
+          ref's head or a member's pinned commit, hosted), with the consumer's references into each
+          by public name
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 6
+        description: Keep the aliases asked for, or every declared external when none are named
+        type: local
+      - stepNumber: 7
+        description: Is an alias named that the project does not declare?
+        type: branch
+        condition: a named alias is not among the declared externals
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse before anything is written: a named alias that is a member composed live
+          (contained, or a `../` sibling checkout) is said to be a member that is never pinned; any
+          other is named with the declared ones
+        type: throw
+        error: UnknownExternalAliasError
+      - stepNumber: 9
+        label: read-lock
+        description: Read the current externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 10
+        description: For each external to pin
+        type: loop
+        loopKind: forEach
+        over: the kept bindings
+        endStep: 21
+      - stepNumber: 11
+        description: Is its producer resolved?
+        type: branch
+        condition: the binding's sourceKind is unresolved
+        onTrueStep: 20
+        onFalseStep: 12
+      - stepNumber: 12
+        description: >-
+          Bind the producer's root read-only — for a git producer the cache directory of the bound
+          commit — restoring the consumer's binding afterwards. The caller must gate on reach
+          itself: a producer root outside the request's reach, missing, unfetchable or holding no
+          project is recorded as unreachable with the reason, and its previous pin stays
+        type: local
+      - stepNumber: 13
+        description: >-
+          Project the producer's resolved project export table at the external's audience ceiling
+          (project for a family producer, instance for a source.path, git or hosted one), each entry
+          with its stereotype, narrowed interface and full contract, plus the exported types and the
+          type closure of every signature
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 14
+        description: >-
+          Read the loader's diagnostics with the producer's root still bound: a spec file that
+          failed to parse leaves its table short, so the producer is recorded unreachable as
+          `producer unreadable: <file>: <error>` (its previous pin stays), never pinned as a
+          producer that removed names. Then restore the consumer's binding, stamp the snapshot with
+          the audience it was filtered to and take its content digest
+          (SurfaceSnapshot.contentDigest)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 15
+        description: Read the snapshot pinned for the alias now
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 16
+        description: Does the pinned snapshot already say everything the new one says?
+        type: branch
+        condition: >-
+          a snapshot is pinned, its content digest equals the new one, and it carries the same facts
+          beside the signatures (SurfaceSnapshot.carriedFactChanges is empty — an abi, a transport,
+          a role, an export kind, the producer's targetLanguage, a rename trace, an unresolved
+          re-export) and the same prose; provenance (stateId, generatedAt, each entry's retired
+          names) aside
+        onTrueStep: 18
+        onFalseStep: 17
+      - stepNumber: 17
+        description: >-
+          Carry the removals into the new snapshot, then write it to .wai/externals/<alias>.yaml —
+          whenever anything it carries moved, not only its digest: the rules read facts no digest
+          covers (LANGUAGE_BRIDGE_MISSING reads the abi), so a re-pin is the documented way to
+          refresh them. Each kept entry's `retired` lists the method names the replaced snapshot's
+          entry held (or already listed as retired) that the new entry neither holds nor names in
+          any method's `formerly` — a removal, never a rename — so binding conformance can name a
+          removed verb a consumer's binding still declares. And say what moved since the replaced
+          pin: every carried fact the replaced snapshot holds differently from the new one
+          (SurfaceSnapshot.carriedFactChanges — a used verb's wire endpoint moved, a transport, an
+          abi, a rename trace) is named in the pin's detail (`moved since the last pin: endpoint of
+          stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`), so a re-pin never
+          rewrites a route a hand-written client spells without a word
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 18
+        label: used
+        description: >-
+          Compute the lock entry: the producer id, the snapshot path, the content digest, the role
+          (external, or member for a referenced project member), the commit the binding carries
+          (only a producer in another git repository than the consumer has one: a git producer's
+          fetched commit, or the head of a `../` sibling that is its own repository — a family,
+          contained or same-repository producer records none), and `used` — each public name of the
+          binding's usage mapped to each of its members' SurfaceSnapshot.memberDigest (an empty map
+          for a name only depended on; a member the snapshot does not carry is reported missing and
+          not pinned — and one the producer does export, only to an audience narrower than the one
+          this project reads it at, is said so: the audience it is exported at, the one this project
+          reads at and the ranking, never "gone"). Usage exists for every producer since stage 8, so
+          an outside producer's `used` is filled too
+        type: local
+      - stepNumber: 19
+        description: Next external
+        type: jump
+        toStep: 21
+      - stepNumber: 20
+        label: unresolved-pin
+        description: >-
+          Record the outcome as unresolved with the external's problem — for a source.hosted
+          external pinned outside a hosted server, "hosted-only producer `<id>`: available only
+          through the hosted server" — and its previous pin stays
+        type: local
+      - stepNumber: 21
+        label: next
+        description: The external is handled
+        type: local
+      - stepNumber: 22
+        description: >-
+          With no aliases named, prune every lock entry whose alias is no longer declared, with its
+          snapshot
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: prune
+      - stepNumber: 23
+        description: Did the lock change?
+        type: branch
+        condition: any lock entry was added, changed or pruned
+        onFalseStep: 25
+      - stepNumber: 24
+        description: Write the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 25
+        label: answer
+        description: Answer one outcome per external handled, in declaration order
+        type: return
+        outcome: ExternalPin[]
+    detail: full
+  - name: getExternalsStatus
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the bound project's declared externals and its referenced project members (a
+          `../`, git or hosted source) through the core, with the consumer's references as they are
+          now — counted by public name for every producer, the outside ones included — passing
+          `offline` through, so an offline read never touches the network
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: For each declared external
+        type: loop
+        loopKind: forEach
+        over: the bindings
+        endStep: 12
+      - stepNumber: 4
+        description: >-
+          Read its pinned snapshot, if any — and carry the lock entry's digest and commit on the
+          status (pinnedDigest, pinnedCommit) as provenance for a reader; neither is compared here
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: Can the live producer be read?
+        type: branch
+        condition: >-
+          the producer is resolved, its root is in the request's reach (a git producer — a fetched
+          commit — and a referenced member — a root its declarer names explicitly — are never a root
+          above the family, so no ceiling applies to them) and holds a project
+        onFalseStep: 11
+      - stepNumber: 6
+        description: >-
+          Bind the producer's root read-only (the caller must gate on reach itself), restoring the
+          consumer's binding afterwards
+        type: local
+      - stepNumber: 7
+        description: Project the producer's live export table at the external's audience ceiling
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 8
+        description: >-
+          Read the loader's diagnostics with the producer's root still bound: a spec file that
+          failed to parse makes the producer unreadable (`producer unreadable: <file>: <error>`) —
+          nothing compared, never a pass, never a removal
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 9
+        description: >-
+          Restore the consumer's binding. Compare every used member — the lock's and the one the
+          references use now — at signature level, for every producer alike (family, path, git,
+          hosted, a referenced project): a live SurfaceSnapshot.memberDigest equal to the locked one
+          is unchanged, a different one changed — the locked digest re-read from the pinned snapshot
+          when it is at hand (and the content digest drift is judged against likewise), so a digest
+          an older release recorded for the same pinned snapshot never reads as a producer's change
+          — and a changed one whose closure holds a field the producer renamed with a trace says so
+          in its detail, naming each field with its new name, and each field ADDED to or REMOVED
+          from a closure type the pin held by its name (SurfaceSnapshot.fieldChangesSince against
+          the pinned snapshot), and whether those field changes are the whole change, so the
+          consumer reads "follow the rename" or the new field rather than an anonymous signature
+          change; one absent under its name is RENAMED when a live entry's `formerly` (the
+          producer's rename trace) names it — renamedTo is that entry's public name (and member),
+          and its signature is still compared so the detail says whether it also changed and how:
+          each parameter renamed per its trace (`parameter "code" renamed to "shortCode"`, which a
+          digest that ignores parameter names cannot see), each field of its closure renamed per its
+          trace, and whether anything beyond the renames moved (its answer or parameter types) —
+          never "unchanged" beside a parameter or answer that moved — and removed otherwise, the
+          detail naming the source's rename when the live snapshot lists the name among its
+          unresolved re-exports; a name or member used now but not in the lock is compared live too:
+          gone from the live table it is renamed or removed (a break the live producer already
+          proves, pinned or not), present it is unlocked (not in the lock — re-pin), named member by
+          member as `wairon lock` names what it refuses; a used contract method's wire endpoint (an
+          HTTP verb, path or stated status, another transport's address) is compared with the pinned
+          snapshot's too — the endpoint is what a client calling over the wire spells, and no digest
+          reads it: a route that MOVED or was REMOVED makes the use changed — a break for that
+          client exactly as a renamed verb is, so the external is incompatible (`wairon externals
+          status` exits 1) — with the move in its detail (`endpoint moved: GET /stats/{code} → GET
+          /v2/stats/{code}`); an InProcess Portal (a library, called directly) binds no route, so it
+          has none to move; an unexported reference of a family producer is unavailable — and a name
+          already answered as renamed or removed (under any member, a type's `type` included) is
+          answered once, never a second time for its unexported references. Stale when a used member
+          changed, was renamed or went away; drifted when the live content digest differs from the
+          pinned one, or when the pinned snapshot carries facts the live one no longer says
+          (staleFacts = SurfaceSnapshot.carriedFactChanges of the pinned snapshot against the live
+          one) — so `drifted` and the health agree on every surface — and a stale snapshot is never
+          ok A contract the lock records as used WHOLE (a bare dependency, no member named) stands
+          for every method the pinned snapshot's entry holds — whatever reaches it through that
+          dependency (its binding, its client) may call any of them, as
+          external_consumer.narrowedToUses reads such a use — so each is compared like a named
+          member: one removed, renamed (with its new name) or whose route moved or went is said by
+          name and judged as above, and only a contract whose every method held answers one
+          unchanged row.
+        type: local
+      - stepNumber: 10
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        label: unavailable
+        description: >-
+          Report every locked used member — or, when none is locked, the external itself — as
+          unavailable with EXTERNAL_CHECK_UNAVAILABLE and the reason: unresolved (the external's
+          problem, a malformed source naming the accepted forms included), unreachable (why its root
+          could not be read), a git producer that could not be fetched or resolved (offline,
+          refused, unknown ref — or not compared because the read was asked offline, naming `wairon
+          externals status` as the command that fetches it), or a source.hosted producer read
+          outside a hosted server or out of the request's reach (outOfReach). Never a pass
+        type: local
+      - stepNumber: 12
+        label: reported
+        description: The external's status is recorded
+        type: local
+      - stepNumber: 13
+        description: Answer one status per declared external, in declaration order
+        type: return
+        outcome: ExternalStatus[]
+    detail: full
+  - name: listExternals
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the bound project's declared externals through the core
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: >-
+          One row per declared external: alias, producer id, source kind, relation, directory,
+          audience, problem, and the lock's entry when pinned — then one row per ORPHANED pin, a
+          lock entry whose alias is no longer declared (a hand-removed declaration), unresolved with
+          the problem "pinned but no longer declared — `wairon externals remove <alias>` removes the
+          pin", so an orphan is never hidden
+        type: local
+      - stepNumber: 4
+        description: 'Answer the rows: the declared in declaration order, then the orphaned pins'
+        type: return
+        outcome: ExternalListing[]
+    detail: full
+  - name: listFamilyPins
+    narrative:
+      - stepNumber: 1
+        description: Read the snapshots the bound root holds through the repository
         type: call
         targetComponent: surface_repository
         targetMethod: listSnapshots
       - stepNumber: 2
-        description: Detect the chaining-mount context of the current root
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveChainingParent
+        description: >-
+          Keep the generated ones — foreign imports (exchanged, authored) are never family pins —
+          and classify each by its key: `<system>::<subsystem>` is a sibling pin, any other
+          generated key the parent's family pin
+        type: local
       - stepNumber: 3
-        description: A chaining parent was resolved
-        type: branch
-        condition: a chaining parent was resolved
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Compute the parent tree's CURRENT state hash as the freshness comparison source
+        description: Answer the family pins in key order
+        type: return
+        outcome: FamilyPin[]
+  - name: listPinnedExternals
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's declared externals and its referenced git or hosted members from
+          its configuration through the core — the aliases and producer ids only; no producer is
+          bound and nothing is climbed. A `../` sibling member is composed live (round 8): never
+          listed as pinned
         type: call
         targetComponent: surfaces_core_adapter
-        targetMethod: computeParentStateId
-      - stepNumber: 5
-        description: For each stored snapshot
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Read the externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 3
+        description: For each declared alias
         type: loop
         loopKind: forEach
-        over: stored snapshots
-        endStep: 6
+        over: the declared aliases, in declaration order
+        endStep: 5
+      - stepNumber: 4
+        description: Read its pinned snapshot, if the lock holds an entry for it
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: >-
+          Record the alias with its producer id, the lock entry and the snapshot — or the problem:
+          never pinned, the snapshot file missing, or the snapshot unreadable
+        type: local
+      - stepNumber: 6
+        description: Answer the pins in declaration order
+        type: return
+        outcome: PinnedExternal[]
+  - name: renamePin
+    sourcePath: src/core/externals.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the current externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Is there a pin to carry?
+        type: branch
+        condition: >-
+          the lock has no entry for the alias, or already holds the entry under newAlias with that
+          producer id
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing to carry: nothing is written'
+        type: return
+        outcome: 'false'
+      - stepNumber: 4
+        label: read-snapshot
+        description: Read the alias's pinned snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readSnapshot
+      - stepNumber: 5
+        description: >-
+          Set the snapshot provenance's producer id to the new one, leaving its content — and so its
+          digest — untouched
+        type: local
+      - stepNumber: 6
+        description: Save the snapshot under the new alias
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveSnapshot
+      - stepNumber: 7
+        description: >-
+          Move the lock entry to the new alias with the new producer id and snapshot path, its
+          digest and used map as pinned, and save the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 8
+        description: Did the alias change?
+        type: branch
+        condition: newAlias differs from alias
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Remove the snapshot kept under the old alias
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 10
+        label: carried
+        description: The pin now answers to the new alias and producer id
+        type: return
+        outcome: 'true'
+  - name: unpin
+    sourcePath: src/core/externals.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the current externals lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 2
+        description: Is the alias pinned?
+        type: branch
+        condition: the lock has no entry for the alias
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Nothing pinned: nothing is written'
+        type: return
+        outcome: 'false'
+      - stepNumber: 4
+        label: drop
+        description: Drop the entry and save the lock
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 5
+        description: Remove the alias's snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 6
+        description: The pin is gone
+        type: return
+        outcome: 'true'
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Read the bound root's configuration through the core; nothing is bound or climbed
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Is the bound root a part?
+        type: branch
+        condition: the configuration is a part's
+        onFalseStep: 6
+      - stepNumber: 3
+        description: Read the part's externals lock and take its parent entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 4
+        description: Read the excerpt the entry names, when there is an entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readExcerpt
+      - stepNumber: 5
+        description: >-
+          Answer the parent's id with the entry and the excerpt — or the problem: never pinned, the
+          excerpt missing or unreadable, or an excerpt of another project than PartOf names
+        type: return
+        outcome: PinnedParent
+      - stepNumber: 6
+        label: none
+        description: 'Not a part: answer null'
+        type: return
+        outcome: 'null'
+    detail: full
+  - name: pinParent
+    narrative:
+      - stepNumber: 1
+        description: A part has no alias to name
+        type: branch
+        condition: an alias is named
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Refuse before anything is written: a part declares no externals; what it pins is its
+          parent
+        type: throw
+        error: UnknownExternalAlias
+      - stepNumber: 3
+        description: >-
+          Take the excerpt of the parent the part's files reference, read with the parent on disk at
+          PartOf.path; a parent the core cannot read or that does not claim the part is answered
+          unreachable with the reason, and the previous pin stays
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: excerptParent
+      - stepNumber: 4
+        description: Read the part's externals lock (none yet reads as empty)
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 5
+        description: >-
+          Check the parent's excerpt is already on file: the pin counts as unchanged only when the
+          lock's parent entry carries the same digest and project and the stored excerpt is still
+          readable
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readExcerpt
       - stepNumber: 6
         description: >-
-          Build the ExternalSurfaceEntry: classify sourceKind (parent = the generated family surface
-          keyed by the parent system name; sibling = a generated '<systemName>::<subsystemId>' key;
-          foreign = exchanged/authored imports), carry origin, generatedAt, stateId/version
-          provenance and the exposed interface ids, and compute freshness — 'fresh' when a generated
-          snapshot's vendored StateId equals the parent's current hash, 'stale' when it differs,
-          'unverifiable' when no parent hash is available or the snapshot is foreign
-        type: local
+          Write the excerpt to .wai/externals/<parent id>.yaml when its digest differs from the
+          lock's parent entry
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveExcerpt
       - stepNumber: 7
-        description: Return the discovery entries
+        description: >-
+          Record the lock's parent entry — the parent's id, the excerpt's path and digest, the
+          commit, role parent, an empty used map — when it changed
+        type: call
+        targetComponent: externals_repository
+        targetMethod: saveLock
+      - stepNumber: 8
+        description: 'Answer one outcome, the parent''s: pinned, unchanged or unreachable'
         type: return
-        outcome: ExternalSurfaceEntry[]
+        outcome: ExternalPin[]
+    detail: full
+  - name: prune
+    narrative:
+      - stepNumber: 1
+        description: Drop every lock entry whose alias the project no longer declares
+        type: local
+      - stepNumber: 2
+        description: For each pruned alias
+        type: loop
+        loopKind: forEach
+        over: the dropped aliases
+        endStep: 3
+      - stepNumber: 3
+        description: Remove its snapshot
+        type: call
+        targetComponent: externals_repository
+        targetMethod: removeSnapshot
+      - stepNumber: 4
+        description: Answer whether any entry was dropped
+        type: return
+        outcome: whether the lock changed
+    detail: full
+  - name: exportDesign
+    narrative:
+      - stepNumber: 1
+        description: Project the bound project's design export
+        type: call
+        targetComponent: design_exporter
+        targetMethod: exportDesign
+      - stepNumber: 2
+        description: An output path was given
+        type: branch
+        condition: outPath provided
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Write the export to the output path as deterministic JSON
+        type: call
+        targetComponent: surface_transfer_adapter
+        targetMethod: writeDesignTo
+      - stepNumber: 4
+        description: Return the design export
+        type: return
+        outcome: DesignExport
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the projects that consume the bound project through the core — the family in reach,
+          and the project roots in the searched folders that declare it — each with its alias,
+          section, the public names it uses and the ones it still writes that are no longer exported
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: listExternalConsumers
+      - stepNumber: 2
+        description: >-
+          Project the bound project's own surface at audience project (the whole table), for the
+          contract each public name holds now
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 3
+        description: >-
+          Add to each consumer's broken names every method it calls (`<name>.<method>`) on a public
+          name whose contract no longer holds that method — a verb removed or renamed away under it
+          — so a call that broke is marked as no longer exported like a public name that broke
+        type: local
+      - stepNumber: 4
+        description: 'Answer them as read: read-only, nothing written'
+        type: return
+        outcome: ExternalConsumer[]
+  - name: diff
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Project the bound project's surface now, at audience project (the whole table) — with
+          every HTTP Portal of the bound project's own besides (its service API, exported to other
+          wairon projects or not), and every type its published shapes name from another project
+          expanded into the closure under its `alias::name`: a pinned external's from the pin the
+          tree holds, a contained member project's from what its L0 export table exports now, every
+          type the producer's closure names — a qualified closure id (`contracts::money`, a type the
+          producer itself takes from another project) as well as a bare one — respelled under the
+          same alias, so the producer's own spelling never leaks into the comparison and a later
+          move of the same type to another alias reads as the alias respelling it is — so a re-pin
+          (or a member's edit) that reshapes a type the project's own API answers with is a change
+          of the project's own surface
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 2
+        description: >-
+          A saved native snapshot, or a git revision (the last committed approval when none is
+          named)
+        type: branch
+        condition: against names a file on disk
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Read the saved file as the baseline: parsed through the native snapshot schema; a file
+          that is an OpenAPI document, or that does not parse as a native snapshot, is refused in
+          one sentence naming what --against takes (a native snapshot from `surface export --format
+          native`, or a git revision), never a raw schema error
+        type: local
+      - stepNumber: 4
+        description: Compare with it
+        type: jump
+        toStep: 8
+      - stepNumber: 5
+        label: revision
+        description: The bound project's tree at the revision, materialized read-only in the fetch cache
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: approvedRevision
+      - stepNumber: 6
+        description: >-
+          Each live member of the bound project as the baseline knew it: one stored inside the bound
+          project's tree as the revision's tree holds it; one stored outside it (a `../` sibling,
+          which the revision's tree does not hold) at the approval the BASELINE's lock records for
+          it (recordedIn: the revision's tree) — its own last committed approval when that lock
+          records none — each projected at its own root, live only when no revision of it can be
+          read: read where the revision's tree locates it, a sibling would expand nothing, and every
+          verb naming one of its types would read "a type it names changed shape" on a tree that did
+          not move
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 7
+        description: >-
+          Project that tree's surface, its root bound for the projection and the caller's binding
+          restored, as the baseline, projected the same way (its own HTTP Portals, the types it
+          names from other projects expanded from the pins of that tree and the member surfaces read
+          at the step before)
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 8
+        label: compare
+        description: >-
+          Compare the baseline with the surface now: surface_snapshot.changesSince (added, removed,
+          renamed per the trace, changed); then each L0 export entry of the table now that publishes
+          nothing — an invalid problem of the resolved table that bound no public name (a wildcard
+          over a level that exports nothing, a named item that no longer exists) — and that the
+          baseline's table did not already carry, as an added change whose detail says it publishes
+          nothing and why, so a table that went from empty to an entry resolving to nothing never
+          reads as no change
+        type: local
+      - stepNumber: 9
+        description: Answer the project, what it was compared with, and the changes
+        type: return
+        outcome: surface_diff
+  - name: unrecordedUses
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's pinned externals — each declared alias with its lock entry and
+          the snapshot it names; an alias never pinned, or whose snapshot cannot be read, has
+          nothing a use could be recorded in and is left out (unpinned is its own refusal)
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listPinnedExternals
+      - stepNumber: 2
+        description: 'None pinned: answer an empty map without resolving anything'
+        type: branch
+        condition: no declared external carries a lock entry and a readable snapshot
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the empty map
+        type: return
+        outcome: none
+      - stepNumber: 4
+        description: >-
+          Resolve the declared externals OFFLINE — no producer is read over the network, only the
+          usages are wanted: each binding's usage is counted exactly as a pin counts it (a family
+          producer's export usage, else the usage by the public name it spells)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 5
+        description: >-
+          For each pinned alias: every used public name the lock entry's `used` map does not hold is
+          unrecorded (as `<name>`, or `<name>.<method>` for each method it uses), and every used
+          method of a name it holds with methods recorded that is not among them is unrecorded
+          (`<name>.<method>`); a name recorded with no members covers the whole name, as the live
+          comparison reads it. Keep only the uses the pinned snapshot carries
+          (surface_snapshot.memberDigest answers a digest for the method or the type, or the
+          snapshot holds the name): a use it does not carry is a design error the gate reports, and
+          no re-pin could record it. Sort each alias's uses and leave out an alias with none
+        type: local
+      - stepNumber: 6
+        description: Answer the map
+        type: return
+        outcome: unrecorded uses by alias
+  - name: memberApprovedSurfaces
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Read each live member with its tree at the approval it is judged against
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 2
+        label: member
+        description: For each member with an approved revision
+        type: loop
+        loopKind: forEach
+        over: the members that have a revision
+        endStep: 4
+      - stepNumber: 3
+        description: Bind the revision's directory read-only, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 4
+        label: projected
+        description: >-
+          Project it at the `project` ceiling, its widest table, and key it by the member's alias; a
+          revision that cannot be projected is left out
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 5
+        description: Answer the approved surfaces by alias
+        type: return
+        outcome: map<string, SurfaceSnapshot>
+    detail: full
+  - name: memberStatuses
+    sourcePath: src/core/surfaces.ts
+    narrative:
+      - stepNumber: 1
+        description: Read each live member with its usage and its tree at the approval it is judged against
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: memberRevisions
+      - stepNumber: 2
+        label: member
+        description: For each member with an approved revision
+        type: loop
+        loopKind: forEach
+        over: the members that have a revision
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Project the member live at its root, and its approved revision, each at the `project`
+          ceiling, each bound read-only and the caller's binding restored
+        type: call
+        targetComponent: surface_projector
+        targetMethod: projectOwnSurface
+      - stepNumber: 4
+        label: compared
+        description: >-
+          Compare as an external's status compares a pin: every used member's digest in the approved
+          surface (SurfaceSnapshot.memberDigest) against the live one — unchanged, changed (the
+          closure's field renames and a moved or removed route named), renamed per the member's
+          rename trace or removed — leaving out a use the approval does not hold or cannot compare
+          (the family run judges it live); drifted when the content digest moved or
+          SurfaceSnapshot.carriedFactChanges of the approved surface against the live one names a
+          fact; stale when a used member changed, was renamed or went away; never pinned
+        type: local
+      - stepNumber: 5
+        description: Answer one status per member compared, in declaration order
+        type: return
+        outcome: list<ExternalStatus>
+    detail: full
 lint:
-  allow:
-    - code: CALL_STEP_UNREALIZED
-      reason: >-
-        Child snapshot write-out is realized through the fs adapter's saveSnapshot in the same flow;
-        the transfer adapter's writeSnapshotTo names the cross-project export edge — reconcile the
-        naming when the surfaces subsystem takes its final lock.
+  allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-07-24T17:55:48.414Z'
+updatedAt: '2026-10-17T16:26:45.774Z'

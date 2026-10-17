@@ -1,0 +1,31 @@
+kind: value-object
+id: external_use_request
+name: ExternalUseRequest
+description: >-
+  What `wairon externals use` and sdd_update_external ask for: the public names to add to and remove
+  from one declared external's `use` imports, so a project never hand-edits `.wai/project.yaml` to
+  import a producer's names bare.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The declared external whose `use` changes
+    optional: false
+  - name: add
+    type: list<string>
+    description: >-
+      Public names to import bare (`*` for all); each must be exported by the producer to this
+      project when it can be read
+    optional: true
+  - name: remove
+    type: list<string>
+    description: Names to stop importing
+    optional: true
+  - name: dryRun
+    type: bool
+    description: Answer what the `use` would become, writing nothing
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-06T23:03:05.551Z'
+updatedAt: '2026-10-06T23:03:06.292Z'

@@ -1,0 +1,377 @@
+id: iproject_config_registry
+name: Project Config Registry Interface
+description: >-
+  The write path for a project's configuration. Each method is one intent-level change, validated
+  against the schema and written through the store in one write. Keys the schema does not know
+  survive every write, and so does every comment: the store edits the document rather than rewriting
+  it. Every write to `extensions.packs` also records `extensions.useGlobalPacks` at its effective
+  value, so a project that changed its packs counts as having decided on global packs. No write
+  backfills a defaulted identity: a configuration that declares no `id` is written without one,
+  because the default (project_config.effectiveId()) can be wrong — a chained child answers to its
+  mount's subsystem id, which a save cannot know. Only a deliberate writer (init, provisioning,
+  doctor) sets an id, and setId is how doctor does it.
+component: project_config_registry
+methods:
+  - name: create
+    description: >-
+      Write a fresh configuration for a project that has none: init, provisioning, a chained child,
+      externalize, and doctor's backfill. Refuses when a configuration already exists, so creation
+      never overwrites one. The configuration is written as given; the caller supplies the `id` when
+      it knows it.
+    signature: 'create(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name: drop every selection of the same pack and append the new one last, so a
+      re-selected pack moves to the highest precedence. Path references are left alone. Covers `pack
+      use`. Returns whether an earlier selection was replaced.
+    signature: 'upsertPackSelection(selection: PackSelection): bool'
+    returns: bool
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name: drop every selection of that pack, leaving path references alone.
+      Writes only when something was dropped. Covers `pack unuse` and a hosted removal that matched
+      a selection. Returns whether anything was dropped.
+    signature: 'removePackSelection(packName: string): bool'
+    returns: bool
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the profile selection that hosted policy workflows applied to the project.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier`, the execution-budget dial.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy path reference (a vendored pack folder or file under `.wai/packs/`) by
+      appending it when that exact reference is absent. Covers `pack add` from a folder or an
+      archive, and a hosted project-pack install. Returns whether it was added.
+    signature: 'registerPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop the legacy path references equal to the given one; selections are left alone. Writes only
+      when something was dropped. The caller decides which reference a pack name means. Covers `pack
+      remove` and a hosted removal that matched a path reference. Returns whether anything was
+      dropped.
+    signature: 'deregisterPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: >-
+      Record that packs were bundled into `.wai/packs/`: each selection of a named pack gets the
+      committed version and `bundle: true`, in place, keeping the order. One write for the whole
+      set. Covers `pack bundle`.
+    signature: 'markSelectionsBundled(bundled: list<PackSelection>): void'
+    returns: void
+    params:
+      - name: bundled
+        type: list<PackSelection>
+    guarantees:
+      - idempotent
+  - name: rekeyCarried
+    description: >-
+      Rekey the debt register (rules.conformance.carried) for an identity move: every carried
+      finding's spec, site and covered units, as identity_rename.rekeyAnchor leaves them. Read from
+      the document as it is WRITTEN, before schema defaults, so every index is the index of the text
+      the store edits; written through the store's comment-preserving scalar rewrite, so every
+      comment and all other formatting survive and only the renamed ids change. Answers one entry
+      per key changed, naming the finding as it stood. A dry run proves the edit and writes nothing;
+      a move the register names nowhere writes nothing and answers empty; a register the store
+      cannot edit precisely is refused and nothing is written.
+    signature: 'rekeyCarried(rename: IdentityRename, dryRun?: bool): list<CarriedRekey>'
+    returns: list<CarriedRekey>
+    params:
+      - name: rename
+        type: IdentityRename
+        description: The identity move the register follows
+      - name: dryRun
+        type: bool
+        description: Answer the edits and write nothing
+        optional: true
+  - name: setId
+    description: >-
+      Declare the project's id — the deliberate write of an identity that until now was only
+      defaulted. Refuses an id outside the project-id grammar, and refuses when the configuration
+      already declares a DIFFERENT id: an id is immutable, and moving it is the rename migration,
+      never a set. Declaring the id already declared writes nothing. Covers `doctor --fix`'s
+      chaining migration. Returns whether it wrote.
+    signature: 'setId(id: string): bool'
+    returns: bool
+    params:
+      - name: id
+        type: string
+        description: 'The project id to declare: a slug of [a-z0-9-_.] that starts and ends alphanumeric'
+    guarantees:
+      - idempotent
+  - name: declareExternal
+    description: >-
+      Declare one external under an alias in `externals`. Refuses an alias outside [a-z0-9-_]+ or
+      one Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9: the alias names its pin
+      file, which no Windows checkout could hold) and a declaration whose producer id breaks the
+      project-id grammar; refuses when the alias is already declared with a DIFFERENT declaration,
+      so a declaration a person wrote is never overwritten. The same declaration again writes
+      nothing — and a declaration that states no `use` is the same as a held one that differs only
+      in its `use` imports (importNames' state, which it leaves alone). Covers `doctor --fix`'s
+      chaining migration. Returns whether it wrote.
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias key — the name the consumer's references use for the producer from stage 3
+      - name: declaration
+        type: ExternalDeclaration
+        description: 'The value under the alias: `{}` when the alias is the producer id'
+    guarantees:
+      - idempotent
+  - name: declareMember
+    description: >-
+      Declare one member under an alias in `members`: the shorthand `alias: path` when the
+      declaration carries only a path, the long form when it carries a description. Refuses an alias
+      outside [a-z0-9-_]+, an empty or absolute path, and an alias `externals` already declares;
+      refuses when the alias is already a member with a DIFFERENT declaration, so a declaration a
+      person wrote is never overwritten. The same declaration again writes nothing. Covers `doctor
+      --fix`'s move of a legacy L1 mount. Returns whether it wrote.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias key — the first segment this project's references use for the member
+      - name: declaration
+        type: MemberDeclaration
+        description: The member's path relative to this root, and its description when one is carried
+    guarantees:
+      - idempotent
+  - name: setMemberPath
+    description: >-
+      Point an existing member at a new path, keeping its description: the write behind moving a
+      member's directory. Refuses an alias `members` does not declare, and an empty or absolute
+      path. The same path writes nothing. Returns whether it wrote.
+    signature: 'setMemberPath(alias: string, path: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: path
+        type: string
+        description: The member's new path, relative to this root
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: >-
+      Remove one member declaration from `members` — the write behind internalizing a member, whose
+      specs have moved into this project. Returns false when the alias is not declared, writing
+      nothing.
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the external or member declared under an alias, so the
+      project may write them bare. Refuses a name that is neither `*` nor a public name of
+      [a-z0-9-_]+, and an alias the configuration declares under neither `externals` nor `members`.
+      Adds only the names not already imported (a `*` already there imports them all), in the order
+      given, after the existing ones; a shorthand member is rewritten to its long form to hold them.
+      Never removes or reorders a name a person wrote. The same names again write nothing. Covers
+      `doctor --fix`'s positional migration step. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias whose `use` gains the names
+      - name: names
+        type: list<string>
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
+  - name: renameId
+    description: >-
+      Move the project's id — the rename migration's write, and the one write that may replace a
+      declared id: sets `id` to the new one and appends the old one to `previousIds` (creating it
+      when absent). Refuses a new id outside the project-id grammar, and refuses when the
+      configuration declares neither the old id nor, when it declares none, defaults to it — so a
+      plan applied to a project whose id moved under it writes nothing. Already declaring the new id
+      with the old one in `previousIds` writes nothing. Returns whether it wrote.
+    signature: 'renameId(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now (declared, or defaulted from its name)
+      - name: to
+        type: string
+        description: 'The new id: a slug of [a-z0-9-_.] that starts and ends alphanumeric'
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one alias of the alias table, keeping its value and its place: a `members` entry or an
+      `externals` entry under `from` moves to `to`, with its path or producer, its description and
+      its `use` exactly as written. Refuses a `to` outside [a-z0-9-_]+, a `from` neither map
+      declares, and a `to` either map already declares. A table that already holds `to` with `from`
+      gone writes nothing. Returns whether it wrote.
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The alias to declare it under
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise where one declared external's producer is: its producer id (`project`, omitted when
+      null so the alias is the id) and its explicit source (`source`, removed when null), keeping
+      its `use` and description. The write behind a rename (an external naming the old id), a detach
+      (a family external that now needs a path), an adopt (a path the family now supplies) and an
+      internalize (a consumer of the folded member now consumes the parent). Refuses an alias
+      `externals` does not declare, and a producer id outside the project-id grammar. An equal
+      revision writes nothing. Returns whether it wrote.
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string?
+        description: The producer id to record, or null when the alias is the producer id
+      - name: source
+        type: ExternalSource?
+        description: The producer's explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: >-
+      Remove one external declaration from `externals` — the write behind adopting it as a member,
+      or folding the producer into this project. Returns false when the alias is not declared,
+      writing nothing.
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
+  - name: updateMember
+    description: >-
+      Change an existing member's declaration (stage 8): set its `source` (a git `#<commit>`
+      included), `ref`, `dir` or description, or drop an asserted `as` or a `use`, keeping every
+      other part of the entry. Rewriting a deprecated long-form `path` to `source` is the same write
+      (`doctor --fix`). Refuses an alias `members` does not declare, and a result with no source or
+      an unparseable one. The entry is written as the shorthand when only its source remains, the
+      long form otherwise. The same values write nothing. The write behind `member update`, `member
+      promote` / `demote`, and `doctor --fix`. Returns whether it wrote.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set; a field it does not name is kept
+    guarantees:
+      - idempotent
+  - name: setPartOf
+    description: >-
+      Write (or, with null, remove) the bound configuration's `partOf` — the one thing a
+      NON-CONTAINED part's configuration declares (stage 8; a contained part has no configuration).
+      Refuses to write partOf into a configuration that declares any project field (an id, members,
+      externals, composition, rules, extensions, targets): a project is never quietly turned into a
+      part — that is `member demote`, which moves those fields first. Creates the configuration when
+      the directory has none (a fresh sibling part). The same value writes nothing. Returns whether
+      it wrote.
+    signature: 'setPartOf(partOf: PartOf?): bool'
+    returns: bool
+    params:
+      - name: partOf
+        type: PartOf?
+        description: The parent the part belongs to, or null to remove it (promote)
+    guarantees:
+      - idempotent
+  - name: describeProject
+    description: Set the project's human-readable `name` and, when given, its `description`.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
+  - name: setNetwork
+    description: >-
+      Declare (or, with null, remove) the bound project's `network`: that it and every member below
+      it form one isolated network boundary. A declaration with no description is written in its
+      short form `network: true`. Refused for a project without a configuration and for a part's (a
+      part declares no network: the project declaring one encloses it). The same value writes
+      nothing. Returns whether it wrote.
+    signature: 'setNetwork(network: NetworkDeclaration?): bool'
+    returns: bool
+    params:
+      - name: network
+        type: NetworkDeclaration?
+        description: The declaration, or null to remove it
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-13T11:09:34.948Z'
+updatedAt: '2026-10-07T21:50:14.939Z'

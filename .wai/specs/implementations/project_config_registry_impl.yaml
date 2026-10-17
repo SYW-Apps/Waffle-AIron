@@ -1,0 +1,325 @@
+id: project_config_registry_impl
+name: Project Config Registry Implementation
+description: >-
+  The write path for `.wai/project.yaml`: one intent-level change per method, read and written back
+  through the store. A save writes exactly the configuration it is given: a defaulted identity is
+  never written in, because a default can be wrong (a chained child answers to its mount) and only a
+  deliberate writer — init, provisioning, doctor — knows what the project should answer to. Every id
+  and alias a setter judges is judged by identifier.problemAs (project-id, alias): "the project-id
+  grammar" and "[a-z0-9-_]+" below are that grammar in full — at most 64 characters, no leading "-",
+  never a Windows device name, super or __proto__ — and a refusal carries its reason. The `members`
+  and `externals` maps are read by own key only, so an alias that is also a JavaScript prototype
+  name (constructor) is read as itself, never as a property every object inherits.
+contract: iproject_config_registry
+sourcePath: src/config/project-config.ts
+methods:
+  - name: create
+    narrative: []
+    intent: >-
+      Refuses with an error naming the project root when a configuration already exists; otherwise
+      validates the configuration against the schema and writes it through the store as given,
+      inventing no `id`. It never overwrites an existing configuration.
+    calls:
+      - project_config_store.exists
+      - project_config_store.write
+  - name: upsertPackSelection
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, drops every `extensions.packs` selection naming the
+      same pack (path references stay), appends the new selection last, records `useGlobalPacks` at
+      its effective value, and writes it back through the store, where unknown keys survive. Returns
+      whether a selection was dropped. Refuses when the project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removePackSelection
+    narrative: []
+    intent: >-
+      Reads the configuration and drops every selection naming the pack (path references stay). When
+      something was dropped, it records `useGlobalPacks` at its effective value and writes the
+      configuration back; otherwise it writes nothing. Returns whether anything was dropped. Refuses
+      when the project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setProjectType
+    narrative: []
+    intent: >-
+      Reads the configuration, sets `projectType`, and writes it back through the store, leaving
+      every other field and key untouched. Refuses when the project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: recordProfileSelection
+    narrative: []
+    intent: >-
+      Reads the configuration, replaces `profileSelection` with the given selection, and writes it
+      back through the store. Refuses when the project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setExecutionTier
+    narrative: []
+    intent: >-
+      Reads the configuration, sets `execution.tier` (creating `execution` when absent, keeping its
+      overrides), and writes it back through the store. Refuses when the project has no
+      configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: registerPackRef
+    narrative: []
+    intent: >-
+      Reads the configuration. When no entry equals the reference, it appends the reference, records
+      `useGlobalPacks` at its effective value, and writes the configuration back; otherwise it
+      writes nothing. Returns whether the reference was appended. Refuses when the project has no
+      configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: deregisterPackRef
+    narrative: []
+    intent: >-
+      Reads the configuration and drops the path references equal to the given one (selections
+      stay). When something was dropped, it records `useGlobalPacks` at its effective value and
+      writes the configuration back; otherwise it writes nothing. Returns whether anything was
+      dropped. Refuses when the project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: markSelectionsBundled
+    narrative: []
+    intent: >-
+      Reads the configuration. For each given pack, every selection of that pack gets the given
+      version and `bundle: true` in place, so no entry moves; a pack the project does not select is
+      skipped. Records `useGlobalPacks` at its effective value and writes once. Refuses when the
+      project has no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: rekeyCarried
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the raw `rules.conformance.carried` — the register as it is WRITTEN, before schema
+          defaults, so every index below is the index of the text the store edits
+        type: call
+        targetComponent: project_config_store
+        targetMethod: readField
+      - stepNumber: 2
+        description: Decide whether there is a register to rekey
+        type: branch
+        condition: the register is not a list
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Answer empty: a project that carries no debt has nothing a move could leave behind'
+        type: return
+        outcome: no edits
+      - stepNumber: 4
+        description: Rekey every carried finding
+        type: loop
+        loopKind: forEach
+        over: each finding, of each carried group, that names a spec
+        endStep: 5
+      - stepNumber: 5
+        description: >-
+          Rekey its spec, site and covered units with identity_rename.rekeyAnchor; for every key
+          that changed, record a scalar edit at its path
+          (rules.conformance.carried.<group>.findings.<finding>.spec | at | covers.<unit>) holding
+          the old value and the new, and a carried rekey naming the finding by its code, spec and
+          site as they stood
+        type: local
+      - stepNumber: 6
+        description: >-
+          Hand every edit to the store's comment-preserving rewrite — as a dry run when asked, so a
+          caller can prove the edit before its first write. A register the store cannot edit
+          precisely raises its refusal here, and nothing is written; no edits writes nothing
+        type: call
+        targetComponent: project_config_store
+        targetMethod: rewriteScalars
+      - stepNumber: 7
+        description: Answer the carried rekeys, in register order
+        type: return
+        outcome: rekeyed
+    detail: full
+  - name: setId
+    narrative: []
+    intent: >-
+      Refuses an id outside the project-id grammar before reading anything. Reads the configuration
+      through the store, refusing when the project has none. When it already declares this id,
+      returns false and writes nothing; when it declares a different one, refuses with an error
+      naming both ids and the project root — an id moves only through the rename migration.
+      Otherwise sets `id` and writes the configuration back through the store, whose edit keeps
+      every comment, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: declareExternal
+    narrative: []
+    intent: >-
+      Refuses an alias outside [a-z0-9-_]+, or a declaration whose `project` breaks the project-id
+      grammar, before reading anything. Reads the configuration through the store, refusing when the
+      project has none. When `externals` already holds the alias with an equal declaration, returns
+      false and writes nothing; with a different one, refuses naming the alias, both declarations
+      and the project root. Otherwise adds the alias with the declaration after the existing entries
+      (creating `externals` when absent) and writes the configuration back through the store,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: declareMember
+    narrative: []
+    intent: >-
+      Refuses an alias outside [a-z0-9-_]+, or an empty or absolute path, before reading anything.
+      Reads the configuration through the store, refusing when the project has none, and refuses an
+      alias `externals` already declares, naming both. When `members` already holds the alias with
+      an equal declaration (the shorthand and a long form with the same path and no description are
+      equal), returns false and writes nothing; with a different one, refuses naming the alias, both
+      declarations and the project root. Otherwise adds the alias after the existing entries
+      (creating `members` when absent) — as the shorthand `alias: path` when there is no
+      description, else the long form — and writes the configuration back through the store, which
+      keeps every comment and places `members` at its schema position, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setMemberPath
+    narrative: []
+    intent: >-
+      Refuses an empty or absolute path before reading anything. Reads the configuration through the
+      store, refusing when the project has none or `members` does not declare the alias. When the
+      member already has that path, returns false and writes nothing; otherwise sets the path in
+      whichever form the entry was written (the shorthand stays a shorthand, the long form keeps its
+      description) and writes the configuration back through the store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removeMember
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none. When `members`
+      does not declare the alias, returns false and writes nothing; otherwise removes the entry (and
+      `members` itself when it was the last one) and writes the configuration back through the
+      store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: importNames
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a name that is neither `*` nor a public name of [a-z0-9-_]+ before reading anything.
+      Reads the configuration through the store, refusing when the project has none, and refuses an
+      alias that neither `externals` nor `members` declares, naming the alias and the project root.
+      Appends to that declaration's `use` every given name it does not already hold (none when it
+      holds `*`), keeping the names a person wrote in their order; a shorthand member becomes its
+      long form `{ path, use }`. When nothing is new, returns false and writes nothing; otherwise
+      writes the configuration back through the store, which keeps every comment, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: renameId
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a new id outside the project-id grammar before reading anything. Reads the
+      configuration through the store, refusing when the project has none. When it already declares
+      the new id and holds the old one in previousIds, returns false and writes nothing. When its
+      effective id (declared, else defaulted from the name) is not the old id, refuses naming both
+      ids and the project root — the plan was computed against a different identity. Otherwise sets
+      `id` to the new id, appends the old id to `previousIds` (creating the list after `id` when
+      absent), and writes the configuration back through the store, whose edit keeps every comment,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: renameAlias
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a new alias outside [a-z0-9-_]+ before reading anything. Reads the configuration
+      through the store, refusing when the project has none. When neither `members` nor `externals`
+      declares the old alias and one of them declares the new one, returns false and writes nothing.
+      Refuses an old alias neither map declares, and a new alias either map already declares, naming
+      it and the project root. Otherwise renames the key in the map that holds it, in place — the
+      entry keeps its position, and its shorthand or long form, path or producer, description and
+      `use` stay exactly as written — and writes the configuration back through the store, returning
+      true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: repointExternal
+    narrative: []
+    detail: intent
+    intent: >-
+      Refuses a producer id outside the project-id grammar before reading anything. Reads the
+      configuration through the store, refusing when the project has none, and refuses an alias
+      `externals` does not declare, naming it and the project root. Sets the entry's `project` to
+      the given id, or removes it when null; sets its `source` to the given one, or removes it when
+      null; leaves `use` and `description` as written. When the entry already reads that way,
+      returns false and writes nothing; otherwise writes the configuration back through the store,
+      returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: removeExternal
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none. When
+      `externals` does not declare the alias, returns false and writes nothing; otherwise removes
+      the entry (and `externals` itself when it was the last one) and writes the configuration back
+      through the store, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: updateMember
+    narrative: []
+    intent: >-
+      Reads the configuration through the store, refusing when the project has none or `members`
+      does not declare the alias. Merges the named fields into the entry (a deprecated `path`
+      becomes `source`), refusing a result with no source, an unparseable source, a git source
+      without its `#<commit>`, or an `as` other than part or project, each before writing. When the
+      merged entry equals the stored one, returns false and writes nothing; otherwise writes it back
+      as the shorthand when only its source remains and the long form otherwise, through the store,
+      which keeps every comment, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setPartOf
+    narrative: []
+    intent: >-
+      Reads the configuration through the store (none yet reads as empty, for a fresh part). Refuses
+      to set partOf on a configuration declaring any project field, asking the store for each
+      project field in turn whether the configuration declares it and naming those it does. When
+      partOf already equals the value (or is absent and the value is null), returns false and writes
+      nothing; otherwise sets or removes it and writes the configuration through the store, creating
+      the file for a fresh part with only its schema version and partOf, returning true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+      - project_config_store.declares
+  - name: describeProject
+    narrative: []
+    intent: >-
+      Reads the configuration, sets `name` and, when one is given, `description`, and writes it back
+      through the store, leaving every other field and key untouched. Refuses when the project has
+      no configuration.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+  - name: setNetwork
+    narrative: []
+    intent: >-
+      Reads the configuration through the store. Refuses when there is none (`wairon init` first)
+      and when it declares partOf (a part's network is the enclosing project's). When the stored
+      network already reads as the value (absent and null, or the same description), returns false
+      and writes nothing; otherwise writes `network: true` for a declaration without a description,
+      `{ description }` with one, or removes the key for null, through the store, leaving every
+      other field and key untouched, and returns true.
+    calls:
+      - project_config_store.read
+      - project_config_store.write
+detail: intent
+status: complete
+createdAt: '2026-09-13T11:19:22.659Z'
+updatedAt: '2026-10-17T16:25:29.548Z'

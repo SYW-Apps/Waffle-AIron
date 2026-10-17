@@ -1,0 +1,53 @@
+kind: value-object
+id: cross_project_import_fact
+name: CrossProjectImportFact
+description: >-
+  One import a file makes from ANOTHER project's source — a folder holding its own .wai/project.yaml
+  that is not the analyzed project's root: one that resolves to nothing (the module is gone, or it
+  does not export the name imported — a type-only import of another project is erased at run time,
+  so nothing but a compiler notices, and the gate reads the file with one), or one that resolves,
+  under each name it binds (`resolved`), which reaches into that project's code and is held to what
+  that project exports
+subsystem: sdd_validator
+fields:
+  - name: specifier
+    type: string
+    description: The module specifier as the import writes it
+    optional: false
+  - name: name
+    type: string
+    description: >-
+      The name imported from it that the module does not export; absent when the module itself does
+      not resolve
+    optional: true
+  - name: project
+    type: string
+    description: The other project's root the import reaches into, relative to the analyzed project's root
+    optional: false
+  - name: line
+    type: int
+    description: The 1-based line of the import
+    optional: false
+  - name: typeOnly
+    type: bool
+    description: >-
+      Whether the import binds the name as a type only — erased at run time, so no test run notices
+      it either
+    optional: false
+  - name: resolved
+    type: bool
+    description: >-
+      True when the import RESOLVES — the module is there and binds the name (`*` for a namespace
+      import, absent for a side-effect import): code reaching into the other project's source, which
+      the gate holds to what that project exports. Absent for an import that resolves to nothing
+    optional: true
+  - name: module
+    type: string
+    description: >-
+      For a resolved import: the module it lands in, relative to the other project's root — what
+      tells a reach into a file realizing one of its data components
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-08T18:51:43.992Z'
+updatedAt: '2026-10-09T00:42:23.530Z'

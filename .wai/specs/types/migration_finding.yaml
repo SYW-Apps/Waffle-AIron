@@ -1,0 +1,20 @@
+kind: value-object
+id: migration_finding
+name: MigrationFinding
+description: >-
+  One pre-permission-model data shape the rollout migration found in a hosted data dir: the area it
+  sits in and what is (or would be) rewritten.
+subsystem: sdd_host
+fields:
+  - name: area
+    type: string
+    description: 'The data area: instance, units, users, keys, sessions, projects or placements.'
+    optional: false
+  - name: detail
+    type: string
+    description: What was found and what the migration does about it.
+    optional: false
+methods: []
+sourcePath: src/server/migration.ts
+createdAt: '2026-09-25T22:56:11.122Z'
+updatedAt: '2026-09-25T22:56:11.125Z'

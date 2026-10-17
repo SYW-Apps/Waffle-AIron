@@ -100,17 +100,14 @@ if ($UserPath -notlike "*$InstallDir*") {
     Write-Host "$InstallDir is already in your PATH." -ForegroundColor Gray
 }
 
-# Record the install directory in ~/.wairon/config.json so `wairon aliases` knows where to work
-$ConfigDir = "$env:USERPROFILE\.wairon"
-$ConfigFile = "$ConfigDir\config.json"
-if (-not (Test-Path $ConfigDir)) { New-Item -ItemType Directory -Path $ConfigDir -Force | Out-Null }
+# Read the aliases this person has opted out of from ~/.wairon/config.json.
+# The installer only READS this file; the CLI is its only writer.
+$ConfigFile = "$env:USERPROFILE\.wairon\config.json"
 if (Test-Path $ConfigFile) {
     $cfg = Get-Content $ConfigFile -Raw | ConvertFrom-Json
 } else {
     $cfg = [PSCustomObject]@{}
 }
-$cfg | Add-Member -MemberType NoteProperty -Name "installDir" -Value $InstallDir -Force
-$cfg | ConvertTo-Json -Depth 5 | Set-Content $ConfigFile -Encoding UTF8
 
 # Create aliases (wai → wairon.exe via .cmd wrapper)
 # Skip any alias that is already taken by something else

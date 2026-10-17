@@ -1,0 +1,24 @@
+kind: value-object
+id: newer_writer
+name: NewerWriter
+description: >-
+  The release that last wrote a project when it is newer than the wairon a running MCP server is:
+  the file that carries its mark (the approval record or a generated guide) and the version stamped
+  there. Two installs on one machine is how a server ends up older than the CLI that wrote the
+  project.
+subsystem: sdd_mcp
+fields:
+  - name: file
+    type: string
+    description: >-
+      The project file carrying the mark, relative to the project root (.wai/lock.json or a
+      generated guide).
+    optional: false
+  - name: version
+    type: string
+    description: The wairon version stamped on that file.
+    optional: false
+methods: []
+sourcePath: src/mcp/build.ts
+createdAt: '2026-10-17T14:43:37.144Z'
+updatedAt: '2026-10-17T14:43:38.619Z'

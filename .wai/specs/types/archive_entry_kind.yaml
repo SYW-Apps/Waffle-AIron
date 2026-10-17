@@ -1,0 +1,24 @@
+kind: enum
+id: archive_entry_kind
+name: ArchiveEntryKind
+description: >-
+  What one entry of a pack or tree archive is. The SDK's archive reader classifies entries this way;
+  its published type keeps the field a string.
+fields: []
+methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No declaration in code: the SDK keeps an archive entry's kind a plain string (classifyKind
+        in sdk/src/archive.ts returns string, ArchiveEntryMeta.kind is string), so the enum is
+        modelled only, as its description says.
+values:
+  - name: file
+    description: A regular file
+  - name: dir
+    description: A directory
+  - name: symlink
+    description: A symbolic link (refused on extraction)
+createdAt: '2026-10-04T23:34:20.397Z'
+updatedAt: '2026-10-07T06:30:07.859Z'

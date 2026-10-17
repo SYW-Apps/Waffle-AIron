@@ -1,0 +1,52 @@
+id: iproject_config_fs_adapter
+name: Project Config FS Adapter Interface
+description: >-
+  File I/O for `.wai/project.yaml` at the bound project root. The document goes in and out as raw
+  YAML: this adapter does no parsing and applies no defaults.
+component: project_config_fs_adapter
+methods:
+  - name: readDocument
+    description: Read the raw configuration document, or null when the file does not exist.
+    signature: 'readDocument(): any'
+    returns: any
+    params: []
+  - name: writeDocument
+    description: >-
+      Write the document as an EDIT of the file already there, never a re-serialization of a plain
+      object: the file's YAML is parsed into its node tree (which carries its comments), the tree is
+      reconciled to the given document — a mapping key whose value is unchanged is left untouched
+      with every comment on it, a changed scalar is replaced in place, a key the document drops is
+      removed, a key it adds is inserted at its place in the schema's field order relative to the
+      keys already present (appended when no schema neighbour is present), and a sequence is
+      reconciled item by item by position — and the tree is serialized back. So comments, key order,
+      quoting of untouched scalars and keys the schema does not know all survive. The edited text is
+      parsed again and must equal the given document; otherwise the write is refused naming the
+      project root, and nothing is written. With no file yet, the document is serialized fresh.
+    signature: 'writeDocument(document: any): void'
+    returns: void
+    params:
+      - name: document
+        type: any
+  - name: documentExists
+    description: Whether the configuration file exists at the bound root.
+    signature: 'documentExists(): bool'
+    returns: bool
+    params: []
+  - name: readText
+    description: >-
+      Read the configuration file's text exactly as it is — comments, quoting and line endings
+      included — or null when the file does not exist.
+    signature: 'readText(): string?'
+    returns: string?
+    params: []
+  - name: writeText
+    description: Write the configuration file's text verbatim, replacing the file.
+    signature: 'writeText(text: string): void'
+    returns: void
+    params:
+      - name: text
+        type: string
+        description: The whole document text, written byte for byte
+status: complete
+createdAt: '2026-09-13T10:50:01.980Z'
+updatedAt: '2026-10-04T10:19:18.005Z'

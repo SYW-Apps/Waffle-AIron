@@ -1,8 +1,10 @@
 id: surface_portal_impl
 name: Surface Portal Implementation
-description: Pure 1:1 forwarding of surface operations to the orchestrator.
+description: >-
+  Pure 1:1 forwarding of surface operations to the orchestrator, in a module of its own so the
+  portal-to-orchestrator hop is a real import edge; client adapters import the portal from here.
 contract: isurface_portal
-sourcePath: src/core/surfaces.ts
+sourcePath: src/core/surface-portal.ts
 methods:
   - name: exportSurface
     narrative:
@@ -10,14 +12,14 @@ methods:
         description: Forward exportSurface to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
-        targetMethod: exportSurface
+        targetMethod: export
   - name: importSurface
     narrative:
       - stepNumber: 1
         description: Forward importSurface to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
-        targetMethod: importSurface
+        targetMethod: import
   - name: listSnapshots
     narrative:
       - stepNumber: 1
@@ -32,13 +34,6 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: getSnapshot
-  - name: generateChildSnapshots
-    narrative:
-      - stepNumber: 1
-        description: Forward generateChildSnapshots to the surface orchestrator
-        type: call
-        targetComponent: surface_orchestrator
-        targetMethod: generateChildSnapshots
   - name: removeSnapshot
     narrative:
       - stepNumber: 1
@@ -46,13 +41,104 @@ methods:
         type: call
         targetComponent: surface_orchestrator
         targetMethod: removeSnapshot
-  - name: listExternalInterfaces
+  - name: pinExternals
     narrative:
       - stepNumber: 1
-        description: Forward to the orchestrator's external-surface discovery
+        description: Forward pinExternals to the surface orchestrator
         type: call
         targetComponent: surface_orchestrator
-        targetMethod: listExternalInterfaces
+        targetMethod: pinExternals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward getExternalsStatus, with `offline`, to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: getExternalsStatus
+  - name: listExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward listExternals to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listExternals
+  - name: listPinnedExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward listPinnedExternals to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listPinnedExternals
+  - name: pinnedParent
+    narrative:
+      - stepNumber: 1
+        description: Forward pinnedParent to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: pinnedParent
+  - name: exportDesign
+    narrative:
+      - stepNumber: 1
+        description: Forward exportDesign to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: exportDesign
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the declaration to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: declare
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the removal to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: remove
+  - name: updateExternalUse
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the `use` change to the external-declarations workflow
+        type: call
+        targetComponent: external_declarations
+        targetMethod: updateUse
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: listConsumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Forward to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: diff
+  - name: unrecordedUses
+    narrative:
+      - stepNumber: 1
+        description: Forward unrecordedUses to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: unrecordedUses
+  - name: memberApprovedSurfaces
+    narrative:
+      - stepNumber: 1
+        description: Forward memberApprovedSurfaces to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: memberApprovedSurfaces
+  - name: memberStatuses
+    narrative:
+      - stepNumber: 1
+        description: Forward memberStatuses to the surface orchestrator
+        type: call
+        targetComponent: surface_orchestrator
+        targetMethod: memberStatuses
 status: complete
 createdAt: '2026-07-10T23:14:37.431Z'
-updatedAt: '2026-07-24T17:55:31.278Z'
+updatedAt: '2026-10-09T11:38:41.925Z'

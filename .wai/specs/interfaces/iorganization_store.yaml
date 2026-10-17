@@ -18,13 +18,26 @@ methods:
     description: >-
       Atomically swap both in-memory collections to the supplied complete unit and placement sets
       after the registry has persisted them.
-    signature: 'replaceAll(units: OrganizationUnitRecord[], placements: ProjectPlacement[]): void'
+    signature: 'replaceAll(units: list<OrganizationUnitRecord>, placements: list<ProjectPlacement>): void'
     returns: void
     params:
       - name: units
-        type: OrganizationUnitRecord[]
+        type: list<OrganizationUnitRecord>
       - name: placements
-        type: ProjectPlacement[]
+        type: list<ProjectPlacement>
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: load
+      reason: >-
+        The read-through store's hydration is called by the repository FACADE, not by a member:
+        every exported facade function in src/server/organization.ts constructs the store, calls
+        load(), and only then forwards to the registry or index. A Repository facade narrative is
+        held to a single call step (FACADE_FORWARDING), so that hydration call has nowhere to live
+        in the model and load has no modelled caller. Modelling the hydration as a facade method of
+        its own that forwards to the read-back (or letting the facade doctrine carry a
+        hydrate-then-forward pair) is the decision owed; declaring a call from the registry or index
+        would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:39.438Z'
-updatedAt: '2026-07-09T22:13:16.564Z'
+updatedAt: '2026-10-04T22:34:57.266Z'

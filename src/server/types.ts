@@ -1,6 +1,9 @@
-import type { StateId } from '../core/statehash.js';
 import type { LockRecord } from '../core/lockfile.js';
 import type { NamedOpenApiSpec } from '../models/index.js';
+import type { PackDoctrine, PackImpact } from '../models/pack-impact.js';
+import type { ProfileFamily } from '../core/extensions.js';
+import type { GitPublish } from '../git/types.js';
+import type { MigrationPlan, TransactionOutcome } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
 // Hosting value types (sdd_host)
@@ -8,15 +11,15 @@ import type { NamedOpenApiSpec } from '../models/index.js';
 
 /** Coarse compatibility role projected for DISPLAY only — never an authorization
  *  source. Precise authorization resolves from a Principal's permissionSubject
- *  through the permission resolver. (Named DisplayRole so the domain concept
+ *  through permission rules. (Named DisplayRole so the domain concept
  *  `Role` below can carry its canonical meaning: a permission template.) */
 export type DisplayRole = 'editor' | 'admin';
 
 // ---------------------------------------------------------------------------
-// Hierarchical permission model (roles + assignments + the resolver)
+// Hierarchical permission model (roles + assignments + permission rules)
 // ---------------------------------------------------------------------------
 
-/** The five capabilities the hierarchical permission model gates. There is NO
+/** The six capabilities the hierarchical permission model gates. There is NO
  *  '*' capability: the instance-admin bypass is env-anchored to the built-in
  *  super-admin/master and is never granted through the assignment grid. */
 export type Capability =
@@ -33,10 +36,37 @@ export type Capability =
 export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
 
 /** The value an effective resolution can settle on — `inherit` is consumed by the walk. */
-export type EffectiveValue = Extract<PermissionValue, 'yes' | 'approval' | 'no'>;
+export type EffectiveValue = 'yes' | 'approval' | 'no';
 
-/** The scope tiers permissions may be anchored at. */
-export type ScopeKind = 'instance' | 'unit' | 'project';
+/** The scope tiers permissions may be anchored at. A subsystem scope
+ *  (`<projectId>/<subsystemId>`) sits below its project and carries only
+ *  project:write, as yes or no. */
+export type ScopeKind = 'instance' | 'unit' | 'project' | 'subsystem';
+
+/** The separator of a subsystem scope id: `<projectId>/<subsystemId>`. A record id never carries it. */
+export const SUBSYSTEM_SCOPE_SEPARATOR = '/';
+
+/** The label a listing and an explanation give a subsystem rule its project's tree no longer declares. */
+export const SUBSYSTEM_NOT_FOUND = 'subsystem not found';
+
+/** A subsystem scope id's project and subsystem, or null for an id without the separator. */
+export function parseSubsystemScope(scopeId: string): { projectId: string; subsystemId: string } | null {
+  const at = scopeId.indexOf(SUBSYSTEM_SCOPE_SEPARATOR);
+  if (at <= 0 || at === scopeId.length - 1) return null;
+  return { projectId: scopeId.slice(0, at), subsystemId: scopeId.slice(at + 1) };
+}
+
+/** The rung that decided an effective permission, in words a refusal or an explanation can quote. */
+export function describeDecision(p: EffectivePermission): string {
+  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default' }[p.source];
+  if (p.source === 'instance-admin' || p.source === 'instance-default') return setting;
+  if (p.decidedScopeKind === 'subsystem' && p.decidedScopeId) {
+    const parsed = parseSubsystemScope(p.decidedScopeId);
+    return `${setting} at subsystem ${parsed?.subsystemId ?? p.decidedScopeId} of project ${parsed?.projectId ?? ''}`.trim();
+  }
+  if (p.decidedScopeKind && p.decidedScopeKind !== 'instance') return `${setting} at ${p.decidedScopeKind} ${p.decidedScopeId ?? ''}`.trim();
+  return `${setting} at the instance`;
+}
 
 /** One capability→value default a role confers. */
 export interface RolePermission {
@@ -67,22 +97,26 @@ export interface Role {
   createdBy?: PrincipalSubject;
 }
 
+/** Who a permission assignment is for: one user, or everyone (a scope-wide default). */
+export type AssignmentSubjectKind = 'user' | 'everyone';
+
 /** One (subject × scope × capability → value) binding — the atom of the grid.
  *  Roles are NOT assignment subjects: a role's values live on Role.permissions
  *  and apply through the user's RoleBindings, anchored at the binding's scope. */
 export interface PermissionAssignment {
   id: string;
-  /** user | everyone (a scope-wide default). */
-  subjectKind: 'user' | 'everyone';
+  subjectKind: AssignmentSubjectKind;
   /** The user id; absent when subjectKind is 'everyone'. */
   subjectId?: string;
   scopeKind: ScopeKind;
-  /** Qualified unit id or project id; absent when scopeKind is 'instance'. */
+  /** Qualified unit id, project id, or `<projectId>/<subsystemId>`; absent when scopeKind is 'instance'. */
   scopeId?: string;
   capability: Capability;
   value: PermissionValue;
   createdAt: string;
   createdBy?: PrincipalSubject;
+  /** Set on a listing, never stored: "subsystem not found" for a subsystem rule its project no longer declares. */
+  scopeNote?: string;
 }
 
 /** Binds a role to a user within a scope. An unscoped binding applies
@@ -93,14 +127,14 @@ export interface RoleBinding {
   scopeId?: string;
 }
 
-/** The resolved caller handed to the pure permission resolver. */
+/** The resolved caller handed to pure permission rules. */
 export interface PermissionSubject {
   /** The principal's stable user id (matches PermissionAssignment.subjectId). */
   subjectId: string;
   /**
    * Alternate ids this subject is also known by, when a user record's id and
    * its subject's userId have DIVERGED (legacy records, renamed subjects).
-   * The resolver honors a per-user assignment keyed by ANY of these exactly
+   * Permission rules honor a per-user assignment keyed by ANY of these exactly
    * as one keyed by subjectId — a "no" override must never silently miss a
    * diverged user. Write paths canonicalize new assignments onto the
    * subject's userId, so aliases only carry legacy rows.
@@ -109,35 +143,196 @@ export interface PermissionSubject {
   /** Roles bound to this subject, optionally scoped. */
   roleBindings: RoleBinding[];
   /** True ONLY for the env-anchored built-in super-admin subject, the master
-   *  credential, or (devMode) the local-developer subject — the resolver then
-   *  bypasses to yes. Determined by SUBJECT IDENTITY, never by an assignment;
+   *  credential, or (devMode) the local-developer subject — permission rules then
+   *  bypass to yes. Determined by SUBJECT IDENTITY, never by an assignment;
    *  a regular user is never instanceAdmin, even a delegated project:admin. */
   instanceAdmin: boolean;
 }
 
-/** The gathered, read-only data the pure resolver walks. The caller performs
- *  the I/O; the resolver performs none. */
+/** The gathered, read-only data pure permission rules walk. The caller performs
+ *  the I/O; permission rules perform none. */
 export interface PermissionWorld {
   assignments: PermissionAssignment[];
   /** Stored roles MERGED with the intrinsic built-in reserved roles. */
   roles: Role[];
   units: OrganizationUnitRecord[];
   placements: ProjectPlacement[];
+  /** Every member record's link to its parent record — the project rungs of a
+   *  member's chain, between its own scope and its family root's units. */
+  parents: ProjectParentLink[];
 }
+
+/** One rung of the project-to-parent-project chain: a member record and the
+ *  record of the project that declares it. Projects nest like units. */
+export interface ProjectParentLink {
+  projectId: string;
+  parentProjectId: string;
+}
+
+/** A request's reach into its bound project's hosted family, per record through
+ *  each record's own chain. */
+export interface FamilyReach {
+  /** Family record ids with project:read yes. */
+  readable: string[];
+  /** Family record ids with project:write yes (at the project rung). */
+  writable: string[];
+  /** The subsystem rungs the principal meets in those records; empty without subsystem settings. */
+  subsystems: SubsystemReach[];
+}
+
+/** One subsystem rung a principal meets in a hosted project, with project:write resolved at it. */
+export interface SubsystemReach {
+  /** The hosted record that owns the subsystem (the parent record for a part's subsystem). */
+  projectId: string;
+  /** The subsystem's local id in that record's tree. */
+  subsystemId: string;
+  permission: EffectivePermission;
+}
+
+/** One row of a reach comparison: one project, subject and capability, before
+ *  and after a change. */
+export interface ReachComparison {
+  memberId: string;
+  subjectId: string;
+  capability: string;
+  before: EffectivePermission;
+  after: EffectivePermission;
+  equal: boolean;
+}
+
+/** One member a hosted family declares on disk, as the member registration
+ *  plans its hosted record. */
+export interface PlannedMemberRecord {
+  record: HostedProjectRecord;
+  familyRootId: string;
+  /** The pre-stage-7 member-qualified selector that reached it. */
+  qualifier: string;
+  /** register | relocate | rename | return | retire | unchanged | unreadable */
+  action: 'register' | 'relocate' | 'rename' | 'return' | 'retire' | 'unchanged' | 'unreadable';
+  /** For action rename: the record id the member held before. */
+  previousId?: string;
+  /** For action unreadable: why, in words a person acts on. */
+  reason?: string;
+}
+
+/** What the data plane learns before it dispatches a membership-changing tool
+ *  it does not serve itself: who gains access through an attach, or why the
+ *  hosted model refuses a family root's rename. */
+export interface MembershipScreen {
+  refusal?: string;
+  reachChanges: ReachComparison[];
+  /** Promote and an externalize as a project: every subsystem setting the move carries onto the new project. */
+  carried?: CarriedSubsystemRule[];
+}
+
+/** What a carried subsystem setting was: a permission assignment, or a role binding. */
+export type CarriedRuleKind = 'assignment' | 'role';
+
+/** What became of a carried subsystem setting. */
+export type CarriedRuleNote = 'carried' | 'most restrictive wins' | 'not carried (can only narrow)';
+
+/**
+ * One subsystem setting a promote or an externalize moves out of its parent, as
+ * the plan lists it and reconcile carries it: carried with its value, collapsed
+ * with others onto one project rule (the most restrictive wins), or — a role
+ * binding — not carried, because a role only grants and leaving it out can only
+ * narrow.
+ */
+export interface CarriedSubsystemRule {
+  /** The subsystem scopes (`<parent>/<subsystem>`) it came from. */
+  from: string[];
+  /** The new project's id: the project scope it lands on. */
+  to: string;
+  /** The user id, or `everyone` for an everyone-default. */
+  subject: string;
+  kind: CarriedRuleKind;
+  /** The project:write value carried (yes | no), or the role id for a role binding. */
+  value: string;
+  note: CarriedRuleNote;
+}
+
+/** What reconciling a hosted family's member records with the family on disk did. */
+export interface MemberReconciliation {
+  registered: string[];
+  /** Member records re-enabled: the family declares their member again after they were disabled as departed. */
+  returned: string[];
+  relocated: string[];
+  /** 'old->new' for every member record re-keyed by a project rename. */
+  renamed: string[];
+  departed: string[];
+  /** Stage 8: member records retired because their member is now a part of its parent. */
+  retired: string[];
+  reachChanges: ReachComparison[];
+  commit?: GitPublish;
+}
+
+/** A hosted detach, planned or applied: it relocates the member into an isolated root of its own. */
+export interface MemberDetachment {
+  memberId: string;
+  plan: MigrationPlan;
+  newRoot: string;
+  reachLost: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** A hosted adopt, planned or applied — detach's inverse: it relocates the project back into the family's tree. */
+export interface MemberAdoption {
+  memberId: string;
+  plan: MigrationPlan;
+  memberPath: string;
+  reachChanges: ReachComparison[];
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  commit?: GitPublish;
+}
+
+/** An administrative token mint's answer: the plaintext, shown once, and each
+ *  deprecated member-qualified entry with the record id it was stored as. */
+export interface MintedToken {
+  token: string;
+  /** '<qualified entry> -> <member record id>' per mapped entry. */
+  mapped: string[];
+}
+
+/** One API key's narrowing as the member upgrade rewrites it. */
+export interface PlannedNarrowing {
+  keyId: string;
+  before: string[];
+  after: string[];
+  widening: string;
+}
+
+/** Where a hosted project's specs are committed: its family root's repository
+ *  and the project's own .wai/ pathspec relative to it. */
+export interface RepositoryScope {
+  familyRootId: string;
+  repositoryRoot: string;
+  pathspecs: string[];
+}
+
+/** Which source decided an effective permission. */
+export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
 
 /** The resolved effective permission for one (subject, capability, target). */
 export interface EffectivePermission {
   value: EffectiveValue;
-  /** instance-admin | user | role | everyone-default | instance-default. */
-  source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+  source: PermissionSource;
   decidedScopeKind?: ScopeKind;
   decidedScopeId?: string;
+  /** Set by the permission explanation only: "subsystem not found" for a subsystem its project does not declare. */
+  scopeNote?: string;
 }
+
+/** The scope kinds a visibility view lists: the instance is never one of them. */
+export type VisibleScopeKind = 'unit' | 'project' | 'subsystem';
 
 /** One scope in a subject's visibility view: actionable, or an ancestor shown
  *  only as a navigation breadcrumb. Never an ancestor's other children. */
 export interface VisibleScope {
-  scopeKind: 'unit' | 'project';
+  /** A subsystem appears only in a project:write view, and only when it carries a setting of its own. */
+  scopeKind: VisibleScopeKind;
   scopeId: string;
   value: EffectiveValue;
   /** True when shown only as an ancestor breadcrumb (not directly actionable). */
@@ -166,15 +361,15 @@ export interface PrincipalSubject {
  *  server-side bindings derived from the token or bootstrap credential, never
  *  from client-supplied parameters. The role/projects fields remain a coarse
  *  compatibility projection for display; precise authorization is expressed
- *  through the permission resolver over permissionSubject, never stored grants. */
+ *  through permission rules over permissionSubject, never stored grants. */
 export interface Principal {
   tokenId: string;
   /** Coarse display projection — NOT an authorization source. */
   role: DisplayRole;
   /** Coarse projection of the token's project narrowing; '*' denotes no
-   *  narrowing (the resolver still gates per project). Entries may be
-   *  subproject-qualified ('projectId::subsystemId') — carried through verbatim
-   *  so root resolution can bind the mounted child root. */
+   *  narrowing (permission rules still gate per project). Entries may be
+   *  member-qualified ('projectId::alias', one member alias per hop) — carried
+   *  through verbatim so root resolution can bind the member's root. */
   projects: string[];
   authenticated: boolean;
   /** Resolved human, service, or bootstrap identity behind the action. */
@@ -193,7 +388,7 @@ export const UNAUTHENTICATED: Principal = {
 /** A persisted MCP/API credential: the hashed bearer token bound server-side to
  *  an owner identity and a projects narrowing. The token carries NO permissions
  *  of its own — within its narrowing it acts as the owner user's LIVE permission
- *  (the resolver gates per project). The plaintext is never stored. */
+ *  (permission rules gate per project). The plaintext is never stored. */
 export interface ApiKeyRecord {
   id: string;
   keyHash: string;
@@ -203,12 +398,14 @@ export interface ApiKeyRecord {
   role?: DisplayRole;
   /** The token's project narrowing: the project ids this token may act on, or
    *  ['*'] for the owner's full accessible set. An entry MAY be
-   *  subproject-qualified — 'projectId::subsystemId' (nested mounts compose,
-   *  e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
-   *  data-plane requests then bind the mounted child root instead of the
-   *  project root. Never a grant — within this narrowing the token acts as the
-   *  owner's LIVE permission (the resolver gates per project; a subproject
-   *  qualifier narrows reach, it never widens or refines grants). */
+   *  member-qualified — 'projectId::alias' (nested members compose, e.g.
+   *  'proj::a::b', one member alias per hop) — scoping the token INTO that
+   *  member project: data-plane requests then bind the member's root instead
+   *  of the project root. A hop is a member alias, the same string a legacy
+   *  mount id was, so a token minted before stage 3 names the same root.
+   *  Never a grant — within this narrowing the token acts as the owner's LIVE
+   *  permission (permission rules gate per project; a qualifier narrows reach,
+   *  it never widens or refines grants). */
   projects: string[];
   createdAt: string;
   /** Human or service identity that owns this token — the identity it acts as. */
@@ -254,19 +451,23 @@ export interface HostedUserRecord {
   roleBindings?: RoleBinding[];
 }
 
+/** An audit event's level, lowest first; the retention policy's minimum compares in this order. */
+export type AuditLevel = 'debug' | 'info' | 'warning' | 'error' | 'security';
+
+/** How an audited action ended. */
+export type AuditOutcome = 'success' | 'denied' | 'failed' | 'skipped';
+
 /** A durable, redacted audit event: who acted, through which token, on what, with what outcome.
  *  Never contains raw bearer tokens, secrets, or full spec bodies. */
 export interface AuditEvent {
   id: string;
   timestamp: string;
-  /** 'debug' | 'info' | 'warning' | 'error' | 'security' */
-  level: string;
+  level: AuditLevel;
   /** e.g. 'auth' | 'mcp' | 'admin' | 'project' | 'lock' | 'pack' | 'producer' | 'audit' */
   category: string;
   /** Canonical action name, e.g. 'mcp.tool.call', 'token.mint', 'user.create'. */
   action: string;
-  /** 'success' | 'denied' | 'failed' | 'skipped' */
-  outcome: string;
+  outcome: AuditOutcome;
   /** Resolved identity responsible for the action. */
   actor: PrincipalSubject;
   /** Credential id used for the request — never the raw token. */
@@ -277,6 +478,10 @@ export interface AuditEvent {
   target?: string;
   /** Small redacted diagnostic payload serialized by policy. */
   metadata?: string;
+  /** The project whose operation reached this one, when the action did not
+   *  bind it directly (a family migration's start, or the family root a
+   *  deprecated member-qualified selector named). */
+  composition?: string;
 }
 
 /** Admin filter for querying the audit log; unset fields match everything. */
@@ -294,11 +499,13 @@ export interface AuditQuery {
   limit?: number;
 }
 
+/** How one diagnostic check came out; a fail makes the instance unhealthy, a warn degraded. */
+export type DiagnosticStatus = 'pass' | 'warn' | 'fail';
+
 /** One diagnostic check outcome inside an instance health report. */
 export interface DiagnosticCheckResult {
   id: string;
-  /** 'pass' | 'warn' | 'fail' */
-  status: string;
+  status: DiagnosticStatus;
   message: string;
   observedAt: string;
   details?: string;
@@ -312,9 +519,13 @@ export interface ResourceUsageSnapshot {
   projectBytes?: number;
   mcpRequestsLastMinute?: number;
   auditEventsToday?: number;
-  /** Advisory observe/warn findings annotated by the quota specialist. */
+  /** Advisory observe/warn findings annotated by quota rules. */
   quotaMessages: string[];
 }
+
+/** How an exceeded quota limit is labelled. The quota policy is advisory: neither
+ *  mode blocks or throttles. A configured 'block' is read as observe (deprecated). */
+export type QuotaMode = 'observe' | 'warn';
 
 /** Advisory quota policy protecting the instance; observe/warn only. */
 export interface ResourceQuotaPolicy {
@@ -323,41 +534,48 @@ export interface ResourceQuotaPolicy {
   maxMcpRequestsPerMinute?: number;
   maxProjectBytes?: number;
   maxAuditEventsPerDay?: number;
-  /** 'observe' | 'warn' */
-  mode: string;
+  mode: QuotaMode;
 }
+
+/** An instance's overall health. */
+export type InstanceHealthStatus = 'ok' | 'degraded' | 'unhealthy';
 
 /** The assembled read-only instance health report. */
 export interface InstanceHealthReport {
-  /** 'ok' | 'degraded' | 'unhealthy' */
-  status: string;
+  status: InstanceHealthStatus;
   generatedAt: string;
   checks: DiagnosticCheckResult[];
   usage?: ResourceUsageSnapshot[];
 }
 
+/** How much of an audit event's metadata is persisted. A configured 'full-redacted'
+ *  is read as redacted (deprecated): the two were never different. */
+export type AuditMetadataMode = 'none' | 'redacted';
+
 /** Instance-level durable audit capture and retention policy. */
 export interface AuditRetentionPolicy {
   enabled: boolean;
   /** Lowest event level that is captured at all. */
-  minimumLevel: string;
+  minimumLevel: AuditLevel;
   retentionDays: number;
   /** Optional longer retention for 'security'-level events. */
   securityRetentionDays?: number;
   /** Whether read-only actions are captured (high volume). */
   includeReadEvents: boolean;
-  /** 'none' | 'redacted' | 'full-redacted' — how much metadata is persisted. */
-  metadataMode: string;
+  /** How much event metadata is persisted. */
+  metadataMode: AuditMetadataMode;
 }
+
+/** Where an approval request stands. */
+export type ApprovalRequestStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled';
 
 /** A durable request for a privileged hosted action, awaiting an authorized decision.
  *  The payload is redacted — never raw secrets or bearer tokens. */
 export interface ApprovalRequest {
   id: string;
-  /** Requested action kind: 'project:init' | 'project:lock' | 'project:promote' (more later). */
+  /** Requested action kind: 'project:init' | 'project:lock' (more later). */
   kind: string;
-  /** 'pending' | 'approved' | 'denied' | 'expired' | 'completed' | 'cancelled' */
-  status: string;
+  status: ApprovalRequestStatus;
   /** Identity that requested the action. */
   requestedBy: PrincipalSubject;
   /** Credential id the request came through, when via MCP/HTTP auth. */
@@ -376,6 +594,19 @@ export interface ApprovalRequest {
   decidedAt?: string;
   decidedBy?: PrincipalSubject;
   decisionReason?: string;
+  /** Set when an approved project:init is executed: one line per pack the
+   *  instance policy applied and for the governing-profile step, each with its
+   *  headline doctrine changes and finding totals (from the init's
+   *  GovernedProjectCreation). The full impacts are in the project.init.policy
+   *  audit event. Absent for every other kind and before execution. */
+  executionSummary?: string;
+  /** A project:lock request only: the gate identity of the tree the request was
+   *  made about, captured when it was created, `<algorithm>:<digest>`. The
+   *  approved execution refuses when the tree's identity no longer matches it —
+   *  an approval never certifies a design nobody asked to have approved.
+   *  Absent on a request created before stage 5, which executes against the
+   *  tree as it then stands. */
+  gateStateId?: string;
 }
 
 /** A decision supplied by an authorized user/admin for a pending approval request. */
@@ -405,13 +636,15 @@ export interface ProjectInitRequest {
   displayName?: string;
   description?: string;
   /** The organization unit that owns the project. REQUIRED — every project is
-   *  placed at creation so the permission resolver can always enumerate it; a
+   *  placed at creation so permission rules can always enumerate it; a
    *  fresh instance must create its first organization unit before
    *  initializing projects. */
   ownerUnitId: string;
-  environment?: string;
   profileSelection?: ProjectProfileSelection;
 }
+
+/** How the instance pack policy is enforced on a project. */
+export type PackEnforcementMode = 'warn' | 'block' | 'auto_reconcile';
 
 /** The hosted instance's pack/profile policy governing project initialization. */
 export interface InstancePackPolicy {
@@ -426,7 +659,7 @@ export interface InstancePackPolicy {
   requireProfileSelection: boolean;
   /** 'warn' (findings surface, actions proceed) | 'block' (violations reject) |
    *  'auto_reconcile' (like warn, and reconcileProjectPolicy may install missing packs). */
-  enforcementMode: string;
+  enforcementMode: PackEnforcementMode;
   updatedAt: string;
   updatedBy?: PrincipalSubject;
 }
@@ -435,7 +668,7 @@ export interface InstancePackPolicy {
 export interface PolicyEvaluationResult {
   compliant: boolean;
   /** The enforcement mode the evaluation ran under. */
-  mode: string;
+  mode: PackEnforcementMode;
   missingPackNames: string[];
   blockedPackNames: string[];
   missingProfileIds: string[];
@@ -459,7 +692,19 @@ export interface PolicyEvaluationResult {
   unappliedProfileIds: string[];
   /** Human-readable findings for summaries and UI. */
   messages: string[];
+  /** Per pack a reconcile applies (or, from an evaluation, would apply): its
+   *  impact on the project, measured before the write against the configuration
+   *  as it stood. A reconcile is an unattended policy write, so these are how its
+   *  result states what it changed. Empty when nothing is, or would be, applied. */
+  impacts?: PackImpact[];
+  /** evaluateInitRequest only: per required/default pack the init would apply,
+   *  what it changes against wairon's defaults — the doctrine half alone (no
+   *  project exists yet to validate). */
+  doctrine?: PackDoctrine[];
 }
+
+/** The server-global pack tier a pack resolved from. */
+export type GlobalPackTier = 'instance' | 'image';
 
 /** A server-global declarative pack resolved to its content for vendoring into a
  *  project, carrying its canonical identity so a project's compliance is checked
@@ -472,7 +717,7 @@ export interface ResolvedGlobalPack {
   /** The pack's serialized declarative content, ready to vendor. */
   content: string;
   /** The server-global tier it resolved from. */
-  tier: 'instance' | 'image';
+  tier: GlobalPackTier;
 }
 
 /** The outcome of resolving policy-supplied pack names against the server-global
@@ -537,6 +782,9 @@ export interface OrganizationState {
   placements: ProjectPlacement[];
 }
 
+/** What happens to a removed organization unit's content. */
+export type UnitDispositionKind = 'migrate' | 'alternative' | 'absorb' | 'cascade';
+
 /** The chosen resolution when removing an organization unit — a unit is never
  *  silently cascade-deleted; the caller picks what happens to its child units
  *  and project placements. Every non-cascade disposition is an explicit move
@@ -546,7 +794,7 @@ export interface UnitDisposition {
    *  new sibling newSlug/newName and move content in — how a rename/replace is
    *  expressed) | 'absorb' (content → the parent unit) | 'cascade' (delete this
    *  unit with its entire subtree and their placements). */
-  kind: 'migrate' | 'alternative' | 'absorb' | 'cascade';
+  kind: UnitDispositionKind;
   /** Required for kind='migrate': the existing destination unit that adopts this
    *  unit's children/placements. Must exist and must not be this unit or one of
    *  its own descendants. */
@@ -639,6 +887,12 @@ export interface ShareSnapshot {
   openapiSet?: NamedOpenApiSpec[];
 }
 
+/** How one access to a share link ended. */
+export type ShareAccessOutcome = 'served' | 'denied-disabled' | 'denied-expired' | 'not-found' | 'denied-download';
+
+/** How resolving a share token for its view ended (a view is never a download, so it is never denied-download). */
+export type ShareViewOutcome = 'served' | 'denied-disabled' | 'denied-expired' | 'not-found';
+
 /** One recorded access to a share link on the public surface. */
 export interface ShareAccessEntry {
   id: string;
@@ -647,8 +901,7 @@ export interface ShareAccessEntry {
   ip: string;
   userAgent: string;
   referer?: string;
-  /** served | denied-disabled | denied-expired | not-found | denied-download. */
-  outcome: string;
+  outcome: ShareAccessOutcome;
 }
 
 /** The owner's request to create a share link. */
@@ -689,7 +942,7 @@ export interface ShareRequestMeta {
 /** Outcome of resolving a share token — the snapshot model + download perms. */
 export interface SharedViewResult {
   found: boolean;
-  outcome: string;
+  outcome: ShareViewOutcome;
   link?: ShareLink;
   /** Serialized snapshot canvas model, on success. */
   model?: string;
@@ -703,7 +956,7 @@ export interface SharedViewResult {
 /** Outcome of a share artifact download. */
 export interface ShareArtifactResult {
   found: boolean;
-  outcome: string;
+  outcome: ShareAccessOutcome;
   kind?: string;
   content?: string;
   contentType?: string;
@@ -726,6 +979,9 @@ export interface RemotePublicInterfaceRef {
   reason: string;
 }
 
+/** Where a cross-project relation stands. */
+export type ProjectRelationStatus = 'active' | 'suspended' | 'retired';
+
 /** A directed cross-project relation: source consumes target's public interface. */
 export interface ProjectRelationRecord {
   id: string;
@@ -733,13 +989,13 @@ export interface ProjectRelationRecord {
   targetProjectId: string;
   /** e.g. 'consumes' | 'depends-on' | 'observes' */
   kind: string;
-  /** The source-side client Adapter component id realizing the hop. */
-  sourceAdapter: string;
   targetPublicInterface: RemotePublicInterfaceRef;
   reason: string;
-  /** 'active' | 'suspended' | 'retired' — only active relations confer reachability. */
-  status: string;
+  /** Only an active relation confers reachability. */
+  status: ProjectRelationStatus;
+  /** Recorded by the server when the relation is first created; kept on update. */
   createdAt: string;
+  /** Recorded by the server from the creating principal; kept on update. */
   createdBy: PrincipalSubject;
 }
 
@@ -765,7 +1021,7 @@ export interface SurfaceArtifact {
   filename: string;
 }
 
-/** The computed surface-visibility view of one observer project (visibility_specialist). */
+/** The computed surface-visibility view of one observer project (visibility_rules). */
 export interface VisibilityResolution {
   observerProjectId: string;
   /** Units the observer's placements land in, plus their ancestor chains. */
@@ -774,10 +1030,13 @@ export interface VisibilityResolution {
   visibleProjects: { projectId: string; distance: 'department' | 'instance' | 'partner'; via: string }[];
 }
 
+/** How far an observer stands from a project in the unit graph, nearest first. */
+export type AudienceDistance = 'department' | 'instance' | 'partner';
+
 /** One entry of the visibility-resolved discovery catalog (listVisibleSurfaces). */
 export interface VisibleSurfaceEntry {
   projectId: string;
-  distance: string;
+  distance: AudienceDistance;
   /** Redacted catalog summaries, already audience-filtered for this observer. */
   interfaces: PublicInterfaceSummary[];
 }
@@ -801,12 +1060,14 @@ export interface ReachableProjectRef {
   publicInterfaceIds: string[];
 }
 
+/** What a landscape node stands for. */
+export type LandscapeNodeKind = 'orgUnit' | 'project' | 'publicInterface';
+
 /** A node of the hosted landscape graph (unit, project, or public interface). */
 export interface LandscapeNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'interface' */
-  nodeKind: string;
+  nodeKind: LandscapeNodeKind;
   projectId?: string;
   unitId?: string;
   publicInterfaceId?: string;
@@ -818,12 +1079,14 @@ export interface LandscapeNode {
   actionable?: boolean;
 }
 
+/** What a landscape edge says about its two ends. */
+export type LandscapeEdgeKind = 'contains' | 'owns' | 'shared_with' | 'publishes' | 'consumes' | 'depends_on' | 'mirrors';
+
 /** A directed edge of the hosted landscape graph. */
 export interface LandscapeEdge {
   from: string;
   to: string;
-  /** 'hierarchy' | 'placement' | 'relation' */
-  edgeKind: string;
+  edgeKind: LandscapeEdgeKind;
   relationId?: string;
   label?: string;
 }
@@ -836,12 +1099,15 @@ export interface LandscapeGraphModel {
   scope?: string;
 }
 
+/** The identity provider kinds an operator can configure. keycloak and authentik have
+ *  endpoint templates of their own; every other kind resolves as generic OIDC. */
+export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
+
 /** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
   id: string;
-  /** e.g. 'oidc' | 'authentik' | 'keycloak' | 'google' | 'entra' */
-  providerType: string;
+  providerType: IdentityProviderType;
   /** Optional admin-set human label, shown on the login screen's
    *  "Sign in with <displayName>" button. Defaults to the provider id when
    *  unset. Presentation only — never used for provider resolution. */
@@ -922,12 +1188,14 @@ export interface WebSession {
   tokenId?: string;
 }
 
+/** What a node of the web UI's architecture graph stands for. */
+export type WebGraphNodeKind = 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+
 /** One node of the web UI's level-of-detail architecture graph. */
 export interface WebGraphNode {
   id: string;
   label: string;
-  /** 'unit' | 'project' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' */
-  kind: string;
+  kind: WebGraphNodeKind;
   /** Detail level: lower = higher-level (landscape/subsystem), deeper = L2/L3/L4
    *  (0 unit/project, 1 subsystem, 2 component, 3 interface/type, 4 implementation). */
   level: number;
@@ -938,8 +1206,11 @@ export interface WebGraphNode {
   parentId?: string;
   projectId?: string;
   status?: string;
-  /** Count of validation issues on this node (overlaid on the project tier). */
+  /** Count of validation errors and warnings on this node (overlaid on the project tier). */
   issueCount?: number;
+  /** Count of validation notices on this node, kept apart from issueCount so a
+   *  node holding only notices is never drawn as failing. */
+  noticeCount?: number;
   /** True when the caller can act on this scope. False/absent on an ancestor
    *  breadcrumb shown read-only only so the tree stays navigable to a deeper
    *  actionable scope (the no@org + yes@one-project case). Carried through from
@@ -968,7 +1239,15 @@ export interface WebGraphModel {
  *  parts of the project it does not govern. */
 export interface ProjectConfigView {
   projectType: string;
+  /** Whether a lock is IN FORCE — a record exists AND its gate identity still
+   *  matches. Deliberately not "a record exists": a stale record freezes nothing,
+   *  so reporting it as locked claimed a freeze that did not hold. */
   locked: boolean;
+  /** A lock record exists but no longer matches: the specs or the governing
+   *  doctrine moved since it was taken, so promotion refuses until a re-lock.
+   *  Distinguished from never-locked so a UI can prompt for the re-lock instead of
+   *  presenting the project as though it was never frozen. */
+  lockStale?: boolean;
   /** "builtin" for a built-in profile or project kind, otherwise the canonical
    *  name of the registered pack contributing it. Absent when the recorded value
    *  resolves to no loaded profile. */
@@ -990,6 +1269,10 @@ export interface ProjectConfigView {
   /** Ids of subsystems declaring a profile of their own, which therefore takes
    *  precedence over the project-level profile for their components. */
   overridingSubsystemIds?: string[];
+  /** Returned by setProjectType only: what the write changed on the project — the
+   *  new governing profile (and the pack registered to contribute it, when one
+   *  was) measured before the write. */
+  impact?: PackImpact;
 }
 
 /** The pre-auth login-options projection the login screen renders from: which
@@ -1023,23 +1306,51 @@ export interface WebContext {
   local?: boolean;
 }
 
+/** A hosted project's lifecycle status. */
+export type HostedProjectStatus = 'active' | 'disabled';
+
 /** A registered hosted project mapped to its isolated .wai/ root. */
 export interface HostedProjectRecord {
   id: string;
   rootPath: string;
-  status: 'active' | 'disabled';
+  status: HostedProjectStatus;
   createdAt: string;
   /** Derived (not persisted on the record): the project's home unit — its
    *  'owner' placement — populated when the record is listed for display. */
   unitId?: string;
+  /** The record id of the project that declares this one as a member; absent
+   *  for a family root. A member's rootPath is never persisted: it is derived
+   *  as the parent's root joined with memberPath. */
+  parentProjectId?: string;
+  /** The member's path relative to its parent's root, forward slashes; present
+   *  iff parentProjectId is. */
+  memberPath?: string;
+  /** Stage 8: why a disabled record is disabled — "part of <parent>" for a member
+   *  retired as a part; cleared when the record is active again. */
+  disabledReason?: string;
 }
+
+/** What a policy-governed hosted initialization created and applied: the
+ *  persisted record (unchanged; this wrapper is never stored), each
+ *  required/default pack the policy applied with its impact measured before the
+ *  write, and the governing-profile step's impact, measured separately. Init is
+ *  an unattended policy write: this is how its result states what it changed. */
+export interface GovernedProjectCreation {
+  record: HostedProjectRecord;
+  packImpacts: PackImpact[];
+  profileImpact?: PackImpact;
+}
+
+/** Whether the admin API is served. Where it listens is the host's adminHost. A stored
+ *  or submitted local_only, private_network or public is read as enabled (deprecated):
+ *  each only ever meant "served". */
+export type AdminApiMode = 'disabled' | 'enabled';
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces
  *  are bound over HTTP versus local/CLI-only. Mirrors
  *  .wai/specs/types/host_exposure_policy.yaml. */
 export interface HostExposurePolicy {
-  /** 'disabled' | 'local_only' | 'private_network' | 'public'. */
-  adminApiMode: string;
+  adminApiMode: AdminApiMode;
   /** Whether the optional browser admin UI is served. */
   adminUiEnabled: boolean;
   /** Whether the draft identity/audit control-plane API is served over HTTP. */
@@ -1076,9 +1387,16 @@ export interface HostConfig {
   /** Runtime control-plane exposure posture; the secure compatible default is
    *  resolved when omitted. */
   exposurePolicy?: HostExposurePolicy;
-  /** Advisory (observe/warn) resource quota policy; a disabled default is
-   *  resolved when omitted. Never blocks or throttles in this draft. */
-  quotaPolicy?: ResourceQuotaPolicy;
+  /** Advisory (observe/warn) resource quota policy, as overrides of the
+   *  disabled default: each field set here wins, every unset field keeps the
+   *  default (operations.ts effectiveQuotaPolicy). Set from WAIRON_QUOTA_POLICY
+   *  by the serve command. Never blocks or throttles in this draft. */
+  quotaPolicy?: Partial<ResourceQuotaPolicy>;
+  /** Durable audit capture and retention policy, as overrides of the secure
+   *  default: each field set here wins, every unset field keeps the default
+   *  (audit.ts effectiveAuditPolicy). Set from WAIRON_AUDIT_POLICY by the serve
+   *  command. */
+  auditPolicy?: Partial<AuditRetentionPolicy>;
   /** True only when the server runs as the local single-project developer server
    *  (`wairon dev`): loopback-bound, auth off, the one project = the current
    *  working directory. NEVER set by the hosted `serve` command, so the dev-only
@@ -1090,7 +1408,7 @@ export interface HostConfig {
   builtinAdminUser?: string;
   /** Built-in super-admin web-login password, read from WAIRON_ADMIN_PASSWORD by
    *  the serve command. Held in memory only — never persisted or logged; compared
-   *  constant-time by the auth specialist. */
+   *  constant-time by authentication. */
   builtinAdminPassword?: string;
 }
 
@@ -1108,21 +1426,20 @@ export interface InstanceIdentity {
   createdAt: string;
 }
 
-/** Outcome of a gated promote — never an actual merge. */
-export interface PromoteResult {
-  status: 'ready' | 'stale' | 'not-locked';
-  stateId?: StateId;
-  message: string;
-}
+/** Whether a project lifecycle action ran, or waits on an approval request. */
+export type ProjectActionStatus = 'completed' | 'pending-approval';
 
-/** The standardized result of a project lifecycle action (initialize/lock/promote).
+/** The project lifecycle actions that run execute-primary. */
+export type ProjectAction = 'project:init' | 'project:lock';
+
+/** The standardized result of a project lifecycle action (initialize/lock).
  *  EXECUTE-PRIMARY: when the caller is authorized the action RUNS and status is
  *  'completed' with the natural result; when their effective permission is
  *  'approval' the action is not run and status is 'pending-approval' carrying
  *  the created request. A 'no' permission never returns this — it raises Forbidden. */
 export interface ProjectActionOutcome {
-  status: 'completed' | 'pending-approval';
-  action: 'project:init' | 'project:lock' | 'project:promote';
+  status: ProjectActionStatus;
+  action: ProjectAction;
   /** Human-readable outcome: the result detail when completed, or that a
    *  request was submitted when pending-approval. */
   summary: string;
@@ -1130,8 +1447,9 @@ export interface ProjectActionOutcome {
   approval?: ApprovalRequest;
   /** The lock record, present when a project:lock completed. */
   lock?: LockRecord;
-  /** The promote result, present when a project:promote completed. */
-  promote?: PromoteResult;
+  /** A project:init executed in this call only: the created record with the
+   *  impacts of every pack and of the governing-profile step the init applied. */
+  creation?: GovernedProjectCreation;
 }
 
 /** A verified short-lived capability to view one project's diagram in a browser —
@@ -1191,8 +1509,8 @@ export interface AvailableProfile {
   /** Where the profile comes from: "builtin" for a wairon built-in profile,
    *  otherwise the name of the server-global pack that contributes it. */
   source: string;
-  /** The profile's doctrine family when known (backend-like | frontend-like | neutral). */
-  family?: string;
+  /** The profile's doctrine family, when known. */
+  family?: ProfileFamily;
   /** Optional human-readable summary of the profile for the picker. */
   description?: string;
   /** Whether this profile can already govern the project it was listed for:
@@ -1217,6 +1535,12 @@ export interface ProfileApplication {
    *  name of the pack contributing it. */
   source: string;
   /** Set only when the ensure step had to vendor a server-global pack into the
-   *  project (registering it in extensions.packs) to make the profile resolve. */
+   *  project to make the profile resolve — the name of that adopted pack, so the
+   *  side effect is reported instead of hidden. */
   adoptedPackName?: string;
+  /** Set together with adoptedPackName: the project-relative path reference of
+   *  the adopted pack's vendored copy, which the calling orchestrator registers in
+   *  the project configuration. The pack registry owns that layout, so callers
+   *  never compose the path themselves. */
+  adoptedPackRef?: string;
 }

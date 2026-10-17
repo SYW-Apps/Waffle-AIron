@@ -1,0 +1,35 @@
+kind: enum
+id: migration_verb
+name: MigrationVerb
+description: >-
+  The family migrations a request can ask for. promote and demote change what a member is and leave
+  storage alone; externalize and internalize are storage moves that compose with them.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/types.ts
+values:
+  - name: attach
+    description: Make an existing project a member
+  - name: rename
+    description: Rename a project's id
+  - name: rename-alias
+    description: Rename the alias a member or external is declared under
+  - name: detach
+    description: Take a member out of the family
+  - name: adopt
+    description: Take a detached project back in
+  - name: internalize
+    description: Fold a part's subsystems back into the parent (composed with demote on a project member)
+  - name: externalize
+    description: 'Move a subsystem out to a part''s directory (composed with promote for as: project)'
+  - name: promote
+    description: 'A part becomes a project: its project content is created'
+  - name: demote
+    description: 'A project becomes a part: its project content is removed'
+  - name: chaining
+    description: >-
+      The stage 2-4 chaining migration (doctor --fix), which takes no other argument; since stage 8
+      it also rewrites each long-form member path to the one location key
+createdAt: '2026-10-04T23:24:23.421Z'
+updatedAt: '2026-10-04T23:24:23.839Z'

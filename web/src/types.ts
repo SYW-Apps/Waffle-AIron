@@ -11,7 +11,8 @@ export type Capability =
   | 'approval:decide'
   | 'share:create';
 export type PermissionValue = 'yes' | 'approval' | 'no' | 'inherit';
-export type ScopeKind = 'instance' | 'unit' | 'project';
+/** A subsystem scope (`<projectId>/<subsystemId>`) carries only project:write, as yes or no (or inherit). */
+export type ScopeKind = 'instance' | 'unit' | 'project' | 'subsystem';
 
 export const CAPABILITIES: Capability[] = [
   'project:read',
@@ -62,6 +63,17 @@ export interface PermissionAssignment {
   capability: Capability;
   value: PermissionValue;
   createdAt: string;
+  /** Set on a listing only: "subsystem not found" for a subsystem rule its project no longer declares. */
+  scopeNote?: string;
+}
+
+/** One user's effective permission at a scope, with the rung that decided it (GET /web/admin/permissions/explain). */
+export interface EffectivePermission {
+  value: 'yes' | 'approval' | 'no';
+  source: 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+  decidedScopeKind?: ScopeKind;
+  decidedScopeId?: string;
+  scopeNote?: string;
 }
 
 export interface HostedUserRecord {
@@ -91,6 +103,36 @@ export interface ProjectRecord {
   id: string;
   status: string;
   unitId?: string;
+  /** Stage 7: a member record names the project that declares it (its crumb). */
+  parentProjectId?: string;
+  /** Stage 7: a member's path inside its parent's tree. */
+  memberPath?: string;
+  /** Stage 8: why a disabled record is disabled ("part of <parent>" for a member retired as a part). */
+  disabledReason?: string;
+}
+
+/** One used member of an external, against the live producer. */
+export interface ExternalUseStatus {
+  publicName?: string;
+  member?: string;
+  /** unchanged | changed | removed | unlocked | unavailable */
+  state: string;
+  code?: string;
+  detail?: string;
+}
+
+/** Relation health of one external: its pin against the live producer; unavailable is never a pass. */
+export interface ExternalStatus {
+  alias: string;
+  project: string;
+  sourceKind: string;
+  pinned: boolean;
+  reachable: boolean;
+  stale: boolean;
+  drifted?: boolean;
+  outOfReach?: boolean;
+  detail?: string;
+  uses: ExternalUseStatus[];
 }
 
 export interface WebContext {
@@ -143,6 +185,66 @@ export interface PolicyEvaluationResult {
   blockedPackNames: string[];
   missingProfileIds: string[];
   messages: string[];
+  /** Per pack a reconcile applied (or, from an evaluation, would apply): its
+   *  impact, measured before the write. */
+  impacts?: PackImpact[];
+}
+
+// ── Pack impact (governance) ─────────────────────────────────────────────────
+// What one pack write changes, measured before it happens and writing nothing.
+// It states changes and never judges them: packs exist to adjust wairon's
+// checks, and a loosening is a change like any other.
+
+/** One thing a pack changes against wairon's defaults. */
+export interface DoctrineChange {
+  axis: 'rule' | 'concept';
+  change: string;
+  subject: string;
+  profile?: string;
+  from?: string;
+  to?: string;
+  reason?: string;
+}
+
+/** One validation finding, as a pack impact lists it. */
+export interface ImpactFinding {
+  code: string;
+  severity: string;
+  message: string;
+  specId?: string;
+}
+
+/** One project run's totals. */
+export interface ImpactTotals {
+  valid: boolean;
+  errors: number;
+  warnings: number;
+  notices: number;
+}
+
+export interface PackImpact {
+  pack: string;
+  version?: string;
+  replaces?: string;
+  direction: 'apply' | 'remove';
+  doctrine: DoctrineChange[];
+  previousDoctrine?: DoctrineChange[];
+  governing: string[];
+  findings: {
+    introduced: ImpactFinding[];
+    resolved: ImpactFinding[];
+    regraded: { finding: ImpactFinding; from: string }[];
+  };
+  before: ImpactTotals;
+  after: ImpactTotals;
+}
+
+/** What a policy-governed create applied: the record, each pack's impact and the
+ *  governing-profile step's impact. */
+export interface GovernedProjectCreation {
+  record: ProjectRecord;
+  packImpacts: PackImpact[];
+  profileImpact?: PackImpact;
 }
 
 export interface ProducerConfig {
@@ -312,6 +414,19 @@ export interface GitBackingBinding {
   credentialRef?: string;
   /** Instance scope: also mirror hashed credential records. */
   includeCredentials?: boolean;
+}
+
+/** What a spec-tree import actually did — including where the replaced tree went. */
+export interface TreeImportResult {
+  destDir: string;
+  projectName: string;
+  /** Project-relative roots recreated: '.' plus every chained subproject. */
+  roots: string[];
+  fileCount: number;
+  replaced: boolean;
+  /** Where the replaced tree was moved aside; absent when nothing was replaced. */
+  backupPath?: string;
+  stateId?: string;
 }
 
 /** The best human label for a user or subject: name, then email, then a short id. */

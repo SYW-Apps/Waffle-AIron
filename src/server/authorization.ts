@@ -1,21 +1,25 @@
 import { listOrganizationUnits, listProjectPlacements } from './organization.js';
 import { listAssignments } from './permissions.js';
-import { listRoles, BUILTIN_ROLES, isBuiltinRoleId } from './roles.js';
-import { resolvePermission, resolveVisibleScopes } from './permission_resolver.js';
+import { listEffectiveRoles } from './roles.js';
+import { resolvePermission, resolveSubsystemReach, resolveVisibleScopes } from './permission-rules.js';
+import { listProjectRecords } from './projects.js';
 import type {
   EffectivePermission,
+  FamilyReach,
+  HostedProjectRecord,
+  PermissionSubject,
   PermissionWorld,
   Principal,
-  Role,
+  ProjectParentLink,
   VisibleScope,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Authorization Specialist (sdd_host) — the single I/O-backed authorization seam.
+// Authorization (sdd_host) — the single I/O-backed authorization seam.
 //
 // The caller has already authenticated (it holds a Principal carrying its
 // permissionSubject); this gathers the permission world ONCE and delegates to
-// the pure permission resolver. It performs no authentication and no workflow
+// the pure permission rules. It performs no authentication and no workflow
 // routing, and holds no state.
 //
 // Consumers use exactly two calls:
@@ -24,32 +28,79 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
- * The role set the resolver walks: the intrinsic BUILT-IN roles merged over the
- * stored admin-defined ones. Built-ins are code constants, never stored rows, so
- * a binding to one ALWAYS resolves — there is no seeding step to forget and no
- * silent admin lockout. A stray stored row carrying a reserved id can never
- * shadow the built-in definition.
- */
-function mergeRoles(stored: Role[]): Role[] {
-  return [...stored.filter((r) => !isBuiltinRoleId(r.id)), ...BUILTIN_ROLES];
-}
-
-/**
- * Gather the read-only world the pure resolver walks: the organization tree,
- * project placements, the assignment grid, and the role definitions. This is the
- * only I/O in the authorization path.
+ * Gather the read-only world the pure permission rules walk: the organization tree,
+ * project placements, the member records' parent links, the assignment grid, and
+ * the role definitions. This is the only I/O in the authorization path.
  */
 function gatherWorld(dataDir: string): PermissionWorld {
   // Step 1: gather all organization units.
   const units = listOrganizationUnits(dataDir);
   // Step 2: gather all project placements.
   const placements = listProjectPlacements(dataDir);
-  // Step 3: gather the relevant permission assignments.
+  // Step 3: gather the hosted records and project the member records' parent links.
+  const parents = parentLinksOf(listProjectRecords(dataDir));
+  // Step 4: gather the relevant permission assignments.
   const assignments = listAssignments(dataDir);
-  // Step 4: gather the role definitions the subject's bindings reference.
-  const roles = listRoles(dataDir);
-  // Step 5: assemble the world, merging the intrinsic built-in roles.
-  return { assignments, roles: mergeRoles(roles), units, placements };
+  // Step 5: gather the effective role set — the built-in roles merged over the stored ones.
+  const roles = listEffectiveRoles(dataDir);
+  // Step 6: assemble the world.
+  return { assignments, roles, units, placements, parents };
+}
+
+/** Each member record's link to its parent — the project rungs of a member's chain. */
+function parentLinksOf(records: HostedProjectRecord[]): ProjectParentLink[] {
+  return records
+    .filter((r) => r.parentProjectId !== undefined)
+    .map((r) => ({ projectId: r.id, parentProjectId: r.parentProjectId as string }));
+}
+
+/**
+ * Gather the permission world exactly as authorize resolves over it, for a
+ * caller that must reason about resolution itself (the member upgrade's reach
+ * proof, a membership change's reach listing). A read; no authentication.
+ */
+export function gatherPermissionWorld(dataDir: string): PermissionWorld {
+  return gatherWorld(dataDir);
+}
+
+/**
+ * Which of the given hosted records the principal may read and write, each
+ * resolved through its OWN chain (its own scope, its parents', its family root's
+ * units) over one gathered world. An unauthenticated principal reaches nothing.
+ */
+export function resolveFamilyReach(dataDir: string, principal: Principal, projectIds: string[]): FamilyReach {
+  const reach: FamilyReach = { readable: [], writable: [], subsystems: [] };
+  if (!principal.authenticated || !principal.permissionSubject) return reach;
+  // Step 1: gather the permission world once.
+  const world = gatherPermissionWorld(dataDir);
+  // Steps 2-4: each record's read and write over its own project scope.
+  for (const id of projectIds) {
+    if (resolvePermission(principal.permissionSubject, 'project:read', 'project', id, world).value === 'yes') reach.readable.push(id);
+    if (resolvePermission(principal.permissionSubject, 'project:write', 'project', id, world).value === 'yes') reach.writable.push(id);
+    // Step 5: the subsystem rungs the principal meets in the record.
+    reach.subsystems.push(...resolveSubsystemReach(principal.permissionSubject, id, world));
+  }
+  // Step 6.
+  return reach;
+}
+
+/**
+ * Resolve a GIVEN subject's effective permission for a capability at a target
+ * scope (unit, project or subsystem) through the same walk authorize takes —
+ * the value, its source and the rung that decided it. It authenticates and
+ * authorizes nobody: its caller must already have authorized the asker.
+ */
+export function explain(
+  dataDir: string,
+  subject: PermissionSubject,
+  capability: string,
+  scopeKind: string,
+  scopeId: string,
+): EffectivePermission {
+  // Step 1: gather the permission world once, as world does.
+  const world = gatherPermissionWorld(dataDir);
+  // Steps 2-3.
+  return resolvePermission(subject, capability, scopeKind, scopeId, world);
 }
 
 /**
@@ -67,9 +118,9 @@ export function authorize(
   if (!principal.authenticated || !principal.permissionSubject) {
     return { value: 'no', source: 'instance-default' };
   }
-  // Steps 1-5: gather the permission world once.
+  // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 6: resolve the effective permission through the pure resolver.
+  // Step 7: resolve the effective permission through pure permission rules.
   return resolvePermission(principal.permissionSubject, capability, scopeKind, scopeId, world);
 }
 
@@ -87,15 +138,15 @@ export function visibleScopes(
   if (!principal.authenticated || !principal.permissionSubject) {
     return [];
   }
-  // Steps 1-5: gather the permission world once.
+  // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 6: compute the actionable scopes plus their ancestor breadcrumb.
+  // Step 7: compute the actionable scopes plus their ancestor breadcrumb.
   return resolveVisibleScopes(principal.permissionSubject, capability, world);
 }
 
 /**
  * True for the env-anchored instance super-admin (built-in admin / master /
- * devMode local developer) — the resolver bypass.
+ * devMode local developer) — the permission-rules bypass.
  *
  * Listings short-circuit on this. A visibility view enumerates the ORG TREE
  * (units and PLACED projects), so an unplaced project is in nobody's visible

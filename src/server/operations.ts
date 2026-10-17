@@ -1,18 +1,21 @@
-import type { IncomingMessage, ServerResponse } from 'http';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { listProjectRecords } from './projects.js';
-import { sendJson } from './httpio.js';
 import { authorize, visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
 import {
-  COMPATIBLE_DEFAULT_EXPOSURE,
+  effectiveExposure,
   getExposurePolicyRecord,
   setExposurePolicyRecord,
 } from './policy.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import * as packs from './packs.js';
 import { listProjectRelations } from './relations.js';
 import { getPublicSurfaceSnapshot } from './surfaces.js';
+import * as hostCore from './adapters/core.js';
+// The project_config type's own behaviour, which travels with the type.
+import { declaredPackNames, declaredProfileIds } from '../models/project.js';
+import { runWithProjectRoot } from '../utils/fs.js';
+import type { ProjectConfig } from '../models/project.js';
 import type {
   AuditEvent,
   DiagnosticCheckResult,
@@ -30,17 +33,17 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Operations Orchestrator + Diagnostics/Quota Specialists + Portal (sdd_host)
+// Operations Orchestrator + Diagnostics + Quota Rules + Portal (sdd_host)
 //
 // The slim read-only operations plane: instance health, resource usage, and
-// advisory (observe/warn) quota reporting. The two specialists are PURE — they
-// reason only over the inputs the orchestrator supplies (project records, pack
-// listings, relations + target snapshots for relation health) and do
-// no I/O of their own (per diagnostics_specialist / quota_specialist). The
+// advisory (observe/warn) quota reporting. Diagnostics and quota rules are
+// PURE — they reason only over the inputs the orchestrator supplies (project
+// records, pack listings, relations + target snapshots for relation health)
+// and do no I/O of their own (per diagnostics / quota_rules). The
 // orchestrator authenticates through the single auth authority and authorizes by
 // Principal grants (operations:read, or an instance-wide admin grant); it lists
 // project records through the project registry and delegates all derivation to
-// the specialists. It performs NO writes and NO audit (every method is a read).
+// diagnostics and quota rules. It performs NO writes and NO audit (every method is a read).
 // Exported as plain functions so both the HTTP operations portal
 // (handleOperationsRequest, below) and any in-process caller reach the same
 // logic — mirroring identity.ts / landscape.ts.
@@ -63,7 +66,7 @@ const DISABLED_QUOTA_POLICY: ResourceQuotaPolicy = { enabled: false, mode: 'obse
 // grant. A '*'/'*' bootstrap or an instance-wide ({projectId:'*'}) operations:read
 // grant resolves to `all` (unfiltered). A unit-scoped grant resolves to that
 // unit's subtree of projects: the per-project inputs are narrowed to that set
-// BEFORE the diagnostics/quota specialists run, so a scoped operator sees health
+// BEFORE diagnostics/quota rules run, so a scoped operator sees health
 // and usage only for their subtree's projects.
 
 /** Authenticate the caller credential or throw (401-mapping). */
@@ -96,13 +99,17 @@ function narrowToScope(projects: HostedProjectRecord[], scope: OperationsReadSco
   return projects.filter((p) => scope.projectIds.includes(p.id));
 }
 
-/** Resolve the advisory quota policy from host config, secure (disabled) default
- *  when unset. */
-function resolveQuotaPolicy(cfg: HostConfig): ResourceQuotaPolicy {
-  return cfg.quotaPolicy ?? DISABLED_QUOTA_POLICY;
+/**
+ * host_config.effectiveQuotaPolicy — the quota policy in force: the disabled
+ * default (enabled false, mode observe, no limits) with each field the
+ * configured `quotaPolicy` sets laid over it. The one place the policy is
+ * resolved; quota evaluation passes what it answers.
+ */
+export function effectiveQuotaPolicy(cfg?: Pick<HostConfig, 'quotaPolicy'>): ResourceQuotaPolicy {
+  return cfg?.quotaPolicy ? { ...DISABLED_QUOTA_POLICY, ...cfg.quotaPolicy } : DISABLED_QUOTA_POLICY;
 }
 
-// ── Diagnostics Specialist (pure) ────────────────────────────────────────────
+// ── Diagnostics (pure) ────────────────────────────────────────────────────────
 //
 // No I/O, no authorization, no disk or private-spec access — every input is the
 // already-listed set of hosted project records supplied by the orchestrator.
@@ -139,7 +146,7 @@ export function runChecks(
   const checks: DiagnosticCheckResult[] = [];
 
   // Registry consistency: unique ids AND a resolvable (non-empty) root for every
-  // record. Derived purely from the records — the pure specialist never stats disk.
+  // record. Derived purely from the records — pure diagnostics never stats disk.
   const ids = scoped.map((p) => p.id);
   const duplicateIds = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
   const unresolvedRoots = scoped.filter((p) => !p.rootPath || p.rootPath.trim() === '');
@@ -271,7 +278,7 @@ export function runChecks(
  * supplied hosted project records: always an instance-level snapshot capturing
  * the active project count, plus a project-scoped snapshot from the record's
  * available metadata when the scope selects a single project. Quota messages are
- * left empty; advisory quota evaluation is applied separately by the quota specialist.
+ * left empty; advisory quota evaluation is applied separately by quota rules.
  */
 export function collectUsage(
   projects: HostedProjectRecord[],
@@ -317,7 +324,7 @@ export function buildHealthReport(
   return report;
 }
 
-// ── Quota Specialist (pure, advisory) ────────────────────────────────────────
+// ── Quota Rules (pure, advisory) ─────────────────────────────────────────────
 
 /**
  * Evaluate resource usage snapshots against the advisory ResourceQuotaPolicy,
@@ -331,8 +338,8 @@ export function evaluateUsage(
 ): ResourceUsageSnapshot[] {
   if (!policy.enabled) return snapshots;
 
-  // Non-enforcing: a would-be 'block' outcome is downgraded to an observation.
-  const advisory = policy.mode === 'block' ? 'observe' : policy.mode || 'observe';
+  // Non-enforcing: the mode only labels an exceeded limit.
+  const advisory = policy.mode || 'observe';
 
   return snapshots.map((snapshot) => {
     const messages: string[] = [];
@@ -353,9 +360,39 @@ export function evaluateUsage(
 // ── Operations Orchestrator ──────────────────────────────────────────────────
 
 /**
+ * The pack/profile references one hosted project declares: bind its isolated
+ * root, load its configuration through the host core adapter, and derive the
+ * declared pack names and profile ids from it. A project with no configuration,
+ * one whose configuration fails to load, or a record with no root to bind yields
+ * empty references, so one malformed project.yaml never fails the whole health
+ * report. The reference carries the RECORD id: a `wairon dev` project's root is the
+ * developer's own folder, whose name is not the id. Carries no filesystem path, so
+ * it stays safe for redacted diagnostics.
+ */
+function declaredReferences(project: HostedProjectRecord): ProjectPackReference {
+  let config: ProjectConfig | null = null;
+  // A record without a root has no isolated root to bind — binding '' would read
+  // the server's own working directory instead.
+  if (project.rootPath && project.rootPath.trim() !== '') {
+    try {
+      config = runWithProjectRoot(project.rootPath, () => hostCore.loadProjectConfig());
+    } catch {
+      config = null; // a configuration that fails to load counts as absent
+    }
+  }
+  const reference: ProjectPackReference = {
+    projectId: project.id,
+    packNames: config ? declaredPackNames(config) : [],
+  };
+  const profileIds = config ? declaredProfileIds(config) : [];
+  if (profileIds.length > 0) reference.profileIds = profileIds;
+  return reference;
+}
+
+/**
  * Authenticate the caller, authorize operations read, list hosted projects, and
  * assemble a redacted instance health report (diagnostic checks plus usage
- * snapshots) via the diagnostics specialist. Read-only; no writes, no audit.
+ * snapshots) via diagnostics. Read-only; no writes, no audit.
  */
 export function getHealthReport(
   cfg: HostConfig,
@@ -374,8 +411,9 @@ export function getHealthReport(
   const imagePackNames = globalPacks.filter((p) => p.tier === 'image').map((p) => p.name);
   const instancePackNames = globalPacks.filter((p) => p.tier === 'instance').map((p) => p.name);
 
-  // Read each project's declared pack/profile references from its isolated root.
-  const projectReferences = projects.map((p) => packs.readProjectReferences(p.rootPath));
+  // Derive each in-scope project's declared pack/profile references from its
+  // configuration, read under its own isolated root.
+  const projectReferences = projects.map((p) => declaredReferences(p));
 
   // Relation health inputs: active relations sourced from in-scope projects,
   // plus the stored snapshots of their targets.
@@ -421,7 +459,7 @@ export function evaluateQuota(
 
   const projects = narrowToScope(listProjectRecords(cfg.dataDir), readScope);
   const usage = collectUsage(projects, scope);
-  const policy = resolveQuotaPolicy(cfg);
+  const policy = effectiveQuotaPolicy(cfg);
   return evaluateUsage(usage, policy);
 }
 
@@ -441,7 +479,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 /** Append a redacted audit event best-effort — never fails the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[operations] audit append failed for "${event.action}": ` +
@@ -466,7 +504,7 @@ function requireInstanceExposureAdmin(cfg: HostConfig, credential: string | null
  */
 export function getExposurePolicy(cfg: HostConfig, credential: string | null): HostExposurePolicy {
   requireInstanceExposureAdmin(cfg, credential);
-  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(getExposurePolicyRecord(cfg.dataDir) ?? {}) };
+  return effectiveExposure(getExposurePolicyRecord(cfg.dataDir));
 }
 
 /**
@@ -478,13 +516,13 @@ export function getExposurePolicy(cfg: HostConfig, credential: string | null): H
 export function setExposurePolicy(
   cfg: HostConfig,
   credential: string | null,
-  exposure: HostExposurePolicy,
+  policy: HostExposurePolicy,
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
-  const stored = setExposurePolicyRecord(cfg.dataDir, {
-    ...COMPATIBLE_DEFAULT_EXPOSURE,
-    ...exposure,
-  });
+  const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
+  // A retired adminApiMode (local_only, private_network, public) is stored as
+  // enabled; the audit event says so, naming the old and the new value.
+  const submitted = (policy as { adminApiMode?: unknown }).adminApiMode;
   const event: AuditEvent = {
     id: '',
     timestamp: '',
@@ -495,51 +533,10 @@ export function setExposurePolicy(
     actor: principalSubject(principal),
     target: 'exposure-policy',
   };
+  if (submitted !== undefined && submitted !== stored.adminApiMode) {
+    event.metadata = `adminApiMode "${String(submitted)}" is deprecated and was stored as "${stored.adminApiMode}"`;
+  }
   if (principal.tokenId) event.tokenId = principal.tokenId;
   tryAppendAudit(cfg, event);
   return stored;
-}
-
-// ── Operations Portal (HTTP) ─────────────────────────────────────────────────
-//
-// Pure forwarding to the orchestrator functions above. Rides the ADMIN-plane
-// listener (mirroring identity.ts / landscape.ts), owning its own error → status
-// mapping (401/403/404/400) so faults never fall through to the admin-plane
-// catch. Endpoints match ioperations_portal exactly. Called by http.ts when the
-// admin listener sees an `/operations/*` path AND the exposure policy enables it.
-
-/**
- * Route one operations control-plane request to the orchestrator and write the
- * HTTP response. Read-only: three GET endpoints (health, usage, quota), each
- * taking an optional `scope` query selector.
- */
-export function handleOperationsRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  url: URL,
-): void {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['operations', ...]
-  const scope = url.searchParams.get('scope') ?? undefined;
-  try {
-    // GET /operations/health
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'health') {
-      return sendJson(res, 200, getHealthReport(cfg, credential, scope));
-    }
-    // GET /operations/usage
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'usage') {
-      return sendJson(res, 200, getUsage(cfg, credential, scope));
-    }
-    // GET /operations/quota
-    if (req.method === 'GET' && parts.length === 2 && parts[1] === 'quota') {
-      return sendJson(res, 200, evaluateQuota(cfg, credential, scope));
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
-  }
 }

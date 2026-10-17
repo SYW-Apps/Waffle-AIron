@@ -1,0 +1,145 @@
+id: project_repository_impl
+name: Project Repository Facade Implementation
+description: >-
+  Pure 1:1 forwarding facade over the owned project record store, write registry, and index. The
+  facade adds no logic.
+contract: iproject_repository
+sourcePath: src/server/projects.ts
+injectedParams:
+  - dataDir
+methods:
+  - name: resolveRoot
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the project index (authorization-narrowed resolution — a selector never widens
+          scope)
+        type: call
+        targetComponent: project_index
+        targetMethod: resolveRoot
+    symbol: resolveProjectRoot
+  - name: create
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry (root allocation + record create)
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: create
+    symbol: createProjectRecord
+  - name: list
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: list
+    symbol: listProjectRecords
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: remove
+    symbol: removeProjectRecord
+  - name: resolveBinding
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the project index (full authorized binding — root, top project id, bound mount
+          chain)
+        type: call
+        targetComponent: project_index
+        targetMethod: resolveBinding
+    symbol: resolveProjectBinding
+  - name: existingRoot
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: existingRoot
+    symbol: existingProjectRoot
+  - name: register
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: register
+    symbol: registerProjectRecord
+  - name: family
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: family
+    symbol: listFamilyRecords
+  - name: declaredMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: declaredMembers
+    symbol: planMemberRecords
+  - name: repositoryScope
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: repositoryScope
+    symbol: projectRepositoryScope
+  - name: registerMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: registerMember
+    symbol: registerMemberRecord
+  - name: setStatus
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project write registry
+        type: call
+        targetComponent: project_write_registry
+        targetMethod: setStatus
+    symbol: setProjectRecordStatus
+  - name: isRetiredPart
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: isRetiredPart
+  - name: declaredSubsystems
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: declaredSubsystems
+    symbol: declaredSubsystemIds
+  - name: partSubsystems
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: partSubsystems
+    symbol: partSubsystemIds
+  - name: admitNarrowing
+    narrative:
+      - stepNumber: 1
+        description: Forward to the project index
+        type: call
+        targetComponent: project_index
+        targetMethod: admitNarrowing
+    symbol: assertMintableNarrowingEntry
+detail: calls-only
+status: complete
+createdAt: '2026-07-04T12:53:36.287Z'
+updatedAt: '2026-10-03T17:57:38.556Z'

@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { startHostServer, PLACEHOLDER_ADMIN_TOKEN, type HostServerHandle } from '../../src/server/http.js';
+import * as backupSchedule from '../../src/server/backup-schedule.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -62,5 +63,23 @@ describe('startHostServer admin-token guard', () => {
     const handle = startHostServer({ ...cfg, authEnabled: false });
     handles.push(handle);
     expect(handle).toBeDefined();
+  });
+
+  it('starts the backup schedule on start and stops it on close', () => {
+    const startSpy = vi.spyOn(backupSchedule, 'start');
+    const stopSpy = vi.spyOn(backupSchedule, 'stop');
+    process.env.WAIRON_ADMIN_TOKEN = 'a'.repeat(64);
+
+    const handle = startHostServer(cfg);
+    handles.push(handle); // safety net: afterEach closes it too if an assertion throws first
+    expect(startSpy).toHaveBeenCalledTimes(1);
+    expect(startSpy).toHaveBeenCalledWith(cfg);
+    expect(stopSpy).not.toHaveBeenCalled();
+
+    handle.close();
+    expect(stopSpy).toHaveBeenCalledTimes(1);
+
+    startSpy.mockRestore();
+    stopSpy.mockRestore();
   });
 });

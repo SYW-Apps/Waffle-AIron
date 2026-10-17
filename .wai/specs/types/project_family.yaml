@@ -1,0 +1,101 @@
+kind: value-object
+id: project_family
+name: ProjectFamily
+description: >-
+  The project graph of one scan: a node per project root, an owner for every spec key, the
+  references authors wrote as the scan bound them, the references that cross a project boundary, and
+  the family's identity and membership problems. A projection of the scan, never stale with it; the
+  rules read it from the rule context and ask it who owns what and which projects depend on which.
+subsystem: sdd_core
+fields:
+  - name: nodes
+    type: list<ProjectNode>
+    description: Every project root the scan read, bound root first, then members in walk order.
+    optional: false
+  - name: owners
+    type: map<string, string>
+    description: Spec key → the key of the project that declares it.
+    optional: false
+  - name: authoredReferences
+    type: list<AuthoredReference>
+    description: Every reference with `::` across the family, as written and as bound.
+    optional: false
+  - name: problems
+    type: list<ProjectFamilyProblem>
+    description: >-
+      Id collisions, id-less and defaulted members, absent members and alias conflicts across the
+      family.
+    optional: false
+  - name: references
+    type: list<CrossProjectReference>
+    description: >-
+      Every reference in the family whose bound target lies in another project than the referring
+      spec's, in the positions CrossProjectReference lists.
+    optional: false
+methods:
+  - name: node
+    signature: 'node(namespace: string): ProjectNode | null'
+    returns: ProjectNode?
+    description: The node with that key, or null.
+    symbol: familyNode
+  - name: ownerOf
+    signature: 'ownerOf(specId: string): ProjectNode | null'
+    returns: ProjectNode?
+    description: 'The project that declares the spec: its owner entry. Null for a key the scan did not read.'
+  - name: producerOf
+    signature: 'producerOf(reference: string, from?: string): ProjectNode | null'
+    returns: ProjectNode?
+    description: >-
+      The project a reference lands in. With `from` (a project key), the reference is read from that
+      project the way the scan binds one — an id without `::` is local to `from`; `alias::name` goes
+      through `from`'s alias table; the deprecated forms are read as the scan reads them — for
+      fields the loader leaves raw, such as trustedLinks. Then: the owner of the spec it names when
+      the scan read one; otherwise the node whose key is the longest prefix of it, which names the
+      project a reference points into even when the item is missing. Null for a reference nothing
+      binds (an outside or unresolved first segment).
+  - name: declares
+    signature: 'declares(consumer: string, producer: string): boolean'
+    returns: bool
+    description: >-
+      Whether the consumer may reach the producer as a declared dependency: the producer is one of
+      the consumer's direct members (its `members` key, or a legacy mount, is the alias), or one of
+      the consumer's externals resolves to it.
+  - name: dependencyCycles
+    signature: 'dependencyCycles(): string[][]'
+    returns: list<list<string>>
+    description: >-
+      The loops in the project dependency graph: an edge runs from a consumer to a producer for
+      every cross-project reference (and every L0 re-export from a member or external), and each
+      strongly connected set of two or more projects is answered once, as the project keys along one
+      loop in walk order, the first key repeated at the end. A member is not an edge to its parent
+      or from it: containment is not dependency. Empty for an acyclic family.
+  - name: bindExternal
+    signature: >-
+      bindExternal(declared: DeclaredExternal, consumer: ProjectNode, nodes: list<ProjectNode>):
+      ResolvedExternal
+    params:
+      - name: declared
+        type: DeclaredExternal
+        description: >-
+          One external declaration as the configuration reads it (declaredExternals), written or
+          only asked for
+      - name: consumer
+        type: ProjectNode
+        description: The declaring project's node
+      - name: nodes
+        type: list<ProjectNode>
+        description: Every node of the family read so far
+    returns: ResolvedExternal
+    description: >-
+      One external declaration bound to its producer the way the graph binds every declared
+      external: its declaration's own problem, else a hosted record id (resolved later through the
+      hosting server's lookup), a git source (resolved later through the fetch cache), a source.path
+      landing on a family project (which must answer to the declared id) or on a directory outside
+      the family (audience instance), else the one family project answering to the declared id
+      (audience project) — none or several being the problem, saying which. Pure, so a declaration
+      not yet written (a dry run of `externals add`) is bound exactly as the written one will be.
+    sourcePath: src/models/project-family.ts
+    symbol: bindDeclaredExternal
+sourcePath: src/models/project-family.ts
+createdAt: '2026-09-26T17:40:06.197Z'
+updatedAt: '2026-10-06T23:04:03.712Z'

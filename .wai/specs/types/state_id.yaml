@@ -2,18 +2,59 @@ kind: value-object
 id: state_id
 name: StateId
 description: >-
-  Content-addressed identity of a spec-tree state: a deterministic hash over the canonicalized spec
-  files. Two trees with identical spec content produce the same StateId; any edit changes it. Backs
-  the commit-scoped lock record and the promote-time re-check.
+  The deterministic identity of a spec-tree state. Two states with identical content produce the
+  same StateId; any change alters it. Two flavours exist, distinguished by `algorithm` so they can
+  never compare equal: the CONTENT identity over the spec tree alone (surface/landscape snapshot
+  stamps, where doctrine is irrelevant), and the GATE identity a lock records and every staleness
+  re-check recomputes — the project's OWN spec content, the governing design doctrine, the consumed
+  contract inputs of its own root, its `composition`, and each direct member's composition subject —
+  because a lock asserts that these specs pass THIS gate against THESE inputs.
 fields:
   - name: algorithm
     type: string
-    description: Hash algorithm identifier (e.g. "sha256")
+    description: >-
+      Algorithm identifier, also distinguishing the flavour: "sha256" = spec-tree content only;
+      "sha256+content+doctrine+inputs+members" = the stage-5 gate identity. Earlier gate markers
+      ("sha256+doctrine+inputs", "sha256+content+doctrine+inputs") are no longer produced;
+      stateIdEquals compares this field, so a lock taken under an earlier marker reads stale once
+      (LockStatus.upgraded) instead of passing.
     optional: false
   - name: digest
     type: string
-    description: Hex digest over the canonicalized spec tree
+    description: >-
+      Hex digest over the canonicalized content (the spec tree, plus for the gate flavour the
+      doctrine projection, the consumed contract inputs, the composition block and the members'
+      subjects)
     optional: false
-methods: []
+  - name: asRecorded
+    type: StateId?
+    description: >-
+      On a gate identity only: the same gate identity computed under the algorithm the bound
+      project's lock record was taken with, when that is the previous algorithm this release can
+      still recompute (the content reading that kept code linkage in). Present only while the record
+      on disk carries that earlier algorithm, so a lock taken before linkage left the approval is
+      judged exactly as it was taken — never a forced re-lock of an unchanged design. Never
+      recorded: a lock writes algorithm and digest alone.
+    optional: true
+  - name: parts
+    type: map<string, string>?
+    description: >-
+      On a gate identity only: the digest of each input the identity covers, taken on its own
+      (gate_identity.parts) — `design` (the own design), `release` (this wairon release's built-in
+      design rules), `rules` (projectType and the design rule tuning), `packs` (the governing
+      extensions' doctrine), `network` (absent when none is declared), `composition`, `contracts`
+      (the consumed contract inputs) and `members` (the direct members' subjects). Never part of the
+      digest; a lock records them as gateParts, so a later check can say WHICH input moved, and tell
+      a release change (only `release` moved) from a change the project made.
+    optional: true
+methods:
+  - name: equals
+    signature: 'equals(other: StateId | null | undefined): boolean'
+    returns: bool
+    description: >-
+      Whether two state ids name the same state: the same algorithm and the same digest. An absent
+      id equals nothing, not even another absent one.
+    symbol: stateIdEquals
+sourcePath: src/core/statehash.ts
 createdAt: '2026-07-04T12:44:18.502Z'
-updatedAt: '2026-07-04T12:44:18.505Z'
+updatedAt: '2026-10-08T08:35:39.792Z'

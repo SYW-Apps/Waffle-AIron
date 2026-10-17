@@ -11,7 +11,7 @@ import {
   placeProject,
 } from './organization.js';
 import { listProjectRecords } from './projects.js';
-import { LEGACY_SUPERADMIN_USER_ID, LEGACY_LOCALDEV_USER_ID } from './auth.js';
+import { isLegacyBuiltin } from './auth.js';
 import type {
   Capability,
   PrincipalSubject,
@@ -123,10 +123,6 @@ function slugify(name: string): string {
 }
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
-
-function isLegacyBuiltin(userId: string | undefined): boolean {
-  return userId === LEGACY_SUPERADMIN_USER_ID || userId === LEGACY_LOCALDEV_USER_ID;
-}
 
 /** Seed one migrated assignment (idempotence: skip when an identical
  *  subject×scope×capability row already sits in the grid). */
@@ -392,10 +388,12 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
     if (apply && changed) writeRaw(sessionsPath, kept);
   }
 
-  // 6. Unplaced projects: every project is placed — the resolver enumerates
-  //    units + PLACED projects, so an unplaced one is in NOBODY's view.
+  // 6. Unplaced projects: every project is placed — permission rules enumerate
+  //    units + PLACED projects, so an unplaced one is in NOBODY's view. Only
+  //    a FAMILY ROOT can be unplaced: a member record takes its units from its
+  //    family root and is never swept into the 'unassigned' unit.
   const placedIds = new Set(listProjectPlacements(dataDir).map((p) => p.projectId));
-  const unplaced = listProjectRecords(dataDir).filter((r) => !placedIds.has(r.id));
+  const unplaced = listProjectRecords(dataDir).filter((r) => !r.parentProjectId && !placedIds.has(r.id));
   if (unplaced.length > 0) {
     found('projects', `${unplaced.length} project(s) are placed in no organization unit: ${unplaced.map((r) => r.id).join(', ')} — placed into the 'unassigned' root unit`);
     if (apply) {

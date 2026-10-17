@@ -1,8 +1,12 @@
 id: validator_core_adapter_impl
 name: Validator Core Adapter Implementation
-description: Concrete implementation forwarding validator load calls to core portal.
+description: >-
+  sdd_validator's client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The validator imports this module, so its calls into core land here — before, the
+  forwards were local wrappers inside the validator's own file and the calls resolved straight into
+  core's modules.
 contract: ivalidator_core_adapter
-sourcePath: src/core/validation.ts
+sourcePath: src/core/adapters/validator-core.ts
 simPath: tests/core/validation.test.ts
 methods:
   - name: loadSystemSpec
@@ -10,59 +14,237 @@ methods:
       - stepNumber: 1
         description: Call loadSystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
   - name: loadSubsystemSpecs
     narrative:
       - stepNumber: 1
         description: Call loadSubsystemSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSubsystemSpecs
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
         description: Call loadComponentSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
         description: Call loadInterfaceSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
   - name: loadImplementationSpecs
     narrative:
       - stepNumber: 1
         description: Call loadImplementationSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadImplementationSpecs
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
         description: Call loadTypeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
   - name: dryRunSerializeSpecs
     narrative:
       - stepNumber: 1
         description: Call dryRunSerializeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: dryRunSerializeSpecs
-    conformance: 'off'
   - name: loadProjectExtensions
     narrative:
       - stepNumber: 1
         description: Forward to the core portal to load and merge the governing extension packs.
         type: call
-        targetComponent: core_portal
+        targetComponent: extension_portal
         targetMethod: loadProjectExtensions
     detail: calls-only
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: Call consumedContractInputs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: consumedContractInputs
+  - name: settledSpecPaths
+    narrative:
+      - stepNumber: 1
+        description: Call settledSpecPaths on the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: settledSpecPaths
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Call getLoaderIssues on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Call clearLoaderIssues on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: clearLoaderIssues
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call scanAllSpecs on the spec tree portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
+  - name: loadProjectVariants
+    narrative:
+      - stepNumber: 1
+        description: Call loadProjectVariants on the extension portal
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadProjectVariants
+  - name: readLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Call readLockRecord on the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: readLockRecord
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSubsystemExports on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveProjectExports on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Call projectFamily on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+  - name: exportUsage
+    narrative:
+      - stepNumber: 1
+        description: Call exportUsage on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: exportUsage
+  - name: loadExtensionsFor
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward to the core portal to load the packs a given configuration (and candidate) would
+          apply.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadExtensionsFor
+    detail: calls-only
+  - name: packManifest
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal to resolve one pack entry and read its manifest.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packManifest
+    detail: calls-only
+  - name: computeOwnStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's own-tree content identity
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeOwnStateId
+  - name: approvalRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's record read under the given root
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvalRecord
+  - name: signatureFacts
+    narrative:
+      - stepNumber: 1
+        description: Call signatureFacts on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: signatureFacts
+  - name: resolveSignatures
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSignatures on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSignatures
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Call typeSpellingFacts on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: typeSpellingFacts
+  - name: computeOwnDesignId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's own-design identity
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeOwnDesignId
+  - name: retiredReachFacts
+    narrative:
+      - stepNumber: 1
+        description: Call retiredReachFacts on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: retiredReachFacts
+  - name: computeOwnDesignIdAsRecorded
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's own-design identity in the earlier reading
+        type: call
+        targetComponent: approval_portal
+        targetMethod: computeOwnDesignIdAsRecorded
+  - name: approvedStatuses
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's status recovery
+        type: call
+        targetComponent: approval_portal
+        targetMethod: approvedStatuses
+  - name: resolveChainingParent
+    narrative:
+      - stepNumber: 1
+        description: Call resolveChainingParent on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
+  - name: diffAgainstApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal's comparison
+        type: call
+        targetComponent: approval_portal
+        targetMethod: diffAgainstApproval
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-18T22:34:35.143Z'
+updatedAt: '2026-10-09T11:40:09.011Z'

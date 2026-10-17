@@ -4,11 +4,7 @@ import { execSync } from 'child_process';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { SUPPORTED_ALIASES, SupportedAlias } from '../config/defaults.js';
-import {
-  getDisabledAliases,
-  setDisabledAliases,
-  getInstallDir,
-} from '../config/userconfig.js';
+import { getDisabledAliases, setDisabledAliases } from '../config/userconfig.js';
 
 // ---------------------------------------------------------------------------
 // aliases command
@@ -72,11 +68,11 @@ export async function runAliasesList(): Promise<void> {
 
   logger.blank();
 
-  if (!isNpm && installDir) {
+  if (installDir) {
     logger.info(`Install directory: ${installDir}`);
-  } else if (!isNpm && !installDir) {
-    logger.warn('Install directory unknown. Run the install script to set it, or set it manually:');
-    logger.info('  wairon aliases enable <name>  (will attempt to derive from current binary)');
+  } else {
+    logger.info('No install directory of ours to manage — an npm install registers these commands');
+    logger.info("itself, through package.json's bin entries.");
   }
 }
 
@@ -133,7 +129,7 @@ export async function runAliasesDisable(alias: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function enableBinaryAlias(alias: SupportedAlias): Promise<void> {
-  const installDir = resolveInstallDir(true);
+  const installDir = resolveInstallDir();
   if (!installDir) {
     logger.error('Cannot determine install directory. Is wairon installed as a binary?');
     process.exit(1);
@@ -159,7 +155,7 @@ async function enableBinaryAlias(alias: SupportedAlias): Promise<void> {
 }
 
 async function disableBinaryAlias(alias: SupportedAlias): Promise<void> {
-  const installDir = resolveInstallDir(false);
+  const installDir = resolveInstallDir();
   if (!installDir) return; // nothing to remove
 
   const filePath = aliasFilePath(alias, installDir);
@@ -225,19 +221,14 @@ function aliasFilePath(alias: string, installDir: string | undefined): string | 
 }
 
 /**
- * Resolve the install directory.
- * For pkg binaries: dirname(process.execPath) — the binary lives there.
- * Falls back to stored installDir from user config.
+ * Resolve the install directory: for a packaged binary, the directory the
+ * running executable sits in. Nothing is looked up, so nothing can be stale.
+ *
+ * An npm install has no directory of ours to manage — its commands are
+ * registered by the bin entries in package.json, wherever npm put them.
  */
-function resolveInstallDir(warnIfMissing = false): string | undefined {
-  if (isPkgBinary()) {
-    return path.dirname(process.execPath);
-  }
-  const stored = getInstallDir();
-  if (!stored && warnIfMissing) {
-    logger.warn('Install directory not recorded in ~/.wairon/config.json');
-  }
-  return stored;
+function resolveInstallDir(): string | undefined {
+  return isPkgBinary() ? path.dirname(process.execPath) : undefined;
 }
 
 /**

@@ -1,0 +1,222 @@
+id: spec_maintenance_portal_impl
+name: Spec Maintenance Portal Implementation
+description: >-
+  Realized by src/core/index.ts, the module that republishes core's portals, alongside core's other
+  portals (N:1). Each method is an identity re-export or a one-call forward to the component that
+  holds the workflow.
+contract: ispec_maintenance_portal
+sourcePath: src/core/index.ts
+methods:
+  - name: provisionProject
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: provisionProject
+  - name: moveMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveMember
+  - name: externalizeSubsystem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: externalizeSubsystem
+  - name: internalizeMember
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: internalizeMember
+  - name: importSpecTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the tree transfer orchestrator.
+        type: call
+        targetComponent: tree_transfer_orchestrator
+        targetMethod: importSpecTree
+  - name: ensureProjectInitialized
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: ensureProjectInitialized
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameComponent
+  - name: retireSpecialists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: retireSpecialists
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameMethod
+  - name: repairForeignStepFields
+    narrative:
+      - stepNumber: 1
+        description: Forward the narrative-step repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairForeignStepFields
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findLegacySpecFiles
+  - name: findChainingSubprojectsMissingConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findChainingSubprojectsMissingConfig
+  - name: backfillChainedSubprojectConfigs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: backfillChainedSubprojectConfigs
+  - name: moveMountToMembers
+    narrative:
+      - stepNumber: 1
+        description: Forward the mount move to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveMountToMembers
+  - name: normalizeReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward the reference normalization to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: normalizeReferences
+  - name: createMember
+    narrative:
+      - stepNumber: 1
+        description: Forward the member creation to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: createMember
+  - name: rewriteReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: rewriteReferences
+  - name: promoteMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: promoteMember
+  - name: demoteMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: demoteMember
+  - name: updateMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: updateMember
+  - name: advanceMember
+    narrative:
+      - stepNumber: 1
+        description: Route the write through the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: advanceMember
+  - name: repairSignatures
+    narrative:
+      - stepNumber: 1
+        description: Forward the signature repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairSignatures
+  - name: repairTypeSpellings
+    narrative:
+      - stepNumber: 1
+        description: Forward the type-spelling repair to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: repairTypeSpellings
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameType
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward to the reachability migration
+        type: call
+        targetComponent: reachability_migration
+        targetMethod: migrate
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameField
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameParam
+  - name: findOrphanedSpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: findOrphanedSpecFiles
+  - name: seedDemoTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the demo orchestrator (an identity re-export)
+        type: call
+        targetComponent: demo_orchestrator
+        targetMethod: seedTree
+  - name: renameSpecId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core orchestrator
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameSpecId
+status: complete
+createdAt: '2026-09-25T17:33:05.650Z'
+updatedAt: '2026-10-09T00:27:01.211Z'

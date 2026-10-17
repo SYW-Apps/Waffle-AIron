@@ -1,0 +1,27 @@
+kind: enum
+id: design_approval
+name: DesignApproval
+description: >-
+  The approval state a design export is stamped with: the lock-check verdict the caller decided
+  against the gate identity, handed down from the CLI to the exporter — or unjudged when no verdict
+  was handed in. Owned beside the other design_* format types; the CLI names it as it names
+  DesignExport.
+subsystem: sdd_surfaces
+fields: []
+methods: []
+sourcePath: src/models/design-export.ts
+values:
+  - name: locked
+    description: The approval still covers this design
+  - name: stale
+    description: >-
+      The design, or something it was approved under (doctrine, declared inputs, composition, a
+      direct member's approval), moved past the approval
+  - name: unlocked
+    description: A tree nobody ever approved
+  - name: unjudged
+    description: >-
+      The caller passed no verdict (an in-process caller that did not obtain one); claims nothing
+      either way
+createdAt: '2026-10-04T14:04:53.240Z'
+updatedAt: '2026-10-04T14:07:36.394Z'

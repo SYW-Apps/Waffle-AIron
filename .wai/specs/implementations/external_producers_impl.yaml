@@ -1,0 +1,515 @@
+id: external_producers_impl
+name: External Producers Implementation
+description: >-
+  src/core/external-producers.ts. Climbs to the highest reachable root of the family, reads the
+  graph there, and binds the bound project's declarations — a source.hosted one through the request
+  binding's hosted record lookup; restores the caller's binding on every path.
+contract: iexternal_producers
+sourcePath: src/core/external-producers.ts
+methods:
+  - name: resolveDeclared
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the bound root — the consumer, whose node is found by its directory — and the
+          caller's binding, which every path restores
+        type: local
+      - stepNumber: 2
+        description: Climb the mount chain one hop at a time
+        type: loop
+        condition: the last hop found a parent in reach
+        loopKind: doWhile
+        endStep: 4
+      - stepNumber: 3
+        description: >-
+          Detect the bound root's chaining parent through the core workflow's detection, which is
+          null for a top root and null when the bound request may not read above its root — the
+          caller must gate on reach itself, and this is where it does
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+      - stepNumber: 4
+        label: climbed
+        description: >-
+          When a parent was found, bind its root read-only and continue from there; when none was
+          found for a root that is itself chained (the next hop is out of reach), record that the
+          family could not be read whole
+        type: local
+      - stepNumber: 5
+        description: Read the project graph of the highest root reached
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 6
+        description: 'Find the consumer''s node: the one whose directory is the remembered root'
+        type: local
+      - stepNumber: 7
+        description: >-
+          For each of the node's externals — its declared externals, then its referenced project
+          members (a `../`, git or hosted source; role member, stage 8), which are bound and judged
+          exactly as externals are
+        type: loop
+        loopKind: forEach
+        over: the consumer node's externals and referenced project members
+        endStep: 21
+      - stepNumber: 8
+        description: Is the producer in the family?
+        type: branch
+        condition: the external's sourceKind is family
+        onFalseStep: 11
+      - stepNumber: 9
+        description: Map the consumer's references into the producer onto the producer's public names
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 10
+        description: A family producer is bound
+        type: jump
+        toStep: 21
+      - stepNumber: 11
+        label: outside
+        description: >-
+          Count the consumer's references through the alias by the public name they spell, since the
+          scan did not read this producer — so its pin's `used` map is filled and its status
+          compares per use, closing the gap where an outside producer was reported unavailable per
+          use
+        type: call
+        targetComponent: spec_loader
+        targetMethod: pinnedUsage
+      - stepNumber: 12
+        description: Is the producer in a git repository?
+        type: branch
+        condition: the producer's source is git
+        onFalseStep: 19
+      - stepNumber: 13
+        description: >-
+          Offline, an external's live head is unknowable without the network (a referenced member
+          keeps its pinned commit, which the cache may already hold)
+        type: branch
+        condition: offline and the binding is an external
+        onFalseStep: 16
+      - stepNumber: 14
+        description: >-
+          Bind it without a directory and with the problem "not compared offline — `wairon externals
+          status` fetches it": unavailable, never a pass
+        type: local
+      - stepNumber: 15
+        description: An offline git external is bound
+        type: jump
+        toStep: 21
+      - stepNumber: 16
+        label: resolveHead
+        description: >-
+          For an external, resolve its ref's head now: that is the live producer a status compares
+          the pin against. A referenced member keeps its declared commit instead — the family is
+          made of the pinned revision. A remote that cannot be reached leaves the binding without a
+          directory and with the problem "git producer unavailable: <reason>" — unavailable, never a
+          pass
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 17
+        description: >-
+          Materialize that commit (served from the cache offline when it is there) and take its
+          directory, under the source's dir, as the producer's root; record the commit on the
+          binding
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 18
+        description: A git producer is bound
+        type: jump
+        toStep: 21
+      - stepNumber: 19
+        label: hosted
+        description: >-
+          For a source.hosted external, ask the request binding's hosted record lookup for the
+          producer's root — the hosting server answers it only for a record the request may read, so
+          the caller must gate on reach itself and this is where it does. Outside a hosted server
+          there is no lookup: the external is unresolved with "hosted-only producer `<id>`:
+          available only through the hosted server"; a record the lookup does not answer (unknown,
+          or out of reach) is unresolved too — unavailable, never a pass. For a `../` sibling or
+          path producer, record the head of the work tree holding it only when that is another git
+          repository than the consumer's (git_source_adapter.repositoryRoot compared, then
+          git_source_adapter.head); a family, contained or same-repository producer records no
+          commit and runs no git process
+        type: local
+      - stepNumber: 20
+        description: >-
+          For a `../` sibling or path producer, find the git repository holding it and the
+          consumer's (no git process): only a producer in another repository has its work tree's
+          head recorded
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: repositoryRoot
+      - stepNumber: 21
+        label: bound
+        description: >-
+          Record the binding: the external, its usage when one was mapped, and whether the family
+          was read whole
+        type: local
+      - stepNumber: 22
+        description: Restore the caller's binding
+        type: local
+      - stepNumber: 23
+        description: Answer the bindings in declaration order
+        type: return
+        outcome: ExternalBinding[]
+    detail: full
+  - name: resolveCandidate
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the bound root — the would-be consumer, whose node is found by its directory —
+          and the caller's binding, which every path restores
+        type: local
+      - stepNumber: 2
+        description: >-
+          Climb to the highest root in reach exactly as resolveDeclared climbs, through the core
+          workflow's reach-gated chaining detection; a hop out of reach ends the climb
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+      - stepNumber: 3
+        description: Read the project graph of the highest root reached
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
+          Find the consumer's node by its directory; read the declaration through the
+          configuration's own reading (declaredExternals over `{ alias: declaration }`), and bind it
+          over the graph's nodes with project_family.bindExternal — the pure binder the graph binds
+          every written declaration with — so a candidate and the written declaration resolve alike
+        type: local
+      - stepNumber: 5
+        description: Is the producer in a git repository?
+        type: branch
+        condition: the candidate's sourceKind is git
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Resolve its ref's head (a `#<commit>` fixes it, with no remote to ask); a remote that
+          cannot be reached leaves the binding without a directory and with its problem
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 7
+        description: >-
+          Materialize that commit and take its directory, under the source's dir, as the producer's
+          root
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 8
+        label: hosted
+        description: >-
+          A source.hosted candidate asks the request binding's hosted record lookup for the
+          producer's root (unresolved outside a hosted server, or when the lookup does not answer);
+          any other is bound as found
+        type: local
+      - stepNumber: 9
+        description: >-
+          Restore the caller's binding and answer the binding — no usage, and whether the family was
+          read whole
+        type: return
+        outcome: ExternalBinding
+    detail: full
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the bound root — the producer, whose node is found by its directory — and the
+          caller's binding, which every path restores
+        type: local
+      - stepNumber: 2
+        description: >-
+          Climb to the highest root in reach through the core workflow's reach-gated chaining
+          detection, as resolveDeclared does: only a root in reach is read
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: resolveChainingParent
+      - stepNumber: 3
+        description: Read the project graph of the highest root reached
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
+          Find the producer's node by its directory; none means nothing in the family read consumes
+          it — the projects composing it from a path are still looked for
+        type: branch
+        condition: the producer's node is in the graph
+        onFalseStep: 9
+      - stepNumber: 5
+        label: projects
+        description: For each other project of the graph
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes other than the producer's
+        endStep: 8
+      - stepNumber: 6
+        description: >-
+          Does it declare the producer — an external whose binding lands on the producer's key, or a
+          member alias naming it?
+        type: branch
+        condition: the project declares the producer as an external or a member
+        onFalseStep: 5
+      - stepNumber: 7
+        description: >-
+          Map its references into the producer onto the producer's public names; the ones that bound
+          to none are the names a breaking change broke
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 8
+        label: recorded
+        description: >-
+          Record the consumer: its id (else its key), key, root, the alias and section it declares
+          the producer under, the public names its usage counts, what it uses method-granular
+          (`uses`: each public name with the contract methods, `type` or capabilities its references
+          reach and the specs that reach it — what a producer renaming a method reads), and the
+          names it still writes that bind to none (broken), sorted
+        type: local
+      - stepNumber: 9
+        label: parents
+        description: >-
+          May the folders around the bound root be read for a project that composes it as a member
+          from a `../` path, which no climb reaches?
+        type: branch
+        condition: >-
+          the request is local (no hosted record lookup is bound) and its reach does not stop at its
+          own root
+        onFalseStep: 14
+      - stepNumber: 10
+        label: parentRoots
+        description: For each project root enclosed with the bound one
+        type: loop
+        loopKind: forEach
+        over: >-
+          the project roots directly under the folders enclosing the bound root and the highest root
+          reached — other than those two and the roots the family listed; a folder holding more than
+          256 folders (a temp or home directory, never a checkout folder) is not read without a
+          search
+        endStep: 13
+      - stepNumber: 11
+        description: Does it compose the producer as a member from a path?
+        type: branch
+        condition: >-
+          its configuration file — read straight, parsed only when it declares members — declares a
+          member whose path source (a `../` sibling, or a contained path) resolves to the bound root
+        onFalseStep: 10
+      - stepNumber: 12
+        description: Read that root's project graph, bound to it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 13
+        label: parentFound
+        description: >-
+          Record every project of that graph that declares the producer — the composing root itself
+          first — as the family's consumers are recorded: a parent that composes this project is a
+          consumer the climb cannot reach
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 14
+        label: search
+        description: >-
+          Searched folders: the project roots outside the family that declare the producer are
+          looked for there
+        type: branch
+        condition: folders were given to search
+        onFalseStep: 21
+      - stepNumber: 15
+        description: A hosted request reads its own project's records, never a folder on the server's disk
+        type: branch
+        condition: the request is a hosted one (a hosted record lookup is bound)
+        onFalseStep: 17
+      - stepNumber: 16
+        description: Refuse the search for a hosted request
+        type: throw
+        error: searching folders is a local read
+      - stepNumber: 17
+        label: roots
+        description: For each project root a searched folder holds
+        type: loop
+        loopKind: forEach
+        over: >-
+          the project roots in, or directly under, each searched folder — other than the bound root
+          and the roots the family listed
+        endStep: 20
+      - stepNumber: 18
+        description: Does it declare the producer as an external, by path or by git — or as a member by a path?
+        type: branch
+        condition: >-
+          its configuration declares an external whose path source resolves to the bound root, or
+          whose git source names the producer's project id, or a member whose path source resolves
+          to the bound root
+        onFalseStep: 17
+      - stepNumber: 19
+        description: Read that root's project graph, bound to it, to find its node
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 20
+        label: found
+        description: >-
+          Count the public names its specs spell through the alias, each with the methods its
+          references reach (`uses`), and record it as a consumer found by the search (found: search)
+          — for a root that declares it as a member, every project of that root's graph that
+          declares the producer, each with its export usage (spec_loader.exportUsage), as the
+          composing parents are recorded
+        type: call
+        targetComponent: spec_loader
+        targetMethod: pinnedUsage
+      - stepNumber: 21
+        label: done
+        description: >-
+          Restore the caller's binding and answer the family's consumers (ordered by key), then the
+          composing parents', then the searched ones (ordered by root)
+        type: return
+        outcome: ExternalConsumer[]
+    detail: full
+  - name: approvedRevision
+    narrative:
+      - stepNumber: 1
+        description: The bound root
+        type: local
+      - stepNumber: 2
+        description: The git work tree holding it
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: repositoryRoot
+      - stepNumber: 3
+        description: Without a repository there is no earlier revision to compare with
+        type: branch
+        condition: the bound root is in a git work tree
+        onFalseStep: 12
+      - stepNumber: 4
+        description: The revision asked for, else the last approval committed
+        type: branch
+        condition: a revision was named
+        onFalseStep: 7
+      - stepNumber: 5
+        description: The commit the named revision names
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitOf
+      - stepNumber: 6
+        description: Go on with that commit
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: last-approval
+        description: The last commit that changed the project's .wai/lock.json — the last committed approval
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: lastCommitOf
+      - stepNumber: 8
+        label: found
+        description: A ref naming nothing, or no approval ever committed, is refused
+        type: branch
+        condition: a commit was found
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Materialize the project's folder of that commit read-only in the fetch cache (the local
+          repository is the source)
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 10
+        description: Answer the directory, the commit, and the label a changelog names the baseline by
+        type: return
+        outcome: approved_revision
+      - stepNumber: 11
+        label: no-commit
+        description: Refuse naming the ref, or that no approval of this project was ever committed
+        type: throw
+        error: no such commit, or no approval committed
+      - stepNumber: 12
+        label: no-repository
+        description: 'Refuse: pass a saved surface snapshot instead'
+        type: throw
+        error: no git work tree
+    detail: full
+  - name: memberRevisions
+    narrative:
+      - stepNumber: 1
+        description: A hosted request reads no folder outside its own records
+        type: branch
+        condition: the request is a hosted one (a hosted record lookup is bound)
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer no member
+        type: return
+        outcome: none
+      - stepNumber: 3
+        description: >-
+          Read the bound project's graph: its direct live members, each with its alias and root, and
+          its own namespace
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 4
+        description: >-
+          Read the bound project's lock record, if any — or, when recordedIn names another tree of
+          the bound project (its tree at an earlier revision), that tree's: the composition subject
+          it records for each member (`members.<alias>.subject`, `<algorithm>:<digest>`)
+        type: local
+      - stepNumber: 5
+        label: member
+        description: For each live member
+        type: loop
+        loopKind: forEach
+        over: >-
+          the graph's direct project members that are contained or `../` siblings (never a part, a
+          git or a hosted one)
+        endStep: 11
+      - stepNumber: 6
+        description: Map the bound project's references into it onto its public names
+        type: call
+        targetComponent: spec_loader
+        targetMethod: exportUsage
+      - stepNumber: 7
+        description: >-
+          Find the git work tree the member's folder lies in; a member in no work tree has no
+          revision, so the three steps below are skipped for it
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: repositoryRoot
+      - stepNumber: 8
+        description: >-
+          The commit of the member's own `.wai/lock.json` that introduced the digest the lock
+          records for it, when it records one
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: commitIntroducing
+      - stepNumber: 9
+        description: Else (no record, or no commit holds it) the member's own last committed approval
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: lastCommitOf
+      - stepNumber: 10
+        description: >-
+          Materialize the member's tree at that commit, read-only, in the fetch cache — skipped when
+          no commit was found or the member is in no work tree (then it has no revision)
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 11
+        label: recorded
+        description: >-
+          Record the member: alias, project id, root, usage and the revision (its directory, commit
+          and label — the approval this project's lock records, or the member's own last approval);
+          a git failure leaves the revision out, never fails the read
+        type: local
+      - stepNumber: 12
+        description: Answer one entry per live member, in declaration order
+        type: return
+        outcome: list<member_revision>
+    detail: full
+status: complete
+createdAt: '2026-09-26T17:44:00.485Z'
+updatedAt: '2026-10-17T16:24:36.408Z'

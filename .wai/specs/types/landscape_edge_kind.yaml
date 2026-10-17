@@ -1,0 +1,26 @@
+kind: enum
+id: landscape_edge_kind
+name: LandscapeEdgeKind
+description: >-
+  What a landscape edge says about its two ends: unit hierarchy, a project's placement, a
+  publication, or a cross-project relation.
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: contains
+    description: A unit contains a child unit, or a project placed with a role other than owner or shared
+  - name: owns
+    description: A unit owns a project (owner placement)
+  - name: shared_with
+    description: A project is shared with a unit (shared placement)
+  - name: publishes
+    description: A project publishes an interface, or a publishes_to relation
+  - name: consumes
+    description: A consumes relation (and any relation kind without an edge of its own)
+  - name: depends_on
+    description: A depends_on relation
+  - name: mirrors
+    description: A mirrors relation
+createdAt: '2026-10-04T23:53:08.262Z'
+updatedAt: '2026-10-04T23:53:08.796Z'

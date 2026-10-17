@@ -378,4 +378,74 @@ describe('organization repository (sdd_host)', () => {
     expect(() => getOrganizationUnit(dataDir, 'x')).toThrow(orgPath);
     expect(() => listProjectPlacements(dataDir)).toThrow(/malformed/i);
   });
+  // ── pre-slug records: read-path normalization ────────────────────────────────
+  //
+  // Live regression (hosted instance upgraded to v5): units persisted before
+  // `slug` existed were served verbatim, and the organizations page died on
+  // `undefined.localeCompare` — a data-shape problem presenting as an unreadable
+  // minified UI crash. The contract declares `slug` required, so the read path
+  // must not emit a record without one.
+
+  describe('units persisted before slugs existed', () => {
+    it('derives a root unit\'s slug from its id, which IS its slug', () => {
+      // Exactly the shape the live instance served: no `slug`, no `parentId`.
+      seed({
+        units: [{
+          id: 'test',
+          name: 'Test',
+          kind: 'organization',
+          status: 'active',
+          createdAt: '2026-07-01T12:44:34.510Z',
+          createdBy: { userId: 'builtin:superadmin', kind: 'human', issuer: 'local' },
+          visibility: 'open',
+        } as unknown as OrganizationUnitRecord],
+        placements: [],
+      });
+
+      const [unit] = listOrganizationUnits(dataDir);
+      expect(unit.slug).toBe('test');
+      // The id is untouched — normalizing a read must never rewrite identity.
+      expect(unit.id).toBe('test');
+    });
+
+    it('derives a nested unit\'s slug from the last segment of its qualified id', () => {
+      seed({
+        units: [
+          { id: 'company', name: 'Company', kind: 'organization', status: 'active', createdAt: 'x', visibility: 'open' } as unknown as OrganizationUnitRecord,
+          { id: 'company.it.team-a', name: 'Team A', kind: 'team', status: 'active', createdAt: 'x', parentId: 'company.it', visibility: 'open' } as unknown as OrganizationUnitRecord,
+        ],
+        placements: [],
+      });
+
+      const bySlug = Object.fromEntries(listOrganizationUnits(dataDir).map((u) => [u.id, u.slug]));
+      expect(bySlug['company']).toBe('company');
+      expect(bySlug['company.it.team-a']).toBe('team-a');
+    });
+
+    it('never overwrites a slug that is already present', () => {
+      seed({
+        units: [{
+          id: 'company.it', slug: 'custom-slug', name: 'IT', kind: 'department',
+          status: 'active', createdAt: 'x', parentId: 'company', visibility: 'open',
+        } as unknown as OrganizationUnitRecord],
+        placements: [],
+      });
+      expect(listOrganizationUnits(dataDir)[0].slug).toBe('custom-slug');
+    });
+
+    it('is sortable by slug without throwing — the exact call that crashed the page', () => {
+      seed({
+        units: [
+          { id: 'zebra', name: 'Zebra', kind: 'organization', status: 'active', createdAt: 'x', visibility: 'open' } as unknown as OrganizationUnitRecord,
+          { id: 'alpha', name: 'Alpha', kind: 'organization', status: 'active', createdAt: 'x', visibility: 'open' } as unknown as OrganizationUnitRecord,
+        ],
+        placements: [],
+      });
+
+      const units = listOrganizationUnits(dataDir);
+      expect(() => units.sort((a, b) => a.slug.localeCompare(b.slug))).not.toThrow();
+      expect(units.map((u) => u.slug)).toEqual(['alpha', 'zebra']);
+    });
+  });
+
 });

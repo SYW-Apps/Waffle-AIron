@@ -1,0 +1,1166 @@
+id: family_validator_impl
+name: Family Validator Implementation
+description: >-
+  The family run over the bound root's graph, in src/core/family-validation.ts. Reach is granted by
+  binding each selected project's root under a ceiling: a plain run narrows it to the family root,
+  `--family` keeps the request's (none locally, the credential's hosted), and nothing widens it. The
+  composition's out-of-reach externals are counted for the run's hint; the family codes are tuned by
+  the owning project's sddRuleSeverity (the consumer for composition, the root for the member
+  checks) and lint.allow never applies to them, because they name no spec.
+contract: ifamily_validator
+sourcePath: src/core/family-validation.ts
+simPath: tests/core/family-validation.test.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph through the core adapter: the root, the project
+          members it contains or holds in a `../` sibling checkout (composed live alike — round 8;
+          depth-bounded by `memberDepth`), their keys and directories, the cross-project references
+          and the identity and membership problems — and, since stage 8, each referenced project
+          member (a git or hosted source, or a `../` sibling the scan could not open; role member),
+          whose root is opened where it is stored: the fetch cache at its pinned commit, or the
+          hosted record within reach. Parts are no selection entries: they are their declaring
+          project's own subsystems, judged by its gate. This is the selection; a referenced member
+          whose root cannot be opened is left out and counted
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Grant reach before any further read: unless the options ask for the family explicitly,
+          narrow the request's reach ceiling to the bound root, so composing an external never reads
+          a producer above the family. With `family` set, keep the request's reach unchanged —
+          locally the walk up is then explicit, hosted it is the credential's — and never widen it
+        type: local
+      - stepNumber: 3
+        description: >-
+          For each selected project, the root first — contained project members in walk order, then
+          referenced ones
+        type: loop
+        loopKind: forEach
+        over: the selected projects of the graph, root first, then members in scan order
+        endStep: 9
+      - stepNumber: 4
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the project's own configuration through the core adapter: its own rule severities and
+          projectType judge it, never the root's
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
+        label: own-gate
+        description: >-
+          Run the project's own gate with its own configuration and the run's scope and strictness —
+          the same call its own `validate` makes, so its verdict here is its verdict everywhere
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 7
+        description: Compose the project's externals against their live producers in reach
+        type: call
+        targetComponent: family_validator
+        targetMethod: compose
+      - stepNumber: 8
+        description: >-
+          Collect the project's own reach model under the same binding, for the family's reach
+          checks
+        type: call
+        targetComponent: spec_validator
+        targetMethod: reachModel
+      - stepNumber: 9
+        description: >-
+          Carry the project's own findings verbatim, each stamped with the project's key (spec ids
+          shown under it), add the composition findings, and record the project's totals
+        type: local
+      - stepNumber: 10
+        description: >-
+          Pair topics across the family: a selected project's UNCONSUMED_TOPIC (or
+          UNSOURCED_SUBSCRIPTION) on a component is dropped when every topic that component leaves
+          unpaired inside its own project is subscribed (or emitted) by another selected project,
+          read from the topic ends of the projects' own reach models — a topic a sibling consumes
+          goes somewhere. The project's own gate, run alone, still reports it
+        type: local
+      - stepNumber: 11
+        description: Run the family checks over the root's graph
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkMembers
+      - stepNumber: 12
+        description: >-
+          Run the governance checks over the root's graph: each requiring project's
+          composition.requirePolicies judged against the members below it
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkPolicies
+      - stepNumber: 13
+        description: >-
+          Run the reachability and network checks only the family can make: the networks around each
+          member, the proof of every network-scoped entry, and every call that crosses into a
+          network. At a member's own root inside a family in reach, the bound root's graph holds
+          neither the family's network nor its callers, so judging it there would call every
+          network-scoped entry unproven and say no network encloses it: the checks are then the
+          enclosing family's — its model composed and judged at its top root
+          (family_validator.reachModel, steps 1-4), its findings narrowed to the bound project and
+          its own members and stamped with their keys here — so the member's family run says what
+          the family run at the root says about it
+        type: call
+        targetComponent: family_validator
+        targetMethod: checkReach
+      - stepNumber: 14
+        description: >-
+          When externals were left out because their producers lie outside the reach, add a one-line
+          hint counting them and naming `validate --family` from the member that declares them
+        type: local
+      - stepNumber: 15
+        description: >-
+          Return the family verdict: valid when no project's gate and no family finding holds an
+          error, with every project's totals counted from the findings listed under it — its own
+          gate's (after topics are paired across the family) and the family's findings stamped with
+          its key — so a count never disagrees with the list, and the aliases of the bound project's
+          externals it composed in reach (`composed`), which the advisory live comparison then skips
+        type: return
+        outcome: ValidationResult
+  - name: compose
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read, through the surfaces adapter, each of the bound project's externals compared at
+          signature level with its live producer: per used member unchanged, changed, removed,
+          unlocked or unavailable, whether the producer drifted from its pin, and whether it lay out
+          of reach (then it was never read)
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 2
+        description: >-
+          Read the bound project's configuration through the core adapter for its own severity
+          overrides
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: For each external's status
+        type: loop
+        loopKind: forEach
+        over: the statuses, in declaration order
+        endStep: 8
+      - stepNumber: 4
+        description: Is the producer out of reach?
+        type: branch
+        condition: the status is outOfReach
+        onFalseStep: 7
+      - stepNumber: 5
+        description: 'Record it as not selected — no finding: the run did not reach it'
+        type: local
+      - stepNumber: 6
+        description: Next external
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: judge
+        description: >-
+          Turn the status into findings on the consumer's external: each used member changed,
+          renamed or removed is EXTERNAL_INCOMPATIBLE (naming the member, what the lock recorded and
+          what the live table now holds — for a rename, the new name the producer's trace carries it
+          to, so the fix reads as "follow the rename" rather than "it is gone"); a drifted producer
+          with every used member unchanged is one EXTERNAL_DRIFTED; an external never pinned at all
+          whose uses are still present live is one EXTERNAL_UNPINNED (error) naming those uses — the
+          composed gate cannot tell what the design is judged against; each other unavailable or
+          unlocked use is EXTERNAL_CHECK_UNAVAILABLE with its reason — never a pass. Each severity
+          is the project's own sddRuleSeverity override, else the code default
+        type: local
+      - stepNumber: 8
+        label: next
+        description: The external is judged
+        type: local
+      - stepNumber: 9
+        description: Return the composition findings, with the aliases of the externals not selected
+        type: return
+        outcome: ValidationIssue[]
+  - name: checkMembers
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Report the graph's member problems: each member-absent problem as MEMBER_NOT_FOUND (naming
+          the declaring project, the alias and the path); each id-collision as PROJECT_ID_COLLISION
+          (pointing at consumption: one member, several consumers); each defaulted member as
+          PROJECT_ID_DEFAULTED, naming the name slug it answers to now and its alias as the id to
+          declare (doctor --fix writes it); each member with no id as PROJECT_ID_AMBIGUOUS
+        type: local
+      - stepNumber: 2
+        description: >-
+          Find the loops of the selection with project_family.dependencyCycles and report each as
+          PROJECT_DEPENDENCY_CYCLE on each project in it, with the references that make each edge,
+          cheapest first
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read each project's resolved L0 export table; for every entry at audience project that
+          re-exports a name from another project of the family, look for a reference of another
+          family project that reaches it through an alias naming the re-exporting project — none is
+          EXPORT_UNREACHED (notice): a dead re-export, to drop from the L0
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 4
+        description: >-
+          Compute the approval state of every member of the selection, each at its own root — the
+          same answer the lock records and status prints
+        type: call
+        targetComponent: family_validator
+        targetMethod: approvals
+      - stepNumber: 5
+        description: >-
+          Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED and each
+          drifted one as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity
+          upgrade (re-lock once), saying for a release the member's approval was re-validated under
+          that the new release finds N issue(s) in its approved design (naming them), naming the
+          inputs that moved when its entry carries them, and quoting what its approval owes when it
+          carries an `owed` sentence (a moved id, an external to pin) instead of calling it changed;
+          a member whose approval carried over by re-validation is approved and gets none. A
+          referenced project member that could not be opened (offline, its checkout absent, out of
+          reach) is EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate and its composition did
+          not run, never a pass. Parts get none of these: a part has no lock of its own, its
+          approval is the declaring project's. The root's own lock is not a family finding
+        type: local
+      - stepNumber: 6
+        description: >-
+          Resolve each finding's severity with the root's sddRuleSeverity override, else the code
+          default, and return them
+        type: return
+        outcome: ValidationIssue[]
+  - name: checkPolicies
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each selected project that may require something of the projects below it, the root
+          first
+        type: loop
+        loopKind: forEach
+        over: >-
+          the selected projects of the graph that have members in the selection, root first, then in
+          scan order
+        endStep: 9
+      - stepNumber: 2
+        description: Bind the project's root for the next calls, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read the project's own configuration through the core adapter: its requirements and the
+          severity overrides that tune the findings about them
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Read its requirements with project_config.requiredPolicies and keep those whose range
+          parses (pack_requirement.rangeProblem is null); an unreadable one is skipped here — the
+          requiring project's own gate reports it as POLICY_REQUIREMENT_INVALID
+        type: local
+      - stepNumber: 5
+        description: Nothing valid is required here
+        type: branch
+        condition: the project has no valid requirement
+        onTrueStep: 9
+        onFalseStep: 6
+      - stepNumber: 6
+        label: members
+        description: >-
+          For each selected member below this project, at every level (the graph's parent links,
+          followed down)
+        type: loop
+        loopKind: forEach
+        over: the selected projects whose parent chain reaches this project, in scan order
+        endStep: 8
+      - stepNumber: 7
+        description: >-
+          Bind the member's root for the next call, restoring the requiring project's binding
+          afterwards
+        type: local
+      - stepNumber: 8
+        label: member-judged
+        description: Judge the member's adoption of this project's valid requirements
+        type: call
+        targetComponent: family_validator
+        targetMethod: adoption
+      - stepNumber: 9
+        label: requirer-done
+        description: >-
+          Resolve each adoption finding this project caused at this project's sddRuleSeverity
+          override, else the code default, dropping those it turned off
+        type: local
+      - stepNumber: 10
+        description: Return the governance findings
+        type: return
+        outcome: ValidationIssue[]
+  - name: adoption
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the member's own configuration through the core adapter: its pack entries, their pins
+          and its projectType
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Load the member's packs, for the committed manifests its legacy path references name
+          (their pack name and declared version). A selection's loaded version is never read: it
+          depends on the machine's store
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 3
+        description: For each requirement
+        type: loop
+        loopKind: forEach
+        over: the requirements, in declaration order
+        endStep: 21
+      - stepNumber: 4
+        description: >-
+          Find the member's entry for the required pack: a selection of that name, else a legacy
+          path reference whose committed manifest carries it
+        type: local
+      - stepNumber: 5
+        description: Does the member select it at all?
+        type: branch
+        condition: the member has no entry for the pack
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          POLICY_NOT_ADOPTED: the member does not select the pack — naming the pack, the range, the
+          profile when one is required, and the requiring project
+        type: local
+      - stepNumber: 7
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 8
+        label: pinned
+        description: >-
+          A floating selection resolves to whatever the machine has installed, so no family can
+          judge it
+        type: branch
+        condition: the entry is a selection with no version pin
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          POLICY_NOT_ADOPTED: "unpinned — a family cannot judge a floating selection; pin a
+          version", naming the requirement and the selection
+        type: local
+      - stepNumber: 10
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 11
+        label: range
+        description: >-
+          Does pack_requirement.admits accept the committed version — the selection's pin, or a
+          legacy reference's manifest version? An unversioned manifest is admitted by `*` only
+        type: branch
+        condition: the requirement does not admit the committed version
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          POLICY_NOT_ADOPTED: selected outside the range — naming the range and the member's pinned
+          (or declared) version
+        type: local
+      - stepNumber: 13
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 14
+        label: profile
+        description: When the requirement names a profile, is the member governed by it?
+        type: branch
+        condition: the requirement names a profile and the member's projectType is another
+        onFalseStep: 17
+      - stepNumber: 15
+        description: >-
+          POLICY_NOT_ADOPTED: the pack is selected but the required profile does not govern — naming
+          the profile and the member's projectType
+        type: local
+      - stepNumber: 16
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 17
+        label: settings
+        description: Read the adopted pack's manifest for the pinned entry, the loader's way
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: packManifest
+      - stepNumber: 18
+        description: >-
+          A manifest that did not load has no settings to compare; the member's own gate reports the
+          load failure
+        type: branch
+        condition: no manifest resolved
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Next requirement
+        type: jump
+        toStep: 21
+      - stepNumber: 20
+        label: compare
+        description: >-
+          Compare the member with extension_pack.settings under the governing profile — the required
+          one, else the member's projectType when the pack defines it, else none
+        type: call
+        targetComponent: family_validator
+        targetMethod: deviations
+      - stepNumber: 21
+        label: next
+        description: The requirement is judged
+        type: local
+      - stepNumber: 22
+        description: >-
+          Return the adoption findings and the deviations at their default severities, each stamped
+          with the member's key; the requiring project's overrides are applied by checkPolicies
+        type: return
+        outcome: ValidationIssue[]
+    symbol: judgeAdoption
+  - name: deviations
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the member's own configuration through the core adapter: rules.sddRuleSeverity,
+          rules.designDepth, rules.naming, rules.complexity and rules.documentation
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Read the member's subsystem specs, for their profile and designDepth overrides and their
+          lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Read the member's component specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Read the member's interface specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Read the member's implementation specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Read the member's type specs, for their lint allows
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: >-
+          Rule severities: a POLICY_DEVIATION for each rules.sddRuleSeverity entry naming a code the
+          pack sets (profile severity, assertion code or rule code) at a different severity — the
+          precedence getRuleSeverity gives the project over the profile
+        type: local
+      - stepNumber: 8
+        description: >-
+          Design depth: one for rules.designDepth, and one per subsystem designDepth, other than the
+          profile's designDepth when it sets one — effectiveDesignDepth's precedence
+        type: local
+      - stepNumber: 9
+        description: >-
+          Naming, complexity and documentation: one per key the profile's rules.naming (subsystems,
+          components, interfaces, types, entities, valueObjects, methods, fields, constants,
+          variables, and each stereotypes entry), rules.complexity (maxMethodParams,
+          maxInterfaceMethods, maxComponentDependencies, maxNarrativeSteps, maxSubsystemComponents,
+          maxUnnarratedComplexity) or rules.documentation (minDescriptionLength,
+          requireDescriptions, requireMethodDescriptions, requireFieldDescriptions) sets and the
+          member's same key replaces with another value — the key-level overlay namingConfigFor,
+          complexityConfigFor and documentationConfigFor apply
+        type: local
+      - stepNumber: 10
+        description: >-
+          Profile: one per subsystem whose `profile` is not the governing profile — there the pack's
+          severities, depth, naming, complexity, documentation, stereotype fencing and edge licences
+          no longer apply
+        type: local
+      - stepNumber: 11
+        description: >-
+          Lint allows: one per lint.allow on any of the member's specs over a code the pack sets,
+          naming the spec and site
+        type: local
+      - stepNumber: 12
+        description: >-
+          Return the deviations, each naming the setting, the pack's value, the member's value and
+          the requirement, stamped with the member's key
+        type: return
+        outcome: ValidationIssue[]
+    symbol: policyDeviations
+  - name: approvals
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: its project members at every level — contained or in
+          a `../` sibling checkout — with their directories and parents, and its referenced project
+          members (a git or hosted source) with the root each is opened at (the fetch cache at the
+          pinned commit, or the hosted record within reach)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Select the projects to answer for: the graph's root, then each member within `depth`
+          levels in walk order. A declared member with no project on disk is answered `never`, with
+          no subject, without binding anything
+        type: local
+      - stepNumber: 3
+        description: For each selected project that loaded
+        type: loop
+        loopKind: forEach
+        over: the selected projects that loaded
+        endStep: 15
+      - stepNumber: 4
+        description: >-
+          Bind the project's own root for the next calls, restoring the caller's binding afterwards
+          — the state is always computed where the project's own lock would be
+        type: local
+      - stepNumber: 5
+        description: >-
+          Compute the project's own gate identity — its own tree, doctrine, own inputs, composition
+          and ITS direct members' approval subjects (each member record's
+          lock_record.approvalSubject: a member whose release stamp was only refreshed reads as the
+          approval its human gave, never as a re-approval), never an ancestor's
+        type: call
+        targetComponent: spec_validator
+        targetMethod: computeGateStateId
+      - stepNumber: 6
+        description: Read the project's own lock record
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: readLockRecord
+      - stepNumber: 7
+        description: >-
+          Decide its state: no record is never; a record whose stateId equals the identity just
+          computed is approved; otherwise drifted, marked upgraded when the record's algorithm
+          differs from the current one (the lock predates the stage-5 identity, which says nothing
+          about the design), and carrying inputsMoved when the record has gate parts that break down
+          its identity (lock_record.movedGateParts: the inputs that moved, named by every verdict).
+          Parts that do not break it down (lock_record.partsProblem) name nothing: the entry carries
+          `partsIgnored`, the clause every surface shows as a notice — and so does a record whose
+          identity still matches but that carries no gate parts at all, which every record from
+          5.1.1-dev.111 on carries. A release stamp that is missing, no wairon version or newer than
+          this release (lock_record.stampProblem) is carried as `stampProblem` whatever the identity
+          decided, unless the release verdict already names the stamp: the identity decides the
+          approval, the notice keeps the stamp from passing silently. Its subject is the record's
+          approval subject (lock_record.approvalSubject), absent when never
+        type: local
+      - stepNumber: 8
+        description: >-
+          When the identity does not match, ask for the release verdict: carried — the state is
+          approved, with `release` set (re-validated under this release) and never upgraded; not
+          carried — drifted with `release` set, never upgraded, its findings the reason; none — the
+          state as decided above
+        type: call
+        targetComponent: family_validator
+        targetMethod: releaseVerdict
+      - stepNumber: 9
+        description: >-
+          Read the project's own configuration, to judge its id against the one its lock record
+          approved: the gate identity does not cover the id, so a project renamed by the rename
+          migration (PROJECT_ID_RENAMED) or with an id changed by hand (PROJECT_ID_CHANGED) would
+          otherwise read approved while `lock-check` refuses it. The resolution is
+          project_config.identity(record.projectId) — the one the project-identity rule and
+          `lock-check` judge by
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        description: Read the declared externals this project never pinned
+        type: call
+        targetComponent: family_validator
+        targetMethod: unpinned
+      - stepNumber: 11
+        description: Read the uses of its pinned externals that their pins do not record
+        type: call
+        targetComponent: family_validator
+        targetMethod: unrecorded
+      - stepNumber: 12
+        description: >-
+          Load the extension packs the project's own configuration selects: a selected pack that
+          cannot load (a load error, or a selection that does not resolve) leaves the doctrine the
+          approval was judged under unreadable, and the gate identity — which digests only what
+          loaded — cannot see it
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectExtensions
+      - stepNumber: 13
+        description: >-
+          Decide what the approval on record still owes, when it has a record: the id moved since it
+          (`the project id moved since the approval (<approved> → <now>)`), a declared external
+          never pinned, a use its pin does not record (`external "<alias>" is used beyond its pin:
+          <uses>`), or a selected extension pack that cannot load (`extension pack(s) selected in
+          .wai/project.yaml cannot load: <why>`) — each one a reason `wairon lock-check` refuses and
+          `wairon lock` refuses or must clear. Anything owed makes the state drifted, whatever the
+          identity said, and is carried as `owed`, one sentence; nothing owed leaves the state as
+          decided
+        type: local
+      - stepNumber: 14
+        description: For a member, read its parent's lock record from the parent's directory
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 15
+        description: >-
+          Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
+          1, for one release) its `children` entry; matches when that equals the member's subject,
+          moved when it differs (including a member pinned before and never approved now), unpinned
+          when the parent has no record or names no pin for the alias. The root's own entry carries
+          no pin
+        type: local
+      - stepNumber: 16
+        description: Return the entries, root first
+        type: return
+        outcome: ProjectApproval[]
+    symbol: projectApprovals
+  - name: relations
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: its project members at every level — contained or in
+          a `../` sibling checkout — with their directories, and its referenced project members (a
+          git or hosted source) with the root each is opened at (the fetch cache at the pinned
+          commit, or the hosted record within reach)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: >-
+          Select the projects to answer for: the graph's root, then every project member in walk
+          order, contained and referenced alike. Parts are not selected — their consumption is their
+          declaring project's. Keep the reach the caller granted (a hosted request's credential
+          reach, with its record lookup); with none granted — a local caller — read with no ceiling,
+          the explicit walk `validate --family` makes, so a `../` producer a project declares is
+          compared rather than left out of reach
+        type: local
+      - stepNumber: 3
+        description: For each selected project
+        type: loop
+        loopKind: forEach
+        over: the selected projects, root first
+        endStep: 16
+      - stepNumber: 4
+        description: Can its root be opened within the request's reach?
+        type: branch
+        condition: >-
+          the project loaded and its root is on disk (or in the fetch cache) and within the reach
+          the caller granted — on a hosted request, a contained member's record is one the request's
+          record lookup answers
+        onFalseStep: 15
+      - stepNumber: 5
+        description: >-
+          Bind the project's own root for the next calls, keeping the granted reach and restoring
+          the caller's binding afterwards — a relation is always read where its consumer's lock is
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read its externals status there through the surfaces adapter — every external and
+          referenced project member it consumes, per use, a producer out of reach marked outOfReach
+          and unread
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 7
+        description: >-
+          Does it reference a CONTAINED project member of its own that no status above already
+          answers? A contained member is not an external (resolveDeclared walks only the declared
+          externals and the referenced members), so without this its consumption would have no
+          relation at all
+        type: branch
+        condition: >-
+          its own project graph holds a reference from it into a contained project member whose
+          alias no status above names
+        onFalseStep: 13
+      - stepNumber: 8
+        description: >-
+          Read its own project graph there: the references it writes into each contained project
+          member, each with its spec, position and the public name it bound to
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 9
+        description: Read its own configuration, so its own rule severities judge it
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 10
+        description: >-
+          Run its own gate there — the same call its own validate makes — for the findings it raises
+          on those references
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateProject
+      - stepNumber: 11
+        description: >-
+          Read, through the surfaces adapter, each live member compared with the approval it is
+          judged against (the one this project's lock records, else the member's own last committed
+          approval), as an external is with its pin
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: memberStatuses
+      - stepNumber: 12
+        description: >-
+          Answer each such member with one status under the alias the project declares it by: each
+          reference a use, removed (so the relation reads incompatible) when the gate raised
+          EXTERNAL_NOT_EXPORTED or any other resolution failure at that reference's call site, with
+          the resolution's reason, and otherwise the verdict the comparison with its approved
+          surface gives it — unchanged, changed (a signature, a field rename, a route moved or
+          removed), renamed or removed per the member's trace — with the comparison's drift (a
+          content or carried fact the member moved since its approval) carried, so a member reads
+          drifted or incompatible as an external does; a member with no approved revision reads its
+          uses unchanged and is never drifted. It carries no pin. A member whose record lies outside
+          the request's reach is answered unreachable and out of reach, every use unavailable —
+          never ok
+        type: local
+      - stepNumber: 13
+        label: record
+        description: Record the project's statuses with the time they were read
+        type: local
+      - stepNumber: 14
+        description: Next project
+        type: jump
+        toStep: 16
+      - stepNumber: 15
+        label: unopened
+        description: >-
+          Record the project with no statuses and the reason (not on disk, not fetched, or outside
+          the request's reach), so every edge from it is drawn unavailable — never a pass
+        type: local
+      - stepNumber: 16
+        label: next
+        description: On to the next project
+        type: local
+      - stepNumber: 17
+        description: Return the entries, root first
+        type: return
+        outcome: ProjectRelations[]
+    symbol: familyRelations
+  - name: advise
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read, through the surfaces adapter and OFFLINE, each of the bound project's externals
+          compared at signature level with its live producer within the request's reach: per used
+          member unchanged, changed, renamed (with renamedTo), removed, unlocked or unavailable,
+          whether the producer drifted, and whether it lay out of reach
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 2
+        description: >-
+          Read the bound project's configuration through the core adapter for its own severity
+          overrides
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Read the project graph through the core adapter for the bound project's references into
+          other projects, to name every spec that uses each moved member
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 4
+        description: >-
+          For each external's status not already composed by the run (an alias in `composed` is the
+          gate's, so it gets no second word)
+        type: loop
+        loopKind: forEach
+        over: the statuses whose alias is not in composed, in declaration order
+        endStep: 12
+      - stepNumber: 5
+        description: Which word does the relation's health give?
+        type: switch
+        'on': status.health()
+        cases:
+          - value: incompatible
+            step: 6
+          - value: drifted
+            step: 8
+          - value: unavailable
+            step: 10
+        defaultStep: 12
+      - stepNumber: 6
+        label: moved
+        description: >-
+          Report one EXTERNAL_LIVE_INCOMPATIBLE (warning, advisory) for the external naming each
+          moved member and how — changed at signature level, renamed to its renamedTo, or gone from
+          the producer's export table — every spec of this project whose references use it, every
+          binding module the implementations of those specs (by id, contract or component) declare,
+          said to be compared with the pin and so to draw BINDING_DRIFT once the re-pin lands, and
+          the fix: adapt the uses (follow the rename), then re-pin with `wairon externals pin
+          <alias>`
+        type: local
+      - stepNumber: 7
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 8
+        label: drift
+        description: >-
+          Report one EXTERNAL_DRIFTED (notice, advisory): the producer moved while nothing this
+          project uses did — re-pin when convenient. A used verb whose wire endpoint moved is no
+          drift: its use is changed, and step 6 reports it as EXTERNAL_LIVE_INCOMPATIBLE with the
+          old and new route
+        type: local
+      - stepNumber: 9
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 10
+        label: uncompared
+        description: >-
+          Report one EXTERNAL_LIVE_UNCOMPARED (notice, advisory). A pinned, reachable external whose
+          only uncompared uses are used beyond its pin (each named `<public name>.<member>`, used
+          now but not in the lock) is said as exactly that: the live producer exports them, the pin
+          records nothing they are judged against, so `wairon lock` refuses and `wairon lock-check`
+          fails until it is re-pinned — the fix named — so a validate log never stays silent on what
+          the approval gates refuse; validate itself does not fail on it (the approval is
+          lock-check's to gate). Otherwise name why the live producer could not be read —
+          unreachable, unresolved, out of reach, or a git source not fetched offline — and that
+          `wairon externals status` compares it. Never a pass, never a failure of the owner gate
+        type: local
+      - stepNumber: 11
+        description: Next external
+        type: jump
+        toStep: 12
+      - stepNumber: 12
+        label: next
+        description: The external is advised on
+        type: local
+      - stepNumber: 13
+        description: >-
+          Return the advisory findings, each marked advisory and stamped with its severity (the
+          project's sddRuleSeverity override, else the default)
+        type: return
+        outcome: ValidationIssue[] (advisory)
+  - name: checkReach
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read each selected project's network declaration from its configuration, as the run read
+          it
+        type: local
+      - stepNumber: 2
+        description: Compose the family's reach model from each project's own model and the family's references
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: compose
+      - stepNumber: 3
+        description: Judge it
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: judge
+      - stepNumber: 4
+        description: >-
+          Drop each finding a project's own gate already carried; stamp the rest with the key of the
+          project whose spec they sit on (a call's caller, a verb's Portal, a MULTIPLE_GATEWAYS
+          finding's first gateway Portal: always the project holding that spec, never a guess from a
+          name in the message), tune each by that project's rules.sddRuleSeverity and drop one a
+          lint.allow on that spec covers at its site
+        type: local
+      - stepNumber: 5
+        description: Read the codes the family judges over every member
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: familyCodes
+      - stepNumber: 6
+        description: >-
+          Report UNUSED_LINT_ALLOW (warning) for each lint.allow of one of those codes on a selected
+          project's own spec that covers no finding of the family's model (carried by its own gate
+          or not) at its site: the project's own gate left that judgement to this run
+        type: local
+      - stepNumber: 7
+        description: Answer them
+        type: return
+        outcome: the family's reach findings
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Is the bound root a member another project declares? Read its chaining parent (within the
+          request's reach)
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 2
+        description: >-
+          A member's view is its enclosing family's, unless the run asked for the member alone
+          (memberDepth 0)
+        type: branch
+        condition: a chaining parent is in reach and memberDepth is not 0
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Climb to the family's top root: bind each parent root in turn and read its own chaining
+          parent the same way, the caller's binding restored afterwards; the member's key there is
+          the node whose directory is the bound root
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer the top root's model, derived by this same workflow bound there, focused on the
+          member's key (focus) and naming the root it was judged at (judgedAt): the enclosing
+          network declaration and its proofs, so a member's view and its family's agree row for row
+        type: return
+        outcome: the enclosing family's reach model, focused on the member
+      - stepNumber: 5
+        description: 'Read the bound root''s project graph: the selection the family run makes'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 6
+        description: For each selected project, root first
+        type: loop
+        loopKind: forEach
+        over: the selected projects of the graph
+        endStep: 8
+      - stepNumber: 7
+        description: Bind the project's root for the next call, restoring the caller's binding afterwards
+        type: local
+      - stepNumber: 8
+        description: Collect its own reach model
+        type: call
+        targetComponent: spec_validator
+        targetMethod: reachModel
+      - stepNumber: 9
+        description: Compose the family's model
+        type: call
+        targetComponent: reach_model_projector
+        targetMethod: compose
+      - stepNumber: 10
+        description: Judge the composed model, so the derived outputs never trust a design that fails the gate
+        type: call
+        targetComponent: network_arbiter
+        targetMethod: judge
+      - stepNumber: 11
+        description: >-
+          Keep each finding as a ReachFinding on the model: tuned by the rules.sddRuleSeverity of
+          the project whose spec it sits on (a code turned off there is dropped), and dropped when a
+          lint.allow on that spec covers it at its site — an error is never allowed, so a refused
+          flow stays refused
+        type: local
+      - stepNumber: 12
+        description: >-
+          Answer it, carrying the bound root's project id (rootProject), its declared externals'
+          aliases, and each renamed member's former names (its previousIds, qualified like its key)
+          mapped to its key
+        type: return
+        outcome: the family's reach model
+  - name: unpinned
+    narrative:
+      - stepNumber: 1
+        description: The bound project's parts — no producer, nothing to pin
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 2
+        description: The bound root's declared externals with their lock entries, read from its own files
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 3
+        description: Answer every declared alias the lock holds no entry for
+        type: return
+        outcome: the aliases with no lock entry, parts left out
+  - name: unrecorded
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the uses of the bound root's pinned externals that their pins do not record, counted
+          offline from its own pins and references
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: unrecordedUses
+      - stepNumber: 2
+        description: Answer them keyed by alias
+        type: return
+        outcome: unrecorded uses by alias
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Split the reference into its alias and public name; a reference without `::` names no
+          other project and is not judged here
+        type: local
+      - stepNumber: 2
+        description: 'Read the bound root''s project graph: the aliases of its members and the projects they name'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 3
+        description: Read the bound root's pinned externals, each with the snapshot its pin names
+        type: call
+        targetComponent: validator_surfaces_adapter
+        targetMethod: listPinnedExternals
+      - stepNumber: 4
+        description: 'A member alias: read that member''s live L0 export table'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        description: >-
+          Decide: an alias that is neither a member nor a declared external is EXTERNAL_UNDECLARED;
+          an external not pinned yet cannot be judged (null); a table or pinned snapshot with no
+          entry of that public name is EXTERNAL_NOT_EXPORTED; an entry whose role is not implement
+          is EXTERNAL_NOT_EXPORTED too — it is exported for consumers to call, and only an extension
+          point (role implement) is implemented
+        type: local
+      - stepNumber: 6
+        description: Answer the sentence, prefixed with its code, or null
+        type: return
+        outcome: problem or null
+  - name: releaseVerdict
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read what the record can prove: whether its gateParts break down its stateId
+          (lock_record.partsProblem against the current identity), the inputs those parts say moved
+          (lock_record.movedGateParts) when they do, and its release stamp against the running
+          release (lock_record.releaseStampAgainst: older, same, newer or invalid)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Does the record carry gate parts that break down its identity (every record this release
+          writes does)?
+        type: branch
+        condition: record.gateParts is set and partsProblem is none
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Did only the release's part move — every part but `release` (the design, rule tuning,
+          packs, network, composition, consumed contracts, members' subjects) equal to the
+          identity's current one?
+        type: branch
+        condition: the only moved gate part is release
+        onFalseStep: 19
+      - stepNumber: 4
+        description: >-
+          Was the record stamped by an older wairon, or this one? A stamp newer than the running
+          release was written by a newer wairon, whose rules this one cannot judge an approval by; a
+          stamp that is no wairon version says nothing about which release took it
+        type: branch
+        condition: releaseStampAgainst is older or same
+        onTrueStep: 11
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Stale, never re-validated: {from, to, carried: false, reason} — `written by a newer wairon
+          (<stamp>) than this one (<running>)`, or a stamp that is no wairon version, so the change
+          cannot be told apart from an edited record; re-lock (or run the newer wairon)
+        type: return
+        outcome: stale with a reason
+      - stepNumber: 6
+        label: legacy
+        description: >-
+          A record that cannot prove its own inputs unchanged: it carries no gate parts (taken
+          before they existed, or stripped), or parts that do not break down its identity
+        type: local
+      - stepNumber: 7
+        description: Compare the own spec files with the approval's per-spec digests
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: diffAgainstApproval
+      - stepNumber: 8
+        description: >-
+          Did no own spec file move, and is every direct member's approval subject (record.members)
+          the one the identity reads now? Otherwise what moved is named by the caller (the specs,
+          the member), not guessed as the release
+        type: branch
+        condition: no own spec moved and every member pin is unchanged
+        onFalseStep: 19
+      - stepNumber: 9
+        description: >-
+          Choose the one sentence (ReleaseVerdict.reason): parts that do not break down the identity
+          are ignored, so whether only the release moved cannot be told; a stamp that is newer or no
+          version; a stamp at or after the first release that records gate parts on a record without
+          them — an earlier wairon wrote it and its stamp was edited, so the release moved and
+          whether the project's own inputs did cannot be told; else `approved under <stamp> before
+          wairon recorded its inputs separately — re-lock once to record them; later upgrades then
+          carry over`. Such a record cannot prove its rule tuning, packs, network or pins unchanged,
+          so it is never carried by re-validation
+        type: local
+      - stepNumber: 10
+        description: >-
+          Stale: {from: the stamp, to: this release, carried: false, reason}. `wairon lock` then
+          takes a real approval, which records the parts
+        type: return
+        outcome: stale with a reason
+      - stepNumber: 11
+        label: cached
+        description: >-
+          Was this record already judged against this identity — in this process, or by an earlier
+          command? Re-validation is a whole owner's gate run (a second code-model build included),
+          and every status, validate and lock-check of an upgraded project asks for the same entry
+          for as long as the approval carries the older stamp. The verdict is kept in memory and in
+          one small file per project root in wairon's user cache (WAIRON_CACHE_DIR, else the OS user
+          cache — never in the tree, so nothing to ignore or commit), keyed by the root, the
+          record's identity, stamp and gate parts, the running release and build, and the current
+          gate identity, which covers the design and every input the verdict reads: any of them
+          moving misses, and a missing or unreadable cache is a miss
+        type: branch
+        condition: a verdict is kept for this root, record identity and current identity
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Answer the cached verdict
+        type: return
+        outcome: ReleaseVerdict
+      - stepNumber: 13
+        label: revalidate
+        description: 'Read the project''s own configuration: its rules and projectType judge it'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 14
+        description: >-
+          Re-validate the approved design under the current rules: the owner's gate at the project's
+          own configuration, each spec at its authored status. A re-validation already running at
+          this root (a rule asking for this entry) is never started again: it answers none
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateDesign
+      - stepNumber: 15
+        description: >-
+          Keep the design half (validation_result.designOnly) and of it the findings that fail
+          `validate --ci` (validation_result.ciBlocking)
+        type: local
+      - stepNumber: 16
+        description: Is the re-validation clean at the --ci standard?
+        type: branch
+        condition: no finding fails --ci
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Carried: {from: the record's validatorVersion, to: this release, carried: true} — approved
+          under the old release, re-validated under this one: still approved. Nothing is written
+          into the project; kept in memory and in the user cache
+        type: return
+        outcome: carried
+      - stepNumber: 18
+        label: stale
+        description: >-
+          Stale for exactly those findings: {from, to, carried: false, count, findings: the first
+          few as `CODE [spec] message`}; cached
+        type: return
+        outcome: stale by release
+      - stepNumber: 19
+        label: none
+        description: 'Not a change of the release: answer none, and the caller judges the staleness as before'
+        type: return
+        outcome: none
+status: complete
+createdAt: '2026-09-28T06:06:31.589Z'
+updatedAt: '2026-10-15T16:03:43.665Z'

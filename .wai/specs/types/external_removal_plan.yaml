@@ -1,0 +1,19 @@
+kind: value-object
+id: external_removal_plan
+name: ExternalRemovalPlan
+description: >-
+  What removing one external takes out: its declaration, its pin, or both — what a dry run of
+  sdd_remove_external / `wairon externals remove --dry-run` answers apart from what was removed.
+fields:
+  - name: declaration
+    type: bool
+    description: Whether the declaration in .wai/project.yaml goes
+    optional: false
+  - name: pin
+    type: bool
+    description: Whether the lock entry and pinned snapshot go
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-07T22:05:34.024Z'
+updatedAt: '2026-10-07T22:05:34.802Z'

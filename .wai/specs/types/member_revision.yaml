@@ -1,0 +1,37 @@
+kind: value-object
+id: member_revision
+name: MemberRevision
+description: >-
+  One live member of the bound project (a contained member or a `../` sibling, read where it is
+  stored and never pinned): where it lives, the bound project's references into it by public name,
+  and its tree at the revision whose approval it is judged against — what a member consumer compares
+  the member's live export with, so a name the member dropped since is named, never silent.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The alias the bound project declares the member under.
+    optional: false
+  - name: project
+    type: string
+    description: The member's effective project id, else its key.
+    optional: false
+  - name: root
+    type: string
+    description: The member's live root on disk.
+    optional: false
+  - name: usage
+    type: ExportUsage
+    description: The bound project's references into the member, mapped onto its public names.
+    optional: false
+  - name: revision
+    type: approved_revision
+    description: >-
+      The member's tree at the approval it is judged against — the one the bound project's lock
+      records for it (its composition subject), else the member's own last committed approval; none
+      when the member is in no git work tree or no commit holds that approval.
+    optional: true
+methods: []
+sourcePath: src/core/external-producers.ts
+createdAt: '2026-10-09T11:37:42.535Z'
+updatedAt: '2026-10-09T12:02:21.890Z'

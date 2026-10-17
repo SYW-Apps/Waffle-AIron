@@ -1,0 +1,22 @@
+id: context_composer
+name: Context Composer
+description: >-
+  Builds the two documents wairon derives for `.wai/context/` and keeps them current: a domain map,
+  and a single guide an AI tool can import to understand the project at once. Both are pure
+  functions of the spec tree and the configuration — deliberately with NO generation timestamp,
+  because stamping the clock made `wairon generate` non-idempotent and rewrote these files across
+  midnight with no design change behind them, committing churn that carries nothing git does not
+  already know from the commit itself. It is also the only thing that writes into that directory,
+  which is what keeps the human-authored documents beside them safe by construction.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - context_store
+  - domain_projector
+  - project_config_repository
+  - version_stamp
+  - ai_tool_guide
+status: complete
+createdAt: '2026-09-23T11:11:01.297Z'
+updatedAt: '2026-09-23T11:12:09.173Z'

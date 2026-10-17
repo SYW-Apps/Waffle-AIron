@@ -1,0 +1,17 @@
+kind: enum
+id: rekeyed_field
+name: RekeyedField
+description: The key of a carried finding an identity rename re-keyed.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/identity-rename.ts
+values:
+  - name: spec
+    description: The anchoring spec
+  - name: at
+    description: The site
+  - name: covers
+    description: One covered unit
+createdAt: '2026-10-04T23:33:42.244Z'
+updatedAt: '2026-10-04T23:33:42.736Z'

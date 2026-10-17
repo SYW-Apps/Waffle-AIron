@@ -64,7 +64,7 @@ listening on the network*.
 | Plane | Portal (draft unless noted) | `HostExposurePolicy` switch | Default |
 |---|---|---|---|
 | Data (MCP `sdd_*` + discovery + self-service) | `host_http_portal` *(complete)* | always on | **exposed** |
-| Existing admin | `admin_portal` *(complete)* | `adminApiMode` | `local_only` |
+| Existing admin | `admin_portal` *(complete)* | `adminApiMode` | `enabled` (was `local_only`) |
 | Identity & audit | `identity_portal` | `identityApiEnabled` | **off** |
 | Landscape & organization | `landscape_portal` | `landscapeApiEnabled` | **off** |
 | Project policy & profiles | `project_policy_portal` | `projectPolicyApiEnabled` | **off** |
@@ -181,6 +181,14 @@ planes. It fronts the *same* `self_service_orchestrator`,
 and `admin_orchestrator`, preserving audit and approval semantics through local
 process invocation. This is what makes "all HTTP control planes off" a viable
 production posture rather than a lockout.
+
+> **Superseded (2026-09-26).** This draft portal was never implemented and was
+> retired from the spec tree. The operator's in-process surface shipped as
+> `local_admin_portal` (published to `sdd_cli` only): `wairon host` reaches the
+> admin, pack, permission, identity, landscape and server workflows through it,
+> and they authorize the credential they are given exactly as the HTTP planes do.
+> Approvals, profile init and exposure policy are not yet on it; a CLI for them
+> would extend `local_admin_portal` rather than revive a second local portal.
 
 > **Supporting, not a plane:** `skills_resource_orchestrator` /
 > `skills_resource_specialist` (subsystem `sdd_skills`) publish the built-in SDD

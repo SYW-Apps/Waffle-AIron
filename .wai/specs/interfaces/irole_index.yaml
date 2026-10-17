@@ -3,11 +3,20 @@ name: Role Index Interface
 description: 'Private read-path contract over the role collection: single-role lookup and full listing.'
 component: role_index
 methods:
-  - name: listRoles
+  - name: list
     description: Return every defined role.
-    signature: 'listRoles(): Role[]'
-    returns: Role[]
+    signature: 'list(): list<Role>'
+    returns: list<Role>
     params: []
+  - name: effective
+    description: >-
+      Return the effective role set: every stored role whose id is not a reserved built-in id,
+      followed by the built-in role definitions.
+    signature: 'effective(): list<Role>'
+    returns: list<Role>
+    params: []
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:27:36.106Z'
-updatedAt: '2026-07-16T15:03:12.140Z'
+updatedAt: '2026-10-04T10:19:25.687Z'

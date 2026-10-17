@@ -7,11 +7,11 @@ description: >-
   project specs.
 fields:
   - name: nodes
-    type: LandscapeNode[]
+    type: list<LandscapeNode>
     description: Organization unit, project, and public-interface nodes.
     optional: false
   - name: edges
-    type: LandscapeEdge[]
+    type: list<LandscapeEdge>
     description: Hierarchy, placement, publication, and relation edges.
     optional: false
   - name: generatedAt
@@ -23,5 +23,6 @@ fields:
     description: Scope used to generate the graph, such as an organization unit id, project id, or "instance".
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:44.223Z'
-updatedAt: '2026-07-08T21:11:44.257Z'
+updatedAt: '2026-10-04T10:20:21.253Z'

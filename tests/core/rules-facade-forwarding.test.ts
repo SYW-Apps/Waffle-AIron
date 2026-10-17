@@ -2,11 +2,11 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
-// Facade forwarding (§7): a Repository/Gateway facade method with an authored
+// Facade forwarding (§7): a Repository facade method with an authored
 // narrative must be exactly one call step to an owned member. Dogfooded at
 // zero cost — all 63 narrated facade methods in wairon's own tree already
 // conform, so the standard's "mechanically enforceable" claim ships as a rule.
@@ -45,7 +45,7 @@ function createTempProject() {
   writeSpec('component', 'record-repository', 'schemaVersion: 1.0.0\nid: record-repository\nname: record-repository\ndescription: d\nsubsystem: sub-a\ncomponentType: Repository\nowns: [record-store, record-registry]');
   writeSpec('component', 'record-store', 'schemaVersion: 1.0.0\nid: record-store\nname: record-store\ndescription: d\nsubsystem: sub-a\ncomponentType: Store\ndurability: ram-projection');
   writeSpec('component', 'record-registry', 'schemaVersion: 1.0.0\nid: record-registry\nname: record-registry\ndescription: d\nsubsystem: sub-a\ncomponentType: Registry\ndependsOn: [record-store]');
-  writeSpec('component', 'other-specialist', 'schemaVersion: 1.0.0\nid: other-specialist\nname: other-specialist\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
+  writeSpec('component', 'record-exporter', 'schemaVersion: 1.0.0\nid: record-exporter\nname: record-exporter\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
   writeSpec('interface', 'irecord-registry', [
     'schemaVersion: 1.0.0',
     'id: irecord-registry',
@@ -58,12 +58,12 @@ function createTempProject() {
     '    signature: "storeRecord(id: string): void"',
     '    returns: "void"',
   ].join('\n'));
-  writeSpec('interface', 'iother-specialist', [
+  writeSpec('interface', 'irecord-exporter', [
     'schemaVersion: 1.0.0',
-    'id: iother-specialist',
-    'name: IOtherSpecialist',
+    'id: irecord-exporter',
+    'name: IRecordExporter',
     'description: d',
-    'component: other-specialist',
+    'component: record-exporter',
     'methods:',
     '  - name: transform',
     '    description: Transforms the record into its canonical wire representation for export.',
@@ -107,7 +107,7 @@ function createTempProject() {
 const facadeIssues = (res: { issues: { code: string; specId?: string; message: string; severity: string }[] }) =>
   res.issues.filter(i => i.code === 'FACADE_FORWARDING');
 
-describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway facades', () => {
+describe('facade-forwarding — §7 pure 1:1 forwarding on Repository facades', () => {
   it('accepts a single call step to an owned member', () => {
     const proj = createTempProject();
     proj.facadeContract();
@@ -120,7 +120,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
     ]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -130,7 +130,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
     proj.facadeImpl([]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -149,7 +149,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].specId).toBe('impl-record-repository');
@@ -167,7 +167,7 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('"local"');
     } finally { proj.cleanup(); }
@@ -178,16 +178,16 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
     proj.facadeContract();
     proj.facadeImpl([
       '      - stepNumber: 1',
-      '        description: Forward to an outside specialist',
+      '        description: Forward to an outside exporter',
       '        type: call',
-      '        targetComponent: other-specialist',
+      '        targetComponent: record-exporter',
       '        targetMethod: transform',
     ]);
     proj.activate();
     try {
-      const found = facadeIssues(validateSddTree());
+      const found = facadeIssues(validateProject());
       expect(found).toHaveLength(1);
-      expect(found[0].message).toContain('other-specialist');
+      expect(found[0].message).toContain('record-exporter');
     } finally { proj.cleanup(); }
   });
 
@@ -206,11 +206,42 @@ describe('facade-forwarding — §7 pure 1:1 forwarding on Repository/Gateway fa
       'lint:',
       '  allow:',
       '    - code: FACADE_FORWARDING',
+      '      at: saveRecord',
       '      reason: transitional — normalization moves into the registry next pass',
     ]);
     proj.activate();
     try {
-      expect(facadeIssues(validateSddTree())).toHaveLength(0);
+      expect(facadeIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
+  });
+
+  it('names the method as its site, so an allow can be held to one method', () => {
+    const narrative = [
+      '      - stepNumber: 1',
+      '        description: Normalize the record id before storing',
+      '        type: local',
+      '      - stepNumber: 2',
+      '        description: Forward to the registry write face',
+      '        type: call',
+      '        targetComponent: record-registry',
+      '        targetMethod: storeRecord',
+    ];
+    const at = (site: string) => {
+      const proj = createTempProject();
+      proj.facadeContract();
+      proj.facadeImpl([
+        ...narrative,
+        'lint:',
+        '  allow:',
+        '    - code: FACADE_FORWARDING',
+        `      at: ${site}`,
+        '      reason: the one deliberate exception on this facade',
+      ]);
+      proj.activate();
+      try { return facadeIssues(validateProject()); } finally { proj.cleanup(); }
+    };
+    expect(at('saveRecord')).toHaveLength(0);
+    // An allow held to another method leaves this one reported.
+    expect(at('loadRecord')).toHaveLength(1);
   });
 });

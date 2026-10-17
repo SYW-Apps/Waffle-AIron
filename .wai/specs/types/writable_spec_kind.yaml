@@ -1,0 +1,25 @@
+kind: enum
+id: writable_spec_kind
+name: WritableSpecKind
+description: >-
+  The kinds of spec the tree stores and the write seams address by kind and id: the L0 singleton and
+  the five per-file kinds. A position that cannot take every kind (the L0 is never deleted, a parent
+  is never an implementation or a type) says so in its own description.
+fields: []
+methods: []
+sourcePath: src/core/specs.ts
+values:
+  - name: system
+    description: The L0 system spec, the tree's singleton
+  - name: subsystem
+    description: An L1 subsystem
+  - name: component
+    description: An L2 component
+  - name: interface
+    description: An L3 interface (contract)
+  - name: implementation
+    description: An L4 implementation, with its L5 narratives
+  - name: type
+    description: 'A type: entity, value-object, signature or enum'
+createdAt: '2026-10-04T23:11:07.188Z'
+updatedAt: '2026-10-04T23:11:07.584Z'

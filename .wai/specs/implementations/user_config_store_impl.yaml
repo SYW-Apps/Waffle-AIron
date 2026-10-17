@@ -1,0 +1,127 @@
+id: user_config_store_impl
+name: User Config Store Implementation
+description: >-
+  src/config/userconfig.ts. Every setter is read-modify-write through the same two primitives, so
+  setting one field can never discard another written by a different command — or by the same
+  command a moment earlier. Nothing is cached between calls, which is what lets a hand edit or
+  another process take effect immediately.
+contract: iuser_config_store
+sourcePath: src/config/userconfig.ts
+methods:
+  - name: load
+    narrative:
+      - stepNumber: 1
+        description: Decide whether there is anything to read
+        type: branch
+        condition: the file exists and parses
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer the settings it holds
+        type: return
+        outcome: loaded
+      - stepNumber: 3
+        description: >-
+          Answer nothing configured. An absent file, an unreadable one and a malformed one are the
+          same answer on purpose: a machine that has never been set up is normal, and a broken file
+          must not stop the tool running
+        type: return
+        outcome: unconfigured
+    symbol: loadUserConfig
+  - name: save
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Create the directory if this is the first write — nothing creates it at install time, so
+          the first setting anyone records is also what makes the home for it
+        type: local
+      - stepNumber: 2
+        description: Write the whole document back, pretty-printed so a person can read and hand-edit it
+        type: local
+      - stepNumber: 3
+        description: Done
+        type: return
+        outcome: saved
+    symbol: saveUserConfig
+  - name: channel
+    narrative:
+      - stepNumber: 1
+        description: Read the settings
+        type: call
+        targetComponent: user_config_store
+        targetMethod: load
+      - stepNumber: 2
+        description: Decide whether the recorded channel is one this build knows
+        type: branch
+        condition: a channel is recorded and this build recognizes it
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer it
+        type: return
+        outcome: channel
+      - stepNumber: 4
+        description: >-
+          Answer the narrowest channel instead. A hand-edited or future-version file can name
+          something this build does not know, and honouring it would let an unrecognized value widen
+          what a stable install is willing to fetch
+        type: return
+        outcome: stable
+    symbol: getChannel
+  - name: setChannel
+    narrative:
+      - stepNumber: 1
+        description: Read the settings as they stand
+        type: call
+        targetComponent: user_config_store
+        targetMethod: load
+      - stepNumber: 2
+        description: Replace the channel, leaving every other setting untouched
+        type: local
+      - stepNumber: 3
+        description: Write the whole document back
+        type: call
+        targetComponent: user_config_store
+        targetMethod: save
+      - stepNumber: 4
+        description: Done
+        type: return
+        outcome: recorded
+    symbol: setChannel
+  - name: disabledAliases
+    narrative:
+      - stepNumber: 1
+        description: Read the settings
+        type: call
+        targetComponent: user_config_store
+        targetMethod: load
+      - stepNumber: 2
+        description: >-
+          Answer the opted-out names, or none at all when the field is absent — which is the default
+          state, because every supported alias is active until somebody opts out
+        type: return
+        outcome: disabled
+    symbol: getDisabledAliases
+  - name: setDisabledAliases
+    narrative:
+      - stepNumber: 1
+        description: Read the settings as they stand
+        type: call
+        targetComponent: user_config_store
+        targetMethod: load
+      - stepNumber: 2
+        description: Replace the opted-out list, leaving every other setting untouched
+        type: local
+      - stepNumber: 3
+        description: Write the whole document back
+        type: call
+        targetComponent: user_config_store
+        targetMethod: save
+      - stepNumber: 4
+        description: Done
+        type: return
+        outcome: recorded
+    symbol: setDisabledAliases
+status: complete
+createdAt: '2026-09-22T21:18:19.297Z'
+updatedAt: '2026-09-22T21:19:48.070Z'

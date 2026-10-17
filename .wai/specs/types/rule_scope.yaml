@@ -1,0 +1,14 @@
+kind: enum
+id: rule_scope
+name: RuleScope
+description: What a validation rule's check needs to see.
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: spec
+    description: Only one spec's own fields, so the write gate also runs it on a candidate before saving
+  - name: tree
+    description: The whole tree (the default)
+createdAt: '2026-10-04T23:13:25.852Z'
+updatedAt: '2026-10-04T23:13:26.266Z'

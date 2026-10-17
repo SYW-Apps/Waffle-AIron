@@ -2,36 +2,119 @@ id: isource_analysis_adapter
 name: Source Analysis Adapter Interface
 description: >-
   Adapter contract for building the pure source-code model that structural conformance validates
-  against. Intent-language only — the parser technology is a swap seam declared on the L4. The
-  contract promises graceful degradation: analysis grade may vary per file, but a readable file
-  always yields facts and a failed file yields a classified non-analyzed entry; the run itself never
-  fails.
+  against, and for finding the source files a project declares as its own. Intent-language only —
+  the parser technology is a swap seam declared on the L4. The contract promises graceful
+  degradation: analysis grade may vary per file, but a readable file always yields facts and a
+  failed file yields a classified non-analyzed entry; the run itself never fails.
 component: source_analysis_adapter
 methods:
   - name: buildCodeModel
     description: >-
-      Resolve each distinct implementation sourcePath within the project root (absolute or
-      parent-escaping paths classify as escaped, nonexistent files as missing, binary/unreadable
-      content as unreadable), analyze every readable file with the best available analyzer — exact
-      AST when the TypeScript compiler module resolves dynamically for ts/js, else the language's
-      declarative pattern table (built-in or extension-pack registered), else the generic
-      word-boundary scan — and return per-file facts (declaration-tier names, string-literal and
-      property-access anchors, exported names, import specifiers, and — at exact grade only —
-      per-named-function cyclomatic complexity plus per-named-function direct callee names, fuel for
-      the detail-sufficiency lint and the call-step realization check; lower grades omit both rather
-      than guess) graded exact | pattern | generic. Deterministic over file contents; a single
-      file's analysis failure degrades that file, never the run.
-    signature: 'buildCodeModel(implementations: ImplementationSpec[], projectRoot: string): CodeModel'
+      Walk the declared source roots for the files no spec need name — each root resolved and
+      containment-checked within the project root (an absolute or parent-escaping root is refused,
+      never walked), a file root standing for itself and a directory root descended recursively
+      without entering node_modules or a dot-directory, keeping each file whose extension names a
+      language the analyzer knows and that is not at, or under, an exclude entry — then resolve each
+      distinct source file the specs name (every implementation sourcePath, every method's own
+      sourcePath, every simPath, and every type sourcePath and type-method sourcePath) on the same
+      terms (absolute or parent-escaping paths classify as escaped, nonexistent files as missing,
+      binary/unreadable content as unreadable), analyze every readable file with the best available
+      analyzer — exact AST when the TypeScript compiler module resolves dynamically for ts/js, else
+      the language's declarative pattern table (built-in or extension-pack registered), else the
+      generic word-boundary scan — and return per-file facts (declaration-tier names, string-literal
+      and property-access anchors, exported names, import specifiers, and — at exact grade only —
+      per-named-function cyclomatic complexity, per-named-function direct callee names and whether
+      the file is a pure re-export barrel that declares nothing of its own; lower grades omit all
+      three rather than guess) graded exact | pattern | generic, beside the walked file list the
+      unclaimed-source rule judges. Declaring no source root walks nothing, which is what keeps that
+      rule opt-in. Deterministic over file contents; a single file's analysis failure degrades that
+      file, never the run.
+    signature: >-
+      buildCodeModel(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
+      string, sourceRoots?: list<string>, exclude?: list<string>): CodeModel
     returns: CodeModel
     params:
       - name: implementations
-        type: ImplementationSpec[]
+        type: list<ImplementationSpec>
         description: >-
-          The loaded L4 specs whose sourcePaths define the file set (deduplicated — N:1 sharing is
-          expected)
+          The loaded L4 specs whose implementation, method and sim paths define part of the file set
+          (deduplicated — N:1 sharing is expected)
+      - name: types
+        type: list<TypeSpec>
+        description: >-
+          The loaded type specs whose own and per-method sourcePaths claim code, analyzed on the
+          same terms
       - name: projectRoot
         type: string
-        description: The root all sourcePaths are resolved and containment-checked within
+        description: The root every source path and source root is resolved and containment-checked within
+      - name: sourceRoots
+        type: list<string>
+        description: >-
+          Project-relative directories or files holding this project's own source code; empty means
+          no walk, and the unclaimed-source rule stays silent
+        optional: true
+      - name: exclude
+        type: list<string>
+        description: >-
+          Paths inside those roots that are not this project's code to claim — vendored libraries,
+          generated output, a chained subproject's own directory
+        optional: true
+  - name: findTestsReferencing
+    description: >-
+      Find the tests that encode a given set of methods. Walks the declared test roots on the same
+      containment terms as the source walk — each root resolved and checked within the project root,
+      an absolute or parent-escaping root refused rather than walked, node_modules and
+      dot-directories skipped — and for each method searches for its `symbol`, or its name when it
+      declares none. A method that carries its realizing sourcePath (the method's own, else its
+      implementation's, as the caller resolved it) is searched by the MODULE a test imports it from:
+      a test file is `imported` only when one of its import bindings comes from that file under the
+      symbol, or from a module that re-exports it from there — aliased or not, through any chain of
+      re-exports, so a test importing it under a republished alias counts though it never spells the
+      symbol — or when it imports such a module as a namespace and names the symbol; a destructured
+      dynamic import counts like a static one. A test that binds the name to any OTHER module is
+      dropped altogether: the name in it is that module's function, neither an import of this method
+      nor a mention of it — which is what keeps removing a thin adapter named like its provider from
+      listing every test of the provider. A method that carries no sourcePath is searched by name
+      alone. One method given more than once (a contract realized in several files) is one entry,
+      imported from any of them. A test file that merely names the symbol is reported as
+      `mentioned`, unless the name matched more than a tenth of the walked test files, in which case
+      the mention list is withheld and `indiscriminate` is set. Declaring no test roots walks
+      nothing and answers empty, which is what keeps this opt-in. Deterministic over file contents;
+      an unreadable test or source file is skipped, never fatal.
+    signature: >-
+      findTestsReferencing(methods: list<MethodImplementation>, projectRoot: string, testRoots:
+      list<string>): list<TestsToRevisit>
+    returns: list<TestsToRevisit>
+    params:
+      - name: methods
+        type: list<MethodImplementation>
+        description: >-
+          The methods to look for; each contributes its `symbol` when it declares one, otherwise its
+          name, and its `sourcePath` — the file realizing it, project-relative — when the caller
+          knows one
+      - name: projectRoot
+        type: string
+        description: The root every test root is resolved and containment-checked within
+      - name: testRoots
+        type: list<string>
+        description: >-
+          Project-relative directories holding the project's tests; empty means no walk and an empty
+          answer
+    guarantees:
+      - idempotent
+  - name: compilerIdentity
+    description: >-
+      Which compiler an exact-grade analysis of this project would read it with — the project's own
+      when it ships the JavaScript compiler API, else wairon's own copy — with its version; none
+      when neither resolves. Resolved the same way buildCodeModel resolves it, so the line validate
+      prints names the compiler the analysis used. Read-only.
+    signature: 'compilerIdentity(projectRoot: string): compiler_identity?'
+    returns: compiler_identity?
+    params:
+      - name: projectRoot
+        type: string
+        description: The bound project's root
+    effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-07-18T18:25:20.954Z'
+updatedAt: '2026-10-07T21:50:13.355Z'

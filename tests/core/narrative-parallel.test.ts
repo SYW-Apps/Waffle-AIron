@@ -2,10 +2,10 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
-import { invalidateSpecCache, updateSpec, saveSubsystemSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
+import { validateProject } from '../../src/core/validation.js';
+import { invalidateSpecCache, updateSpec, saveSpec, saveInterfaceSpec, saveImplementationSpec, loadImplementationSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
-import { stepGraph } from '../../src/core/rules/narrative-flow.js';
+import { stepGraph } from '../../src/models/index.js';
 import type { NarrativeStep } from '../../src/models/index.js';
 
 const now = new Date().toISOString();
@@ -30,12 +30,12 @@ describe('stepGraph parallel successor semantics', () => {
   ];
 
   it('fans out to every arm entry plus the join continuation', () => {
-    const g = stepGraph(steps);
+    const g = stepGraph({ narrative: steps });
     expect(g.successorsOf(1).sort()).toEqual([2, 4, 6]);
   });
 
   it('an arm-end falls through to the JOIN, never into the neighbor arm', () => {
-    const g = stepGraph(steps);
+    const g = stepGraph({ narrative: steps });
     expect(g.successorsOf(3)).toEqual([6]); // not 4
     expect(g.successorsOf(5)).toEqual([6]);
   });
@@ -50,7 +50,7 @@ describe('stepGraph parallel successor semantics', () => {
       step({ stepNumber: 6, type: 'local' }), // outer arm 2
       step({ stepNumber: 7, type: 'return' }),
     ];
-    const g = stepGraph(nested);
+    const g = stepGraph({ narrative: nested });
     // Outer arm 1 spans 2..5 (its end 5 maps to outer join 7); the inner
     // parallel's own join = fallNext(5) = 7 as well.
     expect(g.successorsOf(3)).toEqual([7]);
@@ -60,7 +60,7 @@ describe('stepGraph parallel successor semantics', () => {
   });
 });
 
-describe('narrative-flow parallel/detach soundness (via validateSddTree)', () => {
+describe('narrative control-flow parallel/detach soundness (via validateProject)', () => {
   let proj: string | undefined;
   afterEach(() => {
     invalidateSpecCache();
@@ -91,8 +91,8 @@ describe('narrative-flow parallel/detach soundness (via validateSddTree)', () =>
     writeSpec('system', 'system', 'schemaVersion: 1.0.0\nname: TestSystem\nvision: testing');
     writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     writeSpec('component', 'fan-orch', 'schemaVersion: 1.0.0\nid: fan-orch\nname: fan-orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependsOn: [side-a, side-b]');
-    writeSpec('component', 'side-a', 'schemaVersion: 1.0.0\nid: side-a\nname: side-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
-    writeSpec('component', 'side-b', 'schemaVersion: 1.0.0\nid: side-b\nname: side-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
+    writeSpec('component', 'side-a', 'schemaVersion: 1.0.0\nid: side-a\nname: side-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
+    writeSpec('component', 'side-b', 'schemaVersion: 1.0.0\nid: side-b\nname: side-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
     writeSpec('interface', 'iside-a', 'schemaVersion: 1.0.0\nid: iside-a\nname: ISideA\ndescription: d\ncomponent: side-a\nmethods:\n  - name: workA\n    description: Performs the A-side work and reports the outcome plainly.\n    signature: "workA(): void"\n    returns: "void"');
     writeSpec('interface', 'iside-b', 'schemaVersion: 1.0.0\nid: iside-b\nname: ISideB\ndescription: d\ncomponent: side-b\nmethods:\n  - name: workB\n    description: Performs the B-side work and reports the outcome plainly.\n    signature: "workB(): void"\n    returns: "void"');
     writeSpec('interface', 'ifan-orch', 'schemaVersion: 1.0.0\nid: ifan-orch\nname: IFanOrch\ndescription: d\ncomponent: fan-orch\nmethods:\n  - name: fanOut\n    description: Runs both sides concurrently and reports when both have completed.\n    signature: "fanOut(): void"\n    returns: "void"');
@@ -107,7 +107,7 @@ describe('narrative-flow parallel/detach soundness (via validateSddTree)', () =>
   }
 
   const flowIssues = (codes: string[]) => {
-    const res = validateSddTree();
+    const res = validateProject();
     return res.issues.filter(i => codes.includes(i.code));
   };
 
@@ -227,7 +227,7 @@ describe('updateSpec relocation + labels for parallel branches', () => {
     proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-parallel-upd-'));
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
     setProjectRoot(proj);
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       schemaVersion: '1.0.0', id: 'sub-a', name: 'SubA', description: 'd',
       parentSystem: 'TS', publicInterfaces: [], createdAt: now, updatedAt: now,
     });
@@ -320,7 +320,7 @@ describe('language gating of parallel/detach via pack tables', () => {
       w('system', 'system', 'schemaVersion: 1.0.0\nname: TestSystem\nvision: testing\ntargetLanguage: structured-text');
       w('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
       w('component', 'orch', 'schemaVersion: 1.0.0\nid: orch\nname: orch\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependsOn: [helper]');
-      w('component', 'helper', 'schemaVersion: 1.0.0\nid: helper\nname: helper\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist');
+      w('component', 'helper', 'schemaVersion: 1.0.0\nid: helper\nname: helper\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure');
       w('interface', 'ihelper', 'schemaVersion: 1.0.0\nid: ihelper\nname: IHelper\ndescription: d\ncomponent: helper\nmethods:\n  - name: assist\n    description: Assists with the auxiliary duty and reports completion.\n    signature: "assist(): void"\n    returns: "void"');
       w('interface', 'iorch', 'schemaVersion: 1.0.0\nid: iorch\nname: IOrch\ndescription: d\ncomponent: orch\nmethods:\n  - name: run\n    description: Runs one full pass of the coordinated duty cycle.\n    signature: "run(): void"\n    returns: "void"');
       w('implementation', 'impl-orch', [
@@ -344,7 +344,7 @@ describe('language gating of parallel/detach via pack tables', () => {
         '        type: local',
       ].join('\n'));
       vi.spyOn(process, 'cwd').mockReturnValue(proj);
-      const res = validateSddTree();
+      const res = validateProject();
       const foreign = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(foreign.some(i => i.message.includes('parallel step'))).toBe(true);
       expect(foreign.some(i => i.message.includes('fire-and-forget'))).toBe(true);

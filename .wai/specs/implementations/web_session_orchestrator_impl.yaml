@@ -1,0 +1,454 @@
+id: web_session_orchestrator_impl
+name: Web Session Orchestrator Implementation
+description: >-
+  Browser-session lifecycle for the unified web UI: SSO sign-in start/complete, the built-in
+  super-admin password sign-in, sign-out on one device or all of them, the local-developer session,
+  the pre-auth login-options projection, and the session-principal context projection, with session
+  hygiene (activity touch, expired-session GC) on the way. Sign-in start/complete are
+  unauthenticated (trust anchored by the signed SSO state and provider code exchange); audit appends
+  are best-effort and never fail the primary action.
+contract: iweb_session_orchestrator
+sourcePath: src/server/web.ts
+injectedParams:
+  - cfg
+methods:
+  - name: startSignIn
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the ENABLED identity provider through the identity orchestrator (an unknown or
+          disabled provider rejects the sign-in start identically)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: resolveEnabledProvider
+      - stepNumber: 2
+        description: Generate a cryptographically random nonce for this sign-in attempt
+        type: local
+      - stepNumber: 3
+        description: >-
+          Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
+          authority
+        type: call
+        targetComponent: authentication
+        targetMethod: signSsoState
+      - stepNumber: 4
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (explicit overrides -> OIDC discovery -> providerType template)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 5
+        description: >-
+          Build the provider authorization URL from the config, the signed state, and redirectUri;
+          the adapter enforces the provider's redirect allowlist, as it does on every sign-in start
+          path
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: buildAuthorizationUrl
+      - stepNumber: 6
+        description: >-
+          Record the web.signin.start event (info) with no resolved actor, best-effort through the
+          identity orchestrator — a failure never fails the sign-in start
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 7
+        description: Return the provider authorization URL
+        type: return
+        outcome: authorization URL
+  - name: signOut
+    narrative:
+      - stepNumber: 1
+        description: Remove the browser session by id through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: remove
+      - stepNumber: 2
+        description: >-
+          Opportunistically prune all sessions already past their expiry (housekeeping on the
+          sign-out write path)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: pruneExpired
+      - stepNumber: 3
+        description: >-
+          Record the web.signout event (info) with no resolved actor, best-effort through the
+          identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 4
+        description: Return once the session has been removed
+        type: return
+        outcome: signed out
+  - name: completeSignIn
+    narrative:
+      - stepNumber: 1
+        description: Verify the signed SSO state (rejects tampered or expired state) and return its payload.
+        type: call
+        targetComponent: authentication
+        targetMethod: verifySsoState
+      - stepNumber: 2
+        description: Parse the verified state payload into providerId, nonce, and redirectUri.
+        type: local
+      - stepNumber: 3
+        description: >-
+          Resolve the ENABLED identity provider bound by the state through the identity orchestrator
+          (an unknown or disabled provider rejects the callback identically)
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: resolveEnabledProvider
+      - stepNumber: 4
+        description: >-
+          Resolve the provider's concrete OIDC endpoints through the identity provider adapter
+          (front-channel authorize plus back-channel token/jwks, honoring any split-horizon
+          overrides)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveEndpoints
+      - stepNumber: 5
+        description: Exchange the authorization code with the provider for a redacted token summary.
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: exchangeCode
+      - stepNumber: 6
+        description: >-
+          Verify the provider metadata and resolve it to a Wairon PrincipalSubject (no raw provider
+          tokens).
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveSubject
+      - stepNumber: 7
+        description: >-
+          Read the verified id_token's groups claim from the redacted provider summary (meaningful
+          only now — after resolveSubject verified the same summary)
+        type: call
+        targetComponent: identity_provider_adapter
+        targetMethod: resolveGroups
+      - stepNumber: 8
+        description: >-
+          Decide the SSO-admin membership: in the admin group exactly when the verified groups
+          intersect the provider's configured adminGroupClaims (an unset or empty adminGroupClaims
+          never matches)
+        type: local
+      - stepNumber: 9
+        description: Look up the hosted user by the resolved subject's issuer and external subject id.
+        type: call
+        targetComponent: user_repository
+        targetMethod: findByExternalSubject
+      - stepNumber: 10
+        description: >-
+          If no hosted user matched, provision a first-login record; otherwise use the existing
+          user.
+        type: branch
+        condition: no hosted user matched
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Build a new active first-login HostedUserRecord for the subject — roleBindings = a single
+          binding to the built-in 'sso-admin' role at instance scope when in the admin group,
+          otherwise empty (an admin assigns roles/permissions afterwards). The sso-admin role grants
+          project:admin + project:create instance-wide, never *:*.
+        type: local
+      - stepNumber: 12
+        description: Persist the newly provisioned first-login user record through the user repository.
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 13
+        description: >-
+          If the resolved hosted user's status is not active, reject the sign-in (a deactivated user
+          may not sign in).
+        type: branch
+        condition: the resolved hosted user is not active
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Reject the sign-in of a deactivated user.
+        type: throw
+        error: deactivated user may not sign in
+      - stepNumber: 15
+        description: >-
+          If the user's roleBindings disagree with the SSO-admin membership, refresh them; otherwise
+          skip the refresh
+        type: branch
+        condition: >-
+          the user's roleBindings disagree with the SSO-admin membership decided from the verified
+          groups claim (in the admin group but missing the sso-admin binding, or out of the group
+          but still holding it)
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Persist the refreshed roleBindings through the user repository: add the built-in sso-admin
+          role binding on entry into the admin group, drop it on exit (server-driven; sso-admin
+          grants project:admin + project:create instance-wide, never *:* — the reservation is
+          preserved)
+        type: call
+        targetComponent: user_repository
+        targetMethod: upsert
+      - stepNumber: 17
+        description: >-
+          Build the new WebSession (session id with the reserved prefix, subject, providerId,
+          createdAt, expiresAt = now + the session TTL); the session carries NO grants — the
+          authentication component resolves the principal's permissionSubject (roleBindings +
+          instanceAdmin) live at authentication. MULTI-DEVICE: prior sessions are left intact, so
+          one principal may hold concurrent browser sessions across devices/tabs; each independently
+          revocable via signOut, and signOutEverywhere revokes them all.
+        type: local
+      - stepNumber: 18
+        description: Persist the new browser session through the web session repository.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 19
+        description: >-
+          Record the web.signin event (security) for the signed-in subject, best-effort through the
+          identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 20
+        description: Return the new session id (the portal sets it as the browser session cookie).
+        type: return
+        outcome: new session id
+  - name: signOutEverywhere
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the presented session to a Principal (an expired or absent session yields an
+          unauthenticated principal).
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: If the session did not resolve to an authenticated principal, there is nothing to revoke.
+        type: branch
+        condition: the session did not resolve to an authenticated principal
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return without action (idempotent no-op).
+        type: return
+        outcome: no-op
+      - stepNumber: 4
+        description: List every browser session belonging to the principal's subject.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: listBySubject
+      - stepNumber: 5
+        description: For each of the subject's browser sessions
+        type: loop
+        loopKind: forEach
+        over: the subject's sessions
+        endStep: 6
+      - stepNumber: 6
+        description: Remove the session so it can no longer resolve to a Principal.
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: remove
+      - stepNumber: 7
+        description: >-
+          Record the web.signout.all event (security) for the subject, best-effort through the
+          identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 8
+        description: Return (all of the principal's sessions revoked).
+        type: return
+        outcome: all sessions revoked
+  - name: startDevSession
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the server is NOT in local developer mode (cfg.devMode is false), reject — this path
+          must never mint a session in a hosted deployment
+        type: branch
+        condition: cfg.devMode is false
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject the dev-session mint outside local developer mode
+        type: throw
+        error: dev session is only available under wairon dev (devMode)
+      - stepNumber: 3
+        description: >-
+          Take the synthetic local-developer subject from authentication, which owns built-in
+          subject minting: the persisted boot-reserved local-developer UUID under issuer 'local'
+        type: call
+        targetComponent: authentication
+        targetMethod: localDevSubject
+      - stepNumber: 4
+        description: >-
+          Drop already-expired sessions through the web session repository BEFORE looking for one to
+          reuse, so an aged-out dev session is never handed back as a dead credential (the dev UI
+          would land on a login screen devMode configures no login method for)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: pruneExpired
+      - stepNumber: 5
+        description: >-
+          List the surviving (live) sessions for the synthetic local-developer subject through the
+          web session repository (so the dev server reuses one session rather than churning the
+          store on every cookieless hit)
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: listBySubject
+      - stepNumber: 6
+        description: 'If a LIVE local-developer session already exists, reuse it: return its id'
+        type: branch
+        condition: a live local-developer session already exists
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Return the existing local-developer session id
+        type: return
+        outcome: existing dev session id
+      - stepNumber: 8
+        description: >-
+          Build a new WebSession bound to the synthetic local-developer subject (issuer 'local',
+          userId = the PERSISTED boot-reserved local-developer UUID seeded at first boot, kind
+          'human'), narrowed to the one local project (projects = [the local project id]); the
+          session carries NO permissions — in devMode the authentication component resolves THIS
+          subject's permissionSubject with instanceAdmin = true (full local access) live at
+          authentication, matching the dev-subject identity check in authenticateSession. This path
+          is devMode-only and never mints a session in a hosted deployment. expiresAt = now + the
+          session TTL.
+        type: local
+      - stepNumber: 9
+        description: Persist the new local-developer session through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 10
+        description: Return the new local-developer session id
+        type: return
+        outcome: new dev session id
+    detail: full
+  - name: signInWithPassword
+    narrative:
+      - stepNumber: 1
+        description: >-
+          If the transient in-memory throttle holds an active lockout for this username (~5
+          consecutive failures start a short lockout), reject outright
+        type: branch
+        condition: the in-memory throttle holds an active lockout for this username
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject the locked-out attempt without consulting the credentials
+        type: throw
+        error: Unauthenticated — too many failed attempts (short lockout)
+      - stepNumber: 3
+        description: >-
+          Verify BOTH the username and the password constant-time via the authentication component
+          (unset env = password login disabled → always null)
+        type: call
+        targetComponent: authentication
+        targetMethod: verifyBuiltinAdmin
+      - stepNumber: 4
+        description: If verification returned no subject (mismatch or disabled), record and reject
+        type: branch
+        condition: verification returned no subject
+        onTrueStep: 5
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Record the failed attempt in the transient module-level throttle map (~5 consecutive
+          failures start a short lockout; never persisted)
+        type: local
+      - stepNumber: 6
+        description: Reject the sign-in
+        type: throw
+        error: Unauthenticated — invalid credentials
+      - stepNumber: 7
+        description: >-
+          Clear the username's throttle entry and build the WebSession bound to the stable built-in
+          super-admin subject; the session carries NO grants — the authentication component resolves
+          the built-in super-admin's permissionSubject with instanceAdmin = true (the ONLY
+          instance-admin, env-anchored, hard-reserved away from user records and minted tokens).
+          expiresAt = now + the session TTL.
+        type: local
+      - stepNumber: 8
+        description: Persist the new super-admin browser session through the web session repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: create
+      - stepNumber: 9
+        description: >-
+          Record the web.signin.password event (security) for the built-in admin subject,
+          best-effort through the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 10
+        description: Return the new session id (the portal sets it as the browser session cookie)
+        type: return
+        outcome: new session id
+  - name: getLoginOptions
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Derive passwordLogin: true exactly when BOTH the env-anchored built-in admin username and
+          password are configured on the resolved host config (either unset = password login
+          disabled → false)
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read every configured identity provider through the policy repository (unauthenticated by
+          nature — a pre-auth read; no caller credential is required or accepted)
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 3
+        description: >-
+          Keep only the ENABLED providers and project each to exactly { id, displayName },
+          displayName defaulting to the provider id when unset — no secret, clientId, endpoint, or
+          any other config field ever crosses into the pre-auth payload
+        type: local
+      - stepNumber: 4
+        description: >-
+          Return the WebLoginOptions (the password-login flag plus the projected enabled-provider
+          list)
+        type: return
+        outcome: login options
+  - name: getCurrentContext
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the session to a Principal through the single auth authority's session bridge
+          (rejects an expired or absent session)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Record activity by touching the session's lastSeenAt to now through the web session
+          repository
+        type: call
+        targetComponent: web_session_repository
+        targetMethod: touch
+      - stepNumber: 3
+        description: >-
+          Assemble the WebContext from the resolved principal: subject, isAdmin from
+          principal.permissionSubject.instanceAdmin, and local from cfg.devMode (signals the client
+          to hide the tenancy/login chrome). The client fetches its permission-filtered project list
+          from web_project_orchestrator.list and relies on per-endpoint enforcement for write
+          affordances — no grants
+        type: local
+      - stepNumber: 4
+        description: Return the session-principal context
+        type: return
+        outcome: web context
+    detail: full
+detail: full
+lint:
+  allow:
+    - code: UNREALIZED_DEPENDENCY
+      at: web_session_orchestrator -> audit_repository
+      reason: >-
+        audit_repository gating lands with web UI slices 2-3 (in flight) — the declared edge is
+        design-ahead, not stale. (The previous, spec-wide allow also named policy_repository; that
+        edge stopped firing and the prose kept claiming it, which is what a site-precise allow makes
+        impossible.)
+status: complete
+createdAt: '2026-07-11T11:36:44.225Z'
+updatedAt: '2026-10-03T17:59:26.001Z'

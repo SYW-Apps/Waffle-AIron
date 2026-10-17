@@ -1,0 +1,16 @@
+kind: enum
+id: spec_id_kind
+name: SpecIdKind
+description: The kind label a finding names a spec by.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: Subsystem
+  - name: Component
+  - name: Interface
+  - name: Implementation
+  - name: Type
+createdAt: '2026-10-04T23:34:03.156Z'
+updatedAt: '2026-10-04T23:34:03.582Z'

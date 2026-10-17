@@ -2,16 +2,17 @@ kind: value-object
 id: project_config
 name: ProjectConfig
 description: >-
-  Project configuration, including output targets, rule configuration, extension pack registration,
-  and the hosted/profile selection applied when the project was initialized or reconciled.
+  Project configuration: the project's identity, output targets, rule configuration, extension pack
+  registration, and the hosted/profile selection applied when the project was initialized or
+  reconciled. Identity resolution is intrinsic, pure behaviour of the configuration itself
+  (effectiveId, identity): it needs no collaborator.
 fields:
   - name: name
     type: string
-    description: Project name
+    description: 'Display name. Not an identity: `id` is.'
     optional: false
-    key: primary
   - name: targets
-    type: object[]
+    type: list<any>
     description: 'Output targets: type (claude | gemini | custom), outputDir, enabled'
     optional: false
   - name: rules
@@ -19,7 +20,7 @@ fields:
     description: Topology + conformance rule configuration
     optional: false
   - name: extensions
-    type: object
+    type: any
     description: Extension configuration such as registered pack references and whether global packs are used.
     optional: true
   - name: profileSelection
@@ -39,7 +40,223 @@ fields:
       that resolves to no loaded profile disables that doctrine (UNKNOWN_PROFILE), which is why
       hosted writes ensure the contributing pack is registered before writing it. Defaults to
       'backend' when the config omits it.
+    optional: false
+  - name: schemaVersion
+    type: string
+    description: >-
+      The config-format version this file was written at, so a later wairon can read an earlier
+      project rather than guess at it. Always present — a missing version is filled on write.
+    optional: false
+  - name: createdAt
+    type: string
+    description: 'When the project was initialized. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When the config was last written. Store-managed.
+    optional: false
+  - name: id
+    type: string
+    description: >-
+      The project's stable identity: a slug of [a-z0-9-_.] that starts and ends alphanumeric, judged
+      by identifier.problemAs project-id — at most 64 characters, never a Windows device name and
+      never super, which every consumer would write as a namespace hop. When absent, the effective
+      id is `name` slugified (see effectiveId) and no save writes it in, because the default can be
+      wrong: an existing chained child answers to its mount's subsystem id, which a plain save
+      cannot know. Only deliberate writers set it: init and provisioning
     optional: true
-methods: []
+    key: primary
+  - name: externals
+    type: map<string, ExternalDeclaration>
+    description: >-
+      The other projects this project consumes, keyed by alias — the first segment of its
+      `alias::name` references. Each value is an ExternalDeclaration; the alias defaults the
+      producer id, and a producer is found through the family (parent, members' siblings) or an
+      explicit source (a path, a git repository, or on a hosted instance a record id). Its `use`
+      imports producer names so they may be written bare: a bare name resolves to a local spec
+      first, then to a name exactly one import supplies. A member needs no declaration: its
+      `members` key is its alias. An alias both here and under `members` is a problem of both
+      declarations. A part's configuration declares none: a part's specs use the parent's aliases.
+      Read by the scan and the project graph. Written by hand, or by `doctor --fix` through the
+      registry's declareExternal (adds an alias, never overwrites one) and importNames (adds names
+      to an alias's `use`).
+    optional: true
+  - name: members
+    type: map<string, MemberDeclaration | MemberSource>
+    description: >-
+      What this project is made of beyond its own specs folder, keyed by alias, each value one
+      `source` in one grammar — `scheduler: services/scheduler` (contained), `admin: ../admin`
+      (sibling), `payments: git@host:acme/payments.git#<commit>` (git at a commit), `marketplace:
+      hosted:marketplace` (hosted record) — or the long form (MemberDeclaration) when it must also
+      say `as`, `ref`, `dir`, `use` or a description. What a member IS follows from its content: one
+      whose tree declares an id, holds an L0 or carries a lock is a PROJECT, anything else a PART. A
+      part's subsystems are this project's own subsystems: keyed under this project, referenced by
+      local id, judged by the ordinary subsystem rules and approved by this project's lock. A
+      project member is not a subsystem of this project: it has no L1 spec here, and this project
+      reaches it only as `alias::name` through its L0 exports — or bare, for the names the long
+      form's `use` imports; a contained one is read live, any other is judged against its pin.
+      Together with `externals` it is this project's alias table, and one alias names one member or
+      external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `doctor
+      --fix` through the registry (which rewrites the deprecated long-form `path`); the L1
+      `projectPath` form still loads for one release (DEPRECATED_MOUNT_FORM).
+    optional: true
+  - name: composition
+    type: CompositionConfig
+    description: >-
+      What this project requires of the projects it contains when they are composed:
+      `requirePolicies`, the packs each member must select (by semver range, optionally one
+      profile). This project's own gate judges only its syntax (POLICY_REQUIREMENT_INVALID); the
+      family run judges members against it, and createMember reads it once when it scaffolds a new
+      member. No member's own gate reads it, so a member's verdict is the same with and without a
+      parent's requirement. Not part of the gate identity until stage 5. Written by hand. Coexists
+      with, and is never merged into, the hosted instance floor and profileSelection (see
+      CompositionConfig).
+    optional: true
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The ids this project answered to before, oldest first, each appended by the rename migration
+      and never removed or reordered by a writer. It is the project's own record that an id moved
+      deliberately: a lock that approved one of them reads as renamed (PROJECT_ID_RENAMED, notice)
+      rather than changed, so the re-lock the rename asks for is not refused by the error it would
+      otherwise raise — the deadlock stage 3 reported as id-locked. Nothing resolves through it: a
+      reference or an external that still names an old id is rewritten by the rename, or reported,
+      never redirected.
+    optional: true
+  - name: partOf
+    type: PartOf
+    description: >-
+      Set only in a NON-CONTAINED part's configuration (stage 8: a sibling checkout or a git
+      repository): the project it is a part of, so the part opened alone can say what it belongs to.
+      A contained part has no configuration at all — its parent finds it, and opening its directory
+      resolves to the parent's root. A configuration that sets it declares nothing else a project
+      declares: one that also declares an id makes the member a project by content, which
+      contradicts it (MEMBER_KIND_MISMATCH). Absent in every project's configuration.
+    optional: true
+  - name: description
+    type: string
+    description: A short description of the project. A hosted init writes the request's description here.
+    optional: true
+  - name: execution
+    type: ExecutionConfig
+    description: 'Execution budgets, the resource axis of the derived topology (default: tier off, no overrides)'
+    optional: false
+  - name: paths
+    type: any
+    description: 'Project path settings: specsDir, the spec tree''s root (default .wai/specs)'
+    optional: false
+  - name: globalTemplatesDir
+    type: string
+    description: >-
+      A directory of org- or user-level default templates, resolved after project-local templates
+      and before the built-in ones
+    optional: true
+  - name: network
+    type: NetworkDeclaration
+    description: >-
+      Opt-in: this project and every member below it form an isolated network (`network: true`, or
+      `{ description }`). Read by the family run's network rules and by the derived networking
+      outputs; part of the gate identity, because it changes family-run verdicts. Written by hand.
+      Absent in a part's configuration
+    optional: true
+methods:
+  - name: declaredPackNames
+    signature: 'declaredPackNames(): string[]'
+    returns: list<string>
+    description: >-
+      The names of the packs this configuration declares, deduplicated in first-seen order: each
+      `extensions.packs` entry (a selection's name, or a legacy path reference's file stem — its
+      basename without a pack extension), then the required and default pack names recorded in
+      `profileSelection`. Empty when nothing is declared.
+  - name: declaredProfileIds
+    signature: 'declaredProfileIds(): string[]'
+    returns: list<string>
+    description: >-
+      The profile ids recorded in `profileSelection`, deduplicated in first-seen order; empty when
+      no selection is recorded. The governing `projectType` is not included.
+  - name: activeTargetTypes
+    signature: 'activeTargetTypes(): string[]'
+    returns: list<string>
+    description: >-
+      The target types this configuration enables: every target not explicitly disabled. Empty for a
+      configuration with no enabled targets.
+  - name: effectiveId
+    signature: 'effectiveId(): string | null'
+    returns: string?
+    description: >-
+      The declared id when there is one, as written; otherwise `name` slugified — in every reader,
+      the project graph included, so a project answers to one id wherever it is read (a chained
+      child that declares none is not given its mount's subsystem id here: PROJECT_ID_DEFAULTED
+      names that id as the one to declare, and 2c's doctor --fix writes it). Slugifying lower-cases
+      the name, collapses each run of characters outside [a-z0-9-_.] to one '-', cuts it to 64
+      characters and trims the result until it starts and ends alphanumeric. Returns null when no
+      declared id exists and no slug can be made — a slug the project-id grammar still refuses (a
+      Windows device name, super) included: it never invents a fallback, and the identity reports
+      the missing id.
+    symbol: effectiveProjectId
+  - name: identity
+    signature: 'identity(lockedProjectId?: string): ProjectIdentity'
+    returns: ProjectIdentity
+    description: >-
+      Resolve the effective id against the id a lock approved, naming every problem with it:
+      defaulted when no id is declared and the name yields one; ambiguous when no id is declared and
+      the name yields no slug, or when a declared id breaks the project-id grammar
+      (identifier.problemAs project-id, whose sentence the problem carries); renamed when a
+      lockedProjectId is given, the effective id differs from it and it is one of `previousIds` (the
+      rename migration moved it, and only the re-lock is owed); changed when a lockedProjectId is
+      given and the effective id differs from it otherwise (an effective id of none included).
+    symbol: projectIdentity
+  - name: declaredExternals
+    signature: 'declaredExternals(): DeclaredExternal[]'
+    returns: list<DeclaredExternal>
+    description: >-
+      The configuration's `externals`, one DeclaredExternal per alias in declaration order: the
+      producer id is the entry's `project`, else the alias; the source is read in either form — the
+      one location string members use (parsed by the member-source grammar; a git `#<commit>` read
+      as the ref the pin follows) or the object form ({ path } | { hosted } | { git, ref?, dir? }) —
+      and copied into the normalized fields; `use` is deduplicated in first-seen order; an alias
+      outside [a-z0-9-_]+, an alias `members` also declares, a producer id outside the project-id
+      grammar, a source of the wrong shape, naming none or several of path/hosted/git, naming
+      `commit` ("write `ref: <commit>` or `<url>#<commit>`"), or refused by the grammar, or a `use`
+      entry that is neither `*` nor a public name is recorded as the entry's problem rather than
+      dropped — never a configuration that fails to load, so `externals list` shows every declared
+      external. Empty when nothing is declared.
+  - name: declaredMembers
+    signature: 'declaredMembers(): DeclaredMember[]'
+    returns: list<DeclaredMember>
+    description: >-
+      The configuration's `members`, one DeclaredMember per alias in declaration order: the source
+      string (the shorthand, the long form's `source`, or for one release the deprecated `path`,
+      flagged) parsed into its object form and storage, the asserted `as`, the description and `use`
+      copied as written; an alias outside [a-z0-9-_]+, a missing or unparseable source, a git source
+      without its commit, a bad `as`, a hosted source asserted to be a part, an alias `externals`
+      also declares, or a malformed `use` entry is recorded as the entry's problem rather than
+      dropped. Empty when nothing is declared.
+  - name: withPack
+    signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
+    returns: ProjectConfig
+    description: >-
+      The configuration as it would read after one pack write, without writing it: a selection drops
+      every same-name selection and is appended last (the highest precedence), exactly as the
+      registry's upsertPackSelection writes it; a legacy path reference is appended only when
+      absent, exactly as registerPackRef writes it; with `remove`, the same-name selection (or that
+      exact path reference) is dropped instead, as removePackSelection / deregisterPackRef do. The
+      one reading of a pack write that the dry validate and the registry share, which is what makes
+      an impact report equal what the write then produces (impact-matches-apply).
+  - name: requiredPolicies
+    signature: 'requiredPolicies(): PackRequirement[]'
+    returns: list<PackRequirement>
+    description: >-
+      The configuration's `composition.requirePolicies` in declaration order, a second requirement
+      for a pack already required dropped (the first one stands, and the family run reports nothing
+      about the duplicate). Empty when nothing is required.
+  - name: isPart
+    signature: 'isPart(): boolean'
+    returns: bool
+    description: >-
+      Whether this is a non-contained part's configuration: `partOf` is set. The test every reader
+      that treats such a root differently from a project's (the owner's gate opened at a part,
+      `externals pin` at a part, status) asks, so they cannot disagree about it.
+sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-24T23:30:05.014Z'
+updatedAt: '2026-10-07T21:44:04.175Z'

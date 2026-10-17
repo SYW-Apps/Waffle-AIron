@@ -147,8 +147,9 @@ export function Field(props: {
   info?: ReactNode;
   /** Validation-rail integration (SpecsEditor's ValidationRail): marks this
    *  field as the target of an open, in-scope validation issue with a subtle
-   *  outline (error/warning toned). Unused by every other caller. */
-  highlight?: 'error' | 'warning';
+   *  outline (error/warning toned; a notice gets a quiet neutral tone, never
+   *  the warning one). Unused by every other caller. */
+  highlight?: 'error' | 'warning' | 'notice';
   /** A stable `data-field` anchor a caller can scrollIntoView() by (paired
    *  with `highlight` — SpecsEditor uses both together, but either works
    *  alone). */

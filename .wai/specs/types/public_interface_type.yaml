@@ -1,0 +1,20 @@
+kind: enum
+id: public_interface_type
+name: PublicInterfaceType
+description: The transport kind of a published interface.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: REST
+    description: An HTTP resource API
+  - name: GraphQL
+    description: A GraphQL schema
+  - name: MessageBus
+    description: Messages on a bus
+  - name: RPC
+    description: Remote procedure calls
+  - name: Custom
+    description: Any other transport
+createdAt: '2026-10-04T23:12:16.448Z'
+updatedAt: '2026-10-04T23:12:16.826Z'

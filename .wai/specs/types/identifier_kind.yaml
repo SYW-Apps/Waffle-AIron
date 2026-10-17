@@ -1,0 +1,35 @@
+kind: enum
+id: identifier_kind
+name: IdentifierKind
+description: >-
+  What an identifier names, which decides the grammar it is judged by: one portability floor for
+  every kind (not empty, at most 64 characters, no control, NUL or zero-width character, never
+  starting with "-", never "__proto__"), plus the kind's own character grammar and, for the kinds
+  that become a path segment or a file name, the Windows device names and the reserved namespace
+  keyword.
+fields: []
+methods: []
+sourcePath: src/models/identifiers.ts
+values:
+  - name: spec-id
+    description: >-
+      A spec id (subsystem, component, interface, implementation, type): [a-z0-9-_]+ — a folder and
+      file name, so never a Windows device name
+  - name: project-id
+    description: >-
+      A project's id: [a-z0-9-_.] starting and ending alphanumeric — what consumers, pins and hosted
+      records key on, so never a Windows device name and never super
+  - name: alias
+    description: >-
+      A member or external alias: [a-z0-9-_]+ — the first segment of alias::name and an external's
+      pin file name, so never a Windows device name and never super
+  - name: method
+    description: >-
+      A contract or type method name: an ASCII identifier (a letter or underscore, then letters,
+      digits or underscores) — never a file name, so device names are no concern
+  - name: param
+    description: 'A parameter name: an ASCII identifier'
+  - name: field
+    description: 'A type field name: an ASCII identifier'
+createdAt: '2026-10-07T21:43:08.586Z'
+updatedAt: '2026-10-07T21:43:09.756Z'

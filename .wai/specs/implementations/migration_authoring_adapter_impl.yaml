@@ -1,0 +1,23 @@
+id: migration_authoring_adapter_impl
+name: Migration Authoring Client Adapter Implementation
+description: 'src/migrations/adapters/authoring.ts: in-process imports of the sdd_authoring portal.'
+contract: imigration_authoring_adapter
+sourcePath: src/migrations/adapters/authoring.ts
+methods:
+  - name: updateSpecGated
+    narrative:
+      - stepNumber: 1
+        description: Forward to the authoring portal
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: updateSpecGated
+  - name: writeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward to the authoring portal
+        type: call
+        targetComponent: authoring_portal
+        targetMethod: writeSpec
+status: complete
+createdAt: '2026-09-30T20:45:37.485Z'
+updatedAt: '2026-09-30T21:33:57.842Z'

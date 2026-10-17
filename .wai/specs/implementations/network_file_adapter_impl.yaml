@@ -1,0 +1,29 @@
+id: network_file_adapter_impl
+name: Network File Adapter Implementation
+description: 'File reads of the deployment-side inputs: a bindings document and an observed-flow export.'
+contract: inetwork_file_adapter
+sourcePath: src/network/adapters/files.ts
+technologies:
+  - name: yaml
+    matches:
+      - yaml package
+      - parseDocument
+methods:
+  - name: readBindings
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the file and parse it as YAML into workloads (design name to selector, namespace and
+      port) and the outside address blocks, validating the shape. A missing file, a YAML error or a
+      field of the wrong type refuses with the path and the line; nothing is half-read.
+  - name: readObservedFlows
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the file and parse it by extension: CSV with a header row naming source, destination and
+      optionally transport, method, path and count; or a JSON list of objects with the same fields.
+      A row missing source or destination, or a count that is not an integer, refuses with the row
+      number; nothing is half-read.
+status: complete
+createdAt: '2026-10-06T13:11:40.982Z'
+updatedAt: '2026-10-06T13:12:37.442Z'

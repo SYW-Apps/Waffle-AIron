@@ -9,7 +9,8 @@ description: >-
 subsystem: sdd_host
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - secret_repository
 status: complete
 createdAt: '2026-07-16T15:38:24.176Z'
-updatedAt: '2026-07-16T17:41:48.656Z'
+updatedAt: '2026-10-03T17:50:34.262Z'

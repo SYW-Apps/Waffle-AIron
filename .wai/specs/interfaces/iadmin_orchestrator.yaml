@@ -3,15 +3,15 @@ name: Admin Orchestrator Interface
 description: >-
   Contract for the control-plane workflows behind the admin portal: authenticate a bootstrap/admin
   (master) credential and, only for an admin principal, perform the requested project, API-key,
-  lock, promote, diagram, producer, secret, or git action.
+  lock, diagram, producer, secret, or git action.
 component: admin_orchestrator
 methods:
   - name: createProject
     description: >-
       Authenticate the caller (bootstrap master or a user token). Validate the REQUIRED target
-      unitId (every project is placed at creation so the permission resolver can always enumerate it
-      — a fresh instance must create its first organization unit before creating projects; wairon
-      dev provisions a synthetic local unit at boot). Resolve the caller's project:create permission
+      unitId (every project is placed at creation so permission rules can always enumerate it — a
+      fresh instance must create its first organization unit before creating projects; wairon dev
+      provisions a synthetic local unit at boot). Resolve the caller's project:create permission
       over the target unit via the authorization seam (must be yes; an approval-valued caller must
       use the execute-primary project-lifecycle path). Allocate the project, bootstrap its isolated
       spec tree, and place it in the target unit.
@@ -37,7 +37,7 @@ methods:
   - name: listProjects
     description: Authenticate and list hosted projects.
     signature: 'listProjects(credential: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
   - name: mintKey
     description: >-
       Authenticate the master credential and mint a project-scoped API key. REFUSES any request that
@@ -56,29 +56,28 @@ methods:
   - name: listKeys
     description: Authenticate and list a project's API keys.
     signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    returns: list<ApiKeyRecord>
   - name: lockProject
     description: >-
-      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
-      permission over the target project via the authorization seam (must be yes), bind the project
-      scope, validate-as-complete, and on success promote statuses and write the StateId-scoped lock
-      record.
+      Authenticate the caller (bootstrap master or a user token), resolve the caller's
+      approval:decide permission over the target project via the authorization seam (must be yes: a
+      lock is the project's approval, and a writer requests one through the project lifecycle
+      instead), then lock through the same pre-authorized entry the approval workflow uses
+      (executeApprovedLock), so a direct lock and an approved one are one workflow. The spec tree
+      itself is never rewritten, and nothing is written below the project.
     signature: 'lockProject(credential: string, project: string): LockRecord'
     returns: LockRecord
-  - name: promoteProject
-    description: >-
-      Authenticate the caller (bootstrap master or a user token), resolve the caller's project:write
-      permission over the target project via the authorization seam (must be yes), bind scope, read
-      the lock, re-check the current StateId, and mark ready-for-promotion only when it still
-      matches; reject stale locks.
-    signature: 'promoteProject(credential: string, project: string): PromoteResult'
-    returns: PromoteResult
   - name: generateDiagram
-    description: Authenticate, bind the project scope, and return the rendered diagram artifact for the format.
+    description: >-
+      Authenticate, bind the project scope, and return the rendered diagram artifact for the format;
+      a canvas carries the family's relation health, read with the master credential's
+      whole-instance reach.
     signature: 'generateDiagram(credential: string, project: string, format: string): string'
     returns: string
   - name: downloadDiagram
-    description: Authenticate and return the diagram artifact for download (attachment).
+    description: >-
+      Authenticate and return the diagram artifact for download (attachment); a canvas carries the
+      family's relation health, read with the master credential's whole-instance reach.
     signature: 'downloadDiagram(credential: string, project: string, format: string): string'
     returns: string
   - name: diagramViewLink
@@ -92,7 +91,7 @@ methods:
       the .wai/ tree inside the repo — commits are .wai/-scoped, so the repository can be shared
       with the project's own codebase.
     signature: >-
-      enableGit(credential: string, project: string, remote: string, branch: string):
+      enableGit(credential: string, project: string, remote: string, branch: string, pat?: string):
       HostedProjectRecord
     returns: HostedProjectRecord
     params:
@@ -104,6 +103,12 @@ methods:
         type: string
       - name: branch
         type: string
+      - name: pat
+        type: string
+        description: >-
+          A personal access token for the remote, when reaching it needs one. Stored as a secret
+          under the binding's credential reference, never kept on the binding.
+        optional: true
   - name: disableGit
     description: >-
       Authenticate, require project:admin over the project, and disable its git backing (the
@@ -147,8 +152,8 @@ methods:
     description: >-
       Authenticate, require project:admin over the project, mint a signed canvas link, and project
       the project to the target.
-    signature: 'produceProducer(credential: string, project: string, target: string): void'
-    returns: void
+    signature: 'produceProducer(credential: string, project: string, target: string): async void'
+    returns: async void
     params:
       - name: credential
         type: string
@@ -169,8 +174,8 @@ methods:
         type: string
   - name: listProducers
     description: Authenticate, require project:admin over the project, and list its configured producers.
-    signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    signature: 'listProducers(credential: string, project: string): list<ProducerConfig>'
+    returns: list<ProducerConfig>
     params:
       - name: credential
         type: string
@@ -183,14 +188,16 @@ methods:
   - name: listSecrets
     description: Authenticate and list configured secret keys (names only).
     signature: 'listSecrets(credential: string): string[]'
-    returns: string[]
+    returns: list<string>
   - name: executeApprovedCreate
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       createProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Creates
       the project and places it in the REQUIRED owner unit. Never exposed on any portal.
-    signature: 'executeApprovedCreate(id: string, unitId: string): HostedProjectRecord'
+    signature: >-
+      executeApprovedCreate(id: string, unitId: string, placedBy?: PrincipalSubject):
+      HostedProjectRecord
     returns: HostedProjectRecord
     params:
       - name: id
@@ -200,61 +207,61 @@ methods:
         description: >-
           REQUIRED owner organization unit the new project is placed in (from
           ProjectInitRequest.ownerUnitId).
+      - name: placedBy
+        type: PrincipalSubject
+        description: >-
+          The subject recorded as having placed the project (the acting principal of the approval);
+          omitted records the system
+        optional: true
   - name: executeApprovedLock
     description: >-
       Pre-authorized entry for the approval workflow: performs the same privileged action as
       lockProject but WITHOUT credential authentication — the caller
       (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
-      of the project's own, resolved through the project registry's containment-checked qualified
-      resolution (the same seam the data plane binds through, so a qualifier can never resolve
-      outside the project root). Because the git binding is read from the BOUND root, a
-      subproject-scoped lock finds no repository binding there and therefore performs no sync and no
-      publish: the child is not the git unit. The frozen child tree persists in the project's
-      working tree, but note it is NOT staged by the project's own .wai/-scoped commit either — a
-      chained child lives outside that pathspec — so reaching a remote requires a commit whose scope
-      covers the child's path.
-    signature: 'executeApprovedLock(projectId: string, subproject?: string): LockRecord'
+      exposed on any portal. It locks the project's OWN record: a member is a record since stage 7,
+      so its own tree is bound (derived from its parent's root and memberPath) and no qualifier
+      exists. Git goes through the project's family repository: sync at the family root's repository
+      root, and publish ONLY the project's own .wai/ pathspec there, so a member's lock reaches the
+      remote without sweeping its parent's or siblings' trees. Stage 5: the gate identity is
+      CAPTURED before validation and confirmed unchanged before the record is written (refused
+      otherwise, nothing written); when `expected` is given (an approval request's recorded
+      gateStateId) the captured identity must equal it, so an approval never certifies a design
+      other than the one requested; the lock gates on the design half of the as-complete run only;
+      the record carries format 2, each direct member's subject and state (`members`, never
+      `children`), and the code results beside the claim (`code`); and with
+      composition.requireApprovedMembers it refuses while a direct member is drifted or never
+      approved, naming each. Nothing is ever written below the bound project.
+    signature: >-
+      executeApprovedLock(projectId: string, approver: ApproverIdentity, expected?: string):
+      LockRecord
     returns: LockRecord
     params:
       - name: projectId
         type: string
-      - name: subproject
+      - name: approver
+        type: ApproverIdentity
+        description: >-
+          Who approves, as the caller AUTHENTICATED it: the credential's subject on a direct lock,
+          the decider on an approved request (hostedApprover; the bootstrap master credential when
+          there is no subject). Recorded as the record's lockedBy. Pre-authorized callers resolve
+          it; nothing here re-authenticates.
+      - name: expected
         type: string
         description: >-
-          Chained-subsystem mount chain to bind instead of the project root; absent binds the
-          project's own tree.
-        optional: true
-  - name: executeApprovedPromote
-    description: >-
-      Pre-authorized entry for the approval workflow: performs the same privileged action as
-      promoteProject but WITHOUT credential authentication — the caller
-      (project_lifecycle_orchestrator) has already enforced permission-based authorization. Never
-      exposed on any portal. An optional subproject qualifier binds the CHAINED CHILD's tree instead
-      of the project's own (containment-checked qualified resolution), so the lock record read, the
-      StateId recomputation and the staleness verdict all concern that child's tree.
-    signature: 'executeApprovedPromote(projectId: string, subproject?: string): PromoteResult'
-    returns: PromoteResult
-    params:
-      - name: projectId
-        type: string
-      - name: subproject
-        type: string
-        description: >-
-          Chained-subsystem mount chain to bind instead of the project root; absent binds the
-          project's own tree.
+          The gate identity (`<algorithm>:<digest>`) an approval request recorded when it was made;
+          absent for a direct lock and for a request created before stage 5.
         optional: true
   - name: commitProject
     description: >-
-      Authenticate, require project:write over the project, and publish a DELIBERATE, SCOPED backup:
-      stage ONLY .wai/ (or the finer .wai/specs/<subsystem>/ subpath when given), commit, and push —
-      commit is the local save, push is the actual backup; both happen. Never `git add -A`: a shared
-      real repository's own code is never staged. CAVEAT: a subsystem-scoped commit is a staging
-      convenience only — git history is per-repo, so the log still interleaves all commits; the
-      project is the clean unit. A no-op when nothing under the scoped path changed. Returns the
-      publish outcome (commit id or clean).
+      Authenticate, require project:write over the project's OWN record, and publish a DELIBERATE,
+      SCOPED backup through the project's family repository: a family root stages ONLY its .wai/, a
+      member ONLY its own <path>/.wai/ at its family root's repository root (or the finer
+      .../specs/<subsystem>/ when given) — commit, then push. Pathspec-confined staging and a
+      pathspec-confined commit: never `git add -A`, never a parent's or sibling member's tree, never
+      source code. A member's own history is the family log filtered to its pathspec. A no-op when
+      nothing under the scoped path changed. Returns the publish outcome (commit id or clean).
     signature: >-
-      commitProject(credential: string, project: string, subsystem: string, message: string):
+      commitProject(credential: string, project: string, subsystem?: string, message?: string):
       GitPublish
     returns: GitPublish
     params:
@@ -283,10 +290,12 @@ methods:
   - name: runPeriodicGitSync
     description: >-
       Pre-authorized internal entry for the host supervisor's periodic backup timer — performs NO
-      authentication and is never exposed on any portal. Iterates the git-bound projects whose
-      binding enables periodic sync, and for each publishes a .wai/-scoped commit+push, skipping
-      clean projects (skip-if-clean) so a quiet project never commits noise. Failures are recorded
-      per project and never abort the sweep.
+      authentication and is never exposed on any portal. Iterates the git-bound FAMILY ROOT records
+      whose binding enables periodic sync, and for each publishes one commit+push covering the
+      family's pathspecs (its own .wai/ and every member record's <path>/.wai/), skipping clean
+      families (skip-if-clean) so a quiet family never commits noise. A member record has no
+      repository of its own and is never iterated alone. Failures are recorded per family and never
+      abort the sweep.
     signature: 'runPeriodicGitSync(): void'
     returns: void
     params: []
@@ -297,8 +306,8 @@ methods:
       backup cadence is repository-binding administration, distinct from the project:write commit
       itself.
     signature: >-
-      configureGitSync(credential: string, project: string, periodicSyncMinutes: number,
-      skipIfClean: boolean): void
+      configureGitSync(credential: string, project: string, periodicSyncMinutes?: int, skipIfClean?:
+      bool): void
     returns: void
     params:
       - name: credential
@@ -306,11 +315,97 @@ methods:
       - name: project
         type: string
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
+        optional: true
+  - name: exportProjectTree
+    description: >-
+      Pack a hosted project's spec tree into a .waitree archive. Requires project:read over the
+      project's own record — the same grant that already reads every spec individually, so bulk
+      export grants nothing new. A member is exported by its own record id; no qualifier exists
+      since stage 7.
+    signature: >-
+      exportProjectTree(credential: string, project: string, includeDerived?: bool, allowPartial?:
+      bool): TreeExportResult
+    returns: TreeExportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: includeDerived
+        type: bool
+        optional: true
+      - name: allowPartial
+        type: bool
+        description: >-
+          Pack whatever CAN be packed when a member cannot be, and list the members left out in the
+          result, instead of refusing the whole export.
+        optional: true
+  - name: importProjectTree
+    description: >-
+      Replace a hosted project's spec tree from a .waitree archive. Requires project:admin over the
+      project's own record — strictly above project:write, because this replaces the entire design
+      rather than editing one spec. Refuses an occupied destination unless replaceExisting is set,
+      always refuses executable entries (the archive arrived over the wire, and executable doctrine
+      installs only through the trusted filesystem), and moves the previous tree aside to a backup.
+      A member is imported into by its own record id.
+    signature: >-
+      importProjectTree(credential: string, project: string, archive: bytes, replaceExisting?:
+      bool): TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archive
+        type: bytes
+      - name: replaceExisting
+        type: bool
+        optional: true
+  - name: registerLocalDevProject
+    description: >-
+      Register the local development server's single project: a record pointing at the developer's
+      own working directory instead of an allocated root. No credential exists in that mode, so the
+      workflow admits only a development-mode host configuration and refuses every other. Idempotent
+      across restarts.
+    signature: 'registerLocalDevProject(id: string, rootPath: string): HostedProjectRecord'
+    returns: HostedProjectRecord
+    params:
+      - name: id
+        type: string
+      - name: rootPath
+        type: string
+  - name: gateIdentity
+    description: >-
+      Pre-authorized, like executeApprovedLock and for the same caller: the gate identity of the
+      tree a lock of this project's own record would certify NOW, rendered `<algorithm>:<digest>`.
+      Read-only — no sync, no validation, no write. project_lifecycle_orchestrator records it on a
+      project:lock request when it is created, so the approved execution can refuse a tree that
+      moved after the request.
+    signature: 'gateIdentity(projectId: string): string'
+    returns: string
+    params:
+      - name: projectId
+        type: string
+    guarantees:
+      - idempotent
+  - name: approverFor
+    description: >-
+      The approver identity a hosted lock records for the subject the instance resolved the
+      credential to (source 'hosted'): its user id and display name. No subject means the bootstrap
+      master credential, recorded as the instance master credential. The hosted counterpart of the
+      approval portal's localApprover.
+    signature: 'approverFor(subject?: PrincipalSubject): ApproverIdentity'
+    returns: ApproverIdentity
+    params:
+      - name: subject
+        type: PrincipalSubject
+        description: The resolved subject of the approving credential; absent for the master credential.
         optional: true
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-07-25T17:04:41.956Z'
+updatedAt: '2026-10-17T14:32:48.716Z'

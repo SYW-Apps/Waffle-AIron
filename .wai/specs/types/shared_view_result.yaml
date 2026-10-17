@@ -7,11 +7,11 @@ description: >-
 subsystem: sdd_host
 fields:
   - name: found
-    type: boolean
+    type: bool
     optional: false
   - name: outcome
-    type: string
-    description: served | denied-disabled | denied-expired | not-found.
+    type: ShareViewOutcome
+    description: How resolving the token ended.
     optional: false
   - name: link
     type: ShareLink
@@ -21,11 +21,19 @@ fields:
     description: Serialized snapshot canvas model, on success.
     optional: true
   - name: allowDownloadHtml
-    type: boolean
+    type: bool
     optional: true
   - name: allowDownloadOpenapi
-    type: boolean
+    type: bool
+    optional: true
+  - name: html
+    type: string
+    description: >-
+      Captured self-contained view HTML, on success — served by the portal so it never reaches into
+      the snapshot repository itself.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
+symbol: SharedViewResult
 createdAt: '2026-07-17T22:32:51.513Z'
-updatedAt: '2026-07-17T22:32:51.578Z'
+updatedAt: '2026-10-07T06:29:46.414Z'

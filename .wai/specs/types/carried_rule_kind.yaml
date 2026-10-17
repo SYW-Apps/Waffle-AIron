@@ -1,0 +1,15 @@
+kind: enum
+id: carried_rule_kind
+name: CarriedRuleKind
+description: What a subsystem setting carried out of its parent by a promote or an externalize was.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: assignment
+    description: A project:write assignment anchored at the subsystem
+  - name: role
+    description: A role binding anchored at the subsystem
+createdAt: '2026-10-04T23:18:02.298Z'
+updatedAt: '2026-10-04T23:18:02.689Z'

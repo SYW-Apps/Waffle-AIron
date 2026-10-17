@@ -1,0 +1,29 @@
+kind: enum
+id: reference_form
+name: ReferenceForm
+description: >-
+  How an authored cross-project reference is spelled. leading, super and path are deprecated and
+  still bind for one release.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: alias
+    description: >-
+      The first segment is one of the referring project's aliases (a members or externals key) — the
+      only :: form stage 3 writes
+  - name: import
+    description: >-
+      A bare name (no ::) that names no spec of the referring project, looked up among the names its
+      use imports supply
+  - name: leading
+    description: A leading ::, read from the bound root (deprecated)
+  - name: super
+    description: 'Each super:: climbs one containing project (deprecated)'
+  - name: path
+    description: >-
+      A first segment the referring project does not declare, read the stage-2 way as a member path
+      from the bound root (deprecated)
+createdAt: '2026-10-04T23:11:14.940Z'
+updatedAt: '2026-10-04T23:11:15.348Z'

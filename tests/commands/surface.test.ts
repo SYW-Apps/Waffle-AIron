@@ -5,13 +5,12 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { runSurface } from '../../src/commands/surface.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -63,7 +62,7 @@ function buildTwoPortalProject(rootDir: string): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
       { type: 'REST', details: 'public api', component: 'gateway-portal' },
       { type: 'REST', details: 'operator api', component: 'admin-portal' },
@@ -111,6 +110,11 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
       stdout.push(String(chunk));
       return true;
     }) as typeof process.stdout.write);
+    // Round 6: every status line of an export is on stderr, so stdout is the document alone.
+    vi.spyOn(process.stderr, 'write').mockImplementation(((chunk: string | Uint8Array) => {
+      logged.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write);
   });
 
   afterEach(() => {
@@ -126,10 +130,19 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
     expect(stdout).toHaveLength(1);
     const doc = JSON.parse(stdout[0]);
     expect(doc.info.title).toBe('Admin API');
-    expect(Object.keys(doc.paths)).toEqual(['/cache/purge']);
-    expect(doc.servers).toEqual([{ url: '/admin' }]);
+    // The Portal's basePath is part of every path (round 5: it sat in a relative `servers` url).
+    expect(Object.keys(doc.paths)).toEqual(['/admin/cache/purge']);
+    expect(doc.servers).toBeUndefined();
+    expect(doc['x-wairon-base-path']).toBe('/admin');
     // The OTHER portal's API is absent — a selection is a selection.
     expect(stdout[0]).not.toContain('/records/{id}');
+  });
+
+  it('round 6: stdout is the JSON document alone — the projection line is on stderr', async () => {
+    await runSurface('export', { format: 'openapi', portal: 'admin-portal' });
+    expect(() => JSON.parse(stdout.join(''))).not.toThrow();
+    expect(stdout.join('')).not.toContain('Projected surface');
+    expect(logged.join(' ')).toContain('Projected surface');
   });
 
   it('--portal with --out writes exactly one file at the given path', async () => {
@@ -197,61 +210,22 @@ describe('wairon surface export — multi-portal OpenAPI', () => {
 });
 
 // ---------------------------------------------------------------------------
-// `wairon surface externals` — the external-surface discovery table: one row
-// per vendored snapshot with sourceKind, key, origin, freshness, and the
-// interface ids it exposes.
+// `wairon surface pin` and `wairon surface externals` are gone (stage 3): a
+// project consumes another through `externals` and `wairon externals`.
 // ---------------------------------------------------------------------------
 
-describe('wairon surface externals — external-surface discovery', () => {
+describe('wairon surface — the retired family actions', () => {
   let rootDir: string;
-  let childDir: string;
-  let logged: string[];
-
-  beforeEach(async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-ext-'));
-    buildTwoPortalProject(rootDir);
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid', status: 'draft' }), 'kid');
-    invalidateSpecCache();
-    setProjectRoot(rootDir);
-    await runSurface('generate-children', {});
-    childDir = path.join(rootDir, 'packages', 'kid');
-    logged = [];
-    vi.spyOn(console, 'log').mockImplementation((...args: unknown[]) => { logged.push(args.join(' ')); });
-  });
-
   afterEach(() => {
-    vi.restoreAllMocks();
     setProjectRoot(null);
     invalidateSpecCache();
     try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  it('prints one row per entry: sourceKind, key, origin, freshness, interface ids', async () => {
-    setProjectRoot(childDir);
-    await runSurface('externals', {});
-
-    const output = logged.join('\n');
-    // The family surface delivered by the chaining parent...
-    expect(output).toMatch(/parent\s+.*multi-portal-system/);
-    // ...and the core-sub sibling surface, both generated and fresh.
-    expect(output).toMatch(/sibling\s+.*multi-portal-system::core-sub/);
-    expect(output).toContain('[generated]');
-    expect(output).toContain('fresh');
-    expect(output).not.toContain('stale');
-    // The discovery summary names the exposed interface ids.
-    expect(output).toContain('gateway');
-    expect(output).toContain('admin');
-  });
-
-  it('says so when no external surfaces are stored', async () => {
-    // The PARENT holds no vendored snapshots — generation writes into children.
+  it.each(['pin', 'externals'])('refuses `surface %s`, pointing at `wairon externals`', async (action) => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-surf-gone-'));
+    buildTwoPortalProject(rootDir);
     setProjectRoot(rootDir);
-    await runSurface('externals', {});
-    expect(logged.join('\n')).toContain('No external surfaces available');
-  });
-
-  it('an unknown action names externals among the supported ones', async () => {
-    setProjectRoot(childDir);
-    await expect(runSurface('bogus', {})).rejects.toThrow(/externals/);
+    await expect(runSurface(action, {})).rejects.toThrow(/supported: export, import, list, diff\)[\s\S]*wairon externals/);
   });
 });

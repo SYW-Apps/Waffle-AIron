@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -72,10 +72,11 @@ function dispatchFixture(proj: ReturnType<typeof createTempProject>, opts: {
   proj.subsystem('sub-a');
   proj.component('pkg-portal', 'Portal', [
     'portalType: Custom',
+    'invokedBy: {kind: entry, caller: Clients outside the design call it over its transport}',
     opts.portalDeps ?? 'dependsOn: [shadow-server]',
     ...(opts.table !== undefined ? [opts.table] : []),
   ].filter(Boolean).join('\n'));
-  proj.component('shadow-server', 'Specialist');
+  proj.component('shadow-server', 'Orchestrator', 'dependencyClass: pure');
   proj.writeSpec('interface', 'ipkg-portal', `schemaVersion: 1.0.0
 id: ipkg-portal
 name: IPortal
@@ -106,7 +107,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'UNSERVED_CAPABILITY')).toHaveLength(0);
       expect(issuesWith(res, 'DISPATCH_ON_NON_PORTAL')).toHaveLength(0);
       expect(issuesWith(res, 'UNDECLARED_DISPATCH_TARGET')).toHaveLength(0);
@@ -120,7 +121,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     dispatchFixture(proj); // no table — the historic blind spot, now visible
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       // Nothing statically reaches shadow-server without the table.
       const unusedComponent = issuesWith(res, 'UNUSED_COMPONENT').map(i => i.message).join('\n');
       expect(unusedComponent).toMatch(/shadow-server/);
@@ -134,7 +135,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const found = issuesWith(res, 'UNSERVED_CAPABILITY').map(i => i.message).join('\n');
       expect(found).toMatch(/no-such-comp/);
       expect(found).toMatch(/noSuchMethod/);
@@ -146,7 +147,7 @@ describe('dispatch tables (UNSERVED_CAPABILITY family)', () => {
     proj.subsystem('sub-a');
     proj.component('orch-a', 'Orchestrator',
       'dispatch:\n  - { capability: a.b, component: helper-a, method: run }\n  - { capability: a.b, component: helper-a, method: run }');
-    proj.component('helper-a', 'Specialist');
+    proj.component('helper-a', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'ihelper-a', `schemaVersion: 1.0.0
 id: ihelper-a
 name: IHelper
@@ -159,7 +160,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(codesOf(res)).toContain('DISPATCH_ON_NON_PORTAL');
       expect(codesOf(res)).toContain('DUPLICATE_CAPABILITY');
       expect(codesOf(res)).toContain('UNDECLARED_DISPATCH_TARGET');
@@ -169,16 +170,16 @@ methods:
   it('flags a cross-subsystem dispatch binding', () => {
     const proj = createTempProject();
     dispatchFixture(proj, {
-      table: 'dispatch:\n  - { capability: foreign.cap, component: foreign-spec, method: run }',
-      portalDeps: 'dependsOn: [foreign-spec]',
+      table: 'dispatch:\n  - { capability: foreign.cap, component: foreign-orch, method: run }',
+      portalDeps: 'dependsOn: [foreign-orch]',
     });
     proj.subsystem('sub-b');
-    proj.component('foreign-spec', 'Specialist', '', 'sub-b');
-    proj.writeSpec('interface', 'iforeign-spec', `schemaVersion: 1.0.0
-id: iforeign-spec
+    proj.component('foreign-orch', 'Orchestrator', 'dependencyClass: pure', 'sub-b');
+    proj.writeSpec('interface', 'iforeign-orch', `schemaVersion: 1.0.0
+id: iforeign-orch
 name: IForeign
 description: d
-component: foreign-spec
+component: foreign-orch
 methods:
   - name: run
     description: Runs the foreign capability end to end.
@@ -186,7 +187,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('DISPATCH_CROSS_SUBSYSTEM');
+      expect(codesOf(validateProject())).toContain('DISPATCH_CROSS_SUBSYSTEM');
     } finally { proj.cleanup(); }
   });
 
@@ -225,7 +226,7 @@ methods:
       - { stepNumber: 2, description: dispatch with no capability at all, type: dispatch, targetComponent: pkg-portal }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unserved = issuesWith(res, 'UNSERVED_CAPABILITY').map(i => i.message).join('\n');
       expect(unserved).toMatch(/nobody\.serves\.this/);
       expect(unserved).not.toMatch(/shadow_module\.get.*does not serve/);
@@ -256,7 +257,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const invalid = issuesWith(res, 'INVALID_LIFECYCLE_ENTRYPOINT').map(i => i.message).join('\n');
       expect(invalid).toMatch(/no-such-comp/);
       expect(invalid).toMatch(/noSuchMethod/);
@@ -329,7 +330,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: true, hydrateCallsLoad: true });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'MISSING_HYDRATION')).toHaveLength(0);
       expect(issuesWith(res, 'MISSING_EFFECT_TAG')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -340,7 +341,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: true, hydrateCallsLoad: false });
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/state-store/);
     } finally { proj.cleanup(); }
@@ -351,7 +352,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'durable', lifecycle: false, hydrateCallsLoad: true });
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/no subsystem declares a lifecycle init entrypoint/);
     } finally { proj.cleanup(); }
@@ -362,14 +363,14 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     durabilityFixture(proj, { durability: 'ram-projection', lifecycle: false, hydrateCallsLoad: false });
     proj.activate();
     try {
-      expect(issuesWith(validateSddTree(), 'MISSING_HYDRATION')).toHaveLength(0);
+      expect(issuesWith(validateProject(), 'MISSING_HYDRATION')).toHaveLength(0);
     } finally { proj.cleanup(); }
 
     const proj2 = createTempProject();
     durabilityFixture(proj2, { durability: 'durable', lifecycle: true, hydrateCallsLoad: true, tagEffects: false });
     proj2.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(issuesWith(res, 'MISSING_EFFECT_TAG').length).toBeGreaterThan(0);
       // Untagged methods mean no declared writes — the round-trip rule stays quiet rather than guessing.
       expect(issuesWith(res, 'MISSING_HYDRATION')).toHaveLength(0);
@@ -380,7 +381,7 @@ describe('durability round-trip (MISSING_HYDRATION)', () => {
     proj3.component('some-orch', 'Orchestrator', 'durability: durable');
     proj3.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('DURABILITY_ON_NON_STORE');
+      expect(codesOf(validateProject())).toContain('DURABILITY_ON_NON_STORE');
     } finally { proj3.cleanup(); }
   });
 });
@@ -392,7 +393,7 @@ describe('review-hardening regressions', () => {
     proj.component('state-store', 'Store', 'durability: durable');
     proj.component('boot-orch', 'Orchestrator', 'dependsOn: [cfg-portal]');
     proj.component('cfg-portal', 'Portal',
-      'portalType: Custom\ndependsOn: [state-store]\ndispatch:\n  - { capability: state.get, component: state-store, method: load }');
+      'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [state-store]\ndispatch:\n  - { capability: state.get, component: state-store, method: load }');
     proj.writeSpec('interface', 'istate-store', `schemaVersion: 1.0.0
 id: istate-store
 name: IStore
@@ -442,7 +443,7 @@ methods:
     try {
       // The init flow reaches the portal but never READS the store — the
       // table binding alone must not satisfy the round-trip.
-      const found = issuesWith(validateSddTree(), 'MISSING_HYDRATION');
+      const found = issuesWith(validateProject(), 'MISSING_HYDRATION');
       expect(found).toHaveLength(1);
       expect(found[0].message).toMatch(/state-store/);
     } finally { proj.cleanup(); }
@@ -475,7 +476,7 @@ methods:
       - { stepNumber: 1, description: route the capability, type: dispatch, targetComponent: pkg-portal, capability: shadow_module.get, assertsGuarantees: [exactly-once] }`);
     proj.activate();
     try {
-      const found = issuesWith(validateSddTree(), 'NARRATIVE_SEMANTIC_UNBACKED');
+      const found = issuesWith(validateProject(), 'NARRATIVE_SEMANTIC_UNBACKED');
       expect(found.map(f => f.message).join('\n')).toMatch(/exactly-once.*shadow-server\.getModule/s);
     } finally { proj.cleanup(); }
   });
@@ -497,7 +498,7 @@ methods:
     returns: "void"`);
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('LIFECYCLE_CROSS_SUBSYSTEM');
+      expect(codesOf(validateProject())).toContain('LIFECYCLE_CROSS_SUBSYSTEM');
     } finally { proj.cleanup(); }
   });
 
@@ -507,7 +508,7 @@ methods:
     proj.component('super', 'Orchestrator');
     proj.activate();
     try {
-      expect(codesOf(validateSddTree())).toContain('RESERVED_ID_SEGMENT');
+      expect(codesOf(validateProject())).toContain('RESERVED_ID_SEGMENT');
     } finally { proj.cleanup(); }
     // NAMESPACE_SHADOWING needs a subproject-resident id — covered structurally:
     // a qualified id whose local segment equals a root subsystem id.
@@ -519,8 +520,8 @@ describe('untyped seams (UNTYPED_SEAM)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: env-portal }');
     proj.component('env-portal', 'Portal',
-      'portalType: Custom\ndependsOn: [env-server]\ndispatch:\n  - { capability: env.get, component: env-server, method: getEnv }');
-    proj.component('env-server', 'Specialist');
+      'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [env-server]\ndispatch:\n  - { capability: env.get, component: env-server, method: getEnv }');
+    proj.component('env-server', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'ienv-portal', `schemaVersion: 1.0.0
 id: ienv-portal
 name: IEnvPortal
@@ -547,15 +548,15 @@ methods:
     try {
       // The portal's Json envelope is the sanctioned pattern once the
       // per-capability typing lives in the table.
-      expect(issuesWith(validateSddTree(), 'UNTYPED_SEAM')).toHaveLength(0);
+      expect(issuesWith(validateProject(), 'UNTYPED_SEAM')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
   it('flags bare Json/any params and returns on a published component only', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a', 'publicInterfaces:\n  - { type: Custom, details: d, component: edge-portal }');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom\ndependsOn: [inner-spec]');
-    proj.component('inner-spec', 'Specialist');
+    proj.component('edge-portal', 'Portal', 'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [inner-orch]');
+    proj.component('inner-orch', 'Orchestrator', 'dependencyClass: pure');
     proj.writeSpec('interface', 'iedge-portal', `schemaVersion: 1.0.0
 id: iedge-portal
 name: IEdge
@@ -574,11 +575,11 @@ methods:
     returns: "string"
     params:
       - { name: name, type: string }`);
-    proj.writeSpec('interface', 'iinner-spec', `schemaVersion: 1.0.0
-id: iinner-spec
+    proj.writeSpec('interface', 'iinner-orch', `schemaVersion: 1.0.0
+id: iinner-orch
 name: IInner
 description: d
-component: inner-spec
+component: inner-orch
 methods:
   - name: crunch
     description: Internal helper that legitimately passes loose bags around.
@@ -588,11 +589,12 @@ methods:
       - { name: bag, type: Json }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const seams = issuesWith(res, 'UNTYPED_SEAM');
       expect(seams).toHaveLength(1);
       expect(seams[0].message).toMatch(/invoke/);
-      expect(seams[0].message).toMatch(/param "payload: Json".*return "Promise<Json>"|return "Promise<Json>"/);
+      // The loader reads every type position canonical: Json is `any`, Promise<Json> is `async any`.
+      expect(seams[0].message).toMatch(/param "payload: any".*return "async any"/);
       expect(seams.map(s => s.message).join('\n')).not.toMatch(/Method "(crunch|typed)"/);
     } finally { proj.cleanup(); }
   });
@@ -652,7 +654,7 @@ methods:
     intent: Writes the configuration record into the persisted backing file, replacing the previous version atomically; fails with a StorageError when the file cannot be written.`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const claims = issuesWith(res, 'UNREALIZED_CLAIM');
       expect(claims).toHaveLength(1);
       expect(claims[0].message).toMatch(/applyConfig/);

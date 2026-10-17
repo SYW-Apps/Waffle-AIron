@@ -4,40 +4,40 @@ import * as os from 'os';
 import * as crypto from 'crypto';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-import * as admin from '../server/admin.js';
-import * as packs from '../server/packs.js';
-import * as permissionadmin from '../server/permissionadmin.js';
-import { mintToken } from '../server/identity.js';
-import { upsertUnit as landscapeUpsertUnit } from '../server/landscape.js';
-import { migratePermissionModel } from '../server/migration.js';
-import { AdminAuthError, LockValidationError } from '../server/admin.js';
-import { startHostServer } from '../server/http.js';
-import { registerLocalDevProject, existingProjectRoot } from '../server/projects.js';
-import { runWithProjectRoot } from '../utils/fs.js';
-import { buildCanvasModel } from '../core/canvas.js';
-import { seedDemoTree } from '../core/demo-seed.js';
-import { upsertIdentityProviderRecord } from '../server/policy.js';
-import { setSecret } from '../utils/secrets.js';
+// sdd_host's admin workflows are reached in-process through cli_host_adapter,
+// which re-exports the host's local admin portal — never past it into the
+// modules that realize the workflows.
+import * as localAdmin from './adapters/host.js';
+import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
+import { loadProjectConfig, seedDemoTree } from './adapters/core.js';
+import { effectiveProjectId } from '../models/project.js';
+// The demo census crosses into sdd_core through cli_core_adapter, like every
+// other sdd_core call the CLI makes — `../core/canvas.js` was this file
+// reaching past the Portal into another subsystem's module.
+import { buildCanvasDataModel } from './subsystem.js';
 import type {
+  AuditRetentionPolicy,
   Capability,
   DisplayRole,
   HostConfig,
   HostExposurePolicy,
-  IdentityProviderConfig,
   PermissionValue,
+  ResourceQuotaPolicy,
   ScopeKind,
 } from '../server/types.js';
+import type { PackImpact } from '../models/pack-impact.js';
 
 // ---------------------------------------------------------------------------
 // CLI Host Client Adapter + host command runners (sdd_cli → sdd_host)
 //
 // The wairon CLI as an in-process client of the hosting control plane: `wairon
-// serve` boots the server; `wairon host project|key …`, `wairon host lock`, and
-// `wairon host promote` drive the same admin orchestrator functions the HTTP
-// admin API uses. The master credential is read from WAIRON_ADMIN_TOKEN, so an
-// operator on the box (or via `docker exec`) administers without extra flags.
+// serve` boots the server; `wairon host project|key …` and `wairon host lock`
+// drive the same admin orchestrator functions the HTTP admin API uses. The
+// master credential is read from WAIRON_ADMIN_TOKEN, so an operator on the box
+// (or via `docker exec`) administers without extra flags.
 // ---------------------------------------------------------------------------
 
 export interface HostOptions {
@@ -73,6 +73,8 @@ export interface HostOptions {
   file?: string;
   open?: boolean;
   force?: boolean;
+  /** Write without the impact report or the question (scripts). */
+  yes?: boolean;
 }
 
 function resolveHostConfig(options: HostOptions): HostConfig {
@@ -98,7 +100,140 @@ function resolveHostConfig(options: HostOptions): HostConfig {
   const builtinPassword = process.env['WAIRON_ADMIN_PASSWORD'];
   if (builtinUser) cfg.builtinAdminUser = builtinUser;
   if (builtinPassword) cfg.builtinAdminPassword = builtinPassword;
+  // Durable audit policy (optional): a JSON object of overrides laid over the
+  // secure default. Refused at startup when it is not one.
+  const auditPolicy = process.env['WAIRON_AUDIT_POLICY'];
+  if (auditPolicy !== undefined && auditPolicy.trim() !== '') cfg.auditPolicy = parseAuditPolicyEnv(auditPolicy);
+  // Advisory quota policy (optional): a JSON object of overrides laid over the
+  // disabled default. Refused at startup when it is not one.
+  const quotaPolicy = process.env['WAIRON_QUOTA_POLICY'];
+  if (quotaPolicy !== undefined && quotaPolicy.trim() !== '') cfg.quotaPolicy = parseQuotaPolicyEnv(quotaPolicy);
   return cfg;
+}
+
+/**
+ * Policy values that no longer exist, each with the value it now reads as. Each
+ * stood for no behaviour of its own: full-redacted persisted exactly what
+ * redacted did, and an advisory quota policy never blocked anything. They are
+ * accepted for one release with a warning naming the replacement.
+ */
+const DEPRECATED_POLICY_VALUES: Record<string, Record<string, string>> = {
+  metadataMode: { 'full-redacted': 'redacted' },
+  mode: { block: 'observe' },
+};
+
+/** The value a policy field reads as, warning when it is a deprecated one. */
+function retireValue(variable: string, key: string, value: unknown): unknown {
+  const replacement = typeof value === 'string' ? DEPRECATED_POLICY_VALUES[key]?.[value] : undefined;
+  if (replacement === undefined) return value;
+  logger.warn(`${variable} field "${key}": "${String(value)}" is deprecated and reads as "${replacement}" — set "${replacement}" instead.`);
+  return replacement;
+}
+
+/** The fields WAIRON_AUDIT_POLICY may set, each with the check its value must pass. */
+const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
+  enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  minimumLevel: {
+    expects: 'one of "debug", "info", "warning", "error", "security"',
+    accepts: (v) => typeof v === 'string' && ['debug', 'info', 'warning', 'error', 'security'].includes(v),
+  },
+  retentionDays: { expects: 'a non-negative number', accepts: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 },
+  securityRetentionDays: {
+    expects: 'a non-negative number',
+    accepts: (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0,
+  },
+  includeReadEvents: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  metadataMode: {
+    expects: 'one of "none", "redacted"',
+    // "full-redacted" is still accepted, and read as redacted (see DEPRECATED_POLICY_VALUES).
+    accepts: (v) => typeof v === 'string' && ['none', 'redacted', 'full-redacted'].includes(v),
+  },
+};
+
+/**
+ * Parse WAIRON_AUDIT_POLICY: a JSON object setting any of the audit policy's
+ * fields, each laid over the secure default when the policy is resolved. An
+ * unparsable value, an unknown field or a wrong type is refused with a message
+ * naming the variable, so a misspelt policy never silently runs as the default.
+ * Exported for tests.
+ */
+export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new WaironError(`WAIRON_AUDIT_POLICY is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new WaironError('WAIRON_AUDIT_POLICY must be a JSON object of audit policy fields.');
+  }
+  const policy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const field = AUDIT_POLICY_FIELDS[key as keyof AuditRetentionPolicy];
+    if (!Object.prototype.hasOwnProperty.call(AUDIT_POLICY_FIELDS, key) || !field) {
+      throw new WaironError(
+        `WAIRON_AUDIT_POLICY sets an unknown field "${key}"; the known fields are ${Object.keys(AUDIT_POLICY_FIELDS).join(', ')}.`,
+      );
+    }
+    if (!field.accepts(value)) {
+      throw new WaironError(`WAIRON_AUDIT_POLICY field "${key}" must be ${field.expects}.`);
+    }
+    policy[key] = retireValue('WAIRON_AUDIT_POLICY', key, value);
+  }
+  return policy as Partial<AuditRetentionPolicy>;
+}
+
+/** A non-negative integer limit. */
+const NON_NEGATIVE_INTEGER = {
+  expects: 'a non-negative integer',
+  accepts: (v: unknown) => typeof v === 'number' && Number.isInteger(v) && v >= 0,
+};
+
+/** The fields WAIRON_QUOTA_POLICY may set, each with the check its value must pass. */
+const QUOTA_POLICY_FIELDS: Record<keyof ResourceQuotaPolicy, { expects: string; accepts: (v: unknown) => boolean }> = {
+  enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
+  mode: {
+    expects: 'one of "observe", "warn"',
+    // "block" is still accepted, and read as observe (see DEPRECATED_POLICY_VALUES).
+    accepts: (v) => typeof v === 'string' && ['observe', 'warn', 'block'].includes(v),
+  },
+  maxProjectsPerUser: NON_NEGATIVE_INTEGER,
+  maxMcpRequestsPerMinute: NON_NEGATIVE_INTEGER,
+  maxProjectBytes: NON_NEGATIVE_INTEGER,
+  maxAuditEventsPerDay: NON_NEGATIVE_INTEGER,
+};
+
+/**
+ * Parse WAIRON_QUOTA_POLICY: a JSON object setting any of the quota policy's
+ * fields, each laid over the disabled default when the policy is resolved
+ * (effectiveQuotaPolicy). An unparsable value, an unknown field or a wrong
+ * type is refused with a message naming the variable, so a misspelt policy
+ * never silently runs as the default. Exported for tests.
+ */
+export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new WaironError(`WAIRON_QUOTA_POLICY is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new WaironError('WAIRON_QUOTA_POLICY must be a JSON object of quota policy fields.');
+  }
+  const policy: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const field = QUOTA_POLICY_FIELDS[key as keyof ResourceQuotaPolicy];
+    if (!Object.prototype.hasOwnProperty.call(QUOTA_POLICY_FIELDS, key) || !field) {
+      throw new WaironError(
+        `WAIRON_QUOTA_POLICY sets an unknown field "${key}"; the known fields are ${Object.keys(QUOTA_POLICY_FIELDS).join(', ')}.`,
+      );
+    }
+    if (!field.accepts(value)) {
+      throw new WaironError(`WAIRON_QUOTA_POLICY field "${key}" must be ${field.expects}.`);
+    }
+    policy[key] = retireValue('WAIRON_QUOTA_POLICY', key, value);
+  }
+  return policy as Partial<ResourceQuotaPolicy>;
 }
 
 function masterCredential(): string | null {
@@ -106,10 +241,10 @@ function masterCredential(): string | null {
 }
 
 function mapAdminError(e: unknown): WaironError {
-  if (e instanceof AdminAuthError) {
+  if (e instanceof localAdmin.AdminAuthError) {
     return new WaironError('Forbidden: set WAIRON_ADMIN_TOKEN to the server\'s admin credential to run host commands.');
   }
-  if (e instanceof LockValidationError) {
+  if (e instanceof localAdmin.LockValidationError) {
     const lines = e.errors.map((x) => `  • ${x.specId ? `[${x.specId}] ` : ''}[${x.code}] ${x.message}`).join('\n');
     return new WaironError(`${e.message}\n${lines}`);
   }
@@ -118,87 +253,23 @@ function mapAdminError(e: unknown): WaironError {
 
 // ── declarative env-based identity-provider seeding ─────────────────────────
 
-/** A trimmed env value, or undefined when unset/blank. */
-function envTrim(name: string): string | undefined {
-  const value = process.env[name]?.trim();
-  return value ? value : undefined;
-}
-
-/** Split a comma-separated env value into trimmed, non-empty entries. */
-function envCsv(name: string): string[] {
-  return (process.env[name] ?? '')
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 /**
  * Declarative env-based seeding of the `default` OIDC identity provider, so a
  * whole SSO setup ships in the compose file with no post-deploy clicking.
- * Activates ONLY when WAIRON_OIDC_ISSUER is set; otherwise a no-op. Builds an
- * IdentityProviderConfig (id `default` — the sign-in screen's default provider
- * id — enabled, fields from the WAIRON_OIDC_* env vars), stores a RAW
- * WAIRON_OIDC_CLIENT_SECRET into the host secret store under the fixed ref
- * `oidc-default` (the provider carries only that clientSecretRef — never the
- * raw secret; an existing stored ref may be named via
- * WAIRON_OIDC_CLIENT_SECRET_REF instead), and UPSERTS the provider through the
- * policy repository — the same store the identity plane's
- * upsertIdentityProvider writes to. Server-side bootstrap: no credential is
- * involved, and the upsert is idempotent, so every boot re-seeds declaratively
- * (env is the source of truth for the `default` provider; the web UI still
- * manages providers on top). Exported for tests.
+ * Activates ONLY when WAIRON_OIDC_ISSUER is set; otherwise a no-op. The host
+ * does the seeding itself from its own environment (a raw
+ * WAIRON_OIDC_CLIENT_SECRET lands in the secret store under the fixed ref
+ * `oidc-default`; the provider record carries only the ref) — this command
+ * passes nothing but its configuration. Idempotent, so every boot re-seeds.
+ * Exported for tests.
  */
 export function seedIdentityProviderFromEnv(cfg: HostConfig): void {
-  const issuer = envTrim('WAIRON_OIDC_ISSUER');
-  if (!issuer) return; // seeding activates only when the issuer is set
-
   // The secret store keys off WAIRON_DATA_DIR — anchor it to the resolved data
-  // dir when unset (same precedent as WAIRON_PACKS_DIR in resolveHostConfig).
-  if (!process.env['WAIRON_DATA_DIR']) {
+  // dir when seeding will run (same precedent as WAIRON_PACKS_DIR in resolveHostConfig).
+  if (process.env['WAIRON_OIDC_ISSUER']?.trim() && !process.env['WAIRON_DATA_DIR']) {
     process.env['WAIRON_DATA_DIR'] = cfg.dataDir;
   }
-
-  let clientSecretRef = envTrim('WAIRON_OIDC_CLIENT_SECRET_REF');
-  const rawSecret = process.env['WAIRON_OIDC_CLIENT_SECRET'];
-  if (rawSecret) {
-    // RAW secret shipped in env: store it under the fixed ref and point the
-    // provider at it — the raw value never lands on the provider record.
-    setSecret('oidc-default', rawSecret);
-    clientSecretRef = 'oidc-default';
-  }
-
-  const config: IdentityProviderConfig = {
-    id: 'default', // matches the sign-in screen's default provider id
-    providerType: envTrim('WAIRON_OIDC_PROVIDER_TYPE') ?? 'oidc',
-    issuerUrl: issuer,
-    enabled: true,
-    updatedAt: '', // stamped server-side by the policy registry
-  };
-  // Login-button label (WAIRON_OIDC_DISPLAY_NAME): the sign-in screen renders
-  // "Sign in with <displayName>", defaulting to the provider id when unset.
-  const displayName = envTrim('WAIRON_OIDC_DISPLAY_NAME');
-  if (displayName) config.displayName = displayName;
-  const clientId = envTrim('WAIRON_OIDC_CLIENT_ID');
-  if (clientId) config.clientId = clientId;
-  if (clientSecretRef) config.clientSecretRef = clientSecretRef;
-  const adminGroups = envCsv('WAIRON_OIDC_ADMIN_GROUPS');
-  if (adminGroups.length) config.adminGroupClaims = adminGroups;
-  const redirectUris = envCsv('WAIRON_OIDC_ALLOWED_REDIRECT_URIS');
-  if (redirectUris.length) config.allowedRedirectUris = redirectUris;
-  const domains = envCsv('WAIRON_OIDC_ALLOWED_DOMAINS');
-  if (domains.length) config.allowedDomains = domains;
-  // Split-horizon endpoint overrides (public authorize vs VPC-internal back-channel).
-  const authorizationEndpoint = envTrim('WAIRON_OIDC_AUTHORIZATION_ENDPOINT');
-  if (authorizationEndpoint) config.authorizationEndpoint = authorizationEndpoint;
-  const tokenEndpoint = envTrim('WAIRON_OIDC_TOKEN_ENDPOINT');
-  if (tokenEndpoint) config.tokenEndpoint = tokenEndpoint;
-  const jwksUri = envTrim('WAIRON_OIDC_JWKS_URI');
-  if (jwksUri) config.jwksUri = jwksUri;
-  const userinfoEndpoint = envTrim('WAIRON_OIDC_USERINFO_ENDPOINT');
-  if (userinfoEndpoint) config.userinfoEndpoint = userinfoEndpoint;
-
-  upsertIdentityProviderRecord(cfg.dataDir, config);
-  logger.info("seeded identity provider 'default' from env");
+  if (localAdmin.seedDefaultProvider(cfg)) logger.info("seeded identity provider 'default' from env");
 }
 
 // ── wairon serve ────────────────────────────────────────────────────────────
@@ -216,7 +287,7 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
   }
   let handle;
   try {
-    handle = startHostServer(cfg);
+    handle = localAdmin.startHostServer(cfg);
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
@@ -242,7 +313,7 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
 // The local single-project developer server: serves the SAME hosted web UI
 // (src/server/web.ts serveApp) pointed at the CURRENT project (the cwd's .wai/),
 // auto-signed-in, single-project, with no login screen and no tenancy chrome. It
-// REUSES the whole hosted web pipeline (web_orchestrator, web_graph_orchestrator,
+// REUSES the whole hosted web pipeline (web_session_orchestrator, web_graph_orchestrator,
 // the auth bridge, serveApp) — this is NOT a forked/second UI. Loopback ONLY, auth
 // off, dev-only. The developer keeps this open while an agent edits specs and
 // refreshes to see the live graph (validator issues overlay as ⚠ badges).
@@ -265,13 +336,21 @@ function openBrowser(url: string): void {
 }
 
 export async function runDev(options: HostOptions = {}): Promise<void> {
-  const cwd = process.cwd();
-  // The dev server serves the CURRENT project: a .wai/ must be present.
-  if (!fs.existsSync(path.join(cwd, '.wai'))) {
+  // The dev server serves the project the binding rule binds from here — the
+  // same root `wairon status` reports and the MCP server attaches to: the
+  // nearest folder with an L0, never past the repository root unless declared.
+  const binding = resolveProjectBinding(process.cwd());
+  if (!binding) {
     throw new WaironError(
-      'No .wai/ found in the current directory. Run `wairon dev` from a wairon project root (or run `wairon init` first).',
+      'No wairon project binds this folder. Run `wairon dev` inside a wairon project (or run `wairon init` first).',
     );
   }
+  const cwd = binding.root;
+  let projectId: string | null = null;
+  try {
+    const config = runWithProjectRoot(cwd, () => loadProjectConfig());
+    if (config) projectId = effectiveProjectId(config);
+  } catch { /* an unreadable configuration names no id */ }
 
   // Ephemeral, per-cwd dev data dir under the OS temp dir — NOT the project's own
   // .wai. A deterministic hash of the cwd keeps it stable across restarts (so the
@@ -280,17 +359,12 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   const dataDir = path.join(os.tmpdir(), 'wairon-dev', hash);
   fs.mkdirSync(dataDir, { recursive: true });
 
-  // Register the cwd as the single local project 'local' (idempotent upsert). Its
-  // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
-  // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
-  registerLocalDevProject(dataDir, 'local', cwd);
-
   const port = options.port ? Number(options.port) : 8080;
   // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
   // on 127.0.0.1). devMode independently forces the web UI on in http.ts, so this is
   // belt-and-suspenders; requireTls:false keeps the dev cookie non-Secure over http.
   const exposurePolicy: HostExposurePolicy = {
-    adminApiMode: 'local_only',
+    adminApiMode: 'enabled',
     adminUiEnabled: true,
     identityApiEnabled: true,
     landscapeApiEnabled: true,
@@ -311,9 +385,15 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
     exposurePolicy,
   };
 
+  // Register the cwd as the single local project 'local' (idempotent upsert). Its
+  // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
+  // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
+  // The host admits this registration only for the dev-mode config built above.
+  localAdmin.registerLocalDevProject(cfg, 'local', cwd);
+
   let handle;
   try {
-    handle = startHostServer(cfg);
+    handle = localAdmin.startHostServer(cfg);
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
@@ -321,7 +401,7 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   const url = `http://127.0.0.1:${port}`;
   logger.success('wairon dev server started (local, single-project, no login).');
   logger.info(`  open:      ${chalk.cyan(url)}`);
-  logger.info(`  project:   ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
+  logger.info(`  project:   ${projectId ?? path.basename(cwd)} at ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
   logger.info(`  data dir:  ${chalk.gray(dataDir)}  ${chalk.gray('(ephemeral)')}`);
   logger.blank();
   logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');
@@ -353,22 +433,22 @@ export async function runHostProject(action: string, options: HostOptions = {}):
             '`--unit <unitId>` is required for `host project create` — every project is placed in an organization unit at creation.',
           );
         }
-        const rec = admin.createProject(cfg, cred, options.id, options.unit);
+        const rec = localAdmin.createProject(cfg, cred, options.id, options.unit);
         logger.success(`Created project "${rec.id}" at ${chalk.gray(rec.rootPath)}`);
         break;
       }
       case 'list': {
-        const list = admin.listProjects(cfg, cred);
+        const list = localAdmin.listProjects(cfg, cred);
         if (!list.length) {
           logger.info('No projects.');
         } else {
-          for (const r of list) logger.info(`  ${r.id.padEnd(20)} ${r.status.padEnd(9)} ${chalk.gray(r.rootPath)}`);
+          for (const r of list) logger.info(`  ${r.id.padEnd(20)} ${r.status.padEnd(9)} ${chalk.gray(r.rootPath)}${r.status === 'disabled' && r.disabledReason ? chalk.gray(` (${r.disabledReason})`) : ''}`);
         }
         break;
       }
       case 'destroy': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host project destroy`.');
-        admin.destroyProject(cfg, cred, options.id);
+        localAdmin.destroyProject(cfg, cred, options.id);
         logger.success(`Destroyed project "${options.id}".`);
         break;
       }
@@ -398,7 +478,7 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
   try {
     // Ensure the owner unit exists (idempotent — updates it if already present).
     // A root unit must be a business_entity per the org-unit hierarchy.
-    landscapeUpsertUnit(cfg, cred, {
+    localAdmin.upsertUnit(cfg, cred, {
       id: unitId,
       name: unitId,
       slug: unitId,
@@ -408,18 +488,18 @@ export async function runHostDemo(options: HostOptions = {}): Promise<void> {
       createdBy: { userId: 'master', kind: 'service', issuer: 'local' },
     });
 
-    const existing = existingProjectRoot(cfg.dataDir, id);
+    const existing = localAdmin.existingProjectRoot(cfg.dataDir, id);
     if (existing && !options.force) {
       throw new WaironError(
         `Project "${id}" already exists at ${existing}. Re-run with --force to destroy and reseed it.`,
       );
     }
-    if (existing) admin.destroyProject(cfg, cred, id);
-    const rec = admin.createProject(cfg, cred, id, unitId);
+    if (existing) localAdmin.destroyProject(cfg, cred, id);
+    const rec = localAdmin.createProject(cfg, cred, id, unitId);
 
     const summary = runWithProjectRoot(rec.rootPath, () => {
       seedDemoTree();
-      const model = buildCanvasModel();
+      const model = buildCanvasDataModel();
       return {
         subsystems: model.subsystems.length,
         components: model.components.length,
@@ -458,11 +538,13 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
         // A unit's qualified dot-path id is its parent's id + '.' + slug; a root
         // unit's id IS its slug.
         const qualifiedId = options.parent ? `${options.parent}.${options.slug}` : options.slug;
-        const stored = landscapeUpsertUnit(cfg, cred, {
+        const stored = localAdmin.upsertUnit(cfg, cred, {
           id: qualifiedId,
           name: options.name ?? options.slug,
           slug: options.slug,
-          kind: options.kind ?? 'team',
+          // A top-level unit must be a business_entity (the org-unit hierarchy's
+          // root kind), so that is the default without --parent; under a parent, team.
+          kind: options.kind ?? (options.parent ? 'team' : 'business_entity'),
           ...(options.parent ? { parentId: options.parent } : {}),
           status: 'active',
           createdAt: '',
@@ -491,18 +573,111 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
  * resolves to zero permissions under the live-owner model.
  */
 export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
+  // Step 1.
   const cfg = resolveHostConfig(options);
-  const report = migratePermissionModel(cfg.dataDir, options.fix === true);
+  const fix = options.fix === true;
+  // Steps 2-3: the permission-model migration first.
+  const report = localAdmin.migratePermissionModel(cfg.dataDir, fix);
   if (report.findings.length === 0) {
     logger.success('Hosted data is on the permission model — nothing to migrate.');
+  } else {
+    logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
+    for (const f of report.findings) {
+      logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+    }
+    if (!report.applied) {
+      logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+    }
+  }
+  // Steps 4-5: every hosted project's migration onto the reachability model —
+  // operator-invoked, never at bind, because it rewrites the design and owes a re-lock.
+  printReachMigrations(localAdmin.migrateReachability(cfg, fix), fix);
+  // Step 6: then the member-record upgrade — a dry-run plan, applied all or nothing only with --fix.
+  const upgrade = localAdmin.upgradeMemberRecords(cfg, fix);
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  // Steps 7-8.
+  if (upgrade.recovered.length === 0 && writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
     return;
   }
-  logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
-  for (const f of report.findings) {
-    logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
+  // Step 9.
+  printRecovered(upgrade.recovered, fix);
+  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
+    logger.success('Hosted members are records — nothing to upgrade.');
+    return;
   }
-  if (!report.applied) {
-    logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
+  printMemberUpgrade(upgrade, fix);
+}
+
+/** Step 5: each hosted project's reachability rewrites by form, what it left for an author, and any failure. */
+function printReachMigrations(migrations: ReturnType<typeof localAdmin.migrateReachability>, fix: boolean): void {
+  const failed = migrations.filter((m) => m.failure !== undefined);
+  const pending = migrations.filter((m) => m.plan && (m.plan.rewrites.length > 0 || m.plan.reported.length > 0));
+  if (failed.length === 0 && pending.length === 0) {
+    logger.success('Hosted projects are on the reachability model — nothing to migrate.');
+    return;
+  }
+  let rewritten = 0;
+  for (const m of pending) {
+    const plan = m.plan!;
+    if (plan.rewrites.length > 0) {
+      rewritten++;
+      logger.info(`  [reach   ] ${m.projectId}: ${plan.rewrites.length} rewrite(s)${plan.applied ? ' written' : ''} — ${describeForms(plan.rewrites)}`);
+    }
+    if (plan.reported.length > 0) {
+      logger.warn(`  [reach   ] ${m.projectId}: ${plan.reported.length} form(s) left for an author — ${describeForms(plan.reported)} (\`wairon doctor --report reachability\` in its tree lists each)`);
+    }
+  }
+  for (const m of failed) logger.error(`  [reach   ] ${m.projectId}: the reachability migration failed — ${m.failure}`);
+  if (rewritten === 0) return;
+  if (fix) logger.warn(`${rewritten} hosted project(s) migrated onto the reachability model: each design moved, so each owes one re-lock by its approvers.`);
+  else logger.warn(`${rewritten} hosted project(s) await the reachability migration (dry run; re-run with --fix to write it — each then owes one re-lock).`);
+}
+
+/** Reachability rewrites counted by form, e.g. "3 portal-type, 1 listener-mounts". */
+function describeForms(entries: { form: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const e of entries) counts.set(e.form, (counts.get(e.form) ?? 0) + 1);
+  return [...counts].map(([form, n]) => `${n} ${form}`).join(', ');
+}
+
+/** Step 9: each transaction a crash left unfinished under the data directory, and what was done about it. */
+function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRecords>['recovered'], fix: boolean): void {
+  for (const t of recovered) {
+    const line = `  unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}): ${t.action} — ${t.detail}`;
+    if (t.action === 'refused') logger.error(line);
+    else logger.info(line);
+  }
+  if (recovered.length > 0 && !fix) logger.warn('A crashed transaction is pending under the data directory — re-run with --fix to roll it back first.');
+}
+
+/** Step 9: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
+function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberRecords>, fix: boolean): void {
+  const plan = upgrade.plan;
+  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
+  for (const familyRootId of [...new Set(writes.map((m) => m.familyRootId))]) {
+    logger.info(`Family ${familyRootId}:`);
+    for (const m of writes.filter((w) => w.familyRootId === familyRootId)) {
+      const rows = plan.reach.filter((r) => r.memberId === m.record.id);
+      const verdict = rows.every((r) => r.equal) ? 'all equal — nobody’s reach changes' : 'NOT all equal';
+      logger.info(`  ${m.action} ${m.record.id} (parent ${m.record.parentProjectId}, path ${m.record.memberPath}) — `
+        + `reach: ${rows.length} row(s) compared, ${verdict}`);
+    }
+  }
+  for (const n of plan.narrowings) {
+    logger.info(`  key ${n.keyId}: ${n.before.join(', ')} → ${n.after.join(', ')} (${n.widening})`);
+  }
+  for (const r of plan.refusals) logger.error(`  refused [${r.area}] ${r.detail}`);
+  if (plan.refusals.length > 0) {
+    logger.warn('The member upgrade is blocked — nothing was written.');
+  } else if (upgrade.applied) {
+    logger.success(`Member upgrade applied (${upgrade.outcome?.written.length ?? 0} store file(s) swapped in).`);
+  } else if (upgrade.outcome) {
+    logger.error(`Member upgrade failed: ${upgrade.outcome.failure ?? 'unknown'} — `
+      + (upgrade.outcome.restored ? 'every store was restored.' : `NOT restored: ${upgrade.outcome.unrestored.join(', ')}`));
+  } else if (!fix) {
+    logger.warn('Member upgrade NOT applied (dry run; re-run with --fix to apply).');
   }
 }
 
@@ -511,11 +686,52 @@ export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {
 const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide', 'share:create'];
 const PERMISSION_VALUES: PermissionValue[] = ['yes', 'approval', 'no', 'inherit'];
 
-/** The assignment scope from the mutually exclusive --project/--unit/--instance flags. */
+/**
+ * The assignment scope from the mutually exclusive --project/--unit/--instance
+ * flags; --project with --subsystem is the subsystem scope
+ * `<project>/<subsystem>`, and --subsystem without --project is refused.
+ */
 function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: string } {
+  if (options.subsystem) {
+    if (!options.project) throw new WaironError('`--subsystem <id>` needs `--project <id>`: a subsystem scope is `<project>/<subsystem>`.');
+    return { kind: 'subsystem', id: `${options.project}/${options.subsystem}` };
+  }
   if (options.project) return { kind: 'project', id: options.project };
   if (options.unit) return { kind: 'unit', id: options.unit };
   return { kind: 'instance' };
+}
+
+/**
+ * Warn when a user's effective project:read at a scope is not yes. Read and write
+ * are separate capabilities the resolver decides independently, so a write grant
+ * (or a token owned by someone) can cover a project its subject cannot open; this
+ * says so at the moment it is created, with the grant that fixes it. A user with
+ * no record, or a check that fails, warns nothing — the write already succeeded.
+ */
+function warnIfUnreadable(
+  cfg: HostConfig,
+  cred: string | null,
+  userId: string,
+  scope: { kind: ScopeKind; id?: string },
+  why: string,
+): void {
+  // A subsystem scope is read at its project: read has no subsystem rung.
+  const target = scope.kind === 'subsystem'
+    ? { kind: 'project' as ScopeKind, id: (scope.id ?? '').split('/')[0] }
+    : scope;
+  let read: string;
+  try {
+    read = localAdmin.explain(cfg, cred, userId, 'project:read', target.kind, target.id ?? '').value;
+  } catch {
+    return;
+  }
+  if (read === 'yes') return;
+  const where = target.kind === 'instance' ? 'the instance' : `${target.kind} ${target.id}`;
+  const flag = target.kind === 'instance' ? '--instance' : `--${target.kind} ${target.id}`;
+  logger.warn(
+    `project:read for "${userId}" at ${where} resolves to ${read} — ${why}. `
+      + `Grant it with \`wairon host permission set --user ${userId} --capability project:read ${flag}\`.`,
+  );
 }
 
 export async function runHostPermission(action: string, options: HostOptions = {}): Promise<void> {
@@ -533,7 +749,7 @@ export async function runHostPermission(action: string, options: HostOptions = {
           throw new WaironError(`\`--value\` must be one of: ${PERMISSION_VALUES.join(', ')}.`);
         }
         const scope = resolveScopeOptions(options);
-        const stored = permissionadmin.setAssignment(cfg, cred, {
+        const stored = localAdmin.setAssignment(cfg, cred, {
           id: '',
           subjectKind: 'user',
           subjectId: options.user,
@@ -546,14 +762,19 @@ export async function runHostPermission(action: string, options: HostOptions = {
         logger.success(
           `Assignment ${stored.id}: ${options.user} ${options.capability}=${value} @ ${scope.kind}${scope.id ? ` ${scope.id}` : ''}`,
         );
+        // Read and write are separate capabilities: a write grant over a scope the
+        // subject cannot read leaves them unable to open what they may change.
+        if (options.capability === 'project:write' && (value === 'yes' || value === 'approval')) {
+          warnIfUnreadable(cfg, cred, options.user, scope, `${options.user} can write here but cannot read it`);
+        }
         break;
       }
       case 'list': {
         const scope = resolveScopeOptions(options);
-        const list = permissionadmin.listAssignments(
+        const list = localAdmin.listAssignments(
           cfg,
           cred,
-          options.project || options.unit || options.instance ? scope.kind : undefined,
+          options.project || options.unit || options.instance || options.subsystem ? scope.kind : undefined,
           scope.id,
           options.user ? 'user' : undefined,
           options.user,
@@ -563,14 +784,14 @@ export async function runHostPermission(action: string, options: HostOptions = {
         } else {
           for (const a of list) {
             const subject = a.subjectKind === 'everyone' ? 'everyone' : a.subjectId;
-            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}`);
+            logger.info(`  ${a.id}  ${String(subject).padEnd(20)} ${a.capability.padEnd(16)} ${a.value.padEnd(9)} ${a.scopeKind}${a.scopeId ? ` ${a.scopeId}` : ''}${a.scopeNote ? `  (${a.scopeNote})` : ''}`);
           }
         }
         break;
       }
       case 'remove': {
         if (!options.id) throw new WaironError('`--id <assignmentId>` is required for `host permission remove`.');
-        permissionadmin.removeAssignment(cfg, cred, options.id);
+        localAdmin.removeAssignment(cfg, cred, options.id);
         logger.success(`Removed assignment "${options.id}".`);
         break;
       }
@@ -595,20 +816,30 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         // permissions — it acts as the owner's LIVE permission, narrowed to the
         // named project. Seed the owner's authority with `host permission set`.
         if (options.owner) {
-          const key = mintToken(cfg, cred, {
+          const minted = localAdmin.mintToken(cfg, cred, {
             ownerUserId: options.owner,
             label: options.label ?? `cli token (${options.project})`,
             projects: options.project === '*' ? ['*'] : [options.project],
           });
           logger.success(`API key minted for owner "${options.owner}" (shown once — store it now):`);
           logger.blank();
-          console.log(`  ${chalk.bold(key)}`);
+          console.log(`  ${chalk.bold(minted.token)}`);
           logger.blank();
+          // A deprecated member-qualified entry is stored as the member's own record id: say so.
+          for (const line of minted.mapped) {
+            logger.warn(`Narrowing ${line}: a member is a record of its own, so the token names it by its id (qualified entries are deprecated).`);
+          }
+          // The token acts as its owner's live permission: an owner who cannot read
+          // the project mints a token that cannot read it either.
+          if (options.project !== '*') {
+            warnIfUnreadable(cfg, cred, options.owner, { kind: 'project', id: options.project },
+              `the token acts as "${options.owner}"'s live permission, so it cannot read the project either`);
+          }
           break;
         }
         const role = (options.role ?? 'editor') as DisplayRole;
         if (role !== 'editor' && role !== 'admin') throw new WaironError('`--role` must be editor or admin.');
-        const key = admin.mintKey(cfg, cred, options.project, role);
+        const key = localAdmin.mintKey(cfg, cred, options.project, role);
         logger.success('API key minted (shown once — store it now):');
         logger.blank();
         console.log(`  ${chalk.bold(key)}`);
@@ -620,7 +851,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         break;
       }
       case 'list': {
-        const list = admin.listKeys(cfg, cred, options.project ?? '*');
+        const list = localAdmin.listKeys(cfg, cred, options.project ?? '*');
         if (!list.length) {
           logger.info('No keys.');
         } else {
@@ -630,7 +861,7 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
       }
       case 'revoke': {
         if (!options.id) throw new WaironError('`--id <id>` is required for `host key revoke`.');
-        admin.revokeKey(cfg, cred, options.id);
+        localAdmin.revokeKey(cfg, cred, options.id);
         logger.success(`Revoked key "${options.id}".`);
         break;
       }
@@ -642,27 +873,14 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
   }
 }
 
-// ── wairon host lock / promote ────────────────────────────────────────────────
+// ── wairon host lock ────────────────────────────────────────────────────────
 
 export async function runHostLock(options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
   if (!options.project) throw new WaironError('`--project <id>` is required for `host lock`.');
   try {
-    const rec = admin.lockProject(cfg, masterCredential(), options.project);
+    const rec = localAdmin.lockProject(cfg, masterCredential(), options.project);
     logger.success(`Locked "${options.project}" @ ${rec.stateId.algorithm}:${rec.stateId.digest.slice(0, 12)}… (status ${rec.status}).`);
-  } catch (e) {
-    throw mapAdminError(e);
-  }
-}
-
-export async function runHostPromote(options: HostOptions = {}): Promise<void> {
-  const cfg = resolveHostConfig(options);
-  if (!options.project) throw new WaironError('`--project <id>` is required for `host promote`.');
-  try {
-    const result = admin.promoteProject(cfg, masterCredential(), options.project);
-    const mark = result.status === 'ready' ? chalk.green('✓') : chalk.yellow('✗');
-    logger.info(`${mark} ${result.message}`);
-    if (result.status !== 'ready') process.exitCode = 1;
   } catch (e) {
     throw mapAdminError(e);
   }
@@ -680,25 +898,25 @@ export async function runHostProducer(action: string, options: HostOptions = {})
     switch (action) {
       case 'configure': {
         if (!options.project || !options.page) throw new WaironError('`--project <id>` and `--page <id>` are required.');
-        admin.configureProducer(cfg, cred, options.project, target, options.page);
+        localAdmin.configureProducer(cfg, cred, options.project, target, options.page);
         logger.success(`Configured "${target}" for project "${options.project}".`);
         break;
       }
       case 'produce': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        await admin.produceProducer(cfg, cred, options.project, target);
+        await localAdmin.produceProducer(cfg, cred, options.project, target);
         logger.success(`Produced "${options.project}" to "${target}".`);
         break;
       }
       case 'remove': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        admin.removeProducer(cfg, cred, options.project, target);
+        localAdmin.removeProducer(cfg, cred, options.project, target);
         logger.success(`Removed "${target}" from project "${options.project}".`);
         break;
       }
       case 'list': {
         if (!options.project) throw new WaironError('`--project <id>` is required.');
-        const list = admin.listProducers(cfg, cred, options.project);
+        const list = localAdmin.listProducers(cfg, cred, options.project);
         if (!list.length) logger.info('No producers configured.');
         else for (const p of list) logger.info(`  ${p.target.padEnd(10)} → ${p.parentPageId}`);
         break;
@@ -720,12 +938,12 @@ export async function runHostSecret(action: string, options: HostOptions = {}): 
     switch (action) {
       case 'set': {
         if (!options.key || options.value === undefined) throw new WaironError('`--key <name>` and `--value <secret>` are required.');
-        admin.setSecret(cfg, cred, options.key, options.value);
+        localAdmin.setSecret(cfg, cred, options.key, options.value);
         logger.success(`Secret "${options.key}" set (read live — no restart needed).`);
         break;
       }
       case 'list': {
-        const keys = admin.listSecrets(cfg, cred);
+        const keys = localAdmin.listSecrets(cfg, cred);
         if (!keys.length) logger.info('No secrets set.');
         else for (const k of keys) logger.info(`  ${k}`);
         break;
@@ -740,6 +958,64 @@ export async function runHostSecret(action: string, options: HostOptions = {}): 
 
 // ── wairon host packs <action> ────────────────────────────────────────────────
 
+// ── host packs: the impact before a project pack write ─────────────────────────
+//
+// Installing a pack into a hosted project, or removing one from it, is
+// intentional: in a terminal the command shows what the write would change
+// first — measured by the host, writing nothing — and asks. `--yes`, or a run
+// with no terminal to ask on, writes without the report and says so. The report
+// states changes and never judges them: a pack that loosens wairon's checks is a
+// change like any other. The server-global tier governs no project by itself,
+// so its writes ask nothing.
+
+/** An unattended run: --yes, or no terminal to ask on. */
+function hostPackWriteUnattended(yes?: boolean): boolean {
+  return yes === true || !process.stdin.isTTY || !process.stdout.isTTY;
+}
+
+/** Ask whether to write; anything but yes is no. */
+async function askHostPackWrite(message: string): Promise<boolean> {
+  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
+    { type: 'confirm', name: 'confirmed', message, default: false },
+  ]);
+  return confirmed === true;
+}
+
+/** The line an unattended project pack write ends with. */
+function sayHostPackAppliedUnseen(name: string, verb: 'installed' | 'removed'): void {
+  logger.info(`${verb === 'installed' ? 'Installed' : 'Removed'} "${name}" without showing its impact (--yes, or no terminal) — run the command in a terminal to see it first.`);
+}
+
+/** The impact report: the doctrine against wairon's defaults by profile, the governing profiles, the finding changes and both totals. */
+function printHostPackImpact(impact: PackImpact): void {
+  const removal = impact.direction === 'remove';
+  logger.blank();
+  console.log(chalk.bold(`Pack impact — ${impact.pack}${impact.version ? ` v${impact.version}` : ''}${impact.replaces ? ` (replaces v${impact.replaces})` : ''}`));
+  console.log(chalk.dim(removal
+    ? '  Measured as removed: the findings below are what the pack accounts for on this project now.'
+    : '  Measured as applied. Nothing has been written. Changes are stated, never judged.'));
+  console.log(chalk.bold('\n  What it changes against wairon\'s defaults'));
+  if (impact.doctrine.length === 0) console.log(chalk.dim('    (no changes against wairon\'s defaults)'));
+  const groups = new Map<string, PackImpact['doctrine']>();
+  for (const c of impact.doctrine) groups.set(c.profile ?? '', [...(groups.get(c.profile ?? '') ?? []), c]);
+  for (const [profile, list] of groups) {
+    console.log(`  ${profile === '' ? 'pack-wide' : `profile ${chalk.bold(profile)}`}`);
+    for (const c of list) {
+      const range = c.from !== undefined || c.to !== undefined ? chalk.dim(` (${c.from ?? '—'} → ${c.to ?? '—'})`) : '';
+      console.log(`    ${c.axis} ${chalk.bold(c.change)}: ${c.subject}${range}${c.reason ? chalk.dim(` — ${c.reason}`) : ''}`);
+    }
+  }
+  console.log(`\n  Governs here: ${impact.governing.length > 0 ? impact.governing.join(', ') : chalk.dim('none of its profiles')}`);
+  const f = impact.findings;
+  console.log(chalk.bold(`\n  Findings on this project${removal ? ' once it no longer applies' : ''}: ${f.introduced.length} introduced, ${f.resolved.length} resolved, ${f.regraded.length} regraded`));
+  for (const i of f.introduced) console.log(`    + ${i.severity} [${i.code}]${i.specId ? chalk.dim(` ${i.specId}`) : ''} ${i.message}`);
+  for (const i of f.resolved) console.log(`    - ${i.severity} [${i.code}]${i.specId ? chalk.dim(` ${i.specId}`) : ''} ${i.message}`);
+  for (const r of f.regraded) console.log(`    ~ ${r.finding.severity} [${r.finding.code}]${r.finding.specId ? chalk.dim(` ${r.finding.specId}`) : ''} ${chalk.dim(`was ${r.from}`)}`);
+  const totals = (v: PackImpact['before']): string => `${v.errors} error(s), ${v.warnings} warning(s), ${v.notices} notice(s)`;
+  console.log(`\n  Before: ${totals(impact.before)}\n  After:  ${totals(impact.after)}`);
+  logger.blank();
+}
+
 export async function runHostPacks(action: string, options: HostOptions = {}): Promise<void> {
   const cfg = resolveHostConfig(options);
   const cred = masterCredential();
@@ -748,7 +1024,7 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
   try {
     switch (action) {
       case 'list': {
-        const list = project ? packs.listProjectPacks(cfg, cred, project) : packs.listGlobalPacks(cfg, cred);
+        const list = project ? localAdmin.listProjectPacks(cfg, cred, project) : localAdmin.listGlobalPacks(cfg, cred);
         if (!list.length) {
           logger.info(`No ${scope} packs.`);
           break;
@@ -764,18 +1040,38 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
         if (!options.file) throw new WaironError('`--file <path>` (a declarative pack YAML) is required for install.');
         const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
         const content = fs.readFileSync(path.resolve(options.file), 'utf8');
+        // Steps 10-14: into a project, the impact first — then install only on yes.
+        if (project && !hostPackWriteUnattended(options.yes)) {
+          printHostPackImpact(localAdmin.previewProjectPack(cfg, cred, project, name, content));
+          if (!(await askHostPackWrite(`Install the pack "${name}" into ${scope}?`))) {
+            logger.info('Nothing was installed.');
+            break;
+          }
+        }
         const desc = project
-          ? packs.installProjectPack(cfg, cred, project, name, content)
-          : packs.installGlobalPack(cfg, cred, name, content);
+          ? localAdmin.installProjectPack(cfg, cred, project, name, content)
+          : localAdmin.installGlobalPack(cfg, cred, name, content);
         logger.success(`Installed ${scope} pack "${desc.name}" (${desc.profiles} profile(s), ${desc.languages} language(s)).`);
         if (project) logger.info('Committed with the project — every clone and CI will enforce it.');
+        // Step 16: an unattended run says it installed without showing the impact.
+        if (project && hostPackWriteUnattended(options.yes)) sayHostPackAppliedUnseen(desc.name, 'installed');
         break;
       }
       case 'remove': {
         if (!options.name) throw new WaironError('`--name <name>` is required for `host packs remove`.');
-        if (project) packs.removeProjectPack(cfg, cred, project, options.name);
-        else packs.removeGlobalPack(cfg, cred, options.name);
+        // Steps 20-24: from a project, the impact first — then remove only on yes.
+        if (project && !hostPackWriteUnattended(options.yes)) {
+          printHostPackImpact(localAdmin.previewProjectPackRemoval(cfg, cred, project, options.name));
+          if (!(await askHostPackWrite(`Remove the pack "${options.name}" from ${scope}?`))) {
+            logger.info('Nothing was removed.');
+            break;
+          }
+        }
+        if (project) localAdmin.removeProjectPack(cfg, cred, project, options.name);
+        else localAdmin.removeGlobalPack(cfg, cred, options.name);
         logger.success(`Removed ${scope} pack "${options.name}".`);
+        // Step 26: an unattended run says it removed without showing the impact.
+        if (project && hostPackWriteUnattended(options.yes)) sayHostPackAppliedUnseen(options.name, 'removed');
         break;
       }
       default:
@@ -795,25 +1091,25 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
         if (!options.project || !options.remote) {
           throw new WaironError('`--project <id>` and `--remote <url>` are required for `host git enable`.');
         }
-        admin.enableGit(cfg, cred, options.project, options.remote, options.branch ?? 'main');
+        localAdmin.enableGit(cfg, cred, options.project, options.remote, options.branch ?? 'main');
         logger.success(`Git backing enabled for "${options.project}" (cloned ${options.remote}).`);
         break;
       }
       case 'disable': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git disable`.');
-        admin.disableGit(cfg, cred, options.project);
+        localAdmin.disableGit(cfg, cred, options.project);
         logger.success(`Git backing disabled for "${options.project}".`);
         break;
       }
       case 'sync': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync`.');
-        admin.syncGit(cfg, cred, options.project);
+        localAdmin.syncGit(cfg, cred, options.project);
         logger.success(`Synced "${options.project}" (default → working branch).`);
         break;
       }
       case 'commit': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git commit`.');
-        const publish = admin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
+        const publish = localAdmin.commitProject(cfg, cred, options.project, options.subsystem, options.message);
         if (!publish.published) {
           logger.info('Nothing to publish — the scoped .wai/ path is clean (or the project is not git-backed).');
         } else {
@@ -823,7 +1119,7 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
       }
       case 'status': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git status`.');
-        const s = admin.getGitBinding(cfg, cred, options.project);
+        const s = localAdmin.getGitBinding(cfg, cred, options.project);
         if (!s.enabled) {
           logger.info('Not git-backed.');
         } else {
@@ -838,7 +1134,7 @@ export async function runHostGit(action: string, options: HostOptions = {}): Pro
       case 'sync-config': {
         if (!options.project) throw new WaironError('`--project <id>` is required for `host git sync-config`.');
         const minutes = options.interval !== undefined ? Number(options.interval) : undefined;
-        admin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
+        localAdmin.configureGitSync(cfg, cred, options.project, minutes, options.skipIfClean);
         logger.success(
           minutes !== undefined
             ? `Periodic sync every ${minutes}m for "${options.project}".`

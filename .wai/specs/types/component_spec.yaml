@@ -4,13 +4,20 @@ name: ComponentSpec
 description: L2 Component specification
 fields:
   - name: id
-    type: string
-    description: Stable component identifier
+    type: identifier
+    description: >-
+      Stable component identifier: the spec-id grammar (identifier.problemAs spec-id) — [a-z0-9-_]+,
+      at most 64 characters (it becomes a folder and file name, which must stay under Windows' path
+      limits), never starting with "-" (no command line could name it), never "__proto__", and never
+      a name Windows reserves for a device (con, prn, aux, nul, com0-9, lpt0-9), which no checkout
+      on Windows could hold — refused on every platform so the tree stays portable
     optional: false
     key: primary
   - name: name
-    type: string
-    description: Human-readable component name
+    type: display_name
+    description: >-
+      Human-readable component name: a display_name — never empty, and no control, NUL or zero-width
+      character
     optional: false
   - name: description
     type: string
@@ -21,34 +28,26 @@ fields:
     description: Owning subsystem id
     optional: false
   - name: componentType
-    type: string
-    description: 'Stereotype: Portal, Orchestrator, Store, Adapter, …'
+    type: ComponentType
+    description: >-
+      Stereotype: a building block, a pattern that owns blocks, or a UI block or pattern. Specialist
+      and Gateway are retired (STEREOTYPE_RETIRED): logic is an Orchestrator with a dependencyClass,
+      and a gateway is a Portal with the gateway variant
     optional: false
-  - name: portalType
-    type: string
-    description: Wire flavour when componentType is Portal (HTTP_API, gRPC, …)
-    optional: true
   - name: owns
-    type: string[]
+    type: list<string>
     description: Private member component ids (pattern containment, one hop)
     optional: false
   - name: dependsOn
-    type: string[]
+    type: list<string>
     description: Collaborator component ids
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete
-    optional: true
-  - name: remoteInterfaces
-    type: RemotePublicInterfaceRef[]
-    description: >-
-      Optional remote project public surfaces consumed by this component. Valid only for Adapter
-      components; dependsOn remains local-only and must not point directly into another hosted
-      project.
-    optional: true
+    type: SpecStatus
+    description: How far it is through design (an omitted status is parsed as complete)
+    optional: false
   - name: dispatch
-    type: DispatchBinding[]
+    type: list<DispatchBinding>
     description: >-
       Portal-only: machine-readable capability → component.method dispatch table for generic-handle
       portals. Each entry is validated against the serving component's interface
@@ -57,14 +56,13 @@ fields:
       audit then expires automatically.
     optional: true
   - name: durability
-    type: string
+    type: Durability
     description: >-
-      Store-only: ram-projection | durable. A durable Store's written state must have a hydration
-      read-back reachable from a declared lifecycle entrypoint (MISSING_HYDRATION); a ram-projection
-      declares it is rebuilt, not restored.
+      Store-only: how the Store's state survives a restart (MISSING_DURABILITY when a Store declares
+      none)
     optional: true
   - name: patterns
-    type: PatternRef[]
+    type: list<PatternRef>
     description: >-
       Optional references to pack-declared reusable patterns this component realizes. Resolved
       against loaded packs' PatternDefs (UNKNOWN_PATTERN_REF when unresolved); pack rules enforce
@@ -74,8 +72,173 @@ fields:
     type: string
     description: >-
       Optional component variant — a declared, base-anchored specialization of this component's
-      stereotype (resolved against the variant registry; UNKNOWN_VARIANT / VARIANT_BASE_MISMATCH).
+      stereotype, resolved against the variant registry: wairon's built-in variants, then the global
+      and project directories, a later layer overriding by id (UNKNOWN_VARIANT /
+      VARIANT_BASE_MISMATCH)
     optional: true
-methods: []
+  - name: basePath
+    type: string
+    description: 'Portal-only: the base path every endpoint of the Portal mounts under'
+    optional: true
+  - name: auth
+    type: PortalAuth
+    description: 'Portal-only: the inbound transport authentication the Portal requires'
+    optional: true
+  - name: emits
+    type: list<EventBinding>
+    description: >-
+      Topics this component publishes; every emitted topic needs a subscriber somewhere in the tree
+      (UNCONSUMED_TOPIC)
+    optional: true
+  - name: subscribesTo
+    type: list<EventBinding>
+    description: >-
+      Topics this component consumes; every subscription needs an emitter somewhere in the tree
+      (UNSOURCED_SUBSCRIPTION)
+    optional: true
+  - name: externalLinks
+    type: list<ExternalLink>
+    description: Opaque external references; an implementation link stands in for a local source path
+    optional: true
+  - name: dependencyClass
+    type: DependencyClass
+    description: >-
+      Orchestrator-only: what it may depend on, enforced as a Store's durability is; unset means a
+      workflow (DEPENDENCY_CLASS_VIOLATION, DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR)
+    optional: true
+  - name: lint
+    type: LintConfig
+    description: >-
+      This spec's own acknowledged findings — validator results its author looked at and accepted,
+      each with a reason.
+    optional: true
+  - name: ext
+    type: any
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
+      the core, preserved verbatim through load and save.
+    optional: true
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this component held before, oldest first. Written only by the
+      rename tool (renameComponent), never by an author, and never rewritten or bound as a reference
+      — it names keys that no longer exist. The design export shows it as `formerly`, so a consumer
+      that generated from an earlier export can tell a rename from a delete plus an add. Another
+      component may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand
+      edit); unsetting it releases those ids.
+    optional: true
+  - name: transport
+    type: Transport
+    description: >-
+      On a Portal (and expected on every Portal): how callers reach its verbs. One vocabulary with
+      the endpoint discriminator, replacing the retired portalType (read for one release, HTTP_API
+      as HTTP; doctor --fix rewrites it). Which process serves which Portal is implementation: there
+      are no listener mounts. On an Adapter, optional: the transport it calls its target Portal's
+      verbs over — inferred from that target when absent (HTTP for an HTTP API, a database
+      connection for a database Portal, ...), filled in by the creation tools when the target is
+      known, and an error when stated and it disagrees with the target's
+      (ADAPTER_TRANSPORT_MISMATCH), so a Portal's transport change shows its impact on every Adapter
+      that calls it. On no other block
+    optional: true
+  - name: abi
+    type: string
+    description: >-
+      Portal-only, InProcess only: how a foreign language links this library verb set. c means a
+      C-ABI shared library, DLL or FFI; wasm means a WebAssembly component. Absent means a native
+      API in the project's targetLanguage, which a project in another language cannot call
+      (LANGUAGE_BRIDGE_MISSING)
+    optional: true
+  - name: invokedBy
+    type: DeclaredInvocation
+    description: >-
+      Portal-only: the entry every verb inherits (kind entry, with a scope on a network transport).
+      A verb's own invokedBy overrides only the scope. Never defaulted by a tool and never invented
+      by a migration: a blanket entry on a Portal that is not entered from outside would hide
+      unreached verbs
+    optional: true
+methods:
+  - name: defaultConformanceTier
+    signature: 'defaultConformanceTier(): string'
+    returns: string
+    description: >-
+      The conformance tier its methods get when neither the method nor its implementation sets one:
+      anchored for a Portal, declared otherwise
+  - name: defaultNarrativeDetail
+    signature: 'defaultNarrativeDetail(): string'
+    returns: string
+    description: >-
+      The narrative detail its methods get when neither the method nor its implementation sets one:
+      calls-only for Portals, Observers and Adapters; intent for Stores, Indexes, Queries and
+      Registries; full otherwise
+  - name: isPattern
+    signature: 'isPattern(): boolean'
+    returns: bool
+    description: >-
+      Whether the component is a pattern that owns member blocks: Repository, FeatureComponent or
+      RouterComponent
+  - name: isLogic
+    signature: 'isLogic(): boolean'
+    returns: bool
+    description: >-
+      Whether its methods are flowcharts of the system's logic: an Orchestrator, Supervisor or Actor
+      (or a Specialist until it is retired)
+  - name: holdsState
+    signature: 'holdsState(): boolean'
+    returns: bool
+    description: 'Whether it owns domain or runtime state between calls: a Store, Index, Supervisor or Actor'
+  - name: isRetired
+    signature: 'isRetired(): boolean'
+    returns: bool
+    description: >-
+      Whether its componentType is a retired stereotype (Specialist or Gateway). The rules that
+      judge a stereotype's shape skip it, and retired-stereotypes reports it once, until it is
+      migrated
+  - name: headNoun
+    signature: 'headNoun(): string'
+    returns: string
+    description: >-
+      The last word of the component's id, which names what the component is: the head noun of
+      "pack_store_adapter" is "adapter", and of "credential_write_registry" is "registry".
+      Qualifiers before it name what the component works on, so only the head noun says what it IS.
+  - name: conceptNoun
+    signature: 'conceptNoun(): string'
+    returns: string
+    description: >-
+      The last word of the component's id that does not name a building block: what the component is
+      about, rather than what it is. "pack_store" is about packs, "architecture_diagrams" about
+      diagrams, "cli_packs_adapter" about packs. Empty when every word names a block.
+  - name: designView
+    signature: 'designView(): ComponentSpec'
+    params: []
+    returns: ComponentSpec
+    description: >-
+      This component as the approval sees it: its design with its code linkage, its readiness and
+      volatile metadata left out. That means its externalLinks (an implementation link stands in for
+      a sourcePath and an informative link is documentation; neither can change a design verdict),
+      its status (draft/design/complete is authoring readiness, never what the design says) and
+      createdAt/updatedAt. Every other field stays, including transport, abi and invokedBy. Pure:
+      over the spec's own fields.
+    symbol: componentDesignView
+  - name: entryFor
+    signature: 'entryFor(method: DeclaredInvocation?): DeclaredInvocation?'
+    params:
+      - name: method
+        type: DeclaredInvocation?
+        description: The verb's own declaration, when it has one
+    returns: DeclaredInvocation?
+    description: >-
+      The entry a verb of this Portal has: the verb's own invokedBy when it declares one, else the
+      component's, with the verb's scope taking precedence. None for a non-Portal. Pure
+    symbol: componentEntryFor
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-15T12:23:34.588Z'
+updatedAt: '2026-10-07T22:28:04.027Z'

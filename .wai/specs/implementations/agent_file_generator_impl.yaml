@@ -1,0 +1,56 @@
+id: agent_file_generator_impl
+name: Agent File Generator Implementation
+description: >-
+  src/exporters/generate.ts. Renders once per agent and writes once per target, so N targets cost
+  one render. Its only consumer is `wairon generate`.
+contract: iagent_file_generator
+sourcePath: src/exporters/generate.ts
+methods:
+  - name: generateAll
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For each agent: resolve its template and render its instructions ONCE, then build the
+          export context — the agent, the rendered instructions, the project root, and its execution
+          budget when it carries one. Rendering here rather than inside an exporter is what keeps N
+          targets at one render, and what stops two exporters rendering different text for the same
+          agent
+        type: local
+      - stepNumber: 2
+        description: For each target the project configures, find the exporter that serves it
+        type: call
+        targetComponent: exporter_resolver
+        targetMethod: getExporter
+      - stepNumber: 3
+        description: >-
+          Hand that exporter the context and let it write, collecting what each wrote and whether it
+          changed. Which of the three runs is decided by the resolved handle, not by anything named
+          here — the polymorphism is the point of the seam and is why no call step can name the
+          exporter
+        type: local
+      - stepNumber: 4
+        description: Answer with one summary per agent, each carrying its results across every target
+        type: return
+        outcome: generated
+  - name: resolveExpectedOutputPaths
+    narrative:
+      - stepNumber: 1
+        description: For every agent and every configured target, find the exporter that serves it
+        type: call
+        targetComponent: exporter_resolver
+        targetMethod: getExporter
+      - stepNumber: 2
+        description: >-
+          Ask each where it WOULD write, without rendering instructions or touching a file, and
+          collect the absolute paths into a set
+        type: local
+      - stepNumber: 3
+        description: >-
+          Answer with the set — the files wairon owns. A file under a target directory that is not
+          in it was written by something else, and pruning it would be destroying somebody else's
+          work
+        type: return
+        outcome: resolved
+status: complete
+createdAt: '2026-09-20T19:46:45.566Z'
+updatedAt: '2026-09-20T19:50:45.467Z'

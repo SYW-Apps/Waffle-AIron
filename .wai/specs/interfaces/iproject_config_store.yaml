@@ -1,0 +1,83 @@
+id: iproject_config_store
+name: Project Config Store Interface
+description: >-
+  Read-through holding of one project's configuration. Every read is a read-back of the document
+  through the fs adapter, parsed against the ProjectConfig schema. Keys the schema does not know are
+  round-tripped: they are never dropped by a write, so no path through wairon erases what it cannot
+  express.
+component: project_config_store
+methods:
+  - name: read
+    description: >-
+      Read the configuration: the document parsed against the schema with its defaults applied, or
+      null when the project has no configuration file.
+    signature: 'read(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+    effect: read
+  - name: write
+    description: >-
+      Write the configuration. Known fields come from the given value; every key of the current
+      document the schema does not know is carried over verbatim; and the write is an edit of the
+      file, not a rewrite — every comment, the order of the keys and the quoting of what did not
+      change survive, so a registry save keeps the debt register's carried-group comments byte for
+      byte. A configuration that fails the schema is refused before anything is written.
+    signature: 'write(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+    effect: write
+  - name: exists
+    description: Whether the project has a configuration file.
+    signature: 'exists(): bool'
+    returns: bool
+    params: []
+    effect: read
+  - name: declares
+    description: >-
+      Whether the document sets a top-level or dotted field explicitly (for example
+      `extensions.useGlobalPacks`), as opposed to the schema supplying its default.
+    signature: 'declares(field: string): bool'
+    returns: bool
+    params:
+      - name: field
+        type: string
+    effect: read
+  - name: readField
+    description: >-
+      The raw value at a top-level or dotted path of the document (for example `paths.specsDir`),
+      read before any schema parsing, or undefined when the document or the path is absent. Lets a
+      read that must work on a configuration the schema rejects still reach one field.
+    signature: 'readField(field: string): any'
+    returns: any
+    params:
+      - name: field
+        type: string
+    effect: read
+  - name: rewriteScalars
+    description: >-
+      Replace the named scalars of the document in its TEXT and change nothing else. The document is
+      written by people as well as by wairon — its comments say why each carried group exists and
+      how many findings it holds — and a write through the parsed document drops every one of them.
+      Each scalar is located by walking its path through the block structure, checked to hold
+      `from`, and rewritten in its own quoting (plain stays plain where plain reads the same); line
+      endings are kept. The edited text is parsed again and must equal the document with exactly
+      those values changed. A layout this cannot address precisely — a flow collection, a multi-line
+      scalar — or a scalar holding anything but `from` is refused naming the path, and nothing is
+      written. A dry run does all of it and writes nothing, so a caller can prove the edit before
+      its first write. No edits writes nothing.
+    signature: 'rewriteScalars(edits: list<ScalarEdit>, dryRun?: bool): void'
+    returns: void
+    params:
+      - name: edits
+        type: list<ScalarEdit>
+        description: The scalars to replace, each by path, current value and new value
+      - name: dryRun
+        type: bool
+        description: Prove the edit and write nothing
+        optional: true
+    effect: write
+status: complete
+createdAt: '2026-09-13T10:50:08.266Z'
+updatedAt: '2026-10-04T10:19:19.983Z'

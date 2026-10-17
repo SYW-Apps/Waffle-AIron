@@ -1,0 +1,17 @@
+id: project_repository
+name: Project Repository
+description: >-
+  Facade for hosted-project records and their isolated roots — promoted to a real Repository under
+  the option F registry-taxonomy ruling. Reads (list, authorization-narrowed resolveRoot) go to the
+  project index, writes (create with root allocation, remove) to the project write registry, both
+  over the read-through project record store.
+subsystem: sdd_host
+componentType: Repository
+owns:
+  - project_store
+  - project_write_registry
+  - project_index
+dependsOn: []
+status: complete
+createdAt: '2026-07-04T12:33:43.673Z'
+updatedAt: '2026-09-17T16:34:38.404Z'

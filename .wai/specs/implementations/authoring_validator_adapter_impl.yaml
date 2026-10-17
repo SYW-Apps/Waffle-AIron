@@ -1,0 +1,55 @@
+id: authoring_validator_adapter_impl
+name: Authoring Validator Adapter Implementation
+description: >-
+  sdd_authoring's client hop into sdd_validator, in a module of its own: identity re-exports of the
+  validator portal. The seam imports this module, so its calls into the validator land here.
+contract: iauthoring_validator_adapter
+sourcePath: src/core/adapters/authoring-validator.ts
+methods:
+  - name: validateComponentCandidate
+    narrative:
+      - stepNumber: 1
+        description: Call validateComponentCandidate on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateComponentCandidate
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the search to the validator portal; an empty test-root list answers empty rather
+          than throwing, because naming the tests must never be the thing that fails a write
+        type: call
+        targetComponent: validator_portal
+        targetMethod: findTestsReferencing
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: implementsProblem
+  - name: introducedFindings
+    narrative:
+      - stepNumber: 1
+        description: Call introducedFindings on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: introducedFindings
+  - name: validateProject
+    narrative:
+      - stepNumber: 1
+        description: Call validateProject on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: validateProject
+  - name: listRules
+    narrative:
+      - stepNumber: 1
+        description: Call listRules on validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: listRules
+status: complete
+createdAt: '2026-09-18T21:13:03.714Z'
+updatedAt: '2026-10-09T17:09:39.031Z'

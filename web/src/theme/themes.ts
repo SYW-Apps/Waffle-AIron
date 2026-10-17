@@ -1,4 +1,4 @@
-import { adjustLightness, findClosestAccessibleColor, mixHex, rgbaFromHex, rgbTriplet, rotateHex } from './colorUtils';
+import { adjustLightness, colorToHex, findClosestAccessibleColor, mixHex, rgbaFromHex, rgbTriplet, rotateHex } from './colorUtils';
 
 /**
  * Configurable theme engine adapted from the SYW Apps web shell. A theme is a
@@ -12,6 +12,45 @@ import { adjustLightness, findClosestAccessibleColor, mixHex, rgbaFromHex, rgbTr
 export type AppearanceMode = 'system' | 'light' | 'dark' | 'high-contrast';
 export type ResolvedMode = Exclude<AppearanceMode, 'system'>;
 
+/** Every `--wairon-*` variable the engine emits (the theme builder's editable surface). */
+export const THEME_VARIABLE_NAMES = [
+  '--wairon-page-bg',
+  '--wairon-app-bg',
+  '--wairon-panel-bg',
+  '--wairon-panel-bg-strong',
+  '--wairon-panel-bg-soft',
+  '--wairon-panel-bg-hover',
+  '--wairon-header-bg',
+  '--wairon-sidebar-bg',
+  '--wairon-menu-bg',
+  '--wairon-section-bg',
+  '--wairon-primary',
+  '--wairon-primary-strong',
+  '--wairon-primary-contrast',
+  '--wairon-primary-rgb',
+  '--wairon-secondary',
+  '--wairon-secondary-rgb',
+  '--wairon-accent',
+  '--wairon-brand-text-bg',
+  '--wairon-text',
+  '--wairon-text-muted',
+  '--wairon-text-subtle',
+  '--wairon-text-inverse',
+  '--wairon-border',
+  '--wairon-border-strong',
+  '--wairon-border-muted',
+  '--wairon-shadow',
+  '--wairon-shell-shadow',
+  '--wairon-focus-ring',
+  '--wairon-ok',
+  '--wairon-warn',
+  '--wairon-bad',
+] as const;
+
+export type ThemeVariableName = (typeof THEME_VARIABLE_NAMES)[number];
+export type ThemeVariableMap = Partial<Record<ThemeVariableName, string>>;
+export type ThemeModeVariableMap = Partial<Record<ResolvedMode, ThemeVariableMap>>;
+
 export interface ThemeOption {
   id: string;
   label: string;
@@ -19,6 +58,24 @@ export interface ThemeOption {
   /** swatches[0] is the primary the palette derives from. */
   swatches: [string, string, string];
   defaultMode: ResolvedMode;
+}
+
+/**
+ * A user-authored theme (theme builder, persisted in localStorage). Where the
+ * reference SYW builder stores a full computed-style snapshot and re-derives on
+ * top of it, wairon's palette is 100% derived from the primary — so a custom
+ * theme stores SPARSE overrides instead: resolution is derive(primary, mode) →
+ * `variables` (all modes) → `modeVariables[mode]`. Every edit therefore wins
+ * over derivation, and untouched tokens keep adapting per mode.
+ */
+export interface CustomTheme extends ThemeOption {
+  custom: true;
+  variables: ThemeVariableMap;
+  modeVariables?: ThemeModeVariableMap;
+}
+
+export function isCustomTheme(theme: ThemeOption): theme is CustomTheme {
+  return (theme as CustomTheme).custom === true;
 }
 
 export const THEME_OPTIONS: ThemeOption[] = [
@@ -55,8 +112,13 @@ export const APPEARANCE_OPTIONS: { id: AppearanceMode; label: string }[] = [
 export const DEFAULT_THEME_ID = 'waffler';
 export const DEFAULT_APPEARANCE: AppearanceMode = 'dark';
 
-export function getThemeOption(id: string): ThemeOption {
-  return THEME_OPTIONS.find((t) => t.id === id) ?? THEME_OPTIONS[0];
+/** Built-ins + the user's custom themes: the full picker list. */
+export function buildThemeOptions(customThemes: CustomTheme[] = []): ThemeOption[] {
+  return [...THEME_OPTIONS, ...customThemes];
+}
+
+export function getThemeOption(id: string, customThemes: CustomTheme[] = []): ThemeOption {
+  return buildThemeOptions(customThemes).find((t) => t.id === id) ?? THEME_OPTIONS[0];
 }
 
 /** Resolve 'system' to the OS preference; other modes pass through. */
@@ -138,13 +200,150 @@ export function deriveThemeVariables(primary: string, mode: ResolvedMode): Recor
   };
 }
 
+/** The full variable map for a theme in a mode: derivation for built-ins, plus
+ *  the sparse override layers for custom themes. The `-rgb` companions and the
+ *  accessible primary-contrast are recomputed from the FINAL colors so direct
+ *  edits of primary/secondary stay coherent. */
+export function resolveThemeVariables(theme: ThemeOption, mode: ResolvedMode): Record<string, string> {
+  if (!isCustomTheme(theme)) return deriveThemeVariables(theme.swatches[0], mode);
+  const overrides: ThemeVariableMap = { ...theme.variables, ...(theme.modeVariables?.[mode] ?? {}) };
+  const primary = colorToHex(overrides['--wairon-primary'] ?? theme.swatches[0], THEME_OPTIONS[0].swatches[0]);
+  const vars: Record<string, string> = { ...deriveThemeVariables(primary, mode), ...overrides };
+  vars['--wairon-primary-rgb'] = rgbTriplet(colorToHex(vars['--wairon-primary'], primary));
+  vars['--wairon-secondary-rgb'] = rgbTriplet(colorToHex(vars['--wairon-secondary'], rotateHex(primary, 180)));
+  if (!overrides['--wairon-primary-contrast']) {
+    vars['--wairon-primary-contrast'] = findClosestAccessibleColor('#ffffff', colorToHex(vars['--wairon-primary'], primary), 4.5);
+  }
+  return vars;
+}
+
 /** Compute + apply a theme's variables to the document root and stamp data-mode. */
-export function applyTheme(themeId: string, appearance: AppearanceMode): void {
-  const theme = getThemeOption(themeId);
+export function applyTheme(themeId: string, appearance: AppearanceMode, customThemes: CustomTheme[] = []): void {
+  const theme = getThemeOption(themeId, customThemes);
   const mode = resolveMode(appearance);
-  const vars = deriveThemeVariables(theme.swatches[0], mode);
+  const vars = resolveThemeVariables(theme, mode);
   const root = document.documentElement;
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   root.dataset.mode = mode;
-  root.dataset.theme = themeId;
+  root.dataset.theme = theme.id;
+}
+
+/* ── Custom-theme lifecycle (theme builder) ─────────────────────────────── */
+
+export function generateCustomThemeId(): string {
+  const id =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `custom:${id}`;
+}
+
+/** Start a custom theme from any theme. Because built-ins are pure derivations
+ *  of their primary swatch, seeding swatches (+ any existing overrides when the
+ *  source is itself custom) reproduces the source look exactly — no
+ *  computed-style snapshot needed (the reference builder's approach, which
+ *  would freeze one mode's values across all modes). */
+export function createCustomThemeFrom(source: ThemeOption, mode: ResolvedMode): CustomTheme {
+  return normalizeCustomTheme({
+    id: generateCustomThemeId(),
+    label: `${source.label} Custom`,
+    description: 'Locally stored custom palette.',
+    swatches: [...source.swatches] as [string, string, string],
+    defaultMode: mode,
+    custom: true,
+    variables: isCustomTheme(source) ? { ...source.variables } : {},
+    modeVariables: isCustomTheme(source)
+      ? (Object.fromEntries(
+          Object.entries(source.modeVariables ?? {}).map(([m, v]) => [m, { ...v }]),
+        ) as ThemeModeVariableMap)
+      : {},
+  });
+}
+
+export function createCustomThemeCopy(theme: CustomTheme): CustomTheme {
+  return normalizeCustomTheme({
+    ...theme,
+    id: generateCustomThemeId(),
+    label: `${theme.label} Copy`,
+    swatches: [...theme.swatches] as [string, string, string],
+    variables: { ...theme.variables },
+    modeVariables: Object.fromEntries(
+      Object.entries(theme.modeVariables ?? {}).map(([m, v]) => [m, { ...v }]),
+    ) as ThemeModeVariableMap,
+  });
+}
+
+const stripDerivedCompanions = (variables: ThemeVariableMap): ThemeVariableMap => {
+  const next = { ...variables };
+  // Auto-derived from their color at resolve time — never stored.
+  delete next['--wairon-primary-rgb'];
+  delete next['--wairon-secondary-rgb'];
+  for (const key of Object.keys(next) as ThemeVariableName[]) {
+    if (!next[key]) delete next[key];
+  }
+  return next;
+};
+
+/** Drop derived companions + empty values and re-sync swatches from the
+ *  effective primary/secondary/accent so pickers and the canvas bridge follow
+ *  edits automatically. */
+export function normalizeCustomTheme(theme: CustomTheme): CustomTheme {
+  const variables = stripDerivedCompanions(theme.variables ?? {});
+  const primary = colorToHex(variables['--wairon-primary'] ?? theme.swatches?.[0], THEME_OPTIONS[0].swatches[0]);
+  const swatches: [string, string, string] = [
+    primary,
+    colorToHex(variables['--wairon-secondary'], rotateHex(primary, 180)),
+    colorToHex(variables['--wairon-accent'], rotateHex(primary, 120)),
+  ];
+  const modeVariables = Object.fromEntries(
+    Object.entries(theme.modeVariables ?? {})
+      .map(([m, v]) => [m, stripDerivedCompanions(v ?? {})])
+      .filter(([, v]) => Object.keys(v as ThemeVariableMap).length > 0),
+  ) as ThemeModeVariableMap;
+  return { ...theme, custom: true, swatches, variables, modeVariables };
+}
+
+/** Tolerantly coerce a persisted (possibly hand-edited or stale) payload into a
+ *  clean custom-theme list; anything unusable is silently dropped. */
+export function sanitizeCustomThemes(value: unknown): CustomTheme[] {
+  if (!Array.isArray(value)) return [];
+  const themes: CustomTheme[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const raw = entry as Partial<CustomTheme> & { variables?: unknown; modeVariables?: unknown };
+    if (typeof raw.id !== 'string' || !raw.id.startsWith('custom:')) continue;
+    const pickVars = (v: unknown): ThemeVariableMap => {
+      if (!v || typeof v !== 'object') return {};
+      const out: ThemeVariableMap = {};
+      for (const name of THEME_VARIABLE_NAMES) {
+        const val = (v as Record<string, unknown>)[name];
+        if (typeof val === 'string' && val) out[name] = val;
+      }
+      return out;
+    };
+    const modeVariables: ThemeModeVariableMap = {};
+    if (raw.modeVariables && typeof raw.modeVariables === 'object') {
+      for (const m of ['light', 'dark', 'high-contrast'] as ResolvedMode[]) {
+        const v = (raw.modeVariables as Record<string, unknown>)[m];
+        if (v) modeVariables[m] = pickVars(v);
+      }
+    }
+    const swatches = Array.isArray(raw.swatches) ? raw.swatches.filter((s): s is string => typeof s === 'string') : [];
+    themes.push(
+      normalizeCustomTheme({
+        id: raw.id,
+        label: typeof raw.label === 'string' && raw.label ? raw.label : 'Custom theme',
+        description: typeof raw.description === 'string' ? raw.description : '',
+        swatches: [swatches[0] ?? THEME_OPTIONS[0].swatches[0], swatches[1] ?? '', swatches[2] ?? ''],
+        defaultMode:
+          raw.defaultMode === 'light' || raw.defaultMode === 'dark' || raw.defaultMode === 'high-contrast'
+            ? raw.defaultMode
+            : 'dark',
+        custom: true,
+        variables: pickVars(raw.variables),
+        modeVariables,
+      }),
+    );
+  }
+  return themes;
 }

@@ -6,13 +6,16 @@ description: >-
   that made a shared real repository unsafe).
 contract: igit_adapter
 sourcePath: src/git/adapter.ts
+injectedParams:
+  - token
 methods:
   - name: clone
     narrative:
       - stepNumber: 1
         description: >-
-          Run git clone of the remote (at branch) into the bound project directory, using
-          WAIRON_GIT_TOKEN
+          Run git clone of the remote (at branch) into the bound project directory, the INJECTED
+          token — resolved and handed in by whoever wires the clone up, none for a public remote —
+          put into an https remote so origin carries it
         type: local
   - name: fetch
     narrative:
@@ -52,13 +55,15 @@ methods:
       - stepNumber: 1
         description: Run `git status --porcelain -- <subpath>` and report true when it prints nothing
         type: local
-lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        Uses the shared secrets utility (utils/secrets.ts) which is spec-homed under sdd_host's
-        secret_registry — placement debt: shared infrastructure candidate, not a sanctioned
-        cross-subsystem reach.
+  - name: excludeLocalFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the repository's `.git/info/exclude`, creating its directory if needed; drop any
+          `.wai/lock.json` line an earlier version wrote, warning that approvals now ship; add
+          `.wai/git.json` if it is not already there; and write the file back, so running it twice
+          changes nothing
+        type: local
 status: complete
 createdAt: '2026-07-04T16:33:28.728Z'
-updatedAt: '2026-07-16T15:25:36.196Z'
+updatedAt: '2026-09-25T22:00:45.016Z'

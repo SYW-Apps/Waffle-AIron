@@ -6,9 +6,26 @@ description: >-
 component: git_orchestrator
 methods:
   - name: enable
-    description: Clone + set up the working branch + persist config.
-    signature: 'enable(remote: string, branch: string): void'
+    description: >-
+      Clone + set up the working branch + persist config. The clone authenticates with the token the
+      caller handed in, passed straight to the adapter's clone; credentialRef is only recorded. Only
+      container-local files (git.json) are kept out of commits: the approval record .wai/lock.json
+      is committed with the rest of .wai/, so an approval reaches the remote, and an exclusion of it
+      written by an earlier version is removed with a warning.
+    signature: 'enable(remote: string, branch: string, token: string?, credentialRef?: string): void'
     returns: void
+    params:
+      - name: remote
+        type: string
+      - name: branch
+        type: string
+      - name: token
+        type: string?
+        description: The resolved credential the clone presents; null for a public remote
+      - name: credentialRef
+        type: string
+        description: Recorded in the config for status; never resolved here
+        optional: true
   - name: disable
     description: Clear the git-backing config.
     signature: 'disable(): void'
@@ -19,16 +36,18 @@ methods:
     returns: void
   - name: publish
     description: >-
-      Commit ONLY the scoped subpath (default .wai/), push the working branch, and produce the
-      compare URL; no-op when not git-backed or when the scoped path is clean.
-    signature: 'publish(message: string, subpath: string): GitPublish'
+      Commit ONLY the scoped pathspecs (default ['.wai/']) in one commit, push the working branch,
+      and produce the compare URL; no-op when not git-backed or when every scoped path is clean. A
+      hosted member commits through its family root's repository with its own <path>/.wai/ pathspec;
+      a family migration publishes every touched project's pathspec in one commit.
+    signature: 'publish(message: string, subpaths?: list<string>): GitPublish'
     returns: GitPublish
     params:
       - name: message
         type: string
-      - name: subpath
-        type: string
-        description: Staging scope relative to the repo root; defaults to .wai/.
+      - name: subpaths
+        type: list<string>
+        description: Staging pathspecs relative to the repo root; defaults to ['.wai/'].
         optional: true
   - name: status
     description: >-
@@ -41,15 +60,15 @@ methods:
     description: >-
       Persist the periodic-sync setting (interval + skip-if-clean) into the project's git-backing
       config; rejects when the project is not git-backed.
-    signature: 'configureSync(periodicSyncMinutes: number, skipIfClean: boolean): void'
+    signature: 'configureSync(periodicSyncMinutes?: int, skipIfClean?: bool): void'
     returns: void
     params:
       - name: periodicSyncMinutes
-        type: number
+        type: int
         optional: true
       - name: skipIfClean
-        type: boolean
+        type: bool
         optional: true
 status: complete
 createdAt: '2026-07-04T16:31:53.451Z'
-updatedAt: '2026-07-16T15:24:20.921Z'
+updatedAt: '2026-10-04T10:28:21.715Z'

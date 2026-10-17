@@ -1,0 +1,304 @@
+id: iheuristic_rules
+name: Heuristic Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules give advisory
+  judgements on size, naming and technology fit.
+component: heuristic_rules
+methods:
+  - name: couplingHealth
+    description: >-
+      Rule coupling-health. Two subsystems depending on each other is a real architectural
+      commitment (deployment affinity, backpressure, scaling coupling). It is allowed but must be
+      acknowledged with a trustedLinks declaration on either side, stating the reason (e.g. a
+      latency fast lane that bypasses the bus). A trustedLink on the SOURCE subsystem additionally
+      licenses its direct edges into the peer without the client-Adapter shim; the published-Portal
+      target requirement stays either way. Also flags components whose dependsOn fan-out suggests a
+      god component.
+    signature: 'couplingHealth(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MUTUAL_SUBSYSTEM_DEPENDENCY
+        severity: warning
+        summary: Subsystems depend on each other without a declared trusted link
+      - code: INVALID_TRUSTED_LINK
+        severity: error
+        summary: trustedLinks references a non-existent subsystem
+      - code: UNUSED_TRUSTED_LINK
+        severity: warning
+        summary: trustedLinks declares a peer no dependency actually reaches
+      - code: GOD_COMPONENT
+        severity: warning
+        summary: >-
+          Component with excessive dependency fan-out; not reported on a routing table, which
+          reaches every collaborator it has only through single hand-offs
+  - name: narrativeLanguageConstructs
+    description: >-
+      Rule narrative-language-constructs. Narratives must describe flows the declared target
+      language can express: steps using constructs the language lacks (e.g. exceptions in Rust/Go,
+      do-while in Python) are flagged with the idiomatic alternative. Set targetLanguage on the
+      system (L0) or override per subsystem (L1).
+    signature: 'narrativeLanguageConstructs(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: LANGUAGE_FOREIGN_FLOW
+        severity: warning
+        summary: Narrative flow step uses a construct the target language does not have
+  - name: technologyBinding
+    description: >-
+      Rule technology-binding. Only the stereotypes that sit at a technology seam
+      (Adapter/Store/Registry/Index, Observer — the edge block that subscribes to a messaging
+      technology — and a Portal, the transport seam, which binds the framework that serves its
+      endpoints) should bind a technology directly: an L4 that declares `technologies` on logic has
+      no swap seam. A Portal binding a technology an Adapter, Store, Registry, Index or Observer of
+      the tree also binds is reaching past its own seam into theirs, and is reported. No hardcoded
+      vendor lists — only declared tokens are policed, so the rule never fires on a tree that
+      doesn't opt in.
+    signature: 'technologyBinding(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TECH_ON_LOGIC_COMPONENT
+        severity: warning
+        summary: >-
+          Technology bound by a stereotype that sits at no technology seam, or a Portal binding a
+          technology a data-layer stereotype binds
+  - name: technologyBoundaries
+    description: >-
+      Rule technology-boundaries. Technology stays behind its owning boundary: an L4 that declares
+      `technologies` (e.g. [mysql]) makes its component's ownership tree the technology's home.
+      References outside that tree are leakage, and L3 contract identifiers must stay
+      intent-language — the contract is the swap seam, so the vendor name is wrong even on the
+      owning component's own interface. A word in prose is not a binding: the PROSE of a technology
+      seam (an Adapter, Store, Registry or Index, or an Observer subscribing to a messaging
+      technology — the stereotypes that may bind a technology at all) — its component description,
+      its contract's descriptions and its implementations' descriptions, intents and step prose —
+      names the technology about its own realization ("in memory now, Redis later"), so it is not
+      leakage; its identifiers (id, name, dependsOn, owns, basePath, a step's call target, a source
+      file) still are, and every surface of any other stereotype still is. A technology is matched
+      by its name, or — when it declares `matches` because its name is also an ordinary word of the
+      tree (a package named after the file format it reads) — by those tokens alone. Two
+      declarations of one technology are one home whichever notation each is written in: a component
+      binding it as a bare name and one binding it as `{name, matches}` are both inside it, even
+      when one form's tokens police nothing.
+    signature: 'technologyBoundaries(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TECH_LEAKAGE
+        severity: warning
+        summary: Technology referenced outside its owning boundary
+      - code: VENDOR_NAME_IN_CONTRACT
+        severity: warning
+        summary: Technology name in L3 contract identifiers
+  - name: namingConventions
+    description: >-
+      Rule naming-conventions. Enforces naming conventions (casing styles or regular expressions)
+      for subsystem, component, interface, type (differentiating entities and value-objects),
+      method, variables/parameters, fields, and constants names/IDs, plus stereotype-specific naming
+      patterns. A method name is judged by naming_rule_config.methodCasingFor the subsystem's
+      effective targetLanguage: the configured methods casing when set, else the language's own
+      convention, so a Rust tree is snake_case without configuring anything, and the authoring and
+      rename tools accept exactly what this rule accepts. A contract that implements another
+      project's extension point (`implements`) takes the names of the methods it implements — and of
+      their parameters — from the producer, whose language they are spelled in: those methods, on
+      the contract and on its implementations, are exempt from the casing rule, and the rename tools
+      accept them.
+    signature: 'namingConventions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: NAMING_CONVENTION_VIOLATION
+        severity: warning
+        summary: Item name or ID does not match the configured casing pattern or regex
+      - code: STEREOTYPE_NAMING_VIOLATION
+        severity: warning
+        summary: Component name or ID does not match stereotype suffix/prefix/regex rules
+      - code: INVALID_NAMING_PATTERN
+        severity: error
+        summary: Configured naming pattern is not a known casing style or valid regular expression
+  - name: complexityAndMetadata
+    description: >-
+      Rule complexity-and-metadata. Enforces metadata documentation completeness (checking if
+      descriptions are missing or too short) and structural complexity caps (limits on methods per
+      interface, parameters per method, dependencies per component, and components per subsystem)
+      configured globally or in architectural profiles. A narrative's own length and shape are
+      judged by narrative-complexity.
+    signature: 'complexityAndMetadata(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_DESCRIPTION
+        severity: warning
+        summary: Required description field is missing or empty
+      - code: DESCRIPTION_TOO_SHORT
+        severity: warning
+        summary: Description is shorter than the configured minimum length
+      - code: EXCESSIVE_METHODS
+        severity: warning
+        summary: Interface declares more methods than the configured limit
+      - code: EXCESSIVE_METHOD_PARAMS
+        severity: warning
+        summary: Interface method declares more parameters than the configured limit
+      - code: EXCESSIVE_DEPENDENCIES
+        severity: warning
+        summary: >-
+          Component has more dependencies than the configured limit; not reported on a routing
+          table, which reaches every collaborator it has only through single hand-offs
+      - code: EXCESSIVE_SUBSYSTEM_COMPONENTS
+        severity: warning
+        summary: Subsystem has more direct components than the configured limit
+  - name: narrativeComplexity
+    description: >-
+      Rule narrative-complexity. Judges a narrative on two independent axes: the cognitive band its
+      shape earns, from branching and nesting, and the number of steps it lists. A flat list of
+      registrations is long but linear; a deeply nested guard is short but severe. Each axis warns
+      above its configured level, and reports an error only where a maximum is configured.
+    signature: 'narrativeComplexity(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: NARRATIVE_COMPLEXITY
+        severity: warning
+        summary: 'Narrative''s cognitive band is above the configured level (default: above moderate)'
+      - code: NARRATIVE_COMPLEXITY_OVER_MAX
+        severity: error
+        summary: Narrative's cognitive band is above the configured maximum band
+      - code: EXCESSIVE_NARRATIVE_STEPS
+        severity: warning
+        summary: Method implementation contains more narrative steps than the configured limit (default 25)
+      - code: NARRATIVE_STEPS_OVER_MAX
+        severity: error
+        summary: Narrative step count is above the configured hard maximum
+  - name: namingDiscipline
+    description: >-
+      Rule naming-discipline. A name says what a thing is and never repeats itself: a component's
+      head noun names its own block, generic role words say nothing, a method does not repeat its
+      component's head noun, and a component with one method is not merely that method's name.
+      Adapters and Portals are exempt from the repetition check, because a forwarder's method
+      mirrors the command or route it exposes.
+    signature: 'namingDiscipline(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISLEADING_BLOCK_WORD
+        severity: warning
+        summary: Component's head noun names a building block that is not its componentType
+      - code: GENERIC_COMPONENT_NAME
+        severity: warning
+        summary: >-
+          Component name or id uses a generic role word that says nothing (manager, helper, utils,
+          handler, service)
+      - code: METHOD_REPEATS_COMPONENT
+        severity: warning
+        summary: >-
+          Method name repeats its component's head noun; not reported on Adapter or Portal
+          forwarders
+      - code: COMPONENT_IS_ITS_ONLY_METHOD
+        severity: warning
+        summary: >-
+          Component with a single method is named after that method — fold it into its caller, or
+          name it for its responsibility
+  - name: methodCohesion
+    description: >-
+      Rule method-cohesion. An Orchestrator's methods share collaborators; when they split into
+      groups that call no component in common, the component holds more than one responsibility.
+      Reported only where two or more groups each hold two or more methods, so a single specialized
+      method is not a finding — and never on a pure forwarder, whose every narrated method is a
+      single hand-off and whose responsibility therefore lives in what it forwards to.
+    signature: 'methodCohesion(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INCOHESIVE_METHODS
+        severity: warning
+        summary: >-
+          Orchestrator's methods form two or more groups of two or more that share no called
+          component
+  - name: signatureSourceSuggestions
+    description: >-
+      Rule signature-source-suggestions. A Repository facade method is pure 1:1 forwarding to an
+      owned member by doctrine (facade-forwarding), so its signature IS the member's: where its
+      params (name, type, optional marker, order) and returns equal the owned member method it
+      forwards to, it could name that method as its signatureFrom, and the reference can never be
+      wrong. Suggested only where the adoption would be legal: the member method names no source of
+      its own (no chain). Nothing else is suggested: another forwarder — a Portal restating an
+      Orchestrator, a client Adapter restating a remote Portal — is often a public surface that
+      should stay deliberately decoupled from an internal signature, so wairon does not suggest
+      coupling them. Adoption is opt-in, so this is a notice, and ONE per facade contract, the
+      restating methods being the units it covers.
+    signature: 'signatureSourceSuggestions(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: SIGNATURE_SOURCE_AVAILABLE
+        severity: notice
+        summary: >-
+          A Repository facade's methods restate exactly the owned member methods they forward to and
+          could name them as their signatureFrom
+  - name: removableForwarder
+    description: >-
+      Rule removable-forwarder. An Orchestrator whose every narrated method is a single hand-off
+      (one call or dispatch step, and a return) is a forwarder. Doctrine often requires one — a
+      Portal never depends on an Adapter, so the Orchestrator between them is where the two shapes
+      are translated — and such a forwarder is never reported. When every modelled caller could
+      legally call the forwarded target directly, though, the hop adds nothing doctrine asks for:
+      reported as a warning, to remove the hop or keep it deliberately with a reasoned lint.allow.
+      Legal means the doctrine family's own verdict on the edge the caller would need — the
+      entry-point, data-layer, dependency-class, subsystem-boundary and member-visibility
+      judgements, the Portal write shortcut and the Supervisor shared-data bound on the forwarded
+      method (each with its own reading of an untagged method), a pack profile's allowedEdges, and
+      pack forbid-edge assertions — so one caller that could not make that edge makes the forwarder
+      required. Silent on a forwarder no modelled caller reaches (the unused rules own that), on one
+      a register step, an invokedBy or a subsystem lifecycle entry reaches (callers outside the
+      narratives cannot be judged), and on one a caller reaches through a method that carries no
+      narrative.
+    signature: 'removableForwarder(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: REMOVABLE_FORWARDER
+        severity: warning
+        summary: >-
+          Orchestrator only forwards, and every caller could legally call the target directly —
+          remove the hop, or keep it deliberately with a lint.allow reason
+    previousNames:
+      - iheuristic_rules.removableForwarders
+status: complete
+createdAt: '2026-09-14T06:08:59.720Z'
+updatedAt: '2026-10-16T17:39:28.575Z'

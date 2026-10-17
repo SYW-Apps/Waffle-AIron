@@ -1,0 +1,21 @@
+kind: value-object
+id: open_api_render_context
+name: OpenApiRenderContext
+description: >-
+  What an OpenAPI rendering knows beyond the snapshot: the pinned snapshot of each declared
+  external, where an `alias::name` in a schema resolves (rendered as the component `<alias>.<id>`,
+  with the types it names in turn), and the version the project declares in its package manifest,
+  for info.version.
+fields:
+  - name: externals
+    type: map<string, SurfaceSnapshot>
+    description: Each declared external's pinned snapshot, by alias
+    optional: true
+  - name: version
+    type: string
+    description: The project's declared version (package.json, Cargo.toml or pyproject.toml)
+    optional: true
+methods: []
+sourcePath: src/core/openapi.ts
+createdAt: '2026-10-07T22:12:17.131Z'
+updatedAt: '2026-10-07T22:12:50.029Z'

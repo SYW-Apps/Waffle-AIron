@@ -1,0 +1,30 @@
+id: imigration_validator_adapter
+name: Migration Validator Client Adapter Interface
+description: 'sdd_migrations'' hop into the validator portal: the family run at the bound root.'
+component: migration_validator_adapter
+methods:
+  - name: validateFamily
+    description: >-
+      The run at the bound root (validator_portal.validateFamily); called with memberDepth 0, the
+      owner's gate of that project alone. The family migration orchestrator runs it on an unwritten
+      copy of each project the plan changes and on the rehearsal copy, to name what the plan's
+      result will report that the project does not report now.
+    signature: 'validateFamily(options: ValidationOptions): ValidationResult'
+    returns: ValidationResult
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The run's switches
+    effect: read
+  - name: listRules
+    description: >-
+      The rule set at the bound root (validator_portal.listRules): what tells a finding that judges
+      code from one that judges the design, so a rehearsal — a copy holding .wai trees only, with no
+      code beside them — compares only the design half.
+    signature: 'listRules(): list<SddRule>'
+    returns: list<SddRule>
+    params: []
+    effect: read
+status: complete
+createdAt: '2026-10-08T18:56:05.440Z'
+updatedAt: '2026-10-08T20:10:12.209Z'

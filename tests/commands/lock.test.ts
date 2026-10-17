@@ -4,19 +4,25 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   loadComponentSpec,
   collectPromotableSpecs,
   invalidateSpecCache,
+  readLockState,
+  specPathsInScope,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { diffAgainstApproval } from '../../src/core/approval.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { surfaceRepository } from '../../src/core/surfaces.js';
+import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
-import type { ValidationResult } from '../../src/core/validation.js';
+import { readLockRecordAt } from '../../src/core/lockfile.js';
+import { computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +32,7 @@ import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/mode
 //      lockTree): freeze every in-scope spec through the core barrel and
 //      persist the commit-scoped lock record; a declined confirmation changes
 //      nothing.
-//   2. The cli_runner workflow (runLock in src/cli/index.ts), driven through
+//   2. The cli_runner workflow (runLock in src/cli/runner.ts), driven through
 //      the REAL CLI: the as-complete gate refuses an invalid tree, and a
 //      successful lock regenerates the family/sibling surfaces into every
 //      chained child — and only then.
@@ -85,7 +91,7 @@ function buildLockableProject(rootDir: string, withEndpoint = true): void {
     createdAt: now,
     updatedAt: now,
   });
-  saveSubsystemSpec(subsystem('core-sub', {
+  saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
@@ -124,43 +130,91 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
       valid: true,
       issues: [{ severity: 'warning', code: 'SOME_WARNING', message: 'w' }],
     };
-    const record = await runLock({ yes: true }, gate);
+    const record = await runLock({ yes: true }, gate, computeGateStateId());
 
     expect(record).not.toBeNull();
     expect(record!.status).toBe('ready');
-    expect(record!.stateId.algorithm).toBe('sha256');
+    // The GATE flavour, not the content one: a lock certifies that these specs
+    // passed THIS gate, so the governing doctrine is part of the frozen identity
+    // and a later pack change invalidates the lock by state mismatch.
+    expect(record!.stateId.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
     expect(record!.stateId.digest).toMatch(/^[0-9a-f]{64}$/);
-    expect(record!.lockedBy).toMatch(/^local/);
-    expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1 });
+    // …and it is exactly the validator's gate identity, the one readLockState
+    // is later handed to compare against.
+    const { algorithm, digest } = computeGateStateId();
+    expect(record!.stateId).toEqual({ algorithm, digest });
+    // Whoever git says is authoring here, or user@host when git has no identity —
+    // never a bare OS username, which names nobody in CI.
+    expect(['git', 'os']).toContain(record!.lockedBy.source);
+    expect(record!.lockedBy.id).toBeTruthy();
+    expect(record!.validationResult).toEqual({ valid: true, errors: 0, warnings: 1, notices: 0 });
 
-    // Everything froze on disk...
+    // Approving writes NOTHING into the spec tree — the status ratchet that
+    // used to rewrite every file is gone, and the approval rides in this one
+    // record as a digest per spec.
     invalidateSpecCache();
-    expect(collectPromotableSpecs()).toHaveLength(0);
-    expect(loadComponentSpec('gateway-portal')?.status).toBe('complete');
+    expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
+    expect(Object.keys(record!.specs!).some((p) => p.includes('gateway-portal'))).toBe(true);
+
     // ...and the record persisted to .wai/lock.json.
     const onDisk = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
     expect(onDisk.stateId).toEqual(record!.stateId);
     expect(onDisk.status).toBe('ready');
   });
 
-  it('--subsystem narrows the freeze to in-scope specs', async () => {
+  it('records the project id it approved — the defaulted one when project.yaml declares none', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
     buildLockableProject(rootDir);
-    saveSubsystemSpec(subsystem('aux-sub'));
+
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    // 'lockable-system' declares no id, so it answers to its name slugified —
+    // exactly what a later validate compares project.yaml against.
+    expect(record!.projectId).toBe('lockable-system');
+    const onDisk = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
+    expect(onDisk.projectId).toBe('lockable-system');
+  });
+
+  it("--subsystem is refused as a FIRST approval: the identity is the whole design's (round 7, tinkerer N3)", async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+    saveSpec('subsystem', subsystem('aux-sub'));
     saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
     invalidateSpecCache();
     setProjectRoot(rootDir);
 
-    const record = await runLock({ yes: true, subsystem: 'core-sub' });
+    await expect(runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId()))
+      .rejects.toThrow(/first approval covers the whole tree/);
+    expect(readLockRecordAt(rootDir)).toBeNull();
+  });
 
-    expect(record).not.toBeNull();
+  it('--subsystem re-approves its scope only while nothing outside it moved, and records what a full lock records', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+    saveSpec('subsystem', subsystem('aux-sub'));
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
     invalidateSpecCache();
-    expect(loadComponentSpec('gateway-portal')?.status).toBe('complete');
-    // Out-of-scope specs stay untouched.
-    expect(loadComponentSpec('aux-orchestrator')?.status).toBe('draft');
-    const leftover = collectPromotableSpecs().map((p) => p.id);
-    expect(leftover).toContain('aux-sub');
-    expect(leftover).toContain('aux-orchestrator');
+    setProjectRoot(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    // A spec OUTSIDE the scope moved: the scope cannot be approved alone.
+    saveComponentSpec({ ...component('aux-orchestrator', 'aux-sub'), description: 'moved outside the scope' });
+    invalidateSpecCache();
+    await expect(runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, computeGateStateId()))
+      .rejects.toThrow(/outside it moved/);
+
+    // Only the scope moved: re-approved, and the record is the whole tree's — the identity agrees.
+    saveComponentSpec(component('aux-orchestrator', 'aux-sub'));
+    saveComponentSpec({ ...loadComponentSpec('gateway-portal')!, description: 'moved inside the scope' });
+    invalidateSpecCache();
+    const captured = computeGateStateId();
+    const record = (await runLock({ yes: true, subsystem: 'core-sub' }, { valid: true, issues: [] }, captured))!;
+    expect(record.stateId.digest).toBe(captured.digest);
+    const approved = Object.keys(readLockRecordAt(rootDir)!.specs!);
+    expect(approved.some((p) => p.includes('gateway-portal'))).toBe(true);
+    expect(approved.some((p) => p.includes('aux-orchestrator'))).toBe(true);
+    invalidateSpecCache();
+    expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
   it('a declined confirmation returns null and changes nothing', async () => {
@@ -172,7 +226,7 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     promptMock.mockResolvedValueOnce({ confirmed: false });
     try {
       (process.stdin as unknown as { isTTY: boolean }).isTTY = true;
-      const record = await runLock({});
+      const record = await runLock({}, { valid: true, issues: [] }, computeGateStateId());
       expect(record).toBeNull();
     } finally {
       (process.stdin as unknown as { isTTY: boolean | undefined }).isTTY = isTTY;
@@ -181,11 +235,47 @@ describe('cli_lock_adapter (lockTree): freeze + commit-scoped record', () => {
     expect(promptMock).toHaveBeenCalledTimes(1);
     invalidateSpecCache();
     expect(collectPromotableSpecs()).toHaveLength(promotableBefore);
+    // Declining records no approval — and since the approval IS the lock
+    // record, that is the same statement twice over.
     expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
+    expect(readLockRecordAt(rootDir)).toBeNull();
+  });
+
+  it('says "First approval" only when no record exists — an older record without per-spec digests is named as replaced', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-adapter-'));
+    buildLockableProject(rootDir);
+
+    const said = (): string => {
+      const text = vi.mocked(console.log).mock.calls.map((c) => c.map(String).join(' ')).join('\n');
+      vi.mocked(console.log).mockClear();
+      return text;
+    };
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // No record yet: a true first approval.
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      expect(said()).toContain('First approval of this tree');
+
+      // A record written before per-spec digests existed (an upgrade from an older wairon).
+      const lockFile = path.join(rootDir, '.wai', 'lock.json');
+      const older = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+      delete older.specs;
+      older.validatorVersion = '5.1.0';
+      fs.writeFileSync(lockFile, JSON.stringify(older, null, 2));
+
+      await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+      const second = said();
+      expect(second).not.toContain('First approval');
+      expect(second).toContain('Replacing the approval on record');
+      expect(second).toContain('wairon 5.1.0');
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });
 
-describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces', () => {
+describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery into children', () => {
   let rootDir: string;
 
   afterEach(() => {
@@ -197,33 +287,42 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces',
   const runCli = (cwd: string, ...args: string[]) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'lock', '--yes', ...args], { cwd, timeout: 180_000 });
 
-  it('a locked parent ships fresh surfaces: chained children get regenerated snapshots', async () => {
+  it('a locked parent writes nothing into a chained child — the child pins its own surfaces', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
     buildLockableProject(rootDir);
-    createChainedSubsystem(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     invalidateSpecCache();
     setProjectRoot(null);
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const surfacesDir = path.join(kidDir, '.wai', 'surfaces');
 
+    // A parent lock used to push (children × subsystems) snapshots into every
+    // child's working tree, on the parent's schedule. It pushes nothing now.
     const { stdout } = await runCli(rootDir, '--no-recursive');
-
-    expect(stdout).toContain('Regenerated the family/sibling surfaces');
-    const surfacesDir = path.join(rootDir, 'packages', 'kid', '.wai', 'surfaces');
-    expect(fs.existsSync(surfacesDir)).toBe(true);
-    expect(fs.readdirSync(surfacesDir).length).toBeGreaterThan(0);
+    expect(stdout).not.toContain('delivered surface(s)');
+    expect(fs.existsSync(surfacesDir)).toBe(false);
     const record = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
     expect(record.status).toBe('ready');
-  }, 180_000);
 
-  it('does NOT regenerate child surfaces when the tree mounts no chained children', async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
-    buildLockableProject(rootDir);
+    // The child imports its own (stage 3 retired `surface pin`; a child's own
+    // .wai/surfaces holds whatever it imported)…
+    runWithProjectRoot(kidDir, () => surfaceRepository.saveSnapshot(SurfaceSnapshotSchema.parse({
+      projectName: 'root-system', origin: 'generated', stateId: 'sha256:pinned', generatedAt: new Date().toISOString(), interfaces: [], types: [],
+    })));
     setProjectRoot(null);
+    invalidateSpecCache();
+    const pinned = fs.readdirSync(surfacesDir).map((f) => {
+      const p = path.join(surfacesDir, f);
+      return { p, bytes: fs.readFileSync(p, 'utf8'), mtime: fs.statSync(p).mtimeMs };
+    });
 
-    const { stdout } = await runCli(rootDir);
-
-    expect(stdout).not.toContain('Regenerated the family/sibling surfaces');
-    expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(true);
-    expect(stdout).toContain('Lock record written');
+    // …and a later parent lock leaves the pin exactly as the child committed it.
+    const second = await runCli(rootDir, '--no-recursive');
+    expect(second.stdout).not.toContain('delivered surface(s)');
+    for (const { p, bytes, mtime } of pinned) {
+      expect(fs.readFileSync(p, 'utf8')).toBe(bytes);
+      expect(fs.statSync(p).mtimeMs).toBe(mtime);
+    }
   }, 180_000);
 
   it('refuses to lock a tree that does not validate as complete, changing nothing', async () => {
@@ -246,5 +345,234 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, child surfaces',
     invalidateSpecCache();
     expect(collectPromotableSpecs().length).toBeGreaterThan(0);
     expect(loadComponentSpec('gateway-portal')?.status).toBe('draft');
+  }, 180_000);
+});
+
+// ---------------------------------------------------------------------------
+// readLockState — the ONE authority for "is this project locked?".
+//
+// Staleness used to be compared in exactly one place (the hosted promote gate)
+// while the project config view answered from the mere EXISTENCE of a record. So a
+// project whose specs changed after locking still reported itself locked, claiming
+// a freeze that did not hold — the same time-of-check gap the lock exists to close,
+// reintroduced in the reporting surface. Every caller now shares this verdict.
+// ---------------------------------------------------------------------------
+
+describe('readLockState (the shared lock verdict)', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  function project(): void {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockstate-'));
+    buildLockableProject(rootDir);
+  }
+
+  it('unlocked when no record exists', () => {
+    project();
+    expect(readLockState(computeGateStateId()).state).toBe('unlocked');
+  });
+
+  it('locked immediately after a lock, against the CURRENT gate identity', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    const { state, record, current } = readLockState(computeGateStateId());
+    expect(state).toBe('locked');
+    // The verdict is decided against the gate flavour, and they agree.
+    expect(current.algorithm).toBe('sha256+design-2+doctrine+inputs+members');
+    expect(record!.stateId.digest).toBe(current.digest);
+  });
+
+  it('judges the record against the identity it is handed, hashing nothing itself', async () => {
+    project();
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    expect(readLockState(record!.stateId).state).toBe('locked');
+
+    // Any other identity, however it was computed, is not the one the record froze.
+    const other = { algorithm: record!.stateId.algorithm, digest: '0'.repeat(64) };
+    const verdict = readLockState(other);
+    expect(verdict.state).toBe('stale');
+    expect(verdict.current).toEqual(other);
+  });
+
+  it('STALE once the spec tree changes after locking — the case that used to report "locked"', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    expect(readLockState(computeGateStateId()).state).toBe('locked');
+
+    // Any edit moves the tree past what was frozen.
+    saveComponentSpec(component('gateway-portal', 'core-sub', {
+      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      status: 'complete',
+    } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    const after = readLockState(computeGateStateId());
+    expect(after.state).toBe('stale');
+    // The record survives: staleness is a verdict ABOUT it, not its deletion, so a
+    // caller can prompt for a re-lock rather than pretend it never happened.
+    expect(after.record).not.toBeNull();
+    expect(after.record!.stateId.digest).not.toBe(after.current.digest);
+  });
+
+  it('re-locking after the edit restores the freeze', async () => {
+    project();
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    saveComponentSpec(component('gateway-portal', 'core-sub', {
+      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      status: 'complete',
+    } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    expect(readLockState(computeGateStateId()).state).toBe('stale');
+
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    expect(readLockState(computeGateStateId()).state).toBe('locked');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `wairon lock-check` — the merge gate (cli_lock_adapter.checkApproval, driven
+// through cli_runner.runLockCheck).
+//
+// Every case here runs the REAL CLI as a subprocess and asserts its EXIT CODE,
+// because the exit code IS the feature: a GitHub job fails on it and nothing
+// else. Asserting checkApproval()'s return value would leave the one thing CI
+// reads untested.
+//
+// The gate is OPTIONAL BY CONSTRUCTION, and these tests are what holds that:
+// only `stale` refuses at the default strictness, and `stale` cannot occur in a
+// project that never locked. An existing project upgrading into this command
+// therefore cannot suddenly fail.
+// ---------------------------------------------------------------------------
+
+describe('cli_runner.runLockCheck (real CLI): the approval merge gate', () => {
+  let rootDir: string;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
+  });
+
+  /** Run `wairon lock-check` for real and report code + streams (never throws). */
+  const check = (cwd: string, ...args: string[]): Promise<{ code: number; out: string }> =>
+    execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'lock-check', ...args], { cwd, timeout: 180_000 })
+      .then(
+        ({ stdout, stderr }) => ({ code: 0, out: `${stdout}${stderr}` }),
+        (e: Error & { code?: number; stdout?: string; stderr?: string }) =>
+          ({ code: typeof e.code === 'number' ? e.code : 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` }),
+      );
+
+  it('a repository with no spec tree says so and passes — it is not "unapproved"', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-bare-'));
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('No SDD spec tree here');
+    // Never mistaken for a project that simply forgot to approve.
+    expect(res.out).not.toContain('lock.json is absent');
+  }, 180_000);
+
+  it('…and --strict refuses it, because --strict asks for an approved design', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-bare-'));
+
+    const res = await check(rootDir, '--strict');
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('No SDD spec tree here');
+    expect(res.out).toContain('wairon init');
+  }, 180_000);
+
+  it('a tree nobody ever approved PASSES with a notice — the opt-in seam', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-unlocked-'));
+    buildLockableProject(rootDir);
+    setProjectRoot(null);
+    expect(fs.existsSync(path.join(rootDir, '.wai', 'lock.json'))).toBe(false);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('No approval on record');
+    // The notice has to say how to turn the gate on, or nobody ever does.
+    expect(res.out).toContain('wairon lock');
+    expect(res.out).toContain('--strict');
+  }, 180_000);
+
+  it('…and --strict turns that same tree into a failure', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-unlocked-'));
+    buildLockableProject(rootDir);
+    setProjectRoot(null);
+
+    const res = await check(rootDir, '--strict');
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('No approval on record');
+  }, 180_000);
+
+  it('an approved tree passes, naming the approval it passed on', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-locked-'));
+    buildLockableProject(rootDir);
+    const record = await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+    setProjectRoot(null);
+
+    for (const args of [[], ['--strict']]) {
+      const res = await check(rootDir, ...args);
+      expect(res.code, res.out).toBe(0);
+      expect(res.out).toContain('is the approved design');
+      // The evidence, not just the verdict: a CI log has to be readable later.
+      expect(res.out).toContain(record!.lockedAt);
+    }
+  }, 180_000);
+
+  it('a design that moved past its approval REFUSES, and names the remedy', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-stale-'));
+    buildLockableProject(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    // The exact incident this exists for: the design changes on the branch and
+    // nobody re-approves it before the merge.
+    saveComponentSpec(component('late-orchestrator', 'core-sub'));
+    invalidateSpecCache();
+    setProjectRoot(null);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(1);
+    expect(res.out).toContain('changed after it was approved');
+    // A gate that fails without naming its fix gets bypassed rather than satisfied.
+    expect(res.out).toContain('wairon lock');
+    expect(res.out).toContain('.wai/lock.json');
+
+    // --strict cannot make it any more refused than it already is.
+    expect((await check(rootDir, '--strict')).code).toBe(1);
+  }, 180_000);
+
+  it('a whitespace-only edit does NOT refuse — the gate is on the design, not the bytes', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lockcheck-whitespace-'));
+    buildLockableProject(rootDir);
+    await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
+
+    // Reformat a spec file without changing one thing it says.
+    const specFile = specPathsInScope('core-sub').find((p) => p.includes('gateway-portal'))!;
+    const before = fs.readFileSync(specFile, 'utf8');
+    fs.writeFileSync(specFile, `\n${before}\n\n`);
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+
+    // Since lock format 3 the per-spec digests are DESIGN digests too: a
+    // reformatted file is not a changed spec, and the gate StateId has not
+    // moved either.
+    expect(diffAgainstApproval()!.changed).not.toContain(
+      path.relative(rootDir, specFile).split(path.sep).join('/'),
+    );
+    setProjectRoot(null);
+
+    const res = await check(rootDir);
+    expect(res.code, res.out).toBe(0);
+    expect(res.out).toContain('is the approved design');
   }, 180_000);
 });

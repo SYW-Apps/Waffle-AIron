@@ -8,7 +8,14 @@ componentType: Portal
 owns: []
 dependsOn:
   - surface_orchestrator
-portalType: Custom
+  - external_declarations
+transport: InProcess
+invokedBy:
+  kind: entry
+  caller: >-
+    Tools and scripts that import the @wairon/cli package's library entry (main dist/index.js) and
+    export the design, export or import surfaces, read the stored snapshots, or pin and read
+    declared externals in their own process
 status: complete
 createdAt: '2026-07-10T23:12:10.221Z'
-updatedAt: '2026-07-11T09:04:02.163Z'
+updatedAt: '2026-10-06T19:13:36.170Z'

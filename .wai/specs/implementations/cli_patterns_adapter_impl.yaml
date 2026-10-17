@@ -11,7 +11,7 @@ methods:
       - stepNumber: 1
         description: Load the merged extension set via the core portal.
         type: call
-        targetComponent: core_portal
+        targetComponent: extension_portal
         targetMethod: loadProjectExtensions
       - stepNumber: 2
         description: >-
@@ -21,4 +21,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:09.297Z'
-updatedAt: '2026-07-14T20:23:49.552Z'
+updatedAt: '2026-09-25T17:33:37.075Z'

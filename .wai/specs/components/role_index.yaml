@@ -6,6 +6,8 @@ componentType: Index
 owns: []
 dependsOn:
   - role_store
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-15T20:26:55.347Z'
-updatedAt: '2026-07-15T23:30:41.297Z'
+updatedAt: '2026-09-17T20:37:01.115Z'

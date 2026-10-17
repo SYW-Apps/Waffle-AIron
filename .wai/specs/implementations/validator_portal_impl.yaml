@@ -5,13 +5,13 @@ contract: ivalidator_portal
 sourcePath: src/core/validation.ts
 simPath: tests/core/validation.test.ts
 methods:
-  - name: validateSddTree
+  - name: validateProject
     narrative:
       - stepNumber: 1
-        description: Forward validateSddTree call to spec validator
+        description: Forward validateProject to the spec validator
         type: call
         targetComponent: spec_validator
-        targetMethod: validateSddTree
+        targetMethod: validateProject
   - name: validateRegistry
     narrative:
       - stepNumber: 1
@@ -41,6 +41,118 @@ methods:
         targetComponent: spec_validator
         targetMethod: listRules
     detail: calls-only
+  - name: validateComponentCandidate
+    narrative:
+      - stepNumber: 1
+        description: Forward the candidate check to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: validateComponentCandidate
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward the gate identity computation to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: computeGateStateId
+  - name: findTestsReferencing
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator's test search
+        type: call
+        targetComponent: spec_validator
+        targetMethod: findTestsReferencing
+  - name: builtinProfileIds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProfileIds
+  - name: builtinProjectKinds
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: builtinProjectKinds
+  - name: validateFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward validateFamily to the family validator's run
+        type: call
+        targetComponent: family_validator
+        targetMethod: run
+  - name: measurePackImpact
+    narrative:
+      - stepNumber: 1
+        description: Forward measurePackImpact to the pack impact workflow
+        type: call
+        targetComponent: pack_impact
+        targetMethod: measure
+  - name: measurePackDoctrine
+    narrative:
+      - stepNumber: 1
+        description: Forward measurePackDoctrine to the pack impact workflow
+        type: call
+        targetComponent: pack_impact
+        targetMethod: doctrine
+  - name: familyApprovals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's pin tree
+        type: call
+        targetComponent: family_validator
+        targetMethod: approvals
+  - name: familyRelations
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's relation health
+        type: call
+        targetComponent: family_validator
+        targetMethod: relations
+  - name: adviseExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward adviseExternals to the family validator's advisory pass
+        type: call
+        targetComponent: family_validator
+        targetMethod: advise
+  - name: reachModel
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator's reach model
+        type: call
+        targetComponent: family_validator
+        targetMethod: reachModel
+  - name: unpinnedExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator
+        type: call
+        targetComponent: family_validator
+        targetMethod: unpinned
+  - name: unrecordedExternalUses
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator
+        type: call
+        targetComponent: family_validator
+        targetMethod: unrecorded
+  - name: implementsProblem
+    narrative:
+      - stepNumber: 1
+        description: Forward to the family validator
+        type: call
+        targetComponent: family_validator
+        targetMethod: implementsProblem
+  - name: introducedFindings
+    narrative:
+      - stepNumber: 1
+        description: Forward the in-tree candidate judgement to the spec validator
+        type: call
+        targetComponent: spec_validator
+        targetMethod: introducedFindings
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-18T22:34:35.289Z'
+updatedAt: '2026-10-08T18:50:38.862Z'

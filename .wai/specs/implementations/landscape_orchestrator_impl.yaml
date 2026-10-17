@@ -4,19 +4,21 @@ description: >-
   Hosted-instance landscape ADMINISTRATION workflows: organization-unit administration, project
   placement, public-surface snapshot refresh, cross-project relation management (visibility-gated
   once organization units exist), and landscape graph generation. Authorization resolves through the
-  permission resolver — project:admin over the relevant unit/project for writes, project:read
-  visible scopes for reads (actionable scopes plus their ancestor breadcrumb) — never stored grants.
+  permission rules — project:admin over the relevant unit/project for writes, project:read visible
+  scopes for reads (actionable scopes plus their ancestor breadcrumb) — never stored grants.
   Cross-project reads never touch target private specs. Audit appends are best-effort.
   Consumer-facing discovery/exchange workflows live on the surface exchange orchestrator.
 contract: ilandscape_orchestrator
 sourcePath: src/server/landscape.ts
+injectedParams:
+  - cfg
 methods:
-  - name: generateLandscape
+  - name: generate
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Gather all organization units (also used to resolve the caller's landscape-read scope)
@@ -33,7 +35,7 @@ methods:
           Compute the caller's project:read visible scopes over the organization tree (also gating
           the landscape read)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 5
         description: If the caller has no actionable project/unit scope, deny
@@ -48,7 +50,7 @@ methods:
       - stepNumber: 7
         description: Gather all hosted project records
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 8
         description: Gather all cross-project relations
@@ -84,23 +86,24 @@ methods:
           Project the in-scope units, projects, placements, snapshots, and relations into a
           LandscapeGraphModel
         type: call
-        targetComponent: landscape_diagram_specialist
-        targetMethod: buildGraph
+        targetComponent: landscape_graph
+        targetMethod: build
       - stepNumber: 14
         description: Return the landscape graph model scoped to the caller
         type: return
         outcome: the landscape graph model
+    symbol: generateLandscape
   - name: placeProject
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target unit (placement.unitId)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -128,30 +131,46 @@ methods:
         type: throw
         error: the target organization unit does not exist
       - stepNumber: 8
+        description: Read the project's hosted family, to tell a member from a family root
+        type: call
+        targetComponent: project_repository
+        targetMethod: family
+      - stepNumber: 9
+        description: Is the project a member (its family root is another record)?
+        type: branch
+        condition: the project's family root is another record
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Reject: a member takes its units from its family root — a placement of its own would not
+          be a rung of its permission chain, so it is refused rather than silently ignored
+        type: throw
+        error: A member takes its units from its family root; place the family root instead
+      - stepNumber: 11
         description: Place the hosted project in the organization unit
         type: call
         targetComponent: organization_repository
         targetMethod: placeProject
-      - stepNumber: 9
+      - stepNumber: 12
         description: Append a redacted audit event without letting a failure fail the placement
         type: try
-        endStep: 11
+        endStep: 14
         catches:
           - error: audit append failure
-            step: 12
-      - stepNumber: 10
+            step: 15
+      - stepNumber: 13
         description: Append the redacted project.place audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 11
+      - stepNumber: 14
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 16
+      - stepNumber: 15
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         description: Return the stored project placement
         type: return
         outcome: the stored project placement
@@ -161,12 +180,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -181,7 +200,7 @@ methods:
       - stepNumber: 5
         description: Resolve and bind the target project's isolated root within the principal's authorized set
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: resolveRoot
       - stepNumber: 6
         description: Bind the resolved target project root for host-core reads
@@ -192,46 +211,58 @@ methods:
         targetComponent: host_core_adapter
         targetMethod: computeStateId
       - stepNumber: 8
-        description: Read the target project's L0 system spec at the bound root
+        description: Read the target project's L0 system spec at the bound root (its name labels the snapshot)
         type: call
         targetComponent: host_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 9
-        description: Read the target project's L1 subsystem specs at the bound root
+        description: >-
+          Read the target project's resolved export table through the core adapter — every public
+          name bound to its canonical target, with its audience — instead of the raw L0 YAML
         type: call
         targetComponent: host_core_adapter
-        targetMethod: loadSubsystemSpecs
+        targetMethod: resolveProjectExports
       - stepNumber: 10
         description: >-
-          Leniently read the L0 publicInterfaces, resolve each against its subsystem public
-          interface, and assemble the redacted ProjectPublicSurfaceSnapshot (never private
-          components/narratives/roots/secrets)
-        type: local
+          Read the target project's interface specs through the core adapter, for the method NAMES
+          and endpoint paths of each exported contract
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadInterfaceSpecs
       - stepNumber: 11
+        description: >-
+          Redact each exported component into a PublicInterfaceSummary — its public name, display
+          name, transport kind, audience (the resolver's default, instance, when the entry declares
+          none), version, stability and details, the method NAMES and endpoint paths of its contract
+          (narrowed to the exported interface when it narrows) and the non-builtin type names its
+          signatures reference — and assemble the ProjectPublicSurfaceSnapshot (never component ids,
+          signatures, narratives, roots or secrets)
+        type: local
+      - stepNumber: 12
         description: Replace the target project's redacted public-surface snapshot in the repository
         type: call
         targetComponent: public_surface_repository
         targetMethod: replaceSnapshot
-      - stepNumber: 12
+      - stepNumber: 13
         description: Append a redacted audit event without letting a failure fail the refresh
         type: try
-        endStep: 14
+        endStep: 15
         catches:
           - error: audit append failure
-            step: 15
-      - stepNumber: 13
+            step: 16
+      - stepNumber: 14
         description: Append the redacted surface.refresh audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 14
+      - stepNumber: 15
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 16
-      - stepNumber: 15
+        toStep: 17
+      - stepNumber: 16
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the stored public-surface snapshot
         type: return
         outcome: the stored public-surface snapshot
@@ -241,14 +272,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the relation's source project
           (relation.sourceProjectId)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective project:admin value is not yes, deny
@@ -277,14 +308,14 @@ methods:
           Resolve the SOURCE project's surface-visibility view over the unit graph (postures,
           exposeTo grants)
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: resolveVisibility
       - stepNumber: 8
         description: >-
           Point-check whether the target project (relation.targetPublicInterface.projectId) is
           visible to the source
         type: call
-        targetComponent: visibility_specialist
+        targetComponent: visibility_rules
         targetMethod: isVisible
       - stepNumber: 9
         description: If the target project's surface is not visible to the source, deny
@@ -333,30 +364,43 @@ methods:
           unknown target public interface — a relation must target a system public interface present
           in the target's public-surface snapshot
       - stepNumber: 17
+        description: >-
+          Find a stored relation with this id, so an update keeps its original creator and creation
+          time
+        type: call
+        targetComponent: project_relation_repository
+        targetMethod: list
+      - stepNumber: 18
+        description: >-
+          Record the creator server-side: a new relation gets createdBy = the caller's subject and
+          createdAt = now; an update keeps the stored relation's createdBy and createdAt. The body's
+          values for either are ignored
+        type: local
+      - stepNumber: 19
         description: Create or update the validated cross-project relation
         type: call
         targetComponent: project_relation_repository
         targetMethod: upsert
-      - stepNumber: 18
+      - stepNumber: 20
         description: Append a redacted audit event without letting a failure fail the relation write
         type: try
-        endStep: 20
+        endStep: 22
         catches:
           - error: audit append failure
-            step: 21
-      - stepNumber: 19
+            step: 23
+      - stepNumber: 21
         description: Append the redacted relation.upsert audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 20
+      - stepNumber: 22
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 22
-      - stepNumber: 21
+        toStep: 24
+      - stepNumber: 23
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 22
+      - stepNumber: 24
         description: Return the stored cross-project relation
         type: return
         outcome: the stored cross-project relation
@@ -366,7 +410,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List cross-project relations to resolve the relation being removed by its id
@@ -381,7 +425,7 @@ methods:
       - stepNumber: 4
         description: Resolve the caller's project:admin permission over the relation's source project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 5
         description: If the effective project:admin value is not yes, deny
@@ -429,12 +473,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Compute the caller's project:read visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
         description: If the caller has no actionable project scope, deny
@@ -466,7 +510,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the target unit by id (to distinguish an update from a create)
@@ -479,7 +523,7 @@ methods:
           updating, its parent unit when creating a child; an instance-admin may create top-level
           units)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: If the effective project:admin value is not yes, deny
@@ -546,4 +590,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-09T22:10:36.787Z'
-updatedAt: '2026-07-18T23:48:26.026Z'
+updatedAt: '2026-10-03T17:08:24.720Z'

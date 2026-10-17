@@ -1,0 +1,44 @@
+kind: value-object
+id: component_rename
+name: ComponentRename
+description: >-
+  What renaming a component changed: the specs moved to new ids, and the specs whose references were
+  rewritten
+fields:
+  - name: renamed
+    type: list<SpecRename>
+    description: >-
+      The component, and each interface and implementation named after it (i<id>, <id>_impl), with
+      its old and new id
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      Ids of the other specs whose references to a renamed id were rewritten — lint allows naming
+      the component included
+    optional: false
+  - name: carried
+    type: list<CarriedRekey>
+    description: >-
+      Every edit the rename made to the debt register (.wai/project.yaml rules.conformance.carried):
+      an entry anchored on a renamed spec, or naming the component in its site or covered units.
+      Empty when the register names none of them
+    optional: false
+  - name: keptPublicNames
+    type: list<string>
+    description: >-
+      The export entries (L0 and L1) whose public name was derived from the renamed component or its
+      moving interface (no `as`), each named by its public name: the rename wrote `as: <that name>`
+      on them, so the published surface and every consumer's pin stay as they were. Empty when no
+      entry derived its name from the rename.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: what the rename would move, rewrite, keep and rekey, with
+      nothing written.
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-09-15T10:51:05.887Z'
+updatedAt: '2026-10-08T08:24:01.948Z'

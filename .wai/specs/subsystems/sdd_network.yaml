@@ -1,0 +1,35 @@
+id: sdd_network
+name: SDD Derived Networking
+description: >-
+  Networking derived from the design, never declared in it. It reads the reach model the validator
+  projects (what reaches each Portal verb, and from where) and turns it into what a team uses to run
+  a system:
+
+  - the allowed-flows matrix, keyed by stable project and component names, narrowed to the modelled
+  callers wherever the family run proves an entry;
+
+  - generated network policy (Kubernetes NetworkPolicy first);
+
+  - network diagrams (Mermaid, and the hosted canvas's network view);
+
+  - a check of observed live flows against the matrix;
+
+  - the explanation of why one flow is allowed.
+
+  Specs hold no address, port or region. Every deployment fact (workload selectors, ports, what
+  outside means) comes from a bindings file the team keeps outside .wai/ and passes at generation
+  time. It holds no state and writes no spec.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - details: >-
+      The derived networking front door, consumed in-process by the CLI (`wairon network
+      flows|policy|diagram|check|why`), the MCP read tools and the hosted canvas's network view.
+    component: network_portal
+    consumers:
+      - sdd_cli
+      - sdd_mcp
+      - sdd_host
+trustedLinks: []
+status: complete
+createdAt: '2026-10-06T13:09:22.380Z'
+updatedAt: '2026-10-06T18:55:24.215Z'

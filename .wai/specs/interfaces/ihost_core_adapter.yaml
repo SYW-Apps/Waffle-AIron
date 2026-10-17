@@ -6,100 +6,100 @@ description: >-
 component: host_core_adapter
 methods:
   - name: provisionProject
-    description: Bootstrap a fresh isolated spec tree at the bound root.
+    description: >-
+      Bootstrap a fresh isolated spec tree at the bound root. Hosted creation passes the hosted
+      project id as the name, so the configuration's id is the hosted project id — slugified, which
+      leaves a hosted id unchanged unless it ends in '-', a character the project-id grammar does
+      not allow at the end.
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
-    description: Compute the current spec-tree StateId.
+    description: >-
+      Compute the current spec-tree CONTENT StateId (used for surface/landscape snapshot stamps,
+      where doctrine is irrelevant).
     signature: 'computeStateId(): StateId'
     returns: StateId
-  - name: readLockRecord
-    description: Read the current lock record, or null.
-    signature: 'readLockRecord(): LockRecord | null'
-    returns: LockRecord | null
   - name: writeLockRecord
     description: Persist a lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec to status complete.
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
-    description: Render the bound project's spec tree into a diagram artifact string.
-    signature: 'renderDiagram(format: string): string'
+    description: >-
+      Render the bound project's spec tree into a diagram artifact string; the canvas draws the
+      relation health passed in.
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
+    params:
+      - name: format
+        type: DiagramFormat
+        description: The format to render
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health for the canvas; omitted, none
+        optional: true
   - name: loadSystemSpec
     description: >-
       Read the bound project's L0 system spec, or null when absent. Forwarded to the core portal;
       used to project a redacted public-surface snapshot.
-    signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    signature: 'loadSystemSpec(): SystemSpec?'
+    returns: SystemSpec?
     params: []
   - name: loadSubsystemSpecs
     description: >-
-      Read the bound project's L1 subsystem specs. Forwarded to the core portal; used to resolve the
-      subsystem public interfaces backing the L0 public surfaces.
-    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+      Read the bound project's L1 subsystem specs. Forwarded to the core portal; used where hosted
+      workflows read a project's subsystems (its chained children, its profiles).
+    signature: 'loadSubsystemSpecs(): list<SubsystemSpec>'
+    returns: list<SubsystemSpec>
     params: []
   - name: buildProjectGraph
     description: >-
       Project the bound project's spec tree into a level-filtered WebGraphModel, forwarded to the
       core portal. Used by the web graph orchestrator to render the project-tier graph for the web
       UI.
-    signature: 'buildProjectGraph(level: number): WebGraphModel'
+    signature: 'buildProjectGraph(level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: level
-        type: number
+        type: int
   - name: globalPacksDir
     description: >-
-      Resolve the server-global instance packs directory (WAIRON_PACKS_DIR), forwarded to the core
-      extension loader.
+      Resolve the server-global instance packs directory (WAIRON_PACKS_DIR), forwarded to the
+      extension portal.
     signature: 'globalPacksDir(): string'
     returns: string
     params: []
   - name: discoverPacks
-    description: >-
-      List the pack refs in a directory (sorted, deterministic), forwarded to the core extension
-      loader.
-    signature: 'discoverPacks(dir: string): string[]'
-    returns: string[]
+    description: List the pack refs in a directory (sorted, deterministic), forwarded to the extension portal.
+    signature: 'discoverPacks(dir: string): list<string>'
+    returns: list<string>
     params:
       - name: dir
         type: string
   - name: loadExtensionPacks
     description: >-
-      Load the given pack refs against a project root into a LoadedExtensions, forwarded to the core
-      extension loader (used by the hosted pack store to probe a pack in isolation).
-    signature: 'loadExtensionPacks(refs: Json, projectRoot: string): LoadedExtensions'
+      Load the given pack refs against a project root into a LoadedExtensions, forwarded to the
+      extension portal (used by the hosted pack store to probe a pack in isolation).
+    signature: 'loadExtensionPacks(refs: list<PackRef>, projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: refs
-        type: Json
+        type: list<PackRef>
       - name: projectRoot
         type: string
   - name: checkDeclarativePack
     description: >-
-      Validate a parsed manifest against the declarative-pack schema; returns the first error
-      message, or null when it is a valid declarative pack.
-    signature: 'checkDeclarativePack(manifest: Json): string | null'
-    returns: string | null
+      Judge a parsed manifest as a declarative pack, forwarded to the extension portal: the first
+      schema error's message, or null when it is one.
+    signature: 'checkDeclarativePack(manifest: any): string?'
+    returns: string?
     params:
       - name: manifest
-        type: Json
-  - name: builtinProfileIds
-    description: >-
-      List the ids of wairon's built-in architectural profiles (backend, frontend-reactive, …),
-      forwarded to the core rules registry — the built-in half of the selectable-profile catalog.
-    signature: 'builtinProfileIds(): string[]'
-    returns: string[]
-    params: []
+        type: any
   - name: resolveContainedProjectPath
     description: >-
-      Resolve a subsystem's projectPath WITHIN the given root through the core containment guard —
-      absolute and '..'-escaping paths rejected. The hosted mount-resolution seam: the project
+      Resolve a member's path WITHIN the given root — a project.yaml `members` entry's path or, for
+      one release, a legacy L1 mount's projectPath — forwarded to the spec tree portal's containment
+      check: absolute and escaping paths refused. The hosted member-resolution seam: the project
       repository never touches core modules directly.
     signature: 'resolveContainedProjectPath(projectRoot: string, projectPath: string): string'
     returns: string
@@ -108,17 +108,201 @@ methods:
         type: string
       - name: projectPath
         type: string
-  - name: builtinProjectKinds
+  - name: readLockState
+    description: Forward to core_portal.readLockState with the gate identity the caller computed now
+    signature: 'readLockState(current: StateId): LockStatus'
+    returns: LockStatus
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
+  - name: exportSpecTree
     description: >-
-      The ids of wairon's built-in COMPOSITE PROJECT KINDS (fullstack, system-of-systems, monorepo)
-      — legal projectType values that are not architectural profiles and carry no profile doctrine
-      of their own, read from the core rules registry's bundled constant. A pure, side-effect-free
-      read, and the counterpart of builtinProfileIds: the hosted profile-application path must
-      recognize a project kind as resolvable-as-is (no contributing pack to adopt) instead of
-      refusing it as an unknown profile.
-    signature: 'builtinProjectKinds(): string[]'
-    returns: string[]
+      Pack the bound project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive with provenance. Forwarded to the core portal.
+    signature: 'exportSpecTree(includeDerived?: bool): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: bool
+        optional: true
+  - name: importSpecTree
+    description: >-
+      Import a .waitree archive into the bound project root under an explicit policy, backing up any
+      tree it replaces. Forwarded to the core portal; the hosted caller always sets the
+      executable-entry refusal, because the archive arrived over the wire.
+    signature: 'importSpecTree(archive: bytes, options: tree_import_options): TreeImportResult'
+    returns: TreeImportResult
+    params:
+      - name: archive
+        type: bytes
+      - name: options
+        type: tree_import_options
+  - name: captureApprovedSpecs
+    description: >-
+      Capture the CURRENT spec tree as approved: one content digest per spec file, keyed by path
+      relative to the project root. A chained child's own specs are excluded. Records a decision;
+      the caller is responsible for having gated it, and persists it on the lock record.
+    signature: 'captureApprovedSpecs(root?: string, scope?: ApprovalScope): map<string, string>'
+    returns: map<string, string>
+    params:
+      - name: root
+        type: string
+        optional: true
+      - name: scope
+        type: ApprovalScope
+        optional: true
+  - name: loadProjectConfig
+    description: >-
+      The bound project's configuration, or null when it has none. Forwarded to the core portal.
+      Hosted pack, policy and profile workflows read it instead of the raw file.
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
     params: []
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name in the bound project's configuration, leaving path references alone;
+      returns whether anything was dropped. Forwarded to the core portal. Used by a hosted pack
+      removal whose match is a by-name selection.
+    signature: 'removePackSelection(packName: string): bool'
+    returns: bool
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`. Forwarded to the core portal.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the profile selection hosted policy applied. Forwarded to the core portal.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy pack path reference (a vendored pack file or folder under .wai/packs/) in
+      the bound project's configuration when that exact reference is absent; returns whether it was
+      added. Forwarded to the core portal. Used by every hosted pack install.
+    signature: 'registerPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+        description: Project-relative pack path reference, e.g. .wai/packs/<name>.yaml or .wai/packs/<name>
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop the legacy pack path reference that matches exactly from the bound project's
+      configuration; returns whether anything was dropped. Forwarded to the core portal. Used by a
+      hosted pack removal whose match is a path reference.
+    signature: 'deregisterPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+        description: The exact project-relative pack path reference to drop
+    guarantees:
+      - idempotent
+  - name: buildCanvasDataModel
+    description: >-
+      The bound project's canvas model as data, forwarded to the spec tree portal — what the web
+      app's canvas and a share snapshot mount — carrying the relation health passed in.
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health to carry; omitted, none
+        optional: true
+  - name: packEntryRef
+    description: >-
+      The loadable ref for one configured pack entry, or null when a selection does not resolve,
+      forwarded to the extension portal.
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string?'
+    returns: string?
+    params:
+      - name: entry
+        type: PackSelection
+      - name: projectRoot
+        type: string
+  - name: packEntryLabel
+    description: A stable human label for one configured pack entry, forwarded to the extension portal.
+    signature: 'packEntryLabel(entry: PackSelection): string'
+    returns: string
+    params:
+      - name: entry
+        type: PackSelection
+  - name: resolveProjectExports
+    description: >-
+      Read the bound project's resolved L0 export table — every public name bound to its canonical
+      target, with its audience. Forwarded to the core portal; the landscape builds its redacted
+      public-surface snapshot from it.
+    signature: 'resolveProjectExports(): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params: []
+    guarantees:
+      - idempotent
+  - name: loadInterfaceSpecs
+    description: >-
+      Read the bound project's L3 interface specs. Forwarded to the core portal; the landscape reads
+      the method names and endpoint paths of each exported contract from them.
+    signature: 'loadInterfaceSpecs(): list<InterfaceSpec>'
+    returns: list<InterfaceSpec>
+    params: []
+    guarantees:
+      - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Read a parsed manifest as a declarative pack, forwarded to the extension portal: the
+      ExtensionPack the loader would build from it, throwing the first schema error when it is not
+      one. What the hosted previews and policy writes supply as a pack impact candidate's manifest
+      while the pack is not on disk yet.
+    signature: 'parseDeclarativePack(manifest: any): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: any
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description`. Forwarded to the
+      core portal.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
+  - name: migrateReachability
+    description: >-
+      Forward to spec_maintenance_portal.migrateReachability at the bound project root: plan, and
+      with apply write, that project's migration onto the reachability model. Without apply nothing
+      is written. The caller binds the root and must gate on reach itself.
+    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
+    returns: ReachabilityMigrationPlan
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan (true) or only plan it (false)
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-07-24T23:52:27.050Z'
+updatedAt: '2026-10-06T19:59:27.460Z'

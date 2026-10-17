@@ -1,0 +1,22 @@
+id: orders-repo-impl
+name: Orders repo impl
+description: Delegates to the store
+contract: iorders-repo
+methods:
+  - name: put
+    narrative:
+      - stepNumber: 1
+        description: Hand the record to the store
+        type: call
+        targetComponent: orders-store
+        targetMethod: save
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Ask the store for the record
+        type: call
+        targetComponent: orders-store
+        targetMethod: load
+status: complete
+createdAt: '2026-10-17T11:46:27.641Z'
+updatedAt: '2026-10-17T11:46:28.442Z'

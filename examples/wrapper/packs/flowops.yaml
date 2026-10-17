@@ -26,7 +26,3 @@ languages:
     unsupportedFlow:
       doWhile: FlowOps has no do-while — model as a repeater (loopKind for) with a post-check filter on the following module
       jump: FlowOps modules cannot jump arbitrarily — restructure with routers (switch) and filters (branch) so control flow stays a forward pipeline
-    # Builtin-type vocabulary unambiguous to THIS platform. Declaring it
-    # enables the foreign-builtin check both ways (e.g. `Promise` in a
-    # flowops system is flagged as a typescript builtin).
-    foreignBuiltins: [bundle]

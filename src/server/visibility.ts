@@ -5,7 +5,7 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Surface visibility (sdd_host / visibility_specialist) — Phase 7 Stage 2.
+// Surface visibility (sdd_host / visibility_rules) — Phase 7 Stage 2.
 //
 // PURE unit-graph visibility resolution: the visibility sibling of scope.ts.
 // Given the org unit tree (postures + exposeTo grants) and the placements,
@@ -72,7 +72,7 @@ function effectivePosture(unit: OrganizationUnitRecord, unitById: Map<string, Or
 }
 
 /**
- * visibility_specialist.resolveVisibility — pure. Compute the observer
+ * visibility_rules.resolveVisibility — pure. Compute the observer
  * project's visibility view over the instance. An observer with no placements
  * sees nothing (fail-closed: an unplaced project has no organizational
  * standpoint to see FROM).
@@ -150,12 +150,12 @@ export function resolveVisibility(
   };
 }
 
-/** visibility_specialist.isVisible — point check over a resolution. */
+/** visibility_rules.isVisible — point check over a resolution. */
 export function isVisible(resolution: VisibilityResolution, targetProjectId: string): boolean {
   return resolution.visibleProjects.some((v) => v.projectId === targetProjectId);
 }
 
-/** visibility_specialist.audienceDistance — the distance class of a visible target, or null. */
+/** visibility_rules.audienceDistance — the distance class of a visible target, or null. */
 export function audienceDistance(resolution: VisibilityResolution, targetProjectId: string): string | null {
   return resolution.visibleProjects.find((v) => v.projectId === targetProjectId)?.distance ?? null;
 }

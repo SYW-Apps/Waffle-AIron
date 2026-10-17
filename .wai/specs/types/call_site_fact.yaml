@@ -1,0 +1,97 @@
+kind: value-object
+id: call_site_fact
+name: CallSiteFact
+description: >-
+  One call SITE SHAPE inside a named function-like: the invoked name together with how the call was
+  written. Shape is what a pure model can honestly say about a call's ORIGIN — with no type checker,
+  save(x), ledger.save(x), this.store.save(x) and new Ledger(db).save(x) are four different
+  questions, and collapsing them onto the name "save" is what let a call into an unrelated module
+  count as realizing a narrative step. Sites are deduplicated per shape, never counted: the checks
+  that read them ask where a call could land, never how often it was written.
+subsystem: sdd_validator
+fields:
+  - name: name
+    type: string
+    description: 'The invoked name: the identifier of a bare call, the property name of a member call'
+    optional: false
+  - name: member
+    type: bool
+    description: >-
+      True when the call was written as a member access (receiver.name(...)) rather than as a bare
+      identifier
+    optional: false
+  - name: via
+    type: string
+    description: >-
+      The receiver identifier — set only when the receiver is a plain identifier (specs.save() gives
+      "specs"), never for a longer chain or an expression. The one receiver that can be PROVEN, when
+      the name is a namespace import binding whose properties are that module's own exports — and
+      otherwise a receiver to follow past the value it holds, through the type the file ANNOTATES
+      the name with
+    optional: true
+  - name: field
+    type: string
+    description: >-
+      The instance FIELD the receiver is — set when the call was written this.<field>.name(...)
+      (this.store.save() gives "store"), and never together with via. A receiver is read through
+      what only the type checker cares about — a non-null assertion, parentheses, `satisfies`, a
+      cast to a NAMED type — so this.store!.save() is the same shape, while a cast to any or unknown
+      (or an inline shape) says nothing about the value and is not see-through; and a local name the
+      function binds to a field (const s = this.store, const { store } = this, const { store: s } =
+      this) is that field, so s.save() is recorded as this.store.save(). A receiver a pure model can
+      follow past the value it holds, because the class DECLARES the field's type; what that type
+      resolves to is a possible origin, never a proven one
+    optional: true
+  - name: constructed
+    type: string
+    description: >-
+      The CLASS the receiver was constructed from — set only when the call was written new
+      Class(...).name(...) (new ApprovalRegistry(store).create() gives "ApprovalRegistry"), and
+      never together with via or field. Another receiver a pure model can follow, because the code
+      NAMES the class it built: what that name resolves to is a possible origin and never a proven
+      one, since a method the class INHERITS is written in its base's module and not in the
+      constructed class's
+    optional: true
+  - name: from
+    type: string
+    description: >-
+      The file this site was READ in, set only when it is not the file these facts describe — a
+      re-export barrel carries the sites of the function it publishes, and their bare names and
+      receivers resolve in that file's scope, never in the barrel's
+    optional: true
+  - name: returnedBy
+    type: string
+    description: >-
+      The function whose RESULT the receiver is — set only when the call was written
+      fn(...).name(...) with fn a plain identifier (current().updateSpec() gives "current"), and
+      never together with via, field or constructed. A receiver a pure model can follow through what
+      the code writes down about fn's result: the type its return annotation names, or the class its
+      one return statement constructs (source_file_facts.returnTypes). A possible origin and never a
+      proven one, and only where the module that type leads to holds a BODY under the invoked name
+    optional: true
+  - name: enclosingClass
+    type: string
+    description: >-
+      The top-level named class whose own method the call sits in — set only when the call was
+      written this.name(...) directly inside a method, accessor or constructor of that class (an
+      arrow function keeps `this`, a nested function expression rebinds it and records nothing). A
+      receiver a pure model can follow: the class this file declares. A possible origin and never a
+      proven one, since a subclass may override the method, and only where the class holds a body
+      under the invoked name
+    optional: true
+  - name: receiverPath
+    type: list<string>
+    description: >-
+      The receiver written as a CHAIN of property accesses — set only when the call was written
+      this.<field>.<property>...name(...) (this.c.tracker.checkIn() gives ["this", "c", "tracker"])
+      or <name>.<property>...name(...) (deps.tracker.checkIn() gives ["deps", "tracker"]), and never
+      together with via, field, constructed, returnedBy or enclosingClass. The shape
+      constructor-injected collaborators take when they arrive as ONE bag object. Followed link by
+      link through what the code DECLARES each link to be — the root's declared field or annotated
+      type, then each property's declared type on the shape that declares it — and like every
+      receiver past an import binding it is a POSSIBLE origin and never a proven one
+    optional: true
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-09-19T15:29:49.702Z'
+updatedAt: '2026-10-07T10:53:33.460Z'

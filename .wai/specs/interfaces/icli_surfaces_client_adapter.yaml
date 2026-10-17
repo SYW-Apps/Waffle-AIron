@@ -9,8 +9,8 @@ methods:
       OpenAPI document.
     signature: >-
       exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
-      SurfaceSnapshot
-    returns: SurfaceSnapshot
+      SurfaceExportResult
+    returns: SurfaceExportResult
     params:
       - name: maxAudience
         type: string
@@ -34,17 +34,99 @@ methods:
   - name: listSnapshots
     description: Forward list to the surface portal.
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
-  - name: generateChildSnapshots
-    description: Forward child-snapshot generation to the surface portal.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
-  - name: listExternalInterfaces
+    returns: list<SurfaceSnapshot>
+  - name: pinExternals
+    description: Forward to surface_portal.pinExternals.
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: aliases
+        type: list<string>
+        description: The aliases to pin; all when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: Forward to surface_portal.getExternalsStatus.
+    signature: 'getExternalsStatus(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+  - name: listExternals
+    description: Forward to surface_portal.listExternals.
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
+    params: []
+  - name: exportDesign
     description: >-
-      Forward the external-surface discovery (origin, provenance, freshness per vendored snapshot)
-      to the surface portal.
-    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
+      Forward to surface_portal.exportDesign: the bound project's design export, written to outPath
+      when given
+    signature: 'exportDesign(outPath?: string, approval?: DesignApproval): DesignExport'
+    returns: DesignExport
+    params:
+      - name: outPath
+        type: string
+        optional: true
+      - name: approval
+        type: DesignApproval
+        description: The lock-check state decided by checkApproval
+        optional: true
+  - name: declareExternal
+    description: >-
+      Forward to surface_portal.declareExternal: declare one external of the bound project (`wairon
+      externals add`).
+    signature: 'declareExternal(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location, and the optional producer id, ref, dir, use, description, pin and
+          dryRun
+  - name: removeExternal
+    description: >-
+      Forward to surface_portal.removeExternal: remove one external and its pin (`wairon externals
+      remove`).
+    signature: 'removeExternal(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateExternalUse
+    description: >-
+      Forward to surface_portal.updateExternalUse: add and remove `use` imports of one external
+      (`wairon externals use`).
+    signature: 'updateExternalUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and dryRun
+  - name: listConsumers
+    description: >-
+      Forward to surface_portal.listConsumers: the projects that consume this project — the family
+      in reach, and the project roots in the searched folders (`wairon externals consumers [--search
+      <dir>…]`).
+    signature: 'listConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diffSurface
+    description: >-
+      Forward to surface_portal.diffSurface: the public-surface changelog since the last committed
+      approval, a named revision or a saved snapshot (`wairon surface diff`).
+    signature: 'diffSurface(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-07-24T18:14:48.565Z'
+updatedAt: '2026-10-17T16:36:32.737Z'

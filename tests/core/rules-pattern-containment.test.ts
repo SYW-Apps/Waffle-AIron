@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.component('billing-view', 'View');
     proj.activate();
     try {
-      expect(featureIssues(validateSddTree())).toHaveLength(0);
+      expect(featureIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -80,7 +80,7 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.component('billing-form', 'View');
     proj.activate();
     try {
-      expect(featureIssues(validateSddTree())).toHaveLength(0);
+      expect(featureIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -90,7 +90,7 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.component('billing-logic', 'Orchestrator');
     proj.activate();
     try {
-      const found = featureIssues(validateSddTree());
+      const found = featureIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('billing-feature');
     } finally { proj.cleanup(); }
@@ -104,7 +104,7 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.component('billing-view', 'View');
     proj.activate();
     try {
-      expect(featureIssues(validateSddTree())).toHaveLength(1);
+      expect(featureIssues(validateProject())).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -116,7 +116,7 @@ describe('FeatureComponent containment — 1 Orchestrator + 1..N Views', () => {
     proj.component('billing-cache', 'Store', 'durability: ram-projection');
     proj.activate();
     try {
-      expect(featureIssues(validateSddTree())).toHaveLength(1);
+      expect(featureIssues(validateProject())).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 });
@@ -128,7 +128,7 @@ describe('INVALID_OWNED_MEMBER — owns must name existing components', () => {
     proj.component('billing-store', 'Store', 'durability: ram-projection');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'INVALID_OWNED_MEMBER');
+      const found = byCode(validateProject(), 'INVALID_OWNED_MEMBER');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('billing-repo');
       expect(found[0].message).toContain('ghost-store');
@@ -142,7 +142,7 @@ describe('INVALID_OWNED_MEMBER — owns must name existing components', () => {
     proj.component('billing-registry', 'Registry');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INVALID_OWNED_MEMBER')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INVALID_OWNED_MEMBER')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -155,7 +155,7 @@ describe('SHARED_OWNED_MEMBER — a block has exactly one owner', () => {
     proj.component('shared-store', 'Store', 'durability: ram-projection');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'SHARED_OWNED_MEMBER');
+      const found = byCode(validateProject(), 'SHARED_OWNED_MEMBER');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('repo-a');
       expect(found[0].message).toContain('repo-b');
@@ -171,36 +171,34 @@ describe('SHARED_OWNED_MEMBER — a block has exactly one owner', () => {
     proj.component('store-b', 'Store', 'durability: ram-projection');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'SHARED_OWNED_MEMBER')).toHaveLength(0);
+      expect(byCode(validateProject(), 'SHARED_OWNED_MEMBER')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
 
-describe('GATEWAY_CONTAINMENT — a Gateway owns only Portal/Orchestrator/Specialist members', () => {
-  it('flags a Gateway owning a Store (state belongs behind a Repository, not in the gateway)', () => {
+describe('REPOSITORY_CONTAINMENT — a Repository owns Store/Registry/Index/Query/Adapter members', () => {
+  it('accepts a Query member computing reads over its sibling Store', () => {
     const proj = createTempProject();
-    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-cache]');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom');
-    proj.component('edge-cache', 'Store', 'durability: ram-projection');
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, overdue-invoice-query]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.component('overdue-invoice-query', 'Query', 'dependsOn: [billing-store]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'GATEWAY_CONTAINMENT');
-      expect(found).toHaveLength(1);
-      expect(found[0].specId).toBe('edge-gateway');
-      expect(found[0].message).toContain('edge-cache');
-      expect(found[0].message).toContain('type Store');
+      expect(byCode(validateProject(), 'REPOSITORY_CONTAINMENT')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
-  it('stays silent for the sanctioned member set: Portal + Orchestrator + Specialist', () => {
+  it('flags a workflow Orchestrator member, naming it and its type', () => {
     const proj = createTempProject();
-    proj.component('edge-gateway', 'Gateway', 'owns: [edge-portal, edge-orch, edge-mapper]');
-    proj.component('edge-portal', 'Portal', 'portalType: Custom');
-    proj.component('edge-orch', 'Orchestrator');
-    proj.component('edge-mapper', 'Specialist');
+    proj.component('billing-repo', 'Repository', 'owns: [billing-store, dunning-flow]');
+    proj.component('billing-store', 'Store', 'durability: ram-projection');
+    proj.component('dunning-flow', 'Orchestrator');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'GATEWAY_CONTAINMENT')).toHaveLength(0);
+      const found = byCode(validateProject(), 'REPOSITORY_CONTAINMENT');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('billing-repo');
+      expect(found[0].message).toContain('"dunning-flow" of type Orchestrator');
     } finally { proj.cleanup(); }
   });
 });

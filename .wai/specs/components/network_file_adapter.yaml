@@ -1,0 +1,14 @@
+id: network_file_adapter
+name: Network File Adapter
+description: >-
+  Reads the deployment-side inputs a team keeps outside .wai/: the bindings file (YAML; design names
+  to workload selectors, namespaces and ports, and what outside means) and an observed-flow export
+  (CSV or JSON rows already named with the same bindings). A malformed file is refused naming the
+  line, never half-read. It writes nothing: the caller decides where an output goes.
+subsystem: sdd_network
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-06T13:10:08.676Z'
+updatedAt: '2026-10-06T13:10:09.294Z'

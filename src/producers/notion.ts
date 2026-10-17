@@ -1,4 +1,3 @@
-import { resolveSecret } from '../utils/secrets.js';
 import type { DocPage } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -6,6 +5,11 @@ import type { DocPage } from './types.js';
 // "wairon specs" subsection under a parent page via the Notion REST API (raw
 // fetch, no SDK dependency). Idempotent: the subsection is refreshed, sibling
 // content under the parent is never touched.
+//
+// The token is INJECTED: whoever wires this adapter up resolves it and hands it
+// in (the hosted admin plane from its own secret repository, `wairon produce`
+// from --token, the environment or a prompt). This module never asks anyone for
+// a secret by name, and knows nothing of where secrets are stored.
 // ---------------------------------------------------------------------------
 
 const API = 'https://api.notion.com/v1';
@@ -13,18 +17,14 @@ const NOTION_VERSION = '2022-06-28';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function authHeaders(): Record<string, string> {
-  const token = resolveSecret('notion-token');
-  if (!token) {
-    throw new Error('No Notion token — set WAIRON_NOTION_TOKEN or run `wairon host secret set notion-token <secret>`.');
-  }
+function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'Notion-Version': NOTION_VERSION, 'Content-Type': 'application/json' };
 }
 
-async function api(method: string, pathname: string, body?: unknown): Promise<any> {
+async function api(token: string, method: string, pathname: string, body?: unknown): Promise<any> {
   const res = await fetch(`${API}${pathname}`, {
     method,
-    headers: authHeaders(),
+    headers: authHeaders(token),
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
@@ -33,23 +33,24 @@ async function api(method: string, pathname: string, body?: unknown): Promise<an
   return res.json();
 }
 
-export async function sync(page: DocPage, parentPageId: string): Promise<void> {
-  const existing = await findChildPage(parentPageId, page.title);
+export async function sync(token: string, page: DocPage, parentPageId: string): Promise<void> {
+  if (!token) throw new Error('No Notion token — the caller must hand one in.');
+  const existing = await findChildPage(token, parentPageId, page.title);
   let rootId: string;
   if (existing) {
     rootId = existing;
-    await archiveChildren(rootId);
-    await appendBlocks(rootId, bodyToBlocks(page.body));
+    await archiveChildren(token, rootId);
+    await appendBlocks(token, rootId, bodyToBlocks(page.body));
   } else {
-    rootId = await createPage(parentPageId, page.title, bodyToBlocks(page.body));
+    rootId = await createPage(token, parentPageId, page.title, bodyToBlocks(page.body));
   }
-  for (const child of page.children) await createSubtree(rootId, child);
+  for (const child of page.children) await createSubtree(token, rootId, child);
 }
 
-async function findChildPage(parentId: string, title: string): Promise<string | null> {
+async function findChildPage(token: string, parentId: string, title: string): Promise<string | null> {
   let cursor: string | undefined;
   do {
-    const data = await api('GET', `/blocks/${parentId}/children${cursor ? `?start_cursor=${cursor}` : ''}`);
+    const data = await api(token, 'GET', `/blocks/${parentId}/children${cursor ? `?start_cursor=${cursor}` : ''}`);
     for (const block of data.results ?? []) {
       if (block.type === 'child_page' && block.child_page?.title === title) return block.id;
     }
@@ -58,36 +59,36 @@ async function findChildPage(parentId: string, title: string): Promise<string | 
   return null;
 }
 
-async function archiveChildren(pageId: string): Promise<void> {
+async function archiveChildren(token: string, pageId: string): Promise<void> {
   let cursor: string | undefined;
   const ids: string[] = [];
   do {
-    const data = await api('GET', `/blocks/${pageId}/children${cursor ? `?start_cursor=${cursor}` : ''}`);
+    const data = await api(token, 'GET', `/blocks/${pageId}/children${cursor ? `?start_cursor=${cursor}` : ''}`);
     for (const block of data.results ?? []) ids.push(block.id);
     cursor = data.has_more ? data.next_cursor : undefined;
   } while (cursor);
-  for (const id of ids) await api('PATCH', `/blocks/${id}`, { archived: true });
+  for (const id of ids) await api(token, 'PATCH', `/blocks/${id}`, { archived: true });
 }
 
-async function createPage(parentId: string, title: string, blocks: any[]): Promise<string> {
-  const page = await api('POST', '/pages', {
+async function createPage(token: string, parentId: string, title: string, blocks: any[]): Promise<string> {
+  const page = await api(token, 'POST', '/pages', {
     parent: { page_id: parentId },
     properties: { title: { title: [textNode(title)] } },
     children: blocks.slice(0, 100),
   });
-  if (blocks.length > 100) await appendBlocks(page.id, blocks.slice(100));
+  if (blocks.length > 100) await appendBlocks(token, page.id, blocks.slice(100));
   return page.id;
 }
 
-async function appendBlocks(pageId: string, blocks: any[]): Promise<void> {
+async function appendBlocks(token: string, pageId: string, blocks: any[]): Promise<void> {
   for (let i = 0; i < blocks.length; i += 100) {
-    await api('PATCH', `/blocks/${pageId}/children`, { children: blocks.slice(i, i + 100) });
+    await api(token, 'PATCH', `/blocks/${pageId}/children`, { children: blocks.slice(i, i + 100) });
   }
 }
 
-async function createSubtree(parentId: string, page: DocPage): Promise<void> {
-  const id = await createPage(parentId, page.title, bodyToBlocks(page.body));
-  for (const child of page.children) await createSubtree(id, child);
+async function createSubtree(token: string, parentId: string, page: DocPage): Promise<void> {
+  const id = await createPage(token, parentId, page.title, bodyToBlocks(page.body));
+  for (const child of page.children) await createSubtree(token, id, child);
 }
 
 // ── Minimal markdown → Notion blocks ─────────────────────────────────────────

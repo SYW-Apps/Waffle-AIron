@@ -1,0 +1,18 @@
+kind: enum
+id: transport_kind
+name: TransportKind
+description: >-
+  What crossing a transport makes. Only network transports take entry scopes, fall under the gateway
+  rule and appear in the derived flow matrix.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: network
+    description: 'Crosses a network: HTTP, gRPC, GraphQL, MessageBus, Custom'
+  - name: local
+    description: 'Stays on one host, between processes: CLI, NamedPipe, IPC, JSONRPC'
+  - name: in-process
+    description: 'A library call inside the caller''s process: InProcess'
+createdAt: '2026-10-06T12:53:21.460Z'
+updatedAt: '2026-10-06T12:53:22.058Z'

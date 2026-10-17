@@ -15,8 +15,8 @@ fields:
     optional: false
     key: primary
   - name: origin
-    type: string
-    description: 'Provenance: generated | exchanged | authored.'
+    type: SurfaceOrigin
+    description: Provenance.
     optional: false
   - name: stateId
     type: string
@@ -33,13 +33,257 @@ fields:
     description: ISO-8601 production timestamp.
     optional: false
   - name: interfaces
-    type: SurfaceContractEntry[]
+    type: list<SurfaceContractEntry>
     description: The exported contract entries, already audience-filtered by the producer.
     optional: false
   - name: types
-    type: SurfaceTypeDef[]
-    description: Transitive type closure of every exported signature — the snapshot is self-contained.
+    type: list<SurfaceTypeDef>
+    description: >-
+      Transitive type closure of every exported signature and every exported type — the snapshot is
+      self-contained. Types are gathered by qualified id, so two subsystems' types of the same name
+      both arrive (the later one under its qualified id).
     optional: false
-methods: []
+  - name: projectId
+    type: string
+    description: >-
+      The producing project's effective id (project.yaml id), recorded beside the display-oriented
+      projectName; absent on snapshots written before project ids existed, and on authored or
+      imported surfaces.
+    optional: true
+  - name: exportedTypes
+    type: list<SurfaceTypeExport>
+    description: >-
+      The types the producer exports by name (typeDef exports), audience-filtered like the contract
+      entries and listed apart from them; each definition is in the type closure.
+    optional: true
+  - name: audience
+    type: string
+    description: >-
+      The audience ceiling the producer's export table was filtered to: project for a snapshot
+      pinned from the family, instance for one pinned through source.path; absent on surfaces
+      written before externals and on imports.
+    optional: true
+  - name: targetLanguage
+    type: string
+    description: >-
+      The producer's targetLanguage (L0), lowercased: what a consumer in another language judges a
+      native-ABI library call against (LANGUAGE_BRIDGE_MISSING); absent when the producer declares
+      none, or on snapshots written before it was carried
+    optional: true
+  - name: unresolvedExports
+    type: list<SurfaceUnresolvedExport>
+    description: >-
+      The public names the producer's L0 declares that no longer resolve (a named re-export whose
+      source dropped or renamed the item), with the source's rename trace when it has one: a
+      consumer that used one hears "re-exported from X, which renamed it to Y" instead of a bare
+      removal. Provenance, outside every digest; absent when every entry resolves.
+    optional: true
+methods:
+  - name: isProvidedBy
+    signature: 'isProvidedBy(provider: string): boolean'
+    returns: bool
+    description: >-
+      Whether the named provider published this snapshot: its projectName, or the last :: segment of
+      it (a sibling's snapshot is keyed <systemName>::<subsystemId>, so a reference names a sibling
+      by its subsystem id)
+    sourcePath: src/models/surface-references.ts
+  - name: contentDigest
+    signature: 'contentDigest(): string'
+    returns: string
+    description: >-
+      sha256 over the snapshot's canonical CONTRACT, never over how its references or types are
+      spelled: the public names with each entry's stereotype, transport, auth kind, dispatch
+      bindings and method shapes, the exported types and the closure's type shapes — a data type's
+      shape is its kind and fields, a named scalar's its kind and the primitive it holds, a
+      signature type's is its kind, its params' types and optionality in order (never their names)
+      and its returns, an enum's is its kind and its value names in declared order — every type
+      expression passed through canonicalTypeRef, every list in a fixed order — with provenance
+      (stateId, generatedAt, origin) and prose (descriptions, groups, display names) left out.
+      Because the type expressions are canonical, a producer respelling `T[]` as `list<T>` moves the
+      digest once (the day the grammar ships) and never again.
+    sourcePath: src/models/surface-references.ts
+  - name: memberDigest
+    signature: 'memberDigest(publicName: string, member: string): string | null'
+    returns: string?
+    description: >-
+      sha256 over one used member of one public name, canonicalized so only what a caller depends on
+      moves it: for a contract method, its name, its parameters' types and optionality in order
+      (never their names) and its return type; for `capability:<name>`, the dispatch binding and the
+      bound method's signature so digested; for `type`, the type's shape; in every case followed by
+      the shapes of every type in the transitive closure of the types it names — a signature type's
+      closure followed through its params and returns as a data type's is through its fields, so
+      changing a named signature moves the digest of every member that names it. Every type
+      expression is passed through canonicalTypeRef before it is hashed, and the closure is found by
+      canonical id, never by the suffix match — so the rewrite `shared::native-access-kind` →
+      `native-access-kind` inside the producer moves no digest. Null when the name is not in the
+      snapshot or the member is not on it (the entry's interface narrowing included) — a removed
+      member, never a pass. A lock's `used` map holds these digests, and EXTERNAL_INCOMPATIBLE is an
+      error only because they are canonical.
+    sourcePath: src/models/surface-references.ts
+  - name: canonicalTypeRef
+    signature: 'canonicalTypeRef(typeExpr: string): string'
+    returns: string
+    description: >-
+      A type expression rewritten into the one spelling a digest may see: parsed under the type
+      grammar (type_expression.parse) and answered as its canonical text, so an alias and its
+      canonical spelling digest alike, with every named reference rewritten in place — an identifier
+      naming a type of this snapshot's closure (bare, or prefixed with this snapshot's own project
+      id or alias, compared by reference_resolution.nameKey — or written `<subsystem>.<id>` for one
+      the closure holds unqualified, the way a contract names a local record of another subsystem,
+      `orders.order`) becomes that type's id, so a local record's closure — the member types it
+      embeds — is read by every digest; an identifier that names another project's type becomes
+      `<producer id>::<its id>`; anything unresolvable is kept as written. A text that does not
+      parse is kept as written, identifier by identifier, as before the grammar. Pure: the snapshot
+      is the whole input.
+    sourcePath: src/models/surface-references.ts
+  - name: carriedFactChanges
+    signature: 'carriedFactChanges(live: SurfaceSnapshot): list<string>'
+    params:
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection at the same audience
+    returns: list<string>
+    description: >-
+      The carried facts this pinned snapshot holds differently from the live one, each named where
+      it sits: per public entry its export kind, transport, abi, role, stereotype, basePath, auth
+      scheme and rename trace, per contract method its effect, its wire endpoint (an HTTP verb, path
+      or stated status, or another transport's address — named with where it went, `endpoint of
+      stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`, since a hand-written client
+      spells the route and no digest reads it) and rename trace and each parameter the producer
+      renamed with a trace (named with its new name — a parameter name enters no digest, so the
+      rename never breaks a caller, but the pin still spells the old one), per type its rename trace
+      and each field it renamed with a trace (with its new name), the producer's id and
+      targetLanguage, and the names the producer declares but no longer resolves. These are what the
+      rules judge from a pin beside the signatures (LANGUAGE_BRIDGE_MISSING reads the abi), so a pin
+      whose content digest is unchanged can still be stale; prose (descriptions, display names) and
+      provenance (stateId, generatedAt) are never a fact here. Empty when the snapshot says what the
+      producer says now. Pure.
+    sourcePath: src/models/surface-references.ts
+  - name: changesSince
+    signature: 'changesSince(older: surface_snapshot): list<surface_change>'
+    params:
+      - name: older
+        type: surface_snapshot
+        description: The baseline snapshot
+    returns: list<surface_change>
+    description: >-
+      What this producer's public surface changed from an older snapshot of it: each public name
+      (contract entry or exported type) added, removed, renamed per this snapshot's rename trace
+      (`formerly`), or changed — its audience, a type's shape, or any other fact a consumer's pin
+      carries and is drifted by: a contract entry's export kind, transport, abi, role, stereotype,
+      basePath or auth scheme, a method's effect (an undeclared effect reads `undeclared`, never
+      `none`, which is a declared effect of its own), an exported type's own methods, and the
+      surface's targetLanguage — and inside each contract kept, each method added, removed, renamed
+      per its trace, or changed in signature (memberDigest), each parameter renamed per its trace
+      (`parameter "old" renamed to "new"`), and each method whose wire endpoint moved — its
+      transport, an HTTP verb, path or stated success status, or another transport's address
+      (`endpoint POST /routes/plan → POST /routes/plans`): the endpoint is part of a Portal's
+      published surface, and the one change every HTTP client breaks on. An exported type's field
+      renamed per its trace is a rename row naming the field with its new name — also when the type
+      itself was renamed, so a field rename is never folded into "type renamed". An exported type
+      whose public name changed with no rename trace of its own, but whose entry gives the same
+      definition (an L0 `as` changed, the type id kept), is a rename of the public name, never a
+      removal plus an addition. An exported type whose shape moved only through renames it embeds (a
+      renamed type or field anywhere in its closure, its own fields kept) is a `changed` row naming
+      each of them (`embeds renamed field "money.currency" → "currencyCode"`), so release notes list
+      every type a rename reshapes; contract methods whose signatures moved only through such
+      renames of types the surface exports under no name of its own (its own unexported types,
+      another project's types expanded into it, or an exported type the method reaches only through
+      one of the surface's own unexported records — a local `order` whose `total` embeds `money`:
+      the verb's response changes on the wire, and the exported type's own row names no verb) say so
+      ONCE per contract entry and set of renames — one row naming every such method, never one
+      identical row per method. Every row beyond a rename is judged against this snapshot with its
+      TRACED RENAMES UNDONE: each closure type renamed per its trace (`formerly`) read back under
+      its old id, each field renamed per its trace read back under its old name, and each type
+      another project supplies whose reference only changed alias (`a::name` → `b::name`, the same
+      local name and shape) read under the older spelling — so a type or field rename is counted
+      once, as its rename, and never again as a shape change of every type or method that names it,
+      and an alias respelling is no change at all. A signature row is written only when the
+      signature still reads differently once the method's own rename and those renames are undone (a
+      renamed method whose shape is unchanged is one row, its rename); a method whose signature
+      reads the same but whose digest still moved because a type it names changed shape says exactly
+      that, naming the type, and is left out only when every such type is an exported name whose own
+      shape change is already listed AND the method names it directly, never through an unexported
+      record of its own. A signature row renders each parameter under its own name, never respelled,
+      and when it reads differently only because a renamed type replaced its former spelling — a
+      type another project supplies, which the older side could not expand — it names the renames
+      the newer side's trace carries for that type: its own (`type "tile_coord" renamed to "tile"`)
+      and each of its fields' (`field "tile.zoom" renamed to "z"`), so the wire change inside a
+      consumer's own response is named, not only the type swap. Prose and provenance are never a
+      change, and no row is listed twice. Sorted by name, then member. Pure.
+    sourcePath: src/models/surface-references.ts
+    symbol: surfaceChanges
+  - name: fieldRenames
+    signature: 'fieldRenames(was: SurfaceTypeDef, now: SurfaceTypeDef): list<TracedRename>'
+    params:
+      - name: was
+        type: SurfaceTypeDef
+        description: The older definition of the type
+      - name: now
+        type: SurfaceTypeDef
+        description: The newer definition of the same type
+    returns: list<TracedRename>
+    description: >-
+      The fields of one type renamed between an older and a newer definition of it, per the newer
+      one's rename trace (`formerly`): each field the older had that the newer lacks and a newer
+      field's trace names, as {from, to}. Pure.
+    sourcePath: src/models/surface-references.ts
+  - name: fieldRenamesSince
+    signature: >-
+      fieldRenamesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member:
+      string, pinnedDigest: string): FieldRenameReading
+    params:
+      - name: pinned
+        type: SurfaceSnapshot
+        description: The consumer's pinned snapshot
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection
+      - name: publicName
+        type: string
+        description: The used public name
+      - name: member
+        type: string
+        description: The used member
+      - name: pinnedDigest
+        type: string
+        description: The member digest the lock records
+    returns: FieldRenameReading
+    description: >-
+      Every field rename inside the live closure between the pinned snapshot and the live one, each
+      read `field "<type>.<old>" renamed to "<new>"`, and whether undoing them gives back the pinned
+      member digest exactly (the renames are the whole change). Empty when no field was renamed.
+      What a changed use's detail says so the consumer follows the rename. Pure.
+    sourcePath: src/models/surface-references.ts
+  - name: fieldChangesSince
+    signature: >-
+      fieldChangesSince(pinned: SurfaceSnapshot, live: SurfaceSnapshot, publicName: string, member:
+      string, pinnedDigest: string): FieldChangeReading
+    params:
+      - name: pinned
+        type: SurfaceSnapshot
+        description: The consumer's pinned snapshot
+      - name: live
+        type: SurfaceSnapshot
+        description: The producer's live projection
+      - name: publicName
+        type: string
+        description: The used public name
+      - name: member
+        type: string
+        description: The used member
+      - name: pinnedDigest
+        type: string
+        description: The member digest the lock records
+    returns: FieldChangeReading
+    description: >-
+      Every field change inside the live closure of one used member since the pinned snapshot: the
+      renames its trace records (as fieldRenamesSince reads them), and each field ADDED to or
+      REMOVED from a closure type of the member the pin held under the same id — so a consumer reads
+      a new field by name instead of "its shape changed" and never reads the producer's files for it
+      — and whether undoing them all gives back the pinned member digest exactly (the field changes
+      are the whole change). Empty when no field moved. What a changed use's detail says. Pure.
+    sourcePath: src/models/surface-references.ts
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T23:11:45.776Z'
-updatedAt: '2026-07-10T23:11:45.885Z'
+updatedAt: '2026-10-09T16:50:46.131Z'

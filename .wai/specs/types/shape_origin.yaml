@@ -1,0 +1,15 @@
+kind: enum
+id: shape_origin
+name: ShapeOrigin
+description: How the analyzer read a type shape's members.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: declared
+    description: The shape lists them itself
+  - name: derived
+    description: An alias was followed one hop to the value its shape comes from
+createdAt: '2026-10-04T23:34:09.125Z'
+updatedAt: '2026-10-04T23:34:09.551Z'

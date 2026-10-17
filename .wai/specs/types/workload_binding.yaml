@@ -1,0 +1,24 @@
+kind: value-object
+id: workload_binding
+name: WorkloadBinding
+description: >-
+  How one design name maps to a deployed workload, as the team's bindings file says: the label
+  selector and namespace a generated policy targets.
+subsystem: sdd_network
+fields:
+  - name: selector
+    type: map<string, string>
+    description: The workload's labels, as the deployment sets them
+    optional: false
+  - name: namespace
+    type: string
+    description: The namespace it runs in, when the target format has one
+    optional: true
+  - name: port
+    type: int
+    description: The port its Portals listen on, when the policy should name one
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:33.632Z'
+updatedAt: '2026-10-06T13:09:34.262Z'

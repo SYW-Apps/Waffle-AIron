@@ -1,0 +1,61 @@
+kind: value-object
+id: diagram_options
+name: DiagramOptions
+description: >-
+  What `wairon diagram` was asked for: which slice of the tree, how deep, and in which format. The
+  format can be given two ways: the separate boolean flags (canvas, drawio, excalidraw), which the
+  command grew one at a time, or the one `format` value that names the same choice. Both spellings
+  exist, so neither is a closed set on its own.
+fields:
+  - name: subsystem
+    type: string
+    description: Draw only this subsystem's slice of the tree.
+    optional: true
+  - name: sequence
+    type: string
+    description: >-
+      A `component:method` (or `component.method`) to draw as a narrative sequence diagram instead
+      of the architecture.
+    optional: true
+  - name: depth
+    type: int
+    description: How far to descend.
+    optional: true
+  - name: all
+    type: bool
+    description: Draw the whole tree rather than the default slice.
+    optional: true
+  - name: canvas
+    type: bool
+    description: Emit the interactive self-contained HTML canvas instead of Mermaid.
+    optional: true
+  - name: drawio
+    type: bool
+    description: Emit an editable draw.io file.
+    optional: true
+  - name: excalidraw
+    type: bool
+    description: Emit an Excalidraw scene.
+    optional: true
+  - name: out
+    type: string
+    description: Where to write the artifact.
+    optional: true
+  - name: health
+    type: bool
+    description: >-
+      Compare each consumption relation of the family with its live producer and colour the canvas's
+      edges by it. On unless `--no-health` sets it false: the comparison reads each producer's
+      export table from disk (git producers through the fetch cache; an external's ref asks the
+      remote once), which is small next to the gate the canvas already runs for its issue overlay.
+      Off draws every consumption edge neutral, labelled not checked. Only the canvas carries
+      health; Mermaid, draw.io and Excalidraw ignore it.
+    optional: true
+  - name: format
+    type: DiagramFormat
+    description: The output format by name. An alias for the boolean flags.
+    optional: true
+methods: []
+sourcePath: src/commands/diagram.ts
+createdAt: '2026-09-20T16:42:26.894Z'
+updatedAt: '2026-10-04T23:38:20.031Z'

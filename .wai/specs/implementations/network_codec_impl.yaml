@@ -1,0 +1,95 @@
+id: network_codec_impl
+name: Network Codec Implementation
+description: The neutral encodings and the generated policy, pure and deterministic.
+contract: inetwork_codec
+sourcePath: src/network/codec.ts
+methods:
+  - name: encodeFlows
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gather the gate findings on the flows for the document, each at its own severity
+          (refusedBy errors, flaggedBy warnings, notedBy notices), and whether any flow is refused
+        type: local
+      - stepNumber: 2
+        description: Which format?
+        type: switch
+        'on': format
+        cases:
+          - value: json
+            step: 3
+          - value: csv
+            step: 4
+        defaultStep: 5
+      - stepNumber: 3
+        description: >-
+          JSON: the flows as a list, keys sorted, every fact kept — a refused flow carries its
+          refusedBy — with the root's empty project key and network id written as rootProject when
+          it is given
+        type: return
+        outcome: json document
+      - stepNumber: 4
+        description: >-
+          CSV: a header row (from, to, transport, binding, crosses, via, evidence, gate) and one row
+          per flow, lists joined with semicolons and every field quoted; the gate cell says REFUSED
+          with the error codes, or the codes that mark the row
+        type: return
+        outcome: csv document
+      - stepNumber: 5
+        description: >-
+          Markdown: the same columns as a table, for a review comment, headed by one line per gate
+          finding when the design fails the gate (rows marked REFUSED are refused by the gate, not
+          allowed)
+        type: return
+        outcome: markdown document
+    detail: full
+  - name: encodePolicy
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Leave every flow the gate refuses (refusedBy) out: a policy never admits a flow the design
+          is refused for — no outside block is opened for an illegal outside entry
+        type: local
+      - stepNumber: 2
+        description: >-
+          Group the flows by callee workload: the most specific binding key of the callee's project,
+          subsystem or Portal
+        type: local
+      - stepNumber: 3
+        label: workloads
+        description: For each callee workload
+        type: loop
+        loopKind: forEach
+        over: the callee workloads in name order
+        endStep: 5
+      - stepNumber: 4
+        description: >-
+          Resolve each party to its binding: its own keys first, then a key naming a renamed
+          project's former name (formerNames), which binds it and adds a note naming the key to
+          rename; a name with no binding gets the placeholder label wairon.dev/workload: <name> and
+          joins the unbound list
+        type: local
+      - stepNumber: 5
+        label: workloadsEnd
+        description: >-
+          Emit one NetworkPolicy (apiVersion networking.k8s.io/v1, policyTypes Ingress): podSelector
+          from the callee's binding, namespace when bound, and one ingress rule per source (a
+          podSelector, with a namespaceSelector when the source runs in another namespace; the
+          bindings' outside blocks as ipBlock entries for a flow from outside), with the port when
+          the binding names one. When the workload's verbs differ in their sources (an outside verb
+          beside one only modelled callers reach), add a note: a policy admits per pod and port, so
+          every source reaches every verb; a Portal-level binding (its own selector and port) splits
+          a Portal off into its own policy, and verbs of one Portal split only at L7
+        type: local
+      - stepNumber: 6
+        description: >-
+          Answer the YAML documents, separated and in name order, headed by the unbound names, the
+          notes, and one comment line per refused flow with its findings (REFUSED BY THE GATE, not
+          admitted), with the unbound names, the notes, the gate findings and whether a flow was
+          refused
+        type: return
+        outcome: kubernetes-network-policy document
+    detail: full
+status: complete
+createdAt: '2026-10-06T13:12:03.794Z'
+updatedAt: '2026-10-07T06:19:45.634Z'

@@ -1,18 +1,20 @@
 id: git_backing_orchestrator_impl
 name: Git Backing Orchestrator Implementation
 description: >-
-  Container-level backup workflows: resolver-gated bind/unbind/sync of unit container repos and the
-  instance-structure backup repo, plus the pre-authorized periodic sweep. Mirror syncs never touch
-  the secret store.
+  Container-level backup workflows: permission-rules-gated bind/unbind/sync of unit container repos
+  and the instance-structure backup repo, plus the pre-authorized periodic sweep. Mirror syncs never
+  touch the secret store.
 contract: igit_backing_orchestrator
 sourcePath: src/server/gitbacking.ts
+injectedParams:
+  - cfg
 methods:
-  - name: listBackingBindings
+  - name: listBindings
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: List every stored binding through the repository
@@ -22,31 +24,46 @@ methods:
       - stepNumber: 3
         description: Compute the caller's project:admin visible scopes over the organization tree
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 4
+        description: >-
+          Reduce those visible scopes to the ids of the organization units the caller actually
+          administers (an instance admin skips this, having every binding already)
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableUnits
+      - stepNumber: 5
+        description: >-
+          Resolve the caller's project:admin value at the instance level, which decides whether the
+          instance-wide binding is theirs
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 6
         description: >-
           Filter to bindings whose scope the caller administers (an instance admin keeps all; a unit
           binding requires its unit among the actionable units; the instance binding requires
           instance-level project:admin)
         type: local
-      - stepNumber: 5
+      - stepNumber: 7
         description: Return the caller's bindings
         type: return
         outcome: scoped bindings
+    symbol: listBackingBindings
   - name: bindScope
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the binding's scope (the named unit, or
           instance scope for an 'instance' binding)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -74,32 +91,46 @@ methods:
         type: throw
         error: Unknown organization unit
       - stepNumber: 8
+        description: >-
+          When the bind carries a personal access token, store it as the binding's own git secret
+          through the secret repository, so the clone authenticates with it
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 9
+        description: >-
+          Find the binding already stored for this scope, so a re-bind updates it in place and keeps
+          its id and createdAt
+        type: call
+        targetComponent: git_backing_repository
+        targetMethod: listBindings
+      - stepNumber: 10
         description: Upsert the binding through the repository (one binding per scope — a re-bind replaces)
         type: call
         targetComponent: git_backing_repository
         targetMethod: upsertBinding
         assertsGuarantees:
           - atomic
-      - stepNumber: 9
+      - stepNumber: 11
         description: Append a redacted audit event without letting a failure fail the bind
         type: try
-        endStep: 11
+        endStep: 13
         catches:
           - error: audit append failure
-            step: 12
-      - stepNumber: 10
+            step: 14
+      - stepNumber: 12
         description: Append the redacted git.backing.bind audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 11
+      - stepNumber: 13
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 15
+      - stepNumber: 14
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: Return the stored binding
         type: return
         outcome: stored binding
@@ -108,7 +139,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the binding by id to read its own scope
@@ -130,7 +161,7 @@ methods:
           Resolve the caller's project:admin permission over the binding's OWN scope (never a
           caller-supplied one)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective value is not yes, deny
@@ -170,12 +201,12 @@ methods:
         description: Return once removed
         type: return
         outcome: binding removed
-  - name: syncBackingScope
+  - name: syncScope
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the binding by id to read its own scope
@@ -195,7 +226,7 @@ methods:
       - stepNumber: 5
         description: Resolve the caller's project:admin permission over the binding's OWN scope
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the effective value is not yes, deny
@@ -274,6 +305,7 @@ methods:
         description: Return whether anything was published
         type: return
         outcome: published flag
+    symbol: syncScope
   - name: runPeriodicBackingSync
     narrative:
       - stepNumber: 1
@@ -288,7 +320,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the due bindings
-        endStep: 6
+        endStep: 7
       - stepNumber: 3
         description: Clone-or-open the backing repo's working copy
         type: call
@@ -302,22 +334,25 @@ methods:
         targetComponent: git_backing_adapter
         targetMethod: mirrorTree
       - stepNumber: 5
-        description: >-
-          Commit and push skip-if-clean; on a published sync record lastSyncAt through the
-          repository
+        description: Commit and push skip-if-clean
         type: call
         targetComponent: git_backing_adapter
         targetMethod: commitAndPush
       - stepNumber: 6
+        description: When the sync published, record lastSyncAt through the repository
+        type: call
+        targetComponent: git_backing_repository
+        targetMethod: touchSync
+      - stepNumber: 7
         description: >-
           Record any per-binding failure as a server diagnostic and continue — one binding's failure
           never aborts the sweep
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return once the sweep completes
         type: return
         outcome: sweep completed
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-07-16T15:48:49.424Z'
+updatedAt: '2026-10-17T16:24:49.349Z'

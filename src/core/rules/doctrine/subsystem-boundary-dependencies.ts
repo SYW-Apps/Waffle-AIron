@@ -1,0 +1,186 @@
+import { SddRule, type RuleContext } from '../types.js';
+import { ambiguityMessage, isOwnComponentEntry, type ComponentSpec } from '../../../models/index.js';
+import type { EdgeFinding } from './stereotype-terms.js';
+
+/**
+ * The bounded-context boundary: what a dependsOn id may reach once it leaves
+ * its own subsystem, and what it means when it reaches nothing at all. The
+ * intra-subsystem stereotype matrix is judged by the four rules beside this
+ * one and never applies across a boundary.
+ */
+export const subsystemBoundaryDepsRule: SddRule = {
+  name: 'subsystem-boundary-dependencies',
+  judges: 'design',
+  description:
+    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef: a contained member's live table, a declared external's pin, or a foreign snapshot). When that entry is backed by an InProcess Portal the edge is a library call (reach library): any component may make it directly, no Adapter is asked for, and library-calls judges it instead. Any other entry asks for the same Adapter as a cross-subsystem hop, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution; never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
+  codes: [
+    { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: "dependsOn names a non-existent component" },
+    { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: "Cross-tree dependsOn matched by surface snapshots of several providers with different contracts" },
+    { code: 'CROSS_SUBSYSTEM_NON_ADAPTER', defaultSeverity: 'error', summary: "Non-Adapter component crossing a subsystem boundary" },
+    { code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', defaultSeverity: 'error', summary: "Cross-subsystem dependency on an unpublished component" },
+    { code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL', defaultSeverity: 'error', summary: "Cross-subsystem hop entering through a non-Portal" },
+    { code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER', defaultSeverity: 'error', summary: "Cross-subsystem dependency on a surface published only to other subsystems" },
+  ],
+  check(ctx) {
+    for (const edge of ctx.dependencyEdges().all) {
+      // An edge with a retired end (a Specialist or Gateway) is judged by no
+      // boundary rule: retired-stereotypes reports the retired component once,
+      // and its migration decides what the edge becomes. A reference that
+      // resolved NOTHING is never marked retired, so it is still judged here.
+      if (edge.retired) continue;
+      const comp = edge.from;
+
+      switch (edge.reach) {
+        case 'missing': {
+          // A bare id that names nothing — the typo it always was, with the
+          // `use` line that would import it when a declared dependency exports it.
+          const hint = ctx.importHint(edge.ref);
+          ctx.addIssue(
+            'error',
+            'INVALID_DEPENDENCY_REFERENCE',
+            `Component "${comp.id}" lists dependency "${edge.ref}" which does not exist.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
+            comp.id,
+            edge.draftContext,
+          );
+          continue;
+        }
+
+        case 'library':
+          // A library call: an exported InProcess Portal of another project.
+          // Any component may make it directly; library-calls judges it.
+          continue;
+
+        case 'cross-project':
+          // The edge leaves the project and did not resolve (forbidden,
+          // missing, unavailable, or an ambiguous import): project-boundaries
+          // reports it once, with its resolution. Nothing is reported here.
+          continue;
+
+        case 'ambiguous':
+          // Foreign snapshots of several providers expose the name with
+          // different contracts, so none of them may judge the edge: the
+          // ambiguity is the finding, carrying the edge's resolution.
+          ctx.addIssue(
+            'error',
+            'SURFACE_REF_AMBIGUOUS',
+            ambiguityMessage(edge.surface!, `Component "${comp.id}" depends on`, edge.ref),
+            comp.id,
+            edge.draftContext,
+            edge.resolution,
+          );
+          continue;
+
+        case 'surface':
+          // A contract entry DECLARES the remote surface — a declared
+          // external's pin or a foreign snapshot — so the cross-boundary shape
+          // rule (the source must be an Adapter) applies exactly as it does to a
+          // cross-subsystem edge, carrying the edge's resolution.
+          if (comp.componentType !== 'Adapter') {
+            const provider = edge.surface!.kind === 'resolved' ? edge.surface!.snapshot.projectName : '';
+            ctx.addIssue(
+              'error',
+              'CROSS_SUBSYSTEM_NON_ADAPTER',
+              `Boundary violation: ${comp.componentType} "${comp.id}" depends directly on "${edge.ref}", a surface of project "${provider}". Only a local client Adapter may cross a project boundary — route this hop through an Adapter.`,
+              comp.id,
+              edge.draftContext,
+              edge.resolution,
+            );
+          }
+          continue;
+
+        case 'cross-subsystem':
+          break;
+
+        default:
+          // An intra-subsystem edge: the stereotype matrix judges it.
+          continue;
+      }
+
+      for (const finding of crossSubsystemEdgeFindings(ctx, comp, edge.to!)) {
+        ctx.addIssue(finding.severity, finding.code, finding.message, comp.id, edge.draftContext);
+      }
+    }
+  },
+};
+
+/**
+ * What this rule reports on one edge from `comp` into ANOTHER subsystem's
+ * `depComp`: the crossing's shape (a client Adapter, or a trustedLink), the
+ * published surface it must land on, and the consumers that surface names.
+ * The rule reports these on every cross-subsystem edge; directEdgeRefusals
+ * asks the same question of an edge a forwarder's caller would need.
+ */
+export function crossSubsystemEdgeFindings(ctx: RuleContext, comp: ComponentSpec, depComp: ComponentSpec): EdgeFinding[] {
+  const findings: EdgeFinding[] = [];
+
+  // "Always an Adapter": only a (local) client Adapter may reach another
+  // subsystem; an Orchestrator/etc. must depend on a local Adapter that
+  // abstracts the hop (in-process forwarding, REST, gRPC, IPC).
+  // EXCEPTION: the SOURCE subsystem may license a direct in-process
+  // edge by declaring a trustedLink to the target — the reviewable-
+  // exception mechanism instead of a forwarding shim per hop. The
+  // published-Portal target requirements below apply regardless, so
+  // the distribution seam stays intact at the receiving end.
+  const sourceSub = ctx.subsystems.find(s => s.id === comp.subsystem);
+  const licensed = sourceSub?.trustedLinks?.some(t => t.subsystem === depComp.subsystem) ?? false;
+  if (comp.componentType !== 'Adapter' && !licensed) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_NON_ADAPTER',
+      message: `Boundary violation: ${comp.componentType} "${comp.id}" (subsystem "${comp.subsystem}") depends directly on "${depComp.id}" in subsystem "${depComp.subsystem}". Only a local client Adapter may cross a subsystem boundary — route this hop through an Adapter that calls "${depComp.subsystem}"'s public interface, or declare a trustedLink on "${comp.subsystem}" (with the reason) to license a direct in-process edge to that peer's published Portal.`,
+    });
+  }
+
+  // The target must be part of the other subsystem's published public surface,
+  // AND that surface must be the subsystem's inbound Portal (its front door) — not
+  // a published internal Orchestrator/Store. The hop is always: client Adapter →
+  // remote Portal → Portal dispatches inward. Allowing a non-Portal target leaks
+  // the boundary and breaks the adapter→network→remote-Portal seam.
+  const targetIsPublic = ctx.publicSet.get(depComp.subsystem)?.has(depComp.id) ?? false;
+  if (!targetIsPublic) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_PRIVATE_ACCESS',
+      message: `Boundary violation: "${comp.id}" depends on "${depComp.id}", which is not part of subsystem "${depComp.subsystem}"'s published public surface. Depend on one of its publicInterfaces components instead.`,
+    });
+  } else if (depComp.componentType !== 'Portal') {
+    // Name the crosser as what it is: the sanctioned client Adapter, or
+    // any other stereotype — a trustedLink licenses its crossing, never
+    // this target requirement, and an unlicensed one reaches here too.
+    const crosser = comp.componentType === 'Adapter' ? 'client Adapter' : comp.componentType;
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL',
+      message: `Boundary violation: ${crosser} "${comp.id}" enters subsystem "${depComp.subsystem}" through "${depComp.id}" (${depComp.componentType}), not its inbound Portal. A cross-subsystem hop must target the remote subsystem's Portal (its front door), which dispatches inward — publishing/depending on an internal ${depComp.componentType} leaks the boundary and breaks the distribution seam. Expose a Portal for "${depComp.subsystem}" and point "${comp.id}" at it.`,
+    });
+  }
+
+  // The consumer check runs whatever the portal check said: a surface
+  // published to a named set of subsystems may be depended on only from
+  // those — it is how a provider keeps a surface (the raw spec writes)
+  // away from a door that must not reach it.
+  const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
+  if (publishedTo && !publishedTo.includes(comp.subsystem)) {
+    findings.push({
+      severity: 'error',
+      code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+      message: `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
+    });
+  }
+  return findings;
+}
+
+/**
+ * Who a published component may be depended on by, or null when anyone may.
+ * A component is restricted when EVERY publicInterfaces entry of its subsystem
+ * that names it declares consumers, and the union of those lists is the set;
+ * one entry without the field publishes it to anyone. A component no entry
+ * names is not published at all — CROSS_SUBSYSTEM_PRIVATE_ACCESS's question,
+ * not this one's — so it answers null rather than an empty set.
+ */
+function restrictedConsumers(ctx: RuleContext, subsystemId: string, componentId: string): string[] | null {
+  const entries = (ctx.subsystems.find((s) => s.id === subsystemId)?.publicInterfaces ?? [])
+    .filter((pi) => isOwnComponentEntry(pi) && pi.component === componentId);
+  if (entries.length === 0 || entries.some((pi) => pi.consumers === undefined)) return null;
+  return [...new Set(entries.flatMap((pi) => pi.consumers ?? []))];
+}

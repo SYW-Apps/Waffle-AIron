@@ -1,0 +1,98 @@
+kind: value-object
+id: migration_request
+name: MigrationRequest
+description: >-
+  One family migration as a person or an agent asks for it, from the bound project: the verb and
+  exactly the arguments that verb reads. The same value comes in through `wairon member …` / `wairon
+  project rename` / `wairon doctor`, and through the sdd_* member tools, so every door plans
+  identically.
+subsystem: sdd_migrations
+fields:
+  - name: verb
+    type: MigrationVerb
+    description: The migration asked for.
+    optional: false
+  - name: alias
+    type: string
+    description: >-
+      attach: the alias to declare; rename-alias: the alias as declared now; detach, adopt,
+      internalize, promote, demote: the member or external it acts on.
+    optional: true
+  - name: path
+    type: string
+    description: >-
+      attach: the existing project's root; externalize: the part's root — a new directory, or an
+      existing part's, which the subsystem joins; adopt with a relocation (hosted): the member path
+      to adopt it at, since a source.hosted external names no directory — relative to the bound
+      project.
+    optional: true
+  - name: project
+    type: string
+    description: >-
+      rename: the project whose id moves, as a member alias path from the bound project
+      (`billing/payments`); empty or absent for the bound project itself.
+    optional: true
+  - name: newId
+    type: string
+    description: >-
+      rename: the new project id. promote: the id the promoted part's project declares (default: its
+      alias).
+    optional: true
+  - name: newAlias
+    type: string
+    description: 'rename-alias: the alias to declare it under.'
+    optional: true
+  - name: subsystem
+    type: string
+    description: 'externalize: the subsystem that becomes a member.'
+    optional: true
+  - name: destination
+    type: InternalizeDestination
+    description: >-
+      internalize of a project member, and demote: where the member's own metadata goes (its L0,
+      configuration, externals, packs). Ignored for a part, which has none.
+    optional: true
+  - name: rehearse
+    type: bool
+    description: >-
+      false: plan without rehearsing — the edits and refusals only, no file changes and nothing to
+      apply. doctor's summary line uses it, since it prints counts and never applies. Absent or
+      true: a full plan.
+    optional: true
+  - name: description
+    type: string
+    description: 'attach: what the member is to the bound project, written into its `members` entry.'
+    optional: true
+  - name: widen
+    type: bool
+    description: >-
+      detach: widen to the instance audience exactly the member's exports a family project uses and
+      the member exports only to the family, instead of refusing audience-too-narrow — each widening
+      shown in the plan and confirmed with it.
+    optional: true
+  - name: relocation
+    type: MemberRelocation
+    description: >-
+      detach and adopt on a hosted instance: move the project between its family's tree and an
+      isolated root of its own in the same transaction — detach writes hosted sources instead of
+      path sources, adopt removes them. Absent everywhere else.
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      externalize: part (default) — the subsystem moves to the path as a part of the bound project,
+      and no reference, export or lock entry changes — or project, today's externalize: the moved
+      subsystem becomes a member project (externalize, then promote, in one plan).
+    optional: true
+  - name: announce
+    type: bool
+    description: >-
+      true: the door (the CLI's migration commands, the MCP member tools) asks the plan to announce
+      the findings its result will have that the projects it changes do not report now — two
+      owner's-gate runs per changed project, on copies of their .wai trees. Absent: an internal plan
+      (re-planned at apply, doctor's, a test's) is not judged twice.
+    optional: true
+methods: []
+sourcePath: src/migrations/types.ts
+createdAt: '2026-09-30T20:24:03.011Z'
+updatedAt: '2026-10-08T20:19:41.353Z'

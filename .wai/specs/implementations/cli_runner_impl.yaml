@@ -1,73 +1,305 @@
 id: cli_runner_impl
 name: CLI Runner Implementation
 description: >-
-  Concrete implementation of the CLI Runner Interface mapping commander subcommands to core engine
-  logic.
+  Concrete implementation of the CLI Runner Interface: the workflows cli_portal (src/cli/index.ts)
+  dispatches each command to — those with no command module of their own in src/cli/runner.ts, the
+  rest in the src/commands/ module named per method — mapping each parsed command onto the core
+  engine.
 contract: icli_runner
-sourcePath: src/cli/index.ts
+sourcePath: src/cli/runner.ts
 methods:
   - name: runValidate
     narrative:
       - stepNumber: 1
-        description: Load project configuration file
-        type: local
-      - stepNumber: 2
-        description: Validate registry rules
+        description: >-
+          Is this checkout ATTACHED to a hosted project? An attached checkout has no local tree, so
+          validating locally would report a vacuous pass.
         type: call
-        targetComponent: cli_validator_adapter
-        targetMethod: validateRegistry
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
       - stepNumber: 3
-        description: Validate project configuration
+        description: >-
+          Validate the ATTACHED project's tree on the instance instead, forwarding --family: the
+          instance runs the family run within the credential's reach and never beyond it.
         type: call
-        targetComponent: cli_validator_adapter
-        targetMethod: validateProjectConfig
+        targetComponent: remote_orchestrator
+        targetMethod: validateAttached
       - stepNumber: 4
-        description: Validate SDD specification tree
+        description: >-
+          Print the hosted findings — errors, warnings and notices, each as its own kind — and exit
+          non-zero when it reported errors, or warnings under --ci, exactly as a local run would;
+          notices never fail it.
+        type: return
+        outcome: validated remotely
+      - stepNumber: 5
+        description: >-
+          Pending transaction banner, before the tree is read (a crash mid-swap may leave it
+          unreadable): ask the migration portal (recover with fix false) for unfinished
+          family-migration transactions under this root; each becomes a notice-level line in the
+          output naming its id, verb and coordinator phase and pointing at `wairon doctor --fix` —
+          never an error, so --ci is unaffected
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 6
+        description: >-
+          Not attached: run the whole local validation workflow — registry, project config and spec
+          tree — through the validator adapter.
         type: call
         targetComponent: cli_validator_adapter
-        targetMethod: validateSddTree
-      - stepNumber: 5
-        description: Print validation errors/warnings and exit process if invalid
+        targetMethod: runValidation
+      - stepNumber: 7
+        description: >-
+          Print validation errors, warnings and notices, the run's hint and its code-reading line
+          (the grade the code was read at and, at exact grade, the compiler and whose copy it is),
+          and exit process if invalid
         type: local
+    symbol: validateCommand
   - name: runGenerate
+    sourcePath: src/commands/generate.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
+        description: >-
+          Read the project configuration: the configured targets and whether agent files are
+          materialized (rules.materializeAgentFiles).
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: loadProjectConfig
       - stepNumber: 2
-        description: Generate Dynamic Agent outputs matching configured target engines
-        type: local
-  - name: runList
-    narrative:
-      - stepNumber: 1
-        description: Load specs using spec loader
+        description: Resolve the agent topology from the spec tree through the core adapter
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: resolveAgentTopology
+      - stepNumber: 3
+        description: Did the spec tree resolve any agent?
+        type: branch
+        condition: at least one agent resolved from the spec tree
+        onFalseStep: 13
+      - stepNumber: 4
+        label: outside-targets
+        description: >-
+          Find the configured targets whose agent-file directory resolves outside the project root.
+          Without --global, name each one and say it is skipped — it is left out of both the write
+          and the prune, and nothing outside the project is touched. With --global it is written,
+          and every file there the run replaces or prunes is first copied beside itself as
+          <file>.wairon-backup-<timestamp>, whose path is printed
+        type: local
+      - stepNumber: 5
+        description: >-
+          Generate the agent outputs for the configured target engines when agent files are
+          materialized — every target whose files land inside the project root, and an outside one
+          only under --global
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: generateAll
+      - stepNumber: 6
+        description: >-
+          Ask which files a generate run owns, so stale managed agent files can be pruned against
+          the full resolved topology (also under a domain scope) without deleting something wairon
+          never wrote; a directory outside the project root is pruned only under --global, each
+          pruned file first backed up beside itself
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveExpectedOutputPaths
+      - stepNumber: 7
+        description: Re-export the SDD skills when the spec tree exists
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 8
+        description: >-
+          Ask whether this project keeps a context directory — the derived documents are owed
+          whenever it does, whether or not a person ever wrote the project document, so generate and
+          doctor --fix keep the same documents current
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: hasContext
+      - stepNumber: 9
+        label: context-kept
+        description: >-
+          Owe the derived context documents only to a project that keeps a context directory; one
+          without it goes straight on to the guides, as before
+        type: branch
+        condition: the project keeps a context directory
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Rebuild the derived context documents through the core adapter, each written only if it
+          changed — so a regenerate with no design change behind it leaves no diff
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 11
+        label: reinject-guides
+        description: >-
+          Re-inject the local AI guides for the configuration's active targets through the core
+          adapter, so a guide never outlives the tree it claims to describe
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: reinjectLocalGuides
+      - stepNumber: 12
+        description: Continue to the member walk decision
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        description: 'Warn that no agent resolved from the spec tree: define subsystems and components first'
+        type: local
+      - stepNumber: 14
+        description: Was the member walk asked for?
+        type: branch
+        condition: '--family was given, and the run is neither scoped to a domain or root nor a dry run'
+        onTrueStep: 16
+        onFalseStep: 15
+      - stepNumber: 15
+        description: >-
+          Stop after this project's own outputs — the default since stage 5: generate never
+          cascades, so nothing below the project is written unless the family walk is asked for
+        type: return
+        outcome: this project's outputs generated
+      - stepNumber: 16
+        description: >-
+          --family: list this project's direct members (declared in `members`, or for one release
+          legacy mounts)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: listDirectChainedSubprojects
+      - stepNumber: 17
+        description: Generate each member's layer in its own root
+        type: loop
+        loopKind: forEach
+        over: each direct member
+        endStep: 19
+      - stepNumber: 18
+        description: >-
+          Complete the member's bootstrap without overwriting it — an explicitly asked-for write; a
+          configuration written here declares the alias as the member's project id
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 19
+        description: >-
+          Generate the member's own outputs and, since --family carries down, its own members' — by
+          running this command bound to the member's root
+        type: local
+      - stepNumber: 20
+        description: Every member's layer is generated
+        type: return
+        outcome: the family's outputs generated
+  - name: runList
+    sourcePath: src/commands/list.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the agent topology from the spec tree through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and print resolved dynamic agent list to stdout
         type: local
   - name: runShow
+    sourcePath: src/commands/show.ts
     narrative:
       - stepNumber: 1
-        description: Load spec system
+        description: Resolve the agent topology from the spec tree through the core adapter
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: loadSystemSpec
+        targetMethod: resolveAgentTopology
       - stepNumber: 2
         description: Format and display details for specified dynamic agent
         type: local
   - name: runUpdate
+    sourcePath: src/commands/update.ts
     narrative:
       - stepNumber: 1
-        description: Check remote github release page for new releases
-        type: local
+        description: Decide whether this run names a channel on the command line
+        type: branch
+        condition: a --channel was given
+        onTrueStep: 2
+        onFalseStep: 6
       - stepNumber: 2
-        description: If new release is found and not in check-only mode, pull and apply updates
+        description: Decide whether it is a channel this build knows
+        type: branch
+        condition: the named channel is recognized
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Record it for this machine, so choosing a channel outlives the run that chose it —
+          `--channel` is a setting, not a per-invocation flag
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setChannel
+      - stepNumber: 4
+        description: Use the channel just named
+        type: jump
+        toStep: 7
+      - stepNumber: 5
+        description: Refuse by name, listing every valid channel, and exit non-zero without checking anything
+        type: return
+        outcome: unknown channel
+      - stepNumber: 6
+        description: Use the channel recorded for this machine
+        type: call
+        targetComponent: user_config_store
+        targetMethod: channel
+      - stepNumber: 7
+        description: >-
+          Ask GitHub for the release list. A failure here reports the network problem and stops,
+          rather than reporting no update available — which would be indistinguishable from being
+          current
         type: local
+      - stepNumber: 8
+        description: >-
+          Keep only the releases eligible for that channel and take the newest, then say so when the
+          running build is itself off-channel
+        type: local
+      - stepNumber: 9
+        description: Decide whether anything newer is on offer
+        type: branch
+        condition: no eligible release is newer than the running build
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report already up to date, and mention a newer build waiting on a wider channel if one
+          exists — so that being current on `stable` never silently hides a `beta` release
+        type: return
+        outcome: up to date
+      - stepNumber: 11
+        description: >-
+          Report the new version and the first lines of its release notes, pointing at the full
+          notes when they are longer
+        type: local
+      - stepNumber: 12
+        description: Decide whether this run was only asking
+        type: branch
+        condition: check-only mode
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Exit non-zero to signal that an update is available, having changed nothing — the non-zero
+          status is the answer, for scripts that poll
+        type: return
+        outcome: update available
+      - stepNumber: 14
+        description: >-
+          Download the asset for this platform and swap the running binary, keeping the previous one
+          beside it so a bad release can be stepped back from
+        type: local
+      - stepNumber: 15
+        description: Done
+        type: return
+        outcome: updated
+    symbol: runUpdate
   - name: runHostProject
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -115,55 +347,8 @@ methods:
         description: Return on unknown action
         type: return
         outcome: unknown action
-  - name: runHostKey
-    narrative:
-      - stepNumber: 1
-        description: Read the master credential from the environment
-        type: local
-      - stepNumber: 2
-        description: Dispatch on the action
-        type: switch
-        'on': action
-        cases:
-          - value: mint
-            step: 3
-          - value: revoke
-            step: 5
-          - value: list
-            step: 7
-        defaultStep: 9
-      - stepNumber: 3
-        description: Mint a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: mintKey
-      - stepNumber: 4
-        description: Return after mint
-        type: return
-        outcome: minted
-      - stepNumber: 5
-        description: Revoke a key via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: revokeKey
-      - stepNumber: 6
-        description: Return after revoke
-        type: return
-        outcome: revoked
-      - stepNumber: 7
-        description: List keys via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: listKeys
-      - stepNumber: 8
-        description: Return after list
-        type: return
-        outcome: listed
-      - stepNumber: 9
-        description: Return on unknown action
-        type: return
-        outcome: unknown action
   - name: runHostLock
+    sourcePath: src/commands/host.ts
     narrative:
       - stepNumber: 1
         description: Read the master credential from the environment
@@ -180,24 +365,8 @@ methods:
         description: Return after lock
         type: return
         outcome: locked
-  - name: runHostPromote
-    narrative:
-      - stepNumber: 1
-        description: Read the master credential from the environment
-        type: local
-      - stepNumber: 2
-        description: Promote the project via the host adapter
-        type: call
-        targetComponent: cli_host_adapter
-        targetMethod: promoteProject
-      - stepNumber: 3
-        description: Print the promote result
-        type: local
-      - stepNumber: 4
-        description: Return after promote
-        type: return
-        outcome: promoted
   - name: runProduce
+    sourcePath: src/commands/produce.ts
     narrative:
       - stepNumber: 1
         description: >-
@@ -218,164 +387,327 @@ methods:
         description: Return once produced
         type: return
         outcome: produced
-  - name: runSubsystemAdd
+  - name: runMemberAdd
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
-      - stepNumber: 2
-        description: Require an explicit projectPath for an external (chained) subsystem
-        type: branch
-        condition: options.projectPath is not provided
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Reject: plain in-tree subsystems are authored via the SDD tools; this command creates
-          external subsystems
-        type: throw
-        error: '--project-path is required (use the sdd_add_subsystem tool for in-tree subsystems)'
-      - stepNumber: 4
-        description: >-
-          Compose the SubsystemSpec (id, display name from --name or id, description placeholder,
-          projectPath from options)
-        type: local
-      - stepNumber: 5
-        description: >-
-          Create the chained subsystem: wire the parent subsystem spec and scaffold the child
-          project
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not (naming `wairon
+          init`)
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: createChainedSubsystem
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Require the member's source (`wairon member add <alias> <source>`)
+        type: branch
+        condition: no path was given
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: a member needs a source — a contained path, a `../` sibling path, or a git URL'
+        type: throw
+        error: 'a source is required: wairon member add <alias> <path | ../path | git-url[#commit]>'
+      - stepNumber: 4
+        description: >-
+          Create the member through the core adapter at the source — a part by default, a project
+          with --project (its project content created) — each piece only when absent, and declare it
+          in this project's `members` by the shorthand, with --description when given; idempotent,
+          so a re-run completes a partial scaffold. With --report the same call answers the plan
+          instead, refused exactly as the write would be, and writes nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createMember
+      - stepNumber: 5
+        description: Was it a report?
+        type: branch
+        condition: '--report was given (the creation answered written false)'
+        onFalseStep: 7
       - stepNumber: 6
-        description: Print confirmation (parent subsystem id + child project path) and next steps
+        description: >-
+          Print the plan — the part or project, where it lies, and each file or folder it would
+          create with where it lies (or that it is already in place and declared) — and say nothing
+          was written
+        type: return
+        outcome: report printed
+      - stepNumber: 7
+        description: >-
+          Print confirmation: the alias, part or project, where it lives (and a git member's pinned
+          commit); for a project whose configuration was created, the required packs it applied
+          (name and pinned version), the projectType it set, and each requirement nothing installed
+          satisfies. For a part, one line on the growth path: its subsystems are this project's own;
+          `wairon member promote` makes it a project when it needs its own team, release, approval
+          or public surface
         type: local
   - name: runInit
+    sourcePath: src/commands/init.ts
     narrative:
       - stepNumber: 1
-        description: Resolve the nearest ancestor wairon project root by walking up from cwd
+        description: >-
+          Resolve the project binding of cwd by the binding rule (WaiPaths): the nearest folder with
+          an L0 walking up, never past the repository root unless an ancestor declares the crossing
+          as a member
         type: local
       - stepNumber: 2
         description: Detect whether cwd is itself an already-initialized wairon project root
         type: branch
-        condition: the resolved root equals cwd (already initialized here)
+        condition: the bound root equals cwd (already initialized here)
+        onTrueStep: 3
         onFalseStep: 4
       - stepNumber: 3
         description: Report that the workspace is already initialized and stop
         type: return
         outcome: already initialized
       - stepNumber: 4
-        description: Detect whether cwd sits inside a parent wairon project (subdirectory case)
+        description: Would a parent project bind this folder (the binding resolved to a root above cwd)?
         type: branch
-        condition: a parent project root was found above cwd (root differs from cwd)
+        condition: a parent project binds cwd (bound root differs from cwd)
         onTrueStep: 5
-        onFalseStep: 11
+        onFalseStep: 15
       - stepNumber: 5
         description: >-
-          Prompt the user to create this subdirectory as an external subsystem of the detected
-          parent project
-        type: local
-      - stepNumber: 6
-        description: Honor the user's choice
+          Was the question answered in advance (--yes)? A folder a parent binds is never turned into
+          that parent's member unasked
         type: branch
-        condition: the user declined the prompt
-        onFalseStep: 8
+        condition: '--yes was given'
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse, writing nothing: name the project and root that bind this folder, and the exact
+          commands — `cd <parent root> && wairon member add <alias> <relative path> --project` to
+          make it a member project of that parent, or turn this folder into its own repository (`git
+          init`) and re-run `wairon init` for an independent project. A project.yaml outside this
+          folder is never edited without a question
+        type: throw
+        error: WaironError
       - stepNumber: 7
-        description: Print guidance and stop without changes
+        description: >-
+          Ask on the terminal whether to create this folder as a member project of the parent,
+          saying that yes edits the parent's .wai/project.yaml (outside this folder)
+        type: local
+      - stepNumber: 8
+        description: Honor the answer
+        type: branch
+        condition: the user declined
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Print the same two commands as the refusal and stop without changes
         type: return
         outcome: declined
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
-          Compose the SubsystemSpec (id from --name or directory name, projectPath = relative path
-          from the parent root to cwd)
-        type: local
-      - stepNumber: 9
-        description: Wire the parent subsystem and scaffold this directory's child project
+          Read the parent project's system spec through the core adapter; a parent without one is
+          refused
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: createChainedSubsystem
-      - stepNumber: 10
-        description: Report the external subsystem was created and stop
-        type: return
-        outcome: external subsystem created
+        targetMethod: loadSystemSpec
       - stepNumber: 11
-        description: Bootstrap the standard .wai directory structure
-        type: local
+        description: >-
+          Read the parent project's configuration through the core adapter, for the members it
+          already declares
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
       - stepNumber: 12
-        description: Export SDD skills templates
+        description: >-
+          Compose the member: the alias (asked, defaulting to the directory name, slugified to
+          [a-z0-9-_]+; the alias the parent already declares for this path wins) and the path (the
+          relative path from the parent root to cwd); an alias the parent already declares for
+          another path is refused by the write below
+        type: local
+      - stepNumber: 13
+        description: >-
+          Create the member from the parent's root: scaffold this directory's project (configuration
+          declaring the alias as its id, L0) and declare it in the parent's project.yaml `members` —
+          no L1 spec is written into the parent
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createMember
+      - stepNumber: 14
+        description: >-
+          Report the member was created and stop; when its configuration was created, state the
+          parent's required packs it applied (name and pinned version), the projectType it set, and
+          each requirement nothing installed satisfies, exactly as `wairon member add` does —
+          scaffolding is an unattended pack write, so it shows no impact report
+        type: return
+        outcome: member created
+      - stepNumber: 15
+        description: >-
+          Bootstrap the standard .wai directory structure, with .wai/.gitignore keeping the spec
+          tree's write lock (.spec-write.lock) out of git — created when absent, the line added when
+          the file lacks it, anything else in it kept. Inside .wai it covers the project whether or
+          not it keeps a root .gitignore, and travels with .wai/ wherever a team commits it, so a
+          lock a crashed session left behind is never committed
+        type: local
+      - stepNumber: 16
+        description: Does this folder already hold a project configuration (a half-finished init)?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 17
+        description: >-
+          Complete only what is missing: a folder that already holds a configuration keeps it as it
+          is
+        type: branch
+        condition: the folder has no project configuration yet
+        onTrueStep: 18
+        onFalseStep: 21
+      - stepNumber: 18
+        description: >-
+          Read the store packs that apply by default, to seed as the new configuration's pack
+          selections
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: defaultPackSelections
+      - stepNumber: 19
+        description: >-
+          Compose the new project's configuration — its id (the project name slugified; when the
+          slug is one the id grammar refuses — a device name such as con, the reserved `super`, or
+          nothing at all — the slug with `-project` appended, `project` for an empty one, and a line
+          saying why the folder name was not usable as it is, so a new project never starts without
+          an id), the chosen targets (with --yes: claude only — a tool nobody chose gets no files)
+          and projectType, execution budgets off, component-implementer and agent-file generation
+          off, the store packs declaring applyByDefault seeded as selections, and machine-wide packs
+          recorded as off — and create it through the core adapter.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: createProjectConfig
+      - stepNumber: 20
+        description: >-
+          Seed the context directory (.wai/context/) with its generated files through the core
+          adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 21
+        label: bootstrap_l0
+        description: >-
+          Bootstrap the L0 system spec through core, completing only what is missing (the same
+          bootstrap every chained subproject gets)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: ensureProjectInitialized
+      - stepNumber: 22
+        label: export_skills
+        description: Export SDD skills templates for the configured targets only
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 13
-        description: Generate default L0/L1/L2 spec files if empty
-        type: local
-  - name: runSubsystemMove
+      - stepNumber: 23
+        description: >-
+          For each tool the person chose to install machine-wide, find its global configuration file
+          through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: globalGuideFilePath
+      - stepNumber: 24
+        description: >-
+          Find the in-project configuration file of each configured target as well — a target nobody
+          chose gets none
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: localGuideFilePath
+      - stepNumber: 25
+        description: >-
+          Write the guide into each one the plan asked for — the machine-wide guide into the global
+          file, the in-project one into the local file. They say different things on purpose: the
+          global guide must stay inert in projects that have no spec tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: injectGuide
+      - stepNumber: 26
+        description: >-
+          Write wairon's block of the repository-root pointer for every target that got a local
+          guide, and for the targets that want only a root file. A pointer rather than a copy, so
+          there is one document to keep current instead of two that can disagree; and a block
+          between markers, because the root file is usually the user's own: every byte of it outside
+          the markers is kept, and the report says the block was written into an existing file
+          rather than that a file was created
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: writeRootGuideDelegator
+      - stepNumber: 27
+        description: Report what was created and where, and name the next command to run
+        type: return
+        outcome: initialized
+  - name: runMemberMove
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the parent project root by walking up from cwd and confirm through the core
+          adapter that it holds an initialized wairon project; error if it does not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Require the new location
         type: branch
-        condition: options.projectPath is not provided
+        condition: no new path was given
         onFalseStep: 4
       - stepNumber: 3
         description: 'Reject: the new location is required'
         type: throw
-        error: '--project-path (the new location) is required'
+        error: 'a new path is required: wairon member move <alias> <path>'
       - stepNumber: 4
-        description: Move the subproject directory and update its projectPath link
+        description: Move the member's directory and point its `members` entry there
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: moveSubsystemProject
+        targetMethod: moveMember
       - stepNumber: 5
-        description: Print confirmation (old path to new path)
+        description: Print confirmation (alias, old path to new path)
         type: local
   - name: runSubsystemExternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
       - stepNumber: 2
         description: Require the destination path
         type: branch
-        condition: options.projectPath is not provided
+        condition: options.path is not provided
         onFalseStep: 4
       - stepNumber: 3
         description: 'Reject: the destination is required'
         type: throw
-        error: '--project-path (the subproject destination) is required'
+        error: '--path (the member''s destination) is required'
       - stepNumber: 4
-        description: Externalize the subsystem into a standalone subproject
-        type: call
-        targetComponent: cli_core_adapter
-        targetMethod: externalizeSubsystem
-      - stepNumber: 5
+        label: request
         description: >-
-          Print confirmation, the new subproject path, and a reminder to move the source code and
-          re-validate
+          Build the externalize request, with --as (part, the default — a storage move into a part;
+          project — the move composed with a promote)
         type: local
-  - name: runSubsystemInternalize
+      - stepNumber: 5
+        description: Run it through the shared migration flow; remind that source code is moved by the user
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberInternalize
+    sourcePath: src/commands/subsystem.ts
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the parent project root by walking up from cwd; error if cwd is not inside an
-          initialized wairon project
-        type: local
-      - stepNumber: 2
-        description: Internalize the external subsystem back into the parent tree
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
         type: call
         targetComponent: cli_core_adapter
-        targetMethod: internalizeSubsystem
-      - stepNumber: 3
-        description: Print confirmation and a reminder to re-validate
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the internalize request, its destination from --into, --packs and --export
         type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
   - name: runSurface
+    sourcePath: src/commands/surface.ts
     narrative:
       - stepNumber: 1
         description: Route on the surface action
@@ -385,69 +717,91 @@ methods:
           - value: export
             step: 2
           - value: import
-            step: 4
+            step: 5
           - value: list
-            step: 6
-          - value: generate-children
-            step: 8
-          - value: externals
-            step: 10
-        defaultStep: 12
+            step: 7
+          - value: diff
+            step: 9
+        defaultStep: 11
       - stepNumber: 2
-        description: Export the own surface (audience/format/out/portal from options)
+        description: >-
+          Export the own surface (format/out/portal from options; the audience from --audience, else
+          `project` for --format openapi — the project's own service document, every HTTP Portal it
+          has, exported or not — and `instance` for the native snapshot). An --out naming an
+          existing folder is refused first, before anything renders: it names the file written, so
+          the refusal gives a file path and says how several portals are written (one document per
+          portal beside that path)
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: exportSurface
       - stepNumber: 3
         description: >-
-          Report the export result: every written path — with several portals and no --portal, one
-          file per portal is written and each path is listed. Without an out path, print the single
-          document when one portal remains, else list the available portals (portalId + name) so the
-          caller can pick with --portal, rather than printing nothing.
+          Judge the bound project with the owner's gate, so an export of a design the gate refuses
+          never reads as a success
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 4
+        description: >-
+          Report the export result. The status line (what was projected) goes to stderr, so a
+          document printed to stdout is the document and nothing else; it is a warning, never a
+          success mark, when the projection holds no interface and no type (naming that the export
+          table publishes nothing at that audience) or when the gate found errors (their count and
+          codes, and `wairon validate` to see them). An OpenAPI document with a type it could not
+          resolve (the result's unresolvedTypes) is a warning too, naming each type and how to
+          resolve it by what its alias names in this project's configuration: an external is pinned
+          (`wairon externals pin <alias>`), or the type exported from its L0; a member — never
+          pinned — must export the type from its L0, or the reference names a public name the member
+          retired, to follow at the project that writes it; this project's own id names its own
+          export table; an alias nothing declares is said so — never "pin" for a member or for the
+          project itself, gate errors or not. Every written path is listed — with several portals
+          and no --portal, one file per portal is written and each path is listed. Without an out
+          path, print the single document when one portal remains, else list the available portals
+          (portalId + name) so the caller can pick with --portal, rather than printing nothing. An
+          OpenAPI export with no HTTP Portal (an in-process library) is refused naming why, never
+          answered with the native entries, and one whose operations collide on a path and verb is
+          refused naming both (nothing written).
         type: return
         outcome: exported
-      - stepNumber: 4
+      - stepNumber: 5
         description: Import the foreign surface (source/origin from options)
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: importSurface
-      - stepNumber: 5
+      - stepNumber: 6
         description: Print the imported snapshot summary
         type: return
         outcome: imported
-      - stepNumber: 6
+      - stepNumber: 7
         description: List the stored snapshots
         type: call
         targetComponent: cli_surfaces_client_adapter
         targetMethod: listSnapshots
-      - stepNumber: 7
+      - stepNumber: 8
         description: Print the snapshot table
         type: return
         outcome: listed
-      - stepNumber: 8
-        description: Generate parent snapshots into the chained children
+      - stepNumber: 9
+        description: >-
+          Compare the public surface with the last committed approval, or with --against (a git
+          revision or a saved native snapshot). A comparison that cannot be made — the project is in
+          no git work tree, the revision names no commit, or no approval of it was ever committed —
+          is refused as one line naming why and what to do (lock and commit, or `--against
+          <ref|file>`), exit 1, never an uncaught stack trace
         type: call
         targetComponent: cli_surfaces_client_adapter
-        targetMethod: generateChildSnapshots
-      - stepNumber: 9
-        description: Print the written child paths
-        type: return
-        outcome: generated
+        targetMethod: diffSurface
       - stepNumber: 10
         description: >-
-          List the project's external surfaces (parent family, siblings, foreign imports) with
-          origin and freshness
-        type: call
-        targetComponent: cli_surfaces_client_adapter
-        targetMethod: listExternalInterfaces
+          Print what it was compared with, then one line per change grouped removed, renamed,
+          changed, added, and how many a consumer may have to follow; or the JSON answer under
+          --json
+        type: return
+        outcome: changelog printed
       - stepNumber: 11
         description: >-
-          Print the externals table: one row per entry — sourceKind, key, origin, freshness,
-          interface ids
-        type: return
-        outcome: externals listed
-      - stepNumber: 12
-        description: Unknown surface action
+          Unknown surface action — for `externals` and `pin`, which stage 3 removed, the error names
+          `wairon externals list|status|pin` instead
         type: throw
         error: UnknownSurfaceActionError
   - name: runPacks
@@ -545,6 +899,22 @@ methods:
             step: 8
           - value: remove
             step: 10
+          - value: install
+            step: 13
+          - value: uninstall
+            step: 15
+          - value: which
+            step: 17
+          - value: use
+            step: 19
+          - value: unuse
+            step: 21
+          - value: bundle
+            step: 23
+          - value: sync
+            step: 25
+          - value: impact
+            step: 27
         defaultStep: 12
       - stepNumber: 2
         label: doInit
@@ -600,46 +970,3221 @@ methods:
         label: unknown
         description: Unknown action.
         type: throw
-        error: unknown pack action (expected init | build | add | list | remove)
+        error: >-
+          unknown pack action (expected init | build | install | uninstall | which | use | unuse |
+          impact | bundle | sync | add | list | remove)
+      - stepNumber: 13
+        label: doInstall
+        description: >-
+          Install a pack into this wairon install's store (applies to nothing until a project
+          selects it).
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: installPack
+      - stepNumber: 14
+        description: Done.
+        type: return
+        outcome: install done
+      - stepNumber: 15
+        label: doUninstall
+        description: Remove a pack from the store.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: uninstallStorePack
+      - stepNumber: 16
+        description: Done.
+        type: return
+        outcome: uninstall done
+      - stepNumber: 17
+        label: doWhich
+        description: Identify which installed pack a name resolves to.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: whichPack
+      - stepNumber: 18
+        description: Done.
+        type: return
+        outcome: which done
+      - stepNumber: 19
+        label: doUse
+        description: Select an installed pack for this project.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: usePack
+      - stepNumber: 20
+        description: Done.
+        type: return
+        outcome: use done
+      - stepNumber: 21
+        label: doUnuse
+        description: Deselect a pack for this project.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: unusePack
+      - stepNumber: 22
+        description: Done.
+        type: return
+        outcome: unuse done
+      - stepNumber: 23
+        label: doBundle
+        description: Commit a copy of a selected pack under .wai/packs/.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: bundlePack
+      - stepNumber: 24
+        description: Done.
+        type: return
+        outcome: bundle done
+      - stepNumber: 25
+        label: doSync
+        description: Install every declared-but-missing pack from its recorded source.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: syncPacks
+      - stepNumber: 26
+        description: Done.
+        type: return
+        outcome: sync done
+      - stepNumber: 27
+        label: doImpact
+        description: Show what a pack would change on this project, writing nothing.
+        type: call
+        targetComponent: cli_packs_adapter
+        targetMethod: impactPack
+      - stepNumber: 28
+        description: Done.
+        type: return
+        outcome: impact done
   - name: runLock
     narrative:
       - stepNumber: 1
-        description: Run the as-complete dry-run gate over the tree
+        description: >-
+          Is this checkout ATTACHED to a hosted project? A hosted lock is the instance's
+          execute-primary workflow, not a local freeze.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Lock the ATTACHED project on the instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: lockAttached
+      - stepNumber: 4
+        description: >-
+          Report the outcome verbatim — an approval-gated instance answers that a REQUEST was
+          created, which must never be printed as a completed lock.
+        type: return
+        outcome: locked or requested
+      - stepNumber: 5
+        description: >-
+          Not attached: read the project configuration — its rule severities and projectType govern
+          the as-complete gate.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 6
+        label: empty-design
+        description: >-
+          Ask whether there is anything to approve: a tree that holds the L0 and nothing below it,
+          and was never approved, has no design yet
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: holdsNoDesign
+      - stepNumber: 7
+        description: Nothing to approve?
+        type: branch
+        condition: the tree holds no design and no approval is on record
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        label: nothing-to-approve
+        description: >-
+          Say there is nothing designed to approve yet — the tree holds the L0 and nothing below it,
+          which `validate` calls nothing to check yet — and to add a subsystem first, then lock.
+          Write no record (approving an empty design approves nothing) and exit 0: it is not a
+          failure
+        type: return
+        outcome: nothing to approve
+      - stepNumber: 9
+        label: capture
+        description: >-
+          CAPTURE the gate identity before anything is judged — the identity the record will
+          certify. The lock adapter re-confirms it immediately before writing, so a lock never
+          certifies inputs that moved while it ran (the validation and the confirmation prompt
+          included)
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 10
+        description: >-
+          Run the as-complete dry-run gate over the tree; the result carries its code half
+          summarized with the analyzer identity
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 2
-        description: The gate found errors (an invalid tree is never frozen)
+      - stepNumber: 11
+        description: >-
+          Take the design half (ValidationResult.designOnly): what the approval certifies and the
+          only findings that may refuse it. Code-conformance findings are recorded beside the
+          approval and never refuse it, so a design can be approved before its code exists — CI
+          enforces code conformance (`wairon validate --ci`), not the lock
+        type: local
+      - stepNumber: 12
+        description: The design half found errors (an invalid design is never frozen)
         type: branch
-        condition: as-complete validation reported errors
-        onFalseStep: 4
-      - stepNumber: 3
-        description: Refuse the lock, printing the blocking findings
+        condition: the design half reported errors
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Refuse the lock, printing the blocking findings; nothing was changed
         type: return
         outcome: refused
-      - stepNumber: 4
+      - stepNumber: 14
         description: >-
-          Confirm with the human (skipped under --yes), then freeze the tree through the lock
-          adapter
+          Summarize, apply requireApprovedMembers, confirm with the human (skipped under --yes),
+          re-confirm the captured identity and write the record through the lock adapter
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: lockTree
-      - stepNumber: 5
-        description: The tree mounts chained children
+      - stepNumber: 15
+        description: Did the human decline?
         type: branch
-        condition: at least one subsystem carries a projectPath
+        condition: the lock adapter answered no record
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
+        description: 'Cancelled: nothing was changed'
+        type: return
+        outcome: cancelled
+      - stepNumber: 17
+        description: >-
+          Refresh THIS project's generated outputs only — never --family: a parent lock writes
+          nothing below itself, generated outputs included
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runGenerate
+      - stepNumber: 18
+        description: >-
+          Print the lock record — written, or, when this run re-recorded nothing (the same approval
+          on file, no evidence beside it to refresh), that this run left .wai/lock.json untouched,
+          as the summary promised: a difference from the committed record, if there is one, was
+          written by an earlier run — each direct member's state, and the code results plainly on
+          their own line — "code: N errors, M warnings recorded beside the claim (analyzer
+          <version>, grade <grade>)" — so an approval taken over failing code is never mistaken for
+          clean code; then return
+        type: return
+        outcome: locked
+    symbol: lockCommand
+  - name: runAgent
+    narrative:
+      - stepNumber: 1
+        description: Dispatch on the agent action
+        type: switch
+        'on': action
+        cases:
+          - value: brief
+            step: 2
+          - value: customize
+            step: 4
+        defaultStep: 9
+      - stepNumber: 2
+        description: Compose the agent's live brief via the core client adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 3
+        description: Print the rendered brief (instructions + ownedPaths/readPaths scope)
+        type: return
+        outcome: brief printed
+      - stepNumber: 4
+        description: Compose the agent's live brief via the core client adapter to seed the scaffold
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 5
+        description: Refuse to clobber a user-owned file
+        type: branch
+        condition: .wai/agents/<id>.md already exists
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: The guidance file is user-owned — point at it for direct editing instead of overwriting
+        type: throw
+        error: GuidanceFileExistsError
+      - stepNumber: 7
+        description: >-
+          Write the scaffold: a header explaining that spec-derived facts are inferred live (do not
+          duplicate them), then the subsystem description as the starting content
+        type: local
+      - stepNumber: 8
+        description: Report the created path and how it is used (folded into every future brief)
+        type: return
+        outcome: scaffolded
+      - stepNumber: 9
+        description: Unknown agent action
+        type: throw
+        error: unknown agent action (expected brief | customize)
+  - name: runRemote
+    sourcePath: src/commands/remote.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the instance URL, project selector and bearer credential for this command:
+          explicit flags, then the environment, then this checkout's recorded binding, then the
+          agent's own MCP configuration. Refuse with actionable guidance when nothing resolves.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Route on the remote action
+        type: switch
+        'on': action
+        cases:
+          - value: push
+            step: 3
+          - value: pull
+            step: 5
+          - value: attach
+            step: 7
+          - value: detach
+            step: 9
+          - value: status
+            step: 11
+        defaultStep: 14
+      - stepNumber: 3
+        description: >-
+          Migrate the local spec tree into the hosted project (creating it first when --unit was
+          given).
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: pushTree
+      - stepNumber: 4
+        description: Report what was pushed
+        type: jump
+        toStep: 15
+      - stepNumber: 5
+        description: Migrate the hosted spec tree into this checkout.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: pullTree
+      - stepNumber: 6
+        description: Report what was pulled
+        type: jump
+        toStep: 15
+      - stepNumber: 7
+        description: >-
+          Record a standing binding for this checkout, after verifying it resolves against the
+          instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: attach
+      - stepNumber: 8
+        label: attachReported
+        description: Report what is now attached
+        type: jump
+        toStep: 15
+      - stepNumber: 9
+        description: Remove the binding, returning the checkout to purely local operation.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: detach
+      - stepNumber: 10
+        description: Report the detachment
+        type: jump
+        toStep: 15
+      - stepNumber: 11
+        description: >-
+          Describe what this checkout is attached to and how it resolved — never printing the
+          credential.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: describeAttachment
+      - stepNumber: 12
+        description: >-
+          When the checkout is not attached, list the instances this machine holds a credential for
+          — URLs only, never tokens.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: listStoredInstances
+      - stepNumber: 13
+        description: Report the attachment
+        type: jump
+        toStep: 15
+      - stepNumber: 14
+        description: Reject an unknown remote action, naming the supported ones.
+        type: throw
+        error: 'Unknown remote action (supported: push, pull, attach, detach, status)'
+      - stepNumber: 15
+        label: outcome
+        description: >-
+          Print the outcome: for a migration, direction, instance and project, roots and file count,
+          whether the project was created, and any backup path the destination reported — a replaced
+          tree must always name what it can be undone from; for attach/detach/status, what this
+          checkout now addresses and where that answer came from.
+        type: local
+  - name: runLogin
+    sourcePath: src/commands/remote.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Take the token from --token or prompt for it without echoing, and normalize the instance
+          URL.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Verify the credential against the instance and store it for this machine — not for this
+          project: a login serves every checkout, while binding a project is what `wairon remote
+          attach` is for.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: storeCredential
+      - stepNumber: 3
+        description: >-
+          Confirm which instance is now reachable, and point at `wairon remote attach` as the next
+          step. Never echo the credential.
+        type: local
+      - stepNumber: 4
+        description: Confirm which instance is now reachable, without echoing the credential.
+        type: local
+  - name: runLogout
+    sourcePath: src/commands/remote.ts
+    narrative:
+      - stepNumber: 1
+        description: Was an instance named?
+        type: branch
+        condition: a url argument was supplied
+        onTrueStep: 2
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Forget the stored credential for that instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: forgetCredential
+      - stepNumber: 3
+        description: >-
+          State plainly that this forgot the credential LOCALLY and did NOT revoke it on the
+          instance — revocation lives in the hosted UI under Tokens. Then finish.
+        type: return
+        outcome: forgotten
+      - stepNumber: 4
+        label: listStored
+        description: List the instances this machine holds a credential for, printing URLs only.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: listStoredInstances
+  - name: runStatus
+    narrative:
+      - stepNumber: 1
+        description: Is this checkout ATTACHED to a hosted project?
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: resolveTarget
+      - stepNumber: 2
+        description: Attached?
+        type: branch
+        condition: a hosted target resolved
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Read the ATTACHED project's completeness dashboard from the instance.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: statusAttached
+      - stepNumber: 4
+        description: >-
+          Print the hosted dashboard, naming the instance and project so it is never mistaken for a
+          local tree.
+        type: return
+        outcome: reported remotely
+      - stepNumber: 5
+        description: 'Not attached: print the LOCAL spec tree''s completeness dashboard'
+        type: call
+        targetComponent: cli_runner
+        targetMethod: localStatus
+    symbol: statusCommand
+  - name: runMcpServe
+    sourcePath: src/commands/mcp.ts
+    narrative:
+      - stepNumber: 1
+        description: Run the stdio MCP server against the resolved project root.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: serveMcpStdio
+  - name: runMcpInstall
+    sourcePath: src/cli/runner.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          For a HOSTED registration, resolve the bearer to embed: the explicit flag, else the
+          credential stored for that instance — done HERE because the config adapter may not read
+          the credential store.
+        type: call
+        targetComponent: remote_orchestrator
+        targetMethod: storedCredentialFor
+      - stepNumber: 2
+        description: >-
+          Register (or self-heal) the wairon entry in the configured AI tools' MCP configuration —
+          local stdio, or hosted http when an instance was named.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+    symbol: mcpInstallCommand
+  - name: runMcpStatus
+    sourcePath: src/commands/mcp.ts
+    narrative:
+      - stepNumber: 1
+        description: Report where a wairon MCP server is registered and what it points at.
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: reportMcpStatus
+  - name: runExecutionShow
+    sourcePath: src/commands/execution.ts
+    narrative:
+      - stepNumber: 1
+        description: Is this an initialized wairon project?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Budgets belong to a project.
+        type: branch
+        condition: the project has no configuration (not an initialized wairon project)
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming `wairon init`.
+        type: throw
+        error: Not a wairon project — run `wairon init` first.
+      - stepNumber: 4
+        description: 'Read the project configuration: the execution tier and the per-agent overrides.'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: Print the tier and the one-line description of what that tier means.
+        type: local
+      - stepNumber: 6
+        description: Tier off derives nothing.
+        type: branch
+        condition: the tier is off
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Print that no budgets are derived — briefs and generated agent files carry what they
+          carried before budgets existed — and how to enable them (`wairon execution set-tier
+          default`).
+        type: return
+        outcome: tier off, nothing derived
+      - stepNumber: 8
+        description: Ask the core adapter for the current agent topology, resolved from the live spec tree
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveAgentTopology
+      - stepNumber: 9
+        description: An empty topology has nothing to budget.
+        type: branch
+        condition: the topology has no agents
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Warn that there are no agents in the topology yet, so nothing is budgeted.
+        type: return
+        outcome: no agents
+      - stepNumber: 11
+        description: List every agent's allowance.
+        type: loop
+        loopKind: forEach
+        over: the resolved agents
+        endStep: 12
+      - stepNumber: 12
+        description: Ask the adapter what this agent's work is like
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: deriveExecutionProfile
+      - stepNumber: 13
+        description: >-
+          Ask the adapter what that work earns under the project's dial, and print the row:
+          capability tier, tool grant, turn ceiling, MCP reach, and the rationale underneath
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveBudget
+      - stepNumber: 14
+        description: When the configuration declares per-agent overrides, print how many.
+        type: local
+      - stepNumber: 15
+        description: >-
+          When any agent is pinned to the frontier tier — only an override can do that — warn that
+          frontier is a sparring partner for questions the specs do not settle rather than an owner
+          tier, and that an owner needing it usually points at a component doing too much.
+        type: local
+      - stepNumber: 16
+        description: Done.
+        type: return
+        outcome: allowances listed
+    symbol: showExecution
+  - name: runExecutionSetTier
+    sourcePath: src/commands/execution.ts
+    narrative:
+      - stepNumber: 1
+        description: Is this an initialized wairon project?
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: The dial belongs to a project.
+        type: branch
+        condition: the project has no configuration (not an initialized wairon project)
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming `wairon init`.
+        type: throw
+        error: Not a wairon project — run `wairon init` first.
+      - stepNumber: 4
+        description: Only a known tier can be set.
+        type: branch
+        condition: the requested tier is not one of off | free | default | trade | aggressive
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Refuse, listing the valid tiers.
+        type: throw
+        error: 'Unknown tier — expected one of: off, free, default, trade, aggressive.'
+      - stepNumber: 6
+        description: Read the project configuration for the current tier.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: Setting the current tier again changes nothing.
+        type: branch
+        condition: the requested tier is already the current tier
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Report that the tier is already set, writing nothing.
+        type: return
+        outcome: unchanged
+      - stepNumber: 9
+        description: Write execution.tier through the core adapter; per-agent overrides are kept.
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setExecutionTier
+      - stepNumber: 10
+        description: >-
+          Report the move (previous → new tier) and what the new tier costs — its description — then
+          point at `wairon execution show` for the resulting allowances and at `wairon generate` to
+          write them into materialized agent files.
+        type: local
+      - stepNumber: 11
+        description: The cost-trading tiers get a warning.
+        type: branch
+        condition: the new tier is trade or aggressive
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Warn that this tier trades quality for cost, and that a cheaper delegation needing a
+          second round trip is not cheaper — measure it on real work before keeping it.
+        type: local
+      - stepNumber: 13
+        description: Done.
+        type: return
+        outcome: tier set
+    symbol: setExecutionTier
+  - name: runDoctor
+    sourcePath: src/commands/doctor.ts
+    narrative:
+      - stepNumber: 1
+        label: report-only
+        description: With --report, print one section's plan and nothing else
+        type: branch
+        condition: '--report was given'
+        onFalseStep: 11
+      - stepNumber: 2
+        description: >-
+          Only a lone `--report <section>` is a report, and the sections are `chaining`,
+          `composed-validation` and `reachability`
+        type: branch
+        condition: >-
+          --fix was given too, or the section is none of `chaining`, `composed-validation` and
+          `reachability`
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse the flags, naming them: --report prints and writes nothing, so it never combines
+          with --fix, and the known sections are chaining, composed-validation and reachability
+        type: throw
+        error: DoctorOptionsError
+      - stepNumber: 4
+        label: report-section
+        description: Which section?
+        type: switch
+        'on': the section
+        cases:
+          - value: composed-validation
+            step: 5
+          - value: chaining
+            step: 7
+          - value: reachability
+            step: 9
+        defaultStep: 7
+      - stepNumber: 5
+        description: >-
+          Explain what composed validation changed in each project's verdict: today's as-complete
+          owner's gates against the totals and validator version their locks recorded, and every new
+          finding with its reason (escalated, pinned, positional — the last with what the family's
+          top matched and the rewrite)
+        type: call
+        targetComponent: verdict_changes
+        targetMethod: explain
+      - stepNumber: 6
+        description: >-
+          Print it per project — the lock's totals beside today's when the lock predates composed
+          validation, then the entries grouped by code with their reasons and rewrites, then how
+          many findings it could not attribute and, after that count, every positional candidate no
+          tie-break rule decides (ambiguous, with each candidate, or matching nothing) — and say
+          plainly that the lock records totals only, so this is not a per-code diff. Nothing is
+          written
+        type: return
+        outcome: composed-validation report printed
+      - stepNumber: 7
+        label: report-chaining
+        description: >-
+          Plan the chaining migration of the family through the migration portal (verb chaining,
+          without a rehearsal: the report prints the plan and writes nothing, so there is nothing to
+          discard)
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: plan
+      - stepNumber: 8
+        description: >-
+          Print the plan per project, each item once, OPENING with the new dependencies it
+          introduces (one prominent line per consumer → producer edge no external or pin had before,
+          with its reference count — "app_core now depends on app_ui (96 references)"; listed, never
+          blocking): the id to declare, the minimal L0 to create, the L0 entries to add with the
+          consumers each serves (own `{ typeDef }` entries, mount-carried and positional entries
+          marked), every key the first L0 write will drop from the stored file (droppedKeys, e.g.
+          `status: draft`) under a line saying they will be removed, the externals to declare, the
+          `use` imports to add with the reason each producer was chosen (only-match,
+          declared-producer, already-exported), the aliases to pin, the legacy mounts moved into
+          `members` with every field they carry or retire, and the superseded family pins as ONE
+          line per project with their count; then every reference rewrite (from → to, grouped per
+          project and spec), every finding once (positional-ambiguous with each candidate,
+          import-shadowed, import-collision among them), and the totals. The plan is computed
+          without projecting any sibling surface, so no projector message reaches it. Nothing is
+          written
+        type: return
+        outcome: chaining plan reported
+      - stepNumber: 9
+        label: report-reachability
+        description: >-
+          Plan the bound project's reachability migration with apply false: the same plan --fix
+          writes, rehearsed without a write
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 10
+        description: >-
+          Print each rewrite grouped by its retired form (portalType, listener mounts, invokedBy
+          kinds, export types, in-process endpoints, retired allows), then what it will NOT fix and
+          why (an endpoint outside every old prefix, a sibling-subsystem caller to model, a
+          disagreeing export type, a router already set), then the counts and the one re-lock an
+          applied plan implies. Nothing is written
+        type: return
+        outcome: reachability report printed
+      - stepNumber: 11
+        label: fix
+        description: With --fix, apply the repairs before the report, so the report shows the repaired state
+        type: branch
+        condition: '--fix was given'
+        onFalseStep: 56
+      - stepNumber: 12
+        description: >-
+          First, resolve any family migration a crash left unfinished under this root — roll back
+          each transaction whose coordinator never committed, clean up each that did — before any
+          other repair reads a file that transaction may have half-swapped; a transaction whose
+          coordinator or an owner is out of reach is reported, not guessed
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 13
+        description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 14
+        description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
+        type: branch
+        condition: the project is initialized and its configuration is valid
+        onFalseStep: 56
+      - stepNumber: 15
+        description: >-
+          Carry an earlier approval into the current reading BEFORE any repair or migration touches
+          a spec, so the tree it is compared with is the tree it approved: when its own identity,
+          recomputed, still matches, the whole record (no review, the approval stays the approver's,
+          the record says it was re-expressed); when only the gate it was judged under moved but no
+          spec file did, its reading alone, leaving the lock stale for that stated cause until one
+          `wairon lock`; otherwise nothing, and the report names the cause
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: reexpressApproval
+      - stepNumber: 16
+        description: >-
+          Rebuild the derived context documents through the core adapter, each written only if it
+          changed
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 17
+        description: Re-export the SDD skills for the active targets
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 18
+        description: >-
+          Re-inject the local AI guides for the active targets through the core adapter, recording
+          which files were written so the report can name them
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: reinjectLocalGuides
+      - stepNumber: 19
+        description: >-
+          List the spec files stored under a legacy name and rename each to the name the current
+          layout expects
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 20
+        description: >-
+          Write a project configuration for each chained subproject with specs but none, and print
+          the directories repaired
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: backfillChainedSubprojectConfigs
+      - stepNumber: 21
+        description: >-
+          Retire the Specialists with apply true: each becomes an Orchestrator with the
+          dependencyClass its dependencies decide, and each Specialist-based variant rebases onto
+          Orchestrator; print what was retyped. Runs after the filename migration, so the retyped
+          specs save under current names
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 22
+        description: >-
+          Repair the narrative steps carrying a field their own type cannot have, with apply true:
+          each foreign field is dropped and nothing else about the step changes; print what was
+          repaired. A mechanical spec repair, like the filename migration above
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairForeignStepFields
+      - stepNumber: 23
+        description: >-
+          Regenerate the stored signatures with apply true: every stored text its params contradict
+          is rewritten derived, and every restatement equal to its method's signature source is
+          dropped; print what was rewritten. A mechanical spec repair like the ones above — one
+          project, idempotent, outside the family transaction
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairSignatures
+      - stepNumber: 24
+        description: >-
+          Rewrite the stored type spellings with apply true: every type position that is an alias is
+          re-saved in its canonical spelling, and the derived signature texts follow; print what was
+          rewritten, then the int proposals and the positions needing an author, none of which is
+          written. A mechanical spec repair like the ones above — one project, idempotent, outside
+          the family transaction
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairTypeSpellings
+      - stepNumber: 25
+        description: >-
+          Migrate onto the reachability model with apply true: portalType becomes transport,
+          listener mounts become Portal-level entries on the listener and the Portals it mounted
+          with each via moved to the Portal implementation's router, retired invokedBy kinds and
+          authored export types are rewritten, in-process Custom endpoints become InProcess, and
+          allows of retired codes go; print each rewrite, then what it reports instead of writing
+          (an endpoint outside every old prefix, a sibling-subsystem caller to model, a disagreeing
+          export type), then that the design changed and needs one `wairon lock`. A mechanical spec
+          repair like the ones above: one project, idempotent, outside the family transaction, and
+          it never invents an entry
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 26
+        label: chaining
+        description: >-
+          Plan the chaining migration through the migration portal (verb chaining, without a
+          rehearsal: what is printed and confirmed is the chaining plan, as before; apply rehearses
+          it) — the last spec-touching fix: after the configuration backfill, so every chained child
+          has a project.yaml to declare its id in, and after the filename migration and the spec
+          repairs, so its gated L0 writes save specs under current names into a repaired tree. It is
+          the one fix that writes several projects at once, so it alone runs through the family
+          transaction; every fix above writes one project, regenerates derived output or restates
+          what is there, is idempotent, and stays outside it — a failure there leaves a state its
+          own re-run completes. The transaction recovery at the top of --fix runs before all of them
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: plan
+      - stepNumber: 27
+        description: 'Nothing to migrate: go on without asking'
+        type: branch
+        condition: the plan has something to write
+        onFalseStep: 31
+      - stepNumber: 28
+        description: >-
+          Print the plan per project as --report chaining does — a project outside this project's
+          root (the family above it, which a chained member's migration also writes) marked as such
+          — then ask to apply it. --yes answers yes; a run with no terminal to ask and no --yes, or
+          a no, skips the migration and writes none of it — every other fix above has already run,
+          as it always has. The family's writes are covered by this plan, its confirmation and the
+          family transaction's all-or-nothing restore
+        type: local
+      - stepNumber: 29
+        description: Only a confirmed plan is applied
+        type: branch
+        condition: the person confirmed, or --yes was given
+        onFalseStep: 31
+      - stepNumber: 30
+        description: >-
+          Apply the confirmed plan through the migration portal — rehearsed, staged and swapped
+          all-or-nothing — and print each file written; then name every project whose lock the
+          writes staled, pointing at `wairon lock` — re-locking is the human's, and nothing locks
+          here. A refused or failed plan is printed with its findings (and, for a failed swap,
+          whether the family was restored) and counts as an error in the summary; nothing was
+          written
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: apply
+      - stepNumber: 31
+        label: members-fix
+        description: >-
+          Members: read the project graph the bound root's tree forms now — after the chaining
+          migration, so a legacy mount it moved into `members` is a member here — and take every
+          member project below the bound root with its directory. The per-project repairs above
+          wrote the bound project only; a family is upgraded only once every member is
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 32
+        description: For each member project below the bound root
+        type: loop
+        loopKind: forEach
+        over: the member projects below the bound root, nearest first
+        endStep: 46
+      - stepNumber: 33
+        description: Does the member lie inside the bound root?
+        type: branch
+        condition: the member's directory lies inside the bound root
+        onFalseStep: 45
+      - stepNumber: 34
+        description: >-
+          Bound to the member's root, retire its Specialists with apply true, printed under the
+          member's alias as step 19 prints the bound project's
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 35
+        description: Bound to the member's root, drop the foreign narrative-step fields of its own specs
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairForeignStepFields
+      - stepNumber: 36
+        description: Bound to the member's root, regenerate its stored signatures
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairSignatures
+      - stepNumber: 37
+        description: >-
+          Bound to the member's root, rewrite its stored type spellings, printing its int and enum
+          proposals and the positions needing an author, none of which is written
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairTypeSpellings
+      - stepNumber: 38
+        description: >-
+          Bound to the member's root, migrate it onto the reachability model, printed under the
+          member's alias as the step above prints the project's
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 39
+        description: >-
+          Bound to the member's root, rebuild its derived context documents, so an assistant opened
+          in the member's own folder reads current ones
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 40
+        description: >-
+          Bound to the member's root, re-export the SDD skills for its active targets (a part has no
+          surfaces of its own: its parent's serve it, and this member step is skipped for one)
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 41
+        description: >-
+          Bound to the member's root, re-inject its local AI guides for its active targets, printed
+          under the member's alias
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: reinjectLocalGuides
+      - stepNumber: 42
+        description: >-
+          Bound to the member's root, plan the Claude registration in the member's own project
+          .mcp.json; a plan that would write outside the member's project is not applied from here
+          (a machine-wide registration is the bound project's one plan, so a member never asks a
+          second time)
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: planInstall
+      - stepNumber: 43
+        description: >-
+          Register or repair the member's project .mcp.json when its entry is missing or differs,
+          printed under the member's alias, so an assistant opened in the member's folder has the
+          wairon tools
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 44
+        description: Done with this member
+        type: jump
+        toStep: 46
+      - stepNumber: 45
+        label: member-fix-outside
+        description: >-
+          A member outside the bound root (a sibling checkout) is not written from here: name it
+          with the command to run in its own directory — `wairon doctor --fix` there
+        type: local
+      - stepNumber: 46
+        label: member-fix-next
+        description: On to the next member
+        type: local
+      - stepNumber: 47
+        description: >-
+          Rebuild the bound project's derived context documents once more, last: they describe the
+          tree as it stands NOW, and the first rebuild ran before the spec repairs, the chaining
+          migration and the members' repairs moved it, which left the domain map stale in the
+          closing check
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: syncContextFiles
+      - stepNumber: 48
+        label: mcp
+        description: >-
+          Plan the MCP registration for each active backend without writing anything — Claude in the
+          project's .mcp.json; Gemini in the project's settings, or, for an Antigravity target, the
+          GLOBAL mcp_config.json it alone reads — each write marked inside or outside the project
+          root, with the entry the file holds now and the one it would get
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: planInstall
+      - stepNumber: 49
+        description: >-
+          Register or repair every backend whose planned writes stay inside the project root (or are
+          already up to date); a write inside the project needs no further consent, as before
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 50
+        description: >-
+          For a Gemini or Antigravity target, look for the legacy global Antigravity plugin, whose
+          name collides with the MCP server
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: findLegacyPlugin
+      - stepNumber: 51
+        label: outside-writes
+        description: Anything to write outside the project root?
+        type: branch
+        condition: a planned MCP write outside the project root is pending, or the legacy plugin is present
+        onFalseStep: 56
+      - stepNumber: 52
+        description: >-
+          Print every write outside the project root as its own plan — for each MCP configuration
+          the file, the wairon entry it holds and the one it would get (a large entry summarised, a
+          bearer credential never printed), and the legacy plugin directory to move aside — then ask
+          for ITS OWN confirmation: --yes answers it only together with --global; a terminal asks; a
+          run with neither skips every one of these writes and says so, naming `wairon doctor --fix
+          --yes --global`. Nothing outside the project has been touched up to here
+        type: local
+      - stepNumber: 53
+        description: Only confirmed writes outside the project root are made
+        type: branch
+        condition: '--yes was given together with --global, or the person said yes at the terminal'
+        onFalseStep: 56
+      - stepNumber: 54
+        description: >-
+          Apply each confirmed MCP registration outside the project root through the install, which
+          first copies the file it replaces beside itself as <file>.wairon-backup-<timestamp> and
+          prints where
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 55
+        description: Move a present legacy plugin aside instead of deleting it, and print where it went
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: retireLegacyPlugin
+      - stepNumber: 56
+        label: report
+        description: 'Project: is this an initialized wairon project?'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 57
+        description: Stop at a folder that is not a wairon project
+        type: branch
+        condition: the project is not initialized
+        onFalseStep: 59
+      - stepNumber: 58
+        description: Report it, naming `wairon init`, print the summary and exit non-zero
+        type: return
+        outcome: not a wairon project
+      - stepNumber: 59
+        label: config
+        description: Report whether the configuration is valid, and read its active targets
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 60
+        description: >-
+          Transactions: report each unfinished family migration under this root — its verb, its
+          owners and its coordinator's phase — as an error pointing at `wairon doctor --fix`; silent
+          when there is none
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 61
+        description: >-
+          Write lock: report a .wai/.spec-write.lock that is present — the process it names and
+          whether that process is live, gone, or cannot be read from the file, how old it is, and
+          whether the next write breaks it (a holder that is gone, or a lock no holder can be read
+          from past its short grace) or waits for it; silent when there is none
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: inspectLock
+      - stepNumber: 62
+        description: 'Spec filenames: list the spec files still stored under a legacy name'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 63
+        description: 'Chained subprojects: list the ones with specs but no project.yaml'
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: findChainingSubprojectsMissingConfig
+      - stepNumber: 64
+        description: >-
+          Report whether the system spec is present, whether the spec filenames are current, and any
+          chained subproject with specs but no project.yaml
+        type: local
+      - stepNumber: 65
+        description: >-
+          Spec tree: with a system spec and a valid configuration, run the family gate — the bound
+          project's own gate and every member's — and report its error, warning and notice counts,
+          then one line per member with findings naming the member and its own counts, so a clean
+          top never reads as a clean family; notices alone leave the check passing
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 66
+        description: >-
+          Stereotypes: plan the Specialist retirement with apply false and report each Specialist
+          with the dependencyClass it would take as an Orchestrator, and each variant to rebase,
+          pointing at `wairon doctor --fix`; silent when no Specialist remains
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 67
+        description: >-
+          Narrative steps: plan the foreign-field repair with apply false and report each step
+          carrying a field its own type cannot have — the implementation, the method, the step and
+          the fields — pointing at `wairon doctor --fix`; silent when every step is clean
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairForeignStepFields
+      - stepNumber: 68
+        description: >-
+          Signatures: plan the signature repair with apply false and report each interface or type
+          whose stored signature text its params contradict, and each method restating its source's
+          signature, pointing at `wairon doctor --fix`; silent when every stored signature is
+          already in its stored form
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairSignatures
+      - stepNumber: 69
+        description: >-
+          Type spellings: plan the type-spelling repair with apply false and report each interface
+          or type holding a type position that is an alias of its canonical spelling, pointing at
+          `wairon doctor --fix`; then list, apart, each number position with int proposed (an author
+          confirms by writing int, or writes float), each string-literal union with an enum proposed
+          (an author defines the enum and writes its id), and each position only an author can
+          settle, with its replacement; silent when every stored type position is canonical
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: repairTypeSpellings
+      - stepNumber: 70
+        description: >-
+          Reachability: plan the reachability migration with apply false and report each rewrite it
+          would make and each form it would only report, with the one re-lock it implies
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 71
+        description: >-
+          Members: for each member project below the bound root, bound to its root, plan the same
+          repairs with apply false (as steps 60-65 do here) and read what an assistant opened in the
+          member's own folder would lack (no working project .mcp.json entry, a stale or missing
+          guide, context or skills), and report one line per member with something pending — its
+          alias, its directory and the counts of Specialists, foreign step fields, signatures, type
+          positions to respell, proposals, positions needing an author, reachability rewrites and
+          reports, and the agent surfaces missing — pointing at `wairon doctor --fix` here, which
+          cascades into every member inside this root, or in the member's own directory for one
+          outside it; silent when no member has anything pending
+        type: local
+      - stepNumber: 72
+        description: >-
+          Chaining: plan the migration through the migration portal without a rehearsal and report
+          how much is pending — ids, L0s, entries, externals, pins, mounts to move, references to
+          rewrite, family pins to delete and findings — pointing at `wairon doctor --report
+          chaining` and `--fix`; silent when nothing is planned or reported. After an applied --fix
+          this plan is empty, which is the run's own idempotence check
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: plan
+      - stepNumber: 73
+        description: >-
+          Ask where the derived context documents live, so the staleness check reports on the
+          generated pair and never on the two a person wrote
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: derivedDocPaths
+      - stepNumber: 74
+        description: >-
+          Generated files and skills: read the version each one was stamped with and compare it
+          against the running build, so a file written by an older wairon is reported as stale
+          rather than assumed current
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readStampVersion
+      - stepNumber: 75
+        description: >-
+          Ask which derived context documents a regenerate would change in CONTENT (the project
+          context they embed, the domain map): each is reported `stale — its content differs from
+          what wairon generate writes now`, never current, so a file stamped by this release is
+          never called current while `doctor --fix` would rewrite it
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: staleDerivedDocs
+      - stepNumber: 76
+        description: >-
+          Skills: for each active target, compare the installed SDD skills with what an export would
+          write now, reporting the missing and stale ones
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: checkSkillFreshness
+      - stepNumber: 77
+        description: 'Lock: compute the gate identity as it stands now'
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 78
+        description: >-
+          Resolve the lock against that identity: a locked lock reports when and by whom it was
+          approved (lock_record.approvalStamp), warning when it predates per-spec approval; a stale
+          one reports lock-check's own verdict — an approval a release change carried reads
+          approved, `re-validated under <release>`, and one the new release finds issues in names
+          them; a project never locked reports nothing; a lock record that cannot be read as an
+          approval (corrupt JSON, no gate identity) is reported as an error naming the file and why,
+          never read as "never locked". Any other failure here never breaks the report
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: readLockState
+      - stepNumber: 79
+        description: >-
+          Lock, when stale: ask the lock adapter for lock-check's own verdict (without printing) and
+          report it word for word beneath the Lock heading - ok when a release change carried the
+          approval over, otherwise a warning that says what moved
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: checkApproval
+      - stepNumber: 80
+        description: >-
+          Extension packs: diagnose the project's pack situation — unresolved selections, installed
+          packs not applied, packs applied from the machine-wide store
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: diagnoseProjectPacks
+      - stepNumber: 81
+        description: >-
+          Report leftover approval baselines outside the project, never deleting them, and the
+          extension packs: those unresolved, those installed on this machine but not applied (only
+          REPORTED, with `wairon pack use <name>` for one the project wants: what happens to be in a
+          developer's home store is never doctrine, so --fix never selects it into a project), and
+          those applied from the machine-wide store
+        type: local
+      - stepNumber: 82
+        description: >-
+          MCP server: check that each active backend's registration points at a launchable server,
+          and which build it would start against the running CLI — `wairon --version` for a bare
+          `wairon` entry, the package version for a `node <path>` entry (nothing else from the file
+          is ever executed) — warning when it differs, so two installs on one machine are named, and
+          when a project entry names an absolute path of one machine; flag a legacy global
+          Antigravity plugin
+        type: local
+      - stepNumber: 83
+        description: Print the summary, exiting non-zero when any check reported an error
+        type: return
+        outcome: reported
+    detail: calls-only
+  - name: runLockCheck
+    narrative:
+      - stepNumber: 1
+        label: ask-adapter
+        description: >-
+          Ask the lock adapter for the approval verdict, passing --strict through. No
+          project-initialization assertion first: a repository with no .wai/ at all must be told so,
+          not met with an error about an uninitialized project.
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: checkApproval
+      - stepNumber: 2
+        label: print-verdict
+        description: >-
+          Print the verdict line — a success as an ordinary line, a refusal as an error, so the CI
+          log reads correctly at a glance.
+        type: local
+      - stepNumber: 3
+        label: decide
+        description: Did the verdict approve the tree?
+        type: branch
+        condition: the verdict approved
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        label: pass
+        description: 'Return normally, exiting zero: the merged design is the approved design.'
+        type: return
+        outcome: approved
+      - stepNumber: 5
+        label: refuse
+        description: >-
+          Exit non-zero so the job fails. The workflow fails the job; whether that BLOCKS the merge
+          is a branch-protection setting on the repository, which no workflow can declare for
+          itself.
+        type: return
+        outcome: refused
+    symbol: lockCheckCommand
+  - name: runDiagram
+    sourcePath: src/commands/diagram.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse a --depth that is not a whole number of at least 1 ("-1", "abc") and a --subsystem
+          the tree does not hold, naming what is accepted, before anything is rendered: a sequence
+          diagram of depth nothing, or a component diagram of an unknown subsystem, would be written
+          as if it were the answer
+        type: local
+      - stepNumber: 2
+        description: Should the canvas carry relation health?
+        type: branch
+        condition: the canvas is drawn (alone or in --all) and --no-health was not given
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Compare the family's relations with their live producers through the validator adapter:
+          each project's externals status at its own root, read within the explicit local reach
+          `validate --family` reads within (no narrower binding is granted, so a `../` producer the
+          family declares is read rather than left out of reach), what cannot be compared
+          unavailable. Producers on disk cost one export-table projection each; a git external asks
+          its remote for its ref's head once, and an unreachable remote is unavailable, never a pass
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 4
+        label: render
+        description: >-
+          Render the requested format through the core client adapter, which crosses into sdd_core
+          the way every other command does, handing it the relations when they were read
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 5
+        description: >-
+          Write the artifact to the requested path and report where it landed. Written to the
+          default folder (no --out), say once that these files are derived from the spec tree,
+          rewritten by every run and never read back by wairon: commit `.wai/docs/diagrams/` to
+          browse them on GitHub and in review, or ignore it.
+        type: return
+        outcome: written
+    symbol: runDiagram
+  - name: runDomainsList
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Ask the core adapter for every domain, derived and registered alike
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveDomains
+      - stepNumber: 2
+        description: >-
+          Print them, marking which came from a subsystem and which was registered by hand — the
+          difference decides whether a reader can remove one
+        type: return
+        outcome: listed
+    symbol: runDomainsList
+  - name: runDomainsScan
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the domains already registered, so the scan knows what is taken
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: resolveDomains
+      - stepNumber: 2
+        description: Ask the detector which directories look like domains, handing it the tracked paths and ids
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: detectDomainCandidates
+      - stepNumber: 3
+        description: Decide what the caller asked for
+        type: branch
+        condition: the run was asked to register the candidates
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Register each untracked candidate
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: addDomain
+      - stepNumber: 5
+        description: Print the candidates, showing the already-covered ones too rather than omitting them
+        type: return
+        outcome: scanned
+    symbol: runDomainsScan
+  - name: runDomainsAdd
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Register the domain through the core adapter, which refuses an id that already exists in
+          either kind
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: addDomain
+      - stepNumber: 2
+        description: Report what was registered and where it points
+        type: return
+        outcome: added
+    symbol: runDomainsAdd
+  - name: runDomainsRemove
+    sourcePath: src/commands/domains.ts
+    narrative:
+      - stepNumber: 1
+        description: Unregister the domain through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: removeDomain
+      - stepNumber: 2
+        description: >-
+          Report the removal, or say plainly that a derived domain is removed by removing its
+          subsystem
+        type: return
+        outcome: removed
+    symbol: runDomainsRemove
+  - name: runAliasesList
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Ask which short names this person has opted out of
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 2
+        description: >-
+          Find where the binaries live. A packaged binary already knows — it is the directory the
+          running executable sits in — so nothing is looked up and nothing can be stale
+        type: local
+      - stepNumber: 3
+        description: >-
+          For each supported alias, report which of five states it is in: registered by npm and
+          unchangeable from here, opted out, shadowed by a different program already on PATH,
+          present, or missing with the command that would create it
+        type: local
+      - stepNumber: 4
+        description: >-
+          Close with the install directory when there is one to name, and say plainly when there is
+          not — an npm install has no directory of ours to manage
+        type: local
+      - stepNumber: 5
+        description: Done
+        type: return
+        outcome: listed
+    symbol: runAliasesList
+  - name: runAliasesEnable
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Decide whether this is a name we support
+        type: branch
+        condition: the name is one of the supported aliases
+        onTrueStep: 3
+        onFalseStep: 2
+      - stepNumber: 2
+        description: Refuse by name, listing every supported alias, and exit non-zero
+        type: return
+        outcome: refused
+      - stepNumber: 3
+        description: Read the opted-out list
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 4
+        description: >-
+          Drop this name from it and record that, whichever kind of install this is — so that
+          enabling an alias here is not quietly undone by the next install reading a stale opt-out
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setDisabledAliases
+      - stepNumber: 5
+        description: Decide whether there is anything to create on disk
+        type: branch
+        condition: this is a packaged binary
+        onTrueStep: 6
         onFalseStep: 7
       - stepNumber: 6
         description: >-
-          Regenerate the family and sibling surface snapshots into every chained child — a locked
-          parent ships fresh surfaces
+          Create the alias beside the binary — a symlink on Unix, a .cmd wrapper on Windows — and
+          report it enabled
+        type: return
+        outcome: enabled
+      - stepNumber: 7
+        description: Report that npm's own bin entries already register it, so nothing on disk changed
+        type: return
+        outcome: already registered
+    symbol: runAliasesEnable
+  - name: runAliasesDisable
+    sourcePath: src/commands/aliases.ts
+    narrative:
+      - stepNumber: 1
+        description: Decide whether this is a name we support
+        type: branch
+        condition: the name is one of the supported aliases
+        onTrueStep: 3
+        onFalseStep: 2
+      - stepNumber: 2
+        description: Refuse by name, listing every supported alias, and exit non-zero
+        type: return
+        outcome: refused
+      - stepNumber: 3
+        description: Read the opted-out list
+        type: call
+        targetComponent: user_config_store
+        targetMethod: disabledAliases
+      - stepNumber: 4
+        description: >-
+          Add this name to it and record that. The opt-out is what stops a later install recreating
+          the alias — removing the file alone would not survive one
+        type: call
+        targetComponent: user_config_store
+        targetMethod: setDisabledAliases
+      - stepNumber: 5
+        description: Decide whether there is anything to remove from disk
+        type: branch
+        condition: this is a packaged binary
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Remove the symlink or wrapper beside the binary and report it disabled
+        type: return
+        outcome: disabled
+      - stepNumber: 7
+        description: >-
+          Report that npm's bin entries cannot be changed from here, and what would have to happen
+          instead
+        type: return
+        outcome: npm managed
+    symbol: runAliasesDisable
+  - name: localStatus
+    sourcePath: src/commands/status.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse outside a wairon project, naming `wairon init` — a dashboard of nothing would read
+          like an empty tree rather than like the wrong directory — and refuse a --subsystem the
+          tree does not hold, naming the subsystems it does: an empty dashboard for a typo would
+          read like a subsystem with nothing in it
+        type: local
+      - stepNumber: 2
+        description: >-
+          Pending transaction banner, FIRST — a crash mid-swap is exactly when the tree below may
+          not read: ask the migration portal (recover with fix false — a report, nothing written)
+          for unfinished family-migration transactions under this root, and print one notice line
+          per transaction naming its id, its verb and its coordinator's phase and pointing at
+          `wairon doctor --fix`; silent when there is none. A notice never changes the exit code
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: recover
+      - stepNumber: 3
+        description: >-
+          Ask the validator for the pin tree: this project's approval state and each member's, every
+          one computed at that project's own root — so the state printed for a member here is the
+          state that member's own status prints (status-agrees)
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 4
+        description: >-
+          Ask the core adapter for the completeness report with the pin tree, handing it the
+          terminal's colours as roles: structure for the tree's scaffolding, layer for each label,
+          score for a percentage, draft for anything not yet complete, and present or missing for a
+          source file
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: getStatusReport
+      - stepNumber: 5
+        description: Decide whether the tree could be reported on at all
+        type: branch
+        condition: the report came back failed
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Print the explanation as an error and exit non-zero, naming `wairon init` when there is no
+          system specification. A script running this over a tree that will not parse must not read
+          it as healthy, and the exit code is the only part of that a script sees
+        type: return
+        outcome: unreadable
+      - stepNumber: 7
+        description: Print a heading and the report beneath it
+        type: local
+      - stepNumber: 8
+        description: >-
+          Ask what the lock says about this tree, passing the pin tree so the verdict names members
+          whose pin moved, members not approved, and a stage-5 identity upgrade
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 9
+        description: >-
+          Print the verdict, choosing severity from whether it reports drift rather than by matching
+          its wording — which is why the verdict answers a fact beside the sentence; with --all,
+          every spec that moved since the approval (the verdict's full list) instead of the first
+          few. Then, always, one line saying what the percentages measure — authoring progress: 80%
+          once a component's component, contract and implementation specs are written, 100% once its
+          implementation names source files that exist, capped at 50% while any is draft or design —
+          and that approval is the lock record, not a percentage. A project never approved says so
+          in the report (Approval: never approved).
+        type: local
+      - stepNumber: 10
+        description: >-
+          Compare this project's externals with their live producers, offline and advisory — the
+          same pass plain `validate` appends
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 11
+        description: >-
+          When any came back, print an Externals section under the verdict: one line per external
+          that broke live (what moved — changed, renamed to <name>, or gone — who uses it, and
+          "adapt, then `wairon externals pin <alias>`"), one per drifted producer (re-pin when
+          convenient) and one per producer not compared (why, and that `wairon externals status`
+          compares it), noting that the pin still gates. Nothing is printed for externals that are
+          current, and the exit code is unchanged
+        type: local
+      - stepNumber: 12
+        description: Done
+        type: return
+        outcome: printed
+    symbol: runStatus
+  - name: runSkillsList
+    sourcePath: src/commands/skills.ts
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside an initialized project
+        type: local
+      - stepNumber: 2
+        description: Read the built-in skill names through the skills adapter
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: listSkillNames
+      - stepNumber: 3
+        description: Print each name under a header counting them
+        type: return
+        outcome: listed
+  - name: runSkillsInstall
+    sourcePath: src/commands/skills.ts
+    narrative:
+      - stepNumber: 1
+        description: Refuse outside an initialized project
+        type: local
+      - stepNumber: 2
+        description: Export the skills for the project's enabled targets through the skills adapter
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: exportSddSkills
+      - stepNumber: 3
+        description: Did any target have a skills directory?
+        type: branch
+        condition: the export wrote to at least one destination
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Count the built-in skills for the success line
+        type: call
+        targetComponent: cli_skills_adapter
+        targetMethod: listSkillNames
+      - stepNumber: 5
+        description: Report each destination written, and the targets skipped for having no skills directory
+        type: return
+        outcome: installed
+      - stepNumber: 6
+        label: none
+        description: Warn that no active target has a skills directory, naming the ones skipped
+        type: return
+        outcome: nothing installed
+  - name: runHostProducer
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: configure
+            step: 3
+          - value: produce
+            step: 5
+          - value: remove
+            step: 7
+          - value: list
+            step: 9
+        defaultStep: 11
+      - stepNumber: 3
+        label: configure
+        description: Configure the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: configureProducer
+      - stepNumber: 4
+        description: Return after configure
+        type: return
+        outcome: configured
+      - stepNumber: 5
+        label: produce
+        description: Run the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: produceProducer
+      - stepNumber: 6
+        description: Return after produce
+        type: return
+        outcome: produced
+      - stepNumber: 7
+        label: remove
+        description: Remove the producer target via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeProducer
+      - stepNumber: 8
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 9
+        label: list
+        description: List the producer targets via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listProducers
+      - stepNumber: 10
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 11
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostSecret
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: set
+            step: 3
+          - value: list
+            step: 5
+        defaultStep: 7
+      - stepNumber: 3
+        label: set
+        description: Store the secret via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: setSecret
+      - stepNumber: 4
+        description: Return after set
+        type: return
+        outcome: set
+      - stepNumber: 5
+        label: list
+        description: List the secret key names via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listSecrets
+      - stepNumber: 6
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 7
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostPermission
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: set
+            step: 3
+          - value: list
+            step: 8
+          - value: remove
+            step: 10
+        defaultStep: 12
+      - stepNumber: 3
+        label: set
+        description: >-
+          Validate the capability and value, and resolve the scope from the flags: --project with
+          --subsystem is the subsystem scope `<project>/<subsystem>` (--subsystem without --project
+          is refused), else --project, --unit or the instance
+        type: local
+      - stepNumber: 4
+        description: Store the assignment via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: setAssignment
+      - stepNumber: 5
+        description: Does the assignment grant project:write (yes or approval)?
+        type: branch
+        condition: the capability is project:write and the value grants it
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Explain the user's project:read at the same scope via the host adapter and warn when it is
+          not yes: read and write are separate capabilities, so a subject granted write without read
+          cannot open the project its write covers — the warning names the grant that would fix it.
+          A user with no record, or an explanation that fails, warns nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: explain
+      - stepNumber: 7
+        description: Return after set
+        type: return
+        outcome: assigned
+      - stepNumber: 8
+        label: list
+        description: >-
+          List the assignments narrowed by scope (a subsystem scope included) and user via the host
+          adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listAssignments
+      - stepNumber: 9
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 10
+        label: remove
+        description: Remove the assignment via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeAssignment
+      - stepNumber: 11
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 12
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostPacks
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: list
+            step: 3
+          - value: install
+            step: 8
+          - value: remove
+            step: 19
+        defaultStep: 29
+      - stepNumber: 3
+        label: list
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        label: list_project
+        description: List the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listProjectPacks
+      - stepNumber: 5
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 6
+        label: list_instance
+        description: List the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listGlobalPacks
+      - stepNumber: 7
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 8
+        label: install
+        description: Read the pack file the flags name
+        type: local
+      - stepNumber: 9
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 10
+        onFalseStep: 17
+      - stepNumber: 10
+        description: 'An unattended run installs without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 15
+        onFalseStep: 11
+      - stepNumber: 11
+        label: preview_project
+        description: Measure the install on the hosted project before it happens, writing nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: previewProjectPack
+      - stepNumber: 12
+        description: Print the impact report and ask whether to install
+        type: local
+      - stepNumber: 13
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Return without installing
+        type: return
+        outcome: declined; nothing installed
+      - stepNumber: 15
+        label: install_project
+        description: Install the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: installProjectPack
+      - stepNumber: 16
+        description: 'Return after install: an unattended run says it installed without showing the impact'
+        type: return
+        outcome: installed
+      - stepNumber: 17
+        label: install_instance
+        description: Install the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: installGlobalPack
+      - stepNumber: 18
+        description: Return after install
+        type: return
+        outcome: installed
+      - stepNumber: 19
+        label: remove
+        description: Is a project named?
+        type: branch
+        condition: '--project is given'
+        onTrueStep: 20
+        onFalseStep: 27
+      - stepNumber: 20
+        description: 'An unattended run removes without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 25
+        onFalseStep: 21
+      - stepNumber: 21
+        label: preview_removal
+        description: Measure the removal on the hosted project before it happens, writing nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: previewProjectPackRemoval
+      - stepNumber: 22
+        description: Print the impact report and ask whether to remove
+        type: local
+      - stepNumber: 23
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 25
+      - stepNumber: 24
+        description: Return without removing
+        type: return
+        outcome: declined; nothing removed
+      - stepNumber: 25
+        label: remove_project
+        description: Remove the project packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeProjectPack
+      - stepNumber: 26
+        description: 'Return after remove: an unattended run says it removed without showing the impact'
+        type: return
+        outcome: removed
+      - stepNumber: 27
+        label: remove_instance
+        description: Remove the instance packs via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: removeGlobalPack
+      - stepNumber: 28
+        description: Return after remove
+        type: return
+        outcome: removed
+      - stepNumber: 29
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostGit
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: enable
+            step: 3
+          - value: disable
+            step: 5
+          - value: sync
+            step: 7
+          - value: commit
+            step: 9
+          - value: status
+            step: 11
+          - value: sync-config
+            step: 13
+        defaultStep: 15
+      - stepNumber: 3
+        label: enable
+        description: Bind the project to its git remote via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: enableGit
+      - stepNumber: 4
+        description: Return after enable
+        type: return
+        outcome: enabled
+      - stepNumber: 5
+        label: disable
+        description: Remove the git binding via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: disableGit
+      - stepNumber: 6
+        description: Return after disable
+        type: return
+        outcome: disabled
+      - stepNumber: 7
+        label: sync
+        description: Sync with the remote via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: syncGit
+      - stepNumber: 8
+        description: Return after sync
+        type: return
+        outcome: synced
+      - stepNumber: 9
+        label: commit
+        description: Commit and publish via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: commitProject
+      - stepNumber: 10
+        description: Return after commit
+        type: return
+        outcome: committed
+      - stepNumber: 11
+        label: status
+        description: Read the binding status via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: getGitBinding
+      - stepNumber: 12
+        description: Return after status
+        type: return
+        outcome: reported
+      - stepNumber: 13
+        label: sync-config
+        description: Configure periodic sync via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: configureGitSync
+      - stepNumber: 14
+        description: Return after sync-config
+        type: return
+        outcome: configured
+      - stepNumber: 15
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runServe
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration from flags and environment
+        type: local
+      - stepNumber: 2
+        description: Seed the default identity provider from the environment; a failure aborts the boot
+        type: try
+        endStep: 3
+        catches:
+          - error: Error
+            step: 5
+      - stepNumber: 3
+        label: seed
+        description: >-
+          Have the host seed the default identity provider from its own environment via the host
+          adapter (a no-op without an issuer)
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: seedDefaultProvider
+      - stepNumber: 4
+        description: Skip the failure handler
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        label: seed_failed
+        description: Refuse to boot with the seeding error
+        type: throw
+        error: WaironError
+      - stepNumber: 6
+        label: start
+        description: Start the hosting server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 7
+        description: Print the planes and run until signalled, closing the server on shutdown
+        type: local
+      - stepNumber: 8
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
+  - name: runDev
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Does a project bind the working directory? Resolved by the binding rule (WaiPaths) every
+          CLI command and the MCP server use — the nearest folder with an L0, never past the
+          repository root unless declared — so `wairon dev` serves exactly the project `wairon
+          status` would report
+        type: branch
+        condition: no project binds the working directory
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        label: no_project
+        description: 'Refuse: no wairon project binds this folder (name `wairon init`)'
+        type: throw
+        error: WaironError
+      - stepNumber: 3
+        label: config
+        description: >-
+          Build the ephemeral data dir (per bound root) and the loopback, auth-off, development-mode
+          host configuration
+        type: local
+      - stepNumber: 4
+        description: >-
+          Register the bound project root as the single dev project via the host adapter, and
+          announce it as `project <id> at <root>`
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: registerLocalDevProject
+      - stepNumber: 5
+        description: Start the server via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: startHostServer
+      - stepNumber: 6
+        description: Optionally open the browser, and run until signalled
+        type: local
+      - stepNumber: 7
+        description: Return on shutdown
+        type: return
+        outcome: stopped
+    detail: full
+  - name: runHostDemo
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration and read the master credential
+        type: local
+      - stepNumber: 2
+        description: Ensure the owner organization unit exists (idempotent upsert) via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
+      - stepNumber: 3
+        description: Look up whether the demo project id is already registered via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: existingProjectRoot
+      - stepNumber: 4
+        description: Is it registered?
+        type: branch
+        condition: the project exists
+        onTrueStep: 5
+        onFalseStep: 8
+      - stepNumber: 5
+        label: exists
+        description: Without --force, refuse to reseed
+        type: branch
+        condition: '--force is not given'
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
+        label: refuse
+        description: 'Refuse: the project already exists'
+        type: throw
+        error: WaironError
+      - stepNumber: 7
+        label: destroy
+        description: Destroy the existing project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: destroyProject
+      - stepNumber: 8
+        label: create
+        description: Create the project via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: createProject
+      - stepNumber: 9
+        description: With the new project's root bound, seed the example tree into it through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: seedDemoTree
+      - stepNumber: 10
+        description: >-
+          Count the seeded tree's census (subsystems, components, edges, types, narratives) and
+          print it
+        type: return
+        outcome: seeded
+    detail: full
+  - name: runHostKey
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: mint
+            step: 3
+          - value: revoke
+            step: 9
+          - value: list
+            step: 11
+        defaultStep: 13
+      - stepNumber: 3
+        label: mint
+        description: Is an owner named?
+        type: branch
+        condition: '--owner is given'
+        onTrueStep: 4
+        onFalseStep: 7
+      - stepNumber: 4
+        label: mint_owned
+        description: >-
+          Mint an owner-bound token via the host adapter, and print it once together with each
+          deprecated member-qualified entry and the member record id it was stored as
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: mintToken
+      - stepNumber: 5
+        description: >-
+          For a token narrowed to one project, explain the owner's project:read there via the host
+          adapter and warn when it is not yes — the token acts as its owner's live permission, so an
+          owner who cannot read the project mints a token that cannot read it either; seeding the
+          owner's authority with `host permission set` fixes it. An owner with no user record, or an
+          explanation that fails, warns nothing
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: explain
+      - stepNumber: 6
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 7
+        label: mint_ownerless
+        description: Mint an ownerless key via the host adapter, warning that it resolves to no permissions
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: mintKey
+      - stepNumber: 8
+        description: Return after mint
+        type: return
+        outcome: minted
+      - stepNumber: 9
+        label: revoke
+        description: Revoke a key via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: revokeKey
+      - stepNumber: 10
+        description: Return after revoke
+        type: return
+        outcome: revoked
+      - stepNumber: 11
+        label: list
+        description: List keys via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listKeys
+      - stepNumber: 12
+        description: Return after list
+        type: return
+        outcome: listed
+      - stepNumber: 13
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runHostUnit
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Read the master credential from the environment
+        type: local
+      - stepNumber: 2
+        description: Dispatch on the action
+        type: switch
+        'on': action
+        cases:
+          - value: create
+            step: 3
+        defaultStep: 6
+      - stepNumber: 3
+        label: create
+        description: >-
+          Derive the unit's qualified id from its parent and slug, and its kind: --kind when given,
+          else business_entity for a top-level unit (the only kind the org-unit hierarchy admits at
+          the root) and team under a parent
+        type: local
+      - stepNumber: 4
+        description: Create the unit via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upsertUnit
+      - stepNumber: 5
+        description: Return after create
+        type: return
+        outcome: created
+      - stepNumber: 6
+        label: unknown
+        description: Refuse an unknown action
+        type: throw
+        error: WaironError
+    detail: full
+  - name: runExternals
+    sourcePath: src/commands/externals.ts
+    narrative:
+      - stepNumber: 1
+        description: Route on the externals action
+        type: switch
+        'on': action
+        cases:
+          - value: add
+            step: 2
+          - value: pin
+            step: 4
+          - value: status
+            step: 6
+          - value: list
+            step: 8
+          - value: remove
+            step: 10
+          - value: use
+            step: 12
+          - value: consumers
+            step: 14
+        defaultStep: 16
+      - stepNumber: 2
+        label: add
+        description: >-
+          Declare the external: the first argument is the alias, the second (when given) the source
+          in the one location grammar; --project, --ref, --dir, --use, --description, --no-pin and
+          --dry-run fill the rest of the request
         type: call
         targetComponent: cli_surfaces_client_adapter
-        targetMethod: generateChildSnapshots
-      - stepNumber: 7
-        description: Print the lock record and return
+        targetMethod: declareExternal
+      - stepNumber: 3
+        description: >-
+          Print what was declared (the normalized declaration, the producer id it answers to, the
+          pin) or what a dry run would declare — the producer checked in both; on a refusal print
+          its one sentence naming the accepted form (or the audience that keeps a name from this
+          project) and exit 1; when the producer could not be read print that it is declared but
+          unpinned and why, and exit 2 (nothing was pinned — never a success a script reads as done)
+          — or the JSON answer
         type: return
-        outcome: locked
+        outcome: added
+      - stepNumber: 4
+        label: pin
+        description: Pin the named aliases, else every declared external
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: pinExternals
+      - stepNumber: 5
+        description: >-
+          Print one line per alias — pinned, unchanged, unresolved or unreachable, with the
+          used-name count and each unexported reference (export it from the producer's L0 to pin
+          it); a source.hosted external prints "hosted-only producer `<id>`: available only through
+          the hosted server" instead of a bare unresolved — or the JSON answer; exit 1 when any
+          alias could not be pinned (its previous pin stays)
+        type: return
+        outcome: pinned
+      - stepNumber: 6
+        label: status
+        description: >-
+          Read each external's status against its live producer, fetching git producers (not
+          offline: this is the command that compares them)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 7
+        description: >-
+          Print the status table — per alias: source, pinned, reachable, then its health
+          (incompatible | not compared | drifted | ok — never `current` beside `unreachable`), the
+          carried facts a stale snapshot no longer matches (re-pin to refresh them), then each used
+          member's state, a renamed one with the name it was renamed to, with
+          EXTERNAL_CHECK_UNAVAILABLE and its reason on what could not be compared — then one legend
+          defining every word it used and which fix each asks for (incompatible: adapt the uses,
+          then re-pin; drifted: re-pin when convenient; not compared: make the producer reachable) —
+          or the JSON answer. Exit with the worst health: 1 when any external is incompatible, 2
+          when nothing is incompatible but something could not be compared (never a pass), 0
+          otherwise
+        type: return
+        outcome: status reported
+      - stepNumber: 8
+        label: list
+        description: List the declared externals
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listExternals
+      - stepNumber: 9
+        description: >-
+          Print the table — alias, producer id, source kind and relation, audience, pinned digest or
+          the problem (a malformed declaration is listed with its problem, never hidden) — or the
+          JSON answer
+        type: return
+        outcome: listed
+      - stepNumber: 10
+        label: remove
+        description: >-
+          Remove the external named by the first argument — its declaration and its pin together
+          (--dry-run writes nothing)
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: removeExternal
+      - stepNumber: 11
+        description: >-
+          Print what was removed (the declaration, the pin) or the one-sentence refusal, exiting 1 —
+          or the JSON answer
+        type: return
+        outcome: removed
+      - stepNumber: 12
+        label: use
+        description: >-
+          Change the `use` imports of the external named by the first argument: --add and --remove
+          (comma-separated), --dry-run writes nothing
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: updateExternalUse
+      - stepNumber: 13
+        description: >-
+          Print the resulting `use` list and what moved, or the one-sentence refusal, exiting 1 — or
+          the JSON answer
+        type: return
+        outcome: use changed
+      - stepNumber: 14
+        label: consumers
+        description: >-
+          List the projects that consume this project: the family in reach, and with --search the
+          project roots in the named folders that declare it by path or git
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 15
+        description: >-
+          Print one line per consumer — its project, the alias and section it declares this project
+          under, the root of one found by the search, the names it uses and the names it still
+          writes that are no longer exported — and under it the methods its specs call on each
+          contract it uses (`<name>.<method>`), so a producer about to rename a method reads who
+          calls it; then where else a consumer can be (a sibling checkout is found with --search; a
+          hosted one declares its dependency on its own side); or the JSON answer, `uses` included
+        type: return
+        outcome: consumers listed
+      - stepNumber: 16
+        label: unknown
+        description: 'Unknown externals action (supported: add, pin, status, list, remove, use, consumers)'
+        type: throw
+        error: UnknownExternalsActionError
+    detail: full
+  - name: runMigration
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Plan the request from the current project, asking it to announce the findings its result
+          will have (announce: true) — printed among the plan's notes before anything is confirmed
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: plan
+      - stepNumber: 2
+        description: >-
+          Print the plan: the verb, the family root (and that it is not the whole family, when so),
+          each owner's edits, every refusal, every notes line, the file changes per owner (one line
+          each, a count past a screenful), and the projects to re-lock
+        type: local
+      - stepNumber: 3
+        description: Report only, refused or empty?
+        type: branch
+        condition: '--report was given, or the plan is blocked, or it has no file change'
+        onFalseStep: 6
+      - stepNumber: 4
+        description: Drop the plan's rehearsal; nothing was written
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: discard
+      - stepNumber: 5
+        description: >-
+          Stop: exit non-zero for a refused plan, zero for a report or an empty plan ("nothing to
+          migrate")
+        type: return
+        outcome: reported
+      - stepNumber: 6
+        label: confirm
+        description: >-
+          Ask to apply it: --yes answers; a non-interactive shell without --yes is answered no with
+          a message naming --yes, and the command exits non-zero — not applied and declined by
+          nobody, so a script never reads success
+        type: local
+      - stepNumber: 7
+        description: Confirmed?
+        type: branch
+        condition: the person declined
+        onFalseStep: 10
+      - stepNumber: 8
+        description: Drop the plan's rehearsal
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: discard
+      - stepNumber: 9
+        description: >-
+          Stop, having written nothing (non-zero when no terminal could confirm; zero when the
+          person declined)
+        type: return
+        outcome: declined
+      - stepNumber: 10
+        label: apply
+        description: Apply the confirmed plan, all or nothing
+        type: call
+        targetComponent: cli_migration_adapter
+        targetMethod: apply
+      - stepNumber: 11
+        label: outcome
+        description: >-
+          Print the outcome: committed with each project to re-lock ("run `wairon lock` there");
+          failed with what failed and that the family is unchanged; or failed with the files `wairon
+          doctor --fix` must restore
+        type: local
+      - stepNumber: 12
+        label: made-projects
+        description: >-
+          Did the applied migration make a new project (a promote, or an externalize --as project)?
+          A project made for a team must be usable by that team's session in its own folder
+        type: branch
+        condition: the migration applied and made a new project
+        onTrueStep: 13
+        onFalseStep: 16
+      - stepNumber: 13
+        description: For each project the migration made
+        type: loop
+        loopKind: forEach
+        over: each project the migration made, at its own root
+        endStep: 15
+      - stepNumber: 14
+        description: >-
+          Bound at that project's root, give it what `wairon init` gives a project: its guide and
+          root pointer, its skills and its context, for its configured targets (generate's own layer
+          — no agent files unless it opts in)
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runGenerate
+      - stepNumber: 15
+        description: >-
+          Register its portable project MCP entry (.mcp.json) when claude is a configured target,
+          and print one line naming the folder a teammate opens a session in
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 16
+        label: demoted-scaffold
+        description: >-
+          After an applied demote the member's folder is a part, no project root: remove the session
+          scaffold a promote gave it — the wairon entry of its .mcp.json, the wairon guide and
+          skills under .claude/ and the wairon block of its CLAUDE.md root pointer — deleting a file
+          only when nothing but wairon's own content is left in it, and print each file removed and
+          each kept with why (someone else's content is in it)
+        type: local
+      - stepNumber: 17
+        description: Done, exiting non-zero when the migration failed
+        type: return
+        outcome: applied or failed
+  - name: runMemberAttach
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the attach request from the alias, path and description
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runProjectRename
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the rename request from the new id and --project
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberRenameAlias
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the rename-alias request
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberDetach
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the detach request, with --widen
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberAdopt
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the adopt request
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runHostDoctor
+    sourcePath: src/commands/host.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the host configuration
+        type: local
+      - stepNumber: 2
+        description: Run the permission-model migration via the host adapter, applying it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migratePermissionModel
+      - stepNumber: 3
+        description: >-
+          Print its findings, or that the data is on the permission model, warning when it was a dry
+          run
+        type: local
+      - stepNumber: 4
+        description: >-
+          Plan every hosted project's migration onto the reachability model via the host adapter,
+          writing it only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 5
+        description: >-
+          Print each project's rewrites counted by form, the forms left for an author and any
+          failure, or that every hosted project is on the reachability model; say that a rewritten
+          project owes a re-lock, and warn when it was a dry run
+        type: local
+      - stepNumber: 6
+        description: >-
+          Run the stage-7 member upgrade via the host adapter — a dry-run plan, applied all or
+          nothing only with --fix
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: upgradeMembers
+      - stepNumber: 7
+        description: Nothing to upgrade?
+        type: branch
+        condition: >-
+          no unfinished transaction was found, and the plan has no member to register or relocate,
+          no key to rewrite and no refusal
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Report the members as registered
+        type: return
+        outcome: nothing to upgrade
+      - stepNumber: 9
+        label: members
+        description: >-
+          Print each unfinished transaction found under the data directory (rolled back or cleaned
+          with --fix, pending without it), then the plan once per family: each member with its
+          parent and path, the reach proof as one line per member (rows compared, all equal —
+          nobody's reach changes), each rewritten key entry with its widening, and every refusal (an
+          unreadable member named with why); warn when it was a dry run (re-run with --fix) or a
+          blocked plan (nothing written), and say what was restored when the apply failed
+        type: local
+      - stepNumber: 10
+        description: Return after the report
+        type: return
+        outcome: reported
+    detail: full
+  - name: runMemberPromote
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the promote request, with --id
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberDemote
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Build the demote request, its destination from --home and the pack choice
+        type: local
+      - stepNumber: 3
+        description: Run it through the shared migration flow
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runMigration
+  - name: runMemberUpdate
+    sourcePath: src/commands/subsystem.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Move the member's pin through the core adapter — a dry run with --report
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: advanceMember
+      - stepNumber: 3
+        description: >-
+          Print the commits (from → to, the ref resolved), the spec files added, changed and
+          removed, and, when it wrote and content moved, that this project's lock reads stale until
+          `wairon lock`
+        type: local
+  - name: runExport
+    sourcePath: src/commands/surface.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Decide the approval verdict exactly as `wairon lock-check` does (not strict): the gate
+          identity from the validator, the committed record resolved against it — one meaning of
+          approved in the tool
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: checkApproval
+      - stepNumber: 2
+        description: Project the design export with that verdict's state, written to --out when given
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: exportDesign
+      - stepNumber: 3
+        description: An output file was named
+        type: branch
+        condition: out provided
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Report the path written and whether the exported design is approved
+        type: return
+        outcome: written
+      - stepNumber: 5
+        description: Print the export's deterministic JSON to stdout, and nothing else, so it pipes cleanly
+        type: return
+        outcome: printed
+  - name: cleanStaleBinary
+    sourcePath: src/commands/update.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the leftover: the oldPath given, else — only when running as a packaged executable
+          — the executable's own path with `.old` appended, else nothing.
+        type: local
+      - stepNumber: 2
+        description: Only an existing leftover is removed.
+        type: branch
+        condition: a leftover resolved and it exists on disk
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Unlink it, swallowing the error a file the OS still holds raises, so the next start
+          retries.
+        type: local
+      - stepNumber: 4
+        description: Return; the cleanup never throws.
+        type: return
+        outcome: done
+  - name: announceBinding
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Does the command act on a project? init, the hosted and identity commands (host, remote,
+          login, logout, serve), `mcp serve` and `dev` (which announce their own binding), and
+          help/version do not
+        type: branch
+        condition: the command acts on no project
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Say nothing
+        type: return
+        outcome: silent
+      - stepNumber: 3
+        description: >-
+          Resolve the binding of the bound root (an explicit override, else the binding rule from
+          cwd — WaiPaths)
+        type: local
+      - stepNumber: 4
+        description: Is a project bound?
+        type: branch
+        condition: no project binds the folder
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: 'Say nothing: the command reports the missing project in its own words'
+        type: return
+        outcome: no project
+      - stepNumber: 6
+        description: >-
+          Read the bound project's configuration for its effective id (a configuration that fails
+          its schema names the folder instead; the command reports that in its own words)
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 7
+        description: >-
+          Does the configuration file not parse as YAML (a duplicated key, a bad indent) while the
+          command is not doctor, which diagnoses it in its own words?
+        type: branch
+        condition: project.yaml does not parse and the command is not doctor
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse the command with the parse error as one line naming the file, the line and the key:
+          no command runs on a configuration it cannot read, and every one says so alike
+        type: throw
+        error: YamlSyntaxError
+      - stepNumber: 9
+        description: >-
+          Write `project <id> at <root>` to stderr, the root as an absolute path — nothing under
+          --silent
+        type: local
+      - stepNumber: 10
+        description: Done
+        type: return
+        outcome: announced
+  - name: runNetworkFlows
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask for the matrix in the asked format (json by default), the family at a project that
+          declares members unless --no-recursive
+        type: call
+        targetComponent: cli_network_adapter
+        targetMethod: flows
+      - stepNumber: 2
+        description: >-
+          Print it, or write it to --out, then print each gate finding that refused or marked a row
+          at its own severity (a refused row is never allowed), and exit non-zero when the gate
+          refused a row, so a pipeline that writes the matrix fails on a refused design; at a
+          member's root, say the matrix is the enclosing family's, judged at its root
+        type: local
+  - name: runNetworkPolicy
+    narrative:
+      - stepNumber: 1
+        description: A policy needs the team's bindings
+        type: branch
+        condition: '--bindings is given'
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Generate the policy in the asked target (kubernetes-network-policy by default)
+        type: call
+        targetComponent: cli_network_adapter
+        targetMethod: policy
+      - stepNumber: 3
+        description: >-
+          Print it or write it to --out, then each note (a bindings key resolved through a renamed
+          project's former name, a workload whose verbs differ in reach on one port), each unbound
+          design name with the placeholder label it was given, and each gate finding. Exit non-zero
+          when the gate refused a flow (it was left out), and when any name is unbound: an applied
+          policy over an unbound workload selects nothing it should and denies its ingress by
+          default, so the run says so instead of passing
+        type: return
+        outcome: policy written
+      - stepNumber: 4
+        description: >-
+          Refuse, naming --bindings and that the bindings file lives outside .wai/: specs hold no
+          deployment facts
+        type: throw
+        error: NetworkOptionsError
+  - name: runNetworkDiagram
+    narrative:
+      - stepNumber: 1
+        description: Draw the network picture as Mermaid
+        type: call
+        targetComponent: cli_network_adapter
+        targetMethod: diagram
+      - stepNumber: 2
+        description: Print it, or write it to --out
+        type: local
+  - name: runNetworkCheck
+    narrative:
+      - stepNumber: 1
+        description: A check needs an observed-flow export
+        type: branch
+        condition: '--observed is given'
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Judge the observed flows against the matrix
+        type: call
+        targetComponent: cli_network_adapter
+        targetMethod: check
+      - stepNumber: 3
+        description: >-
+          Print the gate findings when there are any, each former-name note, then the unexpected
+          flows, the disallowed flows (a declared verb, not allowed from that source), the unknown
+          verbs, then the unexercised flows, each with its count
+        type: local
+      - stepNumber: 4
+        description: >-
+          Exit non-zero when anything unexpected, disallowed or unknown was seen, zero otherwise: an
+          unexercised flow is a review item, not a failure
+        type: return
+        outcome: check reported
+      - stepNumber: 5
+        description: Refuse, naming --observed
+        type: throw
+        error: NetworkOptionsError
+  - name: runNetworkWhy
+    narrative:
+      - stepNumber: 1
+        description: Explain the pair
+        type: call
+        targetComponent: cli_network_adapter
+        targetMethod: why
+      - stepNumber: 2
+        description: >-
+          Print each allowing flow with its chain; or say plainly why not: an unknown party name, a
+          flow the gate refuses (with its findings), a collaborator reached in-process (never a
+          network flow — exit zero), or that nothing allows it with the nearest allowed flows; exit
+          non-zero for every answer but allowed and in-process
+        type: local
+  - name: runNetworkDeclare
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project's configuration: a declaration it already holds keeps its description
+          when --description is not given
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: Declare the network, with --description when given, through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 3
+        description: >-
+          Say what was written (or that it already was), that the network rules now judge the
+          design, and to re-lock
+        type: local
+  - name: runNetworkUndeclare
+    narrative:
+      - stepNumber: 1
+        description: Remove the declaration through the core adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: setNetwork
+      - stepNumber: 2
+        description: Say what was removed (or that none was declared), and to re-lock
+        type: local
+  - name: runTypeRenameField
+    sourcePath: src/commands/type.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume this project — the family in reach, members included, and
+          the consumer checkouts in the --search folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the field through the core adapter — or, with --dry-run, ask what the rename would
+          do, refused exactly as the real rename would be and writing nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameField
+      - stepNumber: 4
+        description: >-
+          Keep the consumers whose specs reach a member of a public name the report says carries the
+          field (external_consumer.reaches): the projects whose code reading the old name breaks
+        type: local
+      - stepNumber: 5
+        description: >-
+          Print the move (or what would move), the specs rewritten, the specs whose prose still
+          names the old field (left alone), the public names carrying the field and each consumer it
+          breaks with its section and alias — or that none in reach uses it, naming --search; a dry
+          run ends with "Nothing was written", a real one with the re-lock the rename owes
+        type: return
+  - name: runMethodRenameParam
+    sourcePath: src/commands/method.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume this project — the family in reach, members included, and
+          the consumer checkouts in the --search folders — before anything moves, each with the
+          names and methods its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the parameter through the core adapter — or, with --dry-run, ask what the rename
+          would do, refused exactly as the real rename would be and writing nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameParam
+      - stepNumber: 4
+        description: >-
+          Keep the consumers the report's published list reaches — each public name publishing the
+          method or a follower's verb, a call by a former method name and a broken former public
+          name included (external_consumer.narrowedToUses): the projects that must follow the rename
+        type: local
+      - stepNumber: 5
+        description: >-
+          Print the move (or what would move) — saying when the request named a Portal verb and the
+          rename was made on the source its signature comes from — the interfaces it moved in, the
+          placeholders respelled (followers' included), the export entries publishing the method and
+          each consumer that calls it — or that none in reach calls it, naming --search; a dry run
+          ends with "Nothing was written", a real one with the re-lock the rename owes
+        type: return
+  - name: runMethodRename
+    sourcePath: src/commands/method.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the current project root and confirm it is an initialized wairon project; error if
+          not
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume this project — the family in reach, and the consumer
+          checkouts in the --search folders — before anything moves, each with the names and methods
+          its specs use
+        type: call
+        targetComponent: cli_surfaces_client_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the method through the core adapter — or, with --dry-run, ask what the rename would
+          do, refused exactly as the real rename would be and writing nothing
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renameMethod
+      - stepNumber: 4
+        description: >-
+          Keep the consumers whose specs reach the old method on a public name the report says
+          publishes it, a contract they depend on as a whole included
+          (external_consumer.narrowedToUses): the projects the rename breaks
+        type: local
+      - stepNumber: 5
+        description: >-
+          Print what moved (or would move) and was retargeted, the prose left alone, the pinned
+          symbol, the export entries publishing it, and each consumer it breaks with its folder and
+          alias — or that none in reach calls it, naming --search for checkouts outside the family;
+          a dry run ends with "Nothing was written", a real one with the re-lock the rename owes
+        type: return
+        outcome: renamed
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        runPack is the `wairon pack` family's action dispatcher: a flat twelve-arm if-chain in
+        src/cli/runner.ts, one adapter call per subcommand, cognitive score 1. Its 26 steps are two
+        per subcommand (the call and its return) plus the switch and the unknown-action refusal, so
+        the count tracks how many subcommands `pack` has, not what the method does — the same shape
+        sits at every size in this runner: runPacks (8), runAgent (9), runSurface (12), runRemote
+        (14). There is no seam to split on: all twelve arms call one module (src/commands/packs.ts),
+        and every `pack` subcommand's endpoint dispatches to runPack directly, so scope-based
+        sub-dispatchers would be invented here rather than named in the code. Adding a pack
+        subcommand adds two steps, which is the point.
+    - code: PARAM_TYPE_MISMATCH
+      at: runMcpInstall
+      covers:
+        - options
+      reason: >-
+        The CLI runner is handed its flags, not the record: commander gives mcpInstallCommand the
+        options object it parsed (--hosted, --project, --token, keyed by flag), and the handler maps
+        them one-to-one onto mcp_install_options (hostedUrl, hostedProject, hostedToken) before the
+        command adapter runs — the CLI counterpart of a router unpacking a request, with the flag
+        names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:15:12.186Z'
+updatedAt: '2026-10-17T16:49:37.002Z'

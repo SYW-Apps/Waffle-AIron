@@ -18,13 +18,11 @@ fields:
     description: Display label.
     optional: false
   - name: kind
-    type: string
-    description: >-
-      Node kind: "unit" | "project" | "subsystem" | "component" | "interface" | "implementation" |
-      "type".
+    type: WebGraphNodeKind
+    description: What the node stands for.
     optional: false
   - name: level
-    type: number
+    type: int
     description: >-
       Level-of-detail depth of this node: 0 = landscape/organization tier (units, projects), 1 =
       subsystem, 2 = component (L2), 3 = interface/type (L3), 4 = implementation (L4). The client
@@ -49,17 +47,26 @@ fields:
     description: Optional lifecycle/status label for filtering and styling (e.g. spec completeness).
     optional: true
   - name: issueCount
-    type: number
-    description: Number of validator issues overlaid onto this node (project tier), 0 or absent when clean.
+    type: int
+    description: >-
+      Number of validator errors and warnings overlaid onto this node (project tier), 0 or absent
+      when it has none. Notices are counted apart, in noticeCount.
     optional: true
   - name: actionable
-    type: boolean
+    type: bool
     description: >-
       True when the caller can act on this scope. False/absent on an ancestor-breadcrumb (context)
       unit shown read-only only so the tree stays navigable to a deeper actionable scope (the no@org
       + yes@one-project case) — its non-visible children are omitted. An instance-admin sees every
       node actionable. Carried through from LandscapeNode.actionable on the landscape tier.
     optional: true
+  - name: noticeCount
+    type: int
+    description: >-
+      Number of validator notices overlaid onto this node (project tier), absent when it has none —
+      kept apart from issueCount so a node holding only notices is never drawn as failing.
+    optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-11T11:31:08.145Z'
-updatedAt: '2026-07-23T11:12:11.096Z'
+updatedAt: '2026-10-04T23:40:54.978Z'

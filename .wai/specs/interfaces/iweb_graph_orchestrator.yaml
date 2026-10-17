@@ -7,7 +7,7 @@ description: >-
   tree, level-filtered, with validator issues overlaid).
 component: web_graph_orchestrator
 methods:
-  - name: getGraph
+  - name: get
     description: >-
       Resolve the session to a Principal (rejecting an expired/absent session as unauthenticated).
       For tier 'landscape', delegate to the landscape orchestrator's already permission-filtered
@@ -21,7 +21,7 @@ methods:
       registry (rejecting cross-project access), project its spec tree at the requested level via
       the host core adapter, overlay validator issues as per-node issue counts, and return it. An
       unknown tier is rejected.
-    signature: 'getGraph(sessionId: string, tier: string, projectId: string, level: number): WebGraphModel'
+    signature: 'get(sessionId: string, tier: string, projectId: string, level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: sessionId
@@ -30,18 +30,21 @@ methods:
         type: string
       - name: projectId
         type: string
-        optional: true
+        description: The project to graph; ignored (may be '') for the landscape tier
       - name: level
-        type: number
+        type: int
   - name: getProjectCanvas
     description: >-
       Render the interactive architecture canvas (the full renderCanvasHtml canvas — Cytoscape
       layout, edge routing, type-ERD and database views, search, and the resizable details sidebar)
       for ONE authorized project as a self-contained HTML string. Resolve the session to a
       Principal, resolve and bind the requested project's isolated root within the principal's
-      authorized set (cross-project access is Forbidden), and render the canvas over the bound spec
-      tree via the host core adapter. This is how the web UI reuses the SAME canvas engine as the
-      static `wairon diagram --format canvas` export instead of a second renderer.
+      authorized set (cross-project access is Forbidden), read the family's relation health within
+      the caller's reach (the projects it may read, write or administer — anything beyond is
+      unavailable, never ok), and render the canvas over the bound spec tree via the host core
+      adapter with that health on its consumption edges, as the canvas model carries it. This is how
+      the web UI reuses the SAME canvas engine as the static `wairon diagram --format canvas` export
+      instead of a second renderer.
     signature: 'getProjectCanvas(sessionId: string, projectId: string): string'
     returns: string
     params:
@@ -49,6 +52,87 @@ methods:
         type: string
       - name: projectId
         type: string
+  - name: getProjectCanvasModel
+    description: >-
+      The full canvas model — data, not HTML — for ONE authorized project: the JSON sibling of
+      getProjectCanvas, which the web app's in-React canvas mounts directly instead of framing the
+      static page. Same scoped authorization: the session resolves to a Principal, the project must
+      be in the caller's resolved read set (cross-project access is Forbidden, an unknown project
+      indistinguishably so), and the model is built over the project's bound spec tree. Since stage
+      7 this is the FAMILY canvas for a project that declares members: each member renders as a
+      project node (stage 3's project node), carrying the member's hosted record id ONLY when that
+      record is in the caller's listed projects (the web project orchestrator's scoped list); any
+      other member carries none (no id leaks). A declared external that is no project of the family
+      is an external project node, carrying the hosted record its `source.hosted` names under the
+      same rule. The engine opens a project's own page from exactly the nodes that carry one,
+      through the app's open-project hook; a node without one is drawn unlinked. Each consumption
+      edge carries its relation's health (ok, drifted, incompatible, unavailable) from the same
+      comparison the Relations tab shows, read within the same reach — the caller's listed projects
+      — so a member or producer out of that reach is unavailable, never ok.
+    signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: getProjectOpenApi
+    description: >-
+      An interactive API explorer page for ONE authorized project's public surface, as HTML. Same
+      scoped authorization as the canvas. The owner sees the FULL surface (the project audience
+      ceiling, every gateway entry), unlike a public share link. Each public portal is its own API
+      with its own document: one portal renders its explorer directly, several render an index of
+      them, a named portal renders that portal's explorer, and a portal name the project does not
+      publish lands on the index rather than on a different API — never an empty explorer and never
+      a substitute.
+    signature: 'getProjectOpenApi(sessionId: string, projectId: string, portalId?: string): string'
+    returns: string
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+      - name: portalId
+        type: string
+        description: >-
+          The public portal whose API to show; absent shows the only one, or the index when there
+          are several
+        optional: true
+  - name: getProjectExternals
+    description: >-
+      Relation health for ONE authorized project: its externals status — each declared external's
+      pin compared with its live producer at signature level, per external (its health: ok, drifted,
+      incompatible or unavailable, the same word the canvas's edges show), what cannot be compared
+      reported unavailable and never a pass. Same scoped authorization as the canvas: the session
+      resolves to a Principal and the project must be in the caller's listed projects. The read's
+      reach is that list — the web project orchestrator's scoped list, which holds every project the
+      caller may read, write or administer, not only read: the family above the project is composed
+      when the family root is in it, and a source.hosted producer is read when its record is;
+      anything else is reported unavailable. The SPA renders it on the project page's Relations tab;
+      the canvas colours its edges from the family's relations, read the same way.
+    signature: 'getProjectExternals(sessionId: string, projectId: string): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+  - name: getProjectNetwork
+    description: >-
+      The network view of ONE authorized project: its declared networks, the workloads inside them,
+      the gateways on them and the allowed flows aggregated per workload pair, derived from the
+      design (the hosted canvas's network view). Same scoped authorization and reach as
+      getProjectExternals: the session resolves to a Principal, the project must be in the caller's
+      listed projects, and the family above it is composed only when its root is listed too.
+    signature: 'getProjectNetwork(sessionId: string, projectId: string): NetworkViewModel'
+    returns: NetworkViewModel
+    params:
+      - name: sessionId
+        type: string
+      - name: projectId
+        type: string
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-07-15T23:27:55.709Z'
+updatedAt: '2026-10-06T13:14:49.261Z'

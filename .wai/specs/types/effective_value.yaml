@@ -1,0 +1,19 @@
+kind: enum
+id: effective_value
+name: EffectiveValue
+description: >-
+  The value a permission resolution settles on: a permission value with inherit consumed by the
+  walk.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: 'yes'
+    description: Act directly
+  - name: approval
+    description: Act through an approval request
+  - name: 'no'
+    description: Denied (403, and the target is invisible)
+createdAt: '2026-10-04T23:41:40.780Z'
+updatedAt: '2026-10-04T23:41:41.255Z'

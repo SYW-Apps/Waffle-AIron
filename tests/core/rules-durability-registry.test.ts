@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache, saveComponentSpec, loadComponentSpec, updateSpec } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 
@@ -93,7 +93,7 @@ describe('MISSING_DURABILITY — the axis is opt-out by declaration, never absen
     ownedStore(proj);
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'MISSING_DURABILITY');
+      const found = byCode(validateProject(), 'MISSING_DURABILITY');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].specId).toBe('rec-store');
@@ -106,7 +106,7 @@ describe('MISSING_DURABILITY — the axis is opt-out by declaration, never absen
     proj.component('flow-orch', 'Orchestrator');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MISSING_DURABILITY')).toHaveLength(0);
+      expect(byCode(validateProject(), 'MISSING_DURABILITY')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -118,7 +118,7 @@ describe('durability modes — only durable demands the boot read-back', () => {
       ownedStore(proj, mode);
       proj.activate();
       try {
-        expect(byCode(validateSddTree(), 'MISSING_HYDRATION')).toHaveLength(0);
+        expect(byCode(validateProject(), 'MISSING_HYDRATION')).toHaveLength(0);
       } finally { proj.cleanup(); }
     }
   });
@@ -129,16 +129,16 @@ describe('durability modes — only durable demands the boot read-back', () => {
     proj.activate();
     try {
       // No init flow reaches the store's read — the round-trip must fire.
-      expect(byCode(validateSddTree(), 'MISSING_HYDRATION')).toHaveLength(1);
+      expect(byCode(validateProject(), 'MISSING_HYDRATION')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
   it('DURABILITY_ON_NON_STORE still rejects the new modes on non-Stores', () => {
     const proj = createTempProject();
-    proj.component('sneaky-specialist', 'Specialist', 'durability: cache');
+    proj.component('sneaky-cache-orchestrator', 'Orchestrator', 'durability: cache');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'DURABILITY_ON_NON_STORE');
+      const found = byCode(validateProject(), 'DURABILITY_ON_NON_STORE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('error');
     } finally { proj.cleanup(); }
@@ -153,7 +153,7 @@ describe('Registry matrix — write path to its Store, nothing else', () => {
     proj.component('loose-registry', 'Registry', 'dependsOn: [rec-store2, flow-orch]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP');
+      const found = byCode(validateProject(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('flow-orch');
@@ -167,18 +167,18 @@ describe('Registry matrix — write path to its Store, nothing else', () => {
     proj.component('rec-registry2', 'Registry', 'dependsOn: [rec-store2, db-adapter]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP')).toHaveLength(0);
+      expect(byCode(validateProject(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
-  it('accepts Registry → validation Specialist (the standard §7 validate→write path)', () => {
+  it('accepts Registry → pure validation logic (the standard §7 validate→write path)', () => {
     const proj = createTempProject();
     proj.component('rec-store2', 'Store', 'durability: ram-projection');
-    proj.component('shape-validator', 'Specialist');
+    proj.component('shape-validator', 'Orchestrator', 'dependencyClass: pure');
     proj.component('rec-registry2', 'Registry', 'dependsOn: [rec-store2, shape-validator]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP')).toHaveLength(0);
+      expect(byCode(validateProject(), 'ARCHITECTURE_VIOLATION_REGISTRY_DEP')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -188,7 +188,7 @@ describe('Registry matrix — write path to its Store, nothing else', () => {
     proj.component('inverted-store', 'Store', 'durability: ram-projection\ndependsOn: [rec-registry2]');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'ARCHITECTURE_VIOLATION_STORE_DEP');
+      const found = byCode(validateProject(), 'ARCHITECTURE_VIOLATION_STORE_DEP');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('error');
       expect(found[0].message).toContain('never the reverse');
@@ -202,7 +202,7 @@ describe('REGISTRY_WITHOUT_STORE — the symmetric tripwire', () => {
     proj.component('file-registry', 'Registry');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'REGISTRY_WITHOUT_STORE');
+      const found = byCode(validateProject(), 'REGISTRY_WITHOUT_STORE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('retype it as a Store');
@@ -217,7 +217,7 @@ describe('REGISTRY_WITHOUT_STORE — the symmetric tripwire', () => {
     proj.component('wired-registry', 'Registry', 'dependsOn: [wired-store]');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'REGISTRY_WITHOUT_STORE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'REGISTRY_WITHOUT_STORE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -226,7 +226,7 @@ describe('REGISTRY_WITHOUT_STORE — the symmetric tripwire', () => {
     proj.component('file-registry', 'Registry', 'lint:\n  allow:\n    - code: REGISTRY_WITHOUT_STORE\n      reason: retype to read-through Store scheduled with the taxonomy migration');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'REGISTRY_WITHOUT_STORE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'REGISTRY_WITHOUT_STORE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

@@ -51,6 +51,17 @@ detect_platform() {
 fetch_latest_version() {
     need_cmd curl
 
+    # An explicit WAIRON_VERSION pins the install and skips the API call — what a
+    # CI job wants, so a pipeline is not silently upgraded by a new release.
+    # Accepts "5.1.0" or "v5.1.0".
+    if [ -n "${WAIRON_VERSION:-}" ]; then
+        case "$WAIRON_VERSION" in
+            v*) VERSION="$WAIRON_VERSION" ;;
+            *)  VERSION="v$WAIRON_VERSION" ;;
+        esac
+        return
+    fi
+
     RELEASE_JSON=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")
     VERSION=$(printf '%s' "$RELEASE_JSON" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 
@@ -116,25 +127,9 @@ main() {
             ;;
     esac
 
-    # Record the install directory in ~/.wairon/config.json
-    WAIRON_CFG_DIR="$HOME/.wairon"
-    WAIRON_CFG_FILE="$WAIRON_CFG_DIR/config.json"
-    mkdir -p "$WAIRON_CFG_DIR"
-    if [ -f "$WAIRON_CFG_FILE" ]; then
-        # Preserve existing config, just update/add installDir
-        # Simple sed approach — avoids requiring jq
-        if grep -q '"installDir"' "$WAIRON_CFG_FILE" 2>/dev/null; then
-            sed -i.bak "s|\"installDir\":[^,}]*|\"installDir\": \"${INSTALL_DIR}\"|" "$WAIRON_CFG_FILE" && rm -f "${WAIRON_CFG_FILE}.bak"
-        else
-            # Append before closing brace
-            sed -i.bak "s|}$|,\n  \"installDir\": \"${INSTALL_DIR}\"\n}|" "$WAIRON_CFG_FILE" && rm -f "${WAIRON_CFG_FILE}.bak"
-        fi
-    else
-        printf '{\n  "installDir": "%s"\n}\n' "$INSTALL_DIR" > "$WAIRON_CFG_FILE"
-    fi
-
     # Create aliases: wai → wairon (symlink)
     # Read disabled aliases from config if jq is available, otherwise default to none
+    WAIRON_CFG_FILE="$HOME/.wairon/config.json"
     DISABLED_ALIASES=""
     if command -v jq > /dev/null 2>&1 && [ -f "$WAIRON_CFG_FILE" ]; then
         DISABLED_ALIASES=$(jq -r '(.disabledAliases // []) | join(" ")' "$WAIRON_CFG_FILE" 2>/dev/null || echo "")

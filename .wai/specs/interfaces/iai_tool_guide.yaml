@@ -1,0 +1,132 @@
+id: iai_tool_guide
+name: AI Tool Guide Interface
+description: >-
+  Where each tool keeps its configuration, and how the wairon section inside it is put there,
+  recognised and taken out again. Every write is confined to the marked section; nothing here ever
+  rewrites a file it does not own the middle of.
+component: ai_tool_guide
+methods:
+  - name: globalPath
+    description: >-
+      Where a tool keeps its machine-wide configuration, honouring the environment override that
+      account aliases set, or nothing when the tool is not one we inject into.
+    signature: 'globalPath(targetType: string): string?'
+    returns: string?
+    params:
+      - name: targetType
+        type: string
+        description: 'The AI tool''s target type key: `claude` or `gemini`'
+    guarantees:
+      - idempotent
+  - name: localPath
+    description: >-
+      Where a tool keeps its per-project configuration inside this repository, or nothing when the
+      tool is not one we inject into.
+    signature: 'localPath(projectRoot: string, targetType: string): string?'
+    returns: string?
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targetType
+        type: string
+        description: 'The AI tool''s target type key: `claude`, `gemini` or `agy`'
+    guarantees:
+      - idempotent
+  - name: inject
+    description: >-
+      Put the guide into a file, replacing any section already there. Creates the file and its
+      directories when absent. Idempotent by construction: the old section is removed before the new
+      one is appended, so running it twice leaves the same file.
+    signature: 'inject(filePath: string, scope: GuideScope): void'
+    returns: void
+    params:
+      - name: filePath
+        type: string
+        description: The configuration file to write
+      - name: scope
+        type: GuideScope
+        description: '`global` for the machine-wide guide, `local` for the in-project one'
+    effect: write
+  - name: strip
+    description: >-
+      The same content with the marked section removed, and everything outside it untouched. Content
+      carrying no markers comes back unchanged rather than being treated as an error.
+    signature: 'strip(content: string): string'
+    returns: string
+    params:
+      - name: content
+        type: string
+        description: File content that may carry a guide
+    guarantees:
+      - idempotent
+  - name: writeDelegator
+    description: >-
+      Write wairon's block of the repository-root file that points a tool at the real guide inside
+      the project (CLAUDE.md for claude, GEMINI.md for gemini/agy with the guide inlined,
+      .cursorrules, .github/copilot-instructions.md, .codexrules), between its own markers, so the
+      root stays a pointer rather than a second copy to keep in step. The root file is usually the
+      user's own: every byte outside wairon's markers is kept exactly, nothing a person wrote there
+      is ever deleted, and the file is written only when its wairon block changed. A root file that
+      holds the unmarked pointer an earlier release wrote (alone, or with the user's text after it)
+      is recognised and migrated into the marked block, keeping whatever follows it.
+    signature: 'writeDelegator(projectRoot: string, targetType: string): void'
+    returns: void
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targetType
+        type: string
+        description: The target type key of the AI tool to write a pointer for
+    effect: write
+  - name: refreshLocal
+    description: >-
+      Write the in-project guide and the root pointer for every target that is a tool we inject
+      into, answering the guide paths actually written. Used after anything that changes what the
+      guide should say — a wairon upgrade, a regenerate — so a stale guide is never left claiming to
+      describe the current tree. It INSTALLS as well as refreshes: a known target gets a guide
+      whether or not it had one, and an unrecognized target name is ignored rather than refused.
+    signature: 'refreshLocal(projectRoot: string, targetTypes: list<string>): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root
+      - name: targetTypes
+        type: list<string>
+        description: The target type keys of the AI tools to refresh
+    effect: write
+  - name: body
+    description: >-
+      The wairon guide body for a scope: the global body for a user-level guide file, the local body
+      for a project's own. The same body inject writes between the guide markers, so a renderer that
+      embeds the guide shows exactly what an injected file holds. Both bodies state the approval
+      doctrine an assistant acts on: approval is the lock, not a status; prose is design and linkage
+      is not — an L4/L5 prose change re-opens the approval, so `wairon lock` is owed before code is
+      implemented against it, while code linkage costs no re-lock — because the global body is also
+      what .wai/context/wairon-guide.md carries to every AI tool that reads the context copy
+      instead.
+    signature: 'body(scope: GuideScope): string'
+    returns: string
+    params:
+      - name: scope
+        type: GuideScope
+        description: global for a user-level guide file, local for a project's own
+  - name: registerServer
+    description: >-
+      Register the wairon MCP server in the project's own portable Claude configuration (.mcp.json
+      at the project root) when it registers none: the `wairon mcp serve` entry, every other key
+      kept. A file that already registers wairon is left exactly as it is. Answers the path written,
+      or none when nothing was written. The session scaffold a project made by a family migration
+      gets from the MCP route, as `wairon mcp install --backend claude` gives it on the CLI.
+    signature: 'registerServer(projectRoot: string): string?'
+    returns: string?
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose .mcp.json to write
+    effect: io
+status: complete
+createdAt: '2026-09-23T00:11:03.274Z'
+updatedAt: '2026-10-08T08:26:06.209Z'

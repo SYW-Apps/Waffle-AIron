@@ -1,0 +1,213 @@
+id: cli_mcp_adapter_impl
+name: CLI MCP Configuration Adapter Implementation
+description: >-
+  src/commands/mcp.ts — where Claude and Gemini/Antigravity read MCP server definitions from, what a
+  wairon entry looks like there (local stdio or hosted http), and how to read one back. Writes touch
+  only the `wairon` entry.
+contract: icli_mcp_adapter
+sourcePath: src/commands/mcp.ts
+methods:
+  - name: detectHostedMcpSource
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the known config locations in precedence order: the project's .mcp.json, the user's
+          .claude.json, then the Gemini/Antigravity project and global files.
+        type: loop
+        loopKind: forEach
+        over: the candidate config paths
+        endStep: 9
+      - stepNumber: 2
+        description: >-
+          Read and parse this config, and take its wairon server entry. A missing, unreadable or
+          malformed file contributes NOTHING and never throws — this runs inside ordinary commands,
+          and a broken agent config must not break the CLI.
+        type: local
+      - stepNumber: 3
+        description: Is there no wairon entry here?
+        type: branch
+        condition: the config carries no mcpServers.wairon entry
+        onTrueStep: 9
+        onFalseStep: 4
+      - stepNumber: 4
+        description: Does the entry carry no url (a command/args stdio server)?
+        type: branch
+        condition: the entry has no url field
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report a LOCAL source — the agent authors this checkout's own tree — naming the config
+          file it came from.
+        type: return
+        outcome: local
+      - stepNumber: 6
+        description: >-
+          Reduce the endpoint to the instance base URL the CLI addresses (dropping the /mcp path and
+          any query).
+        type: local
+      - stepNumber: 7
+        description: >-
+          Read the project selector from the entry's X-Wairon-Project header, falling back to a
+          ?project= query on the endpoint.
+        type: local
+      - stepNumber: 8
+        description: >-
+          Parse the bearer out of the entry's Authorization header when it carries one, then report
+          a HOSTED source with the instance, project and credential.
+        type: return
+        outcome: hosted
+      - stepNumber: 9
+        label: nextConfig
+        description: Nothing usable here — continue with the next config location.
+        type: local
+      - stepNumber: 10
+        description: No wairon entry is registered anywhere.
+        type: return
+        outcome: none
+    detail: full
+    intent: ''
+  - name: installMcpServer
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Refuse a LOCAL install outside an initialized wairon project — a local entry serves this
+          checkout's spec tree — while a HOSTED install needs none: a hosted user has no checkout,
+          and the hosted entry is written in this folder without creating a spec tree or a guide.
+          Refuse a config dir given without a backend — a config directory is agent-specific, so the
+          pair is meaningless alone.
+        type: local
+      - stepNumber: 2
+        description: >-
+          When no --backend was given, read the project configuration through the core portal for
+          its enabled targets; a configuration that cannot be read contributes nothing, so the
+          Claude default applies.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Resolve which backends to write: the explicit --backend, else the backends the project's
+          configured targets imply, else Claude.
+        type: local
+      - stepNumber: 4
+        description: Write the entry for each resolved backend.
+        type: loop
+        loopKind: forEach
+        over: the resolved backends
+        endStep: 13
+      - stepNumber: 5
+        description: >-
+          Validate an explicit config dir for this backend (an implicit global-style install), then
+          resolve the file this backend actually loads SERVER DEFINITIONS from — for Claude,
+          .mcp.json or the user .claude.json, never .claude/settings.json, which Claude ignores for
+          servers.
+        type: local
+      - stepNumber: 6
+        description: >-
+          Read the existing config, keeping every other server and key intact; an unparseable file
+          starts fresh rather than aborting the install.
+        type: local
+      - stepNumber: 7
+        description: Was a hosted instance named?
+        type: branch
+        condition: options.hostedUrl is set
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Build the HOSTED entry: the instance's /mcp endpoint with the caller-resolved bearer and
+          the project selector as headers. A missing credential throws with the login command to
+          run.
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: >-
+          Build the LOCAL stdio entry. A project-scoped entry is portable — it names the CLI as
+          `wairon` on PATH, or by a project-relative path when the CLI lives inside the project, and
+          pins no absolute project directory (the server attaches to the working directory's .wai),
+          so a committed project config works on every machine; a global entry names the CLI by
+          absolute path, unpinned, and scopes per session.
+        type: local
+      - stepNumber: 10
+        label: merge
+        description: Is the existing entry already exactly this one?
+        type: branch
+        condition: the registered entry equals the desired entry
+        onTrueStep: 13
+        onFalseStep: 11
+      - stepNumber: 11
+        description: >-
+          Write the entry under mcpServers.wairon — REWRITING a stale one rather than skipping,
+          because a stale command path is exactly how an agent silently loses its wairon tools. When
+          the file lies OUTSIDE the project root and already exists, first copy it beside itself as
+          <file>.wairon-backup-<timestamp> and say where, so a machine-wide configuration is never
+          replaced without its previous value kept.
+        type: local
+      - stepNumber: 12
+        description: >-
+          Report where it wrote, what the entry points at, and what the agent must do to pick it up
+          (restart, and for a project-scoped Claude server, approve it once). A hosted entry written
+          to a project-scoped file carries the bearer, so warn that the file must stay out of
+          version control (or be installed with --global).
+        type: local
+      - stepNumber: 13
+        label: backendEnd
+        description: This backend is up to date.
+        type: local
+    detail: full
+    intent: ''
+    symbol: runMcpInstall
+  - name: reportMcpStatus
+    narrative: []
+    intent: >-
+      For each known config location, report whether a wairon entry is registered and whether it is
+      local or hosted (naming the instance), plus the project the CLI resolves, its name read from
+      the project configuration through the core portal — the one place a developer can see agent
+      and CLI agreeing or disagreeing about what they are working on. Prints paths, never
+      credentials.
+    symbol: runMcpStatus
+  - name: serveMcpStdio
+    narrative: []
+    intent: >-
+      Resolve the project root to attach to — a pinned WAIRON_PROJECT_DIR, else the project the
+      binding rule binds from the cwd (WaiPaths: the nearest folder with an L0, never past the
+      repository root unless an ancestor declares the crossing as a member — the very root every CLI
+      command and `wairon dev` bind), else a cwd that holds a .wai of its own (a project not yet
+      bootstrapped), else the cwd — and record HOW it resolved, announcing `project <id> at <root>`
+      and the method on stderr (never stdout, which is the JSON-RPC channel) so an attachment to an
+      ancestor tree is observable rather than mysterious. Then start the MCP server on the stdio
+      transport and run until the transport closes.
+    calls:
+      - mcp_hosting_portal.serveStdio
+    symbol: runMcpServe
+  - name: planInstall
+    narrative: []
+    intent: >-
+      Resolve the backends and, for each, the file it loads server definitions from and the entry an
+      install would write — the same resolution installMcpServer performs (steps 1-9 of its
+      narrative), read off one shared helper so the two can never disagree — and answer one write
+      per backend: the file, whether it lies outside the bound project root, the wairon entry it
+      holds now (null when none, or when the file is absent or unparseable), the entry it would get,
+      and whether the two are equal. Writes nothing; a hosted install with no credential refuses
+      exactly as the install would.
+    symbol: planMcpInstall
+  - name: findLegacyPlugin
+    narrative: []
+    intent: >-
+      Answer `<gemini home>/config/plugins/wairon` when that directory exists, else null. The gemini
+      home is GEMINI_CONFIG_DIR when set, else ~/.gemini — the same home the global install writes
+      into.
+  - name: retireLegacyPlugin
+    narrative: []
+    intent: >-
+      When the legacy plugin directory exists, rename it to `<gemini
+      home>/config/wairon-plugin.wairon-backup-<timestamp>` — out of the plugins directory, so it no
+      longer loads and no longer collides with the MCP server — and answer that path; null when
+      there is none, and a warning (never a throw) when the move fails. Nothing is deleted.
+detail: intent
+lint:
+  allow: []
+status: complete
+createdAt: '2026-08-12T18:43:49.494Z'
+updatedAt: '2026-10-17T14:35:26.914Z'

@@ -1,0 +1,24 @@
+id: external_declarations
+name: External Declarations
+description: >-
+  Declares an external of the bound project the way `wairon member add` declares a member: one
+  command (`wairon externals add`) and one MCP tool (sdd_add_external) instead of a hand-edited
+  `.wai/project.yaml` whose `source` shape nothing documented. It reads the request's location in
+  the one location grammar members use (a `../sibling`, a `hosted:<id>`, a git URL with an optional
+  `#<commit>` that fixes the pin's ref), refuses what cannot be declared with one sentence naming
+  the accepted form — never a schema dump — writes the normalized declaration through the core's
+  configuration portal, checks it against the producer it reaches (the id it answers to, the `use`
+  names it exports to this project), takes it back out when the producer contradicts it, and pins it
+  when asked so the reproducible gate exists from the first validate. A workflow Orchestrator of its
+  own rather than a seventeenth method on surface_orchestrator: declaring writes configuration,
+  which nothing else in the surfaces plane does, and it composes the pin rather than being part of
+  it.
+subsystem: sdd_surfaces
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - surfaces_core_adapter
+  - surface_orchestrator
+status: complete
+createdAt: '2026-10-06T10:13:54.294Z'
+updatedAt: '2026-10-06T10:13:54.920Z'

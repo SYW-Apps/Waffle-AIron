@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ profiles:
   game-ecs-real:
     family: backend-like
     allowedEdges:
-      - from: [Specialist]
+      - from: [Orchestrator]
         to: [Store]
         reason: ECS systems iterate component arrays directly — the zero-cost idiom of the domain
 `;
@@ -72,25 +72,25 @@ function createTempProject() {
 }
 
 describe('profile edge-deltas — allowedEdges license matrix exceptions', () => {
-  it('licenses the declared edge under the governing profile', () => {
+  it('licenses the declared edge under the governing profile, the dependency-class rule included', () => {
     const proj = createTempProject();
-    proj.component('physics-system', 'Specialist', 'sim', 'dependsOn: [position-store]');
+    proj.component('physics-system', 'Orchestrator', 'sim', 'dependencyClass: read\ndependsOn: [position-store]');
     proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
     proj.activate();
     try {
-      const res = validateSddTree();
-      expect(res.issues.filter(i => i.code === 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP')).toHaveLength(0);
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
   it('the same edge in an un-governed subsystem still violates the matrix', () => {
     const proj = createTempProject();
-    proj.component('tax-calc', 'Specialist', 'billing', 'dependsOn: [rate-store]');
+    proj.component('tax-calc', 'Orchestrator', 'billing', 'dependencyClass: read\ndependsOn: [rate-store]');
     proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
     proj.activate();
     try {
-      const res = validateSddTree();
-      expect(res.issues.filter(i => i.code === 'ARCHITECTURE_VIOLATION_SPECIALIST_DEP')).toHaveLength(1);
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -101,20 +101,20 @@ describe('profile edge-deltas — allowedEdges license matrix exceptions', () =>
     proj.component('position-store', 'Store', 'sim', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: deliberate standalone ECS component array');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'ARCHITECTURE_VIOLATION_VIEW_DEP')).toBe(true);
     } finally { proj.cleanup(); }
   });
 
   it('never relaxes cross-subsystem boundary rules', () => {
     const proj = createTempProject();
-    // Specialist crossing into another subsystem's Store: boundary rules fire
+    // Read logic crossing into another subsystem's Store: boundary rules fire
     // regardless of the profile's allowedEdges.
-    proj.component('physics-system', 'Specialist', 'sim', 'dependsOn: [rate-store]');
+    proj.component('physics-system', 'Orchestrator', 'sim', 'dependencyClass: read\ndependsOn: [rate-store]');
     proj.component('rate-store', 'Store', 'billing', 'durability: ram-projection\nlint:\n  allow:\n    - code: UNOWNED_STORE\n      reason: test fixture');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'CROSS_SUBSYSTEM_NON_ADAPTER')).toBe(true);
     } finally { proj.cleanup(); }
   });

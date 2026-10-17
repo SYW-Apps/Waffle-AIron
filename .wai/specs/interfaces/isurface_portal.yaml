@@ -12,63 +12,180 @@ methods:
       write it to an output path. OpenAPI rendering produces one document per backing public portal
       (renderedSet); a project with a single gateway portal yields a single document (also surfaced
       as `rendered`).
-    signature: 'exportSurface(maxAudience: string, format: string, outPath?: string): SurfaceSnapshot'
-    returns: SurfaceSnapshot
+    signature: >-
+      exportSurface(maxAudience: SurfaceAudience, format: string, outPath?: string, portalId?:
+      string): SurfaceExportResult
+    returns: SurfaceExportResult
     params:
       - name: maxAudience
-        type: string
-        description: 'Audience ceiling: project | department | instance | partner | external'
+        type: SurfaceAudience
+        description: 'Audience ceiling: only what is published to this audience or a narrower one is exported'
       - name: format
         type: string
         description: native | openapi
       - name: outPath
         type: string
         optional: true
+      - name: portalId
+        type: string
+        description: >-
+          For an openapi export, narrow it to this one portal's document; a portalId naming no
+          portal is rejected
+        optional: true
   - name: importSurface
     description: >-
       Import a foreign surface document (native snapshot YAML or OpenAPI) and store it with the
       given origin (exchanged | authored).
-    signature: 'importSurface(sourcePath: string, origin: string): SurfaceSnapshot'
+    signature: 'importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot'
     returns: SurfaceSnapshot
     params:
       - name: sourcePath
         type: string
       - name: origin
-        type: string
-        description: exchanged | authored
+        type: SurfaceOrigin
+        description: Provenance of the imported snapshot (exchanged or authored; an import is never generated)
   - name: listSnapshots
     description: >-
       All stored surface snapshots available to this project (imported plus received
       parent-generated).
     signature: 'listSnapshots(): SurfaceSnapshot[]'
-    returns: SurfaceSnapshot[]
+    returns: list<SurfaceSnapshot>
   - name: getSnapshot
     description: The stored snapshot produced by the named project, or null.
-    signature: 'getSnapshot(projectName: string): SurfaceSnapshot | null'
-    returns: SurfaceSnapshot | null
+    signature: 'getSnapshot(projectName: string): SurfaceSnapshot?'
+    returns: SurfaceSnapshot?
     params:
       - name: projectName
         type: string
-  - name: generateChildSnapshots
-    description: >-
-      Write the family-scoped parent surface AND each sibling subsystem's published surface into
-      every chained child project's .wai/surfaces/, so children can validate and consume cross-tree
-      references standalone against contract-grade snapshots.
-    signature: 'generateChildSnapshots(): string[]'
-    returns: string[]
   - name: removeSnapshot
     description: Remove a stored surface snapshot (file and projection).
-    signature: 'removeSnapshot(projectName: string): boolean'
-    returns: boolean
+    signature: 'removeSnapshot(projectName: string): bool'
+    returns: bool
     params:
       - name: projectName
         type: string
-  - name: listExternalInterfaces
+  - name: pinExternals
     description: >-
-      List this project's consumable external surfaces (parent family, siblings, foreign imports) as
-      catalog entries with origin, provenance, and freshness. Pure 1:1 forward to the orchestrator.
-    signature: 'listExternalInterfaces(): ExternalSurfaceEntry[]'
-    returns: ExternalSurfaceEntry[]
+      Pin the bound project's declared externals (the named aliases, else all): snapshots under
+      .wai/externals/ and the lock at .wai/externals.lock.yaml. The caller must gate on reach
+      itself.
+    signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: aliases
+        type: list<string>
+        description: The aliases to pin; all declared externals when omitted
+        optional: true
+  - name: getExternalsStatus
+    description: >-
+      Report each declared external's pin against its live producer at signature level — unchanged,
+      changed, renamed (named by the producer's rename trace, with the new name) or removed; what
+      cannot be compared is EXTERNAL_CHECK_UNAVAILABLE. Offline, no producer is read over the
+      network. Writes nothing.
+    signature: 'getExternalsStatus(offline?: bool): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (default false)
+        optional: true
+  - name: listExternals
+    description: List the bound project's declared externals, how each resolves and what is pinned for it.
+    signature: 'listExternals(): list<ExternalListing>'
+    returns: list<ExternalListing>
+    params: []
+  - name: listPinnedExternals
+    description: >-
+      The bound project's declared externals, each with its lock entry and pinned snapshot, read
+      from its own .wai/externals files only — what the owner's gate judges a reference into another
+      project against. Pure 1:1 forward.
+    signature: 'listPinnedExternals(): list<PinnedExternal>'
+    returns: list<PinnedExternal>
+    params: []
+  - name: pinnedParent
+    description: >-
+      A part's pinned parent — its lock's parent entry and the excerpt it names, read from its own
+      .wai/externals files only — what the owner's gate opened at a part judges against (stage 8);
+      null at a project. Pure 1:1 forward.
+    signature: 'pinnedParent(): PinnedParent?'
+    returns: PinnedParent?
+    params: []
+  - name: exportDesign
+    description: >-
+      Published: the bound project's design export — the whole design resolved, as the one
+      integration point a generator consumes — written as JSON to outPath when given. The approval
+      verdict is the caller's to decide against the gate identity (the validator's, which this
+      subsystem cannot compute) and is handed in, exactly as status receives its approvals; without
+      one the export says unjudged and claims nothing. The package's library entry (src/index.ts)
+      re-exports it as `exportDesign`, so an in-process consumer calls it without the CLI.
+    signature: 'exportDesign(outPath?: string, approval?: DesignApproval): DesignExport'
+    returns: DesignExport
+    params:
+      - name: outPath
+        type: string
+        description: Where to write the JSON; nothing is written without it
+        optional: true
+      - name: approval
+        type: DesignApproval
+        description: The lock-check state (locked, stale, unlocked) the caller decided; omitted, unjudged
+        optional: true
+  - name: declareExternal
+    description: >-
+      Published: declare one external of the bound project (`wairon externals add`,
+      sdd_add_external) — refused in one sentence naming the accepted form, checked against the
+      producer it reaches, pinned when asked. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.declare
+  - name: removeExternal
+    description: >-
+      Published: remove one external of the bound project (`wairon externals remove`,
+      sdd_remove_external) — its declaration and its pin together, so no orphaned pin is left; an
+      orphaned pin alone is removed too. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.remove
+  - name: updateExternalUse
+    description: >-
+      Published: add and remove `use` imports of one declared external (`wairon externals use`,
+      sdd_update_external) — refused in one sentence, an added name checked against what the
+      producer exports to this project. Dispatched to the external-declarations workflow.
+    signatureFrom: external_declarations.updateUse
+  - name: listConsumers
+    description: >-
+      Published: the projects that consume the bound project — the family in reach, and with search
+      folders the project roots in them declaring it by path or git — with the names each uses and
+      still writes but no longer finds exported (`wairon externals consumers [--search <dir>…]`,
+      sdd_list_consumers). Read-only. Forwarded to the surface orchestrator.
+    signatureFrom: surface_orchestrator.listConsumers
+  - name: diffSurface
+    description: >-
+      Published: the bound project's public-surface changelog since its last committed approval, a
+      named revision or a saved snapshot (`wairon surface diff`, sdd_surface_diff). Read-only.
+      Forwarded to the surface orchestrator.
+    signatureFrom: surface_orchestrator.diff
+  - name: unrecordedUses
+    description: >-
+      The uses of each pinned external of the bound project that its pin does not record, keyed by
+      alias (`<name>` or `<name>.<method>`), counted offline — what `wairon lock` refuses over and
+      `wairon lock-check` fails on. Pure 1:1 forward.
+    signature: 'unrecordedUses(): map<string, list<string>>'
+    returns: map<string, list<string>>
+    params: []
+    effect: read
+  - name: memberApprovedSurfaces
+    description: >-
+      Each live member of the bound project projected at the approval it is judged against, keyed by
+      alias — what binding conformance compares a binding into a member with beside its live export.
+      Pure 1:1 forward.
+    signature: 'memberApprovedSurfaces(): map<string, SurfaceSnapshot>'
+    returns: map<string, SurfaceSnapshot>
+    params: []
+    effect: io
+  - name: memberStatuses
+    description: >-
+      Each live member of the bound project compared with the approval it is judged against — a
+      member's relation health beyond resolution failures. Pure 1:1 forward.
+    signature: 'memberStatuses(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+    effect: io
 status: complete
 createdAt: '2026-07-10T23:13:16.280Z'
-updatedAt: '2026-07-24T17:53:59.538Z'
+updatedAt: '2026-10-17T16:35:54.403Z'

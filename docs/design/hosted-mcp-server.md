@@ -33,13 +33,13 @@ The server splits a public **data plane** from an admin **control plane**, on
 | Plane | Bind (default) | Auth | Surface |
 |---|---|---|---|
 | **Data** | `0.0.0.0:8080` | project API key (bearer) | `POST /mcp` (the `sdd_*` tool surface), `GET /healthz`, `GET /readyz` |
-| **Control** | `127.0.0.1:8081` | master credential (`WAIRON_ADMIN_TOKEN`) | `/admin/projects`, `/admin/keys`, `/admin/projects/{id}/lock`, `/admin/projects/{id}/promote` |
+| **Control** | `127.0.0.1:8081` | master credential (`WAIRON_ADMIN_TOKEN`) | `/admin/projects`, `/admin/keys`, `/admin/projects/{id}/lock` |
 
 The data plane **reuses `sdd_mcp` unchanged** — `host_mcp_adapter` calls
 `createMcpServer()` and runs it inside the request's bound project scope, so the
 existing `sdd_*` tools resolve to the right `.wai/` tree with no changes to them.
 The control plane owns **project & key lifecycle plus the state-scoped
-lock/promote**, and is reachable two ways that hit the *same* logic: the HTTP
+lock**, and is reachable two ways that hit the *same* logic: the HTTP
 admin API, and the `wairon host …` CLI (in-process — no server needed).
 
 ### Request flow (data plane)
@@ -89,8 +89,16 @@ network — the operator owns that risk).
   (you'd be unable to administer).
 - **Project API keys** — minted via the control plane, stored **hashed**
   (salted SHA-256, constant-time compared) in `<dataDir>/auth/credentials.json`.
-  Each key is bound server-side to a role (`editor` | `admin`) and an authorized
-  project set. The plaintext is shown **once** at mint time.
+  Each key has an **owner** (a user id) and an authorized project set: it acts
+  as its owner's live permissions — the assignments set with
+  `wairon host permission set` — narrowed to those projects. The plaintext is
+  shown **once** at mint time. A key minted without an owner (the legacy
+  `--role editor|admin` form) resolves to zero permissions.
+- **Units and permissions** — every project is created inside an organization
+  unit, and access is a grid of assignments (subject × scope × capability:
+  `project:read`, `project:create`, `project:write`, `project:admin`,
+  `approval:decide`) anchored at the instance, a unit, a project or a
+  subsystem; the most specific setting wins.
 - **Auth-derived scope (never client-declared)** — a key authorized for one
   project needs no selector. A multi-project / wildcard key may pass an optional
   `X-Wairon-Project` header or `?project=` selector, honored **only within** its
@@ -99,9 +107,43 @@ network — the operator owns that risk).
 Upgrade path to OIDC/OAuth later: the MCP SDK's `requireBearerAuth` + an OIDC
 verifier slots in at the same boundary. Not a v1 requirement.
 
+### Hosted families — members are projects
+
+A hosted project may declare members (`members` in its `project.yaml`), each a
+wairon project inside its isolated tree. Every member is a **hosted project
+record** of its own (`parentProjectId`, `memberPath`; its root derived from its
+parent's): it is bound by its own id, audited under its own id, and has its own
+record-level tools, approval page and lock requests.
+
+- **Access is inherited.** Projects nest like organization units: a member's
+  permission chain is its own scope, its parent's, up to its family root's
+  units and the instance; the most specific setting wins, so an explicit **no**
+  on a member beats an inherited yes. A token narrowed to a project covers its
+  members. No grant is copied when a member appears.
+- **Membership changes reach.** Attach and adopt widen who reaches the member,
+  detach narrows it; each lists the principals who gain or lose access (a dry
+  run included) and audits it. After any applied family-shape tool the records
+  are reconciled with the family on disk, and a renamed member's own settings
+  and key entries move to its new id.
+- **Detach and adopt relocate.** A detached member moves to an isolated root of
+  its own — in one all-or-nothing transaction with the family edits and the
+  record and placement writes — and keeps its former family root's units. Its
+  consumers name it by `source.hosted: <record id>`, resolved live only through
+  the server's record lookup within what the request may read (unavailable
+  otherwise, never a pass). Adopt moves it back.
+- **Git.** A family commits through its family root's repository: a member
+  under its own `<path>/.wai/`, a family change as one commit over every member
+  it touched.
+- **Refused.** Placing a member in a unit (it takes its units from its family
+  root), and renaming a family root's id.
+- **Upgrading a data dir.** `wairon host doctor` plans the member records and
+  `--fix` applies them, all or nothing; it writes no grant, so nobody's reach
+  changes. A crashed transaction under the data directory is rolled back at
+  boot and by `host doctor --fix`.
+
 ---
 
-## 4. State-scoped lock & gated promote
+## 4. State-scoped lock
 
 Closes the stale-approval (TOCTOU) gap from the feature request.
 
@@ -110,13 +152,20 @@ Closes the stale-approval (TOCTOU) gap from the feature request.
   no-op re-save doesn't shift identity). Identical spec content ⇒ identical
   `StateId`; any edit changes it.
 - **`wairon host lock --project <id>`** → `validateAsComplete` (full strictness,
-  no draft relaxation, mutates nothing) → on success, promote all specs to
-  `complete` and write `.wai/lock.json` **scoped to the exact `StateId`** it
-  validated.
-- **`wairon host promote --project <id>`** → reads the lock, **recomputes the
-  current `StateId`**, and refuses (`stale — re-lock required`) if it drifted.
-  It **never merges** to production — at most it marks the change-set `ready`.
-  Verified: editing a spec after lock flips promote to stale until you re-lock.
+  no draft relaxation, mutates nothing) → on success, record the approved tree
+  as the **baseline** and write `.wai/lock.json` **scoped to the exact `StateId`**
+  it validated. The spec tree itself is never written to — see
+  [approval baselines](approval-baseline.md).
+
+**On the removed `promote` step.** Lock used to be followed by a second gate,
+`wairon host promote`, which re-read the lock, recomputed the `StateId`, and —
+if nothing had drifted — flipped `lock.json`'s `status` from `ready` to
+`promoted`. That was its entire effect. It never merged, published or deployed
+anything, and no code ever branched on the value: the sole reader treated
+`ready` and `promoted` identically. It was intended as a separation-of-duties
+checkpoint, but `lock` is already the human gate (agents do not run it), so it
+gated a door that was already locked. Removed; the `promote:mark-ready` legacy
+permission alias is kept in `migration.ts` so stored grants still upgrade.
 
 ---
 
@@ -132,13 +181,11 @@ participant:
   branch.
 - `wairon host git sync` (or `POST …/git/sync`) pulls the default branch into the
   working branch.
-- **`lock` is git-aware:** it syncs, validates-as-complete, promotes, then
+- **`lock` is git-aware:** it syncs, validates-as-complete, records the approved
+  baseline, then
   **commits + pushes the working branch** and records the commit SHA + a
   **compare URL** — you open the PR (push-only, no forge API). `wairon validate`
   is the natural PR status check.
-- **`promote`** is unchanged — the content `StateId` already refuses a stale
-  lock, and it never merges (the human merges the PR).
-
 Identity: a single bot token — `WAIRON_GIT_TOKEN` (+ `WAIRON_GIT_NAME` /
 `WAIRON_GIT_EMAIL`). `.wai/lock.json` and `.wai/git.json` stay container-local
 (never committed). The Docker image ships with `git` installed.
@@ -186,7 +233,7 @@ Installs over the admin surface are **declarative-only** — profiles and langua
 tables are pure data. Programmatic **rule packs** are executable code; requiring
 arbitrary JS over the network would be a remote-code-execution surface, so they are
 **refused on the API** and install via the trusted filesystem instead — mount them
-into `WAIRON_PACKS_DIR`, or `docker compose exec wairon wairon packs add <file> --global`.
+into `WAIRON_PACKS_DIR`, or `docker compose exec wairon wairon pack add <file> --global`.
 The admin API still **lists** every installed pack (including code packs), so nothing
 is invisible.
 
@@ -196,7 +243,7 @@ docker compose exec wairon wairon host packs install --file ./acme-profiles.yaml
 docker compose exec wairon wairon host packs list
 
 # rule (code) packs — trusted filesystem only
-docker compose exec wairon wairon packs add /data/incoming/acme-rules.cjs --global
+docker compose exec wairon wairon pack add /data/incoming/acme-rules.cjs --global
 ```
 
 #### Extension packs on hosted instances — bake, don't shell in
@@ -254,15 +301,32 @@ docker compose pull
 docker compose up -d
 curl -fsS http://localhost:8080/healthz          # → {"ok":true}
 
-# 3. provision a project and mint an editor key — via docker exec (safest path)
-docker compose exec wairon wairon host project create --id acme
-docker compose exec wairon wairon host key mint --project acme --role editor
+# 3. an organization unit, a project in it, and who may use it — via docker exec (safest path)
+docker compose exec wairon wairon host unit create --slug acme --kind business_entity
+docker compose exec wairon wairon host project create --id shop --unit acme
+docker compose exec wairon wairon host permission set --user alice --capability project:read  --project shop
+docker compose exec wairon wairon host permission set --user alice --capability project:write --project shop
+
+# 4. a key acting as alice, narrowed to the project
+docker compose exec wairon wairon host key mint --project shop --owner alice
 #   → wk_…  (shown once — hand this to the MCP client)
 ```
 
 Remote MCP clients then connect to `https://<host>/mcp` with
 `Authorization: Bearer wk_…` (put TLS in front — see 5.4). A single-project key
 needs no project selector.
+
+- A root unit (one with no `--parent`) must be `--kind business_entity`;
+  departments and teams go below it with `--parent <unitId>`.
+- `project:write` does not include `project:read`; grant both for an author.
+  Grant them at `--unit acme` instead of `--project shop` to cover every project
+  in the unit.
+- The owner (`alice`) needs no user record first: an id without one acts as a
+  service principal. People who sign in through SSO get their user record on
+  first login; assign their permissions to that user id.
+- A new instance needs no `wairon host doctor --fix`: the server seeds its
+  identity at first start. Run `host doctor` (a dry run) after upgrading an
+  existing data dir, and `--fix` when it lists a migration.
 
 ### 5.2 Dockerfile / compose
 
@@ -326,9 +390,11 @@ move as releases land.
 Two equivalent paths to the same control-plane logic:
 
 - **CLI over `docker exec` / SSH** (recommended — no admin port exposed):
-  `wairon host project create|list|destroy`, `wairon host key mint|list|revoke`,
-  `wairon host lock`, `wairon host promote`. Reads `WAIRON_ADMIN_TOKEN` and
-  `WAIRON_DATA_DIR` from the container env.
+  `wairon host unit create`, `wairon host project create|list|destroy`,
+  `wairon host permission set|list|remove`, `wairon host key mint|list|revoke`,
+  `wairon host lock`, `wairon host doctor [--fix]`, and `host packs`, `git`,
+  `producer`, `secret`, `demo` (see the [CLI reference](../cli.md#wairon-host--control-plane)).
+  Reads `WAIRON_ADMIN_TOKEN` and `WAIRON_DATA_DIR` from the container env.
 - **HTTP admin API** — the same operations under `/admin/*`, bound to
   `127.0.0.1:8081` by default. To let your own UI/automation call it, run with
   `--admin-host 0.0.0.0`, publish `8081`, and **front it with TLS + your own
@@ -341,7 +407,7 @@ Two equivalent paths to the same control-plane logic:
 - **Auth:** `Authorization: Bearer <project key>`. Scope is server-side; a
   single-project key needs no `project` argument.
 - **Tools:** the full `sdd_*` surface. No privileged tools on the public plane —
-  lock/promote are control-plane only.
+  lock is control-plane only.
 
 ### 5.4a Reverse proxy & the realtime WebSocket (`/web/ws`)
 
@@ -536,5 +602,5 @@ resize without a rebuild.
 - **Sync/mirror backends** (FR#5) remain future work: native FS is the source of
   truth; a `wairon sync --git <remote>` mirror would layer on top, not replace it.
 - **Actual promotion/merge** to a canonical branch is deliberately out of scope —
-  `promote` marks readiness after the `StateId` re-check; a separate human-gated
-  step performs any merge.
+  `lock` records the approved `StateId`; a separate human-gated step (merging the
+  PR) performs any merge.

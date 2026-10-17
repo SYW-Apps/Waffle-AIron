@@ -1,0 +1,34 @@
+kind: enum
+id: reference_binding
+name: ReferenceBinding
+description: What an authored cross-project reference bound to when the family was scanned.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: exported
+    description: >-
+      A public name of the producer's resolved L0 table whose audience covers the referrer (for an
+      import: the one import that supplies the name)
+  - name: unexported
+    description: >-
+      The producer is known but the name is none of its public names; bound leniently to the
+      producer's spec of that local id (EXTERNAL_NOT_EXPORTED)
+  - name: undeclared
+    description: >-
+      The producer was found only by a deprecated form or by its project id, and the referring
+      project declares no alias for it (EXTERNAL_UNDECLARED)
+  - name: outside
+    description: >-
+      The alias, or an import that may supply the name, is a declared external whose producer the
+      scan did not read; kept as written and resolved by the owner's gate against that external's
+      pin
+  - name: unresolved
+    description: Nothing names the first segment, or no import supplies the bare name
+  - name: local
+    description: A deprecated form that lands in the referring project itself
+  - name: ambiguous
+    description: Two imports supply the bare name (IMPORT_AMBIGUOUS)
+createdAt: '2026-10-04T23:11:18.805Z'
+updatedAt: '2026-10-04T23:11:19.189Z'

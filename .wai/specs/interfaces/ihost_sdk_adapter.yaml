@@ -17,7 +17,7 @@ methods:
       Forward to sdk_portal.extractPack — safely extract into destDir under the given
       (hosted-strict) limits.
     signature: >-
-      extractArchive(archive: bytes, destDir: string, limits?: PackExtractionLimits):
+      extractArchive(archive: bytes, destDir: string, limits?: pack_extraction_limits):
       PackExtractionResult
     returns: PackExtractionResult
     params:
@@ -30,4 +30,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-21T18:42:05.320Z'
-updatedAt: '2026-07-21T19:26:05.041Z'
+updatedAt: '2026-10-03T20:53:58.573Z'

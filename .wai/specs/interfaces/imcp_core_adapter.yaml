@@ -8,89 +8,370 @@ methods:
   - name: loadSystemSpec
     description: Calls loadSystemSpec on core portal
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: resolveAgentTopology
     description: Calls resolveAgentTopology on core portal
     signature: 'resolveAgentTopology(): AgentRecord[]'
-    returns: AgentRecord[]
-  - name: saveSystemSpec
-    description: Calls saveSystemSpec on core portal
-    signature: 'saveSystemSpec(spec: SystemSpec): void'
-    returns: void
-  - name: saveSubsystemSpec
-    description: Calls saveSubsystemSpec on core portal
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
+    returns: list<AgentRecord>
   - name: loadSubsystemSpec
     description: Calls loadSubsystemSpec on core portal
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
-  - name: loadSubsystemSpecs
-    description: Calls loadSubsystemSpecs on core portal
-    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
-  - name: saveComponentSpec
-    description: Calls saveComponentSpec on core portal
-    signature: 'saveComponentSpec(spec: ComponentSpec): void'
-    returns: void
+    returns: SubsystemSpec?
   - name: loadComponentSpec
     description: Calls loadComponentSpec on core portal
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
-  - name: loadComponentSpecs
-    description: Calls loadComponentSpecs on core portal
-    signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
-  - name: saveInterfaceSpec
-    description: Calls saveInterfaceSpec on core portal
-    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
-    returns: void
+    returns: ComponentSpec?
   - name: loadInterfaceSpec
     description: Calls loadInterfaceSpec on core portal
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
-  - name: loadInterfaceSpecs
-    description: Calls loadInterfaceSpecs on core portal
-    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
-  - name: saveImplementationSpec
-    description: Calls saveImplementationSpec on core portal
-    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
-    returns: void
-  - name: loadImplementationSpecs
-    description: Calls loadImplementationSpecs on core portal
-    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
-  - name: createChainedSubsystem
+    returns: InterfaceSpec?
+  - name: moveMember
     description: >-
-      Calls createChainedSubsystem on core portal to scaffold the child subproject and wire the
-      parent subsystem with its projectPath.
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
+      Calls moveMember on the core portal to relocate a member's directory and point its `members`
+      entry there.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
-  - name: moveSubsystemProject
-    description: >-
-      Calls moveSubsystemProject on core portal to relocate an external subsystem's directory and
-      update its link.
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
-    returns: void
-  - name: externalizeSubsystem
-    description: >-
-      Calls externalizeSubsystem on core portal to migrate an internal subsystem into a standalone
-      subproject.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
-    returns: void
-  - name: internalizeSubsystem
-    description: >-
-      Calls internalizeSubsystem on core portal to migrate an external subsystem back into the
-      parent tree.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
-    returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The new root, relative to the bound project root
   - name: resolveChainingParent
     description: >-
       Forward chaining-parent detection to the core portal: is the bound root a chained subproject,
       and of which parent/mount? Used by server startup to announce the context.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
+  - name: composeAgentBrief
+    description: >-
+      Calls composeAgentBrief on core portal — the live per-agent delegation brief for the
+      sdd_get_agent_brief tool and the wairon-agent:// resource reads.
+    signature: 'composeAgentBrief(agentId: string): AgentBrief'
+    returns: AgentBrief
+    params:
+      - name: agentId
+        type: string
+  - name: loadProjectConfig
+    description: >-
+      Calls loadProjectConfig on the core portal: the bound project's configuration, or null when it
+      has none. Read by the sdd_validate_tree tool for the rule severities and projectType that
+      govern the gate.
+    signature: 'loadProjectConfig(): ProjectConfig?'
+    returns: ProjectConfig?
+    params: []
+    guarantees:
+      - idempotent
+  - name: renameComponent
+    description: 'Forward to core_portal.renameComponent: rename a component and every reference to it'
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: renameMethod
+    description: 'Forward to core_portal.renameMethod: rename a contract method and every reference to it'
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage)
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: loadImplementationSpec
+    description: Calls loadImplementationSpec on core portal
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec?'
+    returns: ImplementationSpec?
+    params:
+      - name: id
+        type: string
+        description: The stored implementation's id
+  - name: loadTypeSpec
+    description: Calls loadTypeSpec on core portal
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: getStatusReport
+    description: >-
+      How complete the spec tree is, for the MCP status tool. Answers the text and whether the tree
+      could be read; the tool shows the text either way, since a client asking after status most
+      needs to hear that the tree will not load. Forwarded to the core portal.
+    signature: 'getStatusReport(options: StatusOptions): StatusReport'
+    returns: StatusReport
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+    guarantees:
+      - idempotent
+  - name: approvalVerdict
+    description: >-
+      Forward to approval_portal.approvalVerdict: what the lock says about the tree, given the pin
+      tree the validator computed (members whose pin moved, members drifted or never approved, and
+      the stage-5 upgrade note).
+    signature: 'approvalVerdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params:
+      - name: approvals
+        type: list<ProjectApproval>
+        description: The pin tree from the validator adapter's familyApprovals
+        optional: true
+    guarantees:
+      - idempotent
+  - name: loadComponentSpecs
+    description: 'Forward to spec_tree_portal.loadComponentSpecs: every component of the bound tree'
+    signature: 'loadComponentSpecs(): list<ComponentSpec>'
+    returns: list<ComponentSpec>
+    params: []
+  - name: loadRegistry
+    description: 'Forward to agent_context_portal.loadRegistry: the agent registry the topology tools read'
+    signature: 'loadRegistry(): Registry'
+    returns: Registry
+    params: []
+  - name: resolveDomains
+    description: 'Forward to agent_context_portal.resolveDomains: the project''s domains'
+    signature: 'resolveDomains(): list<Domain>'
+    returns: list<Domain>
+    params: []
+    invokedBy:
+      kind: runtime
+      caller: >-
+        A connected AI client calling the MCP server's listDomains tool, which createMcpServer
+        registers but mcp_portal does not yet model, so no narrative carries this hop.
+  - name: loadProjectVariants
+    description: >-
+      Forward to extension_portal.loadProjectVariants: the variant registry a variant-tagged
+      component's guidance is resolved against
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
+    params: []
+  - name: resolveVariantGuidance
+    description: >-
+      Forward to extension_portal.resolveVariantGuidance: one component's variant guidance and
+      same-variant siblings
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
+    params:
+      - name: component
+        type: ComponentSpec
+      - name: allComponents
+        type: list<ComponentSpec>
+      - name: variantsById
+        type: list<VariantDef>
+  - name: createMember
+    description: >-
+      Calls createMember on the core portal: create a member at a source in the members grammar — a
+      part by default, a project with `as: project` (stage 8; a project with the bound project's
+      required packs, once) — and declare it in the bound project's `members`; answers what was
+      created.
+    signature: 'createMember(alias: string, source: string, description?: string, as?: string): MemberCreation'
+    returns: MemberCreation
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: source
+        type: string
+        description: A contained path, a `../` sibling path, or a git URL (optionally `#<commit>`)
+      - name: description
+        type: string
+        description: What the member is to this project
+        optional: true
+      - name: as
+        type: string
+        description: project to create the project content; omitted creates a part
+        optional: true
+  - name: listDirectChainedSubprojects
+    description: >-
+      Calls listDirectChainedSubprojects on the core portal: the direct members of a project root,
+      one level deep — its `members` entries and, for one release, its legacy L1 mounts — each as
+      its directory, alias and form.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project root whose members are listed
+    guarantees:
+      - idempotent
+  - name: renameType
+    description: 'Forward to core_portal.renameType: rename a type and every reference to it'
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
+    returns: TypeRename
+    params:
+      - name: typeId
+        type: string
+        description: The type to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: setNetwork
+    description: >-
+      Calls setNetwork on the core portal: declare or remove the bound project's network (the
+      sdd_set_network tool).
+    signatureFrom: project_config_portal.setNetwork
+    guarantees:
+      - idempotent
+  - name: renameField
+    description: >-
+      Forward to spec_maintenance_portal.renameField: rename a field of a type and every reference
+      to it
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
+    returns: FieldRename
+    params:
+      - name: typeId
+        type: string
+        description: The type whose field is renamed
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: reinjectLocalGuides
+    description: >-
+      Calls reinjectLocalGuides on the agent context portal: the project-local guides and root
+      pointer of a project a family migration made, for its own sessions.
+    signatureFrom: agent_context_portal.reinjectLocalGuides
+    effect: write
+  - name: registerProjectServer
+    description: >-
+      Calls registerProjectServer on the agent context portal: the portable .mcp.json of a project a
+      family migration made, for its own sessions.
+    signatureFrom: agent_context_portal.registerProjectServer
+    effect: io
+  - name: renameParam
+    description: >-
+      Forward to spec_maintenance_portal.renameParam: rename a parameter of a contract method,
+      keeping its old name in the parameter's rename trace
+    signature: >-
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
+    returns: ParamRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: renameSpecId
+    description: >-
+      Forward to spec_maintenance_portal.renameSpecId: rename one contract or implementation on its
+      own and every reference to it
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do, and write nothing
+        optional: true
+  - name: lockTree
+    description: >-
+      Forward to spec_tree_portal.lockTree: take the bound tree's cross-process write lock before a
+      write tool runs
+    signature: 'lockTree(): void'
+    returns: void
+  - name: unlockTree
+    description: 'Forward to spec_tree_portal.unlockTree: release it once the write tool has answered'
+    signature: 'unlockTree(): void'
+    returns: void
+  - name: readPinnedSpec
+    description: 'Forward to spec_tree_portal.readPinnedSpec: an external''s spec read from its pinned snapshot'
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: component, interface or type
+      - name: id
+        type: string
+        description: The `alias::name` asked for
+  - name: publishedUsesOf
+    description: >-
+      Forward to spec_tree_portal.publishedUsesOf: the public names publishing the given contract
+      methods — what a removal, or a route move, takes from a consumer
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes (none for a route move)
+      - name: methods
+        type: list<string>
+        description: The contract methods, as <interface>.<method>
+  - name: readProjectSystem
+    description: >-
+      Forward to spec_tree_portal.readProjectSystem: the L0 a system id names (this project's by one
+      of its names, a member's own read from its root by `alias::system`), or why none answers
+    signature: 'readProjectSystem(id: string): ProjectSystemRead'
+    returns: ProjectSystemRead
+    params:
+      - name: id
+        type: string
+        description: 'The system id asked for: a name of this L0, or `alias::name`'
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:14.801Z'
+updatedAt: '2026-10-17T16:35:15.031Z'

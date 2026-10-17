@@ -5,7 +5,9 @@ description: L1 Subsystem specification
 fields:
   - name: id
     type: string
-    description: Stable subsystem identifier
+    description: >-
+      Stable subsystem identifier, in the spec-id grammar (see component_spec.id: [a-z0-9-_]+, at
+      most 64 characters, never a Windows device name)
     optional: false
     key: primary
   - name: name
@@ -27,29 +29,79 @@ fields:
   - name: projectPath
     type: string
     description: >-
-      Subproject root for chained/namespaced spec trees. MUST be a relative path that resolves
-      strictly within the owning project's root; absolute paths and ../-escaping paths are rejected
-      so a subproject is always contained by its parent.
+      DEPRECATED (stage 3): the legacy L1 mount form. A subsystem carrying it is not a subsystem at
+      all but a member declaration of its project, read by the scan for one release
+      (DEPRECATED_MOUNT_FORM), never loaded as a subsystem and never given content; `doctor --fix`
+      moves it to project.yaml `members`. MUST be a relative path that resolves strictly within the
+      owning project's root; absolute paths and ../-escaping paths are rejected so a member is
+      always contained by the project declaring it.
     optional: true
   - name: publicInterfaces
-    type: object[]
-    description: 'Published surface: type + details + realizing component'
+    type: list<PublicInterface>
+    description: >-
+      The subsystem's export table: own items (a component or type it owns) and re-exports from
+      other subsystems of the project
     optional: false
   - name: trustedLinks
-    type: object[]
+    type: list<any>
     description: 'Acknowledged mutual couplings: subsystem + reason'
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete
-    optional: true
+    type: SpecStatus
+    description: How far it is through design (an omitted status is parsed as complete)
+    optional: false
   - name: lifecycle
-    type: LifecycleEntrypoint[]
+    type: list<LifecycleEntrypoint>
     description: >-
       Declared init/shutdown flow roots. Reachability analysis (unused-detection, durability
       round-trip hydration) treats these as entrypoints alongside Portals, Observers, and published
       components.
     optional: true
-methods: []
+  - name: lint
+    type: LintConfig
+    description: >-
+      This spec's own acknowledged findings — validator results its author looked at and accepted,
+      each with a reason.
+    optional: true
+  - name: ext
+    type: any
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
+      the core, preserved verbatim through load and save.
+    optional: true
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
+  - name: profile
+    type: string
+    description: >-
+      Per-subsystem governing profile override; when unset the project's projectType governs. An
+      unknown profile is reported (UNKNOWN_PROFILE).
+    optional: true
+  - name: designDepth
+    type: DesignDepth
+    description: Per-subsystem design-depth override. When unset the project's rules.designDepth applies.
+    optional: true
+methods:
+  - name: isDraft
+    signature: 'isDraft(): boolean'
+    returns: bool
+    description: Whether the subsystem's status is draft or design
+    symbol: isDraftSubsystem
+  - name: designView
+    signature: 'designView(): SubsystemSpec'
+    params: []
+    returns: SubsystemSpec
+    description: >-
+      This subsystem as the approval sees it: its status (authoring readiness, never what the design
+      says) and createdAt/updatedAt left out; every other field stays. Pure: over the spec's own
+      fields, and a stored (raw) file reads as readily as a loaded spec.
+    symbol: subsystemDesignView
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-10T18:47:34.461Z'
+updatedAt: '2026-10-07T18:29:36.630Z'

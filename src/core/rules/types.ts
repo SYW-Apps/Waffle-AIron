@@ -7,29 +7,116 @@ import {
   TypeSpec,
   RulesConfig,
   SurfaceSnapshot,
+  MethodSignature,
+  MethodImplementation,
+  ComplexityRuleConfig,
+  DocumentationRuleConfig,
+  NamingRuleConfig,
+  CodeModel,
+  SourceFileFacts,
+  SurfaceRefResolution,
+  CallSiteFact,
+  PinnedExternal,
+  ReferenceResolution,
 } from '../../models/index.js';
 import type { ProfileDef, LanguagePackDef, LoadedPattern, LoadedAssertion } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
-import type { CodeModel } from '../source-analysis.js';
+import type { CarriedDebtKind, DeclaredMember, NetworkDeclaration, PackRequirement, PackSelection, ProjectIdentity } from '../../models/project.js';
+import type { RetiredReachFact } from '../../models/specs.js';
+import type { PackSelectionFailure } from '../extensions.js';
+import type { ValidationIssue } from '../validation.js';
+import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
+import type { ProjectFamily } from '../../models/project-family.js';
+import type { SignatureFacts } from '../signature-sources.js';
+import type { TypeSpellingFacts } from '../../models/type-grammar.js';
 
 // ---------------------------------------------------------------------------
 // Rule registry contracts
 //
 // Every SDD conformance check is an SddRule: a named, documented unit with the
 // issue codes it can emit and a check(ctx) over the shared RuleContext. The
-// registry (rules/index.ts) runs them in order; severity resolution (user
-// overrides + draft-context downgrades) is centralized in ctx.addIssue.
+// rule repository (rules/repository.ts) holds them in run order; severity
+// resolution (user overrides + draft-context downgrades) is centralized in
+// ctx.addIssue.
 //
-// This is the "custom linter" foundation: adding a rule is a new module in
-// this directory plus a registry entry — no surgery on a monolith.
+// This is the "custom linter" foundation: adding a rule is a new module in its
+// family's folder plus a registry entry — no surgery on a monolith.
 // ---------------------------------------------------------------------------
 
-export type Severity = 'error' | 'warning';
+/**
+ * The severity a finding is REPORTED at, after the project's and the governing
+ * profile's overrides. A `notice` is listed on every surface that lists
+ * findings, beside errors and warnings, but never makes a result invalid and
+ * never fails `--ci`. A project reaches it through `rules.sddRuleSeverity`, and
+ * raises a notice code to warning or error the same way.
+ */
+export type IssueSeverity = 'error' | 'warning' | 'notice';
+
+/**
+ * A rule's DEFAULT severity: what a code is reported at before any override.
+ * A code may default to `notice` — reported, never failing the gate — until a
+ * project raises it; the draft downgrade never raises one (min(default, warning)).
+ */
+export type Severity = IssueSeverity;
 
 export interface RuleCode {
   code: string;
   defaultSeverity: Severity;
   summary: string;
+  /**
+   * This code may appear in the conformance debt register
+   * (`rules.conformance.carried`) — the allowlist that keeps the register from
+   * becoming a second, general-purpose lint.allow.
+   *
+   * A code earns it by MEASURING this project's own code against its own spec
+   * at a site the finding can name: the answer is a fact about the tree as it
+   * stands, and paying it means changing code or spec. A doctrine violation, a
+   * malformed spec and a configuration error are none of those — they say the
+   * design is illegal, not that the work is unfinished — and are never
+   * carryable. Naming an uncarryable code in the register is UNCARRYABLE_FINDING,
+   * an ERROR, so widening this set is always a reviewed act.
+   *
+   * A carryable code's rule must hand `addIssue` the finding's `parts`; without
+   * them nothing can match it, and every entry written for it reads as stale.
+   */
+  carryable?: boolean;
+}
+
+/**
+ * What a carryable finding IS, apart from the prose it is reported in: where
+ * inside its spec it lands, and which units it aggregates.
+ *
+ * Prose cannot be an identity — it is reworded, and it carries counts. The
+ * units can: an UNDECLARED_COLOCATED_CALL that lists 23 crossings is 23 facts
+ * wearing one message, and a register keyed by code and spec alone would carry
+ * the 24th for free. `covers` is what closes that.
+ */
+export interface FindingParts {
+  /** The site inside the spec the finding names — for the code↔spec call checks, the contract method. */
+  at: string;
+  /** The units the finding aggregates, each named the way the finding's own message names it. Omitted when the finding is one indivisible fact. */
+  covers?: string[];
+}
+
+/**
+ * One entry of the conformance debt register, resolved for the run: the
+ * finding it names, the reason group it came from, and what the run actually
+ * saw of it — which is how the audit tells a live entry from a stale one.
+ */
+export interface CarriedFindingEntry {
+  /** The kind its reason group declared: drift, undecided or unreadable. */
+  kind: CarriedDebtKind;
+  /** That group's reason, carried onto the entry so a finding about it can quote it. */
+  why: string;
+  code: string;
+  spec: string;
+  at: string;
+  /** The units the entry carries; empty when the finding it names is one indivisible fact. */
+  covers: string[];
+  /** A finding with this code, spec and site fired this run. */
+  fired: boolean;
+  /** Which of `covers` that finding actually reported — a listed unit missing from it has been paid. */
+  seen: Set<string>;
 }
 
 /** The built-in architectural profiles; extension packs may register more. */
@@ -57,6 +144,296 @@ export const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'] as c
  */
 export type ArchProfile = string;
 
+/**
+ * code_index — the run's source-code model keyed for lookup: every analyzed
+ * path's facts and the three anchor tiers a realization check reads. Eight
+ * rules used to rebuild this map (with subtly different shapes) for
+ * themselves; it is built once per run behind `ctx.codeIndex()`.
+ */
+export interface CodeIndex {
+  /** Every canonical path the model holds — the closed set import specifiers resolve against. */
+  paths: Set<string>;
+  /** The paths analyzed at exact AST grade: the only files an import graph may accuse from, or a measured function be read in. */
+  exactPaths: Set<string>;
+  /**
+   * The model's local-package map (CodeModel.packages, empty when it has
+   * none): handed to every import resolution the index and the rules make, so
+   * a specifier naming a package of this repository resolves like a relative
+   * one.
+   */
+  packages: Readonly<Record<string, string>>;
+  /** The analysis facts for a path, by its canonical key. */
+  factsAt(path: string): SourceFileFacts | undefined;
+  /** Declaration-tier anchors: the file's declared and exported names. */
+  declarationsAt(path: string): ReadonlySet<string>;
+  /** Anchored-tier anchors: the declarations together with the weak anchors. */
+  anchorsAt(path: string): ReadonlySet<string>;
+  /** The weak anchors alone — string literals and property-access names — which is where a declared finding code must appear. */
+  findingAnchorsAt(path: string): ReadonlySet<string>;
+  /**
+   * The files the function a call site invokes IS written in, resolved
+   * against the closed path set, or EMPTY when a pure model cannot say —
+   * which is an answer of its own and never a denial.
+   *
+   * `from` is the file the site was read in (a carried site names its own).
+   * Four shapes resolve: a bare call on an import binding lands in the module
+   * that binding came from; a bare call on a locally declared name lands in
+   * that file; a member call through a NAMESPACE import binding lands in that
+   * module; and every landing is widened by the modules it republishes, so a
+   * call through a barrel still lands where the function lives. Everything
+   * else — a member call through a value, a receiver that is not a plain
+   * identifier, a specifier outside the closed set, a name with no binding at
+   * all — resolves to nothing.
+   *
+   * This is the PROVEN tier, and the only one an accusation may be built on.
+   */
+  originOf(site: CallSiteFact, from: string): ReadonlySet<string>;
+  /**
+   * Every file the function a call site invokes CAN have been written in: the
+   * proven origins, widened for the receivers the code writes a NAME for.
+   * A `this.<field>.<method>()` site widens by the modules that declare the
+   * field's DECLARED TYPE — its type-only or runtime import binding, else this
+   * file when it declares that name itself; a `new Class(…).<method>()` site
+   * widens by the module its CLASS NAME came from — its RUNTIME import binding
+   * (a constructed class is a value, never a type-only binding), else this
+   * file when it declares that class; a plain `<name>.<method>()` site widens
+   * through the type the file annotates that name with; a `fn(…).<method>()`
+   * site widens by the module that declares the type fn RETURNS — read where
+   * fn is written — where that module holds a body of the method under that
+   * type; and a `this.<method>()` site inside a class's own method widens by
+   * this file where the class holds a body under the name.
+   *
+   * Possibilities, not facts: a declared type says what a constructor-injected
+   * collaborator is, never which class ships the body, and a constructed class
+   * says where the class was written, never where a method it INHERITS from a
+   * base was. A widened answer may therefore only ACCEPT a call as realized;
+   * naming a file a call landed in stays `originOf`'s word alone. A field the
+   * file annotates with nothing, and a class name it cannot place, resolve to
+   * nothing, exactly as the proven tier does.
+   */
+  possibleOriginsOf(site: CallSiteFact, from: string): ReadonlySet<string>;
+  /**
+   * Every file declaring a named class whose `implements` clause names the
+   * type `typeName` declared in `path` — the clause's name resolved where the
+   * class's file writes it. The step from an interface in a shared contracts
+   * file to the classes that realize it: a POSSIBILITY, never a proven
+   * origin. Exact grade only; pure over the index's own facts.
+   */
+  implementorsOf(path: string, typeName: string): ReadonlySet<string>;
+  /**
+   * What a name a file publishes IS, followed through every forwarding the
+   * code writes down: the pair itself, then for each export-from that
+   * republishes the name — named or star, aliased or not (`export { a as b }
+   * from 'm'` makes the file's `b` m's `a`) — the module it comes from under
+   * the name that module publishes it by; for each export alias publishing it
+   * with no specifier (`export { a as b }`, or with `container` a property
+   * `{ b: a }` of that exported object) the file's own `a`, and where `a` is
+   * a runtime import binding, the module it came from under the name it was
+   * imported by — transitively. An aliased re-export forwards exactly as an
+   * unaliased one does; the spelling differs, the identity does not.
+   * Specifiers outside the closed path set, files below exact grade (which
+   * record no re-export names) and cycles end the walk. PROVEN: every pair is
+   * written down in the code.
+   */
+  forwardsOf(path: string, name: string, container?: string): ForwardedName[];
+  /**
+   * Whether realization has BEGUN for whatever names these files: true when at
+   * least one of them resolves to a file the run analyzed or could read (any
+   * status but missing or escaped). The one definition every code rule shares
+   * — an implementation has begun when any file it names (its sourcePath or a
+   * method's) exists, a type when its own file or a method's exists; a simPath
+   * harness does not count, it follows the code it wires. Before that a named
+   * file is planned, not missing. Pure: over the index's own facts.
+   */
+  holdsAny(files: string[]): boolean;
+}
+
+/** One (file, name) a republished name resolves to (forwarded_name). */
+export interface ForwardedName {
+  /** Canonical path of the module. */
+  file: string;
+  /** The name that module publishes it under. */
+  name: string;
+}
+
+/**
+ * realization_index — which source files realize which components, both ways,
+ * from ONE walk of the implementations whose contract and component resolve
+ * and that do not sit in a chained subproject. The relation is unfiltered:
+ * which files may accuse (exact grade) or count as present (analyzed or
+ * unreadable) is the reading rule's doctrine, not the relation's.
+ */
+export interface RealizationIndex {
+  /** Every file those implementations name, canonical keys, in the order they were first named. */
+  paths: string[];
+  /** The implementations realizing a component, in load order. */
+  implementationsOf(compId: string): ImplementationSpec[];
+  /** The implementations naming a file — N:1 sharing made readable, and the anchor a file-level finding takes. */
+  implementationsAt(path: string): ImplementationSpec[];
+  /** The files a component's implementations name, in declaration order. */
+  filesOf(compId: string): string[];
+  /** The files named across a whole subsystem — what proves a cross-subsystem hop EXISTS (any module of the target subsystem); where it lands is portal-imports' question. */
+  filesIn(subsystemId: string): string[];
+  /** The components a file realizes, in the order their implementations named it. */
+  componentsAt(path: string): ComponentSpec[];
+}
+
+/**
+ * import_graph — the resolved import graph over a CLOSED set of source paths.
+ * Resolution is pure string matching against that set, so the set is part of
+ * the graph's identity. Runtime imports are collaboration; export-from
+ * re-exports are surface republication — together they are a file's TRACES,
+ * never an accusation on their own but enough to realize a declared edge.
+ */
+export interface ImportGraph {
+  /** The closed set this graph resolves against, in construction order. */
+  paths: string[];
+  /** A file's resolved runtime-import targets, itself excluded. */
+  importsOf(path: string): ReadonlySet<string>;
+  /** Its imports together with its resolved re-export targets. */
+  tracesOf(path: string): ReadonlySet<string>;
+  /** Whether any trace runs from one file set into the other — or, when the reverse is allowed (the mounting shape), back the other way. */
+  connects(from: Iterable<string>, to: Iterable<string>, allowReverse: boolean): boolean;
+  /** Every path reachable from a file by following traces transitively, the file included; traversal stops at a file the run did not analyze. */
+  reachFrom(path: string): Set<string>;
+}
+
+/**
+ * Where a dependsOn edge lands, decided once per edge so the rules that judge
+ * it never re-derive it. The seven answers are exhaustive: a ref either names a
+ * component in this tree (`internal` when it shares the source's subsystem,
+ * `cross-subsystem` when it does not), or it leaves the project and lands on an
+ * exported InProcess Portal of another project — a contained member's or a
+ * declared external's (`library`: a library call, which any component may make
+ * directly and library-calls alone judges) — or it leaves the project and
+ * resolves to another declared contract entry — a pin or a foreign snapshot
+ * (`surface`) — or
+ * foreign snapshots of several providers disagree about it (`ambiguous`), or
+ * it leaves the project and does not resolve (`cross-project`: its resolution
+ * is project-boundaries' single finding), or it is a local id that names
+ * nothing (`missing`).
+ */
+export type EdgeReach =
+  | 'internal'
+  | 'cross-subsystem'
+  | 'library'
+  | 'surface'
+  | 'ambiguous'
+  | 'cross-project'
+  | 'missing';
+
+/**
+ * dependency_edge — one dependsOn edge, resolved: what declares it, what it
+ * names, what that reached, and the verdicts every consumer would otherwise
+ * re-derive (retirement, draft context, pack licensing).
+ */
+export interface DependencyEdge {
+  /** The component whose dependsOn declares the edge. */
+  from: ComponentSpec;
+  /** The dependency id exactly as the spec names it. */
+  ref: string;
+  /** Where the ref lands (see EdgeReach). */
+  reach: EdgeReach;
+  /** The component the ref names in this tree — set for an `internal` or `cross-subsystem` edge, and for a `library` edge into a contained member. */
+  to?: ComponentSpec;
+  /** What the surface snapshots answered — set for a `surface` or `ambiguous` edge, and for a `library` edge into a pinned or foreign surface. */
+  surface?: SurfaceRefResolution;
+  /** The owner's resolution of an edge that leaves the project; set for `library`, `surface`, `ambiguous` and `cross-project`. */
+  resolution?: ReferenceResolution;
+  /**
+   * Either end is a retired stereotype, so no boundary or matrix rule judges
+   * the edge: retired-stereotypes reports the component once, and its
+   * migration decides what the edge becomes. Never set on an edge that
+   * resolved nothing — a reference finding stands whatever declares it.
+   */
+  retired: boolean;
+  /** The draft context a finding on this edge takes: the source's, and the target's too once the target resolves. */
+  draftContext: boolean;
+  /**
+   * The governing pack profile's `allowedEdges` licenses this stereotype pair
+   * — the platform's own idiom, declared with a reason. It is carried on the
+   * edge because the matrix is five rules: repeated per rule, a licensed edge
+   * would escape some of them and not others.
+   */
+  licensed: boolean;
+}
+
+/**
+ * dependency_edges — every dependsOn edge in the tree, resolved once per run
+ * behind rule_context.dependencyEdges. Five doctrine rules judge these edges,
+ * and each of them used to re-pay the same prologue before it could judge
+ * anything: walk the components, walk their dependsOn, resolve the id, decide
+ * what an unresolved one means, skip an edge with a retired end, tell an
+ * intra-subsystem edge from a boundary crossing, and let the governing pack
+ * profile license the pair. That prologue is the edge.
+ */
+export interface DependencyEdges {
+  /** Every edge, in component order then declaration order — the ones that reached nothing included. */
+  all: DependencyEdge[];
+  /** The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both ends live, unlicensed. Their target always resolved. */
+  matrix: (DependencyEdge & { to: ComponentSpec })[];
+}
+
+/**
+ * ownership_index — which pattern privately owns each member block, the tree's
+ * ONE ownership reading. The skips are semantics, not shortcuts: see
+ * buildOwnershipIndex for which claims record an owner and which do not.
+ */
+export interface OwnershipIndex {
+  /** The member blocks a legal claim was made on — the domain of ownerOf; a block outside it is a facade or standalone. */
+  ownedMembers: Set<string>;
+  /** The pattern that owns a member block, or none when no legal claim was made on it. */
+  ownerOf(memberId: string): string | undefined;
+}
+
+/** The kind label a finding names a spec by. */
+export type SpecIdKind = 'Subsystem' | 'Component' | 'Interface' | 'Implementation' | 'Type';
+
+/**
+ * spec_id — one spec id in the tree, carrying the kind label its findings name
+ * it by. The id hygiene rules judge ids and nothing else, so walking five
+ * typed collections is plumbing they should not each unroll: gathered once, a
+ * check over every id is one loop.
+ *
+ * Every id is here, in scope or not, and at every grade: WHICH specs a rule
+ * may accuse is doctrine the rule states for itself (ctx.isSpecInScope), never
+ * a property of the walk.
+ */
+export interface SpecId {
+  /** The qualified spec id, exactly as the tree holds it. */
+  id: string;
+  /** The kind label a finding names it by. */
+  kind: SpecIdKind;
+}
+
+/**
+ * resolved_method — one implementation method with its descent already
+ * resolved: the component it realizes, the source file that realizes it and
+ * the draft context a finding on it takes.
+ *
+ * The descent is long and identical everywhere it is paid — implementation,
+ * contract, component, chained-subproject skip, method, source file — and it
+ * is pure plumbing: an implementation whose contract or component does not
+ * resolve is another rule's finding, and a chained child's sourcePaths are
+ * relative to its own root, so the child validates them in its own run.
+ *
+ * What a rule does with the file it is handed stays the rule's: the
+ * conformance dial and the exact-grade test are the honesty stance each rule
+ * owes its reader, and are never applied here.
+ */
+export interface ResolvedMethod {
+  /** The implementation declaring the method — the spec a finding anchors to. */
+  implementation: ImplementationSpec;
+  /** The method itself, narrative and all. */
+  method: MethodImplementation;
+  /** The component the method's implementation realizes. */
+  component: ComponentSpec;
+  /** The file that realizes it: the method's sourcePath, else the implementation's; absent when neither names one. */
+  sourceFile?: string;
+  /** The draft context a finding on this method takes (ctx.isImplementationDraft), read once per implementation. */
+  draftContext: boolean;
+}
+
 export interface RuleContext {
   system: SystemSpec;
   subsystems: SubsystemSpec[];
@@ -78,18 +455,123 @@ export interface RuleContext {
   publicSet: Map<string, Set<string>>;
   /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
   interfacesByComponent: Map<string, InterfaceSpec[]>;
-  /** Stored surface snapshots (.wai/surfaces/) — declared contracts that unresolved cross-tree/remote references validate against. */
+  /**
+   * The foreign surface snapshots (exchanged or authored imports in
+   * .wai/surfaces/) the bound root holds, which references into a foreign
+   * provider are checked against. Only the bound root's own: no member's
+   * snapshots are pooled or consulted.
+   */
   surfaceSnapshots: SurfaceSnapshot[];
+  /**
+   * The bound project's declared externals with their lock entries and pinned
+   * snapshots, read by the validator from the project's own .wai/externals
+   * files: what a reference into a project outside the scan is judged against.
+   * Never the live producer, never anything above the bound root. Empty on a
+   * candidate run.
+   */
+  pinnedExternals: PinnedExternal[];
+  /**
+   * Every binding module the bound project's implementations name
+   * (implementation_spec.bindings), read once by the validator through the
+   * binding module adapter: what binding conformance compares with
+   * pinnedExternals. Absent on a candidate run and a reach-only run.
+   */
+  bindingModules?: import('../binding-modules.js').BindingModule[];
+  /**
+   * Each live member of the bound project (contained or a `../` sibling)
+   * projected at the approval it is judged against — the one the bound
+   * project's lock records, else the member's own last committed approval —
+   * keyed by the alias the bound project declares it under, read by the
+   * validator only when a binding module was read: what binding conformance
+   * names a name the member dropped since its approval against. Absent on a
+   * candidate run, a reach-only run, and when no binding module was read.
+   */
+  memberApprovedSurfaces?: Record<string, SurfaceSnapshot>;
+  /**
+   * The validated root's identity, resolved by the validator from its project
+   * configuration against the id its lock recorded, so the project-identity
+   * rule does no I/O. Absent when the root has no readable configuration, and
+   * on the run that judges a chained child through its parent.
+   */
+  projectIdentity?: ProjectIdentity;
+  /**
+   * The bound root's declared members (project_config.declaredMembers), read
+   * by the validator from its configuration — so the member-declarations rule
+   * names a deprecated long-form `path` without I/O (stage 8). Absent when the
+   * root has no readable configuration, and on a candidate run.
+   */
+  declaredMembers?: DeclaredMember[];
+  /**
+   * The resolved export tables — one per loaded subsystem, then the bound
+   * root's L0 table, then each member project's L0 table — gathered by the validator through the core adapter, so the
+   * export-tables rule judges the resolver's problems without resolving
+   * anything itself. Absent on a candidate run.
+   */
+  exportTables?: ResolvedExportTable[];
+  /**
+   * The project graph of the run's scan, gathered by the validator through the
+   * core adapter: nodes with their bound externals, owners, cross-project
+   * references, the leading-`::` references authors wrote and identity
+   * problems. The family rules (project-boundaries, reference-forms,
+   * external-declarations, and the family half of project-identity) judge it
+   * without I/O. Absent on a candidate run.
+   */
+  projectFamily?: ProjectFamily;
+  /**
+   * For every (consumer, producer) pair the graph's cross-project references
+   * connect, those references mapped onto the producer's public names; the
+   * unexported ones are EXTERNAL_NOT_EXPORTED's facts. Absent on a candidate run.
+   */
+  exportUsages?: ExportUsage[];
+  /**
+   * The bound project's own network declaration (project_config.network): what
+   * network-boundaries judges. Absent when it declares none, when its
+   * configuration is unreadable, and on a candidate run.
+   */
+  network?: NetworkDeclaration;
+  /**
+   * Each scanned project's L0 targetLanguage by project key ('' for the bound
+   * root), normalized like targetLanguageFor: what library-calls judges a
+   * contained member's native library against. Absent on a candidate run.
+   */
+  projectLanguages?: Map<string, string>;
+  /**
+   * The retired reachability forms the run's scan met: the loaded specs read
+   * them compatibly, so these facts are the only place the stored form is
+   * still visible. Absent on a candidate run.
+   */
+  retiredReachFacts?: RetiredReachFact[];
+  /**
+   * What the loader's signature resolution recorded — the sources it met and
+   * the stored texts their params contradict. The loaded interfaces and types
+   * are already resolved, so these facts are the only place the stored form is
+   * still visible. Absent on a candidate run.
+   */
+  signatureFacts?: SignatureFacts;
+  /**
+   * What the loader's type canonicalisation recorded — the stored positions
+   * that are aliases of their canonical spelling, and the ones that are not
+   * canonical at all. The loaded interfaces and types already hold canonical
+   * text, so these facts are the only place the stored spellings are still
+   * visible. Absent on a candidate run.
+   */
+  typeSpellingFacts?: TypeSpellingFacts;
   /**
    * The pure source-code model (per-sourcePath declaration/export/import/
    * anchor facts) built by the source analysis adapter — what the
-   * structural-conformance family checks realization against. Empty when the
+   * Level 1 conformance rules check realization against. Empty when the
    * context was built without one (the family then only reports missing
    * sourcePaths, never file-level findings).
    */
   codeModel: CodeModel;
   /** Implementations grouped by their contract interface id. */
   implementationsByContract: Map<string, ImplementationSpec[]>;
+  /**
+   * The writer's round-trip dry-run findings for every in-scope spec, gathered
+   * by the validator before the rules run, so the roundtrip-serialization rule
+   * reports them without doing I/O.
+   */
+  roundTripIssues: ValidationIssue[];
 
   /** True when the spec (or its ancestors) is in draft/design status. */
   isComponentDraft(compId: string): boolean;
@@ -97,12 +579,78 @@ export interface RuleContext {
   isImplementationDraft(impl: ImplementationSpec): boolean;
   /** The architectural profile governing a component (subsystem override, else project type). */
   getComponentProfile(compId: string): ArchProfile;
-  /** Whether a type reference resolves against builtins, generics, or defined types. */
+  /**
+   * Whether a type reference resolves to a builtin, a generic parameter, or a
+   * type the bound project may name — owner-scoped and explicit, with no
+   * family-wide suffix matching: a bare name resolves among the bound
+   * project's OWN types first, then through its `use` imports exactly as
+   * resolveCrossProject resolves a bare name.
+   */
   isTypeResolved(ref: string, generics: Set<string>): boolean;
-  /** Effective target language for a subsystem (subsystem override, else system), lowercase, or undefined. */
+  /** Effective target language for a subsystem (subsystem override, else system), normalized to the language-table key, or undefined. */
   targetLanguageFor(subsystemId: string | undefined): string | undefined;
   /** Scope filter for granular (per-subsystem) validation. */
   isSpecInScope(specId: string): boolean;
+  /**
+   * True when the subsystem belongs to a contained member rather than the bound
+   * project. Nothing about such a spec is judged in this project's gate —
+   * addIssue drops it, and the conformance family does not even read its
+   * source paths, which are relative to the member's root.
+   */
+  isInChainedSubproject(subsystemId: string): boolean;
+  /** The key of the project that owns a spec key of the run's scan: '' for the bound project, else the contained member's key. */
+  projectOf(specId: string): string;
+  /**
+   * The declared contract entry a reference that leaves the bound project
+   * lands on: a declared external's pinned snapshot (by alias, or through a
+   * `use` import), else the bound root's own foreign snapshots, matched by
+   * provider — snapshots of several providers that disagree make it
+   * ambiguous. No member's snapshots are consulted.
+   */
+  resolveSurfaceRef(ref: string, fromSubsystem?: string): SurfaceRefResolution;
+  /**
+   * The owner's resolution of one reference the scan recorded, decided before
+   * any severity from the bound project's own files: null for a reference that
+   * stays inside the bound project (or is written by a contained member).
+   */
+  resolveCrossProject(specId: string, position: string, reference: string): ReferenceResolution | null;
+  /**
+   * For a bare name that resolves nowhere: the declared external or member
+   * whose table exports a name with the same nameKey without the project
+   * importing it, and the `use` line that would. Null when none does.
+   */
+  importHint(name: string): string | null;
+  /**
+   * rule_context.aliasSpelling — for a dotted type reference `<first>.<name>`
+   * whose first segment is an alias the bound project declares (not one of its
+   * subsystems) and whose supplier exports the name: the `alias::publicName`
+   * it must be written as. Null otherwise.
+   */
+  aliasSpelling(ref: string): string | null;
+  /** Every contract method across the component's interfaces (memoized — eight rules ask per binding or per step). */
+  interfaceMethodsOf(compId: string): MethodSignature[];
+  /** The run's source-code model keyed for lookup (memoized). */
+  codeIndex(): CodeIndex;
+  /** Which files realize which components, both ways (memoized). */
+  realizationIndex(): RealizationIndex;
+  /** The import graph over a closed set of paths — every path the run analyzed when none is given (memoized per set). */
+  importGraph(paths?: Set<string>): ImportGraph;
+  /** Which pattern privately owns each member block (memoized). */
+  ownershipIndex(): OwnershipIndex;
+  /** Every dependsOn edge in the tree, resolved (memoized). */
+  dependencyEdges(): DependencyEdges;
+  /** Every spec id in the tree with the kind label its findings name it by, in subsystem, component, interface, implementation, type order (memoized). */
+  specIds(): SpecId[];
+  /** Every implementation method whose descent resolves, with its component, source file and draft context (memoized). */
+  implementationMethods(): ResolvedMethod[];
+  /** The complexity rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
+  complexityConfigFor(subsystemId?: string): ComplexityRuleConfig | undefined;
+  /** The documentation rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one. */
+  documentationConfigFor(subsystemId?: string): DocumentationRuleConfig | undefined;
+  /** The naming rule config in force for a subsystem: the project's, overlaid with its profile pack's when the pack sets one, stereotype patterns merged key by key. */
+  namingConfigFor(subsystemId?: string): NamingRuleConfig | undefined;
+  /** Whether a type identifier is in the language-agnostic builtin vocabulary, compared ignoring case. */
+  isBuiltinType(ref: string): boolean;
 
   /**
    * Extension-pack data (empty when no packs are loaded): pack-registered
@@ -116,8 +664,37 @@ export interface RuleContext {
     patterns: LoadedPattern[];
     /** Pack-declared semantic guarantee tokens — unioned with SEMANTIC_GUARANTEES by the guarantee-token rule. */
     guarantees: string[];
-    /** Declarative rule assertions (closed kinds, pack-instantiated) evaluated by the declarative-assertions rule. */
+    /** Pack-contributed package names per technology name — what technology.packages adds to the built-in table. */
+    technologyPackages: Record<string, string[]>;
+    /** Declarative rule assertions (closed kinds, pack-instantiated), evaluated by one assertion-* rule per kind. */
     assertions: LoadedAssertion[];
+    /**
+     * The project's by-name pack SELECTIONS (legacy path refs excluded). The
+     * reproducibility rule checks these for a version/integrity pin, since a
+     * floating selection resolved off a mutable machine store is exactly what
+     * `enforceReproducibility` exists to prevent.
+     */
+    packSelections: PackSelection[];
+    /**
+     * Declared selections that could not be resolved, each carrying the code the
+     * pack-resolution rule reports it under. Resolution itself happens in the
+     * extension loader (bundle first, then the store), so the rule surfaces what
+     * the loader found rather than deciding again — the two can never disagree
+     * about whether a pack applies.
+     */
+    selectionFailures: PackSelectionFailure[];
+    /**
+     * The bound project's OWN composition.requirePolicies, which the
+     * pack-requirements rule checks for a readable range. Never a parent's: a
+     * parent's requirements reach a member only in the family run.
+     */
+    packRequirements: PackRequirement[];
+    /**
+     * Each deprecated field a loaded pack still declares, as the extension
+     * loader recorded it (LoadedExtensions.deprecations) — what the
+     * pack-deprecations rule reports as a notice.
+     */
+    deprecations: string[];
   };
 
   /**
@@ -129,22 +706,70 @@ export interface RuleContext {
 
   /**
    * Bookkeeping for per-spec lint suppressions (lint.allow). Suppression
-   * itself happens inside addIssue (warnings only — errors always surface);
+   * itself happens inside addIssue (warnings and notices only — errors always surface);
    * the lint-allows rule audits these entries at the end of the run.
+   *
+   * `at`/`covers` are the finding's own identity (FindingParts), so an allow
+   * covers exactly the occurrence it names: a sited finding matches only an
+   * allow naming that site, an unsited one only an allow naming none, and a
+   * listed-units allow silences the finding only when it lists them all.
    */
-  lintAllows: { specId: string; code: string; reason: string; used: boolean }[];
-  /** Every issue code any registered rule can emit (for allow validation). */
+  lintAllows: {
+    specId: string;
+    code: string;
+    /** The site this allow names, if any — matched against the finding's `parts.at`. */
+    at?: string;
+    /** The units it covers, if any — the finding is silenced only when every unit it reports is listed. */
+    covers?: string[];
+    reason: string;
+    used: boolean;
+  }[];
+  /** Every issue code a registered rule or loaded declarative assertion can emit, gathered by the validator (for allow validation). */
   knownIssueCodes: Set<string>;
 
   /**
+   * What the run's findings of one code said about WHERE they landed on one
+   * spec: the sites they named, and whether any of them named none. The
+   * lint-allows audit reads it to tell a stale allow from a merely coarse one
+   * and to say, in the finding, which sites an allow could name instead.
+   */
+  sitesReported(specId: string, code: string): { sites: string[]; unsited: boolean; errored: boolean };
+
+  /**
+   * The severity a finding of this code on this spec would be reported at
+   * outside draft context: the project's override, else the governing pack
+   * profile's, else the code's default as the validator gathered it. Undefined
+   * for a code the run does not know. The lint-allows audit reads it to tell
+   * an allow naming an error — which no allow can cover — from a stale one.
+   */
+  severityOf(code: string, specId: string): IssueSeverity | 'off' | undefined;
+
+  /**
+   * The conformance debt register (`rules.conformance.carried`), flattened to
+   * one entry per carried finding and carrying its reason group's kind and
+   * why. Carrying happens inside addIssue — after the lint allows, so an
+   * allow and an entry can never both claim one finding — and the
+   * carried-debt rule audits these entries at the end of the run.
+   */
+  carriedFindings: CarriedFindingEntry[];
+  /** Every issue code a registered rule declares CARRYABLE — what the register's entries are checked against. */
+  carryableIssueCodes: Set<string>;
+
+  /**
    * Report an issue. Applies scope filtering, user severity overrides
-   * (rules.sddRuleSeverity), and draft-context downgrades for completeness
-   * rules. 'off' suppresses the issue entirely.
+   * (rules.sddRuleSeverity, which may also set a code to `notice`), and
+   * draft-context downgrades for completeness rules — min(default, warning),
+   * so a draft never raises a notice. 'off' suppresses the issue entirely.
    *
-   * `surfaceResolved` marks a finding whose reference DID resolve against a
-   * vendored surface snapshot — a genuine contract/boundary verdict rather
-   * than a resolution failure, so the chained-subproject pass never replaces
-   * it with UNVERIFIED_EXTERNAL_REF.
+   * A finding on a spec a contained member owns is dropped first: the member's
+   * own gate judges it. `resolution` is the structured answer a finding about
+   * a cross-project reference carries (resolveCrossProject).
+   *
+   * `parts` is the finding's IDENTITY — its site inside the spec and the units
+   * it aggregates — which is what the conformance debt register matches on. A
+   * rule emitting a CARRYABLE code must supply it; a matching entry that lists
+   * every unit carries the warning (or notice), and a unit the entry does not list is
+   * named back as new rather than absorbed.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -152,16 +777,66 @@ export interface RuleContext {
     message: string,
     specId?: string,
     isDraftContext?: boolean,
-    surfaceResolved?: boolean,
+    resolution?: ReferenceResolution,
+    parts?: FindingParts,
   ): void;
 }
 
+/**
+ * How much of the tree a rule must see to reach its verdict.
+ *
+ * - `'tree'` (the default) — the check reads relationships BETWEEN specs: a
+ *   component's interfaces, narrative reachability, the dependency graph. It is
+ *   only meaningful against a fully loaded tree.
+ * - `'spec'` — the check reads nothing but each spec's OWN fields, so it is a
+ *   pure function of one spec. That is what lets it also run against a
+ *   CANDIDATE spec BEFORE the write (see rules/candidate.ts), turning what
+ *   would otherwise be a permanent validate-time error into a refused write
+ *   with the same code and message.
+ *
+ * A rule that mixes the two belongs SPLIT in two, so the intrinsic half can
+ * reach the write boundary — see portalFieldsRule/portalsRule and
+ * durabilityDeclarationRule/durabilityRule.
+ */
+export type RuleScope = 'spec' | 'tree';
+
+/** What a rule's verdict is about (SddRule.judges). */
+export type RuleJudgement = 'design' | 'code';
+
+/** Whether a rule judges code (SddRule.judges = code); anything else counts as design. */
+export function judgesCode(rule: Pick<SddRule, 'judges'>): boolean {
+  return rule.judges === 'code';
+}
+
 export interface SddRule {
-  /** Stable rule id (kebab-case), e.g. "stereotype-dependencies". */
+  /** Stable rule id (kebab-case), e.g. "subsystem-boundary-dependencies". */
   name: string;
   /** One-paragraph description of what the rule enforces and why. */
   description: string;
+  /**
+   * What the check needs to see (see RuleScope). Defaults to 'tree' — the
+   * conservative answer, since a rule that has not declared itself intrinsic
+   * must never be handed a one-spec context.
+   */
+  scope?: RuleScope;
+  /**
+   * design (the default) | code: what the rule's verdict is about. A rule that
+   * reads the source code model judges code: its codes are left out of the gate
+   * identity and summarized apart in the as-complete run's analysis, so an
+   * approval certifies the design and an analyzer upgrade never stales it. A
+   * pack rule declares none and counts as design. Every built-in rule sets it.
+   */
+  judges?: RuleJudgement;
   /** Every issue code this rule can emit, with default severity and summary. */
   codes: RuleCode[];
+  /**
+   * Stage 8: whether the rule's verdict needs the whole system's specs —
+   * reachability and unused detection, topic pairing, cycles across
+   * subsystems, hydration. Such a rule is skipped (and named in
+   * PART_JUDGED_ALONE) when a part is judged alone against its pinned parent
+   * excerpt. Absent means false: a rule that judges what it is handed runs
+   * everywhere.
+   */
+  needsWholeTree?: boolean;
   check(ctx: RuleContext): void;
 }

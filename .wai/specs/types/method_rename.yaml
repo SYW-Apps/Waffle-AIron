@@ -1,0 +1,77 @@
+kind: value-object
+id: method_rename
+name: MethodRename
+description: >-
+  What renaming a contract method changed: the specs the method itself moved in, the specs whose
+  references were retargeted, and the specs whose prose still names it.
+fields:
+  - name: component
+    type: string
+    description: The component whose method was renamed
+    optional: false
+  - name: from
+    type: string
+    description: The method name before the rename
+    optional: false
+  - name: to
+    type: string
+    description: The method name after it
+    optional: false
+  - name: renamed
+    type: list<string>
+    description: >-
+      Ids of the specs the method moved in: every interface of the component that declared it, and
+      the implementations of those contracts
+    optional: false
+  - name: rewritten
+    type: list<string>
+    description: >-
+      Ids of the specs whose references were retargeted: narrative call, register and dispatch
+      steps, dispatch-table bindings, lifecycle entrypoints, and lint allows keyed on the method
+    optional: false
+  - name: mentions
+    type: list<string>
+    description: >-
+      Ids of the specs whose prose still names the old method, and gRPC endpoint bindings whose wire
+      method keeps it. Nothing here was rewritten — a rename never edits prose, and never changes a
+      published wire name
+    optional: false
+  - name: pinnedSymbol
+    type: string
+    description: >-
+      The code symbol an implementation now declares, when the rename pinned the old name so the
+      existing function still binds
+    optional: true
+  - name: carried
+    type: list<CarriedRekey>
+    description: >-
+      Every edit the rename made to the debt register (.wai/project.yaml rules.conformance.carried):
+      an entry anchored at the method on a spec it moved in, or naming <component>.<method> in a
+      covered unit. Empty when the register names it nowhere
+    optional: false
+  - name: publishedIn
+    type: list<string>
+    description: >-
+      The public names of the export entries (L0 and L1) whose contract carries the renamed method:
+      the rename changed a published member there, which consumers pinning that entry see as one
+      member removed and one added. Reported, never prevented — no mainstream export mechanism
+      aliases a single member. Empty when the contract is not exported.
+    optional: false
+  - name: dryRun
+    type: bool
+    description: >-
+      True when this report is a dry run: it names everything the rename WOULD move, retarget and
+      leave, and nothing was written
+    optional: true
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers of an export publishing the method whose specs call it by its old name — the
+      family's projects in reach and the consumer checkouts found in the searched folders: each
+      breaks until it follows the rename (the consumer's own gate then names the new name from this
+      method's rename trace). Absent when the method is published nowhere or nobody calls it
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-09-17T19:21:55.866Z'
+updatedAt: '2026-10-07T18:41:09.735Z'

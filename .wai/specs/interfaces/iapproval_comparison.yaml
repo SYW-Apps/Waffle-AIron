@@ -1,0 +1,158 @@
+id: iapproval_comparison
+name: Approval Comparison Interface
+description: >-
+  The approval's arithmetic over a spec tree: what the tree digests to now, what the record says it
+  digested to when it was approved, and the difference. Every read defaults to the bound project
+  root, so a caller that has one tree passes nothing. Nothing here throws on an unapproved project —
+  a tree with no record answers null, because "never approved" and "approved and drifted" are
+  different answers and a caller has to tell them apart.
+component: approval_comparison
+methods:
+  - name: captureApprovedSpecs
+    description: >-
+      Build the per-spec digest map to write into an approval record, for the tree as it stands, in
+      the DESIGN reading (the record then carries specsReading `design`): each spec parsed and
+      projected to its design view — an implementation, type or component through its type's
+      designView, every other kind with its timestamps dropped — canonicalized and digested, so code
+      linkage (sourcePath, symbol, exportedVia, simPath, injectedParams, conformance tiers, mount
+      `via`, external links), whitespace and a no-op re-save never move a digest. Keyed as before:
+      the project's own spec files by their path from its root, and each part's under
+      `members/<alias>/<path inside the part>`. A part fetched from git is digested from the cache
+      at its pinned commit.
+    signature: 'captureApprovedSpecs(root?: string, scope?: any): map<string, string>'
+    returns: map<string, string>
+    params:
+      - name: root
+        type: string
+        description: The project root being approved; the bound project when omitted
+        optional: true
+      - name: scope
+        type: any
+        description: >-
+          { paths: Set<string> } — a scoped approval (lock --subsystem) restricts the capture to
+          those spec files; everything outside keeps the approval it already had. Omitted captures
+          the whole tree
+        optional: true
+  - name: diffAgainstApproval
+    description: >-
+      What differs between the tree as it stands and the approval on record, compared in the reading
+      the record names: design digests for a record with specsReading `design`, raw-content digests
+      (line endings normalized) for an earlier record — never one against the other. A
+      design-reading spec whose digest differs only because its status moved still matches: status
+      is readiness, not design, and a digest taken while the view still carried it is compared with
+      every status a spec can have. Which specs were added, which changed, which were removed, and
+      which are untouched — and which only MOVED: an added path and a removed one carrying the same
+      digest are one spec whose storage moved with its content unchanged (a part's folder relocating
+      it), named in `moved` and counted among the untouched, never as an addition and a removal, so
+      a storage move the gate identity calls unchanged is unchanged here too. Null when the project
+      has no record at all — never approved is not the same as approved and drifted.
+    signature: 'diffAgainstApproval(root?: string): ApprovalDiff?'
+    returns: ApprovalDiff?
+    params:
+      - name: root
+        type: string
+        description: The project root to compare; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: approvalRecord
+    description: The approval record this project carries, or null when it has none.
+    signature: 'approvalRecord(root?: string): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: settledSpecPaths
+    description: >-
+      The spec paths the approval on record covers, as a set for membership tests. Null when there
+      is no record.
+    signature: 'settledSpecPaths(root?: string): set<string>?'
+    returns: set<string>?
+    params:
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: verdict
+    description: >-
+      What the lock says about the tree as it stands, as a line to show plus whether it is drift.
+      Silent for a project that was never approved. Takes the pin tree the caller obtained from the
+      validator (validator_portal.familyApprovals), because a member's state and its pin need gate
+      identities that only the validator computes: the verdict names each direct member whose pin
+      MOVED (its parent's lock records another subject than the member carries now — so this lock is
+      stale until it re-locks) and each that is drifted or never approved, and says plainly when
+      this project's own lock was taken under an earlier gate identity ("the gate identity gained
+      inputs in stage 5 — re-lock once"). Without approvals it reports the own-spec diff alone.
+      Published rather than kept private because every presenter needs the same answer — the
+      terminal, the MCP status tool and anything else — and two renderings of "has this drifted"
+      that can disagree is precisely the thing a lock exists to prevent.
+    signature: 'verdict(approvals?: list<ProjectApproval>): ApprovalVerdict'
+    returns: ApprovalVerdict
+    params:
+      - name: approvals
+        type: list<ProjectApproval>
+        description: >-
+          The pin tree from validator_portal.familyApprovals: the root's own entry and its members'.
+          Omitted: no member or upgrade note.
+        optional: true
+    guarantees:
+      - idempotent
+  - name: reexpress
+    description: >-
+      The record on file carried into the current reading WITHOUT a new approval, when that is
+      provably sound. Two cases. (1) The identity it certified still holds: a format-2 record
+      (full-content gate algorithm) or a record in the earlier design reading (status still in the
+      view) whose stateId equals gate.asRecorded — that identity recomputed over the tree as it
+      stands. The answer keeps lockedAt, lockedBy, the validation and code results and the members'
+      pins exactly, and replaces stateId with gate (asRecorded dropped), specs with the current
+      design-reading capture, specsReading with `design`, format with 3, and adds `reexpressed`
+      (when, from which algorithm and reading, by which command). (2) A format-2 record whose
+      identity no longer holds, but whose every own spec file still matches its raw-content digest —
+      no file added, changed or removed, not even in code linkage: what moved is the gate the design
+      was judged under (wairon's design rules, the project's rule tuning, composition, network
+      declaration, consumed contracts or a member's approval), never the tree. Its reading is
+      carried exactly as in (1) but its stateId stays the identity it certified, so the lock still
+      reads stale, now for that stated cause, and one `wairon lock` re-approves it under the current
+      gate. Null when there is nothing to carry (no record, a format-3 record in the current
+      reading) or nothing proves the tree unchanged. Writes nothing; the caller writes the answer
+      through the approval portal.
+    signature: 'reexpress(gate: StateId): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: gate
+        type: StateId
+        description: >-
+          The gate identity as it stands now (validator_portal.computeGateStateId), carrying
+          asRecorded when the record on disk is a format-2 one
+    guarantees:
+      - idempotent
+  - name: approvedStatuses
+    description: >-
+      The status each own spec had when the approval on record was taken, keyed `<kind>:<id>`,
+      recovered from a design-reading record's per-spec digests: a spec whose design digest WITH a
+      candidate status (none, draft, design, complete) equals the recorded digest was approved with
+      that status (none reads as complete, as the loader parses it). A spec whose digest matches no
+      candidate moved in its design and is left out, as is every spec of a record in another
+      reading. What state_hash.ownDesignAsRecorded recomputes an earlier-reading identity with. Pure
+      over the record and the tree; writes nothing.
+    signature: 'approvedStatuses(record: LockRecord, root?: string): map<string, SpecStatus>'
+    returns: map<string, SpecStatus>
+    params:
+      - name: record
+        type: LockRecord
+        description: The approval record whose statuses to recover
+      - name: root
+        type: string
+        description: The project root; the bound project when omitted
+        optional: true
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T15:19:05.602Z'
+updatedAt: '2026-10-07T06:24:01.023Z'

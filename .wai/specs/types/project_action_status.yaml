@@ -1,0 +1,15 @@
+kind: enum
+id: project_action_status
+name: ProjectActionStatus
+description: How an execute-primary project lifecycle action ended.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: completed
+    description: The caller was authorized and the action ran
+  - name: pending-approval
+    description: 'The caller''s permission was approval: a request was created and awaits a decision'
+createdAt: '2026-10-04T23:18:17.357Z'
+updatedAt: '2026-10-04T23:18:17.752Z'

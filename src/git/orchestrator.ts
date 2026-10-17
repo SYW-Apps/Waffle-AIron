@@ -18,12 +18,14 @@ const WORKING_BRANCH = 'wairon/work';
  *  repository, so the repo can be shared with the project's own codebase. */
 const DEFAULT_SCOPE = '.wai/';
 
-/** Clone the remote onto the isolated working branch and persist the config. An
- *  optional credentialRef names this connection's own PAT (else the shared
- *  git-token authenticates the clone). */
-export function enable(remote: string, branch: string, credentialRef?: string): void {
+/** Clone the remote onto the isolated working branch and persist the config.
+ *  The clone authenticates with the token the CALLER resolved and handed in
+ *  (null for a public remote); this subsystem never asks anyone for a secret by
+ *  name. An optional credentialRef records which of the caller's secrets the
+ *  connection uses, for its status. */
+export function enable(remote: string, branch: string, token: string | null, credentialRef?: string): void {
   const defaultBranch = branch || 'main';
-  adapter.clone(remote, defaultBranch, credentialRef);
+  adapter.clone(token, remote, defaultBranch);
   adapter.ensureWorkingBranch(WORKING_BRANCH);
   adapter.excludeLocalFiles();
   const config: GitConfig = { enabled: true, remote, defaultBranch, workingBranch: WORKING_BRANCH };
@@ -44,15 +46,17 @@ export function sync(): void {
 }
 
 /**
- * Commit ONLY the scoped subpath (default .wai/) of the working tree, push the
- * working branch, and return the compare URL. No-op (published=false) when not
- * git-backed OR when the scoped path is clean — a quiet project never commits
- * noise. Commit = the local save, push = the actual backup; both happen.
+ * Commit ONLY the scoped pathspecs (default ['.wai/']) of the working tree as
+ * one commit, push the working branch, and return the compare URL. No-op
+ * (published=false) when not git-backed OR when every scoped path is clean — a
+ * quiet project never commits noise. A hosted member commits through its
+ * family root's repository with its own <path>/.wai/ pathspec; a family
+ * migration publishes every touched project's pathspec in one commit.
  */
-export function publish(message: string, subpath: string = DEFAULT_SCOPE): GitPublish {
+export function publish(message: string, subpaths: string[] = [DEFAULT_SCOPE]): GitPublish {
   const config = readGitConfig();
   if (!config || !config.enabled) return { published: false };
-  const commitSha = adapter.commitScoped(subpath, message);
+  const commitSha = adapter.commitScoped(subpaths.length > 0 ? subpaths : [DEFAULT_SCOPE], message);
   if (commitSha === null) return { published: false }; // clean scope
   adapter.push(config.workingBranch);
   const compareUrl = adapter.compareUrl(config.remote, config.defaultBranch, config.workingBranch);

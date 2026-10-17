@@ -1,0 +1,22 @@
+kind: value-object
+id: pack_rule_spec_node
+name: RuleSpecNode
+description: >-
+  A read-only spec node as a code-pack rule sees it: its id and name, with every further field of
+  the spec left open (the code declares an index signature) so the facade stays stable as the spec
+  model grows.
+subsystem: sdd_sdk
+fields:
+  - name: id
+    type: string
+    description: The spec id
+    optional: false
+  - name: name
+    type: string
+    description: The spec's display name
+    optional: true
+methods: []
+componentClass: sdk_portal
+sourcePath: sdk/src/authoring.ts
+createdAt: '2026-10-04T18:23:16.316Z'
+updatedAt: '2026-10-04T18:23:16.839Z'

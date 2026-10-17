@@ -1,32 +1,137 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { aiDir } from '../utils/fs.js';
+import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
+import { LockRecordUnreadableError } from '../utils/errors.js';
+// The approver is shared vocabulary, not this store's private shape: a command
+// that only wants to RENDER one must not have to reach a Store to do it.
+import type { ApproverIdentity, CodeAnalysis, LockReexpression, LockRestamp, ProjectApprovalState, SpecDigestReading } from '../models/lock.js';
+import type { MemberKind } from '../models/project.js';
 
 // ---------------------------------------------------------------------------
 // Lock Registry (sdd_host / sdd_core)
 //
 // File-backed I/O for a project's commit-scoped lock record (.wai/lock.json).
 // The record is proof that the spec tree validated as-complete at one exact
-// StateId; promotion re-checks the current StateId against it and refuses on
-// drift. This module never validates or promotes — it only reads/writes the
-// record. Resolves the path through aiDir(), so it targets whichever project is
-// bound in the current (request-scoped) context.
+// StateId, AND the approval itself: `specs` carries a digest per spec file, so
+// "which specs did the human sign off, and which have moved since?" is answered
+// from a committed file rather than from anything machine-local. This module
+// never validates — it only reads/writes the record. Resolves the path through
+// aiDir(), so it targets whichever project is bound in the current
+// (request-scoped) context.
 // ---------------------------------------------------------------------------
 
+/**
+ * member_pin — one direct member as a parent's lock recorded it: the member's
+ * composition subject (the stateId its OWN lock record carries) and its
+ * approval state when the parent locked. A record of the member owner's
+ * decision, never of the member's specs; the parent never writes below itself.
+ */
+export interface MemberPin {
+  /** The member's effective project id when the parent locked. */
+  project?: string;
+  /** The member's recorded gate identity, `<algorithm>:<digest>`; absent when it had no lock. */
+  subject?: string;
+  /** approved | drifted | never, as it stood when the parent locked (a part records approved). Recorded, never hashed. */
+  state: ProjectApprovalState;
+  /** part | project, as the member's content made it when the parent locked; absent in a record written before stage 8. */
+  as?: MemberKind;
+  /** The commit the member was read at when the parent locked. Provenance only: never read by a verdict. */
+  commit?: string;
+  /** Part only: its content digest (ScannedPart.contentDigest) when the parent locked. */
+  contentDigest?: string;
+}
+
 export interface LockRecord {
-  /** The exact spec-tree state this lock validated. */
+  /**
+   * The gate identity this lock certifies, captured BEFORE the as-complete
+   * validation ran and confirmed unchanged immediately before the record was
+   * written. Also this project's composition subject as its parent sees it.
+   */
   stateId: StateId;
   /** ISO-8601 lock timestamp. */
   lockedAt: string;
-  /** Audit id of the principal that locked (never a raw credential). */
-  lockedBy: string;
+  /** The principal that authorized the lock (never a raw credential). */
+  lockedBy: ApproverIdentity;
   /** wairon version that produced the validation. */
   validatorVersion: string;
-  /** The as-complete validation outcome captured at lock time. */
-  validationResult: { valid: boolean; errors: number; warnings: number };
-  /** "ready" (locked, awaiting promotion) or "promoted". */
-  status: 'ready' | 'promoted';
+  /**
+   * The DESIGN half of the as-complete validation captured at lock time
+   * (ValidationResult.designOnly); the code half is counted under `code`. A
+   * format-1 record counted both together, and a record written before the
+   * notice severity existed carries no notice count.
+   */
+  validationResult: { valid: boolean; errors: number; warnings: number; notices?: number };
+  /** Always 'ready'. The lock IS the human gate; there is no second state. */
+  status: 'ready';
+  /**
+   * THE APPROVAL: spec path (relative to the project root, POSIX separators) →
+   * sha256 of that file's content when it was approved. Sorted on write, so a
+   * re-lock shows one changed line per spec actually re-approved rather than a
+   * rewritten blob.
+   *
+   * Absent on a record written before approval moved in here — such a lock
+   * still proves the tree validated, but cannot say WHICH specs moved since,
+   * only that the whole-tree StateId did. Re-locking records it.
+   */
+  specs?: Record<string, string>;
+  /**
+   * LEGACY (format 1): chained child mount id → that child's approved StateId,
+   * copied without checking the child's lock still matched its tree. Read for
+   * one release as the member pins; never written from stage 5 on.
+   */
+  children?: Record<string, string>;
+  /**
+   * The record format: 3 from the release in which code linkage left the
+   * approval (stateId under the design gate algorithm, `specs` in the design
+   * reading), 2 from stage 5 on, absent means format 1. A format-2 record stays
+   * valid as written: it is judged under its own algorithm (StateId.asRecorded)
+   * and its own reading until it is re-locked or re-expressed.
+   */
+  format?: number;
+  /**
+   * The reading `specs` was digested in: `design` on every record written from
+   * format 3 on, absent on an earlier record (raw-content digests). A reader
+   * compares the tree in the reading the record names, never in another.
+   */
+  specsReading?: SpecDigestReading;
+  /**
+   * Present when a tool carried this record into the current reading and gate
+   * algorithm after proving the design unchanged (doctor --fix), instead of a
+   * human re-approving it.
+   */
+  reexpressed?: LockReexpression;
+  /**
+   * The digest of each input of the certified gate identity (StateId.parts):
+   * what lets a later check name the input that moved, and judge a change of
+   * the wairon release alone by re-validation instead of by digest. Absent on
+   * a record written before this release.
+   */
+  gateParts?: Record<string, string>;
+  /**
+   * Present when `wairon lock` refreshed the record's release stamp after the
+   * approved, unchanged design re-validated clean under a newer release.
+   */
+  restamped?: LockRestamp;
+  /**
+   * Each DIRECT member, keyed by alias → its composition subject and approval
+   * state as they stood when this project locked. Present (possibly empty) on
+   * every format-2 record.
+   */
+  members?: Record<string, MemberPin>;
+  /**
+   * The code-conformance results of the lock-time run with the analyzer that
+   * produced them — BESIDE the approval, never part of what it certifies.
+   * Absent on a format-1 record.
+   */
+  code?: CodeAnalysis;
+  /**
+   * The project's effective id when this lock was taken (a defaulted one
+   * included). Validate reports PROJECT_ID_CHANGED when project.yaml later
+   * resolves to a different id. Absent on a record written before project ids
+   * existed, and when the project had no effective id to record.
+   */
+  projectId?: string;
   /** For git-backed projects: the pushed commit the PR is at. */
   commitSha?: string;
   /** For git-backed projects: the compare/PR URL a human opens to merge. */
@@ -37,20 +142,181 @@ function lockPath(): string {
   return aiDir('lock.json');
 }
 
-/** Read the current project's lock record, or null when absent/unreadable. */
-export function readLockRecord(): LockRecord | null {
-  try {
-    return JSON.parse(fs.readFileSync(lockPath(), 'utf8')) as LockRecord;
-  } catch {
-    return null;
+/**
+ * Read a possibly-legacy `lockedBy` as an ApproverIdentity. Older records wrote
+ * a bare string (`local:someone`, `admin:master`); that says nothing about how
+ * the name was established, so it reads back as `legacy` rather than being
+ * guessed into a source it may not have had.
+ */
+export function normalizeApprover(value: unknown): ApproverIdentity {
+  if (value && typeof value === 'object' && typeof (value as ApproverIdentity).id === 'string') {
+    const v = value as ApproverIdentity;
+    const source: ApproverIdentity['source'] =
+      v.source === 'git' || v.source === 'hosted' || v.source === 'os' ? v.source : 'legacy';
+    return { id: v.id, ...(v.name ? { name: v.name } : {}), source };
   }
+  return { id: typeof value === 'string' && value ? value : 'unknown', source: 'legacy' };
 }
 
-/** Persist the lock record atomically to .wai/lock.json (overwrites any prior). */
+/**
+ * The newest lock record format this release reads. A record naming a later
+ * one was written by a newer wairon: its fields may mean things this release
+ * cannot judge, so it is refused rather than read as something it is not.
+ */
+const LOCK_FORMAT_CURRENT = 3;
+
+/** Read the current project's lock record: null when ABSENT, LockRecordUnreadableError when present but unreadable. */
+export function readLockRecord(): LockRecord | null {
+  return readRecordFile(lockPath());
+}
+
+/** Read another project root's lock record — how a parent resolves a child pin. Fails closed exactly as readLockRecord. */
+export function readLockRecordAt(root: string): LockRecord | null {
+  return readRecordFile(aiDirAt(root, 'lock.json'));
+}
+
+/**
+ * The record at `file`: null only when there is no file. An editor's BOM is
+ * tolerated (it changes no byte of the record); anything else that keeps the
+ * file from being a lock record this release reads is refused by name.
+ */
+function readRecordFile(file: string): LockRecord | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new LockRecordUnreadableError(displayPath(file), `the file cannot be read (${(e as Error).message})`);
+  }
+  return parseLockRecord(text, displayPath(file));
+}
+
+/**
+ * lock_store.parse — a lock record's text read as a LockRecord, or the reason
+ * it is not one (LockRecordUnreadableError naming `file`). Pure.
+ */
+function parseLockRecord(text: string, file: string): LockRecord {
+  const body = text.replace(/^\uFEFF/, '');
+  if (body.trim() === '') throw new LockRecordUnreadableError(file, 'the file is empty');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(body);
+  } catch (e) {
+    throw new LockRecordUnreadableError(file, `it is not valid JSON (${(e as Error).message})`);
+  }
+  // JSON.parse keeps the LAST of two equal keys: which one a reader keeps is
+  // the parser's accident, never the approver's decision — refused by path.
+  const duplicate = firstDuplicateKey(body);
+  if (duplicate !== null) {
+    throw new LockRecordUnreadableError(file, `it names the key "${duplicate}" twice (a conflict resolved by hand leaves this), so which of the two is the record cannot be told`);
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    const what = raw === null ? 'null' : Array.isArray(raw) ? 'an array' : `a ${typeof raw}`;
+    throw new LockRecordUnreadableError(file, `it holds ${what}, not a lock record object`);
+  }
+  const record = raw as Partial<LockRecord> & Record<string, unknown>;
+  if (record.format !== undefined && (typeof record.format !== 'number' || !Number.isInteger(record.format) || record.format < 1)) {
+    throw new LockRecordUnreadableError(file, `its "format" is ${JSON.stringify(record.format)}, not a lock record format`);
+  }
+  if (typeof record.format === 'number' && record.format > LOCK_FORMAT_CURRENT) {
+    throw new LockRecordUnreadableError(file, `it is lock record format ${record.format}, written by a newer wairon (this release reads formats 1-${LOCK_FORMAT_CURRENT}) — upgrade wairon to read it`);
+  }
+  const stateId = record.stateId as Partial<StateId> | undefined;
+  if (!stateId || typeof stateId !== 'object' || typeof stateId.algorithm !== 'string' || typeof stateId.digest !== 'string') {
+    throw new LockRecordUnreadableError(file, 'it records no gate identity ("stateId": {algorithm, digest}), so it is not a lock record');
+  }
+  if (record.specs !== undefined && (record.specs === null || typeof record.specs !== 'object' || Array.isArray(record.specs)
+    || Object.values(record.specs).some((d) => typeof d !== 'string'))) {
+    throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
+  }
+  return normalizeRecord(record);
+}
+
+/**
+ * The path (`gateParts.release`) of the first key a JSON text names twice in
+ * one object, or null when none is. The text is valid JSON already (parsed
+ * before this runs), so a scan of strings and brackets is enough.
+ */
+export function firstDuplicateKey(text: string): string | null {
+  type Frame = { keys: Set<string> | null; expectKey: boolean; path: string; lastKey?: string };
+  const stack: Frame[] = [];
+  const pathOf = (frame: Frame | undefined, key: string): string => (frame && frame.path ? `${frame.path}.${key}` : key);
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1;
+      const top = stack[stack.length - 1];
+      if (top && top.keys && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        if (top.keys.has(key)) return pathOf(top, key);
+        top.keys.add(key);
+        top.lastKey = key;
+        top.expectKey = false;
+      }
+      i = j;
+    } else if (c === '{' || c === '[') {
+      const top = stack[stack.length - 1];
+      const segment = top ? (top.keys ? top.lastKey ?? '' : '[]') : '';
+      const path = top && segment ? pathOf(top, segment) : top?.path ?? '';
+      stack.push({ keys: c === '{' ? new Set<string>() : null, expectKey: c === '{', path });
+    } else if (c === '}' || c === ']') {
+      stack.pop();
+    } else if (c === ',') {
+      const top = stack[stack.length - 1];
+      if (top && top.keys) top.expectKey = true;
+    }
+  }
+  return null;
+}
+
+/** The file as a reader names it: relative to the working directory when inside it, POSIX separators. */
+function displayPath(file: string): string {
+  const rel = path.relative(process.cwd(), file);
+  const shown = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel : file;
+  return shown.split(path.sep).join('/');
+}
+
+function normalizeRecord(raw: unknown): LockRecord {
+  const record = raw as LockRecord;
+  // A lockedAt that is no timestamp text is no timestamp: read as absent, so
+  // no verdict prints `approved undefined` or a number as a date.
+  const lockedAt = typeof (record as { lockedAt?: unknown }).lockedAt === 'string' ? record.lockedAt : '';
+  return { ...record, lockedAt, lockedBy: normalizeApprover((record as { lockedBy?: unknown }).lockedBy) };
+}
+
+/**
+ * Persist the lock record atomically to .wai/lock.json (overwrites any prior).
+ * A legacy `children` map is never written: `members` is recorded instead.
+ */
 export function writeLockRecord(record: LockRecord): void {
   const p = lockPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(record, null, 2) + '\n');
+  // The record keeps the line endings it is checked out with (CRLF stays CRLF).
+  fs.writeFileSync(tmp, withLineEndings(p, JSON.stringify(withSortedMaps(record), null, 2) + '\n'));
   fs.renameSync(tmp, p);
+}
+
+/**
+ * Sort `specs` and `members` by key before serializing, and drop the legacy
+ * `children`. JSON preserves object insertion order, so this is what makes a
+ * re-lock's diff readable: the entries stay in the same place and only the
+ * specs that actually changed move.
+ */
+function withSortedMaps(record: LockRecord): LockRecord {
+  const sorted = <T>(m?: Record<string, T>): Record<string, T> | undefined => {
+    if (!m) return undefined;
+    const out: Record<string, T> = {};
+    for (const k of Object.keys(m).sort()) out[k] = m[k];
+    return out;
+  };
+  const { children: _legacy, ...rest } = record;
+  const specs = sorted(rest.specs);
+  const members = sorted(rest.members);
+  return {
+    ...rest,
+    ...(specs ? { specs } : {}),
+    ...(members ? { members } : {}),
+  };
 }

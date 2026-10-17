@@ -9,8 +9,8 @@ import {
   pruneExpiredWebSessions,
   getWebSessionById,
   listWebSessionsBySubject,
-  WEB_SESSION_PREFIX,
 } from '../../src/server/websessions.js';
+import { WEB_SESSION_PREFIX } from '../../src/server/types.js';
 import type { WebSession, PrincipalSubject, ProjectGrant } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------

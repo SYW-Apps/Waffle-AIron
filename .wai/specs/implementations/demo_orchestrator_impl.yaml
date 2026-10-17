@@ -1,0 +1,74 @@
+id: demo_orchestrator_impl
+name: Demo Orchestrator Implementation
+description: >-
+  Realized by src/core/demo-seed.ts: a fixed example authored through the spec repository's writers
+  at the bound root.
+contract: idemo_orchestrator
+sourcePath: src/core/demo-seed.ts
+methods:
+  - name: seedTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Stamp every spec with one creation time and the complete status, the L0 and the types
+          carrying no status
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write the ShopFlow L0 system spec: its vision, boundaries, global requirements, target
+          language and databases
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 3
+        label: subsystemLoop
+        description: Lay down each of the three subsystems, catalog, ordering and payments
+        type: loop
+        over: the example's subsystems
+        endStep: 8
+      - stepNumber: 4
+        description: Write the subsystem spec with its published Portal
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 5
+        description: >-
+          Write each of its components: the Portal, the workflow Orchestrator, the Repository owning
+          a Store, a Registry and an Index, and the client Adapter crossing into another subsystem's
+          published Portal
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 6
+        description: Write each component's contract with structured params and returns
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 7
+        description: >-
+          Write each implementation, its narratives mixing every step kind and some methods left at
+          intent detail
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 8
+        description: >-
+          Write the subsystem's types, with primary and unique keys and foreign references, some
+          across subsystems
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 9
+        description: Drop the spec repository's cached index so the next read sees the seeded tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 10
+        description: The example tree is in place
+        type: return
+        outcome: seeded
+    detail: full
+    symbol: seedDemoTree
+status: complete
+createdAt: '2026-10-07T22:40:24.198Z'
+updatedAt: '2026-10-07T22:40:26.665Z'

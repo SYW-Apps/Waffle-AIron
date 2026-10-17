@@ -1,0 +1,48 @@
+kind: value-object
+id: project_verdict
+name: ProjectVerdict
+description: >-
+  One project's line in a family run: which project it is, where it lives, and the totals of its own
+  gate's verdict, which the family run prints verbatim under the project's name. A family run never
+  re-judges these findings; it only adds the composition and family findings beside them.
+fields:
+  - name: key
+    type: string
+    description: The project's key in the family root's scan ('' for the root itself, else its project id)
+    optional: false
+  - name: id
+    type: string
+    description: The project's effective id
+    optional: true
+  - name: directory
+    type: string
+    description: The project's root directory
+    optional: false
+  - name: valid
+    type: bool
+    description: Whether its own gate found no error
+    optional: false
+  - name: errors
+    type: int
+    description: Its own gate's error count
+    optional: false
+  - name: warnings
+    type: int
+    description: Its own gate's warning count
+    optional: false
+  - name: notices
+    type: int
+    description: Its own gate's notice count
+    optional: false
+  - name: codeReading
+    type: string
+    description: How its own gate read its code (validation_result.codeReading)
+    optional: true
+  - name: codeCompact
+    type: string
+    description: The same in a few words (validation_result.codeCompact)
+    optional: true
+methods: []
+sourcePath: src/core/validation.ts
+createdAt: '2026-09-28T06:01:58.186Z'
+updatedAt: '2026-10-17T15:42:23.244Z'

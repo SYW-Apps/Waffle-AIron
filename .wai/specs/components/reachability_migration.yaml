@@ -1,0 +1,39 @@
+id: reachability_migration
+name: Reachability Migration
+description: >-
+  The one-project migration onto the reachability model, run by `doctor --fix` and reported by
+  `doctor --report reachability`. It plans first from the retired forms the scan recorded
+  (spec_loader.retiredReachFacts) and writes only with apply. It never invents an entry where the
+  old model implied none: a Portal that was neither a listener nor mounted gets no entry, so it
+  surfaces as unreached for its author to decide.
+
+  - portalType becomes transport, HTTP_API as HTTP. A Custom Portal that binds no endpoint on any
+  verb, or whose Custom addresses name in-process calls, becomes InProcess, with the address dropped
+  and reported as a symbol hint.
+
+  - A listener's mounts are retired. The listener and every Portal it mounted get a Portal-level
+  entry (kind entry, scope outside, the caller naming the listener and its prefixes), each mount's
+  `via` moves to the mounted Portal's implementation as its `router`, and an endpoint outside every
+  old prefix is reported, not fixed.
+
+  - invokedBy external becomes entry on a Portal and runtime elsewhere. A sibling-subsystem
+  declaration is reported, not rewritten: its caller lives in the same tree and must be modelled.
+
+  - An authored L1 or L0 export type that agrees with the derived kind is dropped; one that
+  disagrees is reported.
+
+  - A lint allow of a retired code (UNMOUNTED_PORTAL, ENDPOINT_OUTSIDE_MOUNT,
+  MOUNT_TARGET_NOT_PORTAL, PUBLIC_INTERFACE_TYPE_MISMATCH, PUBLIC_INTERFACE_EVENT_MISTYPED,
+  MISSING_PORTAL_TYPE) is removed, and one of MISSING_PORTAL_TYPE becomes MISSING_PORTAL_TRANSPORT.
+
+  One project, idempotent (an applied plan re-plans empty), outside the family transaction, like the
+  other mechanical spec repairs. It never locks: the rewrites change the design, so the report names
+  the re-lock.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - spec_loader
+status: complete
+createdAt: '2026-10-06T13:07:07.572Z'
+updatedAt: '2026-10-06T13:07:08.182Z'

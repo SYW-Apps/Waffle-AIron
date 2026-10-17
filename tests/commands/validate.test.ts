@@ -1,9 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { isCiDraftWaivable, validateAsComplete } from '../../src/commands/validate.js';
-import { validateSddTree } from '../../src/core/validation.js';
+import { stripVTControlCharacters } from 'util';
+import { carriedDebtSummary, isCiDraftWaivable, renderSpecFindings, validateAsComplete } from '../../src/commands/validate.js';
+import type { CarriedDebt } from '../../src/models/project.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue } from '../../src/core/validation.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
@@ -22,11 +24,68 @@ function warn(code: string, extra: Partial<ValidationIssue> = {}): ValidationIss
   return { severity: 'warning', code, message: `${code} message`, ...extra };
 }
 
+// ---------------------------------------------------------------------------
+// The conformance debt register's own line, and the one thing an audit can
+// never check: whether a `why` is TRUE. A group that admits its classification
+// is unsettled says so with `revisit`, and every run counts those findings
+// beside the kind totals — a confident-sounding reason that is wrong reads as
+// settled, and silence is what lets nobody look again.
+// ---------------------------------------------------------------------------
+
+const group = (kind: CarriedDebt['kind'], findings: number, revisit?: string): CarriedDebt => ({
+  kind,
+  why: `carried because the ${kind} is not paid yet`,
+  ...(revisit ? { revisit } : {}),
+  findings: Array.from({ length: findings }, (_, i) => ({
+    code: 'CALL_STEP_UNREALIZED',
+    spec: `billing_orchestrator_impl`,
+    at: `settleInvoice${i}`,
+    covers: ['1:ledger_store.append', '2:ledger_store.commit'],
+  })),
+});
+
+describe('carriedDebtSummary (the register said out loud)', () => {
+  it('says nothing at all when the register is empty', () => {
+    expect(carriedDebtSummary(undefined)).toBeNull();
+    expect(carriedDebtSummary([])).toBeNull();
+  });
+
+  it('counts findings, units and kinds, and stays silent about re-evaluation when nothing is marked', () => {
+    const summary = carriedDebtSummary([group('drift', 2), group('unreadable', 1)]);
+    expect(summary?.line).toContain('3 finding(s) over 6 unit(s) carried');
+    expect(summary?.line).toContain('2 drift, 0 undecided, 1 unreadable');
+    expect(summary?.line).not.toContain('re-evaluation');
+    expect(summary?.revisits).toEqual([]);
+  });
+
+  it('counts the findings of every group marked provisional, and prints what would settle each', () => {
+    const summary = carriedDebtSummary([
+      group('drift', 2, 'Prove the adapters are realized by the file that consumes them.'),
+      group('unreadable', 1),
+      group('undecided', 3, 'Decide whether the alias or the target is wrong.'),
+    ]);
+    expect(summary?.line).toContain('5 finding(s) in 2 group(s) are marked for re-evaluation');
+    expect(summary?.revisits).toEqual([
+      '  re-evaluate (drift, 2 finding(s)): Prove the adapters are realized by the file that consumes them.',
+      '  re-evaluate (undecided, 3 finding(s)): Decide whether the alias or the target is wrong.',
+    ]);
+  });
+});
+
 describe('isCiDraftWaivable (--ci draft tolerance)', () => {
   it('waives DRAFT_COMPONENT_WARNING (it only exists to surface a draft)', () => {
     expect(isCiDraftWaivable(warn('DRAFT_COMPONENT_WARNING', { draftContext: true }))).toBe(true);
     // Robust even if the draftContext flag were ever absent for this code.
     expect(isCiDraftWaivable(warn('DRAFT_COMPONENT_WARNING'))).toBe(true);
+  });
+
+  it('waives DRAFT_SUBSYSTEM_WARNING exactly like the component variant', () => {
+    // integrity/hierarchy-integrity.ts emits it with the same unconditional
+    // draftContext as DRAFT_COMPONENT_WARNING — it is a pure status notice, so
+    // a fresh draft tree must not fail --ci on it.
+    expect(isCiDraftWaivable(warn('DRAFT_SUBSYSTEM_WARNING', { draftContext: true }))).toBe(true);
+    // Robust even if the draftContext flag were ever absent for this code.
+    expect(isCiDraftWaivable(warn('DRAFT_SUBSYSTEM_WARNING'))).toBe(true);
   });
 
   it('waives UNUSED_COMPONENT only when the referenced component is draft/design', () => {
@@ -87,6 +146,75 @@ function createDraftPortalProject(): { tempDir: string; specsDir: string } {
   return { tempDir, specsDir };
 }
 
+/** Minimal draft tree: system + one draft subsystem, nothing else. The only
+ *  issue it can raise is the pure status notice DRAFT_SUBSYSTEM_WARNING. */
+function createDraftSubsystemOnlyProject(): { tempDir: string } {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ci-draft-'));
+  const waiDir = path.join(tempDir, '.wai');
+  fs.mkdirSync(waiDir);
+  fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
+    schemaVersion: '1.0.0',
+    name: 'ci-draft',
+    targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    rules: {},
+  }));
+  const specsDir = path.join(waiDir, 'specs');
+  fs.mkdirSync(path.join(specsDir, 'subsystems'), { recursive: true });
+  fs.writeFileSync(path.join(specsDir, '.index.yaml'),
+    `schemaVersion: 1.0.0\nname: CiDraftSystem\nvision: A freshly initialized system still being designed\n${META}\n`);
+  fs.writeFileSync(path.join(specsDir, 'subsystems', 'sub-a.yaml'),
+    `schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: The first subsystem of the draft design\nparentSystem: CiDraftSystem\nstatus: draft\n${META}\n`);
+  setProjectRoot(tempDir);
+  invalidateSpecCache();
+  return { tempDir };
+}
+
+/** The --ci failure decision as runValidate computes it over tree issues:
+ *  any error, or any warning that is not draft-waivable, fails the gate. */
+function ciFails(issues: ValidationIssue[]): boolean {
+  return issues.some((i) => i.severity === 'error' || (i.severity === 'warning' && !isCiDraftWaivable(i)));
+}
+
+describe('--ci failure decision over a real tree (draft-waiver end to end)', () => {
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+  });
+
+  it('a fresh draft tree passes --ci: DRAFT_SUBSYSTEM_WARNING fires but is waived', () => {
+    const proj = createDraftSubsystemOnlyProject();
+    try {
+      const result = validateProject();
+      const draftWarn = result.issues.find((i) => i.code === 'DRAFT_SUBSYSTEM_WARNING');
+      // The rule still fires and is still surfaced — the waiver only
+      // classifies the failure decision, it does not silence the rule.
+      expect(draftWarn?.severity).toBe('warning');
+      expect(draftWarn?.draftContext).toBe(true);
+      expect(ciFails(result.issues)).toBe(false);
+    } finally {
+      fs.rmSync(proj.tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('control: a draft-downgraded completeness warning (MISSING_ENDPOINT) still fails --ci', () => {
+    // DRAFT_SUBSYSTEM_WARNING cannot be emitted without draftContext
+    // (integrity/hierarchy-integrity.ts hardcodes it), so the control is a
+    // different draft-context warning that the waiver must NOT cover: an
+    // unbound Portal method, downgraded to a warning while the tree is draft,
+    // is real unfinished work — the gate stays strict.
+    const proj = createDraftPortalProject();
+    try {
+      const result = validateProject();
+      const missing = result.issues.find((i) => i.code === 'MISSING_ENDPOINT');
+      expect(missing?.severity).toBe('warning');
+      expect(missing?.draftContext).toBe(true);
+      expect(ciFails(result.issues)).toBe(true);
+    } finally {
+      fs.rmSync(proj.tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('validateAsComplete (the lock gate forwarder)', () => {
   afterEach(() => {
     setProjectRoot(null);
@@ -96,7 +224,7 @@ describe('validateAsComplete (the lock gate forwarder)', () => {
   it('surfaces draft-hidden completeness errors that a normal validate does not', () => {
     const proj = createDraftPortalProject();
     try {
-      const asDraft = validateSddTree();
+      const asDraft = validateProject();
       expect(asDraft.issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
 
       const asComplete = validateAsComplete();
@@ -118,9 +246,112 @@ describe('validateAsComplete (the lock gate forwarder)', () => {
 
       // Later reads still see the tree at its real statuses.
       invalidateSpecCache();
-      expect(validateSddTree().issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
+      expect(validateProject().issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
     } finally {
       fs.rmSync(proj.tempDir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// How many findings are printed. The default prints the first 100 per
+// severity, says how many were left out of how many, points at --all, and
+// ends with per-code totals; --all prints every one.
+// ---------------------------------------------------------------------------
+
+describe('renderSpecFindings (truncation and --all)', () => {
+  const many = (n: number, code: string): ValidationIssue[] =>
+    Array.from({ length: n }, (_, i) => ({ severity: 'warning' as const, code, message: `${code} ${i}` }));
+
+  const capture = (fn: () => void): string => {
+    const lines: string[] = [];
+    const push = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(push),
+      vi.spyOn(console, 'warn').mockImplementation(push),
+      vi.spyOn(console, 'error').mockImplementation(push),
+    ];
+    try { fn(); } finally { for (const s of spies) s.mockRestore(); }
+    // Strip ANSI colour so assertions read the words.
+    return stripVTControlCharacters(lines.join('\n'));
+  };
+
+  it('by default prints 100 warnings, says how many more of how many, names --all, and totals per code', () => {
+    const issues = [...many(130, 'ALPHA_CODE'), ...many(20, 'BETA_CODE')];
+    const out = capture(() => renderSpecFindings({ valid: true, issues }));
+
+    expect(out.match(/\[(ALPHA|BETA)_CODE\] /g)?.length).toBe(100);
+    expect(out).toContain('... and 50 more warning(s) not shown (100 of 150 printed). Run with --all to print every finding.');
+    expect(out).toContain('Findings by code:');
+    expect(out).toMatch(/130\s+warning\s+ALPHA_CODE/);
+    expect(out).toMatch(/20\s+warning\s+BETA_CODE/);
+  });
+
+  it('with --all prints every finding and no truncation line', () => {
+    const issues = many(150, 'ALPHA_CODE');
+    const out = capture(() => renderSpecFindings({ valid: true, issues }, true));
+
+    expect(out.match(/\[ALPHA_CODE\] /g)?.length).toBe(150);
+    expect(out).not.toContain('not shown');
+  });
+
+  it('prints no totals table when nothing was cut', () => {
+    const out = capture(() => renderSpecFindings({ valid: true, issues: many(3, 'ALPHA_CODE') }));
+    expect(out).not.toContain('Findings by code:');
+    expect(out).not.toContain('not shown');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A member validated on its own judges its own gate, with its network entries
+// counted as declared: it says in one line that its network proofs are judged
+// at the family root, so a green member run is never read as a proven one. A
+// project nobody declares as a member prints no such line.
+// ---------------------------------------------------------------------------
+
+describe('runValidate at a member: the network proofs line', () => {
+  const now = new Date().toISOString();
+  const project = (root: string, name: string, extra: Record<string, unknown> = {}): void => {
+    fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', id: name, name, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now, ...extra,
+    }));
+    fs.writeFileSync(path.join(root, '.wai', 'specs', '.index.yaml'), JSON.stringify({
+      schemaVersion: '1.0.0', name, vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
+    }));
+  };
+  const run = async (root: string): Promise<string> => {
+    const { runValidate } = await import('../../src/commands/validate.js');
+    const lines: string[] = [];
+    const push = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(push),
+      vi.spyOn(console, 'warn').mockImplementation(push),
+      vi.spyOn(console, 'error').mockImplementation(push),
+      vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never),
+    ];
+    setProjectRoot(root);
+    invalidateSpecCache();
+    try { await runValidate({}); } finally {
+      for (const s of spies) s.mockRestore();
+      setProjectRoot(null);
+      invalidateSpecCache();
+    }
+    return stripVTControlCharacters(lines.join('\n'));
+  };
+
+  it('prints it at a member, naming its alias and the family root, and not at the root', async () => {
+    const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-member-line-'));
+    try {
+      project(top, 'family', { members: { inner: 'inner' } });
+      project(path.join(top, 'inner'), 'inner');
+      const atMember = await run(path.join(top, 'inner'));
+      expect(atMember).toContain('Member "inner" of');
+      expect(atMember).toContain('its network proofs are judged at the family root');
+      const atRoot = await run(top);
+      expect(atRoot).not.toContain('network proofs are judged at the family root');
+    } finally {
+      try { fs.rmSync(top, { recursive: true, force: true }); } catch { /* win file locks */ }
     }
   });
 });

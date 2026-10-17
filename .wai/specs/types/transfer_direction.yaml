@@ -1,0 +1,14 @@
+kind: enum
+id: transfer_direction
+name: TransferDirection
+description: Which way a remote transfer moves a tree.
+fields: []
+methods: []
+sourcePath: src/commands/remote.ts
+values:
+  - name: push
+    description: Local to hosted
+  - name: pull
+    description: Hosted to local
+createdAt: '2026-10-04T23:34:01.351Z'
+updatedAt: '2026-10-04T23:34:01.817Z'

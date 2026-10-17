@@ -8,43 +8,221 @@ methods:
   - name: loadSystemSpec
     description: Loads the L0 system specification, or null when the project has none.
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
-    description: Loads all L1 subsystem specifications.
+    description: >-
+      Loads all L1 subsystem specifications of the bound root and of every member the scan read,
+      each keyed under its project's key (`billing::billing` for member billing's subsystem
+      `billing`; never merged with anything). A legacy L1 mount (a subsystem carrying projectPath)
+      is read as a member declaration of its project and is NOT loaded as a subsystem: a mount
+      carries no content. A member path that escapes the project that DECLARES it — absolute,
+      ../-escaping, or through a link — is refused as PROJECTPATH_ESCAPE and not followed,
+      identically from every loading root; every loader issue about a member (escaping, cyclic,
+      missing) carries the member's key, so a validation scope that includes the member keeps it.
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadSubsystemSpec
     description: Loads a single subsystem specification by id.
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpecs
     description: Loads all L2 component specifications.
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadComponentSpec
     description: Loads a single component specification by id.
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpecs
     description: Loads all L3 interface specifications.
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadInterfaceSpec
     description: Loads a single interface specification by id.
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: loadImplementationSpecs
     description: Loads all L4 implementation specifications.
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadImplementationSpec
     description: Loads a single implementation specification by id.
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
+    returns: ImplementationSpec?
   - name: loadTypeSpecs
     description: Loads all type specifications across flat, per-subsystem, and grouped layouts.
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a member's key (its project id, or its alias path when its id is taken or missing) to
+      that member's project root, as the scan recorded it; a member refused at scan time (escaping,
+      missing, cyclic) resolves to null, as does a key no member has.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
+    params:
+      - name: namespace
+        type: string
+        description: The member's key
+  - name: inspectChainedRoots
+    description: >-
+      Walk every member beneath the bound project, in walk order, and report both halves: the
+      project-relative roots that can be followed, and every member that cannot — escaping the
+      project that declares it (absolute, ../-escaping, or through a link), missing on disk, cyclic,
+      or nested past the depth bound — each with its key, the alias and form it is declared in, its
+      declared path and reason. The one place a whole-tree operation learns whether it is seeing the
+      whole tree.
+    signature: 'inspectChainedRoots(): ChainedRootsInspection'
+    returns: ChainedRootsInspection
+    guarantees:
+      - idempotent
+  - name: loadTypeSpec
+    description: >-
+      Loads a single type specification by id, across the flat, per-subsystem and grouped layouts;
+      null when the workspace holds none under that id.
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
+    params:
+      - name: id
+        type: string
+        description: The type's id, qualified when it lives in a chained subproject
+  - name: load
+    description: >-
+      Load one spec of the named kind by id through the typed loader of that kind, or null when none
+      is stored. The L0 is a singleton: its id is informational.
+    signature: >-
+      load(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+    effect: read
+  - name: listProjectRoots
+    description: >-
+      The project roots the current scan read, bound root first, then each contained project member
+      in walk order: its key, where it sits among its family's members and in which form it is
+      declared (with the legacy L1 mount as written, for the migration), its own L0, its
+      configuration (read through that root's binding), its parts (stage 8: what a member is follows
+      from its content; each part's specs keyed under the declaring root as its own, with where they
+      came from — a contained or `../` sibling directory, or the git cache at the pinned commit),
+      its alias table, its resolved L0 and L1 export tables, the keys of the specs its files and its
+      parts' files declared, and every reference with `::` they wrote, with the form it was read in,
+      what it bound to and its rewrite. A referenced project member (a `../`, git or hosted source)
+      is no root here: the declaring project judges it against its pin. Served from the same cached
+      scan as every other read, so it is never stale with it; the scan's freshness signature also
+      covers each root's .wai/project.yaml and each part's directory (a git part by its pinned
+      commit), so an edit to a root's members, externals or parts re-scans.
+    signature: 'listProjectRoots(): list<ScannedProjectRoot>'
+    returns: list<ScannedProjectRoot>
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: subsystemPath
+    description: >-
+      The path the workspace records for a subsystem's spec, or where one not stored yet is placed
+      in the bound project's own tree. A bare id is the bound project's own: one a member project
+      also holds names a new local subsystem, never the member's file.
+    signature: 'subsystemPath(id: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+  - name: componentPath
+    description: >-
+      The path the workspace records for a component's spec, or where one not stored yet is placed
+      under its subsystem — inside its owning pattern's folder only when that owner is of the
+      component's own project, never a member's.
+    signature: 'componentPath(id: string, subsystemId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: subsystemId
+        type: string
+        optional: true
+  - name: interfacePath
+    description: >-
+      The path the workspace records for an interface's spec, or where one not stored yet is placed
+      under its component.
+    signature: 'interfacePath(id: string, componentId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: componentId
+        type: string
+        optional: true
+  - name: implementationPath
+    description: >-
+      The path the workspace records for an implementation's spec, or where one not stored yet is
+      placed under its contract.
+    signature: 'implementationPath(id: string, contractId?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: contractId
+        type: string
+        optional: true
+  - name: snapshot
+    description: Every spec file of the workspace read through the file store, its bytes keyed by path.
+    signature: 'snapshot(): map<string, string>'
+    returns: map<string, string>
+    params: []
+  - name: signatureFacts
+    description: >-
+      What the current scan's signature resolution recorded: every signatureFrom met and how it
+      resolved, and every stored signature text its params contradict. Read from the cached scan,
+      rescanning first when the tree changed.
+    signature: 'signatureFacts(): SignatureFacts'
+    returns: SignatureFacts
+    params: []
+    guarantees:
+      - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded: every stored type position that is an
+      alias of its canonical spelling, and every one that is not canonical at all. Read from the
+      cached scan, rescanning first when the tree changed.
+    signature: 'typeSpellingFacts(): TypeSpellingFacts'
+    returns: TypeSpellingFacts
+    params: []
+    guarantees:
+      - idempotent
+  - name: retiredReachFacts
+    description: >-
+      What the current scan met in the forms the reachability model retired: each Portal's
+      portalType and listener mounts, each invokedBy of a retired kind, each authored export type
+      and each in-process Custom endpoint, with what the stored spec held there. The loader reads
+      them compatibly for one release, so the stored value would otherwise be gone by the time the
+      migration asks. Read from the cached scan, rescanning first when the tree changed.
+    signature: 'retiredReachFacts(): list<RetiredReachFact>'
+    returns: list<RetiredReachFact>
+    params: []
+    guarantees:
+      - idempotent
+  - name: typePath
+    description: >-
+      The path the workspace records for a type's spec, or where one not stored yet is placed under
+      its subsystem and group.
+    signature: 'typePath(id: string, subsystemId?: string, group?: string): string'
+    returns: string
+    params:
+      - name: id
+        type: string
+      - name: subsystemId
+        type: string
+        optional: true
+      - name: group
+        type: string
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-07-18T22:57:54.065Z'
+updatedAt: '2026-10-09T18:34:57.420Z'

@@ -1,0 +1,13 @@
+id: host_network_adapter
+name: Host Network Adapter
+description: >-
+  The hosted server's client of sdd_network's published portal: the network view model the browser
+  canvas's network view draws, read over a bound project root within the caller's reach.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - network_portal
+status: complete
+createdAt: '2026-10-06T13:14:43.491Z'
+updatedAt: '2026-10-06T13:14:44.145Z'

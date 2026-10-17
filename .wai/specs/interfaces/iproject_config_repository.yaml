@@ -1,0 +1,198 @@
+id: iproject_config_repository
+name: Project Config Repository Interface
+description: >-
+  Facade over a project's configuration. Reads forward 1:1 to the index and writes forward 1:1 to
+  the registry; it is the only way into `.wai/project.yaml`.
+component: project_config_repository
+methods:
+  - name: load
+    description: The whole configuration, or null when the project has none (forwarded to the index).
+    signatureFrom: project_config_index.load
+    guarantees:
+      - idempotent
+  - name: exists
+    description: Whether the project has a configuration file (forwarded to the index).
+    signatureFrom: project_config_index.exists
+    guarantees:
+      - idempotent
+  - name: declaresGlobalPacks
+    description: Whether `extensions.useGlobalPacks` is set explicitly (forwarded to the index).
+    signatureFrom: project_config_index.declaresGlobalPacks
+    guarantees:
+      - idempotent
+  - name: specsDir
+    description: The absolute specs folder, resolved at binding (forwarded to the index).
+    signatureFrom: project_config_index.specsDir
+    guarantees:
+      - idempotent
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The project binding: when a project root is bound (a CLI command, an MCP server start, or a
+        hosted request's project binding), the workspace resolves its specs folder once through this
+        method and hands it to the spec repository.
+  - name: create
+    description: Write a fresh configuration for a project that has none (forwarded to the registry).
+    signatureFrom: project_config_registry.create
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name, moving a re-selected pack last; returns whether an earlier selection
+      was replaced (forwarded to the registry).
+    signatureFrom: project_config_registry.upsertPackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name, leaving path references alone; returns whether anything was dropped
+      (forwarded to the registry).
+    signatureFrom: project_config_registry.removePackSelection
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType` (forwarded to the registry).
+    signatureFrom: project_config_registry.setProjectType
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the applied profile selection (forwarded to the registry).
+    signatureFrom: project_config_registry.recordProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier` (forwarded to the registry).
+    signatureFrom: project_config_registry.setExecutionTier
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Append a legacy path reference when it is absent; returns whether it was added (forwarded to
+      the registry).
+    signatureFrom: project_config_registry.registerPackRef
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop a legacy path reference that matches exactly; returns whether anything was dropped
+      (forwarded to the registry).
+    signatureFrom: project_config_registry.deregisterPackRef
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: Record bundled packs on their selections in place, in one write (forwarded to the registry).
+    signatureFrom: project_config_registry.markSelectionsBundled
+    guarantees:
+      - idempotent
+  - name: rekeyCarried
+    description: >-
+      Rekey the debt register for an identity move — a component rename, a method rename, a method
+      move — so unchanged debt never reads as both paid and new. Every comment and all other
+      formatting of the document survive; only the renamed ids change. Answers each edit; a dry run
+      proves it and writes nothing; a register that cannot be edited precisely is refused and
+      nothing is written.
+    signatureFrom: project_config_registry.rekeyCarried
+  - name: setId
+    description: >-
+      Declare the project's id; refused for a malformed id or when a different id is already
+      declared, and a no-op when the same id is (forwarded to the registry). Returns whether it
+      wrote.
+    signatureFrom: project_config_registry.setId
+    guarantees:
+      - idempotent
+  - name: declareExternal
+    description: >-
+      Declare one external under an alias; refused for a malformed alias or producer id, or when the
+      alias already holds a different declaration, and a no-op when it holds the same one (forwarded
+      to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.declareExternal
+    guarantees:
+      - idempotent
+  - name: declareMember
+    description: >-
+      Declare one member under an alias; refused for a malformed alias, an empty or absolute path,
+      an alias `externals` holds, or when the alias already holds a different member declaration,
+      and a no-op when it holds the same one (forwarded to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.declareMember
+    guarantees:
+      - idempotent
+  - name: setMemberPath
+    description: Point an existing member at a new path (forwarded to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.setMemberPath
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: Remove one member declaration (forwarded to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.removeMember
+    guarantees:
+      - idempotent
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the external or member under an alias (forwarded to the
+      registry); a no-op for names already imported. Returns whether it wrote.
+    signatureFrom: project_config_registry.importNames
+    guarantees:
+      - idempotent
+  - name: renameId
+    description: >-
+      Move the project's id from the one it answers to now to a new one, keeping the old in
+      previousIds; refused for a malformed new id or when the project no longer answers to the old
+      one, a no-op once done (forwarded to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.renameId
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one member or external alias, keeping its value and place; refused for a malformed or
+      taken new alias or an undeclared old one, a no-op once done (forwarded to the registry).
+      Returns whether it wrote.
+    signatureFrom: project_config_registry.renameAlias
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise one external's producer id and explicit source, keeping its `use` and description;
+      refused for an undeclared alias or a malformed producer id, a no-op when equal (forwarded to
+      the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.repointExternal
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: Remove one external declaration (forwarded to the registry). Returns whether it wrote.
+    signatureFrom: project_config_registry.removeExternal
+    guarantees:
+      - idempotent
+  - name: updateMember
+    description: 'Forward 1:1 to the registry: change an existing member''s `as`, source or description.'
+    signatureFrom: project_config_registry.updateMember
+  - name: setPartOf
+    description: 'Forward 1:1 to the registry: write or remove the bound configuration''s partOf.'
+    signatureFrom: project_config_registry.setPartOf
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description` (forwarded to the
+      registry).
+    signatureFrom: project_config_registry.describeProject
+    guarantees:
+      - idempotent
+  - name: at
+    description: >-
+      This same Repository bound to an explicit project root instead of the ambient one (the
+      request's binding, else the override, else the working directory): every method of the answer
+      reads and writes the configuration under rootDir. Binding to a root is a real operation — a
+      provisioner writes a project it is not bound to, and a test reads a fixture tree — so it is
+      part of the contract rather than a second way in.
+    signature: 'at(rootDir: string): any'
+    returns: any
+    params:
+      - name: rootDir
+        type: string
+        description: The project root whose .wai/project.yaml the answer reads and writes.
+  - name: setNetwork
+    description: >-
+      Declare or remove the bound project's network (forwarded to the registry). Returns whether it
+      wrote.
+    signatureFrom: project_config_registry.setNetwork
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-13T11:09:45.386Z'
+updatedAt: '2026-10-07T21:50:06.869Z'

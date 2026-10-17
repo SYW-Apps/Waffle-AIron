@@ -1,7 +1,7 @@
 id: ishare_admin_orchestrator
 name: Share Admin Orchestrator Interface
 description: >-
-  Owner-side share-link workflows on the authenticated web surface, resolver-gated on the
+  Owner-side share-link workflows on the authenticated web surface, permission-rules-gated on the
   share:create capability over the target's scope. Mint/disable/permission changes are audited at
   security level; the raw token is returned to the creator exactly once and never stored.
 component: share_admin_orchestrator
@@ -62,8 +62,8 @@ methods:
     description: >-
       Require share:create over the project scope; list the project's share links (records only —
       never a raw token).
-    signature: 'listShareLinks(sessionId: string, projectId: string): ShareLink[]'
-    returns: ShareLink[]
+    signature: 'listShareLinks(sessionId: string, projectId: string): list<ShareLink>'
+    returns: list<ShareLink>
     params:
       - name: sessionId
         type: string
@@ -73,15 +73,15 @@ methods:
     description: >-
       Require share:create over the link's scope; return the link's recent access entries (IP /
       user-agent / referer / outcome) for anomaly review.
-    signature: 'getShareAccessLog(sessionId: string, linkId: string, limit: number): ShareAccessEntry[]'
-    returns: ShareAccessEntry[]
+    signature: 'getShareAccessLog(sessionId: string, linkId: string, limit: int): list<ShareAccessEntry>'
+    returns: list<ShareAccessEntry>
     params:
       - name: sessionId
         type: string
       - name: linkId
         type: string
       - name: limit
-        type: number
+        type: int
 status: complete
 createdAt: '2026-07-17T22:30:21.126Z'
-updatedAt: '2026-07-18T10:10:39.494Z'
+updatedAt: '2026-10-04T10:28:36.374Z'

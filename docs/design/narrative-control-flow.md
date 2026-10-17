@@ -182,7 +182,7 @@ catches breakage at validate time.
 | `INVALID_STEP_JUMP`  | error    | any jump field (`onTrueStep`, `onFalseStep`, `cases[].step`, `defaultStep`, `endStep`, `catches[].step`, `finallyStep`, `toStep`) targeting a step number that does not exist in the narrative |
 | `UNREACHABLE_STEP`   | warning  | step not reachable from step 1 following fall-through + jumps (catch/finally regions count as reachable from their try) |
 
-Registered in the rule registry like the other 12 modules (severity
+Registered in the rule registry like the other modules (severity
 overridable per project, listed by `wairon rules list`). The existing
 unused-component/method reachability walk needs **no change**: it already
 iterates all steps of a narrative linearly, so `call` steps inside branches

@@ -8,6 +8,8 @@ componentType: Store
 owns: []
 dependsOn: []
 durability: read-through
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-08T21:59:02.612Z'
-updatedAt: '2026-07-19T11:31:01.679Z'
+updatedAt: '2026-10-04T19:51:06.799Z'

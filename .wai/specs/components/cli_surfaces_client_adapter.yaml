@@ -1,8 +1,8 @@
 id: cli_surfaces_client_adapter
 name: CLI Surfaces Client Adapter
 description: >-
-  Client adapter forwarding the CLI surface commands (export, import, list, generate-children) to
-  the surface-exchange subsystem's published portal.
+  Client adapter forwarding the CLI surface commands (export, import, list, externals, pin) to the
+  surface-exchange subsystem's published portal.
 subsystem: sdd_cli
 componentType: Adapter
 owns: []
@@ -10,4 +10,4 @@ dependsOn:
   - surface_portal
 status: complete
 createdAt: '2026-07-10T23:12:46.792Z'
-updatedAt: '2026-07-11T09:04:01.963Z'
+updatedAt: '2026-09-12T12:38:14.722Z'

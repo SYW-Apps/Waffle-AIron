@@ -1,0 +1,33 @@
+id: icustom_exporter
+name: Custom Agent File Exporter Interface
+description: >-
+  The Exporter shape for a target wairon ships no exporter for: the project's own configuration
+  decides the output directory and file naming, so supporting an unknown tool is a configuration
+  entry rather than a code change.
+component: custom_exporter
+methods:
+  - name: export
+    description: >-
+      Write the agent's file where the target configuration says, carrying the wairon-managed
+      banner. Answers `unchanged` without touching the file when it already holds exactly this.
+    signature: 'export(ctx: ExportContext): ExportResult'
+    returns: ExportResult
+    params:
+      - name: ctx
+        type: ExportContext
+        description: The agent, its rendered instructions, and the target this write is for
+  - name: outputPath
+    description: >-
+      Where this write would land, from the target's configured output directory, without writing
+      anything.
+    signature: 'outputPath(ctx: ExportContext): string'
+    returns: string
+    params:
+      - name: ctx
+        type: ExportContext
+        description: The agent and target, less the rendered instructions
+    guarantees:
+      - idempotent
+status: complete
+createdAt: '2026-09-20T19:45:44.443Z'
+updatedAt: '2026-09-20T19:45:44.456Z'

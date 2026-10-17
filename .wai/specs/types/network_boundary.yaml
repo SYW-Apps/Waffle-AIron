@@ -1,0 +1,27 @@
+kind: value-object
+id: network_boundary
+name: NetworkBoundary
+description: >-
+  One declared network of a reach model: the project that declares it, the network it sits inside,
+  and the gateways on it. Logical only: no address or range.
+fields:
+  - name: id
+    type: string
+    description: 'The declaring project''s key: the network''s stable name in findings, flows and diagrams'
+    optional: false
+  - name: parent
+    type: string
+    description: The enclosing network's id; absent for an outermost network
+    optional: true
+  - name: description
+    type: string
+    description: The declaration's own description, when it has one
+    optional: true
+  - name: gateways
+    type: list<string>
+    description: The component keys of the gateway-variant Portals inside it that take outside entries
+    optional: false
+methods: []
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T12:57:07.678Z'
+updatedAt: '2026-10-06T12:57:08.241Z'

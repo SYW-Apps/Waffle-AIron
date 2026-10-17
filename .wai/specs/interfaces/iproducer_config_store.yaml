@@ -1,0 +1,27 @@
+id: iproducer_config_store
+name: Producer Config Store Interface
+description: Contract for reading/writing a project's producer configs.
+component: producer_config_store
+methods:
+  - name: read
+    description: Read a target's config, or null.
+    signature: 'read(target: string): ProducerConfig | null'
+    returns: ProducerConfig?
+    effect: read
+  - name: write
+    description: Persist a producer config.
+    signature: 'write(config: ProducerConfig): void'
+    returns: void
+    effect: write
+  - name: clear
+    description: Remove a target's config.
+    signature: 'clear(target: string): void'
+    returns: void
+    effect: write
+  - name: list
+    description: List all producer configs.
+    signature: 'list(): ProducerConfig[]'
+    returns: list<ProducerConfig>
+status: complete
+createdAt: '2026-07-04T17:37:47.379Z'
+updatedAt: '2026-10-04T10:19:16.492Z'

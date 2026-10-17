@@ -5,16 +5,17 @@ import { execFileSync } from 'child_process';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { authorize, visibleScopes, actionableUnitIds, isInstanceAdmin } from './authorization.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import {
   getOrganizationUnit,
   listOrganizationUnits,
   listProjectPlacements,
 } from './organization.js';
-import { listProjectRecords } from './projects.js';
+import { listProjectRecords, listFamilyRecords } from './projects.js';
 import { resolveGitToken, setSecret } from '../utils/secrets.js';
 import type {
   AuditEvent,
+  AuditLevel,
   GitBackingBinding,
   HostConfig,
   OrganizationUnitRecord,
@@ -46,7 +47,7 @@ import type {
 //                          listBindings / getBinding — pure 1:1 forwarding.
 //   - git_backing_adapter: the only block doing git + filesystem I/O for the
 //                          backup working copies under <dataDir>/git-backing/.
-//   - git_backing_orchestrator: resolver-gated bind/unbind/sync + the
+//   - git_backing_orchestrator: permission-rules-gated bind/unbind/sync + the
 //                          pre-authorized periodic sweep.
 // ---------------------------------------------------------------------------
 
@@ -306,7 +307,7 @@ function principalSubject(principal: Principal): PrincipalSubject {
 
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, DEFAULT_AUDIT_POLICY);
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[git-backing] audit append failed for "${event.action}": ` +
@@ -315,7 +316,7 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   }
 }
 
-function buildAuditEvent(principal: Principal, action: string, level: string, target: string): AuditEvent {
+function buildAuditEvent(principal: Principal, action: string, level: AuditLevel, target: string): AuditEvent {
   const event: AuditEvent = {
     id: '',
     timestamp: '',
@@ -441,18 +442,24 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
   cloneOrOpen(binding.remote, binding.branch, workdir, binding.credentialRef);
 
   if (binding.scopeKind === 'unit') {
-    // Every project placed in the unit's subtree mirrors as projects/<id>/.wai/.
+    // Every family root placed in the unit's subtree, PLUS every member record
+    // of those families (a member's units come through its family root), mirrors
+    // as projects/<its own id>/.wai/ from its own root.
     const units = listOrganizationUnits(cfg.dataDir);
     const subtree = subtreeUnitIds(units, binding.scopeId!);
     const placedIds = new Set(
       listProjectPlacements(cfg.dataDir)
         .filter((p) => subtree.has(p.unitId))
-        .map((p) => p.projectId),
+        .flatMap((p) => {
+          const family = listFamilyRecords(cfg.dataDir, p.projectId);
+          // A placement of a member itself is not a rung: only a family root's carries its family.
+          return family[0]?.id === p.projectId ? family.map((r) => r.id) : [];
+        }),
     );
     const projectsDir = path.join(workdir, 'projects');
     fs.rmSync(projectsDir, { recursive: true, force: true });
     for (const rec of listProjectRecords(cfg.dataDir)) {
-      if (!placedIds.has(rec.id)) continue;
+      if (!placedIds.has(rec.id) || !rec.rootPath) continue;
       mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
     }
   } else {
@@ -490,7 +497,7 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
  * mirror sync now (commit+push skip-if-clean). Audited at info level. Returns
  * whether anything was published.
  */
-export function syncBackingScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
+export function syncScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
   const principal = requirePrincipal(cfg, credential);
   const binding = getBinding(cfg.dataDir, bindingId);
   if (!binding) throw new Error(`Backing binding "${bindingId}" not found.`);

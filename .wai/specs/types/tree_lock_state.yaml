@@ -1,0 +1,35 @@
+kind: value-object
+id: tree_lock_state
+name: TreeLockState
+description: >-
+  What a project tree's write lock file (.wai/.spec-write.lock) says as it stands — read for `wairon
+  doctor`, which names a lock that is present and whether the next write breaks it.
+fields:
+  - name: file
+    type: string
+    description: The lock file
+    optional: false
+  - name: pid
+    type: int
+    description: The process the file names as its holder, when it can be read
+    optional: true
+  - name: ageMs
+    type: int
+    description: How long ago the file was written, in milliseconds
+    optional: false
+  - name: holder
+    type: string
+    description: >-
+      live — a running process holds it; gone — its holder process has ended; unreadable — no holder
+      can be read from it (a foreign or truncated file)
+    optional: false
+  - name: breaks
+    type: bool
+    description: >-
+      Whether the next write breaks it instead of waiting: a holder that is gone, a lock older than
+      any write, or one that cannot be read past the short grace a holder mid-write needs
+    optional: false
+methods: []
+sourcePath: src/core/spec-files.ts
+createdAt: '2026-10-09T16:55:35.119Z'
+updatedAt: '2026-10-09T16:55:35.995Z'

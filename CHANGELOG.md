@@ -1,10 +1,1558 @@
 # Changelog
 
-## Unreleased (from v5.0.1)
+## Unreleased — v6.0.0 (from v5.1.0)
 
-Additive features plus fixes: merge dev → main with `[minor]` in the merge commit
-message → **v5.1.0**. (`[major]` would wrongly jump to v6 — that instruction was
-spent on v5.0.0.)
+**Breaking: merge dev → main with `[major]` in the merge commit message → v6.0.0.**
+
+v6 makes a wairon project a set of **projects that name each other**. A project has
+an id, its levels export like a module, and another project is reached only as
+`alias::name` through a member or a declared external. A part of a system that only
+lives in another folder or repository is a **part**, not a project. Around that:
+approval is per project and the same on every machine, packs apply only where a
+project selects them, contract types use one language-neutral grammar, logic is an
+Orchestrator (Specialist and Gateway retire), and the validator checks readability
+and reads the code more closely. Reach is modelled too: every Portal verb is either
+called by the design or declared an entry, Portals state one `transport`, listener
+`mounts` retire, projects may declare networks with gateways, and another project's
+library is called directly.
+
+Who is affected:
+
+- **Every project:** the first `validate --ci` after upgrading reports new findings,
+  and every lock reads stale once. Run the upgrade steps below. Portals are no longer
+  reached just by existing, so a Portal verb that no modelled caller reaches reports
+  `UNUSED_COMPONENT` / `UNUSED_METHOD` until its entry is declared.
+- **Families (a project with chained subprojects):** the chained mounts become
+  `members`. `wairon doctor --fix` migrates them.
+- **Hosted operators:** run `wairon host doctor --fix` once. Several admin API
+  answers and defaults change.
+- **CI:** `validate --ci` can newly fail. The optional `lock-check` workflow is new;
+  it also runs `validate --ci`, which belongs at the family root.
+- **MCP clients and scripts:** some tools are renamed or removed, 16 tools declare an
+  `outputSchema`, and nested unknown keys are refused. `sdd_add_component` takes
+  `transport` instead of `portalType` and no longer takes `mounts`.
+- **Generators reading `wairon export`:** the design export is format 2.0.
+- **Library embedders:** `validateSddTree` is now `validateProject`, with no alias,
+  and 99 exports are gone.
+
+### Upgrading from v5.1.0
+
+Follow these in order. Every `doctor --fix` rewrite moves the gate identity, so lock
+last.
+
+1. **Upgrade wairon everywhere at once:** developer machines, CI (and the
+   `setup-wairon` action's `version`) and the hosted server. Then restart or
+   reconnect each AI tool's wairon MCP server. A server whose build on disk changed the
+   spec schemas now refuses every spec write and says so. A machine with two installs
+   (an old standalone binary and the npm package) can start an older server than the CLI
+   you run, because the committed `.mcp.json` says `wairon` and the PATH decides which:
+   `wairon doctor` names the version that entry starts when it differs from the CLI's,
+   and a server older than the wairon that last wrote the project (its lock or guides)
+   leads its `sdd_get_status` answer with an `OLDER SERVER` banner.
+2. **Hosted operators: `wairon host doctor`, then `wairon host doctor --fix`.** The
+   dry run prints the plan. `--fix` migrates a data dir that predates the permission
+   model. It also registers every member that hosted families declare as a project
+   record of its own. It grants nothing: access is inherited, so everyone's reach
+   stays the same, and the plan shows that before anything is written. `wairon serve`
+   warns at startup while this is pending. It also migrates every hosted project's
+   spec tree onto the reachability model (the same rewrites as step 5), audited per
+   project; each project it rewrote owes one re-lock by its approvers. The server
+   never applies this on its own when it binds a project, because the rewrite moves
+   the approved design.
+   - To upgrade a hosted project's spec tree, pull it into a checkout
+     (`wairon remote pull`), run steps 3–8 there, then push it back
+     (`wairon remote push --force`, which backs up the tree it replaces).
+3. **Read the plan first: `wairon doctor`** at the top of the project. It writes
+   nothing. It lists every repair `--fix` will make, for this project and for each
+   member below it. In a family, also run:
+   - `wairon doctor --report chaining`, for the member migration and the new
+     cross-project dependencies it adds;
+   - `wairon doctor --report composed-validation`, for which of today's findings are
+     new and why.
+   - Read the new dependencies first. A cycle between two projects
+     (`PROJECT_DEPENDENCY_CYCLE`) usually means a reference that should move.
+4. **Decide on machine-wide packs.** Packs installed machine-wide no longer apply to a
+   project that has not selected them. `wairon doctor` lists the installed packs a
+   project does not apply. Either:
+   - select the ones the project relies on by name (`wairon pack use <name>`); or
+   - set `extensions.useGlobalPacks: true` in `.wai/project.yaml` first, to keep the
+     old behaviour on that machine.
+
+   `doctor --fix` never selects them for you: what is installed on one machine is
+   not the project's doctrine.
+
+   A subsystem whose `profile` comes from an unselected pack reports `UNKNOWN_PROFILE`.
+5. **Run `wairon doctor --fix` once, from the top of the family.** In scripts, use
+   `--fix --yes`. Writes outside the project root also need `--global`. It applies:
+   - recovery of an unfinished family migration;
+   - Specialists retyped to Orchestrators with a `dependencyClass`;
+   - stray narrative-step fields (`FOREIGN_STEP_FIELD`) removed;
+   - stored signature texts regenerated;
+   - stored type spellings rewritten to the canonical grammar. This includes
+     `Result<T, E>` → `result<T, E>`, `()` → `void`, `T[]` → `list<T>`,
+     `T | null` → `T?` and `Promise<T>` → `async T`;
+   - the reachability migration. `portalType` becomes `transport` (`HTTP_API` is
+     `HTTP`; a `Custom` Portal that binds no wire address becomes `InProcess`), each
+     listener's `mounts` become a Portal-level entry on every Portal it served and
+     that Portal's implementation `router` (the mount's `via`), `invokedBy: external`
+     becomes `entry` on a Portal verb and `runtime` elsewhere, an authored export
+     `type` that agrees with the derived kind is dropped, in-process `Custom`
+     endpoint addresses are removed, and allows of retired codes are dropped or
+     renamed. It never invents design: what it cannot decide is listed for an author
+     (`wairon doctor --report reachability`);
+   - the member migration. Each legacy L1 mount moves into `members`, ids are
+     declared, the exports, externals and `use` imports each reference needs are
+     written, deprecated reference forms are rewritten to `alias::name` or a bare
+     local id, and the result is pinned. The old family surface pins are deleted.
+     A reference the migration cannot follow (such as `target-unpublished`: the
+     target is not in its subsystem's L1 `publicInterfaces`) is named in the run with
+     its hand fix. What it moves for the rest is written, but nothing is written for
+     that reference, and a finding that blocks the apply writes none of the
+     migration. Fix those by hand (step 7), then re-run `wairon doctor --fix`; the
+     export and `use` import follow once the target is published.
+
+   **Members are repaired by the same run.** Every member inside the project root gets
+   the per-project repairs, each line marked `[alias]`: its specs, and its agent
+   surfaces (the project `.mcp.json`, the guide, the `.wai/context` documents and the
+   skills), so an assistant opened in the member's own folder has the wairon tools.
+   A machine-wide registration stays the one plan the top asks about. A member in a
+   sibling checkout (`../x`) is named with the command to run in its own directory.
+   Plain `wairon doctor` lists, per member, what is pending, agent surfaces included.
+
+   **Committed agent files are kept.** A `project.yaml` that never set
+   `rules.materializeAgentFiles` reads as `true` while wairon-managed agent files are
+   committed (or staged) in git, so the first lock keeps them. A save at the project's
+   root writes `true` down. Ignored or untracked leftovers (a gitignored `.claude/`)
+   do not count: such a project gets live briefs, and the lock writes no agent files.
+   Outside a git repository every managed agent file present counts.
+6. **Make the pack selections reproducible for CI.** CI has no pack store, so a
+   declared pack it cannot get is `PACK_NOT_INSTALLED`, and every command refuses.
+   Either:
+   - run `wairon pack bundle --all` and commit `.wai/packs/`; or
+   - record a fetchable source (`wairon pack use <name> --source <url>`) and run
+     `wairon pack sync` in CI (or the `setup-wairon` action with `packs: sync`).
+
+   A pack installed from a local path has no URL, so bundle it. Otherwise it reports
+   `PACK_SOURCE_UNFETCHABLE` and fails `--ci`.
+7. **Settle by hand what `doctor` lists but never writes:**
+   - **Gateways.** The Portal the Gateway owns becomes the front door, with
+     `variant: gateway`. Its other members become that Portal's dependencies, its
+     consumers depend on the Portal, and the Gateway spec is deleted.
+     `sdd_rename_component` can give the Portal the Gateway's id.
+   - **`number` positions.** Write `int` or `float`. `doctor` proposes `int` where
+     the name says a whole number.
+   - **String-literal unions.** `doctor` proposes an enum (its id and values) but does
+     not write it. Define the enum with `sdd_add_type` (`kind: enum`), then write its
+     id in the position.
+   - **Type forms the grammar leaves out.** Each is named with its replacement. An
+     inline object or a mixed union becomes a value-object, and a single value gets a
+     named scalar (`holds`). An inline function type becomes a `signature` type.
+   - **Migration findings.** These include `positional-ambiguous` (pick the
+     producer), `import-shadowed`, `import-collision` and `target-unpublished`
+     (publish the target in its subsystem's L1 `publicInterfaces`, or move the
+     reference; then re-run `wairon doctor --fix`, which writes the export and import
+     it was waiting on). A legacy mount that carries
+     `trustedLinks`, `lifecycle`, `profile`, `targetLanguage`, `designDepth` or `ext`
+     blocks the migration until that member holds the field itself.
+   - **Supervisors.** A Supervisor narrative that calls shared data must call methods
+     tagged `effect: read` or `effect: lifecycle`. Move each write into an
+     Orchestrator.
+
+   Write these through the MCP tools, which regenerate a method's signature text. A
+   type you change by editing the spec file leaves `SIGNATURE_TEXT_STALE` until you
+   run `wairon doctor --fix` again.
+8. **Run `wairon validate --ci` and work through the findings** (`--all` prints every
+   one). Most are covered by the codes table below. The usual remedies:
+   - Split a coarse `lint.allow` into one allow per site (`at:`). The
+     `UNUSED_LINT_ALLOW` finding lists the sites.
+   - Delete allows that name retired codes, and allows whose finding no longer
+     fires (`UNUSED_LINT_ALLOW` says "no such finding fired").
+   - Write a method's `calls` where its narrative shows no steps.
+   - Declare the entries the migration will not invent. A Portal whose callers are
+     outside the design takes a Portal-level `invokedBy: { kind: entry, caller }`:
+     a CLI, a stdio tool surface (`transport: JSONRPC`), a library or SDK
+     (`transport: InProcess`), and any HTTP Portal no listener mounted. Never declare
+     one only to quiet a finding.
+   - Settle every other unreached verb: model the caller that really calls it, or
+     remove it.
+   - Make a member's parent-relative `sourcePath`s relative to the member.
+   - Plan a `sourcePath` on every component not built yet. A project that generates
+     one implementer agent per component (`rules.generateComponentImplementers`)
+     reports `NO_OWNED_PATHS` for each component whose implementation names no file,
+     and the fix is the planned file, not a `meta` tag: set it with
+     `sdd_write_narrative` or `sdd_update_spec` (`sourcePath`; the file need not
+     exist yet). It is a notice, like `MISSING_SOURCE_PATH`, so it does not fail
+     `--ci`, unless `rules.conformance.requireCode` is on, which makes every unplanned
+     or unbuilt component an error. Planning the path is code linkage: it does not
+     reopen the approval.
+   - A Portal that a member exports and only the parent calls reports
+     `UNUSED_COMPONENT` inside the member, which cannot see the parent's call. Declare
+     the entry in the member: a Portal-level `invokedBy: { kind: entry, caller }` naming
+     the parent (or the outside caller that really reaches it). `sdd_list_consumers`
+     shows who calls the verb across the family.
+   - To soften a warning while you pay it down, set it to `notice` in
+     `rules.sddRuleSeverity` (notices never fail `--ci`).
+   - Re-pin with `wairon externals pin` after editing what a consumer uses.
+9. **Lock bottom-up: each member project first, then the top.** Run `wairon lock` at
+   each project's own root and commit `.wai/lock.json`. A part has no lock of its
+   own: the parent's lock covers it.
+   - `lock` refuses only on design errors. It records code-conformance results beside
+     the approval and does not block on them, so a passing lock alongside a failing
+     `validate --ci` is expected until the code findings are paid.
+   - `lock` no longer writes `status: complete` into spec files.
+   - `lock` accepts a design that still has drafts or warnings (approval is not
+     status), and says how many findings `validate --ci` would fail on. Run
+     `validate --ci` until it passes before locking a design meant to be finished.
+   - `wairon diagram` writes `.wai/docs/diagrams/`, which is derived and never read
+     back: commit it to browse the diagrams on GitHub, or ignore it.
+   - A lock written by an earlier v6 build (format 2) still passes while nothing it
+     covers moved. Run `wairon doctor --fix` to re-express it as format 3: who
+     approved it and when are kept, and the record notes `reexpressed`. One that
+     already drifted needs one `wairon lock`; after that, linking code never
+     drifts it.
+10. **Update scripts and integrations** for the renamed CLI commands, MCP tools,
+    library exports and hosted API answers in the tables below.
+11. **Optional: gate merges on approval.** `wairon lock-check` is new and fails only
+    when a design moved past its approval:
+
+    ```yaml
+    jobs:
+      approved-design:
+        uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v6.0.0
+        with:
+          wairon-version: '6.0.0'
+    ```
+
+    Pin both the ref and `wairon-version`: the gate identity's algorithm can change
+    between versions. Turn on `strict: true` only once re-locking is part of review.
+    After the approval check the job runs `wairon validate --ci` (input `validate`,
+    default `true`). Point `working-directory` at the family root, the project that
+    declares the members: there it is the family run, which judges the network
+    proofs a member's own gate cannot.
+
+`.wai/transactions/` (staged family migrations) ignores itself. Never commit it.
+
+### Breaking changes
+
+#### CLI
+
+| v5.1.0 | v6.0.0 |
+|---|---|
+| `wairon subsystem add <id> --project-path <dir>` | `wairon member add <alias> <source>`: creates a **part** (`--project` creates a project) |
+| `wairon subsystem move <id> --project-path <dir>` | `wairon member move <alias> <path>` |
+| `wairon subsystem internalize <id>` | `wairon member internalize <alias> [--into <subsystem>] [--packs adopt\|drop]` |
+| `wairon subsystem externalize <id> --project-path <dir>` | `wairon subsystem externalize <id> --path <dir>`: moves it into a **part** (`--as project` creates a project) |
+| `wairon surface externals` | `wairon externals status` / `wairon externals list` |
+| `wairon surface generate-children` | removed: a parent pushes nothing into its members; a consumer pins with `wairon externals pin` |
+| `wairon host promote` | removed: `wairon lock` is the approval |
+| `wairon validate` at a project with members | runs the **family run**; `--no-recursive` runs the project's own gate alone |
+| `wairon generate` at a parent | writes this project's outputs only; `--family` walks the members (`--no-recurse` is accepted and ignored) |
+| `wairon lock` | approves this project only, refuses on design errors only, rewrites no spec file (`--no-recursive` is accepted and ignored) |
+| `wairon generate` with `materializeAgentFiles` off | writes no agent files and removes wairon-managed ones; agents are live briefs |
+| `pack use\|unuse\|add\|remove\|install`, `host packs install\|remove --project` | show the pack's impact and ask in a terminal; pass `--yes` in scripts |
+| `doctor --fix`, `subsystem externalize`, `member internalize` | print a plan and ask; `--yes` in scripts, `--report` to see the plan only |
+| `doctor --fix` / `generate` writing outside the project root | needs `--global` (each replaced file is backed up) |
+| `wairon generate --target <unknown>` | refused, naming the configured targets |
+| Which project a command binds (every command, `wairon mcp serve`, `wairon dev`) | the walk up to the nearest project stops at the repository root (the nearest folder holding `.git`) unless a project above declares the folder as a member; a stray `.wai` above a repository binds nothing. Each command prints `project <id> at <root>` on stderr |
+| `wairon init -y` | configures the `claude` target only (name from the folder, profile backend); another tool is one interactive answer or one `targets` entry away |
+| `wairon init` in a folder a parent project binds | asks on a terminal before making the folder a member, which edits the parent's `project.yaml`; with `--yes` it refuses, writes nothing and prints the `wairon member add <alias> <path> --project` to run from the parent |
+| `wairon externals status` | exits 1 when an external is incompatible and 2 when something could not be compared (it always exited 0); a CI step that ran it for information now gates |
+| `wairon externals pin` | exits 1 when an alias could not be pinned (unresolved or unreachable) |
+| `wairon lock-check` at a project with members | judges the members too: a member with spec changes nobody approved fails, and a member that re-locked fails until this project is locked again to pin its new approval. `--strict` also fails a member that was never approved |
+
+#### MCP tools
+
+| v5.1.0 | v6.0.0 |
+|---|---|
+| `sdd_add_subsystem` with `projectPath` | refused; use `sdd_add_member` (`source`, `as`) |
+| `sdd_move_subsystem_project` | `sdd_move_member` |
+| `sdd_internalize_subsystem` | `sdd_internalize_member` (`into`, `packs`, `exports`, `dryRun`) |
+| `sdd_externalize_subsystem { projectPath }` | `sdd_externalize_subsystem { path, as, dryRun }` |
+| `sdd_set_subsystem_project_path` | removed: members are configuration |
+| `sdd_list_external_interfaces` | `sdd_pin_externals` / `sdd_get_externals_status` |
+| `sdd_host_promote_project` | removed |
+| Unknown key nested in a tool's input (a method, param, step, endpoint, …) | refused by name; it used to be dropped silently. `sdd_update_spec`'s `delta` stays open and lists ignored keys under `ineffective` |
+| Tool results | 16 tools declare an `outputSchema` and return `structuredContent` beside the unchanged text: the six create tools, `sdd_update_spec`, `sdd_get_spec` (the spec sits under `spec`), `sdd_validate_tree`, `sdd_set_endpoints`, `sdd_set_public_interfaces`, `sdd_delete_spec`, `sdd_add_member`, `sdd_pack_impact`, `sdd_pin_externals`, `sdd_get_externals_status`. A proxy that rewrites results must carry `structuredContent` |
+| Finding severity | can be `notice`; `sdd_validate_tree` returns a separate `notices` list. The `crossTreeContext` marker is gone; a family run adds `projects` and a `project` key per finding |
+| Change report `change` | can also be `renumbered`, `relocated` or `reordered` (a list restated in a new order now takes that order) |
+| `sdd_update_spec` with `id`, `createdAt`, a component's or type's `subsystem`, a contract's `component` or an implementation's `contract` | refused, naming the tool that owns the change; it used to write a second spec or move the folder |
+| `sdd_delete_spec` | deletes the spec with what it contains, is refused while specs that stay reference it (`force`, `dryRun` are new); the answer gains `dryRun`, `removed`, `references` |
+| Spec writes introducing a doctrine-edge or duplicate-route error | refused at write (a code tuned down in `sddRuleSeverity` is a notice) |
+| `sdd_update_spec` deltas | the merge semantics changed (array merges, step deletes and step retypes). See *Fixes*; a script that relied on the old behaviour was writing specs nobody intended |
+| Spec writes through a server older than the build on disk | refused with `writesRefused: true`; reconnect the server |
+| Spec schema (`Specialist`, `Gateway`, `number`, L1 `projectPath`) | refused at write |
+
+#### Library (`@wairon/cli`)
+
+`validateSddTree` is renamed with **no alias**. The package entry exports 509 names
+(v5.1.0: 313). 99 are gone, all of them internals a star export had swept in.
+
+| Removed | Use instead |
+|---|---|
+| `validateSddTree` | `validateProject` (one project's gate), `validateFamily` (the family run) |
+| `saveSystemSpec`, `saveSubsystemSpec`, `saveComponentSpec`, `saveInterfaceSpec`, `saveImplementationSpec`, `saveTypeSpec`, `delete*Spec` | `saveSpec(kind, spec)`, `deleteSpec(kind, id)`, `loadSpec(kind, id)` |
+| `createChainedSubsystem`, `moveSubsystemProject`, `internalizeSubsystem` | `createMember`, `moveMember`, `internalizeMember(alias, destination)` |
+| `saveProjectConfig` | `createProjectConfig`, `setProjectType`, `recordProfileSelection`, `setExecutionTier`, `registerPackRef` / `deregisterPackRef`, `upsertPackSelection` / `removePackSelection`, `markSelectionsBundled`; `projectConfigExists()` |
+| `listExternalInterfaces`, `projectSubsystemSurface`, `projectChildSurface`, `generateChildSnapshots`, `checkChildSurfaceFreshness`, `loadSurfaceSnapshots`, `saveSnapshot` | `pinExternals`, `getExternalsStatus`, `exportSurface`, `importSurface`, `listExternals` |
+| `findDomain`, `listFreeStandingDomains`, `deriveSubsystemDomains`, `addFreeStandingDomain`, `removeFreeStandingDomain` | `resolveDomains`, `addDomain`, `removeDomain` |
+| `extractGenericTypeVariables`, `extractTypeGenerics`, `extractTypesFromSignature`, `LANGUAGE_MARKERS`, `normalizeLanguage` | no replacement on the entry |
+| Context documents (`contextDir`, `CONTEXT_PATHS`, `renderDomainsDoc`, `renderWaironGuide`, `read*Context`, `write*Context`, `hasArchitectureContext`), the OpenAPI codec (`toOpenApi`, `toOpenApiSet`, `fromOpenApi`, `isOpenApiDocument`), skill and template registry internals, pack manifest schemas, spec path helpers (`get*Path`), group-spec functions, the status ratchet (`promoteAllComplete`, `applySpecStatus`, `collectPromotableSpecs`) | no longer exported |
+
+Also: `LoadedExtensions` has the required fields `instructions` and
+`selectionFailures` (build one with `emptyExtensions()`). In the code model,
+`SourceFileFacts.functionCalls` is replaced by `functionCallSites` (read each site's
+`name`). The embedding API in `docs/extending-wairon.md` is exported by name, and
+`examples/wrapper/wrapper.js` calls `validateProject`.
+
+#### Finding codes that can newly fail `validate --ci`
+
+`--ci` fails on errors and warnings, never on notices. Code-conformance findings
+(marked †) need an implementation `sourcePath` and fire at exact analysis grade.
+
+| Code | Severity | Fires when | Remedy |
+|---|---|---|---|
+| `STEREOTYPE_RETIRED` | error | a component is still `Specialist` or `Gateway` | `doctor --fix`; Gateways by hand (step 7) |
+| `DEPENDENCY_CLASS_VIOLATION`, `DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR` | error | logic reaches past its `dependencyClass` (`pure`, `read`), or the class sits on a non-Orchestrator | change the class or the edge |
+| `SUPERVISOR_WRITE_SHORTCUT` | error | a Supervisor calls a shared data method whose effect is not `read` or `lifecycle` | tag the method, or route the write through an Orchestrator |
+| `SUPERVISOR_CONTAINMENT`, `SUPERVISION_STATE_INTRUSION`, `LIFECYCLE_CALLS_WRITE`, `ARCHITECTURE_VIOLATION_SUPERVISOR_DEP` | error | a Supervisor owns more than its own Store or Registry, another component reaches that state, a `lifecycle` method calls a write, or a Supervisor depends on a presentation block | follow the message |
+| `ACTOR_REACHED_WITHOUT_SUPERVISOR` | error | a live Actor is reached neither through a Supervisor that supervises it nor through a Registry such a Supervisor maintains | model the lookup hop |
+| `UNDECLARED_DEPENDENCY_CALL`, `PORTAL_WRITE_SHORTCUT`, `ROUTER_COMPONENT_CONTAINMENT`, `CIRCULAR_DEPENDENCY` | error | existing rules now also judge calls through a pinned contract, a Portal's dispatch table, a RouterComponent owning two Portals, and a cycle through a `--subsystem` scope | fix the edge |
+| `DUPLICATE_STEP_LABEL` | error | two steps of one narrative share a label | rename one |
+| `DUPLICATE_SPEC_ID` | error | two spec files of one project declare one id | remove or rename one |
+| `DUPLICATE_MEMBER_NAME`, `RESERVED_IDENTIFIER` | error | two methods, parameters or fields of one place share a name, or a name is a word the `targetLanguage` reserves for that kind (`fn` in Rust, a keyword parameter in TypeScript) | rename it (`wairon method rename`, `rename-param`, `type rename-field`) |
+| `ENDPOINT_PATH_PLACEHOLDER` | error | an HTTP path placeholder is unclosed, written twice, or names neither a parameter of its method nor a field of a parameter's type | respell the path |
+| `SCHEMA_VALIDATION_ERROR` | error | a spec id or alias that starts with `-` or is `__proto__`, a method, parameter or field name over 64 characters or starting with a digit, or a blank display `name` or one holding a control or zero-width character | rename it |
+| `EXPORT_INVALID`, `EXPORT_ID_DUPLICATE`, `EXPORT_CYCLE`, `EXPORT_UNCONSUMABLE`, `EXPORT_WIDENS_AUDIENCE` | error | an L0 or L1 `publicInterfaces` entry has no source, names something not exported, repeats an id, cycles, re-exports a non-Portal/Observer, or widens a member's audience | fix the entry |
+| `EXTERNAL_UNDECLARED`, `EXTERNAL_NOT_EXPORTED`, `IMPORT_AMBIGUOUS`, `IMPORT_UNRESOLVED`, `IMPORT_SHADOWED_BY_LOCAL`, `TRUSTED_LINK_CROSSES_PROJECT` | error | a reference reaches another project undeclared or at a name it does not export, or a `use` import is ambiguous, unresolved or shadowed | `doctor --fix`, then the hand items |
+| `UNDEFINED_TYPE_REFERENCE` | error | a dotted type reference names another project through its alias (`alias.name`); it used to be accepted silently | write `alias::name`, as the message says |
+| `EXTERNAL_INCOMPATIBLE`, `MEMBER_NOT_FOUND`, `PROJECT_ID_COLLISION`, `PART_UNAVAILABLE`, `MEMBER_KIND_MISMATCH` | error | family run: a used contract changed or vanished, a member is missing or unreadable, or two projects share an id | re-pin, restore, or rename |
+| `MEMBER_UNAPPROVED`, `MEMBER_DRIFTED`, `PROJECT_DEPENDENCY_CYCLE`, `EXTERNAL_CHECK_UNAVAILABLE`, `PROJECT_ID_AMBIGUOUS`, `LOCAL_ID_SHADOWS_PROJECT` | warning | family run: a member is unlocked or its lock is stale, two projects depend on each other, a used contract cannot be compared, or an id is missing or shadowed | lock members bottom-up; tune in the parent's `rules.sddRuleSeverity` |
+| `PROJECTPATH_ESCAPE` | error | a legacy mount leaves the project that declares it (a `../sibling`) | declare the sibling from the project that contains both, or migrate with `doctor --fix` |
+| `SURFACE_REF_AMBIGUOUS` | error | a reference matches pinned contracts of several producers that disagree | name the producer (`alias::name`) |
+| `PACK_NOT_INSTALLED`, `PACK_VERSION_UNSATISFIED`, `PACK_INTEGRITY_MISMATCH` | error | a declared pack cannot be resolved; every command refuses | step 6 |
+| `UNPINNED_PACK_SELECTION`, `PACK_SOURCE_UNFETCHABLE`, `PACK_STORE_DRIFT` | warning | a selection floats, or cannot be fetched, or the bundle and the store disagree | pin, bundle, or `rules.enforceReproducibility: false` |
+| `TYPE_SPELLING_STALE`, `SIGNATURE_TEXT_STALE` | warning | a stored alias spelling, or a signature text its params no longer derive | `doctor --fix` |
+| `TYPE_NOT_NEUTRAL`, `TYPE_FORM_UNSUPPORTED`, `TYPE_EXPRESSION_INVALID`, `TYPE_POSITION_INVALID` | warning | `number` or a legacy builtin, a form the grammar leaves out, a position that does not parse, or a misplaced `void`, `async` or `result` (all refused at write) | step 7 |
+| `FOREIGN_STEP_FIELD` | warning | a narrative step carries a field its type cannot have | `doctor --fix` |
+| `NARRATIVE_COMPLEXITY`, `EXCESSIVE_NARRATIVE_STEPS` | warning | a narrative above the `moderate` cognitive band, or above 25 steps (the limit now has a default) | split it, or set `complexity.cognitiveWarnAbove` / `maxNarrativeSteps` |
+| `MISLEADING_BLOCK_WORD`, `GENERIC_COMPONENT_NAME`, `METHOD_REPEATS_COMPONENT`, `COMPONENT_IS_ITS_ONLY_METHOD`, `INCOHESIVE_METHODS` | warning | a name says a block it is not, says nothing, repeats its component, or an Orchestrator holds two jobs (a pure forwarder is exempt) | rename or split, or a reasoned `lint.allow` |
+| `UNUSED_COMPONENT`, `UNUSED_METHOD` | warning | a method with no narrative steps no longer vouches for every collaborator | write its `calls` |
+| `METHOD_SOURCE_PATH_MISSING` | warning | an implementation's realization has begun (a file it names exists) but some contract methods name no file | name each method's file, or the implementation's `sourcePath` |
+| `UNUSED_LINT_ALLOW`, `UNKNOWN_LINT_ALLOW_CODE` | warning | a coarse allow on a code that names sites, an allow naming an error, or an allow naming a retired code | one allow per site (`at:`); delete the rest |
+| `UNUSED_COMPONENT`, `UNUSED_METHOD` (on a Portal) | warning | Portals are no longer automatic reachability roots: a verb that no modelled caller reaches and that is not declared an entry | model the caller, declare the entry for real outside callers, or remove the verb |
+| `MISSING_PORTAL_TRANSPORT` | error | a Portal states no `transport` (was `MISSING_PORTAL_TYPE`) | `doctor --fix`, or state it |
+| `ENTRY_ON_NON_PORTAL` | error | `invokedBy: { kind: entry }` on a method of a non-Portal | use `kind: runtime` |
+| `GATEWAY_BYPASSED` | error | inside a declared network, a non-gateway Portal is entered from outside, or a modelled call crosses into the network onto a non-gateway | enter through the gateway, or mark the Portal `variant: gateway` |
+| `LIBRARY_CALL_IMPURE` | error | pure or read logic calls a library verb whose `effect` it may not reach (an undeclared effect counts as impure) | declare the verb's `effect`, or move the call into a workflow |
+| `LANGUAGE_BRIDGE_MISSING` | error | a native `InProcess` library (no `abi`) is called from a project in another `targetLanguage` | declare `abi: c` or `abi: wasm`, or put a network Portal in front |
+| `IMPLEMENTS_MISMATCH` | error | an interface that `implements` an extension point misses one of its methods or changes a signature | state every method with the same signature |
+| `ENTRY_SCOPE_NOT_NETWORK`, `INVOKED_BY_RETIRED_KIND` | warning | an entry `scope` on a local or in-process verb, or an `invokedBy` kind `external` / `sibling-subsystem` (read compatibly for one release) | drop the scope; `doctor --fix` for `external`, model the caller for `sibling-subsystem` |
+| `ENTRY_UNPROVEN`, `EXPORT_BEYOND_NETWORK` | warning | family run: a `network` entry no modelled caller in its boundary reaches; a network verb exported beyond the project that is not the outermost gateway entered from outside | model the caller (or a reasoned `lint.allow` for an unmodelled one); narrow the audience or export the gateway |
+| `UNTYPED_SEAM`, `UNREALIZED_CLAIM`, `UNCONDITIONAL_CALL_CYCLE` | warning | existing rules now see bare types nested in a published method, "persistence" claims, and cycles through parallel, `doWhile` and `try` steps | follow the message |
+| † `CALL_STEP_UNREALIZED` | warning | a call step (or declared call) does not land in the target method's own source file; a same-named function elsewhere no longer counts | fix the call or the target's `sourcePath`, or map it with `symbol` |
+| † `CALL_ORIGIN_UNRESOLVED`, `METHOD_BODY_NOT_FOUND`, `UNDECLARED_COLOCATED_CALL` | warning | a call site the analysis cannot follow, a declaration without a body, or an undeclared call between components sharing a file | point at the body, narrate or declare the call |
+| † `UNREALIZED_PARAM`, `UNDECLARED_PARAM`, `PARAM_NAME_MISMATCH`, `PARAM_OPTIONALITY`, `PARAM_TYPE_MISMATCH` | warning | contract `params` and the realizing function disagree on a parameter, its name or its optionality, or a record parameter is typed so it cannot hold the record (`any`, `unknown`, a partial object) | fix either side; declare wiring arguments in `injectedParams` |
+| `ENDPOINT_STATUS_MISMATCH` | warning | an endpoint states a status no client library names (`299`), a 204/304 on a verb answering a value, or a redirect on a verb answering a record | state the status the answer allows, or change the answer |
+| † `ASYNC_MISMATCH` | warning | an `async` returns and the function disagree | fix either side |
+| † `UNDECLARED_EXPORT`, `UNREALIZED_EXPORT_HANDLE` | warning | a file exports a name no contract declares and another component imports it, or a declared `exportedVia` names a missing export | put the name on a contract, or stop exporting it |
+| † `IMPORT_BYPASSES_PORTAL` | warning | an import into another subsystem lands on a file that realizes none of its published components | import through the portal |
+| † `MISSING_TYPE_SOURCE_PATH` | warning | a type names no `sourcePath`, so its shape is never compared with the code, and its subsystem already has code (a notice before that) | name the file that declares the type (`symbol` when the code name differs) |
+| † `TECH_LEAKAGE_IN_CODE` | warning | now also fires for a technology written by its plain name: common packages are known by default (`postgres` covers `pg`) | move the import behind the component that binds the technology |
+| `EXTERNAL_UNPINNED` | error | a declared external was never pinned (the project's gate composed with its externals, and the family root); `wairon lock` refuses until it is | `wairon externals pin` |
+| † `RETURN_TYPE_MISMATCH` | warning | a realizing function (TypeScript or Python) is annotated to return something the contract's `returns` cannot hold | fix the code, or restate the contract (a design change) |
+| † `UNDECLARED_PUBLIC_MEMBER` | warning | a public method, exported function or exported class of a realizing file that no contract, `symbol`, `exportedVia`, router or type declares, and nothing in the project uses | declare it, make it private, or remove it |
+| † `UNDECLARED_DEPENDENCY` | warning | now also fires when a component imports a Portal that depends on it and calls it: the import runs against the declared edge, and only a Portal mounted onto its host without calling it is forgiven | remove the import, or declare the collaboration |
+| † `UNNARRATED_CALL` | warning | a method narrated at call level calls a contract method of a collaborator its narrative names, with no step for that call | narrate the call, declare it in `calls`, or remove it |
+| † `ROUTES_UNCHECKED` | warning | a Portal's files hold a router or route table that no `router:` names, so its routes are never compared with the design | name the router on the Portal implementation |
+| `REMOVABLE_FORWARDER` | warning | an Orchestrator only passes calls on, and every caller could make the call itself | remove the hop, or keep it with a reasoned `lint.allow` |
+
+Code-conformance findings can be recorded as classified debt in
+`rules.conformance.carried` instead of being allowed.
+
+**Planned code is a notice.** `MISSING_SOURCE_PATH` is now a notice (it was a
+warning), and a named file that does not exist yet is the new notice
+`SOURCE_FILE_PLANNED`, while the implementation's realization has not begun (no
+file it names exists). Once it has begun, `MISSING_SOURCE_FILE` (error) and
+`SIM_FILE_MISSING` (warning) apply as before. A design-only tree therefore
+passes `--ci`. `rules.conformance.requireCode: true` reports both notices as
+errors.
+
+**Retired codes** (an allow naming one is `UNKNOWN_LINT_ALLOW_CODE`; a severity entry naming
+one does nothing):
+`ARCHITECTURE_VIOLATION_SPECIALIST_DEP`, `GATEWAY_CONTAINMENT`,
+`LANGUAGE_FOREIGN_BUILTIN`, `NAMESPACE_SHADOWING`, `CROSS_TREE_REF_UNRESOLVED`,
+`SURFACE_STALE`, `UNVERIFIED_EXTERNAL_REF`, `CHAINED_SUBPROJECT_CONTEXT`, and with the
+reachability model `UNMOUNTED_PORTAL`, `ENDPOINT_OUTSIDE_MOUNT`, `MOUNT_TARGET_NOT_PORTAL`,
+`PUBLIC_INTERFACE_TYPE_MISMATCH` and `PUBLIC_INTERFACE_EVENT_MISTYPED`.
+`MISSING_PORTAL_TYPE` is renamed `MISSING_PORTAL_TRANSPORT` (`doctor --fix` rekeys an
+allow or severity naming it). Two notices are new: `MULTIPLE_GATEWAYS` and
+`ENTRY_SCOPE_UNBOUNDED` (a `network` scope with no declared network around it). The built-in
+rules are split into smaller named rules (40 → 115); a split rule kept its codes.
+
+#### Spec, configuration and lock
+
+- `UNCONSUMED_TOPIC` and `UNSOURCED_SUBSCRIPTION` are sited at their topic. An
+  existing whole-spec `lint.allow` for them no longer covers them: write
+  `at: <topic>` on it.
+
+- **`project.yaml`** gains `id` (written by `init` and `doctor --fix`), `members`,
+  `externals`, `composition` (`requirePolicies`, `requireApprovedMembers`),
+  `execution`, `previousIds` and `partOf`. `rules` gains `materializeAgentFiles`,
+  `complexity.*` thresholds and `conformance` (`sourceRoots`, `exclude`, `unclaimed`,
+  `carried`, `testRoots`). `aiGuide` is gone; it was never read. A save keeps
+  comments, unknown keys, key order and line endings, and places a new key in schema
+  order.
+- **A project's own `complexity`, `documentation` and `naming` settings override its
+  profile pack's**, as its severities already did.
+- **Reachability.** A Portal states `transport` (renamed from `portalType`; one
+  vocabulary with its endpoints, `HTTP_API` read as `HTTP`, and new `JSONRPC` for
+  JSON-RPC over stdio and `InProcess` for a library, which binds no endpoint), an
+  optional `abi` (`c`, `wasm`) when `InProcess`, and an optional Portal-level
+  `invokedBy` entry its verbs inherit. Component `mounts` are gone; a Portal's L4
+  `router` names the router entry its file exports (linkage, outside the approval).
+  `invokedBy.kind` is `entry | runtime` with a `scope` (`outside | network`); `external`
+  and `sibling-subsystem` are retired. The export kind (`type`) on L1 and L0
+  `publicInterfaces` entries is derived from the backing Portal, no longer authored;
+  an entry may carry `role: implement`, and an interface may declare `implements`.
+  The method `effect` vocabulary gains `none` and `io`. `project.yaml` gains
+  `network`, which enters the gate identity only when declared.
+- **Naming follows the target language.** A method's casing defaults from
+  `targetLanguage` (camelCase for TypeScript and Java, snake_case for Rust and
+  Python) unless `rules.naming` sets it, and the rename tools validate a new name
+  against it instead of always requiring camelCase.
+- **Design export format 2.0.** `components[].portalType` is `transport`, `mounts` is
+  removed, a Portal may carry `abi` and `invokedBy`, `invokedBy` kinds are
+  `entry | runtime` with a `scope`, and export entries carry `role` and a derived
+  `type`. The schema ships as `schemas/design-export-2.json`. Surface snapshots
+  carry each entry's `transport`, `abi` and `role` and the producer's
+  `targetLanguage`; a pin taken before reads the absent fields as unchanged.
+- **Specs:** `Specialist` and `Gateway` retire. Type positions follow the grammar.
+  `lint.allow` gains `at` and `covers`, and `sdd_update_spec` merges allows by code
+  and `at`. A method effect can be `lifecycle`. An L1 subsystem carrying
+  `projectPath` is a deprecated form.
+- **Lock record format 3.** It adds `members` (alias → project, approved state),
+  `code` (the conformance results beside the claim), `projectId` and one digest per
+  spec. `children` is read for one release and never written.
+  - The per-spec digests and the gate identity read each spec's **design**
+    (`specsReading: design`). Code linkage is left out: `sourcePath`, `symbol`,
+    `exportedVia`, `simPath`, `injectedParams`, conformance tiers, a Portal's `router`,
+    `externalLinks`, and the `createdAt`/`updatedAt` timestamps. Linking code to an
+    approved design, or a change and its revert, never stales a lock.
+  - A format-2 record from an earlier v6 build still passes while unchanged, and
+    `doctor --fix` re-expresses it (upgrade step 9).
+  - The **gate identity** is computed differently. It no longer depends on the
+    machine, and it now also covers the governing doctrine, the pinned contracts,
+    `composition` and the members' approvals. Code findings are recorded beside the
+    approval instead of inside it.
+  - So every v5.1.0 lock reads stale once, and `lock-check` says why.
+  - `lock` never rewrites spec `status`. A spec that is approved and unchanged is
+    judged as complete in memory.
+
+#### Hosted
+
+- `wairon host doctor --fix` is required (step 2). Every member of a hosted family
+  becomes a project record that inherits access through its parent. An explicit
+  "no" on a member's own record beats any inherited grant.
+- **Writes are judged per member and per subsystem.** A spec write into a member, or
+  a subsystem, that the caller may not write is refused with `SubsystemWriteDenied`,
+  even when the caller may write the parent.
+- **A hosted lock is an approval.** It needs `approval:decide` over the project on
+  every surface (MCP, the admin API, the web UI, `wairon lock` while attached). A
+  person who may write the whole project but holds no `approval:decide` now gets a
+  pending approval request for someone else to decide, where they used to lock
+  directly. The web Lock button makes the same decision as the MCP tool: it locks
+  for someone who may approve, and for a writer it creates the request and says
+  "Approval requested; someone with approval rights decides it". The admin API
+  still refuses a caller who may not approve. Grant `approval:decide` to the people
+  who approve designs.
+- **Promote is removed:** `wairon host promote`, `sdd_host_promote_project`, the
+  admin and web promote routes, the `project:promote` approval kind and the Promote
+  button. Stored `promote:mark-ready` grants still migrate.
+- **Token mint requires its project list** (`*` for the owner's full reach). A token
+  qualified `project::member` is mapped to the member's record id. The mint answer
+  is `{ token, mapped }`.
+- **Admin API answers:**
+  - Policy-governed project creation (`POST /web/projects`, the policy portal's init,
+    an approved init) answers a `GovernedProjectCreation` (`record`, `packImpacts`,
+    `profileImpact`); read the record from `record`.
+  - A refused lock answers 409.
+  - A lock request whose design moved after it was requested ends `cancelled`, with
+    the reason.
+  - `environment` is no longer part of a project-init request.
+- **Defaults and values:**
+  - A landscape entry with no audience is `instance` (it was `public`).
+  - The exposure, audit and quota settings offer only the values that behave
+    differently: `adminApiMode` is `disabled` or `enabled`, `metadataMode` is `none`
+    or `redacted`, and quota `mode` is `observe` or `warn`. Stored retired values are
+    mapped with a warning for one release.
+- **Git backing commits `.wai/lock.json`**, so an approval reaches the bound remote.
+- A member with a `../` or git source is refused on hosted (hosted roots are
+  isolated). A hosted detach or adopt moves the member's directory.
+
+### Deprecated
+
+**Removed right after v6.0.0.** Each is still read in v6.0.0, reported as a notice,
+and rewritten by `wairon doctor --fix`:
+
+- a leading `::` (`::shared::error-type`);
+- `super::`;
+- member paths (`billing::invoice::invoice_portal`);
+- the L1 mount form (a subsystem carrying `projectPath`);
+- the hosted token qualifier `projectId::alias` (mint by record id).
+
+**Read for one release:**
+
+- the long-form member `path` key (`doctor --fix` rewrites it to the one location
+  key);
+- `children` in a lock record;
+- `generate --no-recurse` and `lock --no-recursive` (accepted and ignored);
+- a pack's `languages.<id>.foreignBuiltins` (`PACK_FIELD_DEPRECATED`);
+- the retired hosted settings values.
+
+`wairon packs` remains a deprecated alias of `wairon pack`.
+
+### New
+
+**The code gate closes the holes the release QA found, and says what it checked.**
+A release QA seat changed realized code one way at a time and found ordinary
+mismatches passing with "All checks passed". Each is now caught, and `validate` says
+how much of the code it read. Each new code is a **warning, so `validate --ci` can
+newly fail** on code that passed before:
+
+- **`RETURN_TYPE_MISMATCH`** (new): a function annotated to return a type its
+  contract's `returns` does not describe is reported on that method, naming the
+  contract's type and the code's. Before, a changed return type surfaced only on a
+  caller whose own port no longer matched (`UNREALIZED_DEPENDENCY` "the declared edge
+  is stale", `CALL_ORIGIN_UNRESOLVED`). Those caller findings are no longer reported
+  on their own: they are held under `RETURN_TYPE_MISMATCH`, which says so, and are
+  judged again once the return is fixed. Not compared: a contract returning void, a function registering
+  the method's handler, a void handler writing through an injected response handle,
+  an unannotated body, and a type the design does not know.
+- **`UNDECLARED_PUBLIC_MEMBER`** (new): a public method of a component's realizing
+  class, or a function or class its file exports, that no contract declares and
+  nothing in the project uses (no call in its own file, no other file, no test). A
+  class counts as used when its own file names it outside its own body (constructed,
+  extended, annotated with, `instanceof` / `isinstance`, passed on); its own static
+  factory does not count. Before,
+  `UNDECLARED_EXPORT` fired only once another component imported the name. Exempt:
+  constructors, accessors, fields, static, private, protected, `#private` and
+  underscore-prefixed members, `override`, computed names, language protocol and
+  framework lifecycle hooks, Python dunders, test files, and `conformance: off`.
+- **`UNNARRATED_CALL`** (new): a method whose narrative is at `full` or
+  `calls-only` detail (or that declares its calls) calls, in its own body, a verb of a
+  collaborator the narrative names that no step names — the forward twin of
+  `CALL_STEP_UNREALIZED`. A collaborator reached through a port (a planned one, or
+  another project's) counts as the component its narrated calls go to.
+- **`ROUTES_UNCHECKED`** (new): a Portal binding HTTP endpoints whose files hold a
+  router or route table its implementation never names in `router:` was a standing
+  `ROUTER_UNDECLARED` notice; it is now a warning naming each spelling `router:`
+  accepts. `ROUTER_UNDECLARED` stays a notice only where the files hold no router: the
+  Portal is then read as served method by method, and an undeclared handler method is
+  `UNDECLARED_PUBLIC_MEMBER`.
+- **Python is judged, not only read for method names.** A signature reader (no
+  interpreter, no dependency) reads each `def`: parameter names — compared in
+  snake_case, so the contract's `documentId` is the code's `document_id` — their
+  annotations and return annotations, class members, imports and call sites. A
+  renamed parameter is `PARAM_NAME_MISMATCH` (and the rest of the parameter checks),
+  a changed return annotation `RETURN_TYPE_MISMATCH`, an import of another
+  component's module the design does not list `UNDECLARED_DEPENDENCY`, an extra
+  public method or module function `UNDECLARED_PUBLIC_MEMBER`, and an unnarrated call
+  through an annotated collaborator `UNNARRATED_CALL`. Python gains a type dialect;
+  briefs give its mapping without the "mapping only" line.
+- **An import that runs against a Portal's call edge is `UNDECLARED_DEPENDENCY`.**
+  The reverse import a declared edge forgives is the mounting shape: a server's file
+  importing the Portal that depends on it, to serve it. That was forgiven for any
+  component the Portal depends on, so an Orchestrator importing the Portal that calls
+  it passed silently in Python and showed in TypeScript only as `UNDECLARED_EXPORT` on
+  the Portal's file. A Portal that calls a component (a narrative call or dispatch
+  step, a declared call or a dispatch-table binding) is now that component's client:
+  its import back is `UNDECLARED_DEPENDENCY` on the importer, naming the edge it
+  inverts, and it no longer realizes the Portal's own edge. `UNDECLARED_EXPORT` now
+  also names the files that took each name, not only the file that publishes it.
+- **What was checked is said.** The code-reading line (`validate`, `sdd_validate_tree`)
+  now names, per language, the grade and the checks it ran and did not
+  (`python: 4 file(s) at grade pattern with its signature reader, checked methods,
+  params, returns (where annotated), public members, imports, calls through declared
+  receivers — not checked: routes, data types`); a family run prints it per project,
+  and the closing line repeats it in a few words (`Code checked: …`). Routes are read
+  only out of a router a Portal names, so a language whose code realizes an HTTP
+  Portal naming no router says `routes where a router is named` and counts those
+  Portals among what it did not check.
+- **Still not checked**, and said in that line: calls made inside helpers and calls to
+  collaborators a narrative never names (the detail dial lets a narrative summarize
+  them; a collaborator the design does not list at all is `UNDECLARED_DEPENDENCY`);
+  Python routes and data shapes; a declared Python dependency that no import
+  realizes; languages other than TypeScript, JavaScript and Python beyond method
+  names. Static methods are exempt from `UNDECLARED_PUBLIC_MEMBER`, and a verb some
+  other code mentions by name counts as used.
+- wairon's own tree carries what the new checks measured in it as drift in its
+  conformance debt register: 29 narratives that leave out a call to a collaborator
+  they narrate, and 6 contracts whose `returns` the code no longer matches. Three dead
+  exports they also found were removed.
+
+**Forwarders: required or removable.**
+
+- New warning `REMOVABLE_FORWARDER`. An Orchestrator whose every narrated method
+  only passes the call on is reported when every modelled caller could legally
+  call the forwarded target itself. Legal is the doctrine rules' own verdict on
+  that edge, including a pack profile's `allowedEdges` and `forbid-edge`
+  assertions, so a forwarder doctrine requires is never reported: Portal →
+  Orchestrator → Adapter, or a Portal in front of a write.
+- **This can fail `validate --ci` on an existing project** that has such a
+  forwarder. Two ways out: keep it on purpose with a `lint.allow` for
+  `REMOVABLE_FORWARDER` and a reason on the component, or set
+  `rules.sddRuleSeverity.REMOVABLE_FORWARDER` in `project.yaml` (`notice` keeps it
+  visible without failing CI). Or remove the hop.
+- `ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP` on a Portal → Adapter edge now says
+  why: the Portal goes through an Orchestrator, which is where the two shapes are
+  translated. The wording for the other targets is unchanged.
+
+**Reachability, networks and libraries.**
+
+- Every Portal verb is reached by a modelled caller or declared an entry, and the
+  unused-component and unused-method findings now name both remedies for a Portal.
+  A Portal-level entry covers every verb; a verb may override its scope.
+- **Networks.** `network: true` (or `{ description }`) in `project.yaml` makes a
+  project and its members an isolated network. Entries are scoped `outside` or
+  `network`, relative to the innermost network, so a member written alone still
+  resolves them. Inside a network only a `gateway` Portal is entered from outside,
+  one gateway per level. The family run at the root proves each `network` entry has a
+  modelled caller inside its boundary. A project that declares no network sees none
+  of this.
+- **Libraries.** An `InProcess` Portal is a library (or, with `abi`, an FFI, DLL or
+  WebAssembly surface) and needs no endpoint. Another project calls its exported
+  verbs directly from any component, with no client Adapter, checked for purity and
+  for the language bridge.
+- **Extension points.** An export entry with `role: implement` is a contract
+  consumers supply (a trait, a callback, a webhook); a consumer's interface declares
+  `implements: alias::name`, and its methods count as reached.
+- **Derived networking.** `wairon network flows | policy | diagram | check | why`
+  derives an allowed-flows matrix (JSON, CSV or Markdown), Kubernetes
+  `NetworkPolicy` from a bindings file kept outside `.wai/`, a Mermaid diagram of the
+  networks as trust boundaries, a comparison of observed live flows, and the
+  modelled chain behind one flow. The specs never hold an address. The MCP server
+  adds `sdd_get_network_flows` and `sdd_explain_flow`, and the hosted web API adds
+  `GET /web/projects/network`. See `docs/network.md`.
+- **CI at the family root.** A member validated alone says in one line that its
+  network proofs are judged at the family root. The reusable `lock-check` workflow
+  gains a `validate` input (default `true`) that runs `wairon validate --ci` in its
+  `working-directory`.
+- `wairon doctor --report reachability` prints the reachability migration's plan.
+
+**Members, parts and projects.**
+
+- A member is declared by one location key: `scheduler: services/scheduler`,
+  `admin: ../admin`, `payments: git@host:acme/payments.git#<commit>` or
+  `hosted:<id>`. Its content decides whether it is a project (it has an id, an L0 or
+  a lock) or a part (anything else).
+- A part's subsystems are the parent's own: same ids, same lock, same agents.
+- Git members are fetched at their pinned commit into an offline-capable cache
+  (`WAIRON_CACHE_DIR`). `wairon member update` moves the pin.
+- A part stored outside its parent can pin the excerpt of the parent it uses, so its
+  own CI can validate it alone.
+
+**Cross-project references.**
+
+- `project.yaml` `externals` declares the projects a project consumes. Each level's
+  `publicInterfaces` is an export table, with named re-exports, type exports and
+  wildcards.
+- `wairon externals pin | status | list` records and compares exactly what is used,
+  at signature level. `use` imports bring in bare names.
+- `validate --family` (and `sdd_validate_tree` with `family`) runs every member's own
+  gate and composes each external against its live producer.
+
+**Family migrations.** `member attach | detach [--widen] | adopt | rename-alias |
+internalize | promote | demote`, `project rename` and `subsystem externalize` print a
+plan, ask, then apply to every project they touch, or to none. Each has an MCP tool
+with `dryRun`. A rename keeps the old id in `previousIds` and asks for a re-lock
+(`PROJECT_ID_RENAMED`).
+
+**Approval.**
+
+- `wairon lock-check` checks that the design in the tree is the approved design, and
+  comes with a reusable workflow.
+- `wairon status` names the specs that changed since approval.
+- `lockedBy` records where the identity came from (`git`, `os` or `hosted`).
+- A parent can require approved members (`composition.requireApprovedMembers`).
+
+**Packs.**
+
+- A machine-wide pack store with versions (`pack install | uninstall | which`).
+- Per-project selection (`pack use | unuse`, `--pin`, `--source`, `--bundle`),
+  `pack sync` and `pack bundle`.
+- `pack impact`, also `sdd_pack_impact` and hosted previews: what a pack changes,
+  before it is written.
+- Parent requirements: `composition.requirePolicies`, judged by `POLICY_NOT_ADOPTED`
+  and `POLICY_DEVIATION`.
+- `applyByDefault` seeds a pack into new projects. A pack's `instructions` and skills
+  that extend a built-in skill reach the connecting agent.
+
+**Types and contracts.**
+
+- One neutral grammar: ten primitives, `list` / `set` / `map`, `T?`, `async T` and
+  `result<T, E>`. It reaches OpenAPI, the ERD and the snapshots, and implementer
+  briefs carry each language's mapping.
+- New type kinds: `enum`, named scalars (`holds`) and `signature` types.
+- A method's signature text is derived from its `params`, and `signatureFrom` names
+  the method or signature type it forwards.
+- Contract methods declare their `findings`, and a method can name its own
+  `sourcePath`.
+
+**Code ↔ spec.**
+
+- Calls are checked where they land, and parameters, exports, type shapes and routes
+  are compared against the code. Route coverage reads a Portal's routes from its L4
+  `router`.
+- `rules.conformance.sourceRoots` reports `UNCLAIMED_SOURCE_FILE` for code no spec
+  names.
+- A type can claim its file (`sourcePath`, `symbol`).
+- A method's `calls` declares what it calls when its narrative shows no steps.
+- `register` steps and `invokedBy` (`entry` on a Portal, `runtime` anywhere) declare
+  callers outside the modelled graph.
+- `rules.conformance.carried` holds classified debt.
+
+**Design blocks.**
+
+- Logic is an Orchestrator with `dependencyClass: pure | read`.
+- Query is a Repository member, and a Supervisor may own its own state.
+- Built-in variants: `arbiter`, `projector`, `composer` and `codec` on Orchestrator,
+  and `gateway` on Portal.
+- A `publicInterfaces` entry can name its `consumers`.
+
+**Readability checks.** Narrative complexity, naming discipline and method cohesion,
+each with configurable thresholds.
+
+**Authoring.**
+
+- Rename and move tools: `sdd_rename_component`, `sdd_rename_method`,
+  `sdd_rename_type` and `sdd_move_methods`. A move that a rule refuses ranks the
+  legal homes. A rename leaves a trace (`previousIds`, `previousNames`) and keeps
+  published names.
+- Creates take a `status`, `sdd_get_spec` can return chosen `methods`, and
+  `sdd_update_spec` takes `dryRun` and `unset` and reports `ineffective` keys and
+  `testsToRevisit` (`rules.conformance.testRoots`).
+- A write is refused when it would place a field its component type cannot have.
+
+**Agents.**
+
+- Agents are **live briefs**, through `sdd_get_agent_brief`, the `wairon-agent://`
+  resource and `wairon agent brief`. Agent files are opt-in
+  (`rules.materializeAgentFiles`), and `wairon agent customize` adds your own
+  guidance in `.wai/agents/<id>.md`.
+- The new `sdd-delegate` skill spawns a subagent from a brief.
+- Execution budgets (`execution.tier`, `wairon execution show | set-tier`) give
+  each agent a capability tier, a turn ceiling and a tool class.
+- The MCP server sends `instructions` on connect and offers the skills as prompts.
+
+**Code linkage and live drift.**
+
+- Code linkage is outside the approval (lock format 3), so planned `sourcePath`s
+  are declared at design time. Briefs fence planned files, marked
+  `(planned — create it)`, simulation harnesses and the subsystem's type files.
+  `rules.conformance.requireCode` makes unlinked and planned code an error.
+- Plain `validate` and `status`, `sdd_validate_tree` and `sdd_get_status` compare
+  each external with its **live** producer, offline, and report what moved as
+  advisory findings (`advisory: true`): `EXTERNAL_LIVE_INCOMPATIBLE` (warning) names
+  each moved member, the specs that use it and the fix; `EXTERNAL_DRIFTED` and
+  `EXTERNAL_LIVE_UNCOMPARED` (notices). They never decide `valid` or `--ci`: the pin
+  stays the gate. `wairon externals status` is the opt-in live gate.
+- A rename reads as a rename. The surface projection, the pin snapshot and
+  `wairon surface export` carry the producer's rename trace as `formerly`, outside
+  every digest, so no existing pin moves. A used name that was renamed is `renamed`
+  with `renamedTo`, and `EXTERNAL_INCOMPATIBLE` and `EXTERNAL_LIVE_INCOMPATIBLE`
+  say "renamed to X".
+- `wairon externals add` and `sdd_add_external` declare an external: one-sentence
+  refusals, a check against the producer it reaches (a contradicted declaration is
+  removed again), and a pin by default. `sdd_get_externals_status` returns each
+  external's `health`.
+
+**Severity `notice`:** reported everywhere, never a failure. Any code can be set to
+`notice` in `rules.sddRuleSeverity`.
+
+**Design export.** `wairon export` and `exportDesign()` produce the whole resolved
+design as one deterministic JSON document (`wairon-design` 1.0,
+`schemas/design-export-1.json`, `docs/design-export.md`).
+
+**Moving between local and hosted.**
+
+- `.waitree` archives.
+- `wairon remote push | pull | attach | detach | status`.
+- `wairon login | logout`.
+- `wairon mcp install --hosted`.
+- Hosted tree export and import, also from the web Transfer tab.
+
+**Hosted.**
+
+- Access rules per subsystem.
+- A permission explanation (`/web/admin/permissions/explain`).
+- Relation health on the canvas and on the project's Relations tab.
+- Member crumbs and openable member nodes.
+- A custom theme builder.
+- `WAIRON_AUDIT_POLICY` and `WAIRON_QUOTA_POLICY` set the audit and quota policies.
+
+**Approval and upgrades.**
+
+- A spec's `status` (draft, design, complete) is readiness, not design: it is left
+  out of the approval, so promoting a spec after the lock never reopens it. A lock
+  taken while status was still part of the approval keeps passing when only a
+  status moved, and `wairon doctor --fix` carries it into the current reading.
+- `wairon doctor --fix` re-expresses an older lock record before any repair touches
+  a spec, so an unchanged tree is carried into the current format even when the
+  rules it was judged under moved. A lock whose specs are unchanged but that no
+  longer matches now says why: the gate moved (a newer release's rules, the rule
+  tuning, composition, network, consumed contracts or a member's approval), never
+  the design.
+
+**Code conformance.**
+
+- A call through an injected collaborator whose type comes from a component the
+  caller never declared is an undeclared dependency even when the type is imported
+  type-only. A Portal calling a write or lifecycle method of a data component that
+  way is `PORTAL_WRITE_SHORTCUT_IN_CODE`, the code twin of `PORTAL_WRITE_SHORTCUT`.
+- Importing a technology's package (one of its declared tokens) from a component
+  that does not bind that technology is `TECH_LEAKAGE_IN_CODE`.
+- An Adapter's call step to a verb of a Portal on an out-of-process transport is
+  the link the design models: it is no longer resolved to the remote file, so it no
+  longer reads as an unresolved call. The call to the Adapter is still checked.
+- `CONFORMANCE_DEGRADED` says what is missing: no TypeScript installed, or one that
+  ships no JavaScript compiler API (TypeScript 7). A project's TypeScript 7 is
+  passed over for a usable compiler where one can be found.
+- An Adapter's `dependsOn` to a Portal on an out-of-process transport is realized
+  by the link, never by an import, so it is never `UNREALIZED_DEPENDENCY`. Nothing
+  asks for an import across a network boundary any more.
+- A call is followed through a non-null assertion, a cast to a named type, a local
+  alias of a field and a destructured field exactly as through the field itself, so
+  those forms no longer hide `PORTAL_WRITE_SHORTCUT_IN_CODE` or
+  `UNDECLARED_DEPENDENCY`. A Portal's call through a receiver the analysis cannot
+  follow, under the name of a nearby data component's write, is reported as the
+  notice `PORTAL_CALL_UNRESOLVED` instead of passing silently. A field typed
+  `T | null` or `T | undefined` is read as a `T`.
+- Interfaces declared in a shared contracts file are followed to the classes whose
+  `implements` clause names them, wherever they live, so the layout no longer
+  breaks call tracing.
+- `TECH_LEAKAGE_IN_CODE` knows the common packages of common technologies
+  (postgres, mysql, redis, mongodb, sqlite, kafka, rabbitmq; an HTTP client is never
+  a technology). The table is documented and extended per technology by
+  `{ name, matches }` or by a pack's `technologyPackages`. A technology written
+  once as a name and once as `{ name, matches }` is one technology, with no spurious
+  `TECH_LEAKAGE`.
+- A type without a `sourcePath` is reported (`MISSING_TYPE_SOURCE_PATH`): a notice
+  before its subsystem has code, a warning after. The architect skill plans type
+  source paths with the implementations'.
+- The planned files of one implementation are one `SOURCE_FILE_PLANNED` notice.
+
+**Authoring.**
+
+- `wairon type rename-field` and `sdd_rename_field` rename a type's field and
+  respell its references. The old name stays on the field (`previousNames`) and
+  shows as `formerly` in the design export.
+- `wairon method rename-param` and `sdd_rename_param` rename a contract method's
+  parameter: the old name stays on the parameter (`formerly` in the design export),
+  the signature is re-derived and an HTTP path placeholder that bound it follows.
+- A contract that implements another project's extension point takes its method
+  and parameter names from the producer: those methods are exempt from the local
+  casing rule, and `sdd_rename_method` accepts the producer's names. Per-method
+  allows for that are no longer needed.
+- A key a spec's schema does not know (for example `exports:` in the L0, whose
+  export table is `publicInterfaces`) is reported as `UNKNOWN_SPEC_KEY`, and an
+  unknown setting in `project.yaml` as `UNKNOWN_CONFIG_KEY`. The docs show how to
+  author the L0 export table.
+- The architect skill and guide aim for the smallest sound design: one standalone
+  Store for simple state, and the Repository pattern only for real lookup needs.
+
+**Briefs.**
+
+- Rust and Python briefs carry a type mapping table, marked as mapping only (no
+  analyzer reads those languages yet). A design with no code yet takes its language
+  from `targetLanguage`.
+- A consumer's brief lists the externals it uses (names, transport, abi) and adds
+  the pinned snapshot to its read paths.
+- A subsystem owner's fence includes the project's shared setup files (manifest,
+  compiler settings, crate or package root, system-level type files).
+
+**Externals.**
+
+- `wairon externals use` changes an external's imports, `wairon externals remove`
+  removes a declaration with its pin, and `wairon externals consumers` lists the
+  family projects that consume this one. MCP: `sdd_update_external` and
+  `sdd_remove_external`.
+- A re-pin refreshes every fact the snapshot carries (abi, transport, role,
+  renames), and a stale snapshot reads as drifted, never ok.
+- Export audiences: a name exported to a narrower audience than the consumer's is
+  refused with both audiences named; a `department` export is noted
+  (`EXPORT_AUDIENCE_NARROW`), and a re-export cannot widen an audience.
+- Implementing another project's trait: the producer's bare type names and
+  `alias::name` compare as one type, and a cross-project `signatureFrom` resolves
+  from the pin.
+- The methods of an implemented contract are pinned one by one, so the producer
+  renaming one reads live as "renamed to <name>".
+- A public name gone from the live producer is `EXTERNAL_INCOMPATIBLE` whether the
+  consumer pinned it or not.
+- `wairon externals consumers --search <dir>…` finds consumers outside the family,
+  and `sdd_list_consumers` gives an assistant the same answer.
+- `wairon surface diff [--against <file>] [--json]` and `sdd_surface_diff` list
+  what changed on the public surface.
+- The design export's `uses` lists every referenced name.
+- A pin taken before anything references the external says it fills on the next
+  pin. A producer that cannot be read is named with its file and error. A name
+  exported but reached by nothing is the notice `EXPORT_UNREACHED`.
+- Removing the last external also removes `externals.lock.yaml`.
+- An Adapter exported as an extension point is typed `InProcess` (pins of such a
+  producer read drifted once). `surface export --format openapi` is refused for a
+  library. Pins carry the methods and constructors of exported types.
+
+**Networks.**
+
+- The network commands judge the design through the validator first. A flow a gate
+  error sits on is refused: marked in the matrix (a `gate` column), left out of
+  every policy (and `policy` exits 1), explained by `why`, and filed as disallowed
+  by `check`. `why` also says when a callee is reached in-process (never a network
+  flow) and when a name is unknown.
+- Bindings include the Portal's `basePath`, so live checks match real paths, and
+  `check` reports disallowed flows apart from unknown ones.
+- A caller is named by its workload (its subsystem) across a project boundary.
+- An Adapter may state its transport, which must match its target Portal's
+  (`ADAPTER_TRANSPORT_MISMATCH`).
+- `wairon network declare | undeclare` and `sdd_set_network` write the network
+  declaration.
+- Migrations: promoting a member (or externalizing a subsystem into a project)
+  declares an entry on each verb the parent calls and names the topics that cross
+  the new boundary, which the family run pairs; externalizing re-roots moved types'
+  source paths; demoting removes the setup a promote wrote. `sdd_update_spec`
+  refuses a member project's spec from the root and names the member's folder.
+- Promoting (or externalizing as a project) leaves a valid tree: export entries are
+  rewritten, and source paths outside the new project become member-relative
+  planned paths. The tool route sets the new project up for its own sessions, as
+  the CLI does.
+- `network policy` and `check` resolve a renamed project's former id in bindings
+  and observed names, with a NOTE; `policy` exits 1 when a name stays unbound, and
+  notes a workload that serves verbs of different reach on one port. A project
+  rename's plan lists the binding and telemetry keys to rename.
+- Inside a member, the network commands answer from the enclosing family
+  (`--no-recursive` judges the member alone). `flows` exits 1 on a design the gate
+  refuses, and its JSON names the root project.
+- `network why` answers for subsystems with only types, member projects and
+  `alias::name` parties. `sdd_get_status` has a Network line.
+- A Portal transport change, dry run included, lists the Adapters it affects.
+
+**CLI.**
+
+- `wairon diagram` draws relation health (`--no-health` skips it).
+- `validate --all` prints every finding, with per-code totals.
+- `wairon update --channel dev`.
+- `wairon dev` is a local Canvas and Specs shell with no sign-in.
+- `wairon lock --all` lists every changed spec; a long list is otherwise
+  summarized.
+- The reusable `lock-check` workflow installs the project's dependencies (npm, pnpm
+  or yarn, from the lockfile; input `install`) before `validate --ci`, so a
+  TypeScript project's analysis runs at full grade on a fresh clone. The docs' CI
+  recipe says the same.
+
+### Fixes
+
+- **`wairon doctor`, assistant registrations:** `doctor --fix` now repairs every assistant registration that
+  `doctor` reports out of date, including a project `.gemini/settings.json` when Antigravity is a
+  target (it used to rewrite only the Claude entry). A registration that starts a different build than
+  this CLI is shown as a warning, never a check mark, and an up-to-date entry now names the build it
+  starts, e.g. `registered (starts wairon 5.1.1)`.
+- **Confirmations with no terminal:** `wairon domains remove` without a terminal now refuses with a
+  failing exit code instead of failing inside the prompt; `wairon lock` and the migration commands
+  already refuse this way, and a test now pins it.
+- **Hosted operator setup:**
+  - The shipped docs now explain how to turn on the web UI (the exposure policy's
+    `webUiEnabled`), what `requireTls` does, how the built-in administrator signs in
+    (`WAIRON_ADMIN_USER` / `WAIRON_ADMIN_PASSWORD`), how to set up single sign-on
+    (`WAIRON_OIDC_*`), and who may approve a design. `wairon serve` logs one line
+    saying whether the web UI is on and how a person can sign in.
+  - `wairon mcp install --hosted` works in an empty folder. It writes only the
+    registration, with no local spec tree or guide, and warns that the file now
+    holds a credential.
+  - A hosted lock records its gate parts, as a local lock does, so status no longer
+    reports a fresh hosted approval as an old record that needs rewriting.
+  - `wairon remote --help` no longer offers `project::subsystem`: a key is never
+    narrowed to a subsystem. A refused mint names `wairon host permission set
+    --subsystem`, which confines a person to one.
+- **Code↔spec conformance, round-4 trials:**
+  - A Portal's calls are resolved by the TypeScript type checker, so no receiver spelling hides a write to a data component any more (element access, destructuring, `.call`, a field of a dependency bag, a type alias, a barrel, `Pick<>`, a factory, `new Store()`, a port interface the Portal declares itself): `PORTAL_WRITE_SHORTCUT_IN_CODE`, plus `UNDECLARED_DEPENDENCY` on the edge.
+  - `PORTAL_CALL_UNRESOLVED` is now a **warning** (was a notice): a write-named call through an `any`/`unknown`/untyped receiver fails `--ci` instead of passing.
+  - New `UNDECLARED_WRITE_CALL` (warning): a method's code calls another component's write- or lifecycle-effect method that its narrative never claims.
+  - `TECH_LEAKAGE_IN_CODE` also reports a known technology package (e.g. `ioredis`) that no implementation binds.
+  - Constructor parameter properties count as the class's fields (no false `UNREALIZED_TYPE_FIELD`).
+  - `typescript` is now a runtime dependency: the analyzer uses the project's own TypeScript 5/6 and wairon's copy otherwise, so TypeScript 7 or no TypeScript no longer means `CONFORMANCE_DEGRADED`.
+  - A long-lived MCP server no longer keeps a stale compiler or a stale parse: both are keyed on what they depend on.
+- **Code↔spec conformance, round-5 trials:**
+  - Unowned code is read as part of whoever calls it: a function in a file no component realizes (a persistence helper module), or one that is none of its file's components' modelled methods, is analyzed as if inlined at the call site, transitively, and the finding names the path (`PORTAL_WRITE_SHORTCUT_IN_CODE`, `UNDECLARED_WRITE_CALL`).
+  - A reference to a method is a use, not only a call: a write method passed to `Reflect.apply`, kept in a `Function`-typed variable, bound, or handed on as a callback is judged like a call.
+  - A computed member on a receiver that was a data component before a cast (`(store as Record<string, fn>)[key]()`) fails closed as `PORTAL_CALL_UNRESOLVED`, naming the component's writes; the checker records the receiver's original type.
+  - An Orchestrator's unnarrated write through an unresolvable receiver (`(this.store as any).put(…)`) now fails closed too, as `CALL_ORIGIN_UNRESOLVED` (warning) — the fail-closed half of `UNDECLARED_WRITE_CALL`.
+  - A Portal calling a workflow verb (Orchestrator, Supervisor, Actor) that its narrative never names, and whose effect is not declared `read` or `none`, is `UNDECLARED_WRITE_CALL`. Declare the verb's effect, narrate the call, or remove it.
+  - Honest dependency injection is clean: `CALL_ORIGIN_UNRESOLVED` and `UNREALIZED_DEPENDENCY` accept what the type checker resolves, so a type-only `ports.ts` barrel, `export *`, a Store port declared in a shared module and a deps object typed inline no longer fail `--ci`. The import graph still accepts on its own, and is the only reading where no checker loads.
+  - A private field a getter reads is backing storage, not undeclared data (`UNDECLARED_TYPE_FIELD`).
+  - `UNDECLARED_PARAM` names an inserted leading parameter, not the declared one it pushed along, when the trailing names prove the shift.
+- **Code↔spec conformance, round-6 trials:**
+  - A computed key on a data component fails closed however the receiver or the key is cast: a key the checker types as one literal names its member by the literal's value (`const name = 'put'; (store as any)[name](…)` was silent), and a member read by a key that names no single member off a receiver that was a data component before any cast is recorded even when it is taken as a value and invoked later (`const f = store[k] as Fn; f.call(store, …)`) — `PORTAL_CALL_UNRESOLVED` in a Portal, `CALL_ORIGIN_UNRESOLVED` elsewhere.
+  - New `CALL_TARGET_PLANNED` (notice): a claimed call written through a port to a collaborator whose code is not written yet (no file its implementations name exists) is planned, not `CALL_ORIGIN_UNRESOLVED` — the first component of a service implemented from its brief no longer turns `--ci` red. It is judged as usual once the target's realization begins.
+  - An Orchestrator, Supervisor or Actor verb that declares no `effect` has it read off its own narrative, transitively: a Portal's unnarrated call to a verb that only reads is no longer `UNDECLARED_WRITE_CALL`. A verb whose narrative reaches a write still is; one nothing settles (no narrative, a dispatch step) is reported as an unnarrated call whose effect is undeclared, never as a write.
+  - A parameter whose name starts with `_` is imposed and unused, never `UNDECLARED_PARAM`: a `node:http` handler `getRoute(_req, _url, params)` realizing `getRoute(id)` is clean, and its request is no longer paired with `id`. `_id` realizing `id` is the same argument.
+  - `PARAM_NAME_MISMATCH` no longer goes quiet when the parameter's type is an external one (`stops: list<geo::coordinate>` realized as `points: Coordinate[]`): an external type answers to the name its pinned snapshot gives it.
+  - `TECH_LEAKAGE_IN_CODE` reads a technology import moved into a helper module as its importer's: unowned modules a file imports are followed transitively (the finding names the hops), as unowned code already was for calls.
+- **Approval, migrations, externals and surfaces, round-4 trials:**
+  - `wairon status`, `sdd_get_status`, `lock-check` and `lock` read one verdict: a project whose id moved since its approval (`wairon project rename`), or whose declared external was never pinned or is used beyond its pin, reads **drifted** with what it owes (`ProjectApproval.owed`) — never "approved … no spec has changed since" while `lock-check` fails. "No spec has changed since" now always says what the approval owes instead. A member in that state is `MEMBER_DRIFTED` with the reason.
+  - `PROJECT_ID_RENAMED` names the new id (it printed the display name where the new id belongs).
+  - `wairon lock` refuses a design whose external uses are not in its pin ("used now, but not in the lock") exactly as it refuses a never-pinned external — re-pin first, nothing written; `lock-check` fails on both.
+  - A storage move is no design change: a part's TYPE `sourcePath`s are read relative to the part's root like its implementations' (no more `SOURCE_PATH_ESCAPES_ROOT` after `subsystem externalize`), and every migration whose edits only move files (`member internalize` of a part included) asks for a re-lock only when the approval no longer covers the tree.
+  - `surface diff` lists every fact a consumer's pin drifts by — `abi`, transport, role, stereotype, basePath, auth, a method's effect, a type's own methods, `targetLanguage` — never prints "signature A → A" (a method whose closure type changed shape says so), and refuses an impossible comparison (no git, no committed approval) in one line, exit 1.
+  - A call to a renamed method carries "It was renamed to …" from the target's rename trace (`INVALID_TARGET_METHOD_REFERENCE`, `SURFACE_REF_NOT_EXPOSED`), as a renamed type always did.
+  - New `wairon method rename <component> <method> <new-name> [--dry-run] [--search <dir...>] [--no-pin-symbol]`; `sdd_rename_method` takes `dryRun` and `search` and answers `breaks`: the consumers (family members and found checkouts) whose specs call the method through an export. `externals consumers` / `sdd_list_consumers` report method-granular use (`uses`).
+  - `sdd_validate_tree` (and `validate --family`) at a member's root judges its network from the enclosing family — no "no declared network encloses the root" or `ENTRY_UNPROVEN` on verbs the family proves — says that its proofs are judged at the family root as the CLI does, and every per-project count is counted from the findings listed under it.
+  - `network why` reads a renamed project's former id (with a note) and, at a member's root, the member's bare names.
+  - `implements:` naming an export consumers call (not role implement) is `EXTERNAL_NOT_EXPORTED`; `sdd_update_spec` reports it on the write, dry run included.
+  - An undeclared alias in `alias::name` is `EXTERNAL_UNDECLARED` alone — no `DEPRECATED_REFERENCE_FORM` "member path" beside it.
+  - `sdd_remove_external`'s dry run answers what the real run removes (round 5 marks it a dry run); `sdd_get_externals_status` and `EXTERNAL_LIVE_INCOMPATIBLE` list a renamed name once.
+  - The externals hint no longer sends a project without members to `validate --family`.
+  - `member attach` refuses a malformed alias as `alias-invalid` (was `alias-taken`).
+  - The generated AI guide names every `sdd_*` tool the server registers and says plainly that an L4/L5 prose change re-opens the approval while code linkage does not.
+- **Identifiers, robustness and docs, round-5 trials:**
+  - Ids that are JavaScript prototype names work: `constructor` is a component, type, subsystem, member alias or project id like any other (it broke `sdd_add_component`, `sdd_add_type` and `sdd_delete_spec` with raw Node errors and was refused as a `DUPLICATE_SPEC_ID` of `function Object()`), and every registry keyed by a user id reads by own key only. `__proto__` is refused by the id grammar for every kind of id, naming why (a YAML or JSON key of that name is dropped on read); `member add __proto__` no longer says "already declared as {}".
+  - One id grammar for every kind of id: spec ids, project ids, member and external aliases, and method, parameter and field names are never empty, at most 64 characters, never start with `-`, hold no control, NUL or zero-width character and are never `__proto__`; project ids and aliases also refuse Windows device names and `super`; method, parameter and field names are ASCII identifiers that never start with a digit. `project rename con` / a 300-character id (CLI and `sdd_rename_project` dry run alike), a 300-character or digit-leading method name and a leading-dash component id are refused; `member add aux` is refused for the right reason (a device name). Display `name`s are never blank and hold no invisible character. A name-derived project id is cut to 64 characters, and one the grammar still refuses is no id (`PROJECT_ID_AMBIGUOUS`).
+  - Language-aware names: new `RESERVED_IDENTIFIER` (error) refuses a method, parameter or field name the tree's `targetLanguage` reserves for that kind — Rust, Python, Go, Java, C#, C and Kotlin keywords everywhere; TypeScript/JavaScript and Ruby keywords as parameters only, and `constructor` as a TypeScript method — naming the language and an alternative. The writers and the rename tools refuse the same names.
+  - `sdd_define_interface` (and `sdd_add_type`, `sdd_update_spec`) refuse a method, parameter or field name they introduce that `sdd_rename_method`/`rename-param`/`rename-field` would refuse — the identifier grammar, a reserved word, a duplicate, and (for a contract implementing no extension point) the tree's method casing.
+  - New `DUPLICATE_MEMBER_NAME` (error): two methods of one contract or type, two parameters of one method or two fields of one type sharing a name. New `ENDPOINT_PATH_PLACEHOLDER` (error): an HTTP path placeholder left unclosed, written twice, or naming neither a parameter of its method nor a field of a parameter's type. `RENAME_TRACE_CONFLICT` reports a method, parameter or field trace that holds its own current name.
+  - `sdd_update_spec` with `[]` clears every list, the keyed ones (`publicInterfaces`, `methods`, `fields`, `dispatch`, `lifecycle`) included — `publicInterfaces: []` was silently ignored.
+  - `sdd_get_network_flows to: <project>::<portal>` resolves the bound project's own id, and a party that names nothing is refused instead of answering `[]`.
+  - `status --subsystem nope` (and `sdd_get_status`), `diagram --subsystem nope`, `diagram --depth -1|abc` and `member add x .wai` are refused with one line.
+  - An Observer may bind a messaging technology, and its prose naming one is no `TECH_LEAKAGE` (Observer joins Adapter, Store, Registry and Index as a technology seam).
+  - `validate` ends with one code-reading line — the analysis grade and, at exact grade, the TypeScript compiler and whose copy it is (`Code read at grade exact with TypeScript 5.9.3 (wairon's own copy)`); `sdd_validate_tree` carries the same sentence in its hint.
+  - `lock` counts every draft or design spec per kind (it counted components only, and only when all were draft), and a re-run with nothing it records changed keeps `.wai/lock.json` — `lockedAt` included — untouched.
+  - The rename plan no longer prints `id: id: old → new`.
+  - Docs: `wairon method rename` (`--dry-run`, `--search`, `--no-pin-symbol`) has a cli.md section and a README row; cli.md documents the id grammar, the code-reading line and lock's draft count; the generated `.wai/context/wairon-guide.md` states "Prose is design; linkage is not".
+- **Approval, doctor, externals, surfaces and OpenAPI, round-5 trials:**
+  - An approval record that cannot be read fails closed everywhere. A `.wai/lock.json` that is empty (a BOM alone included), not JSON, JSON that is not a lock record (`null`, a string, `{"formatVersion": 99}`), or of a newer lock format is no longer read as "absent": `lock-check` (plain and `--strict`), `status`, `validate`, `sdd_get_status` and the family gates each stop with one `✖` line naming the file and what is wrong (never `Cannot read properties of undefined`), and `doctor` names it. `wairon lock` never overwrites a record it cannot read: restore it (`git checkout -- .wai/lock.json`) or delete it to approve afresh. An editor's BOM before a valid record is tolerated. **Breaking for scripts:** a plain `lock-check` that passed on a corrupt record now fails.
+  - A specs folder whose L0 (`.wai/specs/.index.yaml`) was deleted while spec files remain is an error, not an empty tree: `validate` and `validate --ci` exit 1 naming the missing file and how many spec files it leaves unjudged, and `lock-check` refuses at every strictness (it said "the spec tree is empty" / "nothing is gated", exit 0).
+  - `wairon doctor --fix` no longer records the packs installed on the machine as explicit selections in a project (or in its members) that never declared `useGlobalPacks`: that wrote one developer's home store into an approved repository, drifted the approval and asked for a pack CI could not fetch. `doctor` still lists them and names `wairon pack use <name>`. The `pinInstalledPacksAsSelections` core export and the project-config repository's `pinGlobalPacksAsSelections` write are removed.
+  - `effect` travels through `signatureFrom`: a verb whose signature comes from a contract method (this project's or another project's export) takes that method's effect unless it declares its own, so a Portal verb forwarding a pure method is pure — exports and pins carry it, and a pure consumer may call it (`LIBRARY_CALL_IMPURE` judged it "not declared").
+  - `surface diff` prints an effect that was not declared as `undeclared` (a newly declared `effect: none` read `effect none → none`).
+  - Field and parameter renames reach a consumer with their new names. A snapshot carries each field's (and signature parameter's) rename trace as `formerly`. `surface diff` lists `renamed <type>.<field> — field "zoom" renamed to "z"` instead of an anonymous shape change (the shape row stays only for what the renames do not explain), and `renamed <entry>.<method> — parameter "address" renamed to "query"` (it listed nothing). A consumer's `EXTERNAL_LIVE_INCOMPATIBLE` / `EXTERNAL_INCOMPATIBLE` and `externals status` name `field "tile_coord.zoom" renamed to "z" (its shape is otherwise unchanged) — follow the rename`, and a parameter rename is a stale fact naming the new name.
+  - A use beyond the pin is named by `validate` (and `sdd_validate_tree`, `status`): `EXTERNAL_LIVE_UNCOMPARED` (advisory notice) lists each `<name>.<member>` used now but not in the lock and that `wairon lock` refuses and `lock-check` fails until it is re-pinned. `validate --ci` still passes it — the approval is `lock-check`'s gate, which the CI recipe runs beside it. `externals status` lists such uses member by member, as `lock` does.
+  - `drifted` agrees with the health: a pinned snapshot whose carried facts moved (an `abi`, an effect, a rename trace) is `drifted: true` in `sdd_get_externals_status` and `externals status --json` (MCP said `health: drifted` beside `drifted: false`).
+  - `sdd_rename_method`'s dry-run `breaks` is narrowed to what breaks: the public names publishing the method, each with that one member (it listed the consumer's whole use of the producer), as the CLI dry run says it.
+  - Dry runs say they are dry runs: `sdd_remove_external` / `externals remove --dry-run --json` answer `dryRun: true`, `removed: false`, `unpinned: false` and `wouldRemove: {declaration, pin}` (they answered `removed: true`, identical to the real run); `sdd_add_external` and `sdd_update_external` dry runs carry `dryRun: true`. **MCP output schema:** `sdd_remove_external` gains `dryRun` and `wouldRemove`, `sdd_add_external` and `sdd_update_external` gain `dryRun` (all optional).
+  - The OpenAPI document of a project's own HTTP API: `surface export --format openapi` renders every HTTP Portal of the project, exported to other wairon projects or not (the L0 export table governs consumption, not documentation) — its default audience is now `project`; a wider `--audience` narrows it to what the table shares there, and `--portal` naming a Portal left out says why instead of "Unknown portal". The credential a Portal's auth binds (`token`, `bearerToken`, an `apiKey` named like the scheme's key, …) is no longer a required query or body parameter beside `security`; it is named under `x-wairon-credential-param`. Express-style `:name` placeholders are path parameters (`/routes/:id` → `/routes/{id}`, `in: path`), and `method rename-param` respells them in their own form. The Portal's `basePath` is part of every path (named once as `x-wairon-base-path`; the relative `servers` URL is gone). A type of a pinned external (`geo::coordinate`) renders from the pin as `geo.coordinate` instead of "Unresolved type". `info.version` is the project's declared version (package.json, Cargo.toml or pyproject.toml). The hosted demo's endpoint paths are now relative to their Portal's basePath, as the reach model always joined them.
+- **Delegation briefs and binding modules, round-6 trials:**
+  - A brief's code write fence is exact files, never a folder glob: `codeFence` holds the files its specs alone name — implementation, method, simPath and binding files, and the files of the types the agent owns (a component's: its `componentClass` types and the types only its own contracts use, so a subagent creates `Payment` at its planned home instead of copying it). A file another component's specs also name is no single fence's. `src/**` is gone, so sibling fences never overlap and parallel implementers need no hand-narrowed fences.
+  - New `sharedPaths` on the brief (and a "Shared, owned by no single agent" list in its fence section, `wairon agent brief` and the `wairon-agent://` resource): the files other components' specs name too, the module setup from the project root down to the code (`package.json`, `tsconfig.json`, `Cargo.toml`, … — a service's own manifest included, so a subagent can fix the module type its tests need) for implementers as well as owners, the package roots there and up to eight unnamed source files beside its own. The rule is stated once: touch them only for this component's needs and name each in the report; a shared or unnamed file that would need a responsibility of its own is a design change — stop and report it. **Breaking for brief consumers:** a subsystem owner's setup files moved from `codeFence` to `sharedPaths`.
+  - An implementer's `readPaths` carry the specs of the types its contracts use (and of the types their fields name), its dependencies' contracts and the files realizing them.
+  - The `gateway` variant's guidance agrees with what a gateway does: checking the credential its `auth` declares is its own admission step and may be a step of its narrative; a check needing state or policy is called (it said "hold NO verification logic" beside approved narratives that verify the token).
+  - New `bindings` on an implementation (code linkage, outside the approval; `sdd_write_narrative`, `sdd_update_spec`): the hand-written binding modules through which its code reaches another project's library. New rule `binding-modules`: `BINDING_DRIFT` (warning) compares each binding's exported declarations with the pinned snapshots of the externals the component reaches — a method or function the pin renamed (`"tile_for_coordinate" was renamed to "tile_at" in geo::tiles — follow the rename`), one it no longer exports, a parameter list whose arity or names differ (a parameter rename named), a field the pinned type renamed or lacks; `BINDING_UNREAD` (notice) for a binding not written yet, outside the root, not TypeScript/JavaScript, or whose component reaches no pinned external. A stale call into a library through a binding no longer survives re-pin, `validate`, tsc and the tests unremarked. Return types are not compared.
+  - `BINDING_DRIFT` also compares a binding into a **member** project, which is never pinned, with what the member's L0 exports now (read live in the family scan, rename traces included): a parameter or field renamed in a member (`rename-param`, `rename-field`) reaches the parent's binding at `validate` time with the rename to follow (`parameter "zoom" of "tileAt" was renamed to "z" — follow the rename`, compared "as its member project exports it now"), where before only the rename's dry-run `breaks` named that consumer. A binding whose component reaches a member is no longer `BINDING_UNREAD` telling you to pin it. The built-in rule set changes; an approval taken under the previous release carries over when the re-validation is clean.
+- **Approval, authoring, generated files, renames, surfaces and networks, round-6 trials:**
+  - Root pointer files keep your text. `wairon init`, `generate`, `lock` and `doctor --fix` write only wairon's block of the root `CLAUDE.md` (and `GEMINI.md`, `.cursorrules`, `.github/copilot-instructions.md`, `.codexrules`), between `<!-- wairon-root-start -->` and `<!-- wairon-root-end -->`; every other byte is kept, the block takes the file's line endings, and a file whose own text already imports `@.claude/CLAUDE.md` is not given a second import. `init -y` used to replace an existing root `CLAUDE.md`, and every later lock, generate or doctor --fix deleted text appended to it. A root file holding the unmarked pointer an earlier release wrote (alone or with text after it) is migrated into the marked block. `init` says it wrote into an existing file instead of "Created". A demote removes only the marked block.
+  - **Upgrading wairon no longer stales an approval by itself.** A lock records each input of its gate identity on its own (`gateParts` in `.wai/lock.json`: design, release, rules, packs, network, composition, contracts, members). When only the release's built-in design rules moved, the approved design is re-validated under the current rules in the same command: clean at the `--ci` standard it carries over, nothing written, and `lock-check`, `status`, `sdd_get_status`, `validate` and the family view say "approved under <old>, re-validated under <new>: still approved"; `wairon lock` then refreshes the record's release stamp (`restamped`) without asking for a re-approval. If the new rules find errors or warnings, the approval is stale for exactly those ("the new release finds N issue(s) in the approved design: …"), never the generic five-candidate sentence. The project's own rule tuning, packs, network and pins stay in the identity. A record from before gate parts is judged the same way when another release took it, no own spec moved and every member pin is unchanged (its own tuning and pins it can only prove inside its digest until one `wairon lock`). New on `ProjectApproval`: `release` and `inputsMoved`; new on `StateId`: `parts`; new on `LockRecord`: `gateParts`, `restamped`.
+  - The hosted project configuration view (`getProjectConfig` / `setProjectType`, the web UI's lock badge) reads the same release verdict: an approval carried over a release change reports `locked`, not `lockStale`, as `lock-check` and `status` say locally.
+  - A stale approval names the input that moved when its record carries gate parts: after `wairon network declare` the verdict says "the network declaration" (likewise the rule tuning, the packs, a consumed contract's pin, `composition`), in `lock-check`, `status`, `lock` and `MEMBER_DRIFTED`.
+  - **BREAKING (MCP `sdd_update_spec`):** a list of plain values (`owns`, `dependsOn`, `guarantees`, `previousNames`, a technology's `matches`, the L0's `globalRequirements` written as text) MERGES at every depth: values the delta names are appended when missing and every held value is kept; one is removed only by a marker element `{ "value": <v>, "action": "delete" }` (a requirement also `{ "description": <text>, "action": "delete" }`), and `[]` still clears. It used to replace the list, so one new requirement deleted the other three. A marker naming a value the list does not hold is refused. The tool's description says so (description text only, no input-schema change).
+  - The hosted web Specs editor saves list edits in that vocabulary: removing an L0 boundary or global requirement, an implementation's technology or a contract method's guarantee now sends a removal marker (it sent the whole list, which the merge kept whole, so a removal silently did nothing), and a reorder or an in-place edit removes the stored items and re-adds the list in the order shown, in one delta. A list mixing text and object items, which the server replaces whole, is still sent whole.
+  - A corrupt, empty, `null` or schema-invalid L0 with specs below it fails closed exactly like a missing one: plain `lock-check` (and `--strict`) refuse it instead of "No SDD spec tree here … nothing is gated"; `status` says it in one line, once ("The L0 System spec (.wai/specs/.index.yaml) cannot be read: …"), instead of a raw schema dump twice; `validate`'s `MISSING_SYSTEM_SPEC` names `.wai/specs/.index.yaml` and says whether it is missing or unreadable. `status` and `lock` with a missing L0 and specs below it say what `validate` says (its root is gone) instead of "not started" / "no spec tree".
+  - A lock record without `lockedAt` or a usable `lockedBy` reads "approved at an unrecorded time by an unrecorded approver", never "approved undefined by unknown".
+  - `sdd_get_network_flows` filters by a member's own party at a member root: `to: <portal>`, `<member>::<portal>` and a subsystem now return the rows the unfiltered call lands there (they returned `[]`), as `wairon network why` reads them.
+  - `wairon doctor` reports a derived context document whose content a regenerate would change as stale, not "current" because its stamp matches.
+  - **BREAKING (validate):** a tree with no `targetLanguage` is judged by the TypeScript reserved words, as it is already judged by TypeScript's camelCase method casing: a method named `constructor` or a parameter named `class` there is `RESERVED_IDENTIFIER`, and the message says the tree declares no targetLanguage.
+  - `wairon init` in a folder whose name gives no usable project id (`con`, `super`, `aux`) writes `<name>-project` as the id and says why, instead of a project.yaml with no id.
+  - `externalizeSubsystem`, `internalizeMember` and `member promote` re-base an implementation's `bindings` paths as they re-base its other file paths.
+  - `wairon method rename-param` and `wairon type rename-field` take `--dry-run` and `--search <dirs...>`, and name every consumer that breaks: the family in reach (members included) and checkouts in the searched folders. `sdd_rename_param` and `sdd_rename_field` take `dryRun` and `search` and answer `publishedIn` and `breaks`. `sdd_rename_component` and `sdd_rename_type` take `dryRun`.
+  - A parameter rename respells the HTTP placeholder (`{old}` or `/:old`) on every method whose `signatureFrom` takes the renamed method's signature, not only on the method's own binding.
+  - Rename dry runs' `breaks[].uses[].specs` name only the specs that reach the renamed member. `ExportUse` gains `memberSpecs`, which also shows in `sdd_list_consumers` output.
+  - `surface diff` / `sdd_surface_diff` count each traced rename once: a renamed method with an unchanged shape no longer also reads as a signature change, an alias respelling of another project's type is no change, and a type rename plus a field rename no longer marks every type embedding them as "type shape changed".
+  - **BREAKING (library report shape):** `ParamRename` and `FieldRename` gain a required `publishedIn` (for `FieldRename` a list of `ExportUse`).
+  - **BREAKING (validate):** new rule `ENDPOINT_ROUTE_DUPLICATE` (error): two methods bound to the same HTTP verb and path within one Portal, or across Portals declaring the same basePath; placeholders are compared by position, so `{id}` and `:code` are the same segment. The built-in rule set (part of the gate identity) changes. The OpenAPI export refuses two operations on one path and verb, naming both, instead of silently dropping one.
+  - **BREAKING (validate):** an L0 wildcard re-export whose source exports nothing is `EXPORT_INVALID` instead of passing silently.
+  - `surface export` never prints ✔ when it publishes nothing, and warns with the error count and codes when the design fails validate. Status lines go to stderr, so `surface export --format openapi > api.json` writes pure JSON. `surface diff` lists an added L0 entry that publishes nothing instead of "no change"; `--against` an OpenAPI document, or any non-snapshot file, is refused in one line instead of a raw schema error.
+  - **BREAKING (OpenAPI):** operations answer the verb's conventional success code (204 no content, 201 POST, else 200), and `result<T, E>` adds a `default` error response with E's schema. `surface import` reads any 2xx, reads 204 as void, and turns an error response back into `result<T, E>`. `auth.scheme: custom` no longer invents an `Authorization` header: it is an apiKey scheme in `auth.name`'s header when one is named, otherwise an http scheme `custom`.
+- **Approval, lock and migrations, round-7 trials:**
+  - **BREAKING (approval):** a lock record without gate parts (every record written before wairon recorded them) never carries over a change of the wairon release automatically: it cannot prove the project's own rule tuning, packs, network or pins unchanged, so a tuning change made in the same upgrade can no longer be restamped as approved. It is stale with one sentence — "Approved under wairon <old> before wairon recorded its inputs separately — re-lock once to record them; later upgrades then carry over." — on `lock-check`, `status`, `validate`, `sdd_get_status` and the family view, and `wairon lock` takes a real approval (it asks), never a restamp. Records with gate parts keep the carry-over.
+  - A member's restamp is no re-approval: `restamped` records the subject of the human approval (`restamped.subject`), and a parent's gate identity and member pin read that subject (`lock_record.approvalSubject`), so a family carries a release upgrade over at every root without a re-approval per member.
+  - A lock of an unchanged approval leaves the record on file as it is — `lockedAt`, release stamp and `restamped` trace — and `.wai/lock.json` untouched; only evidence beside the approval (code results, design counts, gate parts that are missing or do not match the identity) is refreshed, and the summary names it. Another approver locking an unchanged design is told their own approval is recorded. `wairon lock` prints "Lock record unchanged … left untouched" when it wrote nothing.
+  - A release stamp that is no wairon version, or is newer than the running wairon, is no upgrade: stale, saying "written by a newer wairon" or that the stamp is no version, never "re-validated under". A record without gate parts whose stamp claims a release that records them says its stamp was edited and an earlier wairon took it, instead of five candidate inputs.
+  - Gate parts must break down the `stateId` they sit beside: parts that do not (a part missing, a part differing while the identity matches, or no part moved while the identity did) are ignored with a notice and carry nothing over; `wairon lock` rewrites them from a still-matching identity, keeping the approval.
+  - **BREAKING (CLI `lock --subsystem`):** a scoped lock only re-approves. It is refused as a first approval (the identity a lock certifies is the whole design's), and refused whenever a spec outside the subsystem or an input besides the design moved since the approval; when it passes, the record is the one a full lock writes, so the record, the identity, `status` and `lock-check` agree.
+  - Family migrations judge each project they change on their rehearsal copy and announce every design finding the result will have that the project does not report now, as a plan note (`after attach: N new error(s) the projects it changes do not report now: …`), in the CLI report and the MCP answer alike. Both sides are judged on copies of the `.wai` trees, so planning reads no code. The copy now also holds a member the plan declares without writing into it.
+  - **BREAKING (validate):** a `signatureFrom` naming another project's export (`alias::name.method`) needs no `dependsOn` whatever the relation: a contained member is judged like a declared external (it raised `SIGNATURE_SOURCE_OFF_EDGE` only as a member). An implementer of an extension point never depends on the producer's component. Only a source inside the method's own project needs the edge.
+  - A test holds `docs/cli.md` and the `project.yaml` schema to the same settings: every documented key (`rules.conformance.requireCode`, `composition.requireApprovedMembers`, …) must be one the schema reads.
+- **Authoring tools, round-7 trials:**
+  - **BREAKING (MCP `sdd_update_spec`):** a delta is refused when it changes which spec it is or where it lives: its `id` or `createdAt`, a component's or type's `subsystem`, a contract's `component`, an implementation's `contract` (by value or by `unset`). The delta used to write a second spec under the new id (same route, same lint allows) or move the folder, leaving every reference behind, and answered "1 change". The refusal names the tool that owns the change (`sdd_rename_component`, `sdd_rename_type`, `sdd_move_methods`) and says so where none exists yet: no tool moves a component or a type to another subsystem, or renames a subsystem. A restated value is still accepted, and setting a subsystem still repairs a spec whose stored subsystem the tree does not have.
+  - **BREAKING (MCP `sdd_delete_spec`):** deletes a spec with everything it contains: a contract with its implementations, a component with its contracts, implementations and owned members, a subsystem with its components and types. It used to remove only the index file, orphan the rest and answer "Successfully deleted". A deletion that would leave a reference in a spec that stays is refused and lists every reference (the invalid references validate would report). New inputs: `force: true` deletes anyway and answers the references it left, and `dryRun: true` answers the plan and removes nothing. The structured answer gains `dryRun`, `removed` and `references`.
+  - **BREAKING (MCP authoring):** the write gate refuses the error-level design findings a write introduces: a doctrine edge between two existing blocks (a Portal depending on a Store, and the other `ARCHITECTURE_VIOLATION_*_DEP` codes) and a route another method already binds (`ENDPOINT_ROUTE_DUPLICATE`). This applies to `sdd_update_spec` (its dry run included), `sdd_set_endpoints`, `sdd_add_component` and `sdd_define_interface`. Findings the tree already had are not judged, and a code the project tuned down in `sddRuleSeverity` is reported as a notice instead.
+  - A list restated with exactly its stored elements in a new order takes that order and reports `reordered`; it used to answer "No change — the delta matches what is stored". The change report has a new kind, `reordered`. A list of plain values (`dependsOn`, `technologies`, requirements written as text) is reported value by value, so a mixed edit no longer reads as the whole list `set` and cut at 120 characters. A long text that changed is shown from just before the change.
+  - A dry run takes the write's path through the writer's schema and write checks, so it is refused exactly when the write would be. Before, `technologies: [{name: …}]` and `unset: ["vision"]` answered "would be added" or "1 change would be made", and then the write refused them. A property test checks that a dry run and a write of the same delta give the same result.
+  - `unset: ["dependsOn"]` (any list the schema defaults) reports the clearing without a contradicting `NO EFFECT … unset did not remove it`.
+  - `sdd_add_component` takes `variant`, so a gateway Portal is one call. When the input leaves it out, a stored variant is carried as before.
+  - The `sdd_update_spec` description is shorter: about 1,000 characters plus a 2,100-character `delta` description (was 1,000 plus 5,600). The server never cut it; the trial's probe printed only the first 6,000 characters of the schema.
+  - `sdd_rename_param` and `sdd_rename_field` refuse a rename back to a name the parameter or field itself retired (`name-retired`), as `sdd_rename_method` does. Before, the rename went through and the tree then reported `RENAME_TRACE_CONFLICT`.
+  - `member attach` / `sdd_attach_member` accept a sibling path with a leading `../`, as `member add` does. Any other path out of the project is still `not-contained`. `cli.md` no longer lists `sdd_add_member` and `sdd_move_member` among the tools that take `dryRun`; only the family migrations do.
+- **Surfaces, externals, binding modules and the OpenAPI codec, round-7 trials:**
+  - **BREAKING (validate):** binding modules are compared in every shape the trials met. A binding into a contained member declared under an alias other than its project id is compared with what the member exports now (it was `BINDING_UNREAD … pin it`, a pin a member cannot have); a component reaches a project through the types its contract names too, so a binding to a types-only contracts library is compared; CommonJS exports (`exports.X = { … }`, `module.exports.X = …`, the properties of `module.exports = { … }`) are read; a type the producer renamed is named when the binding still declares it, or types a field with it, under the former name; a verb the producer removed is named when the declaration is tagged to its interface (`/** geo::tiles */`, `/** geo::tiles.tile_at */`) or an earlier pin held it. New `BINDING_DRIFT` findings can fail `--ci`.
+  - `BINDING_UNREAD` says why in member terms: a member is never told to pin (one that exports nothing is told to export there), a pin is suggested only for a declared external (`wairon externals pin <alias>`), and a module that declares nothing comparable names the export forms it cannot see into (`module.exports = require(…)`). The message reads "is not compared:" (was "is not compared with any pin:"). A brief's "Externals used" names a member as a member project read live, never "not pinned yet".
+  - A re-pin records each method the producer removed since the previous pin as `retired` on the snapshot's entry, carried while the name stays absent. Provenance: no digest, carried fact or drift comparison reads it.
+  - `wairon method rename-param` / `sdd_rename_param` follow `signatureFrom`: renaming a parameter of a method a published Portal verb forwards names that Portal's exports in `publishedIn` and the consumers calling the verb in `breaks` (it answered `publishedIn: []`). Asked of the Portal verb, the rename is made on its source and `routedFrom` says so (it was refused `param-missing`); a verb forwarding another project's method or a signature type is still refused, naming the source and that a rename there reaches the verb. `ParamRename` gains `published` (method-granular, with former names) and `routedFrom`.
+  - Rename break reports keep a consumer whose reference an earlier rename already broke: a call still naming a method's former name, and a former public name it still writes, are named among the breaks (`ExportUse` gains `formerNames` and `formerMembers` on a rename's published list).
+  - **BREAKING (`surface diff`):** against a revision it covers the project's own HTTP Portals (exported or not), and every type they name from a pinned external or a member is expanded from that side's pin or member, so a re-pin that reshapes the project's own wire format is a change on the verb. A field rename keeps its row beside its type's rename (traced, or a changed public name of the same definition, which is no longer "removed + added"), and a type reshaped only by a rename it embeds is a `changed` row naming it.
+  - `externals status` / `sdd_get_externals_status` say what moved with a renamed method — each parameter renamed per its trace, each field of its closure renamed, added or removed — and never "(its signature is unchanged)" beside a parameter or answer type that moved.
+  - **BREAKING (OpenAPI):** a method whose one body param is an object type sends that object as the bare body (named under `x-wairon-body-param`, which `surface import` reads back); several body params stay the properties of a body object. A POST answers `201` only when it creates — effect `lifecycle`, or an undeclared, `write` or `io` effect with a creating name (`create…`, `add…`, `place…`, `signUp`, …) — and `200` otherwise (a cancel, an archive, a log-in).
+  - The OpenAPI export resolves a member project's types from what the member exports now, by public name, as it resolves a pinned external's, and a type nothing resolves is named in a warning instead of a ✔ (`SurfaceExportResult.unresolvedTypes`).
+  - **BREAKING (CLI `member add`):** a git producer whose L0 exports its names only more narrowly than `instance` (the audience a git member is read at) is refused with the audience reason `externals add` gives, writing nothing; a pin of a name exported too narrowly says so instead of "gone".
+- **Conformance analyzer, round-7 trials:**
+  - **BREAKING (validate, param conformance):** a parameter whose name starts with `_` is set aside only when the analyzer proves it unused (no identifier of its name in the body or another parameter's default, no `arguments`). A used `_secret` or `_apiKey` is judged like any parameter, so the one-character bypass is closed. `ParameterFact` gains `unused` and `kind`.
+  - **BREAKING (validate, param conformance):** parameters are paired in order by the best agreement (names, then declared types, then the kind of value the checker settles), ties aligned against the tail as the rule text always said. `planRoute(apiKey, req)` for `planRoute(request)` now names `apiKey`, not `req`. A paired parameter whose name differs and whose kind differs is a substitution: `getRoute(params: Record<string, string>)` realizing `getRoute(id: string)` reports `id` as `UNREALIZED_PARAM` and `params` as `UNDECLARED_PARAM`. The honest `(req, url, params)` handler draws no `PARAM_OPTIONALITY`, and the finding names the one green path: `injectedParams: [req, url]` and the contract's own parameters after them. A private dispatch table keyed by the same verb names no longer hides the published handler.
+  - **BREAKING (validate, fail-closed `any`):** class code is read like closure code. `await (this.store as any).x()` in a method that is not async, an optional (`store?:`) or `| undefined` Store field, a local alias, `(this as any).store`, a const read through its initializer and a Store typed by an interface a factory realizes all keep the receiver's original type, so the write is `PORTAL_CALL_UNRESOLVED` / `CALL_ORIGIN_UNRESOLVED`. Every string-typed computed key on a data component (`as string`, a reassigned `let`, an array element, a function result, an environment value, an index-signature variable, a `keyof` concatenation) fails closed the same way.
+  - **BREAKING (validate):** a Portal call that lands only on a port no written class realizes, under the name of a data component's write the Portal claims nowhere, is `PORTAL_CALL_UNRESOLVED` even before the Store's file exists. The finding says when the Store has no code yet. `ResolvedCallFact` gains `port`.
+  - A member of a workflow component's class that its contract does not declare is that component's code, not unowned code read as the caller's. A code-only rename (`markDone` → `complete`) is `CALL_STEP_UNREALIZED` naming the method the code calls instead, never `✖ PORTAL_WRITE_SHORTCUT_IN_CODE` blaming the Portal. A Portal calling such a member beside its narrated verbs is `UNDECLARED_WRITE_CALL`.
+  - Route coverage reads string constants, concatenations and template literals, through the type checker across modules. A prefix the router strips before splitting the path (`pathname.slice(BASE.length)`) is folded in front of its routes, and such routes are read under the Portal's `basePath`, so `BASE = '/v1/habits'` under basePath `/v1` lists no phantom routes. Route tables (an array of `{ method, path }` objects with `/a/:b` templates or anchored regular expressions, or an object keyed `VERB /path`) are read, also in the functions the router entry calls. A table with an entry that does not settle is `UNREADABLE_ROUTER`; it is never read in part. `RouteFact` gains `fullPath`.
+  - **BREAKING (validate):** new rule `CROSS_PROJECT_IMPORT_UNRESOLVED` (warning): an import, runtime or type-only, from another project's source (a folder with its own `.wai/project.yaml`) that the checker resolves to nothing, because the module is gone or no longer exports the name. A type-only import of a renamed `CustomerId` used to pass at grade exact. `SourceFileFacts` gains `crossProjectImports`.
+  - wairon's own tree: `mcp_hosting_portal.createMcpServer` and `mcp_server.create` take an `options: mcp_server_options` (new type), as the code always did, instead of `hostedTools: bool`. `authenticateMaster`'s parameter is called `credential` in the code too.
+- **Surfaces, externals, binding modules and the OpenAPI codec, round-8 trials:**
+  - **BREAKING (OpenAPI):** every exported document is valid: a component key is `<alias>.<id>` (a qualified id's `::` written `.`), matching `^[a-zA-Z0-9._-]+$`; a type is ONE component however it is reached — under a member's alias, its project id, or another producer's closure — keyed by the first alias the project is held under; and the document holds exactly the types its operations reach (it held every type of the closure, each member type two or three times, `contracts::money` keys referenced by nothing).
+  - **BREAKING (OpenAPI, schema):** an HTTP endpoint takes an optional success `status` (a 2xx or 3xx code; `sdd_set_endpoints` `status`), which the export answers with in place of its convention: 202 Accepted for work done later, a 3xx redirect (a `Location` header, no body), a 201 for a workflow verb that files something (`POST /routes/plan`). `surface import` reads a non-conventional success code back as `status` — a third-party create answering 200 now imports with `status: 200`.
+  - **BREAKING (OpenAPI):** a field or parameter typed `T?` is no longer `required` (it stays nullable), and a field's description is carried on its property (and read back by `surface import`). Error responses are unchanged: a `default` response only for a `result<T, E>`, never one the design does not state.
+  - **BREAKING (`surface diff`):** a moved endpoint is a change of the Portal verb — its path, HTTP verb or stated status (`endpoint POST /routes/plan → PUT /routes/plans`); it read "no change". Contract methods whose signatures moved only through the same renamed type or field are ONE row naming every method (`3 methods (listHabits, getHabit, archive): signatures read the same, but they name renamed types: …`), and no row is listed twice.
+  - `surface diff` no longer reports an alias respelling (`shop-platform::money` → `contracts::money`) as a change of every verb — a round-7 regression: a pinned producer's own qualified closure ids (`contracts::money` inside the platform's pin) were left in its spelling when the pin was expanded, so both sides spelled `contracts::…` differently. Every closure type is now respelled under the alias.
+  - Rename break reports follow a type through the signature closure of exported verbs to a consumer that depends on the publishing Portal as a whole (a bare `dependsOn: alias::portal`): `type rename-field`, `sdd_rename_field`, `method rename-param`, `sdd_rename_param`, `method rename` and `sdd_rename_method` named "No consumer in reach" for it.
+  - `sdd_rename_type` takes `search` and answers `publishedIn` and `breaks`, as the field and parameter renames do (`TypeRename` gains `publishedIn`). `sdd_rename_component` keeps every public name through `as`, so it breaks no consumer and takes no search.
+  - `externals consumers` / `sdd_list_consumers` mark a verb a consumer still calls on a kept public name that the contract no longer holds (`tiles.tile_for_coordinate (no longer exported)`), as the tool's description always promised.
+  - **BREAKING (validate):** binding modules are read in every CommonJS shape: `module.exports = { Client }` (shorthand), `module.exports.X = X`, `module.exports = class X { … }` / `= X`, a TypeScript `export = X` or `export = { X }` (a `.d.ts` too), and JSDoc `@typedef` with `@property` lines — a bare identifier read through the module's own declaration of it. A `_private` member of a class or object is not part of the surface (it was reported "not exported"). A `module.exports = { … }` tagged as a whole judges each untagged member against its tag, so an extra member is reported. New `BINDING_DRIFT` findings can fail `--ci`.
+  - `BINDING_DRIFT` names a renamed type a binding tags by its RETIRED id (`/** shared::customer_id */`) even when the rename kept the display name, and names the project that owns a type a member's verb answers (`shared::money`), never the member (`payments_svc::money`).
+  - The advisory `EXTERNAL_LIVE_INCOMPATIBLE` names the binding modules the using specs' implementations declare: a binding is compared with the pin, never live, so it draws `BINDING_DRIFT` once the re-pin lands — the finding now says where the code must follow before then.
+- **Conformance analyzer, round-8 trials:**
+  - **BREAKING (validate, fail-closed `any`):** a write taken as a VALUE off an opaque receiver and invoked later (`const f = (this.plans as any).save; f(x)`) is `PORTAL_CALL_UNRESOLVED` / `CALL_ORIGIN_UNRESOLVED`, as the rule text always said. A receiver is opaque however it came to be — a cast, an any-typed closure parameter, a local typed any, a function result typed any (`parseJson`). A port cast away while the data component behind it is still planned (`(this.sink as any).update(x)`, `const s: any = this.sink`) is judged by the design's write set, which a planned component has too; it passed until the Store's file existed. The same name reached in two functions is two findings — the first no longer hides the second.
+  - **BREAKING (validate, param conformance):** an object where the contract declares a record is compared structurally, by the property names the checker gives its type: one holding every field is a rename (`PARAM_NAME_MISMATCH`), one sharing none a substitution (`UNREALIZED_PARAM` + `UNDECLARED_PARAM`), and a platform transport class (`IncomingMessage`, a fetch `Request`…) where a record is declared is a substitution — `planRoute(req: IncomingMessage)` and `planRoute(session: { user: string })` for `planRoute(request: plan_request)` passed silently. Where the code settles no kind (unannotated JavaScript, `any`), a parameter named as a transport handle (req, res, ctx, request, response, next, reply) in a domain argument's place is a substitution: same-arity framework handlers like `cancelOrder(req, res)` for `cancelOrder(orderId, customerId)` passed `--ci`. A date, datetime, duration or bytes compares with the kinds it is written as, so a fresh name for one (`when: string` for `date: date`) is `PARAM_NAME_MISMATCH`, which says when the code still uses the parameter's retired name.
+  - **BREAKING (validate):** new `UNUSED_INJECTED_PARAM` (warning): an `injectedParams` name none of the implementation's realizing functions takes — stale linkage that would wave through the next parameter of that name. `ParameterFact` gains `fields`, `transport` and `reads`.
+  - Framework handlers have a green path that needs no design change: `injectedParams` matches a name with or without its leading `_`, and drops a TRAILING run as well as a leading one (a trailing one only where the contract declares no parameter of that name); a contract parameter the code does not take but reads off an injected request handle by its own name (`req.params.code`, `req.query['limit']`, a destructuring of such a read) is realized through it. The findings name both shapes.
+  - **Fix:** the conformance dial (`conformance: off` on an implementation or a method) was stored but ignored by the parameter and async checks; it now switches them off. In the call check it switches only the forward direction off (whether the claims are found in the code) — the converse (`UNDECLARED_WRITE_CALL`, `CALL_ORIGIN_UNRESOLVED`, `UNDECLARED_COLOCATED_CALL`) is judged whatever the dial says, where `off` used to skip it too. Doctrine checks (`PORTAL_WRITE_SHORTCUT_IN_CODE`, `PORTAL_CALL_UNRESOLVED`, `UNDECLARED_DEPENDENCY`, route coverage) never read the dial.
+  - **BREAKING (validate):** new `CROSS_PROJECT_SOURCE_IMPORT` (warning): an import that RESOLVES into another project's source (a member's, or a sibling's) under a name that project does not publish — its L0 export table as a member exports it now, or the pinned snapshot of the external it is — is code reaching into its internals past its surface; the finding names the data component the module realizes, since a write through it is the persistence shortcut past the other project's surface. A declared binding module is the sanctioned place for that reach and is never reported. `CrossProjectImportFact` gains `resolved` and `module`.
+  - Routers: `router` may name a central module's table or entry (`src/routes.ts#ROUTES`) or a module alone (`src/routes.ts`, every route-bearing export read), and a route table bound to a top-level const is read under its own name; several Portals naming one router are judged against all of them. An object table keyed by template literals over constants (`` [`POST ${PREFIX}/orders`] ``) and a table returned in place (`return [ … ]`) are read instead of `UNREADABLE_ROUTER`. A table is read under the one prefix its router strips (`path.slice(BASE.length)`), so a prefix that is not the Portal's `basePath` is `UNDECLARED_ROUTE` + `UNROUTED_ENDPOINT` naming both — it passed. A router module counts as claimed source. `RouteFact` gains `table`; `SourceFileFacts` gains `routePrefixes`.
+  - New `CALL_ACROSS_LANGUAGE` (notice): a claimed call from TypeScript or JavaScript into a component whose code is in another language (a Rust member reached through a binding) is no longer judged by the call graph — it drew `CALL_STEP_UNREALIZED` warnings no code could clear, turning a family root red on attach — and the boundary is said once per project and language.
+  - Docs: `sdd-implement` and `sdd-delegate` describe the handler shape, `injectedParams`, reading parameters off the request, the dial and router linkage; cli.md says the same under `validate`.
+  - wairon's own tree: `host_request_orchestrator_impl` no longer declares a `dataDir` injection no handler takes.
+- **Approval and lock, round-8 trials:**
+  - A release stamp that is missing, no wairon version (`"banana"`) or newer than the running wairon (`"9.9.9"`) is reported on every path: round 7 judged the stamp only when the identity no longer matched, so a matching record kept a bogus stamp silently. `lock-check`, `status`, `sdd_get_status` and `validate` name it as a notice (the identity still decides), and `wairon lock` replaces it with the running release, keeping the approval.
+  - A matching record whose `gateParts` block was deleted gets the notice `{}` got ("the record carries none"), and `lock` rewrites the parts.
+  - **BREAKING (approval):** a `.wai/lock.json` that names one key twice in an object (what a careless conflict resolution leaves) cannot be read and fails closed by name, like conflict markers; JSON.parse silently kept the last copy.
+  - **BREAKING (`lock-check`, `validate`, `lock`):** a committed approval that records spec files while `.wai/specs` is gone fails closed at every strictness ("the design it approved is gone"); "no spec tree here, nothing is gated" is said only when no approval is on record.
+  - `lock-check` names a missing `.wai/project.yaml` instead of blaming the network declaration or the rule tuning it held.
+  - The family root names a member in its own terms: one whose record predates gate parts is "its approval predates recorded inputs — re-lock it once at its own root", not "spec changes nobody approved", which is kept for a member whose specs may have moved.
+  - `lock` at a parent warns, before it writes, when a direct member is not covered by its own approval: the order is bottom-up (members first), or the parent locks twice. cli.md says so.
+  - **BREAKING (CLI `lock --subsystem`):** a member project's subsystem (`--subsystem payments_svc::payments` at the root) is refused, naming the member's folder: a member's subsystem is approved at the member's own root. It used to print "nothing has changed … ✔ Specs locked" over a changed member spec.
+  - **BREAKING (approval):** an extension pack the project selects that cannot load leaves the approval owed: `lock-check` fails naming the pack ("make the pack load, then `wairon lock`") instead of passing while `validate` is red.
+  - The approval verdict (`status`, `sdd_get_status`) names every moved spec up to forty, then counts the rest and names `wairon status --all`; it named five and "… and N more".
+  - A lock that records the project's own inputs for the first time (a first approval, a record from before gate parts) or after the rule tuning or packs moved prints them: projectType, each severity override (`PORTAL_WRITE_SHORTCUT → notice`), the selected packs, a declared network, `composition`.
+  - A no-op `lock` says ".wai/lock.json is left untouched by this run"; evidence it refreshes (the analyzer's version in `code`, a replaced stamp) is named.
+  - Docs: cli.md no longer says a change of wairon release writes a new record (a release whose built-in rules are unchanged leaves the record as it is), states that code-conformance configuration (`rules.conformance`, `requireCode` included, and code-rule severity overrides) is outside the approval identity and why, and the generated guide mentions `wairon lock --subsystem` and the bottom-up order.
+- **Authoring tools and family migrations, round-8 trials:**
+  - **BREAKING (MCP, authoring):** every write tool refuses a spec of another project, through one shared guard (`crossProjectWriteRefusal`), the dry run included: from a family root, `sdd_delete_spec {component: payments_svc::payment_store}` deleted the member's `.index.yaml` with no force and orphaned its contract and implementation, while `sdd_update_spec` on the same id was refused. The create tools (a parent in a member: `component: payments_svc::x`, `subsystem: payments_svc::payments`), `sdd_update_spec`, `sdd_delete_spec` (a member type by its key or by an `alias::name` too — it answered "file may not exist"), `sdd_set_endpoints`, `sdd_set_public_interfaces`, `sdd_move_methods`, the renames and the two new tools all answer "chained-spec: … lives in another project; <verb> it from that project's own root", naming the member's folder and the call to make in a session there.
+  - **BREAKING (MCP):** `sdd_delete_spec` of an id no spec of the kind holds is refused (`spec-missing`) with what the id might have meant — the kind that does hold it (`"analytics" is a subsystem — pass kind "subsystem"`), a type's `<subsystem>::<id>` form for `api-gateway.principal`, the ids the kind holds — instead of answering "could not be deleted (file may not exist)". The L0 is refused by name.
+  - **BREAKING (MCP, structured output):** a deletion reports `published` — every public name of the project a consumer reaches what goes through — and `breaks`, the consumers in reach (family members, and checkouts in the new `search` folders) whose specs use one, as every rename has. A producer deleting `sku_id` from a library saw "3 references" and no consumer.
+  - **BREAKING (MCP, authoring):** removing a contract method through `sdd_update_spec` (a delete marker, or the list emptied) — or re-authoring a contract without it through `sdd_define_interface` — takes the method's implementation entries with it in the same write (`cascaded`; a dry run says which would go): a narrative realizes its contract method and means nothing without it, and the entry left behind was `UNEXPECTED_IMPLEMENTATION_METHOD`, refused by `lock`. The removal is refused while another spec still references the method (a call, register or dispatch step, a declared call, a dispatch binding, a lifecycle entrypoint, a signatureFrom), naming each, exactly as a deletion is. A removed published verb is reported under `published` and `breaks` (`sdd_update_spec` takes `search`).
+  - **BREAKING (MCP, authoring):** the write gate refuses a dependsOn edge into another subsystem whose target is not a Portal (`CROSS_SUBSYSTEM_NON_ADAPTER`, `CROSS_SUBSYSTEM_PRIVATE_ACCESS`, `CROSS_SUBSYSTEM_TARGET_NON_PORTAL` on it, as validate reports them): no trustedLink or export makes a Store another subsystem's front door, so no later write can cure it. A Portal -> Store edge across subsystems was written ("1 change") while the same edge inside one subsystem was refused. A cross-subsystem edge into a Portal is curable (a client Adapter, a trustedLink, the target's export) and rides along as a warning notice.
+  - **BREAKING (MCP, authoring):** a delta setting a system-level type's `subsystem` is refused like any other move, naming `sdd_move_spec` (it was written, leaving the file in `types/` and its references behind). The identity refusals now name the owning tools: `sdd_rename_spec` for a contract's or an implementation's id, `sdd_move_spec` for a subsystem.
+  - New MCP tool `sdd_rename_spec {kind: interface | implementation, id, newId, dryRun?}`: renames ONE contract or implementation on its own and rewrites every reference — implementations' `contract`, export entries' `interface` (a public name derived from the old id is kept with `as`), lint allows and debt-register entries keyed on it — with a rename trace. The ids a component rename keeps when they are not derived from the component's had no rename at all.
+  - New MCP tool `sdd_move_spec {kind: component | type, id, subsystem?, dryRun?}`: moves a component — with the members it owns, its contracts and implementations — or a type to another subsystem (a type also to or from system level). Ids never change; what names the old subsystem follows: its export entries and lifecycle entrypoints for the moved components, an L0 re-export from it (a whole-subsystem re-export gets an entry per moved export), and every type reference qualified by the old subsystem. A component move is gated: a forbidden doctrine edge or a cross-subsystem edge into a non-Portal it would create refuses it with the rule's words.
+  - `sdd_rename_component` moves every file the component owns: a contract or implementation whose id is not derived from the component's (`memory_stats_store`) kept its id but stayed in the old folder, named after a component that no longer existed, with the validator silent. It now follows the component's folder.
+  - `sdd_add_type` and `sdd_set_endpoints` take `dryRun` (the authoring seam's `writeSpec` takes `dryRun` on the restatement; the receipt says `dryRun`).
+  - Every MCP tool description ends with its argument names (`Arguments: id, newId, dryRun?.`), read from the input schema — `sdd_externalize_subsystem` takes `subsystem`, the component and type renames `newId`, the method/param/field renames `newName`; callers guessed them from the CLI.
+  - The change report no longer says both `reordered` and "NO EFFECT: the stored spec already held this value" for a list restated in another order, nor "the write did not store it" for a new field whose type it respelled (`string[]` stored as `list<string>`).
+  - `constructor` stays a legal component id (accepted since round 5): renamed to, moved, deleted and read like any other — now covered by a test.
+  - **BREAKING (family):** a `members` entry pointing at a `../` sibling checkout that holds a project is composed live, like a contained member: the family scan follows it, its own gate runs in the family run, and it is never pinned. `externals pin <alias>` on such a member is refused with the reason, and a plain `externals pin` prunes the pin an earlier release took. It was judged against its pin as a referenced external (lib-and-app: 19 × `EXTERNAL_CHECK_UNAVAILABLE`, a pin `geo → geo`, and `SIGNATURE_SOURCE_UNRESOLVED` / `IMPLEMENTS_MISMATCH` on a trait implementer). Git and hosted members are unchanged.
+  - `member adopt` / `sdd_adopt_member` accept an external whose source is a `../` sibling, as `member attach` and `member add` read a location, so `member attach` refused with "use member adopt" is no longer a dead end.
+  - **BREAKING (CLI):** a family migration (`member …`, `subsystem externalize`, `project rename`) run without `--yes` and with no terminal to confirm it exits 1. (A refusal already exited 1; the round-8 "`member add` refused with exit 0" did not reproduce from source or the built CLI.)
+  - `member demote` and `member internalize` accept every file wairon writes under `.wai` — they refused every project `wairon init` created over `phased_design.md`. `phased_design.md`, `mcp`, `git.json`, `remote.json` and `producers.json` are deleted and listed (a workbook that differs from the home project's is named in the plan as not carried); `variants` and vendored `packs` are placed in the home project, and a differing file of the same name refuses. A file wairon never writes is still refused by name.
+  - A family migration that respells params writes the derived signature texts itself (the store's re-save and reference respelling re-derive them): an internalize left 39 stale texts, read as `EXTERNAL_UNDECLARED`, until `doctor --fix`.
+  - `member internalize` names in its plan the dependency loop it closes when it re-points a sibling consumer at the parent, and the plan's announcement now includes the resulting `PROJECT_DEPENDENCY_CYCLE` (announcements compare each side's family graph, not only the per-project runs).
+  - `subsystem externalize --as project` (and `member promote`) declares, imports and pins the new project's externals for the sibling projects its moved specs name, instead of announcing an `EXTERNAL_UNDECLARED` per reference. `PromoteResult` gains `externalsDeclared`.
+  - A plan's announcement judges a changed folder only where the result keeps a project root: a demote no longer announces `MISSING_SYSTEM_SPEC` for the folder it turns into a part. Internalize and demote plans list what could not be carried and each signature text they re-derived.
+  - `status` and the canvas label a sibling member with its `../` location.
+- **What the assistant reads (skills, guide, briefs), round-9 trials:**
+  - `injectedParams` are code linkage, set by the implementer once the code exists: the architect skill and the `sdd_write_narrative` description say never to declare them while designing (the skill guessed `db`, `deps`, `config`, `req, res` on a fresh design, and approved projects carried them into `UNUSED_INJECTED_PARAM`); `sdd-implement` and every implementer brief say when and how to declare them (`sdd_write_narrative` or `sdd_update_spec`, no re-lock) and that a design-time guess the code does not take is removed — the brief lists the ones declared now.
+  - No file is fenced to two implementers any more: a type's `componentClass` claimed its file even when another component's specs named that file too, so one `src/types.ts` holding two Stores' entity types sat in both Stores' write fences; such a file is now shared, and a last pass takes any file still in two implementer fences out of both. The architect skill plans type files per owning component (shared value types in one subsystem types file no component owns).
+  - A first-wave brief lists the package or crate root beside its code as shared when a spec names it as planned (a maths module and its Portal's planned `mod.rs`), with the rule that a module root another agent owns takes only the line declaring the module; it was listed only once the file existed.
+  - A Portal implementer's brief carries a `## Handler shape` section (the contract's own parameters, the handles named in `injectedParams`, a contract parameter read off the request by its own name, the `router` linkage and what `conformance: off` does and does not switch off).
+  - A brief's member section spells the names a component uses by the member's PUBLIC export names (`geo::geocoding`, not the internal `geo::geocoding_portal`), and tells the binding modules to follow the member's live L0 export table instead of "the pin" for a member that is never pinned.
+  - The generated guide (`.claude/CLAUDE.md`, `.wai/context/wairon-guide.md`, `GEMINI.md`) and the MCP server instructions list the commands the assistant recommends to the human — `surface export --format openapi`, `lock`, `lock-check`, `externals pin`, `network declare`, `member …`, `doctor --fix`, `agent customize` — state the `validate --ci` rule plainly (errors and warnings fail it, except the draft-related warnings; notices never do), and say a JSDoc `@typedef` makes plain-JS fields checkable.
+  - The architect skill says where a Portal's need for an Adapter goes: into the Orchestrator it already dispatches to, or — for a sibling subsystem in the same process — a `trustedLink` that lets the Portal depend on the sibling's published Portal, never a one-call forwarding Orchestrator added for the hop.
+- **Conformance analyzer, round-9 trials:**
+  - **BREAKING (validate, fail-closed parameters):** new `PARAM_TYPE_MISMATCH` (warning): where the contract declares a record, a parameter typed opaquely — `any`, `unknown`, `object`, `{}`, `Record<string, unknown>`, or no annotation at all in TypeScript — or as an object missing the record's fields or adding its own (`{ stops: unknown[]; secret: string }`) is reported, naming the fields missing and added. `planRoute(request: any)` realizing `planRoute(request: plan_request)` passed `--ci`: the fail-closed rule that catches every `any` receiver stopped at the parameter list. A new code rather than `UNREALIZED_PARAM`, because the parameter IS taken, under its own name — what fails is its type, and the finding says so. Unannotated JavaScript stays unjudged. `ParameterFact` gains `opaque`; its `fields` are the type's DATA properties (methods set aside).
+  - **BREAKING (validate, param conformance):** a parameter named as a transport handle (req, res, ctx, request, response, next, reply) in a contract parameter's place is a substitution however the handle is typed — a hand-written `type Req = { params: … }` included — and a MEMBER project's contract types (`shared::order_id`) are read live from the family, their code name, kind and fields: `cancelOrder(req: Req, res: Res)` realizing `cancelOrder(orderId: shared::order_id, customerId: shared::customer_ref)` passed with 0 findings, reading nothing off `req`. An object whose properties name two or more of the contract's own parameters bundles them: `cancelOrder(input: { orderId, customerId })` reports both unrealized and the object undeclared, where it named `orderId` alone (and wrongly).
+  - The framework-handler green path reads what node:http handlers read: a contract parameter read off an injected request (`req`, `request`, `ctx`, `context`, `event`, and now `url`) through `req.query.x`, `req.body.x`, `url.searchParams.get('x')` on a `new URL(req.url, base)`, a destructuring at any depth, a local the request flows into, or a helper the request is passed to — in the same file, or in a module no implementation claims (`const { orderId } = pathParams(req)`) — is realized; the one record parameter left unpaired is realized by the body read whole (`hit: hit_event` by `req.body`). Each of these stayed `UNREALIZED_PARAM`.
+  - **`UNUSED_INJECTED_PARAM` is a notice** (was a warning since round 8): `injectedParams` are code linkage, and an injection no function takes hides nothing, so finished, approved projects whose design-time `injectedParams` the code never took no longer go red in `validate --ci` after the upgrade.
+  - **BREAKING (validate, route coverage):** route coverage is never silently off. New `ROUTER_UNDECLARED` (notice): a Portal binding HTTP endpoints whose implementation names no `router:` while its code is read at exact grade, naming the route-bearing functions and tables its files hold — a route table moved to another module with no `router:` switched the check off without a word. A route table may spread other tables (`[...ingestRoutes, ...statsRoutes]`, an object spread too), followed through the type checker into any module; a linkage naming a declaration that holds neither a body nor a readable table is `UNREADABLE_ROUTER` (both passed silently). One literal table named by several Portals is one router, as the module form was: a route is declared when any of them declares it — each Portal was blamed for the other's routes.
+  - New `REALIZATION_UNCHECKED` (notice): an implementation whose conformance dial is off, on itself or on some of its methods, is said once, naming the methods — the dial is code linkage outside the approval, and `validate --ci` said "All checks passed" with the realization checks off. `wairon status` (and `sdd_get_status`) print a `Conformance off:` line naming them.
+  - `TECH_ON_LOGIC_COMPONENT` no longer tells a Portal to move its web framework behind a data seam: a Portal is the transport seam and binds the framework that serves its endpoints. A Portal binding a technology a data-layer component of the tree binds too (`postgres` beside its Store) is still reported, saying so.
+  - wairon's own tree: `admin_portal` and `host_http_portal` name their routers (`routeAdmin`, `routeData`), so their 36 endpoints are route-checked; 23 stale `conformance: off` method dials that hid nothing are gone; `cli_runner_impl` carries a reasoned `lint.allow` for `runMcpInstall`, whose handler takes commander's flags (`--hosted`, `--project`, `--token`) and maps them onto `mcp_install_options`.
+- **Conformance analyzer, round-10 trials:**
+  - The one record parameter of a plain node:http handler is realized by a body helper: the injected request handed as a call's first argument to any function — an imported body parser included — whose result the handler binds to a local and uses whole (`const cart = await readJsonBody(req)`, `(await readJsonBody(req)) as Cart`, `const cart: Cart = await readJsonBody<Cart>(req)`, or two steps through `body`), the node:http spelling of `req.body`. Each stayed `UNREALIZED_PARAM`, so honest handlers needed the router to parse the body into `req.body`. It stays unrealized when the result is discarded, never used, only destructured or only read for fields, when the request is not the first argument, and when the callee is a collaborator (`this.orders.place(req)`, a method of another handler parameter). `ParameterFact` gains `handedWhole`. The finding now names both ways a parameter is read off an injected request, with the method's own names.
+  - **BREAKING (validate, fail-closed parameters):** a scalar parameter (a string, a number, a boolean, a date, a datetime or a duration) realized by an opaque-typed parameter (`any`, `unknown`, …) the body reads as an object — a member no such value has, `args.habitId` where the contract declares `date` — is `PARAM_TYPE_MISMATCH`. It paired silently while the record rule failed closed. One read only as the scalar it is (`date.length`, `day.getTime()`) is not. `ParameterFact` gains `members`, the member names read directly off the parameter.
+  - An `UNREALIZED_PARAM` caused by `injectedParams` naming the contract's own parameter says so (`injectedParams` names "habitId", "date" — the contract's own parameter(s) … drop them). The seven findings gave no hint.
+  - A Portal served by a class's method has a `router:` spelling: `Class.method` (`HabitPortal.handle`) and `<module>#Class.method`. The class is the export and must hold the method. `HabitPortal`, `handle`, `HabitPortal.handle`, `HabitPortal#handle` and `ROUTES` were each refused with a different code. A refused bare name that is a method of an exported class is told its `Class.method` spelling, one declared but not exported is told to export it, and `Class#method` is told to use a dot. `ROUTER_UNDECLARED` lists only names the linkage accepts (an exported router or table, `Class.method`, an exported entry calling into a router of its file) and names private ones apart with "export it". It suggested a module-private `ROUTES` that was then refused.
+  - New `ROUTER_NOT_DISPATCHED` (notice): a router naming a route table that a sibling aggregate of its module leaves out (`router: statsRoutes` beside `routes = [...ingestRoutes]`, in the module or one importing its tables). If the server dispatches the aggregate, none of the table's routes is served, and coverage read the table as it stands and stayed green. It is a notice because which process dispatches which table is never read. `SourceFileFacts` gains `tableSpreads`.
+- **What the assistant reads (skills, briefs), round-10 trials:**
+  - The architect skill, `sdd-implement`, the Portal brief and cli.md say `router` names the table or function the server actually dispatches (the aggregate, not a Portal's own table spread into it), and give the `Class.method` spelling. The architect planned per-Portal tables, and a table dropped from the dispatched spread read clean.
+  - The architect skill says a client Adapter verb takes its signature from the Portal verb it calls (`signatureFrom: <portal>.<verb>`, `alias::…` across projects) instead of restating the params. A producer's parameter rename reached the restated copies as nothing.
+  - `sdd-implement`, the Portal brief and cli.md describe the record read whole through a body helper and the scalar `any` rule.
+- **Surfaces, externals and members, round-9 trials:**
+  - A consumed verb's ROUTE is part of what the consumer depends on: a moved path, verb or stated status of a used Portal verb reads `drifted` (a carried fact, `endpoint of stats-api.getStats (GET /stats/{code} → GET /v2/stats/{code})`), the use says `endpoint moved: …` in `externals status`, the advisory `EXTERNAL_DRIFTED` names the route and that a client spelling it must follow, a route REMOVED is `changed` (incompatible), and a re-pin says what moved since the last pin instead of rewriting the path without a word. `externals status` said `unchanged`, `drifted: false`.
+  - A project that composes this one as a `../` sibling MEMBER is its consumer: `externals consumers`, `sdd_list_consumers` and the rename/delete dry runs read the folders enclosing the bound root (a folder of at most 256 folders; `--search` reads any) and the searched folders for a `members:` entry resolving here, and list every project of that family that uses it. All three said "no consumer" while the parent sat one folder up.
+  - A verb removed from a live member reaches the consumer's binding: a member is never pinned, so the binding is compared with the member's live export AND its surface at the approval it is judged against (the one the consumer's lock records for it, else the member's own last committed approval, read from git): a bare binding export the approved design held and the live export no longer does is `BINDING_DRIFT` "was removed … (the member's approved design held it)". It was silent through every run.
+  - A binding into the parent's own re-exports (the shape `member promote` writes, `shop-platform::money`) is compared with the member they re-export from — it was never compared — and the OpenAPI document resolves such a type from the project's own surface. The OpenAPI document also resolves a `../` sibling member's types (it read only contained members: three "Unresolved type" schemas), and the "no schema" warning's advice follows what the alias is — a member is never told to pin, nor a project to pin itself.
+  - A live member's relation health (the canvas, the hosted Relations tab) compares it with its approved surface like an external's pin: a used verb that changed since reads incompatible, any other move drifted — it counted resolution failures only.
+  - `surface diff`: a contract's local record spelled `<subsystem>.<id>` (`orders.order`) is read with its closure — its embedded member types were invisible to every digest, so a gateway's wire change through it (`order.total.currencyCode`) was missing from the changelog; an exported type reached through such a record names the verb too; a signature row renders parameters under their own names (it printed `contracts::order_id: shared::order_id`); a type swap that follows another project's rename names the renames inside it (`type "geo::tile_coord" renamed to "geo::tile"; field "geo::tile.zoom" renamed to "z"`). A pinned consumer's comparison re-reads the locked digests from the pinned snapshot, so the closure now read moves no existing pin.
+  - OpenAPI: the one object body param is the bare body when it is optional or `T?` too (a `{ "reminder": … }` wrapper the server never read); a `T?` body is required and nullable, an optional one not required.
+  - New `ENDPOINT_STATUS_MISMATCH` (warning): an endpoint `status` that is no standard success or redirect code (`299`), a 204/304 on a verb answering a value, or a redirect on a verb answering a record rather than the location.
+- **Surfaces, externals and members, round-10 trials:**
+  - The live externals gate sees a verb a consumer reaches through a contract it uses WHOLE (`use: [habit_portal]`, a bare `dependsOn` with no call named): every method the pin holds is compared, so a removed verb reads `removed`, a renamed one `renamed to habit_portal.markDone`, both `incompatible` (`externals status` exits 1, `EXTERNAL_LIVE_INCOMPATIBLE`), and a moved route names the verb — it said `unchanged · drifted: re-pin when convenient` and "nothing this project uses changed".
+  - `surface diff` against a revision reads a `../` sibling member as the approval the baseline's own lock recorded for it: the baseline tree in the fetch cache holds no sibling, so its types never expanded and every verb naming one read `changed — a type it names changed shape` right after a clean re-lock. Nothing changed now reads "no change"; a member change since the approval is still named on the verb.
+  - The live comparison names a field ADDED to or REMOVED from a used member's types (`field "code_stats.window" added`) beside the traced renames, and says "(and its shape changed beyond that)" only when something besides fields moved.
+  - `sdd_set_endpoints` names the consumers a route move breaks, as a rename or a removal does: the public names publishing the moved verb and each consumer reaching it (`PUBLISHED as … the route of each would move`, `BREAKS 1 consumer(s)`; `published`, `breaks`, `rerouted` on the structured answer), with a new optional `search` for sibling checkouts.
+  - `sdd_get_spec` with `alias::name` reads an external's pinned contract with `methods` and with no kind (it answered "No spec of any kind"), and a type the pinned contract carries without exporting it (`legacy::habit`), the marker naming what carries it.
+  - `BINDING_DRIFT` into a member says "the member's" and "the member's type" for a parameter and a field, never "the pin's" or "the pinned type": a member is read live and never pinned.
+- **Approval, authoring, the spec write lock and member verbs, round-10 trials:**
+  - `wairon lock` on the release-stamp refresh path judges members exactly like the ordinary path: a sibling member edited and not re-locked at its own root since the record (its subject, and so the gate identity, unchanged) is no release change — the lock reports it `drifted` with the bottom-up warning and never records it `approved` (it printed "stamp refreshed — no review needed … member geo: approved" while `lock-check --strict` failed).
+  - A release-stamp refresh also refreshes the code results and design counts recorded beside the approval (`lock.json#code` read the old analyzer until the next no-op lock).
+  - The release re-verdict of an upgraded approval is kept across commands, in wairon's user cache (`WAIRON_CACHE_DIR`, else the OS user cache; one small file per project root, never in the tree), keyed by the root, the record and the current gate identity: every `validate`, `status` and `lock-check` no longer re-runs the whole owner's gate while the approval carries the older stamp.
+  - `wairon lock --subsystem <id>` counts the subsystem's own types (a type whose `subsystem` names it) inside the scope; it called them "outside it".
+  - `sdd_move_spec` of a type re-points the L0 export table: an entry publishing a project-level type (no `from`) moved into a subsystem re-exports it `from` that subsystem, whose L1 gains the type's export entry; a type made system-level is published by the L0 directly again (its entries lose `from`, its L1 entries go — previously refused). A component move also re-points an L0 or L1 entry that names it by its contract alone. No more `EXPORT_INVALID` after a move.
+  - Every `sdd_move_spec` is rehearsed in a private copy of the tree, as the family migrations rehearse theirs: the report carries `files` (each written, a moved one as `old → new`), `references` (each type reference respelled, each export entry re-pointed, added or dropped) and `findings` (the design errors and warnings the result reports that the tree does not now); a dry run answers that rehearsal, and a real move that would leave a new error is refused, writing nothing.
+  - A type move is placement, not an edit: every file it touches keeps its `updatedAt` and its line endings, and the folder the moved file leaves empty is pruned — moving a cluster back leaves the tree byte-identical (it left an empty `tiles/types/` and `updatedAt`-only diffs).
+  - **EDGE (BLOCKER):** two CLI writers of one spec no longer both print `✔` while one change is lost. Every write into a `.wai` tree — the store's, the core's raw rewrites, CLI commands, migrations (each owner's lock is held across a family commit), `doctor --fix` and the hosted server — takes the tree's `.wai/.spec-write.lock` at the shared file helper, and a spec document that changed on disk since this process read it is refused with `spec-write-conflict` (the other write is kept, nothing is written to that file; run the command again) instead of being overwritten.
+  - **EDGE:** a `.spec-write.lock` wairon cannot read (empty, foreign, truncated) is broken by the next write once it is 10 s old (it blocked every write for 30 s, said it would be broken, and never was); `wairon doctor` names a present lock, its holder, whether that holder is live or gone, and whether the next write breaks it.
+  - **EDGE:** `member add` / `sdd_add_member` create a member inside the project or as a sibling checkout one level up (`../<name>`) only: `../../../toolchain` is refused, naming where it lands and the accepted forms, before anything is written (it scaffolded a `.wai` outside the family). An alias already declared otherwise is refused before anything is scaffolded. New `member add --report` prints what would be created, refused exactly as the write would be, and writes nothing.
+  - `wairon init` writes `.wai/.gitignore` ignoring `.spec-write.lock` (created when absent, the line added when missing), so a lock a crashed session left behind is never committed by a team that commits `.wai/` wholesale. An init refusal in a subfolder exits 1 (pinned by a test).
+  - **BLOCKER:** a write never lands in a member project through a bare id. Ids are per project: a bare id is the bound project's own, so from a family root `sdd_add_subsystem tiles` beside a member holding `tiles` creates the root's own `tiles` (it re-authored the member's subsystem in place and cleared its `publicInterfaces`), `sdd_add_component` of an id a member's Repository owns is placed in the root's own folder (the layout normalization moved it into the member's), and an update, delete, rename, move or child create naming such an id is refused as missing (or, for the component-addressed tools, with the project boundary's sentence) — the spec path builders no longer answer a bare id with a member's file by suffix or by an owner's local id. Reads still compose members under their keys; only a deprecated legacy L1 mount keeps its bare-id resolution until `doctor --fix` rewrites it.
+- **Members, externals, approval and briefs, round-11 trials:**
+  - `sdd_get_spec` with `kind: system` reads the L0 the id names, and only that one: `alias::system` (or `alias::<its L0 name>`, `<project-id>::<its L0 name>`) answers a MEMBER project's own L0 as stored at its root, export table included, with a read-only `memberProject` marker; with no kind it is inferred. It answered the CONSUMER's own L0 relabelled under the member's id, and the no-kind form said "No spec of any kind". A part, an external (its pin's exported names are listed), a name the member's L0 does not go by, an unknown prefix, and a bare id that is none of this L0's names (`system`, its name, the project id) are refused, naming why.
+  - **BREAKING (externals status):** a used verb of a wire Portal whose endpoint moved is `changed`, so the external is `incompatible` (`wairon externals status` exits 1, `EXTERNAL_LIVE_INCOMPATIBLE`) — a client calling it over the wire spells the route. It read `unchanged … drifted`, exit 0. An InProcess library binds no route, so nothing changes for it.
+  - `wairon lock` with a member that drifted at its own root (its pin unchanged) keeps the approval on record, as it says: the member's new state is refreshed beside it as evidence (`the member state(s) recorded beside their unchanged pins (geo: approved → drifted)`). It printed "its lockedAt … kept" and wrote a new `lockedAt`.
+  - An approval an older release recorded, carried over because this release changed no built-in rule, is said once as a notice by `status`, `lock-check` and `validate` (`approved under wairon <old>; this release (<new>) judges the design by the same rules`). Every surface was silent.
+  - A write's change report echoes a reference another project provides as it is stored (`dependsOn added: "geo::distance"`), never as the producer's internal id it binds to (`geo-sdk::distance_portal`).
+  - A file only a type's METHODS name (`src/reminder_schedule.ts` beside the fields in `src/types.ts`) stays `SOURCE_FILE_PLANNED` (a notice) once the type's own file exists, as a component method's planned file does — it was `MISSING_SOURCE_FILE` (an error) mid-implementation. The type's own file missing while a methods file exists is still `MISSING_SOURCE_FILE`. The brief of the component whose narratives call those methods fences that file; it was listed as shared by every contract naming the type, and fenced by none.
+  - The code write fence of every implementer brief, `sdd-implement` and `sdd-delegate` say never to delete or move a file or folder outside the fence (an ignored project folder included) and never to use an existing project folder as scratch space.
+  - A requirement added through `sdd_update_spec` as `{ description }` is stored in the form its siblings take: text beside text (it was the one object in a list of strings).
+  - **EDGE:** `wairon surface export --out <folder>` is refused naming a file path and how several portals are written; it failed on a raw `EISDIR`.
+- **Approval wording, renames and briefs, round-11 trials (EDGE):**
+  - `wairon status` with only a member's pin moved says what moved and what to do: `this project is not covered by its approval: none of its own specs changed, but member geo was re-approved at its own root since, and this approval still pins its earlier approval`, with `wairon lock` here as the fix, and the verdict reads `none of this project's own specs has changed since; what moved is a member's approval` with `Member pin moved since approval: geo was re-approved at its own root after this approval …`. It said `this project is drifted` beside `no spec has changed since`.
+  - `wairon lock-check` beside a member carrying unapproved changes names what this project's own approval no longer covers — its own specs, a member's moved pin (`this approval still pins geo at an earlier approval`), what it owes, or the inputs that moved — and says it still covers the design when it does (an approval an older release took and this one carries over included). It said `This project's own approval is stale too` whenever the gate identity differed, though no own spec had moved.
+  - `wairon project rename` / `sdd_rename_project` from a member's own root names each consumer outside the family it writes nothing in: a parent that declares the project as a `../` sibling member is named with its folder and alias, to re-lock there once this project is re-locked (`Outside this family: route-planner (../route-planner) declares this project as its member "geo" …`). The plan named the renamed project alone. Its closing note says what a rename does not look for — a project outside the family that declares the renamed one as an external, listed by `wairon externals consumers --search <dir>` — where it claimed such a project beside the renamed one was found.
+  - `wairon type rename-field` / `sdd_rename_field` report the prose they leave alone, as the method rename does: `mentions` lists the type itself and every spec with the type in view (naming a type that carries the field, a contract naming one, or an implementation of such a contract) whose descriptions, intents or narrative steps spell the old field — dry run and real alike; the CLI prints them as `Left alone (prose still names "zoom" …)`. A spec that never has the type in view is not reported for a common field name. There was no `mentions` field.
+  - Briefs and the `sdd-implement` skill name the binding tag convention: a declaration in a binding module that mirrors a producer name carries a doc comment naming it (`/** geo::<public name> */` above an interface, a class or a type; `/** geo::<public name>.<method> */` above a free function), so `validate` compares it with that export alone and names a verb the producer no longer holds; an untagged declaration nothing matches by name is the binding's own plumbing. It was documented only in `docs/cli.md`.
+- **BREAKING (MCP and CLI, refusal wording):** every spec write tool words a refusal of an id it cannot write the same way. A spec another project holds — named through a member's or an external's alias, by a member's key, or by a bare id only a member holds — is `chained-spec: "<id>" lives in another project, and a project's specs are changed only from its own root.`, followed by which project and how: a member with its folder, the session to open there and the call to make there; an external as read-only here, changed by its owner from its own root. An id no project in reach holds is `spec-missing: this project has no <kind> "<id>". Nothing was written.` The renames (`sdd_rename_*`, `wairon method rename`, `method rename-param`, `type rename-field`) and moves said "lives in another project" while `sdd_update_spec`, `sdd_delete_spec`, `sdd_set_endpoints`, `sdd_set_public_interfaces`, `sdd_move_methods` and the create tools (for a parent) said the spec "does not exist" for the same id; the codes `component-missing`, `type-missing`, `chained-component` and `chained-type` are now `spec-missing` and `chained-spec`, and the rename and move tools no longer prefix their refusal with `WaironError:`. What a write may change is unchanged: a bare id is still the bound project's own.
+- **Authoring tools and family migrations, round-9 trials:**
+  - `sdd_move_spec` of a type follows every spelling of a reference to it: `orders::order_status` and the documented dot form `orders.order_status` alike, matched as the loader matches, wherever it stands in a type expression (`list<…>`, `…?`, `map<…>`, `result<…>`, a union, a returns, a field, a foreign key's `.field`). The dot form was left dangling (`rewritten: []`, then `UNDEFINED_TYPE_REFERENCE`). Moved to system level, the qualifier goes with its separator.
+  - `sdd_move_spec` moves a connected cluster: the new optional `together` (a list of ids of the same kind) moves them in ONE call, planned by one dry run, the components judged together in their new subsystem, all written or none. A single move the gate refuses now names its collaborators left behind as the `together` list that takes them along. Input-schema addition.
+  - `member internalize` de-aliases every type position through the same rewriter: `list<shared::x>`, `shared::x?` and a returns kept the alias of the project it deleted (28 `EXTERNAL_UNDECLARED` that `doctor --fix` could not clear).
+  - `member rename-alias` on a trait implementer (`implements: geo::point` beside `signatureFrom: geo::point.<method>`) refused its own plan ("not at its position any more"): a contract's `implements` was no position the reference writer read. It now plans and applies, every occurrence respelled.
+  - **BREAKING (`sdd_update_spec`):** a reference is compared by its written text. A delta naming a reference the stored spec holds in another spelling of the same target (`geo::distance` for `geo::distance_portal`) is a change — reported with both texts and written — where it was "No change … matches what is stored", so the spelling the gate asks for could not be written. A no-change answer to a `methods` (or `fields`) list that left stored elements out says that lists upsert and how to remove one (`{"name": …, "action": "delete"}`).
+  - **BREAKING (`sdd_update_spec`, code linkage):** an implementation's `injectedParams` and `bindings` restated REPLACE what is stored instead of merging (`[_ctx, req, res]` + `[ctx, req, res]` stored `[_ctx, req, res, ctx]`). Both state the code's reality whole — the realization's leading parameters in order, its binding modules — and an entry left over from an earlier statement is itself a finding (`UNUSED_INJECTED_PARAM`, `BINDING_UNREAD`). A `{ value, action: "delete" }` marker still removes one value. Every other plain-value list keeps merging.
+  - **BREAKING (`sdd_get_spec`):** an `alias::name` id resolves through the alias table the way a write resolves it — a member's spec reads under its key (`ext::cadence` answered "does not exist"), and an EXTERNAL's spec reads from the pinned snapshot this project holds of it: the pinned contract entry or exported type as `spec`, with a read-only `pinnedSnapshot` marker beside it (alias, producer, snapshot file, StateId). Output-schema addition.
+  - **BREAKING (`sdd_initialize_system`):** refused, writing nothing, when the session was opened in a folder that is not the bound project's root (it bound upward) and that project already has an L0 — it re-authored the PARENT's name, vision, boundaries, requirements and `targetLanguage` (95 `NAMING_CONVENTION_VIOLATION`). The refusal names the root and the next step `wairon init` names: `wairon member add <alias> <path> --project` from the root. Re-initializing from the project's own root needs no flag: it is the documented way to re-author the L0, it already announces what it replaces and clears, `lock-check` catches it, and `sdd_update_spec` edits the L0 field by field.
+  - **BREAKING (`sdd_rename_method`):** an implementation that names no symbol is pinned to the old name only when its code exists — the file realizing the method is on disk. With no code written it pinned the old name for code that would be written under the new one. `pinSymbol: true` always pins; `false` never does.
+  - **Security (EDGE):** a path-shaped name never writes outside the tree. `sdd_add_component { subsystem: "../../../dashboard/.wai/specs/dashboard" }` answered "Successfully added" and wrote into another project; `links/../analytics`, `links/` and `Links` were accepted because existence was checked by path, case-insensitively on Windows. Every id a path is built from — a spec's own id, the subsystem, component or contract it is written under, a type's group — must be an id first (letters, digits, `-` and `_` per `::`-segment; `not-an-id` otherwise), checked before any path exists, and a spec found at a path is that spec only under exactly the id asked for.
+  - **EDGE:** two sessions writing one spec at the same moment no longer lose one write while both answer "Updated". Every spec-write MCP tool runs under the tree's cross-process write lock (`.wai/.spec-write.lock`, created exclusively — atomic on Windows too — reentrant, a lock whose holder is gone broken at once) and re-reads the tree before it writes.
+  - Refusal wording: the rename tools give the project boundary's refusal for a member's or an external's spec named through its alias (they said `component-missing`), and name a member project by its id, as every other write tool does; `sdd_set_endpoints` and `sdd_set_public_interfaces` name themselves in a boundary refusal instead of `sdd_update_spec`.
+  - `sdd_attach_member` of an alias already attached says so instead of answering an empty plan; `sdd_add_member` says when it created a new folder OUTSIDE the project.
+- **Ids Windows cannot store are refused on every platform.** A spec id (component,
+  subsystem, type, …) may no longer be a name Windows reserves for a device —
+  `con`, `prn`, `aux`, `nul`, `com0`–`com9`, `lpt0`–`lpt9` — nor longer than 64
+  characters: such an id became a folder no Windows checkout can hold, and
+  `git add -A` failed for the whole repository (a 270-character id died on a raw
+  `ENOENT`). The MCP tools and the CLI refuse it with the reason and write
+  nothing; `validate` reports one already in a tree as `SCHEMA_VALIDATION_ERROR`,
+  now worded `path: message` instead of a JSON dump. An external alias, which
+  names its pin file, refuses the same device names.
+- **A `project.yaml` that does not parse stops every command alike.** A duplicated
+  key (a second `rules:` block appended by hand) crashed `validate` and
+  `network declare` with a Node stack trace, while `lock-check` and `status`
+  carried on as if the file were fine. Every command now refuses with one line
+  naming the file, the line and the key — `✖ .wai/project.yaml:33: duplicated
+  mapping key "rules"` — and exits 1; `doctor` diagnoses it in the same words.
+- **No stack traces for bad input.** Whatever a command throws is printed as one
+  `✖` line with exit 1 (`surface export --portal <unknown>`, `surface diff`
+  without a committed approval, …); `WAIRON_DEBUG=1` prints the stack for a bug
+  report. `project rename` to a malformed id is refused as `id-invalid` (it said
+  `id-collision`), and `member rename-alias` to a malformed alias as
+  `alias-invalid` (it said `alias-taken`).
+- **OpenAPI path parameters.** `surface export --format openapi` declared every
+  parameter of `GET /stats/{code}` `in: query` — an invalid document, and a
+  generated client sent `?code=`. A param named by a `{name}` segment of the path
+  is now `in: path`, required; the others stay in the query (GET, DELETE) or the
+  JSON body (POST, PUT, PATCH).
+- **`TECH_LEAKAGE` reads no binding into prose.** Binding `redis` on one Store
+  made another Store's description ("in memory now, Redis later") a leak, on its
+  component, contract and implementation. The prose of a data-layer seam (Adapter,
+  Store, Registry, Index) names a technology about its own realization and is no
+  longer leakage; its identifiers, and every surface of a logic component, still
+  are.
+- **Docs.** `wairon surface diff`, `externals consumers --search`, the dev
+  server's MCP endpoint (`POST /mcp?project=local`), what to commit, the analysis
+  grades and how a refusal is printed are documented. The CI recipe pins "the
+  version you lock with" instead of a fixed dev or release version, and README
+  links the design docs and `CONTRIBUTING.md` relatively — the package now ships
+  them — so no link 404s before `main` has the file.
+- **Approval messages agree.** `lock` no longer says "Nothing has changed" when
+  only an input moved (the project id, a network, a pinned external): it names
+  what did. A storage move is no change for `lock`, as it already was for
+  `lock-check`. `lock` says when it approves an all-draft design, and
+  `validate --ci` prints how many draft-related warnings it waived.
+- **Nothing to approve on an empty tree.** `lock` on a tree that holds only the
+  L0 writes no lock and says to add a subsystem first (exit 0); `lock-check` and
+  `status` say the same.
+- **`lock-check` agrees with `lock` on the project id.** A hand-edited id
+  (`PROJECT_ID_CHANGED`) now fails `lock-check`, with or without `--strict`, and
+  names the fix: restore the id, or use `wairon project rename`. A rename not yet
+  re-locked fails it too.
+- **`lock-check` names what moved** in the same words as `lock` (for example the
+  network declaration), not a generic list.
+- **`status` and `lock-check` agree on unknown keys.** A key the spec schema does
+  not read, such as a top-level `symbol:` on an implementation, no longer shows
+  as a changed spec in `status`. It is reported as `UNKNOWN_SPEC_KEY`, with a hint
+  to put `symbol` on the method.
+- **Long cache paths on Windows.** wairon's git calls for its fetch cache use
+  `core.longpaths`, so `surface diff` and git producer fetches work under a deeply
+  nested cache directory.
+- **Networks.** `network declare` keeps the description. `GATEWAY_BYPASSED` is
+  reported once per Portal. `MULTIPLE_GATEWAYS` has one severity and anchor in the
+  project and the family run. `ENDPOINT_TRANSPORT_MISMATCH` stays an error on
+  drafts.
+- **Docs.** The documented tool count matches the server, shipped docs link only
+  to shipped files, and the docs explain which version of the reusable workflow
+  to pin on a dev build. `pack init` accepts `-y`.
+- **`externals status`** explains only the words it printed.
+
+- **Wording.** Plain `validate` ends with "Passed with N warning(s)" when it printed
+  warnings, and says there is nothing to check on an empty tree. `status` marks a
+  file not written yet as planned, and its percentages read files the same way the
+  lines do. `INVOKED_BY_UNDESCRIBED` states its threshold. `lock` prints the code
+  line once. `sdd_get_status` with no project says that no project binds the
+  folder.
+- **CLI.** `-y` is accepted wherever `--yes` is. `init` takes the project name from
+  `package.json` (or `Cargo.toml`) when there is one.
+- **Reachability.** No Portal is exempt from the unused findings by a field the
+  authoring tool wrote for it. A library no longer needs invented `Custom`
+  endpoint addresses to satisfy `MISSING_ENDPOINT`, and a library's consumers no
+  longer need a client Adapter per library. An exported extension point is no longer
+  refused as unconsumable. A type the project exports at L0 counts as used, and in
+  the family run so do its consumers' uses. An export's kind is no longer guessed
+  from its description prose.
+- **Rename tools and casing.** The rename tools accepted only camelCase method names
+  even in a tree whose define tools wrote snake_case; they now follow the project's
+  method casing.
+- **Lazy loads in the code analysis.** A call through a destructured
+  `require('…')` or `await import('…')` binding (`const { f } = require('./m')`)
+  resolves to the module it loads, as a static named import does, so the call it
+  realizes is no longer reported unrealized. A name two lazy loads bind differently,
+  or that a static import or a local function also binds, stays unresolved.
+- **Hosted member upgrade.** The member upgrade's plan, apply and drop are one
+  workflow of the member registration again, so the local admin entry point only
+  forwards to it.
+
+- **External sources.** A `project.yaml` external's `source` is read in either
+  form: the location string (`../x`, `hosted:<id>`, `<git url>`,
+  `<git url>#<commit>`) or the object. `source: { git, commit }` and a malformed
+  `url#commit` are that external's problem, named with the forms that work. They
+  no longer produce a raw schema dump or hide the other externals from
+  `externals list`. A `<git url>#<full commit>` external uses that commit directly
+  instead of failing `ls-remote`.
+- **Approval drift without a design change.** `updatedAt` is no longer part of a
+  spec's approved digest, so a no-op re-save or a change and its revert no longer
+  drifts the lock.
+- **Delta merges.**
+  - Every array merges by identity at every depth (it used to replace whole lists
+    such as `trustedLinks`, `invariants`, `lint.allow`, `params` and `catches`).
+  - A field a delta leaves out keeps its value, `unset` works at every level, and
+    `[]` clears a narrative.
+  - A step whose `type` changes is rebuilt for the new type.
+  - A label can retarget a jump that already has a number.
+  - Deleting a step is refused when it addresses nothing, its restatement does not
+    match, or it would leave a region body without its header.
+  - Malformed step markers are refused.
+- **Re-authoring** with a create tool carries what the tool cannot express
+  (`lint.allow`, `ext`, `auth`, …) and names what it removed. It no longer reopens a
+  complete subsystem as draft.
+- **No-op writes.** A write that changes nothing writes nothing and says so. A real
+  change is reported field by field, and narrative changes step by step.
+- **Write targets.** `sdd_move_methods` into a component without a contract creates
+  it. An unknown owning subsystem is refused.
+- **Stale locks.** A stale lock no longer reports as locked; `status` and `doctor`
+  name the staleness and its remedy.
+- **Hosted.**
+  - The legacy validate view no longer reports every tree as clean.
+  - The organizations page no longer crashes on units saved before slugs existed.
+  - An unmigrated data dir is announced at startup.
+  - Read-only topology tools need read access, not write.
+  - A unit removal refuses a missing or unknown disposition.
+  - `pack remove` takes the name the listing shows.
+  - A producer-run failure answers its own HTTP status instead of 500.
+- **Hosted CLI.**
+  - `wairon host unit`, `host key` and `host permission` behave as the hosted
+    quick start documents them.
+  - `host unit create` without `--parent` creates a `business_entity`, the only
+    kind a top-level unit can be (it defaulted to `team`). Under a parent the
+    default stays `team`.
+  - `host key mint` refuses a project that no hosted record holds, and mints
+    nothing.
+  - Granting `project:write` to a user who cannot read that scope, or minting a
+    token for an owner who cannot read its project, warns and names the
+    `project:read` grant that fixes it.
+- **`wairon dev`.**
+  - A stale or expired session no longer strands it on a sign-in screen.
+  - It places its project at startup, so it no longer warns that a
+    permission-model migration is pending.
+- **`wairon update`.** The stable channel no longer installs dev builds.
+- **`wairon init`.**
+  - It keeps an existing configuration.
+  - It writes no agent file.
+  - For an Antigravity (`agy`) target it no longer writes a project
+    `.gemini/settings.json`, which Antigravity ignores. It prints the command that
+    registers the server machine-wide instead.
+  - It refuses clearly without a terminal (use `-y`).
+  - Provisioning and externalizing never overwrite an existing `project.yaml`.
+  - It never edits a parent project's `project.yaml` without asking.
+- **Promoted projects.** A project made by `member promote` or
+  `subsystem externalize --as project` is set up like one made by `init`.
+- **MCP registration.** A project-scoped registration (`.mcp.json`,
+  `.gemini/settings.json`), written by `init`, `mcp install` or `doctor --fix`, holds
+  nothing machine-specific. It runs `wairon mcp serve` from the PATH (or the CLI by a
+  project-relative path when the CLI is installed inside the project) and pins no
+  project directory. `doctor --fix` rewrites an older entry that named absolute
+  paths. A `--global` registration is machine-wide and still names the CLI by its
+  absolute path.
+- **`wairon doctor`.** On a machine without Antigravity it reports nothing to
+  register, instead of a missing registration.
+- **`wairon generate`.**
+  - It keeps the derived context documents current.
+  - It prints what it reconciled.
+  - It refuses an unknown `--target`.
+- **Line endings.** Every `.wai` writer keeps a file's line endings.
+- **`validate --ci`.** It waives `DRAFT_SUBSYSTEM_WARNING` like
+  `DRAFT_COMPONENT_WARNING`.
+- **Rule false positives fixed.**
+  - `MEANINGLESS_BRANCH` reads fall-through from the step graph.
+  - `INESCAPABLE_CYCLE` accepts an exit off the end.
+  - `UNREALIZED_CLAIM` ignores quoted text.
+  - `UNUSED_TYPE` counts type-method signatures.
+  - `GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES` exempt a pure forwarder and read
+    the effective `maxComponentDependencies`.
+  - Several rules report once instead of twice.
+  - `UNUSED_METHOD` and `ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT` land on the
+    interface that declares the method.
+- **Analysis.**
+  - The pattern-grade analyzer no longer drops a second file's declarations.
+  - Aliased and named re-exports, local workspace packages and own-class calls are
+    followed.
+  - A technology can declare the tokens it is matched by
+    (`{ name, matches }`).
+  - A forwarding method that shares its target's name is no longer assumed to
+    realize the call: identity is judged on the function body, so a handler that
+    bypasses its orchestrator is reported (`CALL_STEP_UNREALIZED`).
+  - A collaborator typed through `Pick`, `Omit`, `Partial`, `Required` or
+    `Readonly`, through one type alias, or as a property of an object of
+    collaborators is followed to its module.
+  - An `import type` realizes a dependency edge, and a pattern's own files may
+    import its members.
+  - A component with no code yet gets no simulation finding.
+  - Findings use shorter messages.
+- **Migrations.**
+  - Self-qualified invariant references are migrated.
+  - `EXPORT_INVALID` names a duplicate export id.
+  - `lock` says when it replaces an older approval.
+  - A family migration no longer writes `materializeAgentFiles: false` into a
+    `project.yaml` that never set it. The migration rehearses in a copy that has no
+    agent files, so the default was recorded and the next lock deleted the
+    committed agent files.
+  - `member promote` and `subsystem externalize --as project` respell every
+    reference across the new boundary: dotted type tokens at every type position
+    (fields, params, returns, type-method signatures), `signatureFrom` and asserted
+    invariants. They drop `consumers` entries that name a subsystem across the
+    boundary, write type re-exports with `from:`, and take intact pins of other
+    family projects again. The plan is the rehearsal the apply commits, so it lists
+    exactly what is written.
+  - `member rename-alias` also respells type-method signatures and returns.
+  - `member demote` writes an `alias::<type>` token of a type expression or an
+    asserted invariant back as a local reference. A `consumers` list that still
+    restricts a surface gets back each subsystem across the old boundary that
+    depends on it, so a promote followed by a demote no longer leaves
+    `CROSS_SUBSYSTEM_UNLISTED_CONSUMER` behind. A list the promote removed whole
+    is not recreated: absent means any subsystem may depend, and the promote's plan
+    named the removal.
+  - `subsystem externalize` moves every spec file the subsystem owns, whatever the
+    layout. In the flat layout (`subsystems/`, `types/`, …) it used to declare the
+    part and move nothing. In the nested layout a type of the subsystem kept in the
+    shared `types/` folder was left behind.
+- **Packs.** `pack bundle` of a pack installed as a single file by an older
+  `packs add --global` writes a pack directory that resolves without the store. It
+  used to write the file where the directory belongs, so a clone and CI still
+  reported `PACK_NOT_INSTALLED`. Such a bundle no longer reports `PACK_STORE_DRIFT`
+  against the file it came from.
+- **Messages and tools.**
+  - `sdd_get_spec` infers the kind from a unique id, and refuses an id that names
+    specs of several kinds.
+  - `sdd_set_endpoints` refuses a transport the Portal's `transport` does not imply,
+    and an endpoint on an `InProcess` Portal, which needs none.
+  - A family migration's re-lock list names the project it ran in as
+    `this project (.)`, where it printed a bare `.` that read as an empty list.
+  - `lock-check` on a stale lock says what moved: how many of the project's own spec
+    files changed, and which direct member's approval moved, was added or was
+    removed.
+  - The design export's `source.stateId` and the lock record's `stateId` are
+    different digests by design. `docs/design-export.md` now says so: `stateId` is
+    the content id to cache on, and `source.approval` relates an export to its
+    approval.
+  - `wairon export` at a project with member projects names them. Members are
+    listed under `dependencies` and never inlined, so the top of a family that holds
+    no design of its own exports no components. That export no longer reads as
+    empty without a reason.
+  - The design-export schema declares its `$schema` and no longer carries an `$id`
+    that did not resolve.
+- **Packages.** The library entry ships TypeScript declarations, and the npm package
+  and release binaries ship the web app (the build fails without it).
+  The npm package also ships the documentation. Generated skills, guides and
+  `.mcp.json` keep their line endings.
+- **Agent briefs.** A brief states which files the agent may write, and a brief
+  can be asked for by component id.
+- **Generated guidance.** The guide and the `sdd-architect`, `sdd-implement` and
+  `sdd-delegate` skills describe the reachability model: how to declare entries and
+  networks, that an entry is never invented to quiet a finding, that libraries are
+  called directly, how to name transports, and that method names follow the
+  language's casing while wire names live on endpoints.
+- **`wairon status`.** Progress is measured per component: 80% once its
+  component, contract and implementation specs are written, and 100% once its
+  implementation names source files that exist. It is capped at 50% while any of
+  them is a draft. `--all` lists every spec that moved since the approval.
+- **Wording.** `status`, `doctor` and the externals commands word their output
+  more clearly.
+
+### Security
+
+- **Hosted approval decisions are read strictly:** a decision request whose body lacks the accepted
+  fields, or carries a value of the wrong kind, was recorded as a denial. It is now refused with a
+  message naming the accepted fields, and the request stays pending (`docs/cli.md`, hosted section).
+
+Hosted deployments of v5.1.0 should upgrade. This release hardens:
+
+- the confinement of credentials narrowed to a member;
+- write authorization for members and subsystems inside a hosted request;
+- CSRF protection on web writes (approval decisions, project configuration);
+- the sign-in redirect allowlist on every sign-in entry point;
+- session handling on the local dev server;
+- how integration secrets reach the Git and producer integrations;
+- the local operator's administrative writes;
+- approval of a hosted design, which now requires the approval capability on every
+  surface.
+
+### Release process
+
+Every release now passes a QA gate before dev is merged into main: a fixed panel of four
+persona seats plus free automated checks, recorded in a short verdict that CI checks on pull
+requests into main (`docs/release-qa.md`). The upgrade from v5.1.0 is also replayed on every pull
+request by an end-to-end test against a project v5.1.0 itself wrote and locked.
+
+## v5.1.0 (from v5.0.1)
 
 ### Hosted profile application: a selected profile now actually governs (new, `feat/profile-apply-into-spec`)
 

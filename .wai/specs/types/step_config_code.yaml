@@ -1,0 +1,18 @@
+kind: enum
+id: step_config_code
+name: StepConfigCode
+description: The finding codes a narrative step-configuration problem maps to.
+fields: []
+methods: []
+sourcePath: src/models/step-config.ts
+values:
+  - name: DUPLICATE_STEP_LABEL
+    description: Two steps of one narrative share a label, the anchor later deltas address by
+  - name: MALFORMED_FLOW_STEP
+    description: A flow step misses required configuration, or a local or call step carries flow configuration
+  - name: INVALID_STEP_JUMP
+    description: A jump field targets a step number the narrative does not have
+  - name: FOREIGN_STEP_FIELD
+    description: A step carries a field its own type cannot have
+createdAt: '2026-10-04T23:34:07.312Z'
+updatedAt: '2026-10-04T23:34:28.577Z'

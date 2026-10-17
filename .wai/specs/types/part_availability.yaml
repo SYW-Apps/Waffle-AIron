@@ -1,0 +1,17 @@
+kind: enum
+id: part_availability
+name: PartAvailability
+description: Whether, and from where, the scan read a part's files.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/core/specs.ts
+values:
+  - name: live
+    description: From a directory on disk
+  - name: cache
+    description: From the git cache at the pinned commit
+  - name: unavailable
+    description: Not read at all
+createdAt: '2026-10-04T23:33:31.755Z'
+updatedAt: '2026-10-04T23:33:32.295Z'

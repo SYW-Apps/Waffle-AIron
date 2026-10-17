@@ -1,0 +1,18 @@
+kind: enum
+id: agent_status
+name: AgentStatus
+description: >-
+  Where an agent in the registry stands. A record written without one is active, so the absence of a
+  decision is never mistaken for a retirement.
+fields: []
+methods: []
+sourcePath: src/models/agent.ts
+values:
+  - name: active
+    description: In use, and generated
+  - name: draft
+    description: Being written; not yet in use
+  - name: deprecated
+    description: Retired
+createdAt: '2026-10-04T23:13:40.701Z'
+updatedAt: '2026-10-04T23:13:41.084Z'

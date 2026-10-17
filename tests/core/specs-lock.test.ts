@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import {
   collectPromotableSpecs,
   applySpecStatus,
@@ -67,7 +67,7 @@ describe('spec status promotion (wairon lock core)', () => {
     const proj = createDraftProject();
     try {
       // Draft tree: missing endpoint is downgraded to a warning → no errors.
-      const asDraft = validateSddTree();
+      const asDraft = validateProject();
       expect(asDraft.issues.some((i) => i.code === 'MISSING_ENDPOINT' && i.severity === 'error')).toBe(false);
 
       // Dry-run promotion: snapshot → set all complete → validate → restore.
@@ -75,7 +75,7 @@ describe('spec status promotion (wairon lock core)', () => {
       const promotable = collectPromotableSpecs();
       for (const p of promotable) applySpecStatus(p.kind, p.id, 'complete');
       invalidateSpecCache();
-      const asComplete = validateSddTree();
+      const asComplete = validateProject();
       restoreSpecFiles(snapshot);
       invalidateSpecCache();
 

@@ -1,0 +1,24 @@
+kind: value-object
+id: approved_revision
+name: ApprovedRevision
+description: >-
+  Where the baseline of a surface comparison was read: the bound project's tree at one commit,
+  materialized read-only in the fetch cache, and how a reader names it.
+subsystem: sdd_core
+fields:
+  - name: directory
+    type: string
+    description: The project's root at that commit, in the fetch cache.
+    optional: false
+  - name: commit
+    type: string
+    description: The full commit.
+    optional: false
+  - name: label
+    type: string
+    description: 'How a changelog names the baseline: the last approval with its commit, or the ref asked for.'
+    optional: false
+methods: []
+sourcePath: src/core/external-producers.ts
+createdAt: '2026-10-07T10:52:48.831Z'
+updatedAt: '2026-10-07T10:52:49.414Z'

@@ -4,7 +4,10 @@ description: >-
   Control-plane HTTP boundary for read-only hosted operations: forwards each health, usage, and
   quota request to the operations orchestrator.
 contract: ioperations_portal
-sourcePath: src/server/operations.ts
+sourcePath: src/server/operations-portal.ts
+injectedParams:
+  - cfg
+router: handleOperationsRequest
 methods:
   - name: getHealthReport
     narrative:
@@ -30,4 +33,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T11:27:04.719Z'
-updatedAt: '2026-07-10T11:27:34.167Z'
+updatedAt: '2026-10-06T18:55:17.009Z'

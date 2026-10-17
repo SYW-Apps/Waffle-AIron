@@ -22,11 +22,11 @@ module.exports = {
         for (const comp of ctx.components) {
           if (comp.componentType !== 'Portal') continue;
           if (ctx.getComponentProfile(comp.id) !== 'flowops-automation') continue;
-          if (comp.portalType !== 'MessageBus') {
+          if (comp.transport !== 'MessageBus') {
             ctx.addIssue(
               'error',
               'FLOWOPS_PORTAL_TRANSPORT',
-              `Portal "${comp.id}" uses portalType ${comp.portalType ?? '(none)'} in a flowops-automation subsystem — FlowOps scenarios are triggered, not called: expose a MessageBus (webhook/event) trigger instead.`,
+              `Portal "${comp.id}" uses transport ${comp.transport ?? '(none)'} in a flowops-automation subsystem — FlowOps scenarios are triggered, not called: expose a MessageBus (webhook/event) trigger instead.`,
               comp.id,
               ctx.isComponentDraft(comp.id),
             );

@@ -25,5 +25,6 @@ fields:
     description: What this capability does, for the dispatch narrative
     optional: true
 methods: []
+sourcePath: src/models/specs.ts
 createdAt: '2026-07-10T18:47:25.258Z'
-updatedAt: '2026-07-10T18:47:25.267Z'
+updatedAt: '2026-09-19T11:07:07.118Z'

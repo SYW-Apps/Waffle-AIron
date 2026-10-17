@@ -16,18 +16,22 @@ methods:
       perform the same profile-aware initialization body as executeApprovedInit: validate the
       request against the active pack policy (throwing on violations under an enforcing policy),
       create the hosted project, apply the instance's required/default declarative packs via the
-      pack registry, record the resolved profile selection into the project's config, APPLY that
+      pack store, record the resolved profile selection into the project's config, APPLY that
       selection so it actually governs the new project (the first recorded id that resolves —
       project kind, built-in, or pack-contributed profile whose pack is vendored as part of the same
       step — is written as projectType; the remaining ids stay recorded but unapplied, since
       projectType takes exactly one profile), and audit the initialization including the applied
       profile and any unapplied remainder. A selection no tier can resolve leaves the default
       projectType in place and is recorded in the audit rather than failing project creation.
-      Returns the created hosted project record.
+      Returns a GovernedProjectCreation: the created hosted project record (the persisted record,
+      unchanged) with the impact of every pack and of the governing-profile step the init applied —
+      an unattended policy write stating what it changed; the audit event records a compact form of
+      them (audit metadata is size-capped; the full lists are only in the returned
+      GovernedProjectCreation).
     signature: >-
       initializeProjectWithProfile(credential: string, request: ProjectInitRequest):
-      HostedProjectRecord
-    returns: HostedProjectRecord
+      GovernedProjectCreation
+    returns: GovernedProjectCreation
     params:
       - name: credential
         type: string
@@ -66,8 +70,8 @@ methods:
       the governing profile, but only when it is broken or non-compliant: when instance policy
       requires profiles and none of the required ids is governing, or when the recorded projectType
       resolves to no loaded profile, apply the first resolvable id (required ids first, then the
-      recorded selection) through the pack registry's ensure seam — vendoring its contributing pack
-      — and write it as projectType. A resolvable, policy-compliant projectType is reported, never
+      recorded selection) through the pack store's ensure seam — vendoring its contributing pack —
+      and write it as projectType. A resolvable, policy-compliant projectType is reported, never
       overwritten, so a deliberate local choice survives reconciliation. Audit the reconciliation
       and return the post-reconciliation PolicyEvaluationResult, including governingProfileId and
       any unapplied selection remainder.
@@ -112,15 +116,17 @@ methods:
       exposed on any portal. Validates the request against the active pack policy (under an
       enforcing policy, throws on violations), creates the hosted project via
       admin_orchestrator.executeApprovedCreate, applies the instance's requiredGlobalPacks and
-      defaultProjectPacks as declarative packs via the pack registry, records the resolved
+      defaultProjectPacks as declarative packs via the pack store, records the resolved
       ProjectProfileSelection into the project's config, APPLIES that selection as the project's
       governing projectType (first resolvable id, contributing pack vendored through the pack
-      registry's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable
-      selection leaves the default projectType and is reported in the audit rather than failing
-      creation), and audits 'project.init.policy'. This is the single initialization body shared by
-      the gated portal path (initializeProjectWithProfile) and approval execution.
-    signature: 'executeApprovedInit(request: ProjectInitRequest): HostedProjectRecord'
-    returns: HostedProjectRecord
+      store's ensure seam; remaining ids recorded but unapplied; an entirely unresolvable selection
+      leaves the default projectType and is reported in the audit rather than failing creation), and
+      audits 'project.init.policy'. This is the single initialization body shared by the gated
+      portal path (initializeProjectWithProfile) and approval execution. Returns the
+      GovernedProjectCreation (the persisted record with every applied pack's impact and the
+      governing-profile impact).
+    signature: 'executeApprovedInit(request: ProjectInitRequest): GovernedProjectCreation'
+    returns: GovernedProjectCreation
     params:
       - name: request
         type: ProjectInitRequest
@@ -130,8 +136,11 @@ methods:
       authenticated upstream): read the active pack policy (or the documented permissive default
       when unset) and evaluate the ProjectInitRequest against it — flagging a missing required
       profile selection, requested blocked packs, and unknown profile ids — returning a
-      PolicyEvaluationResult. Used by the project lifecycle orchestrator to gate a project-init
-      request before executing it or creating an approval; never exposed on any portal.
+      PolicyEvaluationResult. It also carries `doctrine`: for each required/default pack the init
+      would apply, what the pack changes against wairon's defaults — the doctrine half only, with no
+      finding diff, because the project does not exist yet. Used by the project lifecycle
+      orchestrator to gate a project-init request before executing it or creating an approval; never
+      exposed on any portal.
     signature: 'evaluateInitRequest(request: ProjectInitRequest): PolicyEvaluationResult'
     returns: PolicyEvaluationResult
     params:
@@ -163,8 +172,8 @@ methods:
       target project through the authorization seam (must be yes; an instance-admin bypasses),
       resolve and bind the project's isolated root, then make the requested projectType actually
       GOVERN the project rather than merely recording a name: ensure the profile is resolvable
-      through the pack registry's ensure-profile-installed seam (a built-in profile or project kind
-      and an already-registered pack profile pass through unchanged; a profile contributed only by a
+      through the pack store's ensure-profile-installed seam (a built-in profile or project kind and
+      an already-registered pack profile pass through unchanged; a profile contributed only by a
       server-global pack has that pack vendored into the project and registered in extensions.packs;
       an id no tier contributes is REFUSED, because writing it would silently disable the whole
       profile doctrine), write the profile into the project's project.yaml, and fold the applied id
@@ -182,6 +191,92 @@ methods:
         type: string
       - name: projectType
         type: string
+  - name: createGovernedProject
+    description: >-
+      The single profile-aware initialization body, shared by the gated portal path
+      (initializeProjectWithProfile) and approval execution (executeApprovedInit) — it performs no
+      authentication and no authorization of its own, so it is never exposed on any portal.
+      Validates the request against the active pack policy (throwing on violations under an
+      enforcing policy), creates the hosted project through the admin plane's pre-authorized create
+      entry, applies and registers the instance's required/default declarative packs (measuring each
+      before its write), records the resolved ProjectProfileSelection, APPLIES that selection so it
+      actually governs the new project (the first recorded id the instance can resolve becomes
+      projectType, the step measured separately before its writes; the rest stay recorded as the
+      unapplied remainder), and audits 'project.init.policy' best-effort with a compact form of the
+      impacts (doctrine changes counted by kind, finding counts and both totals — audit metadata is
+      size-capped, so the full lists stay in the returned GovernedProjectCreation). A selection no
+      tier can resolve leaves the default projectType in place and is reported in the audit rather
+      than failing creation. When a principal is supplied the recorded selection and the audit are
+      attributed to that caller; the pre-authorized entry runs without one. Returns the
+      GovernedProjectCreation: the persisted record, unchanged, beside the pack impacts and the
+      governing-profile impact.
+    signature: >-
+      createGovernedProject(request: ProjectInitRequest, principal?: Principal):
+      GovernedProjectCreation
+    returns: GovernedProjectCreation
+    params:
+      - name: request
+        type: ProjectInitRequest
+        description: >-
+          The initialization request: its required ownerUnitId, its requested packs and its profile
+          selection
+      - name: principal
+        type: Principal
+        description: >-
+          The authenticated caller to attribute the selection and the audit to; absent on the
+          pre-authorized path
+        optional: true
+  - name: repairGoverningProfile
+    description: >-
+      Repair a project's governing profile, but ONLY when it is broken or non-compliant: the
+      instance policy requires profiles and none of them governs, or the recorded projectType
+      resolves to no loaded profile at all. A resolvable, policy-compliant projectType is reported
+      and left exactly as it is, so a deliberate local choice survives reconciliation. A repair
+      takes the first resolvable candidate (the policy's required ids before the recorded selection
+      ids), vendors its contributing pack through the pack store's ensure seam and registers the
+      reference, writes it as the project's projectType, and folds it into the recorded selection so
+      compliance — which reads the record — agrees with the governing reality. Performs no
+      authentication: the reconciling caller's project:write was resolved upstream, and it is never
+      exposed on any portal.
+    signature: >-
+      repairGoverningProfile(projectId: string, root: string, policy: InstancePackPolicy, config:
+      ProjectConfig, catalog: list<AvailableProfile>, principal: Principal): ProfileRepair
+    returns: ProfileRepair
+    params:
+      - name: projectId
+        type: string
+        description: The hosted project whose governing profile is judged
+      - name: root
+        type: string
+        description: The project's bound isolated root, where a repair is written
+      - name: policy
+        type: InstancePackPolicy
+        description: The effective instance policy whose required profile ids decide compliance
+      - name: config
+        type: ProjectConfig
+        description: >-
+          The project's configuration as the pack half left it — its projectType and recorded
+          selection
+      - name: catalog
+        type: list<AvailableProfile>
+        description: >-
+          The profiles selectable for this project, which decide what resolves and what can repair
+          it
+      - name: principal
+        type: Principal
+        description: The reconciling caller, stamped onto the folded selection
+  - name: appendAuditBestEffort
+    description: >-
+      Append one redacted audit event under the active retention policy WITHOUT letting a failure
+      fail the caller's primary action — an append failure is recorded as a server diagnostic and
+      swallowed (audit appends are best-effort by invariant). The shared best-effort audit
+      choreography every policy-plane write ends with.
+    signature: 'appendAuditBestEffort(event: AuditEvent): void'
+    returns: void
+    params:
+      - name: event
+        type: AuditEvent
+        description: The redacted event to append
 status: complete
 createdAt: '2026-07-08T21:59:46.667Z'
-updatedAt: '2026-07-24T23:31:48.662Z'
+updatedAt: '2026-10-04T10:19:21.512Z'

@@ -1,0 +1,70 @@
+kind: value-object
+id: internalize_result
+name: InternalizeResult
+description: >-
+  What internalizing a member did with each thing the member held: the subsystems and types it
+  moved, where each piece of the member's own metadata went, and what was deleted — so no part of
+  the member's .wai disappears unlisted.
+subsystem: sdd_core
+fields:
+  - name: subsystems
+    type: list<string>
+    description: The member's subsystems, now the parent's, under their own ids.
+    optional: false
+  - name: types
+    type: list<string>
+    description: The member's project-level types, now the parent's project-level types.
+    optional: false
+  - name: placed
+    type: list<string>
+    description: >-
+      One line per piece of metadata and where it went, e.g. "L0 vision → billing description",
+      "globalRequirements (2) → parent L0", "targetLanguage rust → billing, ledger", "member
+      payments → parent members as payments (services/billing/payments)", "pack acme/rules@1.2.0
+      adopted", ".wai/variants/relay.yaml → this project's .wai/variants/relay.yaml".
+    optional: false
+  - name: externals
+    type: list<string>
+    description: >-
+      The aliases the parent now declares that the member declared, whose pins the family migration
+      takes again in the parent.
+    optional: false
+  - name: deleted
+    type: list<string>
+    description: >-
+      Every file of the member's .wai deleted with no home, grouped: its project.yaml, its lock (its
+      approval ends with the project), its pins and snapshots, its derived outputs (agents, context,
+      docs, generated, rules, templates, topology, mcp), its legacy surfaces, its design workbook
+      (phased_design.md), its host and producer bindings (git.json, remote.json, producers.json),
+      and the files placed in this project (variants, vendored packs).
+    optional: false
+  - name: notCarried
+    type: list<string>
+    description: >-
+      One line per piece of the member's metadata deliberately not carried, with the reason — e.g.
+      "projectType fullstack not stamped on billing, ledger: not a subsystem profile (a project
+      kind, or no built-in or loaded pack registers it)", or the member's design workbook when it
+      differs from this project's — so a value the moved subsystems cannot hold is listed rather
+      than raising UNKNOWN_PROFILE, and the plan names it before anything is applied.
+    optional: false
+  - name: consumersRestored
+    type: list<string>
+    description: >-
+      Demote only (empty for internalize): one line per consumers list that still restricts a
+      surface, widened by the subsystems across the old boundary that depend on it — the use the
+      boundary's export table granted, kept as the list a part needs. A list the promote removed
+      whole is not recreated: absent reads as any subsystem of the project, and nothing durable
+      survives the promote to tell it from a list never written.
+    optional: false
+  - name: signaturesRederived
+    type: list<string>
+    description: >-
+      Internalize and demote: one line per contract or type method whose stored signature text the
+      respelling across the old boundary left stale and was re-derived from its params, e.g.
+      "ihit_client.reportHit: reportHit(hit: analytics::hit): async void → reportHit(hit:
+      analytics.hit): async void".
+    optional: true
+methods: []
+sourcePath: src/core/provision.ts
+createdAt: '2026-09-30T20:21:50.730Z'
+updatedAt: '2026-10-09T00:59:03.200Z'

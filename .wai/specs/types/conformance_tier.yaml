@@ -1,0 +1,19 @@
+kind: enum
+id: conformance_tier
+name: ConformanceTier
+description: >-
+  How strictly a contract method's realization is checked in its source file. Absent, the
+  stereotype's default applies (Portal: anchored, everything else: declared). The existence check of
+  every named source file always applies.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: declared
+    description: A declaration-tier anchor for each contract method in the sourcePath file
+  - name: anchored
+    description: Also accepts exact string-literal occurrences (tool and route registrations)
+  - name: 'off'
+    description: Skips method checks, for generated or vendored code
+createdAt: '2026-10-04T23:12:02.447Z'
+updatedAt: '2026-10-04T23:12:02.921Z'

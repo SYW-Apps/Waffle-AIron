@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -41,7 +41,7 @@ describe('diagram generation from the spec tree', () => {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'billing',
@@ -50,7 +50,7 @@ describe('diagram generation from the spec tree', () => {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'shipping',
       name: 'Shipping',
       description: 'shipping',
@@ -145,6 +145,38 @@ describe('diagram generation from the spec tree', () => {
     // stereotype classes + public surface marking
     expect(mmd).toContain('classDef entry');
     expect(mmd).toMatch(/class .*billing_portal.* publicSurface/);
+  });
+
+  it('classes retired Specialists and Gateways as retired, not as logic or a pattern', () => {
+    buildFixture();
+    const at = { description: 'd', subsystem: 'billing', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now };
+    saveComponentSpec({ ...at, id: 'pricing-specialist', name: 'Pricing Specialist', componentType: 'Specialist' } as any);
+    saveComponentSpec({ ...at, id: 'edge-gateway', name: 'Edge Gateway', componentType: 'Gateway' } as any);
+    const mmd = generateComponentDiagram();
+
+    expect(mmd).toContain('classDef retired');
+    const retiredIds = (/^\s*class (\S+) retired$/m.exec(mmd)?.[1] ?? '').split(',');
+    expect(retiredIds).toEqual(expect.arrayContaining(['pricing_specialist', 'edge_gateway']));
+    expect(/^\s*class (\S+) logic$/m.exec(mmd)?.[1] ?? '').not.toContain('pricing_specialist');
+    expect(/^\s*class (\S+) pattern$/m.exec(mmd)?.[1] ?? '').not.toContain('edge_gateway');
+  });
+
+  it('classes a Query as its own stereotype and draws it as a Repository member beside its Index', () => {
+    buildFixture();
+    const at = { description: 'd', subsystem: 'billing', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now };
+    saveComponentSpec({ ...at, id: 'billing-index', name: 'Billing Index', componentType: 'Index' } as any);
+    saveComponentSpec({ ...at, id: 'billing-query', name: 'Billing Query', componentType: 'Query' } as any);
+    saveComponentSpec({ ...at, id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store', 'billing-index', 'billing-query'] } as any);
+    const mmd = generateComponentDiagram();
+
+    expect(mmd).toContain('classDef query');
+    // owns → dashed containment edge, same as any other Repository member
+    expect(mmd).toMatch(/billing_repo -\. owns \.-> billing_query/);
+    expect(mmd).toMatch(/billing_repo -\. owns \.-> billing_index/);
+    const queryIds = (/^\s*class (\S+) query$/m.exec(mmd)?.[1] ?? '').split(',');
+    expect(queryIds).toContain('billing_query');
+    expect(/^\s*class (\S+) data$/m.exec(mmd)?.[1] ?? '').not.toContain('billing_query');
+    expect(/^\s*class (\S+) logic$/m.exec(mmd)?.[1] ?? '').not.toContain('billing_query');
   });
 
   it('scopes a component diagram to a subsystem plus its external neighbors', () => {

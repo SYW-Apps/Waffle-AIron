@@ -1,0 +1,78 @@
+id: inetwork_orchestrator
+name: Network Orchestrator Interface
+description: >-
+  The derived networking workflows. Each reads the reach model of the bound project (its family at a
+  project that declares members) and writes nothing.
+component: network_orchestrator
+methods:
+  - name: flows
+    description: The allowed-flows matrix, encoded as JSON, CSV or Markdown.
+    signature: 'flows(options: ValidationOptions, format: NetworkOutputFormat): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+        description: 'The selection: member depth and reach'
+      - name: format
+        type: NetworkOutputFormat
+        description: json, csv or markdown
+  - name: policy
+    description: Generated network policy for a target format, from the matrix and the team's bindings file.
+    signature: >-
+      policy(options: ValidationOptions, bindingsPath: string, format: NetworkOutputFormat):
+      NetworkDocument
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: bindingsPath
+        type: string
+        description: The bindings file the team keeps outside .wai/
+      - name: format
+        type: NetworkOutputFormat
+        description: 'A policy target: kubernetes-network-policy'
+  - name: diagram
+    description: The network picture as Mermaid.
+    signature: 'diagram(options: ValidationOptions): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+  - name: view
+    description: The network picture as the hosted canvas's view model.
+    signature: 'view(options: ValidationOptions): NetworkViewModel'
+    returns: NetworkViewModel
+    params:
+      - name: options
+        type: ValidationOptions
+  - name: check
+    description: Observed live flows judged against the matrix.
+    signature: >-
+      check(options: ValidationOptions, observedPath: string, bindingsPath: string?):
+      FlowCheckReport
+    returns: FlowCheckReport
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: observedPath
+        type: string
+        description: The observed-flow export
+      - name: bindingsPath
+        type: string?
+        description: The bindings the observed names follow; none when they are design names already
+  - name: why
+    description: Why one party may reach another, from the design.
+    signature: 'why(options: ValidationOptions, from: string, to: string): FlowExplanation'
+    returns: FlowExplanation
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: from
+        type: string
+        description: A project, a project::component, or outside
+      - name: to
+        type: string
+        description: A project, a project::portal, or a project::portal.verb
+status: complete
+createdAt: '2026-10-06T13:11:10.358Z'
+updatedAt: '2026-10-06T13:11:10.965Z'

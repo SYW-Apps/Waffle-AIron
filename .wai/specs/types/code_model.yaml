@@ -2,22 +2,78 @@ kind: value-object
 id: code_model
 name: CodeModel
 description: >-
-  The pure source-code model the structural-conformance rule family consumes — built once per
-  validation run by the source analysis adapter and injected into the rule context (the
-  surface-snapshots pattern). Keyed by resolved sourcePath, so many implementations legitimately
-  sharing one file (N:1 realization) read the same facts.
+  The pure source-code model the Level 1 conformance rules consume — built once per validation run
+  by the source analysis adapter and injected into the rule context (the surface-snapshots pattern).
+  Keyed by resolved source path, so implementations and methods legitimately sharing one file (N:1
+  realization) read the same facts.
 subsystem: sdd_validator
 fields:
   - name: files
-    type: SourceFileFacts[]
+    type: list<SourceFileFacts>
     description: >-
-      One facts entry per distinct resolved sourcePath (including missing/escaped/unreadable
-      entries, so rules stay pure lookups)
+      One facts entry per distinct resolved source path — an implementation's, a method's or a sim
+      harness's — including missing/escaped/unreadable entries, so rules stay pure lookups
     optional: false
   - name: projectRoot
     type: string
-    description: The root every sourcePath was resolved and containment-checked against
+    description: The root every source path was resolved and containment-checked against
     optional: false
-methods: []
+  - name: rootFiles
+    type: list<string>
+    description: >-
+      Every source file the declared source-root walk found, as canonical keys in walk order — the
+      domain the unclaimed-source rule judges. Empty when the project declares no source roots,
+      which is what keeps that rule opt-in. Facts for these files live in files, like any other
+      analyzed path.
+    optional: false
+  - name: packages
+    type: map<string, string>
+    description: >-
+      The package specifiers that name a package of THIS repository, each mapped to the canonical
+      project-relative source file it resolves to: the root package and every workspace package the
+      root package.json declares (never node_modules), by the package's `name` for its main entry
+      and `name/sub` for each plain subpath export, each entry mapped back from the package's build
+      output to its source through the package's tsconfig outDir/rootDir when it names a build file.
+      What lets a package import resolve like a relative one; a third-party specifier is in no entry
+      and resolves to nothing, as before
+    optional: true
+  - name: reachedCalls
+    type: map<string, list<ResolvedCallFact>>
+    description: >-
+      The resolved calls of the project's own source files that no facts entry holds but a resolved
+      call or reference of the run reaches — a helper module no spec names and no source-root walk
+      found — keyed by canonical path. What lets a rule read unowned code as part of whoever calls
+      it. Absent where no type checker was loaded
+    optional: true
+  - name: reachedImports
+    type: map<string, ModuleImports>
+    description: >-
+      What each of the project's own source files the type checker read imports — the run's files
+      and every project file they pull in, a helper module no spec names included — keyed by
+      canonical path. What lets a rule read an unowned module's imports as its importer's. Absent
+      where no type checker was loaded
+    optional: true
+  - name: outsideNames
+    type: list<string>
+    description: >-
+      Every identifier written, comments aside, in a source file of the project the run did not
+      analyze — its tests, a composition root, scripts; dependency, build-output and hidden folders
+      are not read. What tells a public verb nothing uses from one code outside the design calls, so
+      it may only ever exempt a name, never accuse one. Absent when the walk found no such file
+    optional: true
+methods:
+  - name: pathKey
+    signature: 'pathKey(path: string): string'
+    returns: string
+    description: >-
+      The canonical key form of a source path in this model — forward slashes, no leading ./ — the
+      form every facts entry is stored under and every lookup or path comparison uses
+  - name: factsFor
+    signature: 'factsFor(path: string): SourceFileFacts | undefined'
+    returns: SourceFileFacts?
+    description: >-
+      The facts entry for a source path, looked up by its canonical key; undefined when the run
+      analyzed no such path
+sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-07-11T17:51:46.145Z'
+updatedAt: '2026-10-17T15:42:21.227Z'

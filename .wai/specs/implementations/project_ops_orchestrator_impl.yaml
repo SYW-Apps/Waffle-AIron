@@ -2,10 +2,12 @@ id: project_ops_orchestrator_impl
 name: Project Ops Orchestrator Implementation
 description: >-
   Pure 1:1 forwarding seam: every method passes the caller's credential (browser session id or
-  bearer token) straight to the owning orchestrator, whose resolver gate applies unchanged. No
-  authorization logic and no state here.
+  bearer token) straight to the owning orchestrator, whose permission-rules gate applies unchanged.
+  No authorization logic and no state here.
 contract: iproject_ops_orchestrator
 sourcePath: src/server/projectops.ts
+injectedParams:
+  - cfg
 methods:
   - name: listGlobalPacks
     narrative:
@@ -164,16 +166,16 @@ methods:
   - name: getExposurePolicy
     narrative:
       - stepNumber: 1
-        description: Forward to the operations orchestrator with the caller's credential
+        description: Forward to the exposure policy orchestrator with the caller's credential
         type: call
-        targetComponent: operations_orchestrator
+        targetComponent: exposure_policy_orchestrator
         targetMethod: getExposurePolicy
   - name: setExposurePolicy
     narrative:
       - stepNumber: 1
-        description: Forward to the operations orchestrator with the caller's credential
+        description: Forward to the exposure policy orchestrator with the caller's credential
         type: call
-        targetComponent: operations_orchestrator
+        targetComponent: exposure_policy_orchestrator
         targetMethod: setExposurePolicy
   - name: listBackingBindings
     narrative:
@@ -181,7 +183,7 @@ methods:
         description: Forward to the git backing orchestrator with the caller's credential
         type: call
         targetComponent: git_backing_orchestrator
-        targetMethod: listBackingBindings
+        targetMethod: listBindings
   - name: bindBackingScope
     narrative:
       - stepNumber: 1
@@ -202,7 +204,7 @@ methods:
         description: Forward to the git backing orchestrator with the caller's credential
         type: call
         targetComponent: git_backing_orchestrator
-        targetMethod: syncBackingScope
+        targetMethod: syncScope
   - name: installGlobalPackArchive
     narrative:
       - stepNumber: 1
@@ -267,7 +269,35 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: listProjectProfiles
+  - name: exportProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: exportProjectTree
+  - name: importProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Forward to the admin orchestrator with the caller's credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: importProjectTree
+  - name: previewProjectPack
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPack
+  - name: previewProjectPackRemoval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the pack orchestrator with the caller's credential
+        type: call
+        targetComponent: pack_orchestrator
+        targetMethod: previewProjectPackRemoval
 detail: calls-only
 status: complete
 createdAt: '2026-07-16T15:31:04.418Z'
-updatedAt: '2026-07-24T23:39:18.636Z'
+updatedAt: '2026-09-29T16:16:48.520Z'

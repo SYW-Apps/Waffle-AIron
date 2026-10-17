@@ -1,0 +1,108 @@
+kind: value-object
+id: reach_model
+name: ReachModel
+description: >-
+  What reaches each Portal verb and from where, projected from a tree or a whole family. It is the
+  one input of the network rules (network_arbiter) and of every derived networking output: the flow
+  matrix, policies, diagrams, the observed-flow check and the explanation of a flow. Deterministic:
+  the same tree gives the same model, in a stable order.
+fields:
+  - name: scope
+    type: string
+    description: >-
+      What it was projected from: own (one project's own gate) or family (the family run at its
+      root)
+    optional: false
+  - name: networks
+    type: list<NetworkBoundary>
+    description: Every declared network in scope, outermost first
+    optional: false
+  - name: verbs
+    type: list<VerbReach>
+    description: Every Portal verb in scope
+    optional: false
+  - name: calls
+    type: list<ModelledCall>
+    description: Every modelled call into a Portal verb that crosses a subsystem or project boundary
+    optional: false
+  - name: placements
+    type: list<ComponentPlacement>
+    description: >-
+      Every component in scope, with its project and subsystem: how a caller only a cross-project
+      reference records is named by its workload, and how a party is known at all
+    optional: false
+  - name: topics
+    type: list<TopicEnd>
+    description: >-
+      Every end of the pub/sub graph in scope: each component's emitted and subscribed topics, which
+      the family run pairs across projects
+    optional: false
+  - name: findings
+    type: list<ReachFinding>
+    description: >-
+      The model's network findings, judged (network_arbiter.judge) and lint-allow filtered, when the
+      model was read for the derived networking outputs (family_validator.reachModel); absent on a
+      model a rule projects to judge
+    optional: true
+  - name: subsystems
+    type: list<string>
+    description: >-
+      Every subsystem in scope, qualified like the placements, including one that holds only types
+      (a library of value objects): how such a subsystem is known as a party, and answered as
+      reached in-process
+    optional: true
+  - name: externals
+    type: list<string>
+    description: >-
+      The aliases of the bound project's declared externals: a party named `<alias>::<name>` through
+      one is known, and, with no network verb of the model under it, answered as reached outside
+      this design's network model
+    optional: true
+  - name: rootProject
+    type: string
+    description: >-
+      The bound root's project id: how the root's own parties and network are named in an encoded
+      matrix, where its key is empty
+    optional: true
+  - name: formerNames
+    type: map<string, string>
+    description: >-
+      Each former name of a renamed member project (its previousIds, qualified like its key) mapped
+      to its current key: how a bindings key or an observed-flow name written before the rename
+      still resolves, each such use reported so the key can be renamed
+    optional: true
+  - name: focus
+    type: string
+    description: >-
+      At a member's own root: the member's key in the enclosing family the model was composed for.
+      The matrix keeps only the flows that start or land inside it, row for row as the family root
+      derives them
+    optional: true
+  - name: judgedAt
+    type: string
+    description: >-
+      At a member's own root: the root directory of the enclosing family whose network declaration
+      and proofs the model carries
+    optional: true
+methods:
+  - name: callersOf
+    signature: 'callersOf(portal: string, verb: string): list<ModelledCall>'
+    params:
+      - name: portal
+        type: string
+      - name: verb
+        type: string
+    returns: list<ModelledCall>
+    description: The modelled calls that land on one Portal verb. Pure
+  - name: enclosing
+    signature: 'enclosing(network: string?): list<string>'
+    params:
+      - name: network
+        type: string?
+    returns: list<string>
+    description: >-
+      The chain of declared networks around a network, innermost first, ending at the outermost.
+      Pure
+sourcePath: src/models/reach.ts
+createdAt: '2026-10-06T12:57:20.910Z'
+updatedAt: '2026-10-07T06:19:18.298Z'

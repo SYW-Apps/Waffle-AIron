@@ -1,0 +1,133 @@
+kind: value-object
+id: scanned_project_root
+name: ScannedProjectRoot
+description: >-
+  What one scan read at one project root, beyond the specs it put in the index: its key and where it
+  sits among its family's members, its own L0 (never merged into the index, whose L0 is the bound
+  root's), its configuration, its alias table, its resolved export tables, the ids of the specs it
+  declared, and every reference with `::` its authors wrote, as bound. The raw material of the
+  project graph and the export tables, and what the writer relativizes a save against.
+subsystem: sdd_core
+fields:
+  - name: namespace
+    type: string
+    description: >-
+      The project's key: '' for the bound root, else its effective project id — the prefix of every
+      spec it declares in memory (`billing::invoice_portal`, `billing::billing` for its subsystem
+      `billing`), the same at every depth and from every root that reads it. A member whose id
+      another member already holds, or that has none, is keyed by its alias path instead and
+      reported (PROJECT_ID_COLLISION, PROJECT_ID_AMBIGUOUS). In memory only: a key is never written
+      to a file.
+    optional: false
+    key: primary
+  - name: parent
+    type: string
+    description: The key of the root that declares this one as a member.
+    optional: true
+  - name: mountAlias
+    type: string
+    description: >-
+      The alias its parent declares it under: the parent's `members` key, or the legacy L1 mount
+      subsystem's local id.
+    optional: true
+  - name: mountForm
+    type: MountForm
+    description: How the parent declares it; absent for the bound root.
+    optional: true
+  - name: legacyMount
+    type: SubsystemSpec?
+    description: >-
+      The legacy L1 mount subsystem as the parent wrote it (its description, publicInterfaces,
+      trustedLinks, consumers, lint and any other field), read so the migration can carry its fields
+      and a finding can name it. Never in the index: a mount carries no content. Null for a
+      members-declared root and the bound root.
+    optional: false
+  - name: directory
+    type: string
+    description: The root directory, absolute.
+    optional: false
+  - name: system
+    type: SystemSpec?
+    description: >-
+      The root's own L0, its export entries qualified into its key (`from` against its subsystems,
+      members and externals, `component`, `interface` and `typeDef` against their source); null when
+      the root has none.
+    optional: false
+  - name: config
+    type: ProjectConfig?
+    description: >-
+      The root's configuration, read through the configuration bound at that root — the per-root
+      binding the scan already reads the root's specs folder through (a scan may read the
+      configuration of the root it is walking, through that root's binding); its .wai/project.yaml
+      is part of the scan's freshness signature. Null when unreadable.
+    optional: false
+  - name: aliases
+    type: map<string, string>
+    description: >-
+      The root's alias table: each `members` key (or legacy mount id) and each declared external's
+      alias, mapped to the key of the project it names in this scan; an external whose producer the
+      scan did not read maps to nothing and its references bind as outside.
+    optional: false
+  - name: exports
+    type: ResolvedExportTable
+    description: >-
+      The root's L0 export table, resolved once in the scan through export_resolver — after the
+      tables of the members and externals it re-exports from — and the table every `alias::name`
+      into this project binds against. Empty when the root has no L0.
+    optional: false
+  - name: subsystemExports
+    type: map<string, ResolvedExportTable>
+    description: >-
+      Each of the root's subsystems' L1 export tables, keyed by subsystem key, resolved in the same
+      pass.
+    optional: false
+  - name: specIds
+    type: list<string>
+    description: The keys of every spec this root's files declared.
+    optional: false
+  - name: authoredReferences
+    type: list<AuthoredReference>
+    description: >-
+      Every reference with `::` this root's files wrote, with the form it was read in and what it
+      bound to.
+    optional: false
+  - name: problems
+    type: list<ProjectFamilyProblem>
+    description: >-
+      The family problems the scan met at this root, as spec_index.listProjectRoots records them:
+      its members that were absent, an alias declared both as a member and as an external, a key two
+      of its spec files declare (duplicate-spec, naming both files — a part's file and the root's
+      own included, since they share one namespace), and its members' stage-8 problems
+      (part-unavailable, kind-mismatch). The identity problems (collisions, no-id, defaulted) are
+      the project family index's to derive from the nodes.
+    optional: false
+  - name: memberDescription
+    type: string
+    description: >-
+      What its parent's declaration says the member is: the `members` entry's description, or a
+      legacy mount's description; absent for the bound root and for a member declared without one.
+    optional: true
+  - name: parts
+    type: list<ScannedPart>
+    description: >-
+      The parts this root declares (stage 8), in declaration order, each with where its files came
+      from and the keys of the specs it put in the index under THIS root's key. A part is not a
+      root: it appears here and nowhere in the root list.
+    optional: false
+  - name: referenced
+    type: list<ScannedPart>
+    description: >-
+      The referenced project members this root declares (stage 8): each git member whose content
+      makes it a project, located at the fetch cache at its pinned commit, with its commit and
+      availability, and nothing of it read into this root (its subsystems and specIds stay empty) —
+      and a `../` sibling project member only when the scan could not open it (a hosted instance, an
+      absent folder), as unavailable: an openable sibling is followed and composed live like a
+      contained member (round 8). The family run, the gate identity and the externals plane open
+      each at this root; a hosted member is located by the hosting server's record lookup instead
+      and is not listed. On a hosted instance a `../` or git source is never read, so none is
+      located.
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-26T17:39:58.407Z'
+updatedAt: '2026-10-09T00:59:07.347Z'

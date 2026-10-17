@@ -1,0 +1,68 @@
+kind: value-object
+id: spec_deletion
+name: SpecDeletion
+description: >-
+  What a delete answers with, as data: which spec, whether it was removed, every spec the deletion
+  took with it (a container's content), every reference another spec still holds to them, every
+  public name a consumer reaches what goes through, and the tests that encode a method the deletion
+  took away. A dry run answers the same plan and removes nothing.
+subsystem: sdd_authoring
+fields:
+  - name: kind
+    type: WritableSpecKind
+    description: The spec kind deleted (never system).
+    optional: false
+  - name: id
+    type: string
+    description: The id the spec was stored under
+    optional: false
+  - name: deleted
+    type: bool
+    description: >-
+      True when the spec and its subtree were removed; false on a dry run, and when no spec held the
+      id
+    optional: false
+  - name: testsToRevisit
+    type: list<TestsToRevisit>
+    description: >-
+      The tests that encode a method this deletion removed, one entry per such method. Empty when
+      the spec held no methods, when the project declares no test roots, or when nothing references
+      them
+    optional: false
+  - name: dryRun
+    type: bool
+    description: 'True when the caller asked what the deletion would do: nothing was removed'
+    optional: false
+  - name: removed
+    type: list<SpecRef>
+    description: >-
+      Every spec the deletion removes (or, on a dry run, would remove), innermost first and the
+      addressed spec last
+    optional: false
+  - name: references
+    type: list<SpecReference>
+    description: >-
+      Every reference a spec outside the removed set holds to one of them. A deletion that would
+      leave any is refused unless the caller forces it; forced, these are the references left
+      dangling, each of which validate reports
+    optional: false
+  - name: published
+    type: list<ExportUse>
+    description: >-
+      Every public name of the bound project's L1 and L0 export tables a consumer reaches what the
+      deletion removes through, each with the members carrying it: an export of a removed component
+      or contract (its methods), of a removed type or a type embedding it, and an exported contract
+      whose methods name one. Read before anything goes. Empty when nothing removed is published.
+    optional: false
+  - name: breaks
+    type: list<ExternalConsumer>
+    description: >-
+      The consumers in reach (family members included, and checkouts in the searched folders) whose
+      specs reach one of the published names on a member it carries — the projects the deletion
+      breaks, narrowed to what they use. Filled by the door that read the consumers; absent when
+      none breaks.
+    optional: true
+methods: []
+sourcePath: src/core/authoring.ts
+createdAt: '2026-09-24T22:20:44.394Z'
+updatedAt: '2026-10-09T00:25:01.272Z'

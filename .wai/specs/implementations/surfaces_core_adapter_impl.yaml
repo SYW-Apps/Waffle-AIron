@@ -1,60 +1,162 @@
 id: surfaces_core_adapter_impl
 name: Surfaces Core Adapter Implementation
-description: Spec-tree reads forwarded to the core portal.
+description: >-
+  sdd_surfaces' client hop into sdd_core, in a module of its own: identity re-exports of the core
+  portals. The surface workflows import this module, so their calls into core land here.
 contract: isurfaces_core_adapter
-sourcePath: src/core/surfaces.ts
+sourcePath: src/core/adapters/surfaces-core.ts
 methods:
   - name: loadSystemSpec
     narrative:
       - stepNumber: 1
         description: Call loadSystemSpec on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadSystemSpec
-  - name: loadSubsystemSpecs
-    narrative:
-      - stepNumber: 1
-        description: Call loadSubsystemSpecs on core portal
-        type: call
-        targetComponent: core_portal
-        targetMethod: loadSubsystemSpecs
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
         description: Call loadComponentSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadComponentSpecs
   - name: loadInterfaceSpecs
     narrative:
       - stepNumber: 1
         description: Call loadInterfaceSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadInterfaceSpecs
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
         description: Call loadTypeSpecs on core portal
         type: call
-        targetComponent: core_portal
+        targetComponent: spec_tree_portal
         targetMethod: loadTypeSpecs
-  - name: resolveChainingParent
+  - name: computeStateId
     narrative:
       - stepNumber: 1
-        description: Forward chaining detection to the core subsystem's published portal
+        description: Call computeStateId on the approval portal
         type: call
-        targetComponent: core_portal
-        targetMethod: resolveChainingParent
-  - name: computeParentStateId
+        targetComponent: approval_portal
+        targetMethod: computeStateId
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveProjectExports on the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveProjectExports
+  - name: loadProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Call loadProjectConfig on the project config portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+  - name: resolveExternals
+    narrative:
+      - stepNumber: 1
+        description: Forward the externals resolution, with `offline`, to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveExternals
+  - name: excerptParent
+    narrative:
+      - stepNumber: 1
+        description: Forward the part's parent excerpt to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: excerptParent
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadSubsystemSpecs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSubsystemSpecs
+  - name: loadImplementationSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadImplementationSpecs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadImplementationSpecs
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Call resolveSubsystemExports on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveSubsystemExports
+  - name: projectFamily
+    narrative:
+      - stepNumber: 1
+        description: Forward the project graph read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: projectFamily
+  - name: declareExternal
     narrative:
       - stepNumber: 1
         description: >-
-          Forward the read-only cross-root state-hash computation to the core subsystem's published
-          portal
+          Forward the declaration write to the core subsystem's published configuration portal,
+          which routes it through the core orchestrator
         type: call
-        targetComponent: core_portal
-        targetMethod: computeStateIdAt
+        targetComponent: project_config_portal
+        targetMethod: declareExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the removal to the core subsystem's published configuration portal, which routes
+          it through the core orchestrator
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removeExternal
+  - name: resolveExternalCandidate
+    narrative:
+      - stepNumber: 1
+        description: Forward the candidate binding to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveExternalCandidate
+  - name: listExternalConsumers
+    narrative:
+      - stepNumber: 1
+        description: Forward the consumer listing to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: listExternalConsumers
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Forward the import to the core subsystem's published configuration portal
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: importNames
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
+  - name: approvedRevision
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: approvedRevision
+  - name: memberRevisions
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: memberRevisions
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-07-24T18:02:21.009Z'
+updatedAt: '2026-10-09T11:37:58.170Z'

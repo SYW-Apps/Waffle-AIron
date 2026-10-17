@@ -1,0 +1,208 @@
+id: narrative_graph_projector_impl
+name: Narrative Graph Projector Implementation
+description: >-
+  Realizes the shared BFS narrative-graph walker moved out of graph.ts, deriving a NarrativeReach
+  from a seed set without persisting or mutating any state.
+contract: inarrative_graph_projector
+simPath: tests/core/validation.test.ts
+methods:
+  - name: walk
+    sourcePath: src/core/rules/narrative-graph-projector.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve WalkOptions: followDispatchTables defaults to true when unset, followRegisterEdges
+          defaults to true when unset. Initialize an empty NarrativeReach (reachedComponents and
+          reachedMethods both empty) and an empty FIFO queue of pending {compId, methodName}
+          entries.
+        type: local
+      - stepNumber: 2
+        label: seedLoop
+        description: 'For each seed in seeds:'
+        type: loop
+        loopKind: forEach
+        over: seeds
+        endStep: 7
+      - stepNumber: 3
+        description: >-
+          Reach the seed's component (the shared 'reach a component' behavior reused everywhere
+          below): if reach.reachesComponent(seed.compId) is false, add seed.compId to
+          reachedComponents; then, only when followDispatchTables is true, flood the component's
+          dispatch table into the reach — for each binding whose target is in ctx.componentMap,
+          reach that bound component the same way and, if not already reached, add its bound method
+          to reachedMethods and enqueue it, recursively repeating the flood for a newly reached
+          bound Portal.
+        type: local
+      - stepNumber: 4
+        description: Does this seed target one specific method, or the whole component?
+        type: branch
+        condition: the seed declares a methodName
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Seed names one method: if reach.reachesMethod(seed.compId, seed.methodName) is false, add
+          methodKey(seed.compId, seed.methodName) to reachedMethods and push {compId: seed.compId,
+          methodName: seed.methodName} onto the queue.
+        type: local
+      - stepNumber: 6
+        description: Continue to the next seed.
+        type: jump
+        toStep: 2
+      - stepNumber: 7
+        label: seedEnqueueAll
+        description: >-
+          Seed names no method: enqueue every contract method of the component — for each interface
+          in ctx.interfacesByComponent.get(seed.compId) and each of its methods, if
+          reach.reachesMethod(seed.compId, methodName) is false, add methodKey(seed.compId,
+          methodName) to reachedMethods and push {compId: seed.compId, methodName} onto the queue.
+        type: local
+      - stepNumber: 8
+        label: bfsLoop
+        description: 'While the queue has pending entries:'
+        type: loop
+        condition: the queue is non-empty
+        loopKind: while
+        endStep: 19
+      - stepNumber: 9
+        description: Dequeue the next {compId, methodName} from the front of the queue.
+        type: local
+      - stepNumber: 10
+        description: >-
+          Resolve the method's implementation: for each interface in
+          ctx.interfacesByComponent.get(compId), look up
+          ctx.implementationsByContract.get(interfaceId) for an implementation whose methods include
+          one named methodName; take the first (impl, methodImpl) match found, else leave both
+          undefined.
+        type: local
+      - stepNumber: 11
+        description: Did the method resolve to a real implementation?
+        type: branch
+        condition: impl or methodImpl is undefined (no implementation resolved for this method)
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          A reached method with no implementation contributes nothing — continue to the next queued
+          entry.
+        type: jump
+        toStep: 8
+      - stepNumber: 13
+        label: narrativeLoop
+        description: 'For each step in the resolved method''s narrative:'
+        type: loop
+        loopKind: forEach
+        over: methodImpl.narrative
+        endStep: 15
+      - stepNumber: 14
+        description: >-
+          Derive which reachability edges this narrative step contributes, from the step itself, the
+          tree's components and whether register handoffs count; a step type that carries no edge
+          contributes nothing and the walk moves to the next narrative step.
+        type: call
+        targetComponent: narrative_graph_projector
+        targetMethod: stepEdges
+      - stepNumber: 15
+        label: applyEdges
+        description: >-
+          Apply each derived edge: reach its component (the shared reach-a-component behavior above)
+          and, when the edge names a method, if reach.reachesMethod(component, method) is false, add
+          methodKey(component, method) to reachedMethods and push {compId, methodName} onto the
+          queue. Then continue to the next narrative step; this is also the narrative loop's last
+          body step.
+        type: local
+      - stepNumber: 16
+        label: declaredCallLoop
+        description: >-
+          For each reference in the resolved method's declared calls (none when it declares none):
+          the narrative-less spelling of a call step, and the only edges a method with no narrative
+          contributes — there is no fallback behind them, so a collaborator the method does not name
+          is not reached whatever its detail dial.
+        type: loop
+        loopKind: forEach
+        over: methodImpl.calls
+        endStep: 18
+      - stepNumber: 17
+        label: declaredCallParse
+        description: >-
+          Read the reference apart into the component it names and the method on it; a reference
+          that is not "<component>.<method>", or one naming a component ctx.componentMap does not
+          hold, contributes no edge and the walk moves to the next reference
+          (narrative-target-references is what reports either).
+        type: local
+      - stepNumber: 18
+        label: declaredCallApply
+        description: >-
+          Reach the named component (the shared reach-a-component behavior above) and, if
+          reach.reachesMethod(component, method) is false, add methodKey(component, method) to
+          reachedMethods and push {compId, methodName} onto the queue. This is also the
+          declared-call loop's last body step.
+        type: local
+      - stepNumber: 19
+        label: bfsContinue
+        description: Continue to the next queued entry.
+        type: jump
+        toStep: 8
+      - stepNumber: 20
+        description: 'The queue is empty: return the walk''s reach.'
+        type: return
+        outcome: the accumulated NarrativeReach (reachedComponents, reachedMethods)
+  - name: stepEdges
+    sourcePath: src/core/rules/narrative-graph-projector.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Only call, register and dispatch narrative steps carry reachability edges; branch on the
+          step's type — any other type contributes nothing.
+        type: switch
+        'on': the narrative step's type
+        cases:
+          - value: call
+            step: 2
+          - value: register
+            step: 4
+          - value: dispatch
+            step: 6
+        defaultStep: 8
+      - stepNumber: 2
+        label: callEdge
+        description: >-
+          Call step: when it also declares targetComponent and targetMethod, contribute one edge
+          naming targetComponent and targetMethod; otherwise this step contributes no edge.
+        type: local
+      - stepNumber: 3
+        description: Return the call step's edge
+        type: return
+        outcome: one edge to targetComponent.targetMethod, or none
+      - stepNumber: 4
+        label: registerEdge
+        description: >-
+          Register step: only when followRegisterEdges is true and the step also declares
+          targetComponent and targetMethod, contribute one edge naming targetComponent and
+          targetMethod exactly as a call step does — the callback is reached wherever its
+          registering narrative is, but the edge is skipped entirely when the option is off.
+        type: local
+      - stepNumber: 5
+        description: Return the register step's edge
+        type: return
+        outcome: one edge to targetComponent.targetMethod, or none when the option is off
+      - stepNumber: 6
+        label: dispatchEdge
+        description: >-
+          Dispatch step: when it declares targetComponent, contribute an edge naming targetComponent
+          (the routed Portal) and no method, then look up its dispatch table for the binding whose
+          capability matches the step's capability; when a binding exists and ctx.componentMap has
+          its bound component, contribute a second edge naming that bound component and its bound
+          method.
+        type: local
+      - stepNumber: 7
+        description: Return the dispatch step's edges
+        type: return
+        outcome: the routed Portal's edge, plus the bound capability server's edge when the table binds it
+      - stepNumber: 8
+        description: Any other step type carries no reachability edge
+        type: return
+        outcome: no edges
+lint:
+  allow: []
+status: complete
+createdAt: '2026-09-14T23:13:09.851Z'
+updatedAt: '2026-09-19T21:40:56.358Z'

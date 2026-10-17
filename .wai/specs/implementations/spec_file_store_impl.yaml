@@ -1,42 +1,68 @@
 id: spec_file_store_impl
 name: Spec File Store Implementation
 description: >-
-  Raw YAML file I/O over the shared yaml/fs utilities (readYamlFile, writeYamlFile, listFiles,
-  listFilesRecursive) as imported and used by the spec workspace.
+  The spec tree's file face, in a module that is only that: src/core/spec-files.ts holds
+  readSpecFile, writeSpecFile and listSpecFiles, and the `.yaml` storage format is decided there
+  once. It delegates to the project's general-purpose YAML and directory helpers, but those are NOT
+  the store — src/utils/yaml.ts and src/utils/fs.ts are shared infrastructure that project config,
+  pack manifests, templates, variants, surface snapshots and the registry all read through, so
+  naming them here claimed two utility modules whole and made nineteen unrelated importers read as
+  consumers of a Repository-private Store. findChainingParent is the one method written in the
+  workspace module itself (src/core/specs.ts), where the validator can reach it without reaching
+  into this Store.
 contract: ispec_file_store
-sourcePath: src/core/specs.ts
+sourcePath: src/core/spec-files.ts
 methods:
   - name: read
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Reads the YAML document at the given project-relative spec path and parses it into a plain
-      object; returns null when the file is absent or empty, and propagates a parse error for
-      malformed YAML.
-    symbol: readYamlFile
+      Reads the spec document at the given path (resolved by the caller) and parses it; returns null
+      when the file is absent or empty, and propagates a parse error for malformed content. The
+      storage format — YAML — is decided here, not by the caller. The shared file helper tells the
+      store's guard what it read, so a digest of the bytes this process last saw of each spec
+      document is remembered (bounded: past a limit the memory is cleared, which only ever skips a
+      check).
+    symbol: readSpecFile
   - name: write
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Serializes the given document as YAML and writes it to the spec path, creating parent
-      directories as needed; filesystem failures propagate to the caller.
-    symbol: writeYamlFile
+      Serializes the given document in the spec storage format and writes it to the given path,
+      creating parent directories as needed; filesystem failures propagate to the caller. The file
+      keeps its line endings: a document already on disk is rewritten with the ones it holds (CRLF
+      stays CRLF), and a new one takes the project's convention — an `eol` the nearest
+      .gitattributes sets for it, else the endings most files beside it (or in the folders above it,
+      up to the project) already use, else LF — so a re-save, a doctor repair or a migration never
+      turns a file into a whole-file diff. The shared file helper every .wai writer goes through
+      does the same, and calls the guard this module installs into it before every write, rename or
+      delete inside a .wai tree: the tree's write lock is taken for that one write unless this
+      process holds it already, and a spec document whose bytes on disk are no longer the ones this
+      process last read or wrote is refused with spec-write-conflict (SpecWriteConflictError) — the
+      other session's write is kept, nothing is written to the file, and the caller is told to run
+      again. The path is the caller's — the registry resolves a spec's home, a part's folder
+      included, and never hands it a path inside the git fetch cache, which is read-only.
+    symbol: writeSpecFile
   - name: listTree
+    sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Recursively lists YAML spec files under the given directory tree; returns an empty list when
-      the root is absent rather than failing.
-    symbol: listFilesRecursive
+      Recursively lists the spec documents under the given directory, matching them by the storage
+      format's extension; returns an empty list when the root is absent rather than failing.
+    symbol: listSpecFiles
   - name: findChainingParent
+    sourcePath: src/core/specs.ts
     narrative:
       - stepNumber: 1
         description: Resolve the bound project root and set the bounded ancestor hop budget
         type: local
       - stepNumber: 2
-        description: Walk upward while no mount is found and ancestors remain within the hop budget
+        description: Walk upward while no declaring parent is found and ancestors remain within the hop budget
         type: loop
-        condition: no mounting subsystem recorded and an ancestor remains within the hop budget
+        condition: no declaring parent recorded and an ancestor remains within the hop budget
         loopKind: while
         endStep: 4
       - stepNumber: 3
@@ -46,14 +72,17 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
-          Scan the ancestor's spec directory (when present) for a subsystem spec whose projectPath
-          resolves EXACTLY to the bound root, skipping malformed specs soft; record the first match
-          (parent root + subsystem id)
+          At an ancestor holding a wairon project, read its member declarations — its
+          configuration's `members` (through that ancestor's per-root binding) and, for one release,
+          its subsystem specs carrying projectPath — and record the first whose path resolves
+          EXACTLY to the bound root and stays within the ancestor's own root (parent root, alias,
+          form; a `members` entry wins over a legacy mount under the same alias), skipping malformed
+          files soft
         type: local
       - stepNumber: 5
-        description: A mounting subsystem was recorded
+        description: A declaring parent was recorded
         type: branch
-        condition: a mounting subsystem was recorded
+        condition: a declaring parent was recorded
         onFalseStep: 7
       - stepNumber: 6
         description: Return the chaining-parent reference
@@ -65,6 +94,56 @@ methods:
         outcome: 'null'
     detail: full
     intent: ''
+  - name: remove
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer false when nothing is at the path — a delete of what was never there is not an
+          error, and the caller is entitled to tell the two apart
+        type: local
+      - stepNumber: 2
+        description: >-
+          Unlink the document, then prune each parent directory the deletion left empty, stopping
+          before the specs root the caller passed so the root survives an emptied tree
+        type: local
+      - stepNumber: 3
+        description: Answer that a document was removed
+        type: return
+        outcome: removed
+    symbol: removeSpecFile
+  - name: lockTree
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Creates the lock file beside the tree (<root>/.wai/.spec-write.lock) exclusively — the one
+      filesystem operation every platform, Windows included, makes atomic — writing the holder's pid
+      and the time into it. A process that already holds the lock counts one more hold and returns
+      at once (reentrant, keyed by the lock file's path as the platform compares paths), so a write
+      tool that calls another write path never waits on itself. When another holder has the file, it
+      waits in short synchronous sleeps: a lock whose holder process is gone, older than any write
+      could take, this process's own with no hold counted, or one no holder can be read from that is
+      older than a ten-second grace (a holder caught between creating and filling it takes
+      milliseconds) is removed and taken over; after a bounded wait it throws, naming the holder's
+      pid and pointing at `wairon doctor`, so a stuck writer never hangs the session. A root holding
+      no .wai folder has no tree to guard: nothing is created.
+  - name: unlockTree
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Counts one hold down; the last hold removes the lock file, and only when this process wrote it
+      — a lock taken over by another process after this one was judged gone is never removed by the
+      late original holder. Releasing a lock this process does not hold does nothing.
+  - name: inspectLock
+    sourcePath: src/core/spec-files.ts
+    narrative: []
+    detail: intent
+    intent: >-
+      Reads <root>/.wai/.spec-write.lock when it is there: the holder's pid and time when they can
+      be read, the file's age, whether the holder process is alive, and whether the next write would
+      break it by the same rule lockTree waits by. Writes and removes nothing; none when the file is
+      absent.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-07-24T18:06:44.579Z'
+updatedAt: '2026-10-09T16:55:40.585Z'

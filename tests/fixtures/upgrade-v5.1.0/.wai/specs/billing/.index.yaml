@@ -1,0 +1,10 @@
+id: billing
+name: billing
+description: External subsystem billing
+parentSystem: shop
+publicInterfaces: []
+projectPath: services/billing
+trustedLinks: []
+status: complete
+createdAt: '2026-10-17T11:46:26.397Z'
+updatedAt: '2026-10-17T11:46:28.101Z'

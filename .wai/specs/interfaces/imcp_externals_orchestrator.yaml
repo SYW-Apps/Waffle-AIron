@@ -1,0 +1,101 @@
+id: imcp_externals_orchestrator
+name: MCP Externals Orchestrator Interface
+description: >-
+  Contract for the MCP tool workflows over the bound project's outward world: external-surface
+  discovery, declaring an external, the externals pin and the externals status report.
+component: mcp_externals_orchestrator
+methods:
+  - name: pin
+    description: >-
+      The sdd_pin_externals tool workflow: pin the bound project's declared externals (the named
+      aliases, else all) through the surfaces adapter and shape the tool response — one outcome per
+      alias, with its unexported references. A tree-scoped write: under a narrowed credential it
+      pins the bound child, and a producer outside the request's reach is reported unreachable,
+      never read.
+    signature: 'pin(aliases?: list<string>): list<ExternalPin>'
+    returns: list<ExternalPin>
+    params:
+      - name: aliases
+        type: list<string>
+        description: The aliases to pin; all when omitted
+        optional: true
+  - name: status
+    description: >-
+      The sdd_get_externals_status tool workflow: read each declared external's pin against its live
+      producer through the surfaces adapter (fetching git producers) and shape the tool response —
+      per used member unchanged, changed, renamed (with the new name), removed or unlocked, and each
+      external's health; what cannot be compared is EXTERNAL_CHECK_UNAVAILABLE. A tree-scoped read.
+    signature: 'status(): list<ExternalStatus>'
+    returns: list<ExternalStatus>
+    params: []
+  - name: declare
+    description: >-
+      The sdd_add_external tool workflow: declare one external of the bound project through the
+      surfaces adapter and shape the tool response — the addition as structured content, a refusal
+      as one sentence naming the accepted form (never a schema dump), so an assistant never
+      hand-edits .wai/project.yaml. A tree-scoped write: under a narrowed credential it declares on
+      the bound child, and a producer outside the request's reach is reported unreachable, never
+      read.
+    signature: 'declare(request: ExternalRequest): ExternalAddition'
+    returns: ExternalAddition
+    params:
+      - name: request
+        type: ExternalRequest
+        description: >-
+          The alias, the location in the one location grammar, and optionally the producer id, ref,
+          dir, `use`, description, pin and dryRun
+  - name: remove
+    description: >-
+      The sdd_remove_external tool workflow: remove one external of the bound project — its
+      declaration and its pin — through the surfaces adapter and shape the tool response: the
+      removal as structured content, a refusal as one sentence. A tree-scoped write.
+    signature: 'remove(alias: string, dryRun?: bool): ExternalRemoval'
+    returns: ExternalRemoval
+    params:
+      - name: alias
+        type: string
+        description: The external to remove
+      - name: dryRun
+        type: bool
+        description: Answer what would be removed, writing nothing
+        optional: true
+  - name: updateUse
+    description: >-
+      The sdd_update_external tool workflow: add and remove `use` imports of one declared external
+      through the surfaces adapter and shape the tool response — the change as structured content, a
+      refusal as one sentence naming the closest exported names — so an assistant never hand-edits
+      .wai/project.yaml to import a producer's names bare. A tree-scoped write.
+    signature: 'updateUse(request: ExternalUseRequest): ExternalUseChange'
+    returns: ExternalUseChange
+    params:
+      - name: request
+        type: ExternalUseRequest
+        description: The alias, the names to add and remove, and dryRun
+  - name: consumers
+    description: >-
+      The sdd_list_consumers tool workflow: the projects that consume the bound project — the family
+      in reach, and with search folders (resolved against the bound root) the project roots in them
+      declaring it by path or git — through the surfaces adapter, shaped as one line per consumer
+      beside the structured list. A read.
+    signature: 'consumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: diff
+    description: >-
+      The sdd_surface_diff tool workflow: the bound project's public-surface changelog since its
+      last committed approval, a named revision or a saved snapshot, through the surfaces adapter,
+      shaped as one line per change beside the structured answer. A read.
+    signature: 'diff(against?: string): surface_diff'
+    returns: surface_diff
+    params:
+      - name: against
+        type: string
+        description: A git revision or a saved native surface snapshot file
+        optional: true
+status: complete
+createdAt: '2026-09-26T17:50:42.455Z'
+updatedAt: '2026-10-07T11:00:28.510Z'

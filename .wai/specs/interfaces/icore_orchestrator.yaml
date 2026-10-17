@@ -6,163 +6,1537 @@ methods:
   - name: loadSystemSpec
     description: Delegate loading system spec to spec loader
     signature: 'loadSystemSpec(): SystemSpec | null'
-    returns: SystemSpec | null
+    returns: SystemSpec?
   - name: loadSubsystemSpecs
     description: Delegate loading subsystem specs to spec loader
     signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
-    returns: SubsystemSpec[]
+    returns: list<SubsystemSpec>
   - name: loadComponentSpecs
     description: Delegate loading component specs to spec loader
     signature: 'loadComponentSpecs(): ComponentSpec[]'
-    returns: ComponentSpec[]
+    returns: list<ComponentSpec>
   - name: loadInterfaceSpecs
     description: Delegate loading interface specs to spec loader
     signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
-    returns: InterfaceSpec[]
+    returns: list<InterfaceSpec>
   - name: loadImplementationSpecs
     description: Delegate loading implementation specs to spec loader
     signature: 'loadImplementationSpecs(): ImplementationSpec[]'
-    returns: ImplementationSpec[]
+    returns: list<ImplementationSpec>
   - name: loadSubsystemSpec
     description: Delegate loading a single subsystem spec to spec loader
     signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
-    returns: SubsystemSpec | null
+    returns: SubsystemSpec?
   - name: loadComponentSpec
     description: Delegate loading a single component spec to spec loader
     signature: 'loadComponentSpec(id: string): ComponentSpec | null'
-    returns: ComponentSpec | null
+    returns: ComponentSpec?
   - name: loadInterfaceSpec
     description: Delegate loading a single interface spec to spec loader
     signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
-    returns: InterfaceSpec | null
+    returns: InterfaceSpec?
   - name: loadImplementationSpec
     description: Delegate loading a single implementation spec to spec loader
     signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
-    returns: ImplementationSpec | null
-  - name: saveSystemSpec
-    description: Delegate persisting the L0 system spec to spec loader
-    signature: 'saveSystemSpec(spec: SystemSpec): void'
-    returns: void
-  - name: saveSubsystemSpec
-    description: Delegate persisting an L1 subsystem spec to spec loader
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
-  - name: saveComponentSpec
-    description: Delegate persisting an L2 component spec to spec loader
-    signature: 'saveComponentSpec(spec: ComponentSpec): void'
-    returns: void
-  - name: saveInterfaceSpec
-    description: Delegate persisting an L3 interface spec to spec loader
-    signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
-    returns: void
-  - name: saveImplementationSpec
-    description: Delegate persisting an L4 implementation spec to spec loader
-    signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
-    returns: void
+    returns: ImplementationSpec?
   - name: provisionProject
     description: >-
       Bootstrap a fresh isolated project at the bound root: default project.yaml plus an L0 system
-      spec named `name`.
+      spec named `name`. The configuration declares the project's id, `name` slugified — for a
+      hosted project, whose name is its hosted id, that is the hosted id itself.
     signature: 'provisionProject(name: string): void'
     returns: void
   - name: computeStateId
-    description: >-
-      Compute the deterministic content hash (StateId) of the current spec tree via the state hash
-      specialist.
+    description: Compute the deterministic content hash (StateId) of the current spec tree via state_hash.
     signature: 'computeStateId(): StateId'
     returns: StateId
   - name: readLockRecord
     description: Read the current commit-scoped lock record, or null if the project is unlocked.
     signature: 'readLockRecord(): LockRecord | null'
-    returns: LockRecord | null
+    returns: LockRecord?
   - name: writeLockRecord
     description: Persist a commit-scoped lock record.
     signature: 'writeLockRecord(record: LockRecord): void'
     returns: void
-  - name: promoteAllComplete
-    description: Promote every spec in the tree to status complete (the lock status write).
-    signature: 'promoteAllComplete(): void'
-    returns: void
   - name: renderDiagram
-    description: Delegate diagram rendering to the diagram specialist.
-    signature: 'renderDiagram(format: string): string'
+    description: >-
+      Delegate diagram rendering to architecture_diagrams, with the relation health the canvas
+      draws.
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
     returns: string
-  - name: createChainedSubsystem
+    params:
+      - name: format
+        type: DiagramFormat
+        description: The format to render
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health for the canvas; omitted, none
+        optional: true
+  - name: createMember
     description: >-
-      Create a chained subproject subsystem: persist the parent L1 subsystem spec (with projectPath)
-      at the bound root, then FULLY yet NON-DESTRUCTIVELY initialize the isolated child wairon
-      project at that path in the same action — create the specs dir, project.yaml, and L0 system
-      spec only when each is absent, so a fresh child becomes runnable standalone without the caller
-      hand-authoring project.yaml, and an already- or partially-scaffolded child (e.g. specs present
-      but project.yaml missing) is completed without overwriting its existing spec tree. Throws if
-      projectPath is empty, or if it does not resolve strictly within the owning project root
-      (absolute and ../-escaping paths are rejected so a chained subproject is always contained by
-      its parent).
-    signature: 'createChainedSubsystem(subsystem: SubsystemSpec, projectName: string): void'
-    returns: void
-  - name: moveSubsystemProject
+      Create a member of the bound project — a PART unless `as` is project (stage 8: boundaries are
+      earned) — FULLY yet NON-DESTRUCTIVELY, each piece only when absent, so an already- or
+      partially-scaffolded one is completed without overwriting anything. What it creates IS what
+      the member becomes, since kind follows from content: a PART gets only a specs directory —
+      plus, when it is not contained, a configuration holding its PartOf (the bound project's id and
+      the bound root relative to it), so it can say what it belongs to opened alone; a PROJECT gets
+      the project content — a project.yaml declaring the alias as its id, an L0 and its specs
+      directory, so it is runnable standalone — plus the bound project's required packs
+      (composition.requirePolicies) written into its extensions.packs once, each pinned to the
+      highest installed version its range admits, and a required profile as the projectType when
+      exactly one requirement names one (a requirement nothing installed satisfies is returned as
+      unadopted, never written; afterwards the selections are the member's own). Then declare it in
+      the bound project's `members` under the alias as the shorthand `alias: <source>` (the long
+      form only for a description). A contained source must resolve strictly within the owning
+      project root (absolute, inner-`..` and link-escaping paths are rejected — leaving the root is
+      only ever a leading `../`), and a `../` source is a sibling checkout ONE level up
+      (`../<name>`, folders below it allowed): a deeper climb, or a path naming the project's own
+      folder or one holding it, is refused with the accepted forms, so a mistyped depth never
+      scaffolds a .wai outside the family. A git source is NOT scaffolded — the repository must
+      already hold the member, whose content decides what it is — and is pinned at the given commit
+      or its default branch's head (resolved and fetched through the git source adapter), the commit
+      written as `#<commit>`. Writes no L1 spec. With `report`, every refusal is made exactly as the
+      write would make it and the plan is answered — the files and folders it would create, each
+      named with where it lies, and the declaration — with nothing written. Throws for an alias
+      outside [a-z0-9-_]+, a source none of the grammar's forms parses, an escaping path, a hosted
+      source, a git source that cannot be resolved or fetched, `as: part` on a directory that
+      already holds a project (that is `member attach`), or an alias already declaring a different
+      member or an external — the last two before anything is scaffolded.
+    signature: >-
+      createMember(alias: string, source: string, description?: string, as?: string, report?: bool):
+      MemberCreation
+    returns: MemberCreation
+    params:
+      - name: alias
+        type: string
+        description: The member's alias (and, for a project, its new project id)
+      - name: source
+        type: string
+        description: >-
+          Where it lives, in the members grammar: a contained path, a `../` sibling path, or a git
+          URL (its `#<commit>` optional here: without one the remote's default branch head is
+          resolved and pinned). A `hosted:` source is refused; hosted project creation makes records
+      - name: description
+        type: string
+        description: >-
+          What the member is to this project; recorded on the member entry and, for a project, used
+          as the vision of a bootstrapped L0
+        optional: true
+      - name: as
+        type: string
+        description: project (`--project`) to create the project content; omitted creates a part
+        optional: true
+      - name: report
+        type: bool
+        description: >-
+          Answer the plan — refused exactly as the write would be — and write nothing (`wairon
+          member add --report`)
+        optional: true
+  - name: moveMember
     description: >-
-      Relocate an external subsystem's subproject: move its directory on disk from the current
-      projectPath to newProjectPath and persist the updated link. Throws if the subsystem has no
-      projectPath (not an external subproject), or if newProjectPath does not resolve strictly
-      within the owning project root (absolute or ../-escaping targets are rejected).
-    signature: 'moveSubsystemProject(subsystemId: string, newProjectPath: string): void'
+      Relocate a member of the bound project — a contained or `../` sibling project member, or a
+      part (stage 8) — move its directory on disk from its current location to the new one and point
+      its `members` entry there; a part stored in a sibling checkout has its PartOf path
+      re-expressed from its new place. A member still declared in the legacy L1 form is first moved
+      into `members` (as moveMountToMembers does), so wairon never writes the L1 form. Throws, each
+      before anything is written, if the alias declares no member, if the member is fetched from git
+      (its files are the fetch cache's) or a hosted record, if a legacy mount carries a field beyond
+      its path and description (a non-empty publicInterfaces or trustedLinks, a lint allow, a
+      lifecycle, profile, targetLanguage, designDepth or ext) — a move never drops a field, and
+      `wairon doctor --fix` carries them plan-first — if the move would change its storage (a
+      contained member stays contained, a sibling stays a sibling: that is externalize/internalize),
+      if a contained target does not resolve strictly within the owning project root (absolute or
+      inner-`..` targets are rejected), if the target lies on another volume, or if it already
+      exists.
+    signature: 'moveMember(alias: string, newPath: string): void'
     returns: void
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: newPath
+        type: string
+        description: The member's new root, relative to the bound project root
   - name: externalizeSubsystem
     description: >-
-      Externalize an internal subsystem into a standalone subproject: provision a child wairon
-      project at projectPath, move the subsystem's spec subtree (L1-L4 + types) there, reduce the
-      parent entry to a projectPath mount, and rewrite cross-subsystem references to the new
-      namespaced ids. Throws if the subsystem is missing or already external, or if projectPath does
-      not resolve strictly within the owning project root (absolute or ../-escaping paths are
-      rejected). Source code is not moved.
-    signature: 'externalizeSubsystem(subsystemId: string, projectPath: string): void'
-    returns: void
-  - name: internalizeSubsystem
+      Move an internal subsystem's spec subtree (L1-L4 + its types) OUT of the bound project's own
+      specs folder into a part at the path (stage 8 — a storage move, the default): a new contained
+      part is a specs directory there declared in `members` under the subsystem id by the shorthand,
+      or the subsystem joins the existing part at that directory. Each moved implementation's file
+      paths (sourcePath, each method's sourcePath, simPath) are re-expressed relative to the part's
+      root — the same files. Nothing else changes: the subsystem keeps its key, every reference
+      keeps its spelling, no export or external is written, and the verdict is the same as before
+      (part-is-the-parents-subsystem). With `as: project` it then promotes the new part
+      (promoteMember with the subsystem id), which is the pre-stage-8 externalize: the moved
+      subsystem becomes a member project with what crosses the boundary declared on both sides.
+      Throws if the subsystem is missing or is already in a part or member, if the path does not
+      resolve strictly within the owning project root (absolute, ../-escaping and link-escaping
+      paths are rejected), or if it holds a project, before anything moves. Source code is not
+      moved.
+    signature: 'externalizeSubsystem(subsystemId: string, path: string, as?: string): PromoteResult?'
+    returns: PromoteResult?
+    params:
+      - name: subsystemId
+        type: string
+        description: The subsystem to move out
+      - name: path
+        type: string
+        description: >-
+          The part's root relative to the bound project: a new directory, or an existing part's,
+          which the subsystem joins
+      - name: as
+        type: string
+        description: part (the default) or project
+        optional: true
+  - name: internalizeMember
     description: >-
-      Internalize an external subsystem back into the parent tree: move the subproject's spec
-      subtree back under the parent subsystem, drop projectPath, delete the child .wai project, and
-      rewrite references back to bare ids. Throws if the subsystem is not external or its subproject
-      is not a single flat subsystem.
-    signature: 'internalizeSubsystem(subsystemId: string): void'
-    returns: void
+      Internalize a member back into the bound project's own specs folder, whole. For a PART (stage
+      8) it is a storage move only: every subsystem of the part and its types move under the bound
+      project's specs, each moved implementation's file paths are re-expressed relative to the bound
+      root, the member entry is removed and what remains of the part's .wai (its PartOf, its pin of
+      the parent) is deleted, each listed; no reference changes, since a part's specs are already
+      the project's own. For a PROJECT it first demotes it (demoteMember, which sends each piece of
+      its metadata to its home, removes its boundary and rewrites references to local ids) and then
+      makes that storage move. Pins of carried externals and references from OTHER projects of the
+      family are the family migration's (boundary_migration), not this write's. Throws, before
+      anything moves, if the alias declares no member, if the home names no subsystem of either
+      side, if a moved subsystem, type or spec file would land on an existing one, if a carried
+      alias is already declared differently, if a pack differs and the destination says neither
+      adopt nor drop, if the member carries conformance debt or severity overrides the parent does
+      not share, if a destination export collides with a public name the parent already exports, if
+      the member is fetched from git (its files are the cache's), or if the member's .wai holds a
+      file this write does not recognise — each named.
+    signature: 'internalizeMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where a project member's own metadata goes; ignored for a part
   - name: loadTypeSpecs
     description: Delegate loading type specs to spec loader
     signature: 'loadTypeSpecs(): TypeSpec[]'
-    returns: TypeSpec[]
+    returns: list<TypeSpec>
   - name: dryRunSerializeSpecs
     description: >-
       Delegate the in-memory round-trip serialization check to spec loader (optionally
       scope-filtered)
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
   - name: buildProjectGraph
     description: >-
       Project the current project's spec tree into a level-filtered WebGraphModel for the web UI,
-      forwarded to the diagram specialist's pure graph projection.
-    signature: 'buildProjectGraph(level: number): WebGraphModel'
+      forwarded to the pure graph projection of architecture_diagrams.
+    signature: 'buildProjectGraph(level: int): WebGraphModel'
     returns: WebGraphModel
     params:
       - name: level
-        type: number
+        type: int
   - name: resolveChainingParent
     description: >-
       Report whether the currently bound project root is a chained subproject of a parent project
-      (parent root + mounting subsystem id), or null for a genuine top root. Read-only detection
-      through the spec loader.
+      (parent root + mounting subsystem id), or null for a genuine top root. Null too when the bound
+      request may not read above its root: a hosted credential narrowed to the child, or a parent
+      that lies above the request's top project root. Read-only detection through the spec loader.
     signature: 'resolveChainingParent(): ChainingParentRef | null'
-    returns: ChainingParentRef | null
+    returns: ChainingParentRef?
   - name: computeStateIdAt
     description: >-
       Compute the CURRENT spec-tree state hash of the project at the given root, binding that root
       strictly read-only for the duration and restoring the previous binding afterwards. Serves
       freshness comparisons of vendored surface snapshots against what the (parent) tree looks like
       now; returns null when the root holds no loadable spec tree.
-    signature: 'computeStateIdAt(root: string): string | null'
-    returns: string | null
+    signature: 'computeStateIdAt(root: string): string?'
+    returns: string?
     params:
       - name: root
         type: string
+  - name: readLockState
+    description: >-
+      Resolve the project's lock against the gate identity the caller computed now
+      (validator_portal.computeGateStateId): unlocked when no record exists, locked when the
+      record's gate identity equals it — or, for a format-2 record, equals its asRecorded reading
+      (the identity recomputed under the algorithm that record was taken with) — stale otherwise.
+    signature: 'readLockState(current: StateId): LockStatus'
+    returns: LockStatus
+    params:
+      - name: current
+        type: StateId
+        description: The gate identity as it stands now
+  - name: resolveSubprojectForNamespace
+    description: >-
+      Resolve a chained mount's qualified namespace to its project root (containment-checked against
+      the bound root), or null when the namespace names no mount. Read-only lookup through the spec
+      loader.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
+    params:
+      - name: namespace
+        type: string
+  - name: createProjectConfig
+    description: >-
+      Write a fresh configuration for a project that has none, through the project config
+      Repository. Refuses when one already exists.
+    signature: 'createProjectConfig(config: ProjectConfig): void'
+    returns: void
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: upsertPackSelection
+    description: >-
+      Select a pack by name in the bound project's configuration, moving a re-selected pack last,
+      through the project config Repository. Returns whether an earlier selection was replaced.
+    signature: 'upsertPackSelection(selection: PackSelection): bool'
+    returns: bool
+    params:
+      - name: selection
+        type: PackSelection
+    guarantees:
+      - idempotent
+  - name: removePackSelection
+    description: >-
+      Deselect a pack by name, leaving path references alone, through the project config Repository.
+      Returns whether anything was dropped.
+    signature: 'removePackSelection(packName: string): bool'
+    returns: bool
+    params:
+      - name: packName
+        type: string
+    guarantees:
+      - idempotent
+  - name: setProjectType
+    description: Set the governing `projectType`, through the project config Repository.
+    signature: 'setProjectType(projectType: string): void'
+    returns: void
+    params:
+      - name: projectType
+        type: string
+    guarantees:
+      - idempotent
+  - name: recordProfileSelection
+    description: Record the applied profile selection, through the project config Repository.
+    signature: 'recordProfileSelection(selection: ProjectProfileSelection): void'
+    returns: void
+    params:
+      - name: selection
+        type: ProjectProfileSelection
+    guarantees:
+      - idempotent
+  - name: setExecutionTier
+    description: Set `execution.tier`, through the project config Repository.
+    signature: 'setExecutionTier(tier: string): void'
+    returns: void
+    params:
+      - name: tier
+        type: string
+    guarantees:
+      - idempotent
+  - name: registerPackRef
+    description: >-
+      Register a legacy pack path reference when it is absent, through the project config
+      Repository. Returns whether it was added.
+    signature: 'registerPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: deregisterPackRef
+    description: >-
+      Drop a legacy pack path reference that matches exactly, through the project config Repository.
+      Returns whether anything was dropped.
+    signature: 'deregisterPackRef(ref: string): bool'
+    returns: bool
+    params:
+      - name: ref
+        type: string
+    guarantees:
+      - idempotent
+  - name: markSelectionsBundled
+    description: >-
+      Record bundled packs on their selections in place, in one write, through the project config
+      Repository.
+    signature: 'markSelectionsBundled(bundled: list<PackSelection>): void'
+    returns: void
+    params:
+      - name: bundled
+        type: list<PackSelection>
+    guarantees:
+      - idempotent
+  - name: ensureProjectInitialized
+    description: >-
+      NON-DESTRUCTIVELY complete a project's bootstrap at the bound root: write the default project
+      configuration and the L0 system spec only when each is absent, preferring the existing system
+      spec's name, and report which files it wrote. A configuration it writes declares the given id,
+      else the chosen name slugified; an L0 it writes carries the given vision, else a placeholder
+      naming the project. Unlike provisionProject it never overwrites.
+    signature: 'ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): ProjectBootstrap'
+    returns: ProjectBootstrap
+    params:
+      - name: fallbackName
+        type: string
+        description: The project name to use when no system spec names one yet
+      - name: id
+        type: string
+        description: >-
+          The project id a configuration written here declares — a member's alias; omitted, the
+          chosen name slugified
+        optional: true
+      - name: vision
+        type: string
+        description: >-
+          The vision an L0 written here carries — a member's description; omitted, a placeholder
+          naming the project
+        optional: true
+    guarantees:
+      - idempotent
+  - name: listDirectChainedSubprojects
+    description: >-
+      The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
+      through that root's binding) and, for one release, its legacy L1 mounts, each resolved inside
+      the project root, as the member's directory, alias and form. An absolute or escaping path is
+      skipped.
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: consumedContractInputs
+    description: >-
+      The consumed contract inputs a verdict at the bound project can consult, as canonical content
+      keys: THIS root's stored surface snapshots (.wai/surfaces), pinned external snapshots
+      (.wai/externals) and externals lock (.wai/externals.lock.yaml). A member's inputs are left out
+      since stage 5: they are that member's own gate's, and reach this project's gate identity
+      through the member's composition subject. The gate identity covers them, so swapping a pinned
+      contract or re-pinning a changed `used` map invalidates a lock.
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
+    params: []
+  - name: renameComponent
+    description: >-
+      Rename a component and every reference to it. The component, and each interface and
+      implementation named after it (i<id>, <id>_impl), move to the new id and file, a member of a
+      pattern staying under its owner, each with its old id appended to its rename trace
+      (previousIds) — the record the design export shows as `formerly`, so a consumer can tell the
+      rename from a delete plus an add. Every reference in the bound tree is rewritten: dependsOn,
+      owns, dispatch and lifecycle entries, published interfaces at L1 and L0 (their component and
+      interface), narrative targets, auth sources naming a component, an entity's componentClass, an
+      interface's component, an interface method's signatureFrom naming one of its methods
+      (`component.method`), and an implementation's contract; rename traces are never rewritten. A
+      published name survives: an L1 or L0 export entry whose public name was derived from the old
+      id (it states no `as`) gets `as: <that name>` written before its target is respelled, and the
+      report lists it as kept. Findings keyed on the component follow it too, because they are keyed
+      by exactly the ids a rename exists to rewrite and left alone would read as debt both paid and
+      new: every lint allow naming it on an edge site or in a covered unit, and every entry of the
+      debt register (.wai/project.yaml rules.conformance.carried) anchored on a renamed spec or
+      naming the component in its site or covered units — rewritten in place, every comment and all
+      other formatting of the register kept, and each register edit reported. References from
+      chained subprojects (super::) are not rewritten: validate each child after renaming. Refuses a
+      component that does not exist, a new id already taken or outside the id grammar, a new id (or
+      the interface or implementation id it implies) that a spec of its kind retired (id-retired,
+      naming the holder), a component inside a chained subproject (rename it from that project's
+      root), and a register that cannot be rewritten that precisely; every refusal happens before
+      the first write, and a failure after it leaves the rename half-applied. Human-readable names
+      are left to the author, and a lock goes stale as with any edit. Inside a hosted request every
+      spec the rename would write — the moved specs and every spec whose references it rewrites — is
+      judged against the request's write reach before the first write: a rename that would change a
+      spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming every
+      such subsystem and the rung that decided each, and nothing is written.
+    signature: 'renameComponent(componentId: string, newId: string, dryRun?: bool): ComponentRename'
+    returns: ComponentRename
+    params:
+      - name: componentId
+        type: string
+        description: The component to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would move, rewrite, keep and rekey — refusing exactly as the real
+          rename would — and write nothing
+        optional: true
+  - name: retireSpecialists
+    description: >-
+      Plan, and with apply write, the migration off the retired Specialist stereotype. Every
+      Specialist becomes an Orchestrator whose dependencyClass follows from its dependencies: pure
+      when it depends only on pure logic, read when it also depends on Repositories, Indexes,
+      Adapters or read logic, unset when a dependency fits neither. Classes are decided over the
+      whole graph, so a Specialist is classified after those it depends on. Every project variant
+      based on Specialist is rebased onto Orchestrator. Without apply nothing is written.
+    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
+    returns: SpecialistRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
+  - name: renameMethod
+    description: >-
+      Rename a contract method and every reference to it. The method moves on every interface of the
+      component that declares it — its name, its former key `<contract>.<old name>` appended to its
+      rename trace (previousNames, shown as `formerly` in the design export), and its signature: a
+      method with params is re-saved with the text they derive under the new name, a prose method
+      has the name inside its prose renamed — and on the implementations of those contracts,
+      carrying narrative, sourcePath, symbol, detail, intent and findings unchanged. Narrative call,
+      register and dispatch steps naming it, dispatch-table bindings, lifecycle entrypoints and
+      every interface method whose signatureFrom names it (`component.method`) are retargeted, and
+      so are the findings keyed on it: a lint allow at the method on a spec it moved in or covering
+      <component>.<method>, and every debt-register entry (.wai/project.yaml
+      rules.conformance.carried) keyed the same way, rewritten in place with every comment and all
+      other formatting kept and each edit reported. An implementation that declared no symbol is
+      pinned to the old name when its code exists — the file realizing the method is on disk — so
+      the function it already binds to keeps binding; with no code written yet nothing binds, and no
+      pin is set unless pinSymbol is true. pinSymbol false never pins. Prose is never rewritten and
+      a gRPC endpoint binding keeps its wire method — renaming a contract method must not silently
+      rename an RPC; both are reported as mentions. When the contract is exported (an L1 or L0
+      entry), the rename changes a published member: the report names those entries (publishedIn),
+      and nothing prevents it. Refuses, before the first write: a component or method that does not
+      exist, a name already declared on that interface or retired there by one of its methods
+      (name-retired), a name outside the identifier grammar, a component inside a chained subproject
+      (rename it from that project's root), and a register that cannot be rewritten that precisely.
+      A lock goes stale as with any edit. Inside a hosted request every spec the rename would write
+      is judged against the request's write reach before the first write: a rename that would change
+      a spec of a subsystem the request may not change is refused (SubsystemWriteDenied), naming
+      every such subsystem and the rung that decided each, and nothing is written.
+    signature: >-
+      renameMethod(componentId: string, methodName: string, newName: string, pinSymbol?: bool,
+      dryRun?: bool): MethodRename
+    returns: MethodRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method is renamed
+      - name: methodName
+        type: string
+        description: The method name as it stands
+      - name: newName
+        type: string
+        description: >-
+          Its new name, an identifier in the tree's method casing
+          (naming_rule_config.methodCasingFor its targetLanguage) — any identifier for a component
+          one of whose contracts implements another project's extension point, since the producer
+          names those methods
+      - name: pinSymbol
+        type: bool
+        description: >-
+          Whether an implementation that declares no symbol is pinned to the old name so its
+          function still binds: omitted, it is pinned only when the file realizing the method exists
+          (no code, nothing to keep binding); true always pins, false never does
+        optional: true
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would move, retarget and leave alone, refusing exactly as the real
+          rename would, and write nothing
+        optional: true
+  - name: moveRenamedSpecs
+    description: >-
+      Move each spec a component rename renames to its new id: reload it as the reference rewrite
+      left it, write it under the new id where the loader places it (an owned member nested under
+      its owner; an implementation whose new path is the file it already occupies has that file
+      cleared first, because the loader refuses to write a spec over a file holding another id),
+      then remove the file it left behind, prune the folders that leaves empty, and drop the cached
+      spec index. Every OTHER contract of the component and every implementation of its contracts
+      keeps its id but follows the component's folder: each is re-saved where the loader now places
+      it and the file it left is removed — an implementation left in a folder named after a
+      component that no longer exists is the debris a rename must never leave. The reload is the
+      point: the rewrite already edited the moved specs' own files, so writing the copies loaded
+      before it would undo their references; a spec the reload cannot find falls back to the copy
+      the rename planned from. The rename decides WHAT moves — this writes the move.
+    signature: >-
+      moveRenamedSpecs(componentId: string, newId: string, component: ComponentSpec,
+      movingInterface?: InterfaceSpec, movingImplementation?: ImplementationSpec): void
+    returns: void
+    params:
+      - name: componentId
+        type: string
+        description: The component's id before the rename — how each moved spec's old file is found
+      - name: newId
+        type: string
+        description: The component's new id, which implies i<newId> and <newId>_impl
+      - name: component
+        type: ComponentSpec
+        description: The component as the rename planned from it, the fallback when the reload finds nothing
+      - name: movingInterface
+        type: InterfaceSpec
+        description: The component's own interface named i<componentId>, when one moves
+        optional: true
+      - name: movingImplementation
+        type: ImplementationSpec
+        description: >-
+          The implementation named <componentId>_impl realizing one of the component's contracts,
+          when one moves
+        optional: true
+  - name: updateSpec
+    description: >-
+      Apply a partial delta to one stored spec of any level and persist the result, answering with
+      exactly what changed. The delta merges onto the spec in its STORED form
+      (method_signature.storedForm): a method that takes its signature from a source carries only
+      the source, never the params and returns the scan resolved into it, so a delta that leaves
+      such a method alone cannot write them back. Refuses a spec that does not exist, a delta that
+      changes the spec's identity or placement (its id or createdAt, a component's or type's
+      subsystem, a contract's component, an implementation's contract — the delta engine would
+      otherwise write a second spec under the new id or move the file and leave every reference
+      behind; the refusal names the tool that owns the change), a mis-selected kind on the singleton
+      L0, and a delta key the level's canonical schema does not know — an unknown key is dropped on
+      write, so the edit would otherwise report success and change nothing. Merges identity-keyed
+      arrays element by element at every depth (a list restated with exactly its stored elements in
+      another order takes that order), applies narrative step deltas in ascending order with every
+      jump relocating around the inserted and deleted steps, rebuilds a step whose type changes for
+      its new type, refuses a delete that addresses no step, that a jump still targets, that a
+      restated label or description does not match, or that would leave a region body standing
+      without its header, honours `unset` and `[]` at each level, and resolves symbolic label
+      references against the merged numbering, a label in the delta replacing the stored number it
+      twins. Names every path the delta carried that the write did not act on — one the level's
+      schema drops at a depth the permissive delta cannot refuse, or one whose value the stored spec
+      already held. Compares the result with what is stored and writes NOTHING when they match. A
+      dry run runs the whole write, the caller's judgement and the staging through the writer schema
+      and write reach included, so it is refused exactly when the write would be, and answers with
+      the report it would have produced without persisting it. The caller's hooks, when given, judge
+      the merged spec at the last point before anything reaches disk.
+    signature: >-
+      updateSpec(kind: WritableSpecKind, id: string, delta: SpecDelta, hooks?: SpecWriteHooks,
+      dryRun?: bool): SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The id of the spec to change
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, shaped like the spec, carrying the delta's own verbs
+      - name: hooks
+        type: SpecWriteHooks
+        description: >-
+          The write seam's hooks: what to run beside the write (the candidate gate, the report
+          collectors)
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Report what the delta would do and write nothing
+        optional: true
+  - name: repairForeignStepFields
+    description: >-
+      Plan, and with apply write, the repair of narrative steps carrying a field their own type
+      cannot have. Such a field is the leftover of an edit that changed a step's type back when the
+      writer merged instead of rebuilding; it configures nothing and means nothing, and
+      FOREIGN_STEP_FIELD reports it. Each foreign field is dropped from its step and nothing else
+      about the step changes — a step's type is never guessed at from the fields, because only its
+      author knows whether a local carrying a target was meant to be a call. Without apply nothing
+      is written.
+    signature: 'repairForeignStepFields(apply: bool): list<ForeignFieldRepair>'
+    returns: list<ForeignFieldRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: loadTypeSpec
+    description: Read one type specification by id through the spec repository.
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: moveMethods
+    description: >-
+      Move contract methods from one component to another, and every reference with them. Each
+      method leaves the source component's interface and arrives on the target's, carrying its
+      signature, params, returns, signatureFrom, guarantees and endpoint binding unchanged and
+      appending its former key `<source contract>.<name>` to its rename trace (previousNames); its
+      implementation entry moves with it, carrying narrative, sourcePath, symbol, detail, intent,
+      calls and findings. An entry with no sourcePath of its own is realized in its old
+      implementation's default file, so when the receiving implementation names a different file the
+      entry keeps its old one as its own sourcePath, and a notice says so — moving a method is not
+      moving its code. A target that declares no contract yet receives one, i<target>, at the source
+      contract's status; when implementation entries travel and no implementation realizes the
+      receiving contract, <target>_impl is created for them at the source implementation's status,
+      inheriting its sourcePath (left unset, with each entry keeping the file it was realized in,
+      when the entries come from implementations with different sourcePaths). The report names
+      everything it created, and a failed write deletes what it created as it restores what it
+      edited. Narrative call, register and dispatch steps naming the old home, dispatch-table
+      bindings, lifecycle entrypoints, `calls` entries and every signatureFrom naming a moved method
+      (`component.method`) are retargeted to the new one. A moved method keeps its own signatureFrom
+      as written; whether its new component still reaches the source is the validator's question
+      (SIGNATURE_SOURCE_OFF_EDGE). Findings keyed on a moved method follow it: a lint allow anchored
+      at it moves to the receiving spec, one covering <from>.<method> names <to>.<method>, and the
+      debt register (.wai/project.yaml rules.conformance.carried) is rekeyed the same way in place,
+      every comment and all other formatting kept, each register edit reported (on a dry run, the
+      edits it would make). Prose is never rewritten and a wire endpoint keeps its address — moving
+      a method between components must not silently re-address an RPC; both are reported as
+      mentions. Every edit is computed before the first is written, and a write that fails — the
+      register's included, which is written last — restores the ones already made, because a
+      half-moved method leaves callers naming a home it no longer has. The caller's judgement runs
+      as a write hook on the resulting components at the last point before anything reaches disk,
+      which is where a move that breaks a dependency rule is refused. Refuses, before the first
+      write: a component or method that does not exist, a method name already declared on the target
+      or retired on the receiving contract, a source and target that are the same component, a
+      target with several contracts none of which is named i<target>, a contract or implementation
+      to create whose id another spec already holds, a component inside a chained subproject (move
+      it from that project's root), and a register that cannot be rewritten without disturbing its
+      formatting. A lock goes stale as with any edit. Inside a hosted request every spec the move
+      would write — the source, the target, what it creates and every referrer it retargets — is
+      judged against the request's write reach with the rest of its edits, before the first write: a
+      move that would change a spec of a subsystem the request may not change is refused
+      (SubsystemWriteDenied), naming every such subsystem and the rung that decided each, and
+      nothing is written.
+    signature: >-
+      moveMethods(from: string, to: string, methods: list<string>, hooks?: SpecWriteHooks, dryRun?:
+      bool): MethodMoveReport
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: list<string>
+        description: The method names to move; every one must be declared on the source component's contract
+      - name: hooks
+        type: SpecWriteHooks
+        description: The judgement to run on the resulting components at the write boundary
+        optional: true
+      - name: dryRun
+        type: bool
+        description: >-
+          Run the whole move, hook included, and answer with the report it would have produced
+          without writing
+        optional: true
+  - name: specPathsInScope
+    description: >-
+      Every spec file path inside a scope, or the whole tree when no subsystem is named. Used when
+      an approval is taken over part of a tree rather than all of it, so the record says exactly
+      which files it covers.
+    signature: 'specPathsInScope(scopeSubsystem?: string): list<string>'
+    returns: list<string>
+    params:
+      - name: scopeSubsystem
+        type: string
+        description: The subsystem to scope to, or the whole tree when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: loadSpec
+    description: Delegate loading one spec of the named kind to the spec loader; null when none is stored.
+    signature: >-
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec id; informational for the L0
+  - name: saveSpec
+    description: >-
+      Delegate persisting one spec of the named kind to the spec loader, answering with its
+      placement notices.
+    signature: >-
+      saveSpec(kind: WritableSpecKind, spec: SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, of that kind
+  - name: deleteSpec
+    description: Delete one spec document of the named kind through the loader. False when it was not there.
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
+      - name: id
+        type: string
+        description: The spec id
+  - name: findChainingParent
+    description: >-
+      Walk up from a child root for the ancestor project that mounts it as a chained subsystem,
+      stopping at an optional ceiling. Pure detection that is NOT gated on any request's reach: a
+      caller that must not read above a bound root passes that root as the ceiling and gates on its
+      own reach before calling.
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params:
+      - name: childRoot
+        type: string
+        description: The root to start the walk from
+      - name: ceiling
+        type: string
+        description: A root the walk never climbs above
+        optional: true
+  - name: scanAllSpecs
+    description: >-
+      The bound tree's spec index at the given recursion depth: every loaded spec by kind and the
+      file each is stored in. Sets the depth the following spec reads use.
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        description: How deep into chained subprojects the scan reads
+        optional: true
+  - name: getLoaderIssues
+    description: >-
+      The issues the loader recorded while reading the bound tree: files that failed their schema or
+      could not be parsed.
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forget the loader's recorded issues and drop the cached index, so the next read starts from
+      disk and records afresh.
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: findLegacySpecFiles
+    description: >-
+      The bound tree's spec files stored under a legacy (undotted) name, each with the name the
+      current layout expects. Pure read.
+    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
+    returns: list<LegacySpecFile>
+    params: []
+  - name: findChainingSubprojectsMissingConfig
+    description: >-
+      The member directories, found recursively from a root through each project's members (either
+      declaration form), that hold a spec tree but no project configuration — the state that leaves
+      one unrunnable standalone. Pure read.
+    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: backfillChainedSubprojectConfigs
+    description: >-
+      Write a project configuration for every member found recursively from a root (either
+      declaration form) that has a spec tree but none, declaring its alias as its project id;
+      existing specs are never touched. Returns the directories repaired.
+    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
+    returns: list<string>
+    params:
+      - name: projectRoot
+        type: string
+  - name: assertContainedProjectPath
+    description: >-
+      Resolve a subsystem's projectPath within a project root, refusing an absolute, parent-escaping
+      or link-escaping path, and return the contained absolute child root.
+    signature: 'assertContainedProjectPath(projectRoot: string, projectPath: string): string'
+    returns: string
+    params:
+      - name: projectRoot
+        type: string
+      - name: projectPath
+        type: string
+  - name: loadProjectVariants
+    description: >-
+      The component-variant registry governing the current project, forwarded from the variant
+      registry.
+    signature: 'loadProjectVariants(): list<VariantDef>'
+    returns: list<VariantDef>
+    params: []
+  - name: resolveVariantGuidance
+    description: >-
+      One component's variant guidance and its same-variant siblings, forwarded from the variant
+      registry; null when the component declares no variant or one that does not resolve.
+    signature: >-
+      resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
+    params:
+      - name: component
+        type: ComponentSpec
+      - name: allComponents
+        type: list<ComponentSpec>
+      - name: variantsById
+        type: list<VariantDef>
+  - name: setProjectId
+    description: >-
+      Declare the bound project's id through the project config Repository: refused for a malformed
+      id or when a different id is already declared, a no-op when the same one is. Returns whether
+      it wrote.
+    signature: 'setProjectId(id: string): bool'
+    returns: bool
+    params:
+      - name: id
+        type: string
+        description: The project id to declare
+    guarantees:
+      - idempotent
+  - name: declareExternal
+    description: >-
+      Declare one external of the bound project under an alias through the project config
+      Repository: refused for a malformed alias or producer id, or when the alias holds a different
+      declaration, a no-op when it holds the same one. Returns whether it wrote.
+    signature: 'declareExternal(alias: string, declaration: ExternalDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The alias key
+      - name: declaration
+        type: ExternalDeclaration
+        description: The value under the alias
+    guarantees:
+      - idempotent
+  - name: moveMountToMembers
+    description: >-
+      Move one legacy L1 mount of the bound project into its `members`: declare the member under the
+      mount's alias with the mount's projectPath as its path and the mount's description as its
+      description, then delete the L1 mount document. The caller carries the mount's other fields
+      into the member first; this moves only the declaration and the description, which are the
+      parent's own words about its member. Refuses when the alias names no legacy mount of the bound
+      project and no equal member, or when the alias already holds a different member declaration.
+      Idempotent: a mount already moved (an equal member, no L1 document) writes nothing. Returns
+      whether it wrote.
+    signature: 'moveMountToMembers(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id, which becomes the member's alias
+    guarantees:
+      - idempotent
+  - name: normalizeReferences
+    description: >-
+      Re-save one spec of the family with every reference in its canonical stage-3 form (a bare
+      local id, or `alias::publicName`) through the spec repository; targets never change. Returns
+      whether the stored text changed.
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+  - name: importNames
+    description: >-
+      Add public names to the `use` of the bound project's external or member under an alias,
+      through the project config Repository: refused for a malformed name or an undeclared alias, a
+      no-op for names already imported. Returns whether it wrote.
+    signature: 'importNames(alias: string, names: list<string>): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external or member alias
+      - name: names
+        type: list<string>
+        description: The public names to import, or `*`
+    guarantees:
+      - idempotent
+  - name: renameProjectId
+    description: >-
+      Move the bound project's id through the project config Repository, keeping the old one in
+      previousIds: refused for a malformed new id or when the project no longer answers to the old
+      one, a no-op once done. The rename migration's write; it touches no reference and no lock.
+      Returns whether it wrote.
+    signature: 'renameProjectId(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The id the project answers to now
+      - name: to
+        type: string
+        description: The new id
+    guarantees:
+      - idempotent
+  - name: renameAlias
+    description: >-
+      Rekey one member or external alias of the bound project through the project config Repository,
+      keeping its value and place. It touches no reference: the family migration respells them.
+      Returns whether it wrote.
+    signature: 'renameAlias(from: string, to: string): bool'
+    returns: bool
+    params:
+      - name: from
+        type: string
+        description: The alias as declared now
+      - name: to
+        type: string
+        description: The new alias
+    guarantees:
+      - idempotent
+  - name: repointExternal
+    description: >-
+      Revise one external of the bound project — its producer id and explicit source — through the
+      project config Repository, keeping its `use` and description. Returns whether it wrote.
+    signature: 'repointExternal(alias: string, project: string?, source: ExternalSource?): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+      - name: project
+        type: string?
+        description: The producer id, or null when the alias is the id
+      - name: source
+        type: ExternalSource?
+        description: The explicit place, or null to find it through the family
+    guarantees:
+      - idempotent
+  - name: removeExternal
+    description: >-
+      Remove one external declaration of the bound project through the project config Repository.
+      Returns whether it wrote.
+    signature: 'removeExternal(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The external's alias
+    guarantees:
+      - idempotent
+  - name: declareMember
+    description: >-
+      Declare an EXISTING project or part as a member of the bound project through the project
+      config Repository — the write behind `member attach` and `member adopt`, which scaffold
+      nothing (createMember scaffolds). Written as the shorthand when the declaration carries only
+      its source. Refused for a malformed alias, a contained source that does not resolve strictly
+      within the bound root (the containment guard createMember applies; a leading `../` is the
+      explicit way out), an alias `externals` holds, or an alias already holding a different member;
+      a no-op when it holds the same one. Returns whether it wrote.
+    signature: 'declareMember(alias: string, declaration: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: declaration
+        type: MemberDeclaration
+        description: Its source, and its `as`, description and `use` when it has them
+    guarantees:
+      - idempotent
+  - name: removeMember
+    description: >-
+      Remove one member declaration of the bound project through the project config Repository — the
+      write behind `member detach`; the member's directory and project are left exactly as they are.
+      Returns whether it wrote.
+    signature: 'removeMember(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+    guarantees:
+      - idempotent
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec of the family through the spec repository:
+      each edit replaces exactly the text it names at exactly its position. The family migrations'
+      reference write, for spellings the canonical writer cannot derive because the alias table they
+      bind through is changing in the same migration. Refuses the whole spec, writing nothing, when
+      an edit's text is not at its position. Returns whether the stored text changed.
+    signature: 'rewriteReferences(kind: WritableSpecKind, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: list<ReferenceEdit>
+        description: The edits for this spec
+    guarantees:
+      - idempotent
+  - name: updateMember
+    description: >-
+      Change an existing member's declaration through the project config Repository (stage 8) — the
+      write behind `member update` moving a git member's `#<commit>`, and `doctor --fix` rewriting a
+      deprecated long-form `path` to the one location key. A contained source in the changes is held
+      to the containment guard. Never writes a kind: what a member is follows from its content.
+      Returns whether it wrote.
+    signature: 'updateMember(alias: string, changes: MemberDeclaration): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The member's alias
+      - name: changes
+        type: MemberDeclaration
+        description: The fields to set (source, ref, dir, description)
+  - name: promoteMember
+    description: >-
+      Promote a part of the bound project to an independent project IN PLACE (stage 8, `member
+      promote`): its files stay where they are, and promote CREATES the project content — which is
+      what makes it a project, since kind follows from content. The part gets a project.yaml
+      declaring its id (replacing a non-contained part's PartOf configuration) and a minimal L0
+      (vision: the member's description) whose export table holds exactly what the rest of the bound
+      project uses of it — each used component its subsystem already publishes, through that
+      subsystem's export (one it does not publish refuses: making a component public is a design
+      decision, never a promotion's side effect), each used type. Every reference keeps its target
+      and is re-saved from where it now lives, so the writer spells it again: the bound project's
+      references into the part become `alias::name`; the part's references back into the bound
+      project become `<parent id>::name`, the bound project exports what they use in the same way,
+      and the new project declares the parent as an external; a bare type name the other side no
+      longer owns is imported by name (`use`) rather than respelled, so the text stays as written.
+      The bound project's L0 entries that re-exported the part's subsystems re-export the member by
+      alias. An asserted `as: part` on the declaration is dropped (it would now contradict the
+      content); nothing else in the declaration changes. This is exactly the boundary half of the
+      pre-stage-8 externalize, which now composes it after the storage move. Locks nothing: both
+      projects are to re-lock (the new one has never been approved). Throws, before anything is
+      written, when the alias names no part, the part is fetched from git (its files are the
+      cache's: promote it from a checkout of its repository), a trustedLink joins the part's
+      subsystems and the rest (it would cross a project boundary — remove or replace it first), a
+      used component is unpublished, or the id collides with a family project's.
+    signature: 'promoteMember(alias: string, id?: string): PromoteResult'
+    returns: PromoteResult
+    params:
+      - name: alias
+        type: string
+        description: The part's alias
+      - name: id
+        type: string
+        description: The new project's id; defaults to the alias
+        optional: true
+  - name: demoteMember
+    description: >-
+      Demote a project member of the bound project to a part IN PLACE (stage 8, `member demote`) —
+      promoteMember's inverse: its files stay where they are, and demote REMOVES the project
+      content, which is what makes it a part. Each piece of the member's own metadata goes to a home
+      exactly as internalizeMember sends it (its L0 vision, boundaries, globalRequirements and
+      databases to the bound project's L0; its targetLanguage, projectType and designDepth stamped
+      on its subsystems where they differ; its own members and its externals other than the parent
+      declared by the bound project; its packs adopted or dropped as the destination says); then its
+      L0, its project.yaml, its own lock, pins and derived outputs are deleted — a non-contained
+      member keeps a configuration holding only its PartOf — every reference is re-saved from where
+      it now lives (the bound project's `alias::name` references and the member's `<parent
+      id>::name` references become local ids, and the parent's exports that existed only for the
+      member, and the member's external for the parent, are removed), the bound project's L0
+      re-exports from the member become re-exports of its subsystems, and an asserted `as: project`
+      or a `use` on the declaration is dropped. Locks nothing: the bound project is to re-lock.
+      Throws, before anything is written, for the same reasons internalizeMember does (no such
+      project member, a subsystem, type or spec file landing on an existing one, a carried alias
+      declared differently, a pack differing with no adopt or drop, conformance debt or severity
+      overrides the parent does not share, a destination export colliding, an unrecognised file in
+      the member's .wai) and when the member is fetched from git (demote it from a checkout of its
+      repository).
+    signature: 'demoteMember(alias: string, destination: InternalizeDestination): InternalizeResult'
+    returns: InternalizeResult
+    params:
+      - name: alias
+        type: string
+        description: The project member's alias
+      - name: destination
+        type: InternalizeDestination
+        description: Where the member's own metadata goes
+  - name: advanceMember
+    description: >-
+      `wairon member update <alias>` (stage 8): move a git member's pin. Resolve the ref (or take
+      the commit given) through the git source adapter, fetch it, compare the member's spec files at
+      the old and the new commit, and — unless dryRun, or nothing moved — write the new commit into
+      the member's source. The only way a git member's content changes, so a verdict never moves
+      because a remote did. Locks nothing: changed content stales the bound project's lock (a part)
+      or reads as a moved subject (a project). Throws for an alias that names no git member, or a
+      ref or commit that cannot be resolved or fetched (offline included), before anything is
+      written.
+    signature: 'advanceMember(alias: string, ref?: string, commit?: string, dryRun?: bool): MemberAdvance'
+    returns: MemberAdvance
+    params:
+      - name: alias
+        type: string
+        description: A member declared with a git source
+      - name: ref
+        type: string
+        description: >-
+          The ref to follow this time; defaults to the source's ref, else the remote's default
+          branch
+        optional: true
+      - name: commit
+        type: string
+        description: An exact commit to pin instead of resolving a ref
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what would change and write nothing
+        optional: true
+  - name: describeProject
+    description: >-
+      Set the project's human-readable `name` and, when given, its `description`, through the
+      project config Repository.
+    signature: 'describeProject(name: string, description?: string): void'
+    returns: void
+    params:
+      - name: name
+        type: string
+      - name: description
+        type: string
+        optional: true
+    guarantees:
+      - idempotent
+  - name: repairSignatures
+    description: >-
+      Plan, and with apply write, the one-time regeneration of stored signatures into their stored
+      form: every contract and type method whose stored text differs from the text its params derive
+      gets the derived text (SIGNATURE_TEXT_STALE), and every sourced method that also restates
+      params and returns EQUAL to its source's has them dropped. A sourced method restating
+      DIFFERENT ones is left alone and keeps being reported (SIGNATURE_SOURCE_RESTATED): only its
+      author knows which contract was meant — and so is the rest of the interface holding it, since
+      re-saving it would store that method with only its source. Methods without params keep their
+      prose. Every spec it writes goes through the ordinary writer, so what it writes is exactly
+      what any later save would. Only the bound project's own specs are repaired. Idempotent: after
+      an applied run the plan is empty. Without apply nothing is written.
+    signature: 'repairSignatures(apply: bool): list<SignatureTextRepair>'
+    returns: list<SignatureTextRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the repair; false plans without writing
+  - name: repairTypeSpellings
+    description: >-
+      Plan, and with apply write, the one-time rewrite of stored type positions into their canonical
+      spelling: every interface and type of the bound project holding a position that is an alias
+      (TYPE_SPELLING_STALE — `Result<T, E>` and `()` included, which become `result<T, E>` and void)
+      is re-saved, and the writer stores every position canonical — so what it writes is exactly
+      what any later save would, and the derived signature texts follow. It never guesses: a
+      `number` position whose name plainly says an integer (count, size, length, limit, port, step,
+      index, depth, level, days, minutes, seconds, bytes, version, ...) gets int PROPOSED
+      (type_expression_problem.intProposal), a union of string literals gets an enum PROPOSED
+      (type_expression_problem.enumProposal: the id from the position's name, the values in written
+      order), each left as written for an author to confirm, and every position no rewrite or
+      proposal can settle (an inline function type, a union mixing a primitive, a number with no
+      proposal, a builtin with no neutral meaning, an expression that does not parse) is listed as
+      needing an author. Re-saving a spec holding such a position leaves that position as written.
+      An interface holding a sourced method whose restatement differs from its source is never
+      re-saved — the writer would store that method with only its source and decide the contract for
+      its author — so its aliases wait until SIGNATURE_SOURCE_RESTATED is settled. Only the bound
+      project's own specs are repaired. Idempotent: after an applied run nothing is left to rewrite.
+      Without apply nothing is written.
+    signature: 'repairTypeSpellings(apply: bool): list<TypeSpellingRepair>'
+    returns: list<TypeSpellingRepair>
+    params:
+      - name: apply
+        type: bool
+        description: Write the rewrite; false plans without writing
+  - name: renameType
+    description: >-
+      Rename a type and every reference to it. The type moves to the new id and file under the same
+      owner, its old id appended to its rename trace (previousIds); every type position in the bound
+      tree naming it is respelled — contract and type-method params and returns, fields,
+      signature-type params and returns — and so is a signatureFrom naming it as a signature type
+      and an L1 or L0 export entry's typeDef. An export entry that exported it without `as` gets
+      `as: <the old public name>` first, so the published name stays. Rename traces are never
+      rewritten. Findings keyed on the type follow it: lint allows naming it, and debt-register
+      entries anchored on it, rewritten in place with every comment and all other formatting kept
+      and each edit reported. The report names publishedIn — every public name a consumer reaches
+      the type through: an exported type that is or embeds it, and an exported contract whose
+      methods name one in their signature closure (those methods) — so a caller can name the
+      consumers whose code still spells the old name. Refuses a type that does not exist, one inside
+      a chained subproject, a new id outside the id grammar, a new id another type of the same owner
+      holds or retired (id-taken, id-retired naming the holder), and a register that cannot be
+      rewritten that precisely; every refusal happens before the first write. Display names are the
+      author's to change, and a lock goes stale as with any edit. Inside a hosted request every spec
+      it would write is judged against the request's write reach before the first write
+      (SubsystemWriteDenied), and nothing is written on a refusal.
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
+    returns: TypeRename
+    params:
+      - name: typeId
+        type: string
+        description: The type to rename, qualified by its owning subsystem when two subsystems own that id
+      - name: newId
+        type: string
+        description: Its new id, under the same owner
+      - name: dryRun
+        type: bool
+        description: >-
+          Answer what the rename would rewrite, keep and rekey — refusing exactly as the real rename
+          would — and write nothing
+        optional: true
+  - name: setNetwork
+    description: >-
+      Declare (or, with null, remove) the bound project's network, through the project config
+      Repository: the design-level fact the network rules and the derived networking read. Returns
+      whether it wrote.
+    signature: 'setNetwork(network: NetworkDeclaration?): bool'
+    returns: bool
+    params:
+      - name: network
+        type: NetworkDeclaration?
+        description: The declaration, or null to remove it
+    guarantees:
+      - idempotent
+  - name: renameField
+    description: >-
+      Rename a field of a type and every reference to it. The field keeps its place, type and
+      description under the new name, its old name appended to its rename trace (previousNames — the
+      design export shows it as `formerly`, so a consumer holding the old name can follow the move);
+      every reference to it in the bound tree is respelled: a foreign key `references:
+      <type>.<field>` naming it from any type. Rename traces are never rewritten, and prose is never
+      rewritten. The report names every public name a consumer reaches the field through
+      (publishedIn): an exported type that is, or embeds transitively, the renamed type, and an
+      exported contract whose methods name such a type. Refuses, writing nothing: a type no project
+      in reach holds (spec-missing), one another project holds (chained-spec — named through its
+      alias, or a bare id only a member holds: the sentence every write tool answers with, naming
+      that project and how it is changed there), a field the type does not declare (field-missing),
+      a new name that is not an identifier (invalid-name), and a name another field of the type
+      holds (name-taken), or any field of the type — the renamed one included — retired in its trace
+      (name-retired): renaming back to a former name is refused as a method rename refuses it, since
+      the trace would list the field's own name. With dryRun it answers what it would respell and
+      where the field is published, refusing exactly as the real rename would, and writes nothing. A
+      lock goes stale as with any edit. Inside a hosted request every spec it would write is judged
+      against the request's write reach before the first write (SubsystemWriteDenied).
+    signature: 'renameField(typeId: string, field: string, newName: string, dryRun?: bool): FieldRename'
+    returns: FieldRename
+    params:
+      - name: typeId
+        type: string
+        description: >-
+          The type whose field is renamed, qualified by its owning subsystem when two subsystems own
+          that id
+      - name: field
+        type: string
+        description: The field's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would respell and where the field is published, and write nothing
+        optional: true
+  - name: renameParam
+    description: >-
+      Rename a parameter of a contract method and every reference to it. The parameter moves on
+      every interface of the component that declares the method — keeping its place, type,
+      description and optionality under the new name, its old name appended to its rename trace
+      (previousNames, shown as `formerly` in the design export) — and each such method is re-saved
+      with the signature text its params derive. A method whose signatureFrom names this one reads
+      the new name through the loader, and its HTTP endpoint path placeholder follows too: `{old}`
+      (or `/:old`) on the method's own binding AND on every follower method's binding — any contract
+      method in the bound tree whose signatureFrom takes this method's signature — is respelled in
+      the form it was written (the URL a caller sends is unchanged — only the name binding the
+      segment to the parameter moves). Asked of a method that takes its signature from another of
+      this project's contract methods (a Portal verb with signatureFrom), the rename is made on that
+      source and reaches the asked method through its signatureFrom; the report says so
+      (routedFrom). The report names the export entries publishing the method and every follower's
+      verb (publishedIn), method-granular with their former names (published), so a consumer calling
+      a published Portal verb that forwards the method is named among the breaks. Prose is never
+      rewritten. Refuses, writing nothing: a component no project in reach holds (spec-missing), one
+      another project holds (chained-spec — named through its alias, or a bare id only a member
+      holds: the sentence every write tool answers with, naming that project and how it is changed
+      there), a method no contract of the component declares (method-missing), a parameter the
+      method does not declare, or one it takes from another project's method or a signature type —
+      the refusal names the source and says a rename made there reaches this method (param-missing),
+      a new name that is not an identifier — or, when rules.naming.variables is set and no contract
+      of the component implements another project's extension point, not in that casing
+      (invalid-name) — a name another parameter of the method holds (name-taken), and a name any
+      parameter of the method retired in its trace — its own included, so renaming back to a former
+      name is refused as a method rename refuses it, since the trace would then list the parameter's
+      own name (RENAME_TRACE_CONFLICT) and a consumer holding the old key could not tell the two
+      apart; unsetting that previousNames releases it (name-retired). With dryRun it answers what it
+      would move and respell, refusing exactly as the real rename would, and writes nothing. A lock
+      goes stale as with any edit. Inside a hosted request every spec it would write — the moving
+      contracts and every follower's — is judged against the request's write reach before the first
+      write (SubsystemWriteDenied).
+    signature: >-
+      renameParam(componentId: string, methodName: string, param: string, newName: string, dryRun?:
+      bool): ParamRename
+    returns: ParamRename
+    params:
+      - name: componentId
+        type: string
+        description: The component whose contract method's parameter is renamed
+      - name: methodName
+        type: string
+        description: The contract method
+      - name: param
+        type: string
+        description: The parameter's name as it stands
+      - name: newName
+        type: string
+        description: Its new name
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would move and respell, and write nothing
+        optional: true
+  - name: findOrphanedSpecFiles
+    description: >-
+      The bound tree's spec files left standing while its specs folder holds no READABLE L0 — none
+      at all (no .index.yaml at its root, nor a legacy system.yaml), or one that cannot be read as
+      an L0 (empty, null, not YAML, failing its schema) — as paths from the project root, sorted,
+      the L0 file itself left out; empty when a readable L0 is there or nothing else is. A tree
+      whose root was deleted or broken is not an empty tree. Pure read.
+    signature: 'findOrphanedSpecFiles(): list<string>'
+    returns: list<string>
+    params: []
+    effect: read
+  - name: crossProjectWriteRefusal
+    description: >-
+      The project boundary of every authored write, and the one sentence a write refusing an id it
+      cannot write answers with. A target lives in another project when its key carries a member
+      project's prefix (a stored spec read through this tree, or an `alias::name` the bound
+      project's alias table binds to a member) or its first segment is an external's alias: it is
+      refused as living in another project — a member named with its folder relative to the bound
+      root, the session to open there and the call to make there; an external as read-only here,
+      changed by its owner from its own root. With existing, a target the write needs that the bound
+      project does not hold is refused too: as living in another project when only a member holds
+      that bare id (a bare id stays the bound project's own — the sentence says where the spec
+      lives, it never writes there), else with the one missing sentence every write tool shares
+      (spec-missing: this project has no <kind> "<id>"). Undefined when every target passes. A
+      legacy L1 mount keeps its old cross-tree writes and is never refused here. A read: writes
+      nothing.
+    signature: >-
+      crossProjectWriteRefusal(targets: list<SpecRef>, tool: string, call?: string, existing?:
+      bool): string?
+    returns: string?
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: >-
+          Every spec the write would write, create under or delete, each by kind and id as the
+          caller wrote it
+      - name: tool
+        type: string
+        description: >-
+          The tool the caller is answering for (sdd_delete_spec, sdd_define_interface, ...): the
+          call the sentence tells the caller to make at the owning project's root when it names none
+      - name: call
+        type: string
+        description: >-
+          The exact call to make at the owning project's root, when the caller can spell it (a
+          rename with its arguments); absent, the tool with the target's kind and local id
+        optional: true
+      - name: existing
+        type: bool
+        description: >-
+          Whether the targets must exist: one the bound project does not hold is refused, as another
+          project's when only a member holds that bare id, else as missing
+        optional: true
+  - name: publishedUsesOf
+    description: >-
+      Every public name of the bound project's L1 and L0 export tables a consumer reaches something
+      a removal takes away through, each with the members carrying it: an export of a removed
+      component or contract (its methods), of a removed type or any type embedding it (member
+      `type`) and every exported contract whose methods name one (those methods), and, for each
+      removed contract method, the entries publishing it and every published verb forwarding it by
+      signatureFrom. Former names ride along so a consumer still writing one is found. What a delete
+      and a method removal report as `published`, read before anything is removed. A read: writes
+      nothing.
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes
+      - name: methods
+        type: list<string>
+        description: The contract methods a write removes, each as `<interface>.<method>`
+  - name: renameSpecId
+    description: >-
+      Rename one contract or one implementation on its own — the id a component rename keeps when it
+      is not derived from the component's — and every reference to it. The spec moves to the new id
+      and file beside its owner, its old id appended to its rename trace (previousIds). A contract's
+      references are rewritten: every implementation's contract, and the interface of every L1 and
+      L0 export entry naming it, an entry that derived its public name from the old id (no `as`)
+      getting `as: <that name>` first so the published surface and every consumer's pin stay.
+      Findings keyed on the spec follow it: lint allows anchored on it and the debt register's
+      entries, rewritten in place with every comment kept. Refuses, before the first write: a kind
+      other than interface or implementation, a spec that does not exist (spec-missing), one in
+      another project (chained-spec — rename it from that project's own root), a new id outside the
+      id grammar (an interface id begins with i), and a new id a spec of its kind holds (id-taken)
+      or retired (id-retired). A dry run answers what the rename would move, rewrite and keep,
+      refused exactly as the rename would be, and writes nothing.
+    signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: interface or implementation
+      - name: id
+        type: string
+        description: The spec to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: moveSpec
+    description: >-
+      Move a component or a type to another subsystem of the bound project with everything that
+      follows it. A component takes the members it owns, its contracts and their implementations:
+      each is re-saved under its new owner, so its file lands in the new subsystem's folder and the
+      one it left is removed. Ids do not change, so references by id stay; what names the OLD
+      subsystem follows: the old subsystem's export entries for a moved component move to the new
+      subsystem's publicInterfaces, its lifecycle entrypoints naming one move too, and an L0
+      re-export from the old subsystem that names a moved component — by its component or its
+      contract — or type is re-pointed at the new one. A type takes its file, its L1 export entries
+      and every type reference qualified by its old subsystem, in either spelling and wherever it
+      stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes
+      `list<new.type>`); a type moves to system level (no subsystem) or from it, and the L0 export
+      table follows: an entry publishing a project-level type (no `from`) moved into a subsystem
+      re-exports it `from` that subsystem, whose L1 gains the type's export entry; a type made
+      system-level is published by the L0 directly — its entries lose `from` (keeping the public
+      name) and its L1 entries go. A type's move is placement, not an edit: every file it touches
+      keeps its updatedAt, and a folder the moved file leaves empty is pruned, so moving it back
+      leaves the tree byte-identical. The report names the files written and the references
+      respelled or re-pointed. Refuses, before the first write: a kind other than component or type,
+      a spec that does not exist, one in another project, a target subsystem the bound tree does not
+      have or the one it already lives in, a component another pattern owns (move its owner), and a
+      type id the target already holds. A dry run answers the plan and writes nothing. The caller's
+      gate judges the moved components before this runs.
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to; omitted for a type made system-level
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+        optional: true
+  - name: rehearsalCopy
+    description: >-
+      A private copy of the bound project's tree in a temporary folder — its .wai (the specs, the
+      configuration, the lock record and pins, the rules; never the generated outputs, the context,
+      a transaction or the write lock) and a specs folder configured outside it — for a write to be
+      rehearsed on, its result judged, and the copy discarded. Answers the copy's root.
+    signature: 'rehearsalCopy(): string'
+    returns: string
+    params: []
+    effect: write
+  - name: discardRehearsal
+    description: Remove a copy rehearsalCopy made, whatever the rehearsal did in it. Nothing else is touched.
+    signature: 'discardRehearsal(directory: string): void'
+    returns: void
+    params:
+      - name: directory
+        type: string
+        description: The copy's root, as rehearsalCopy answered it
+    effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:01:48.922Z'
+updatedAt: '2026-10-17T16:35:03.436Z'

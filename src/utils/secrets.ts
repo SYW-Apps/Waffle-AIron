@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
-// Integration secret resolution (secret_registry + resolveSecret)
+// Integration secret resolution (secret_write_registry + resolveSecret)
 //
 // Secrets (git token, Notion token, diagram signing key) resolve from the
 // data-dir store ($WAIRON_DATA_DIR/auth/secrets.json) first, then env. The store
@@ -33,14 +33,24 @@ function readStore(): Record<string, string> {
   }
 }
 
-/** Resolve a secret by key: data-dir store, then env fallbacks, else null. */
-export function resolveSecret(key: string): string | null {
-  const stored = readStore()[key];
+/** The value under a key in a read store map, else its first env fallback that is set, else null. */
+function storedOrEnvironment(store: Record<string, string>, key: string): string | null {
+  const stored = store[key];
   if (stored) return stored;
   for (const env of ENV_FALLBACK[key] ?? []) {
     if (process.env[env]) return process.env[env] as string;
   }
   return null;
+}
+
+/** Resolve a secret by key: data-dir store, then env fallbacks, else null. */
+export function resolveSecret(key: string): string | null {
+  return indexResolveSecret(key);
+}
+
+/** The index's read behind resolveSecret: one read of the store, then the env fallbacks. */
+function indexResolveSecret(key: string): string | null {
+  return storedOrEnvironment(readStore(), key);
 }
 
 /**
@@ -51,15 +61,22 @@ export function resolveSecret(key: string): string | null {
  * shared token. Returns null when neither is set.
  */
 export function resolveGitToken(credentialRef?: string | null): string | null {
-  if (credentialRef) {
-    const own = resolveSecret(credentialRef);
-    if (own) return own;
-  }
-  return resolveSecret('git-token');
+  return indexResolveGitToken(credentialRef);
+}
+
+/** The index's read behind resolveGitToken: one read of the store, both keys resolved from it. */
+function indexResolveGitToken(credentialRef?: string | null): string | null {
+  const store = readStore();
+  return (credentialRef ? storedOrEnvironment(store, credentialRef) : null) ?? storedOrEnvironment(store, 'git-token');
 }
 
 /** Set a secret at runtime in the data-dir store (read live — no restart). */
 export function setSecret(key: string, value: string): void {
+  registryWriteSecret(key, value);
+}
+
+/** The write registry's upsert behind setSecret: read the store, set the key, swap the file atomically. */
+function registryWriteSecret(key: string, value: string): void {
   const p = storePath();
   if (!p) throw new Error('WAIRON_DATA_DIR is not set — a running server needs it to store secrets.');
   const store = readStore();
@@ -72,5 +89,10 @@ export function setSecret(key: string, value: string): void {
 
 /** List configured secret key names — never the values. */
 export function listSecretKeys(): string[] {
+  return indexListSecretKeys();
+}
+
+/** The index's read behind listSecretKeys: the stored key names, never the values. */
+function indexListSecretKeys(): string[] {
   return Object.keys(readStore());
 }

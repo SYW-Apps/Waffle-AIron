@@ -1,0 +1,24 @@
+id: iorders-orch
+name: IOrdersOrchestrator
+description: Workflows for orders
+component: orders-orch
+methods:
+  - name: create
+    description: Create one order
+    signature: 'create(record: string): string'
+    returns: string
+    params:
+      - name: record
+        type: string
+        description: The record
+  - name: find
+    description: Look one order up
+    signature: 'find(key: string): string'
+    returns: string
+    params:
+      - name: key
+        type: string
+        description: The key
+status: complete
+createdAt: '2026-10-17T11:46:27.603Z'
+updatedAt: '2026-10-17T11:46:28.325Z'

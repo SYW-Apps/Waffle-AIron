@@ -22,8 +22,10 @@ import {
 import { routeAdmin } from '../../src/server/http.js';
 import { createProject } from '../../src/server/admin.js';
 import { mintUserToken, allow, seedUnit, createPlacedProject } from './helpers.js';
-import { adoptProjectPack, listProjectPacks } from '../../src/server/packs.js';
-import { ForbiddenError } from '../../src/server/identity.js';
+import { adoptProjectPack, executeApprovedEnsureProfileInstalled, listProjectPacks } from '../../src/server/packs.js';
+import { loadProjectConfig } from '../../src/core/index.js';
+import { runWithProjectRoot } from '../../src/utils/fs.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { existingProjectRoot } from '../../src/server/projects.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
@@ -256,7 +258,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredGlobalPacks: ['foo'], defaultProjectPacks: ['bar'] }));
 
     const unit = seedUnit(dataDir, 'happy-unit');
-    const rec = executeApprovedInit(cfg, { id: 'happy-proj', ownerUnitId: unit.id });
+    const { record: rec } = executeApprovedInit(cfg, { id: 'happy-proj', ownerUnitId: unit.id });
     expect(rec.id).toBe('happy-proj');
 
     // Packs really installed — asserted via the packs module list.
@@ -283,9 +285,35 @@ describe('project policy orchestrator (sdd_host)', () => {
     expect(() => initializeProjectWithProfile(cfg, writer, { id: 'nope-proj', ownerUnitId: unit.id })).toThrow(ForbiddenError);
     expect(existingProjectRoot(dataDir, 'nope-proj')).toBeNull();
 
-    const rec = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
+    const { record: rec } = initializeProjectWithProfile(cfg, creator, { id: 'creator-proj', ownerUnitId: unit.id });
     expect(existingProjectRoot(dataDir, 'creator-proj')).toBeTruthy();
     expect(readRawConfig(rec.rootPath).profileSelection.selectedBy.userId).toBe('u-cr');
+  });
+
+  it('initializeProjectWithProfile: writes the display name and description into the new project.yaml', () => {
+    const unit = seedUnit(dataDir, 'named-unit');
+    allow(dataDir, 'u-nm', 'project:create', 'instance', undefined);
+    const creator = mintUserToken(dataDir, { id: 'nm', userId: 'u-nm' });
+
+    const { record: named } = initializeProjectWithProfile(cfg, creator, {
+      id: 'named-proj', ownerUnitId: unit.id, displayName: 'Billing Service', description: 'Invoices and payments',
+    });
+    const raw = readRawConfig(named.rootPath);
+    expect(raw.name).toBe('Billing Service');
+    expect(raw.description).toBe('Invoices and payments');
+    expect(raw.id).toBe('named-proj');
+
+    // Only a description: the name stays the project id.
+    const { record: described } = initializeProjectWithProfile(cfg, creator, {
+      id: 'described-proj', ownerUnitId: unit.id, description: 'Just a description',
+    });
+    expect(readRawConfig(described.rootPath).name).toBe('described-proj');
+    expect(readRawConfig(described.rootPath).description).toBe('Just a description');
+
+    // Neither: the bootstrap name, no description.
+    const { record: plain } = initializeProjectWithProfile(cfg, creator, { id: 'plain-proj', ownerUnitId: unit.id });
+    expect(readRawConfig(plain.rootPath).name).toBe('plain-proj');
+    expect(readRawConfig(plain.rootPath).description).toBeUndefined();
   });
 
   // ── project config (projectType + lock) ──────────────────────────────────
@@ -353,7 +381,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     setPackPolicy(cfg, MASTER, samplePolicy({ requiredProfileIds: ['ddd'] }));
 
     const unit = seedUnit(dataDir, 'apply-unit');
-    const rec = executeApprovedInit(cfg, { id: 'apply-proj', ownerUnitId: unit.id });
+    const { record: rec } = executeApprovedInit(cfg, { id: 'apply-proj', ownerUnitId: unit.id });
 
     // The headline bug: the required profile now GOVERNS instead of being a name
     // recorded in profileSelection that nothing enforces.
@@ -401,7 +429,7 @@ describe('project policy orchestrator (sdd_host)', () => {
     seedProfilePack('hex', 'hex-doctrine', 'hexagonal');
 
     const unit = seedUnit(dataDir, 'two-unit');
-    const rec = executeApprovedInit(cfg, {
+    const { record: rec } = executeApprovedInit(cfg, {
       id: 'two-proj',
       ownerUnitId: unit.id,
       profileSelection: selection({ profileIds: ['ddd', 'hexagonal'] }),
@@ -439,6 +467,44 @@ describe('project policy orchestrator (sdd_host)', () => {
       profileResolvable: true,
     });
     expect(setProjectType(cfg, MASTER, 'adopt-proj', 'ddd').adoptedPackName).toBeUndefined();
+  });
+
+  it('an adopted profile pack is registered by the reference the pack registry reported, which registers nothing itself', () => {
+    seedProfilePack('acme', 'acme-doctrine', 'ddd');
+
+    // The registry vendors the contributing pack and REPORTS its reference...
+    createPlacedProject(cfg, MASTER, 'store-proj');
+    const storeRoot = existingProjectRoot(dataDir, 'store-proj')!;
+    const config = runWithProjectRoot(storeRoot, () => loadProjectConfig());
+    expect(executeApprovedEnsureProfileInstalled(cfg, 'store-proj', 'ddd', config)).toEqual({
+      profileId: 'ddd',
+      source: 'acme-doctrine',
+      adoptedPackName: 'acme-doctrine',
+      adoptedPackRef: '.wai/packs/acme-doctrine.yaml',
+    });
+    expect(fs.existsSync(path.join(storeRoot, '.wai', 'packs', 'acme-doctrine.yaml'))).toBe(true);
+    expect(readRawConfig(storeRoot).extensions?.packs ?? []).toEqual([]);
+
+    // ...and the policy orchestrator registers exactly that reference.
+    createPlacedProject(cfg, MASTER, 'ref-proj');
+    const root = existingProjectRoot(dataDir, 'ref-proj')!;
+    setProjectType(cfg, MASTER, 'ref-proj', 'ddd');
+    expect(readRawConfig(root).extensions.packs).toEqual(['.wai/packs/acme-doctrine.yaml']);
+    expect(readRawConfig(root).projectType).toBe('ddd');
+  });
+
+  it('an unknown project.yaml key survives the hosted projectType and profile-selection writes', () => {
+    createPlacedProject(cfg, MASTER, 'keep-key-proj');
+    const root = existingProjectRoot(dataDir, 'keep-key-proj')!;
+    writeRawConfig(root, { ...readRawConfig(root), futureSetting: { enabled: true, owner: 'platform' } });
+
+    // One hosted write sets projectType and records the folded profile selection.
+    setProjectType(cfg, MASTER, 'keep-key-proj', 'game-ecs');
+
+    const raw = readRawConfig(root);
+    expect(raw.projectType).toBe('game-ecs');
+    expect(raw.profileSelection.profileIds).toEqual(['game-ecs']);
+    expect(raw.futureSetting).toEqual({ enabled: true, owner: 'platform' });
   });
 
   it('setProjectType REFUSES a profile id no tier contributes and leaves project.yaml byte-for-byte intact', () => {
@@ -575,7 +641,7 @@ describe('project policy orchestrator (sdd_host)', () => {
   it('a pack adopted AFTER init no longer erases the recorded profileSelection (schema round-trip regression)', () => {
     seedGlobalPack('foo');
     const unit = seedUnit(dataDir, 'rt-unit');
-    const rec = executeApprovedInit(cfg, {
+    const { record: rec } = executeApprovedInit(cfg, {
       id: 'rt-proj',
       ownerUnitId: unit.id,
       profileSelection: selection({ profileIds: ['frontend-reactive'] }),
@@ -788,7 +854,7 @@ describe('project policy portal (sdd_host http)', () => {
     const unit = seedUnit(dataDir, 'http-unit');
     const init = await api('POST', '/projects/init', { cred: MASTER, body: { id: 'http-proj', ownerUnitId: unit.id } });
     expect(init.status).toBe(201);
-    expect(init.json.id).toBe('http-proj');
+    expect(init.json.record.id).toBe('http-proj');
     expect(existingProjectRoot(dataDir, 'http-proj')).toBeTruthy();
 
     // GET /projects/{id}/policy/evaluation → 200.

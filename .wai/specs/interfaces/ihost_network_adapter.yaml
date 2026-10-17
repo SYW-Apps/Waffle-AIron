@@ -1,0 +1,17 @@
+id: ihost_network_adapter
+name: Host Network Adapter Interface
+description: Forwards onto the network portal.
+component: host_network_adapter
+methods:
+  - name: view
+    description: >-
+      Forward to network_portal.view: the network view model of the bound root, its family within
+      the bound reach.
+    signature: 'view(options: ValidationOptions): NetworkViewModel'
+    returns: NetworkViewModel
+    params:
+      - name: options
+        type: ValidationOptions
+status: complete
+createdAt: '2026-10-06T13:14:45.585Z'
+updatedAt: '2026-10-06T13:14:46.176Z'

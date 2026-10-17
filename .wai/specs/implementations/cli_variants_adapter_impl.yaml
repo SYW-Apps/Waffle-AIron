@@ -2,15 +2,16 @@ id: cli_variants_adapter_impl
 name: CLI Variants Adapter Implementation
 description: The `wairon variants list` command in src/commands/variants.ts.
 contract: icli_variants_adapter
-sourcePath: src/commands/variants.ts
+sourcePath: src/commands/adapters/variants.ts
 methods:
   - name: listVariants
     narrative: []
     intent: >-
-      Loads the component-variant registry (global + project) via the core surface and prints each
-      variant: its id, the base stereotype it specializes, its implementation guidance, and any
-      target/profile scope. An empty registry prints a hint on where to define variants.
+      Loads the component-variant registry (built-in, global and project) via the core surface and
+      prints each variant: its id, the base stereotype it specializes, its implementation guidance,
+      and any target/profile scope. The built-in variants are always listed, so a project with none
+      of its own still sees them.
 detail: intent
 status: complete
 createdAt: '2026-07-15T12:24:27.080Z'
-updatedAt: '2026-07-15T12:26:32.689Z'
+updatedAt: '2026-09-25T20:49:41.825Z'

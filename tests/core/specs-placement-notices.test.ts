@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -67,7 +67,7 @@ function nestedProject(): void {
   fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
   setProjectRoot(proj);
   invalidateSpecCache();
-  saveSubsystemSpec({
+  saveSpec('subsystem', {
     id: 'billing', name: 'Billing', description: 'd', parentSystem: 'T',
     publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
   });
@@ -112,11 +112,14 @@ describe('type placement notices', () => {
     expect(saveTypeSpec(typeSpec())).toEqual([]);
   });
 
-  it('sdd_update_spec bubbles the save notices', () => {
+  it('sdd_update_spec bubbles the save notices (a stray type repaired into an owner — a move, from a subsystem or from system level, is refused, r7/r8)', () => {
     flatProject(['billing', 'ops']);
-    saveTypeSpec(typeSpec());
-    const notices = updateSpec('type', 'invoice', { subsystem: 'ops' });
+    saveTypeSpec(typeSpec({ subsystem: undefined }));
+    expect(() => updateSpec('type', 'invoice', { subsystem: 'ops' })).toThrow(/sdd_move_spec/);
+    saveTypeSpec(typeSpec({ subsystem: 'ghost' }));
+    const { notices } = updateSpec('type', 'invoice', { subsystem: 'ops' });
     expect(notices.some(n => n.includes('never relocates'))).toBe(true);
+    expect(() => updateSpec('type', 'invoice', { subsystem: 'billing' })).toThrow(/"subsystem" is where the type lives.*sdd_move_spec/s);
   });
 });
 
@@ -126,12 +129,12 @@ describe('component / interface / implementation parent-change notices', () => {
     const specs = path.join(proj, '.wai', 'specs');
     fs.writeFileSync(
       path.join(specs, 'components', 'widget.yaml'),
-      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Specialist\nowns: []\ndependsOn: []\n${stamp}\n`,
+      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Orchestrator\ndependencyClass: pure\nowns: []\ndependsOn: []\n${stamp}\n`,
     );
     invalidateSpecCache();
 
     const notices = saveComponentSpec({
-      id: 'widget', name: 'W', description: 'd', subsystem: 'ops', componentType: 'Specialist',
+      id: 'widget', name: 'W', description: 'd', subsystem: 'ops', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     });
     expect(notices.some(n => n.includes('never relocates'))).toBe(true);
@@ -210,11 +213,11 @@ describe('component / interface / implementation parent-change notices', () => {
     const specs = path.join(proj, '.wai', 'specs');
     fs.writeFileSync(
       path.join(specs, 'components', 'widget.yaml'),
-      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Specialist\nowns: []\ndependsOn: []\n${stamp}\n`,
+      `schemaVersion: 1.0.0\nid: widget\nname: W\ndescription: d\nsubsystem: billing\ncomponentType: Orchestrator\ndependencyClass: pure\nowns: []\ndependsOn: []\n${stamp}\n`,
     );
     invalidateSpecCache();
     const notices = saveComponentSpec({
-      id: 'widget', name: 'W', description: 'renamed only', subsystem: 'billing', componentType: 'Specialist',
+      id: 'widget', name: 'W', description: 'renamed only', subsystem: 'billing', componentType: 'Orchestrator', dependencyClass: 'pure',
       owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now,
     });
     expect(notices).toEqual([]);

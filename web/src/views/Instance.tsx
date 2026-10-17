@@ -348,7 +348,7 @@ function ExposureForm(props: { policy: HostExposurePolicy; onSaved: () => void; 
     <div className="panel stack-lg">
       <p className="hint">Which control-plane surfaces this instance serves. Changing these affects what is reachable over HTTP — take care.</p>
       <Field label="Admin API mode">
-        <Select value={p.adminApiMode} onChange={(v) => set({ adminApiMode: v })} options={['disabled', 'local_only', 'private_network', 'public'].map((m) => ({ value: m, label: m }))} />
+        <Select value={p.adminApiMode} onChange={(v) => set({ adminApiMode: v })} options={['disabled', 'enabled'].map((m) => ({ value: m, label: m }))} />
       </Field>
       <div className="toggle-grid">
         {EXPOSURE_TOGGLES.map((t) => (

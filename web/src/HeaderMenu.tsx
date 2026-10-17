@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ThemeSections } from './ThemeControls';
 import { subjectLabel } from './types';
 import type { WebContext } from './session';
@@ -12,6 +13,7 @@ import type { WebContext } from './session';
 export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -50,7 +52,12 @@ export function HeaderMenu(props: { ctx: WebContext; onSignOut: () => void }) {
             </div>
           </div>
 
-          <ThemeSections />
+          <ThemeSections
+            onOpenBuilder={() => {
+              setOpen(false);
+              navigate('/themes');
+            }}
+          />
 
           <div className="hmenu-foot">
             <button className="btn btn-ghost btn-sm" onClick={props.onSignOut}>

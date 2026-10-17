@@ -8,13 +8,15 @@ description: >-
   pre-authorized entrypoints. Audit appends are best-effort and never fail the primary action.
 contract: iproject_lifecycle_orchestrator
 sourcePath: src/server/projectlifecycle.ts
+injectedParams:
+  - cfg
 methods:
   - name: initializeProject
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential; any authenticated principal may attempt initialization
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -43,7 +45,7 @@ methods:
       - stepNumber: 7
         description: Resolve the caller's project:create permission over the request's required owner unit
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 8
         description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
@@ -63,7 +65,10 @@ methods:
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
       - stepNumber: 10
-        description: Build a completed ProjectActionOutcome (action project:init)
+        description: >-
+          Build a completed ProjectActionOutcome (action project:init) carrying the init's
+          GovernedProjectCreation as `creation` — the record and the impact of every pack and of the
+          governing-profile step the policy applied
         type: local
       - stepNumber: 11
         description: Executed — continue to auditing
@@ -115,29 +120,25 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Resolve the caller's project:write permission over the project
+        description: >-
+          Resolve the caller's approval:decide permission over the project: a lock is the project's
+          approval
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
-        description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
-        type: switch
-        'on': the resolved effective permission value
-        cases:
-          - value: 'yes'
-            step: 4
-          - value: 'no'
-            step: 7
-        defaultStep: 8
+        description: May the caller approve the project themselves?
+        type: branch
+        condition: the caller's approval:decide over the project resolves yes
+        onFalseStep: 7
       - stepNumber: 4
         description: >-
-          Authorized: lock directly via the admin plane's pre-authorized entry, forwarding the
-          project id AND the optional subproject qualifier so the freeze lands on the chained
-          child's tree when one was supplied — the permission just resolved and the audit below stay
-          anchored at the TOP project id.
+          Authorized: lock directly via the admin plane's pre-authorized entry with the caller as
+          the approver, forwarding the project id — a member's own record id when a member is
+          locked; no qualifier exists any more
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -147,134 +148,95 @@ methods:
       - stepNumber: 6
         description: Executed — continue to auditing
         type: jump
-        toStep: 11
+        toStep: 17
       - stepNumber: 7
-        description: Reject the lock
-        type: throw
-        error: Forbidden — caller may not lock this project
+        description: >-
+          Resolve the caller's project:write permission over the project: only a writer may request
+          the lock for someone else to approve
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
       - stepNumber: 8
         description: >-
-          Build the pending project:lock ApprovalRequest: kind, the TOP project id, the requester's
-          subject and token id, expiry, and a redacted human summary. When the caller is bound to a
-          subproject, record that qualifier in the request's payload (payloadType naming the scope
-          shape) — the SAME mechanism a project:init request already uses to carry what its
-          execution needs — so the approved action stays confined to that child tree instead of
-          silently widening to the whole project when someone approves it. The summary names the
-          subproject too, so an approver sees the real scope before deciding.
-        type: local
+          May the caller request the lock? A writer at the project rung may (a subsystem's yes never
+          reaches a whole-tree action), and so may a caller whose approval:decide resolves to
+          approval
+        type: branch
+        condition: >-
+          project:write over the project resolves no and approval:decide does not resolve to
+          approval
+        onFalseStep: 10
       - stepNumber: 9
-        description: Create the pending approval request
-        type: call
-        targetComponent: approval_repository
-        targetMethod: create
+        description: Reject the lock; nothing is requested
+        type: throw
+        error: >-
+          Forbidden — caller may not lock this project: approving it needs approval:decide,
+          requesting it needs project:write
       - stepNumber: 10
-        description: Build a pending-approval ProjectActionOutcome carrying the created request
-        type: local
-      - stepNumber: 11
-        description: Append a redacted audit event without letting a failure fail the action
-        type: try
-        endStep: 13
-        catches:
-          - error: audit append failure
-            step: 14
-      - stepNumber: 12
-        description: Append the redacted project-lifecycle audit event (security level)
-        type: call
-        targetComponent: audit_repository
-        targetMethod: append
-      - stepNumber: 13
-        description: On a successful append, continue to the return and skip the audit-failure handler
-        type: jump
-        toStep: 15
-      - stepNumber: 14
-        description: Record the audit append failure as a server diagnostic and continue
-        type: local
-      - stepNumber: 15
-        description: Return the project action outcome
-        type: return
-        outcome: the project action outcome
-    detail: full
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:write permission over the project
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
-        type: switch
-        'on': the resolved effective permission value
-        cases:
-          - value: 'yes'
-            step: 4
-          - value: 'no'
-            step: 7
-        defaultStep: 8
-      - stepNumber: 4
         description: >-
-          Authorized: promote directly via the admin plane's pre-authorized entry, forwarding the
-          project id AND the optional subproject qualifier so the lock/StateId re-check concerns the
-          chained child's tree when one was supplied — permission and audit stay anchored at the TOP
-          project id.
+          Read the subsystem rungs the caller meets in the project through the authorization seam: a
+          lock signs the whole tree
+        type: call
+        targetComponent: authorization
+        targetMethod: reach
+      - stepNumber: 11
+        description: >-
+          Does a subsystem rule deny the caller write on any subsystem of the project? Nobody
+          requests a signature over a subsystem they may not change
+        type: branch
+        condition: the caller may write the project and a subsystem rung in it denies the caller write
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Refuse the lock, naming every subsystem denied and the rung that decided each; nothing is
+          requested
+        type: throw
+        error: >-
+          Forbidden — a lock signs the whole tree, and the caller may not change these subsystems:
+          <each, decided at its rung>
+      - stepNumber: 13
+        description: >-
+          Approval required: capture the gate identity of the project's tree (a member's own tree
+          when the project is a member) through the admin plane, so the approved execution can
+          refuse a tree that moved after the request
         type: call
         targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
-      - stepNumber: 5
+        targetMethod: gateIdentity
+      - stepNumber: 14
         description: >-
-          Build a completed ProjectActionOutcome (action project:promote) carrying the promote
-          result
+          Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
+          member's when a member is locked), the requester's subject and token id, expiry, a
+          redacted human summary naming the project, and gateStateId = the identity just captured.
+          No qualifier is recorded: the record id alone confines the approved action
         type: local
-      - stepNumber: 6
-        description: Executed — continue to auditing
-        type: jump
-        toStep: 11
-      - stepNumber: 7
-        description: Reject the promotion
-        type: throw
-        error: Forbidden — caller may not promote this project
-      - stepNumber: 8
-        description: >-
-          Build the pending project:promote ApprovalRequest: kind, the TOP project id, the
-          requester's subject and token id, expiry, and a redacted human summary. When the caller is
-          bound to a subproject, record that qualifier in the request's payload (payloadType naming
-          the scope shape), so the approved promotion re-checks THAT child's lock and StateId rather
-          than the whole project's, and the summary names the subproject so an approver sees the
-          real scope.
-        type: local
-      - stepNumber: 9
+      - stepNumber: 15
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 10
+      - stepNumber: 16
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 11
+      - stepNumber: 17
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 13
+        endStep: 19
         catches:
           - error: audit append failure
-            step: 14
-      - stepNumber: 12
+            step: 20
+      - stepNumber: 18
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 13
+      - stepNumber: 19
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 21
+      - stepNumber: 20
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 15
+      - stepNumber: 21
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -284,7 +246,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Lazily expire overdue pending requests before reading (pass the current timestamp)
@@ -314,7 +276,7 @@ methods:
       - stepNumber: 7
         description: Resolve the caller's approval:decide permission over the request's project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 8
         description: If the resolved value is not yes, deny
@@ -336,34 +298,41 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's approval:decide visibility view and derive the actionable (decidable)
           project set — skipped for an instance-admin, who may decide every request
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: visibleScopes
       - stepNumber: 3
+        description: >-
+          Read the decidable project set down from that view: its project entries that are not
+          breadcrumb context
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableProjects
+      - stepNumber: 4
         description: Reject (Forbidden) a non-admin caller whose decidable project set is empty
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Lazily expire overdue pending requests before listing (pass the current timestamp)
         type: call
         targetComponent: approval_repository
         targetMethod: expirePending
-      - stepNumber: 5
+      - stepNumber: 6
         description: List the pending approval requests, optionally narrowed to one project
         type: call
         targetComponent: approval_repository
         targetMethod: list
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Filter to the requests whose project is in the caller's decidable set (an instance-admin
           keeps all; a request with no project id is instance-admin-only — fail closed)
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the pending approval requests the caller may decide
         type: return
         outcome: pending approval requests
@@ -373,7 +342,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the request being decided by decision.requestId
@@ -394,7 +363,7 @@ methods:
           Resolve the caller's approval:decide permission over the request's project (a project:init
           request resolves at the target unit/instance)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 6
         description: If the resolved value is not yes, deny
@@ -434,52 +403,71 @@ methods:
         'on': request.kind
         cases:
           - value: project:init
-            step: 13
+            step: 19
           - value: project:lock
-            step: 15
-          - value: project:promote
-            step: 17
-        defaultStep: 19
+            step: 13
+        defaultStep: 18
       - stepNumber: 13
-        description: Execute the approved initialization via the policy orchestrator's pre-authorized entry
-        type: call
-        targetComponent: project_policy_orchestrator
-        targetMethod: executeApprovedInit
-      - stepNumber: 14
-        description: Continue to mark the approval completed
-        type: jump
-        toStep: 20
-      - stepNumber: 15
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one, so an approved
-          subproject lock freezes exactly that child tree and an approval can never widen the scope
-          the requester was confined to.
+          project:lock — run the pinned lock, cancelling the request if the design it was made about
+          has moved
+        type: try
+        endStep: 15
+        catches:
+          - error: the design changed since the lock was requested
+            step: 16
+      - stepNumber: 14
+        description: >-
+          project:lock — execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a request recorded with a member qualifier before the upgrade is
+          mapped, for one release, to that member's record, never wider) with the request's
+          gateStateId as the expected identity (so an approval never certifies a design other than
+          the one requested; a request without one executes against the tree as it stands).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
-      - stepNumber: 16
+      - stepNumber: 15
+        label: lockDone
         description: Continue to mark the approval completed
         type: jump
         toStep: 20
+      - stepNumber: 16
+        label: cancelMoved
+        description: >-
+          The tree moved after the request: cancel the approved request (never left approved and
+          un-executable until it expires), recording on it as its executionSummary "the design
+          changed since it was requested (requested <id>, now <id>); request the lock again" — which
+          getApprovalStatus and awaitApproval readers see
+        type: call
+        targetComponent: approval_repository
+        targetMethod: cancel
       - stepNumber: 17
         description: >-
-          project:promote — execute through the admin plane's pre-authorized promote entry,
-          forwarding the subproject qualifier recorded on the request's payload when it carries one,
-          so the lock/StateId re-check concerns that child tree.
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
+          Refuse the decision's execution with the same reason: nothing was locked, and the
+          requester asks again
+        type: throw
+        error: >-
+          the approval request was cancelled: the design changed since it was requested; request the
+          lock again
       - stepNumber: 18
-        description: Continue to mark the approval completed
-        type: jump
-        toStep: 20
-      - stepNumber: 19
         description: Reject an unsupported approval kind
         type: throw
         error: unsupported approval kind
+      - stepNumber: 19
+        label: initCase
+        description: >-
+          project:init — execute the approved initialization via the policy orchestrator's
+          pre-authorized entry; its GovernedProjectCreation says what the init applied (falls
+          through to marking the approval completed)
+        type: call
+        targetComponent: project_policy_orchestrator
+        targetMethod: executeApprovedInit
       - stepNumber: 20
-        description: Mark the approval completed once execution succeeded
+        label: complete
+        description: >-
+          Mark the approval completed once execution succeeded; for a project:init, record the
+          applied packs' and governing profile's headline impacts on the approval as its
+          executionSummary, so the returned ApprovalRequest states what the init changed
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
@@ -512,7 +500,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the approved request by id
@@ -564,75 +552,96 @@ methods:
             step: 12
           - value: project:lock
             step: 14
-          - value: project:promote
-            step: 16
-        defaultStep: 18
+        defaultStep: 19
       - stepNumber: 12
         description: >-
           Execute the approved project initialization under pack policy via the policy
-          orchestrator's pre-authorized entry
+          orchestrator's pre-authorized entry; its GovernedProjectCreation says what the init
+          applied
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
       - stepNumber: 13
         description: Continue to mark the approval completed
         type: jump
-        toStep: 19
+        toStep: 20
       - stepNumber: 14
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry, forwarding the
-          subproject qualifier recorded on the request's payload when it carries one (the retry path
-          must confine exactly as the auto-execute path does).
+          project:lock — run the pinned lock, cancelling the request if the design it was made about
+          has moved
+        type: try
+        endStep: 16
+        catches:
+          - error: the design changed since the lock was requested
+            step: 17
+      - stepNumber: 15
+        description: >-
+          project:lock — execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a pre-upgrade qualifier mapped to its member record for one release)
+          with the request's gateStateId as the expected identity (the retry path must confine and
+          pin exactly as the auto-execute path does).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
-      - stepNumber: 15
-        description: Continue to mark the approval completed
-        type: jump
-        toStep: 19
       - stepNumber: 16
-        description: >-
-          project:promote — execute through the admin plane's pre-authorized promote entry,
-          forwarding the subproject qualifier recorded on the request's payload when it carries one.
-        type: call
-        targetComponent: admin_orchestrator
-        targetMethod: executeApprovedPromote
-      - stepNumber: 17
+        label: lockDone
         description: Continue to mark the approval completed
         type: jump
-        toStep: 19
+        toStep: 20
+      - stepNumber: 17
+        label: cancelMoved
+        description: >-
+          The tree moved after the request: cancel the approved request, recording on it as its
+          executionSummary "the design changed since it was requested (requested <id>, now <id>);
+          request the lock again" — the retry path ends exactly as the auto-execute path does
+        type: call
+        targetComponent: approval_repository
+        targetMethod: cancel
       - stepNumber: 18
+        description: >-
+          Refuse the execution with the same reason: nothing was locked, and the requester asks
+          again
+        type: throw
+        error: >-
+          the approval request was cancelled: the design changed since it was requested; request the
+          lock again
+      - stepNumber: 19
         description: Reject an unsupported approval kind
         type: throw
         error: unsupported approval kind
-      - stepNumber: 19
-        description: Mark the approval completed once the privileged action has executed successfully
+      - stepNumber: 20
+        description: >-
+          Mark the approval completed once the privileged action has executed successfully; for a
+          project:init, record the applied packs' and governing profile's headline impacts on the
+          approval as its executionSummary
         type: call
         targetComponent: approval_repository
         targetMethod: markCompleted
-      - stepNumber: 20
+      - stepNumber: 21
         description: Append a redacted audit event without letting a failure fail the execution
         type: try
-        endStep: 22
+        endStep: 23
         catches:
           - error: audit append failure
-            step: 23
-      - stepNumber: 21
+            step: 24
+      - stepNumber: 22
         description: >-
           Append the redacted approval.executed audit event (security level) under the active
           retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 22
+      - stepNumber: 23
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 24
-      - stepNumber: 23
+        toStep: 25
+      - stepNumber: 24
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 24
-        description: Return the execution outcome summary
+      - stepNumber: 25
+        description: >-
+          Return the execution outcome summary — for a project:init, including the executionSummary
+          of what the init applied
         type: return
         outcome: execution outcome summary
   - name: awaitApproval
@@ -640,7 +649,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Look up the approval request by id
@@ -671,20 +680,27 @@ methods:
         type: loop
         condition: the request is still pending and the timeout has not elapsed
         loopKind: while
-        endStep: 9
+        endStep: 10
       - stepNumber: 8
         description: Wait a short interval
         type: local
       - stepNumber: 9
+        description: >-
+          Realize any lazy expiry: mark every pending request past its deadline expired, so the
+          re-read below sees a request that timed out as expired rather than still pending
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 10
         description: Re-read the request's current state
         type: call
         targetComponent: approval_repository
         targetMethod: getById
-      - stepNumber: 10
+      - stepNumber: 11
         description: Return the request in its current state (decided/completed, or still pending at timeout)
         type: return
         outcome: the request's current state
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-07-25T17:26:30.125Z'
+updatedAt: '2026-10-17T16:25:44.818Z'

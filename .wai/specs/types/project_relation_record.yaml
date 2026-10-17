@@ -23,12 +23,6 @@ fields:
     type: string
     description: Relation kind such as "consumes", "publishes_to", "depends_on", "mirrors", or "documents".
     optional: false
-  - name: sourceAdapter
-    type: string
-    description: >-
-      Optional source project adapter component id responsible for consuming the remote public
-      surface.
-    optional: true
   - name: targetPublicInterface
     type: RemotePublicInterfaceRef
     description: >-
@@ -40,17 +34,22 @@ fields:
     description: Human-readable reason for the cross-project relation.
     optional: false
   - name: status
-    type: string
-    description: 'Lifecycle status: "draft", "active", "deprecated", or "removed".'
+    type: ProjectRelationStatus
+    description: >-
+      Lifecycle status; only an active relation confers reachability, and a relation written without
+      one is active.
     optional: false
   - name: createdAt
     type: string
-    description: ISO-8601 creation timestamp.
+    description: When the relation was first created, recorded by the server; kept unchanged on later updates
     optional: false
   - name: createdBy
     type: PrincipalSubject
-    description: Identity that created the relation.
-    optional: true
+    description: >-
+      The subject who first created the relation, recorded by the server from the writing principal;
+      kept unchanged on later updates
+    optional: false
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:25.097Z'
-updatedAt: '2026-07-08T21:11:25.134Z'
+updatedAt: '2026-10-04T23:53:29.268Z'

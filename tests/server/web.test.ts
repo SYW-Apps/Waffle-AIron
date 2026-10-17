@@ -21,7 +21,7 @@ import {
 import { allow, seedUnit } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { signSsoState, verifySsoState, authenticate } from '../../src/server/auth.js';
-import { ForbiddenError, UnauthenticatedError } from '../../src/server/identity.js';
+import { ForbiddenError, UnauthenticatedError, AdminAuthError } from '../../src/server/errors.js';
 import * as identity from '../../src/server/identity.js';
 import { upsertIdentityProviderRecord } from '../../src/server/policy.js';
 import { findUserByExternalSubject, setUserStatus, upsertUser as repoUpsertUser } from '../../src/server/users.js';
@@ -32,18 +32,17 @@ import {
 } from '../../src/server/websessions.js';
 import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
 import * as webproject from '../../src/server/webproject.js';
-import { AdminAuthError } from '../../src/server/admin.js';
 import { createCredential, hashToken, findByTokenHash } from '../../src/server/credentials.js';
 import { queryAuditEvents as auditQuery } from '../../src/server/audit.js';
 import { createUnit as createOrgUnit, placeProject, listProjectPlacements } from '../../src/server/organization.js';
 import * as webadmin from '../../src/server/webadmin.js';
 import { replacePublicSurfaceSnapshot } from '../../src/server/surfaces.js';
 import { upsertProjectRelation } from '../../src/server/relations.js';
-import { validateProjectAsComplete } from '../../src/server/adapters.js';
+import { validateAsComplete as validateProjectAsComplete } from '../../src/server/adapters/validator.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { provisionProject } from '../../src/core/provision.js';
 import {
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveTypeSpec,
@@ -472,7 +471,7 @@ describe('web graph orchestrator (sdd_host)', () => {
       // provisionProject writes .wai/project.yaml + the L0 system spec 'GraphSys',
       // so the conformance gate (loadProjectConfig) treats the root as a real project.
       provisionProject('GraphSys');
-      saveSubsystemSpec({
+      saveSpec('subsystem', {
         id: 'billing',
         name: 'Billing',
         description: 'billing',
@@ -529,6 +528,8 @@ describe('web graph orchestrator (sdd_host)', () => {
     invalidateSpecCache();
     const expectedCounts = new Map<string, number>();
     for (const iss of expected.issues) {
+      // Notices are counted apart (noticeCount), never in issueCount.
+      if (iss.severity === 'notice') continue;
       if (iss.specId) expectedCounts.set(iss.specId, (expectedCounts.get(iss.specId) ?? 0) + 1);
     }
 
@@ -607,7 +608,6 @@ describe('web graph orchestrator (sdd_host)', () => {
       sourceProjectId: 'proj-a',
       targetProjectId: 'proj-b',
       kind: 'consumes',
-      sourceAdapter: 'a-client',
       targetPublicInterface: { projectId: 'proj-b', systemInterfaceId: 'b-api', reason: 'r' },
       reason: 'r',
       status: 'active',
@@ -1682,7 +1682,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
 // listProjects is OWNED here (the admin list is master-only): it resolves the
 // session to a Principal, computes the caller's project:read visible scopes over
 // the org tree, and returns only the in-scope project records (an instance admin
-// sees all). create/lock/promote/destroy are thin forwards to the admin
+// sees all). create/lock/destroy are thin forwards to the admin
 // orchestrator with the session AS the credential, so admin.ts's resolver
 // authorization applies unchanged (a caller lacking permission is refused with
 // AdminAuthError → 403).
@@ -1781,7 +1781,7 @@ describe('web project orchestrator (sdd_host)', () => {
     // placed) — the create routes through the POLICY-AWARE initialization, so
     // the instance pack policy applies to web creates exactly as to MCP init.
     const unit = seedUnit(dataDir, 'team');
-    const rec = webproject.createProject(cfg, superAdmin(), 'new-proj', unit.id);
+    const { record: rec } = webproject.createProject(cfg, superAdmin(), 'new-proj', unit.id);
     expect(rec.id).toBe('new-proj');
     expect(listProjectRecords(dataDir).some((r) => r.id === 'new-proj')).toBe(true);
 
@@ -1806,7 +1806,7 @@ describe('web project orchestrator (sdd_host)', () => {
   it('lockProject forwards with the session: a viewer is denied (403); a permission-holder passes the gate', () => {
     createProjectRecord(dataDir, 'demo');
     allow(dataDir, 'viewer', 'project:read', 'project', 'demo');
-    expect(() => webproject.lockProject(cfg, session('viewer'), 'demo')).toThrow(AdminAuthError);
+    expect(() => webproject.lockProject(cfg, session('viewer'), 'demo')).toThrow(ForbiddenError);
 
     // The instance admin passes the authorization gate; the lock itself may fail
     // validate-as-complete, but that must NOT be an authorization denial.
@@ -1819,17 +1819,9 @@ describe('web project orchestrator (sdd_host)', () => {
       err = e;
     }
     expect(err).not.toBeInstanceOf(AdminAuthError);
+    expect(err).not.toBeInstanceOf(ForbiddenError);
   }, 20_000);
 
-  it('promoteProject forwards with the session: a permission-holder reaches the workflow (not-locked), a viewer is denied (403)', () => {
-    const unit = seedUnit(dataDir, 'team');
-    webproject.createProject(cfg, superAdmin(), 'promo', unit.id);
-    expect(webproject.promoteProject(cfg, superAdmin(), 'promo').status).toBe('not-locked');
-
-    createProjectRecord(dataDir, 'demo');
-    allow(dataDir, 'viewer', 'project:read', 'project', 'demo');
-    expect(() => webproject.promoteProject(cfg, session('viewer'), 'demo')).toThrow(AdminAuthError);
-  }, 20_000);
 });
 
 // ── Web project routes over HTTP (routeData) ─────────────────────────────────
@@ -1902,7 +1894,7 @@ describe('web project routes over HTTP (sdd_host)', () => {
   it('webUiEnabled=false (default): every /web/projects route answers 404', async () => {
     const cookie = adminCookie(); // a valid session exists, but the surface is gated off
     expect((await raw({ method: 'GET', path: '/web/projects', headers: { cookie } })).status).toBe(404);
-    for (const p of ['/web/projects', '/web/projects/lock', '/web/projects/promote', '/web/projects/destroy']) {
+    for (const p of ['/web/projects', '/web/projects/lock', '/web/projects/destroy']) {
       const r = await raw({ method: 'POST', path: p, headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body: '{}' });
       expect(r.status).toBe(404);
     }
@@ -1933,12 +1925,41 @@ describe('web project routes over HTTP (sdd_host)', () => {
       body: JSON.stringify({ id: 'made-here', unitId: unit.id }),
     });
     expect(created.status).toBe(201);
-    expect(JSON.parse(created.body).id).toBe('made-here');
+    expect(JSON.parse(created.body).record.id).toBe('made-here');
     expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(true);
     expect(listProjectPlacements(dataDir, 'made-here').map((p) => p.unitId)).toEqual([unit.id]);
   }, 20_000);
 
-  it('a viewer is refused create/lock/promote/destroy over HTTP (403, resolver denial) but can still read the scoped list', async () => {
+  it('the Lock route answers a writer with a pending approval request (200), a decider with a completed lock, and a reader with 403', async () => {
+    enableWebUi();
+    const unit = seedUnit(dataDir, 'lock-team');
+    const cookieOf = (userId: string): string => {
+      const s = createWebSession(dataDir, {
+        id: '', subject: { userId, kind: 'human', issuer: 'local' },
+        projects: ['*'], createdAt: '', expiresAt: FUTURE(),
+      });
+      return `wairon_session=${s.id}`;
+    };
+    const lockAs = (cookie: string): Promise<{ status: number; body: string }> =>
+      raw({ method: 'POST', path: '/web/projects/lock', headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body: JSON.stringify({ projectId: 'lockable' }) });
+    webproject.createProject(cfg, adminCookie().slice('wairon_session='.length), 'lockable', unit.id);
+    allow(dataDir, 'route-writer', 'project:write', 'project', 'lockable');
+    allow(dataDir, 'route-decider', 'approval:decide', 'project', 'lockable');
+    allow(dataDir, 'route-reader', 'project:read', 'project', 'lockable');
+
+    const writer = await lockAs(cookieOf('route-writer'));
+    expect(writer.status).toBe(200);
+    expect(JSON.parse(writer.body)).toMatchObject({ status: 'pending-approval', action: 'project:lock' });
+
+    const reader = await lockAs(cookieOf('route-reader'));
+    expect(reader.status).toBe(403);
+
+    const decider = await lockAs(cookieOf('route-decider'));
+    expect(decider.status).toBe(200);
+    expect(JSON.parse(decider.body)).toMatchObject({ status: 'completed', action: 'project:lock' });
+  }, 30_000);
+
+  it('a viewer is refused create/lock/destroy over HTTP (403, resolver denial) but can still read the scoped list', async () => {
     enableWebUi();
     const unit = seedUnit(dataDir, 'team');
     createProjectRecord(dataDir, 'demo');
@@ -1950,7 +1971,6 @@ describe('web project routes over HTTP (sdd_host)', () => {
 
     expect((await post('/web/projects', JSON.stringify({ id: 'x', unitId: unit.id }))).status).toBe(403);
     expect((await post('/web/projects/lock', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
-    expect((await post('/web/projects/promote', JSON.stringify({ projectId: 'demo' }))).status).toBe(403);
     expect((await post('/web/projects/destroy', JSON.stringify({ id: 'demo' }))).status).toBe(403);
     // Nothing was created or destroyed by the refused mutations.
     expect(listProjectRecords(dataDir).some((r) => r.id === 'demo')).toBe(true);

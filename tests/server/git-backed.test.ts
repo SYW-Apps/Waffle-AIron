@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { excludeLocalFiles } from '../../src/git/adapter.js';
 import {
   invalidateSpecCache,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -18,11 +19,19 @@ import {
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import * as admin from '../../src/server/admin.js';
-import { AdminAuthError } from '../../src/server/admin.js';
-import { hostCore } from '../../src/server/adapters.js';
+import { AdminAuthError } from '../../src/server/errors.js';
+import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
+import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import * as memberRegistration from '../../src/server/members.js';
 import type { HostConfig } from '../../src/server/types.js';
+import type { ApproverIdentity } from '../../src/models/lock.js';
+
+/** A hosted approver, the way the lifecycle orchestrator resolves one from an
+ *  authenticated principal. */
+const TEST_APPROVER: ApproverIdentity = { id: 'u-test', name: 'Tester', source: 'hosted' };
+
 
 // ---------------------------------------------------------------------------
 // Integration test for git-backed projects (sdd_git). Exercises the real git
@@ -138,6 +147,31 @@ function seedRemote(base: string): { remote: string; seed: string } {
   return { remote, seed };
 }
 
+/**
+ * A private copy of the seeded remote and its collaborator clone, made with
+ * file copies instead of git.
+ *
+ * Every test here needs the same starting state, and building it took six git
+ * processes (init, clone, add, commit, branch, push) per test, on top of the
+ * dozen or more the test itself runs — all synchronous, all inside the test's
+ * fixed wall-clock budget, and each one several times slower when the rest of
+ * the suite is saturating the machine. That is what made this file fail under
+ * full-suite load and pass alone. The template is built once; a copy costs no
+ * process at all. The clone's `origin` is the one absolute path inside it, so
+ * it is repointed at the copy's own remote — never the shared template.
+ */
+function copySeededRemote(template: string, base: string): { remote: string; seed: string } {
+  fs.cpSync(template, base, { recursive: true });
+  const remote = path.join(base, 'remote.git');
+  const seed = path.join(base, 'seed');
+  const configPath = path.join(seed, '.git', 'config');
+  const config = fs.readFileSync(configPath, 'utf8');
+  const repointed = config.replace(/^(\s*url\s*=\s*).*$/m, `$1${remote.replace(/\\/g, '/')}`);
+  if (repointed === config) throw new Error(`the seed clone has no origin url to repoint: ${configPath}`);
+  fs.writeFileSync(configPath, repointed);
+  return { remote, seed };
+}
+
 describe('git-backed projects (sdd_git)', () => {
   let base: string;
   let dataDir: string;
@@ -145,13 +179,27 @@ describe('git-backed projects (sdd_git)', () => {
   let seed: string;
   let cfg: HostConfig;
   const savedEnv = { ...process.env };
+  let template: string;
+
+  beforeAll(() => {
+    template = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-template-'));
+    seedRemote(template);
+  });
+
+  afterAll(() => {
+    try {
+      fs.rmSync(template, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
 
   beforeEach(() => {
     invalidateSpecCache();
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-it-'));
+    ({ remote, seed } = copySeededRemote(template, base));
     dataDir = path.join(base, 'data');
     fs.mkdirSync(dataDir, { recursive: true });
-    ({ remote, seed } = seedRemote(base));
     process.env.WAIRON_ADMIN_TOKEN = ADMIN;
     process.env.WAIRON_GIT_NAME = 'wairon-bot';
     process.env.WAIRON_GIT_EMAIL = 'bot@localhost';
@@ -178,6 +226,44 @@ describe('git-backed projects (sdd_git)', () => {
     expect(fs.existsSync(path.join(root, '.wai', 'specs', '.index.yaml'))).toBe(true);
   });
 
+  // ── exclude-file doctrine: only git.json stays local; lock.json is committed ──
+
+  it('enable on a fresh repo excludes only git.json — not lock.json', () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const excludeContent = fs.readFileSync(path.join(root, '.git', 'info', 'exclude'), 'utf8');
+    expect(excludeContent).toContain('.wai/git.json');
+    expect(excludeContent).not.toContain('.wai/lock.json');
+  });
+
+  it('removes a lock.json exclusion left by an earlier wairon version, with a warning, and never duplicates git.json', () => {
+    // A directory standing in for a repo an earlier wairon version already
+    // configured — no real clone needed, since excludeLocalFiles works purely
+    // against .git/info/exclude on the bound root.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-git-exclude-'));
+    const excludePath = path.join(dir, '.git', 'info', 'exclude');
+    fs.mkdirSync(path.dirname(excludePath), { recursive: true });
+    // The legacy exclusion, alongside an unrelated line a human might have
+    // added by hand — that one must survive untouched.
+    fs.writeFileSync(excludePath, '*.local\n.wai/lock.json\n.wai/git.json\n');
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runWithProjectRoot(dir, () => excludeLocalFiles());
+    // Re-enabling (excludeLocalFiles running again on the same root) must not
+    // duplicate the git.json line, and there is nothing left to warn about.
+    runWithProjectRoot(dir, () => excludeLocalFiles());
+
+    const after = fs.readFileSync(excludePath, 'utf8');
+    expect(after).not.toContain('lock.json');
+    expect(after).toContain('*.local'); // untouched
+    expect(after.match(/\.wai\/git\.json/g)).toHaveLength(1); // not duplicated
+    expect(warn).toHaveBeenCalledTimes(1); // only the first call found something to remove
+    expect(warn.mock.calls[0]?.[0]).toMatch(/lock\.json/);
+
+    warn.mockRestore();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   // Real git subprocess work (commit + push + log) sits at the default 5s
   // timeout boundary under full-suite worker contention — a timing flake, not
   // a logic risk; the generous ceiling keeps the verdict about correctness.
@@ -200,61 +286,130 @@ describe('git-backed projects (sdd_git)', () => {
     // ...and the remote received the working branch.
     expect(git(['branch'], remote)).toContain('wairon/work');
 
-    // Container-local files never enter the repo.
+    // git.json (container-local connection config) never enters the repo, but
+    // lock.json — the approval record — IS committed, so it reaches the remote.
     const tracked = git(['ls-files'], root);
-    expect(tracked).not.toContain('lock.json');
+    expect(tracked).toContain('.wai/lock.json');
     expect(tracked).not.toContain('git.json');
   });
 
-  // ── subproject confinement: a child freeze is NOT a repository event ─────────
-  //
-  // The git binding is read from the BOUND root, so a subproject-scoped lock finds
-  // no binding at the child and both the sync and the publish no-op naturally (no
-  // conditional anywhere says so). This is THE confinement point: a token narrowed
-  // to one chained child must not be able to commit and push the parent's
-  // repository. Asserted through the same real-git seams the tests above use.
-  it('a subproject-scoped lock performs NO commit and NO push against the parent repository', { timeout: 30_000 }, () => {
+  // Stage 7: a member is a hosted record of its own, committed through its
+  // FAMILY ROOT's repository with ONLY its own <path>/.wai/ pathspec — never the
+  // parent's tree, never a sibling's, never a path someone else staged.
+  it('a member lock commits through the family repository with only its own pathspec, sweeping nothing else', { timeout: 30_000 }, () => {
     admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
     const root = projectRoot();
 
-    // A chained subproject inside the bound repo, itself a provisioned (lockable)
-    // wairon project. Its .wai/ is the CHILD's, not the repo-root .wai/.
+    // A member inside the bound repo, itself a provisioned (lockable) project,
+    // registered as a hosted record by the stage-7 upgrade.
     const child = seedChainedMount(root, 'billing', 'packages/billing');
     runWithProjectRoot(child, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
 
-    // Dirty the PARENT's .wai/ too, so a publish would definitely have something
-    // to commit if one were attempted.
+    // Dirty the PARENT's .wai/, and stage an unrelated source file — neither may ride along.
     const idx = path.join(root, '.wai', 'specs', '.index.yaml');
     fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: parent edit, must stay unpublished'));
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'team-code.ts'), 'export const x = 1;\n');
+    git(['add', '--', 'src/team-code.ts'], root);
     invalidateSpecCache();
 
     const headBefore = git(['rev-parse', 'wairon/work'], root);
+    const rec = admin.executeApprovedLock(cfg, 'billing', TEST_APPROVER);
 
-    const rec = admin.executeApprovedLock(cfg, 'demo', 'billing');
-
-    // The child really froze …
+    // The member froze at its own root and its lock reached the remote.
     expect(rec.status).toBe('ready');
     expect(fs.existsSync(path.join(child, '.wai', 'lock.json'))).toBe(true);
-    // … and DID NOT HAPPEN: no commit was recorded on the lock record (publish
-    // no-opped because the bound child root carries no git.json).
-    expect(rec.commitSha).toBeUndefined();
-    expect(rec.compareUrl).toBeUndefined();
-    // DID NOT HAPPEN: the working branch never moved — no commit was created.
-    expect(git(['rev-parse', 'wairon/work'], root)).toBe(headBefore);
-    // DID NOT HAPPEN: nothing was pushed — the remote still has no working branch.
-    expect(git(['branch'], remote)).not.toContain('wairon/work');
-    // DID NOT HAPPEN: the parent's dirty .wai/ edit is still uncommitted, and the
-    // parent tree was not locked at all.
-    expect(git(['status', '--porcelain', '--', '.wai/'], root)).toContain('.wai/specs/.index.yaml');
-    expect(fs.existsSync(path.join(root, '.wai', 'lock.json'))).toBe(false);
-
-    // The repository was live and capable all along: an UNQUALIFIED lock of the
-    // same project commits and pushes exactly as before (no regression).
-    const parentRec = admin.executeApprovedLock(cfg, 'demo');
-    expect(parentRec.commitSha).toMatch(/^[0-9a-f]{40}$/);
+    expect(rec.commitSha).toMatch(/^[0-9a-f]{40}$/);
     expect(git(['rev-parse', 'wairon/work'], root)).not.toBe(headBefore);
     expect(git(['branch'], remote)).toContain('wairon/work');
+    // The commit holds ONLY the member's .wai/ paths.
+    const files = git(['show', '--name-only', '--format=', rec.commitSha!], root).split(/\r?\n/).filter(Boolean);
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) expect(f.startsWith('packages/billing/.wai/'), f).toBe(true);
+    // Nothing else was swept: the parent's edit is still dirty, the team's staged file still staged.
+    expect(git(['status', '--porcelain', '--', '.wai/'], root)).toContain('.wai/specs/.index.yaml');
+    expect(git(['diff', '--cached', '--name-only'], root)).toContain('src/team-code.ts');
+    expect(fs.existsSync(path.join(root, '.wai', 'lock.json'))).toBe(false);
+  });
+
+  // Stage 7: family-commit-covers-members — the periodic sweep iterates FAMILY
+  // ROOTS and publishes ONE commit whose pathspecs are the root's .wai/ and each
+  // member record's <path>/.wai/; nothing else in the repository is swept.
+  it('family-commit-covers-members: one commit, every member pathspec, nothing else swept', { timeout: 30_000 }, () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const billing = seedChainedMount(root, 'billing', 'packages/billing');
+    runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
+    const docs = seedChainedMount(root, 'docs', 'packages/docs');
+    runWithProjectRoot(docs, () => hostCore.provisionProject('docs'));
+    invalidateSpecCache();
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
+    // Commit the scaffolding so only the edits below are pending.
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'add', '-A'], root);
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
+
+    // Pending: the root's .wai/, the billing member's .wai/; and outside any .wai/,
+    // a staged team file and an unstaged one — neither may ride along.
+    const idx = path.join(root, '.wai', 'specs', '.index.yaml');
+    fs.writeFileSync(idx, fs.readFileSync(idx, 'utf8').replace(/vision:.*/, 'vision: root edit'));
+    fs.writeFileSync(path.join(billing, '.wai', 'note.yaml'), 'note: member edit\n');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'team-code.ts'), 'export const x = 1;\n');
+    git(['add', '--', 'src/team-code.ts'], root);
+    fs.writeFileSync(path.join(root, 'README.md'), 'unstaged team edit\n');
+
+    admin.configureGitSync(cfg, ADMIN, 'demo', 1, true);
+    const headBefore = git(['rev-parse', 'HEAD'], root);
+    admin.runPeriodicGitSync(cfg);
+
+    // Exactly ONE new commit …
+    expect(git(['rev-parse', 'HEAD~1'], root)).toBe(headBefore);
+    const files = git(['show', '--name-only', '--format=', 'HEAD'], root).split(/\r?\n/).filter(Boolean);
+    // … covering both the root's and the member's pathspecs …
+    expect(files).toContain('.wai/specs/.index.yaml');
+    expect(files).toContain('packages/billing/.wai/note.yaml');
+    // … and nothing outside a project's .wai/.
+    for (const f of files) expect(f.startsWith('.wai/') || /^packages\/(billing|docs)\/\.wai\//.test(f), f).toBe(true);
+    expect(git(['diff', '--cached', '--name-only'], root)).toContain('src/team-code.ts');
+    expect(git(['status', '--porcelain', '--', 'README.md'], root)).toContain('README.md');
+    expect(git(['branch'], remote)).toContain('wairon/work');
+  });
+
+  // Stage 7 wave B: after a hosted family-shape change, reconcile registers the
+  // new member and publishes ONE family commit whose pathspecs are exactly the
+  // touched projects' own .wai/ — never source code, never an untouched member.
+  it('reconcile publishes one family commit over every touched project', { timeout: 30_000 }, () => {
+    admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
+    const root = projectRoot();
+    const billing = seedChainedMount(root, 'billing', 'packages/billing');
+    runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
+    invalidateSpecCache();
+    expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'add', '-A'], root);
+    git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
+
+    // The family-shape change on disk: a new member declared and scaffolded, an untouched member edited, team code beside it.
+    const tools = seedChainedMount(root, 'tools', 'packages/tools');
+    runWithProjectRoot(tools, () => hostCore.provisionProject('tools'));
+    fs.writeFileSync(path.join(billing, '.wai', 'note.yaml'), 'note: not part of this change\n');
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'team-code.ts'), 'export const x = 1;\n');
+    invalidateSpecCache();
+    const headBefore = git(['rev-parse', 'HEAD'], root);
+    const principal = { tokenId: 't-op', role: 'admin', projects: ['*'], authenticated: true, subject: { userId: 'u-op', kind: 'human', issuer: 'local' } };
+    const result = memberRegistration.reconcile({ dataDir }, principal, 'demo', ['demo']);
+    expect(result.registered).toEqual(['tools']);
+    expect(result.commit?.published).toBe(true);
+
+    // Exactly ONE new commit, covering the touched projects' own .wai/ and nothing else.
+    expect(git(['rev-parse', 'HEAD~1'], root)).toBe(headBefore);
+    const files = git(['show', '--name-only', '--format=', 'HEAD'], root).split(/\r?\n/).filter(Boolean);
+    expect(files.some((f) => f.startsWith('.wai/'))).toBe(true);
+    expect(files.some((f) => f.startsWith('packages/tools/.wai/'))).toBe(true);
+    for (const f of files) expect(f.startsWith('.wai/') || f.startsWith('packages/tools/.wai/'), f).toBe(true);
+    expect(git(['status', '--porcelain', '--', 'packages/billing/.wai/note.yaml'], root)).toContain('note.yaml');
   });
 
   it('sync integrates a collaborator commit from the default branch', () => {
@@ -360,7 +515,10 @@ describe('git-backed projects (sdd_git)', () => {
     const rec = admin.lockProject(cfg, ADMIN, 'demo');
     const subject = git(['log', '-1', '--pretty=%s', 'wairon/work'], root);
     expect(subject).toContain('wairon lock: demo @');
-    expect(subject).toContain(rec.stateId);
+    // The identity rendered `<algorithm>:<digest>`. The message used to
+    // interpolate the StateId OBJECT ("[object Object]"), and this assertion,
+    // handed the object, passed against that string.
+    expect(subject).toContain(`${rec.stateId.algorithm}:${rec.stateId.digest}`);
   });
 
   it('getGitBinding reports scoped dirtiness and the sync setting; configureGitSync persists it', () => {
@@ -443,7 +601,7 @@ describe('git-backed projects (sdd_git)', () => {
     // a detached call. Returns each authored file's repo-relative path.
     const now = '2026-07-05T00:00:00.000Z';
     const authored = runWithProjectRoot(root, () => {
-      saveSubsystemSpec({
+      saveSpec('subsystem', {
         id: 'demo-core',
         name: 'Demo Core',
         description: 'session handling',
@@ -555,10 +713,14 @@ describe('git-backed projects (sdd_git)', () => {
     const clone = fs.mkdtempSync(path.join(base, 'content-clone-'));
     git(['-c', 'core.autocrlf=false', 'clone', '-q', '--branch', 'wairon/work', remote, '.'], clone);
 
-    // 1. Every wairon-AUTHORED spec file is byte-identical, working tree → clone.
+    // 1. Every wairon-AUTHORED spec file is byte-identical, working tree → clone,
+    //    line endings aside: the writer keeps the working tree's convention (a
+    //    checkout under core.autocrlf=true is CRLF), and git stores LF, which is
+    //    what this clone, with translation pinned off, checks out.
+    const lf = (bytes: Buffer): Buffer => Buffer.from(bytes.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
     for (const rel of Object.values(authored)) {
-      const original = fs.readFileSync(path.join(root, rel));
-      const carried = fs.readFileSync(path.join(clone, rel));
+      const original = lf(fs.readFileSync(path.join(root, rel)));
+      const carried = lf(fs.readFileSync(path.join(clone, rel)));
       expect(carried.equals(original), `byte drift between project and clone in ${rel}`).toBe(true);
     }
 
@@ -569,8 +731,10 @@ describe('git-backed projects (sdd_git)', () => {
     expect(fs.readFileSync(path.join(clone, '.wai', 'specs', '.index.yaml'), 'utf8')).toBe(INDEX_YAML);
 
     // 3. The clone's .wai file SET matches the project's (nothing dropped),
-    // minus the container-local files that must never enter the repo.
-    const containerLocal = new Set(['git.json', 'lock.json']);
+    // minus git.json — the one file that must never enter the repo. (No lock
+    // was taken in this scenario, so lock.json is not in play here either way;
+    // see git-backed's other tests for it being committed.)
+    const containerLocal = new Set(['git.json']);
     expect(listTree(path.join(clone, '.wai'))).toStrictEqual(
       listTree(path.join(root, '.wai')).filter((f) => !containerLocal.has(f)),
     );

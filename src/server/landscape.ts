@@ -1,12 +1,9 @@
-import type { IncomingMessage, ServerResponse } from 'http';
 import { runWithProjectRoot } from '../utils/fs.js';
-import { readYamlFile } from '../utils/yaml.js';
-import { AI_PATHS } from '../config/loader.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { appendAuditEvent, DEFAULT_AUDIT_POLICY } from './audit.js';
-import { resolveProjectRoot, listProjectRecords } from './projects.js';
-import { hostCore } from './adapters.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
+import { resolveProjectRoot, listProjectRecords, listFamilyRecords } from './projects.js';
+import * as hostCore from './adapters/core.js';
 import {
   createUnit,
   updateUnit,
@@ -26,7 +23,6 @@ import {
   getPublicSurfaceSnapshot,
   findPublicInterface,
 } from './surfaces.js';
-import { sendJson } from './httpio.js';
 import {
   authorize,
   visibleScopes,
@@ -35,13 +31,13 @@ import {
   actionableUnitIds,
 } from './authorization.js';
 import { resolveVisibility, isVisible, audienceDistance, audienceCovers } from './visibility.js';
-import { hostSurfaces } from './adapters.js';
+import * as hostSurfaces from './adapters/surfaces.js';
 import * as yamlLib from 'js-yaml';
 import { safeFilenamePart } from '../utils/filenames.js';
 import { openApiIndexDocument } from './openapiindex.js';
 import type {
   AuditEvent,
-  AuditRetentionPolicy,
+  AuditLevel,
   HostConfig,
   HostedProjectRecord,
   LandscapeEdge,
@@ -57,11 +53,13 @@ import type {
   ReachableProjectRef,
   VisibleSurfaceEntry,
   SurfaceArtifact,
+  LandscapeEdgeKind,
 } from './types.js';
-import type { SurfaceSnapshot } from '../models/index.js';
+import type { SurfaceSnapshot, InterfaceSpec, MethodSignature, ResolvedExportTable } from '../models/index.js';
+import { isTypeVocabulary, methodTypeRefs } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
-// Landscape Orchestrator + Surface Exchange Orchestrator + Diagram Specialist
+// Landscape Orchestrator + Surface Exchange Orchestrator + Landscape Graph
 // + Portal (sdd_host)
 //
 // TWO orchestrators realize in this module — two workflows, two components:
@@ -97,7 +95,7 @@ const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 const PROJECT_READ_CAPABILITY = 'project:read';
 const PROJECT_WRITE_CAPABILITY = 'project:write';
 
-// ── authorization helpers (hierarchical resolver) ─────────────────────────────
+// ── authorization helpers (hierarchical permission rules) ────────────────────
 //
 // Every control-plane method resolves the caller's permission through the
 // authorization seam (project:admin for writes, project:read for reads). An
@@ -186,7 +184,7 @@ function requireLandscapeReach(
  * resolution in the consumer-facing exchange, so an unverified claim would let a
  * credential read the discovery neighbourhood of a project it is not scoped to.
  * A yes-valued project:read or project:write over the observer project passes;
- * an instance-admin passes for any project (the resolver bypass).
+ * an instance-admin passes for any project (the permission-rules bypass).
  */
 function requireObserverScope(cfg: HostConfig, principal: Principal, observerProjectId: string): void {
   const covered =
@@ -207,14 +205,10 @@ function principalSubject(principal: Principal): PrincipalSubject {
   );
 }
 
-function resolveAuditPolicy(_cfg: HostConfig): AuditRetentionPolicy {
-  return DEFAULT_AUDIT_POLICY;
-}
-
 function buildAuditEvent(
   principal: Principal,
   action: string,
-  level: string,
+  level: AuditLevel,
   category: string,
   over: Partial<AuditEvent> = {},
 ): AuditEvent {
@@ -236,7 +230,7 @@ function buildAuditEvent(
  *  diagnostic and swallowed so an append can never fail the primary action. */
 function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
   try {
-    appendAuditEvent(cfg.dataDir, event, resolveAuditPolicy(cfg));
+    appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
   } catch (err) {
     console.error(
       `[landscape] audit append failed for "${event.action}": ` +
@@ -247,128 +241,53 @@ function tryAppendAudit(cfg: HostConfig, event: AuditEvent): void {
 
 // ── redaction helpers for the public-surface snapshot ────────────────────────
 //
-// SystemSpec.publicInterfaces IS schema-modeled since Phase 7 Stage 1, but the
-// schema deliberately carries only the gateway CORE fields — the catalog
-// extras some trees author inline (methods/endpoints/publicTypes name lists)
-// are not modeled and would be stripped by loadSystemSpec(). The snapshot
-// builder therefore still reads the raw .wai/specs/.index.yaml, tolerating
-// absence and legacy shapes, and projects each entry into a redacted
-// PublicInterfaceSummary carrying ONLY safe scalar/name content — never
-// component ids, narratives, implementations, root paths, secrets, or
-// non-public types.
+// The snapshot is built from the project's RESOLVED export table — the same
+// table the surface projector flattens — so the landscape lists exactly the
+// public names the export resolver binds, every re-export followed to its
+// canonical target, instead of re-reading raw L0 YAML leniently. Each exported
+// component becomes a redacted PublicInterfaceSummary carrying ONLY safe
+// scalar/name content — its method NAMES, HTTP endpoint paths and the type
+// names its signatures reference — never component ids, signatures,
+// narratives, implementations, root paths or secrets. An entry that declares
+// no audience gets the resolver's default, `instance`, as the projector does.
 
-/** One raw, un-schema'd L0 public-interface entry as authored in the system spec.
- *  Every field is optional and read leniently. */
-interface RawSystemPublicInterface {
-  id?: unknown;
-  systemInterfaceId?: unknown;
-  name?: unknown;
-  type?: unknown;
-  audience?: unknown;
-  version?: unknown;
-  stability?: unknown;
-  methods?: unknown;
-  endpoints?: unknown;
-  publicTypes?: unknown;
-  details?: unknown;
-  subsystem?: unknown;
-  interface?: unknown;
-  component?: unknown;
+/** The HTTP path of a method's endpoint binding — the only endpoint shape that is a public name. */
+function endpointPath(m: MethodSignature): string | undefined {
+  return m.endpoint?.transport === 'HTTP' ? m.endpoint.path : undefined;
 }
 
-/** The subsystem public-interface shape backing an L0 surface (type + details). */
-interface SubsystemPublicInterface {
-  type: string;
-  details: string;
-  component?: string;
-  interface?: string;
-}
-
-/** First non-empty string among the candidates, or undefined. */
-function firstString(...vals: unknown[]): string | undefined {
-  for (const v of vals) {
-    if (typeof v === 'string' && v.trim().length > 0) return v;
-  }
-  return undefined;
-}
-
-/** Reduce an array to a list of plain NAMES (strings pass through; objects yield
- *  their name/id), dropping anything else. This is the redaction gate for
- *  methods / public types — a full signature or narrative can never leak. */
-function toNameList(v: unknown): string[] {
-  if (!Array.isArray(v)) return [];
-  const out: string[] = [];
-  for (const item of v) {
-    if (typeof item === 'string') {
-      if (item.trim().length > 0) out.push(item);
-    } else if (item && typeof item === 'object') {
-      const rec = item as Record<string, unknown>;
-      const name = firstString(rec.name, rec.id);
-      if (name) out.push(name);
+/** The non-builtin type names a contract's signatures reference, local names only. */
+function referencedTypeNames(methods: MethodSignature[]): string[] {
+  const names = new Set<string>();
+  for (const m of methods) {
+    for (const ref of methodTypeRefs(m)) {
+      if (!isTypeVocabulary(ref)) names.add(ref.split(/::|\./).pop()!);
     }
   }
-  return out;
+  return [...names];
 }
 
-/** Read the target project's raw L0 publicInterfaces (must run bound to the
- *  project root). A missing/absent field yields an empty list — private by
- *  default. */
-function readRawSystemPublicInterfaces(): RawSystemPublicInterface[] {
-  const raw = readYamlFile(AI_PATHS.specsSystem()) as { publicInterfaces?: unknown } | null;
-  const list = raw?.publicInterfaces;
-  return Array.isArray(list) ? (list as RawSystemPublicInterface[]) : [];
-}
-
-/** Resolve an L0 entry against a referenced subsystem public interface (by
- *  interface id, else component id) to source its type/details. */
-function resolveSubsystemInterface(
-  entry: RawSystemPublicInterface,
-  subsystems: { id: string; publicInterfaces: SubsystemPublicInterface[] }[],
-): SubsystemPublicInterface | undefined {
-  const subId = firstString(entry.subsystem);
-  const interfaceId = firstString(entry.interface);
-  const componentId = firstString(entry.component);
-  const pools = subId
-    ? subsystems.filter((s) => s.id === subId).map((s) => s.publicInterfaces)
-    : subsystems.map((s) => s.publicInterfaces);
-  for (const pool of pools) {
-    const match = pool.find(
-      (pi) =>
-        (interfaceId !== undefined && pi.interface === interfaceId) ||
-        (componentId !== undefined && pi.component === componentId),
-    );
-    if (match) return match;
-  }
-  return undefined;
-}
-
-/** Project the raw L0 public interfaces into redacted PublicInterfaceSummary
- *  entries — public method/endpoint metadata and public DTO names only. */
-function buildRedactedSummaries(
-  rawList: RawSystemPublicInterface[],
-  subsystems: { id: string; publicInterfaces: SubsystemPublicInterface[] }[],
-): PublicInterfaceSummary[] {
+/** Project the resolved export table into redacted PublicInterfaceSummary entries. */
+function buildRedactedSummaries(table: ResolvedExportTable, interfaces: InterfaceSpec[]): PublicInterfaceSummary[] {
   const out: PublicInterfaceSummary[] = [];
-  for (const entry of rawList) {
-    if (!entry || typeof entry !== 'object') continue;
-    const id = firstString(entry.id, entry.systemInterfaceId, entry.interface, entry.component);
-    if (!id) continue; // an entry with no stable id can never be targeted by a relation
-    const matched = resolveSubsystemInterface(entry, subsystems);
+  for (const entry of table.entries) {
+    if (entry.kind !== 'component') continue; // a type export is no contract entry
+    const methods = interfaces
+      .filter((i) => i.component === entry.component && (!entry.interface || i.id === entry.interface))
+      .flatMap((i) => i.methods);
     const summary: PublicInterfaceSummary = {
-      id,
-      name: firstString(entry.name) ?? id,
-      type: firstString(entry.type, matched?.type) ?? 'Custom',
-      audience: firstString(entry.audience) ?? 'public',
-      methods: toNameList(entry.methods),
-      details: firstString(entry.details, matched?.details) ?? '',
+      id: entry.publicName,
+      name: entry.name ?? entry.publicName,
+      type: entry.type ?? 'Custom',
+      audience: entry.audience ?? 'instance',
+      methods: methods.map((m) => m.name),
+      details: entry.details ?? '',
     };
-    const version = firstString(entry.version);
-    if (version) summary.version = version;
-    const stability = firstString(entry.stability);
-    if (stability) summary.stability = stability;
-    const endpoints = toNameList(entry.endpoints);
+    if (entry.version) summary.version = entry.version;
+    if (entry.stability) summary.stability = entry.stability;
+    const endpoints = methods.map(endpointPath).filter((e): e is string => !!e);
     if (endpoints.length > 0) summary.endpoints = endpoints;
-    const publicTypes = toNameList(entry.publicTypes);
+    const publicTypes = referencedTypeNames(methods);
     if (publicTypes.length > 0) summary.publicTypes = publicTypes;
     out.push(summary);
   }
@@ -380,7 +299,7 @@ function stateIdToString(state: { algorithm: string; digest: string }): string {
   return `${state.algorithm}:${state.digest}`;
 }
 
-// ── Landscape Diagram Specialist (pure projection) ───────────────────────────
+// ── Landscape Graph (pure projection) ─────────────────────────────────────────
 //
 // No I/O, no authorization, no project-root or private-spec access — every input
 // is supplied already-authorized by the orchestrator. Node ids are namespaced by
@@ -397,14 +316,14 @@ function interfaceNodeId(projectId: string, interfaceId: string): string {
 }
 
 /** Map a placement role to a landscape edge kind. */
-function placementEdgeKind(role: string): string {
+function placementEdgeKind(role: string): LandscapeEdgeKind {
   if (role === 'owner') return 'owns';
   if (role === 'shared') return 'shared_with';
   return 'contains';
 }
 
 /** Map a relation kind to a landscape edge kind. */
-function relationEdgeKind(kind: string): string {
+function relationEdgeKind(kind: string): LandscapeEdgeKind {
   switch (kind) {
     case 'consumes':
       return 'consumes';
@@ -581,9 +500,9 @@ export function placeProject(
   // The caller must cover BOTH the target unit AND the project being placed.
   // Checking only the destination unit was a scope-capture hole: a unit admin
   // could adopt any project into their unit and thereby pull it into their
-  // reach (→ destroy/lock/promote/audit it). The project's authority comes from
+  // reach (→ destroy/lock/audit it). The project's authority comes from
   // its CURRENT placements, so require project:admin over it as it stands; an
-  // instance-admin places anything anywhere (the resolver bypass).
+  // instance-admin places anything anywhere (the permission-rules bypass).
   if (!permitsCap(cfg, principal, PROJECT_ADMIN_CAPABILITY, 'unit', placement.unitId)) {
     throw new ForbiddenError('placing a project requires project:admin over the target unit');
   }
@@ -592,6 +511,12 @@ export function placeProject(
   }
   if (!getOrganizationUnit(cfg.dataDir, placement.unitId)) {
     throw new Error('the target organization unit does not exist');
+  }
+  // Steps 8-10: a member takes its units from its family root — a placement of
+  // its own would not be a rung of its permission chain, so it is refused.
+  const family = listFamilyRecords(cfg.dataDir, placement.projectId);
+  if (family.length > 0 && family[0].id !== placement.projectId) {
+    throw new Error('A member takes its units from its family root; place the family root instead');
   }
   const stored = placeProjectInUnit(cfg.dataDir, placement);
   tryAppendAudit(
@@ -630,9 +555,8 @@ export function refreshPublicSurface(
   const snapshot = runWithProjectRoot(root, (): ProjectPublicSurfaceSnapshot => {
     const stateId = hostCore.computeStateId();
     const system = hostCore.loadSystemSpec();
-    const subsystems = hostCore.loadSubsystemSpecs();
-    const rawInterfaces = readRawSystemPublicInterfaces();
-    const interfaces = buildRedactedSummaries(rawInterfaces, subsystems);
+    const exports = hostCore.resolveProjectExports();
+    const interfaces = buildRedactedSummaries(exports, hostCore.loadInterfaceSpecs());
     return {
       projectId,
       stateId: stateIdToString(stateId),
@@ -658,7 +582,9 @@ export function refreshPublicSurface(
  * Authenticate the caller, require a landscape:manage or instance-admin grant,
  * validate the relation's targetPublicInterface against the target project's
  * stored public-surface snapshot (no snapshot → reject with refresh guidance;
- * unknown interface → reject), create or update the relation, and append a
+ * unknown interface → reject), create or update the relation — the server
+ * records createdBy (the caller) and createdAt (now) on create and keeps both on
+ * update — and append a
  * redacted relation.upsert audit event (info, best-effort).
  */
 export function upsertRelation(
@@ -703,7 +629,23 @@ export function upsertRelation(
     );
   }
 
-  const stored = upsertProjectRelation(cfg.dataDir, relation);
+  // The server records who created the relation and when: a new relation is
+  // stamped from the caller and the clock, an update keeps the stored creator.
+  const existing = relation.id
+    ? listProjectRelations(cfg.dataDir).find((r) => r.id === relation.id)
+    : undefined;
+  const record: ProjectRelationRecord = {
+    id: relation.id,
+    sourceProjectId: relation.sourceProjectId,
+    targetProjectId: relation.targetProjectId,
+    kind: relation.kind,
+    targetPublicInterface: relation.targetPublicInterface,
+    reason: relation.reason,
+    status: relation.status,
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    createdBy: existing?.createdBy ?? principalSubject(principal),
+  };
+  const stored = upsertProjectRelation(cfg.dataDir, record);
   tryAppendAudit(
     cfg,
     buildAuditEvent(principal, 'relation.upsert', 'info', 'landscape', {
@@ -967,7 +909,7 @@ export function getProjectSurfaceForMcp(
   const record = listProjectRecords(cfg.dataDir).find((p) => p.id === targetProjectId);
   if (!record?.rootPath) throw new Error(`Unknown project "${targetProjectId}".`);
   const result = runWithProjectRoot(record.rootPath, () =>
-    hostSurfaces.exportBoundSurface(maxAudience, 'native'));
+    hostSurfaces.exportSurface(maxAudience, 'native'));
   return { ...result.snapshot, origin: 'exchanged' };
 }
 
@@ -1005,7 +947,7 @@ export function exportProjectSurface(
   const root = resolveProjectRoot(cfg.dataDir, principal, projectId);
   if (!root) throw new Error(`Unknown project "${projectId}".`);
 
-  const result = runWithProjectRoot(root, () => hostSurfaces.exportBoundSurface(maxAudience, format));
+  const result = runWithProjectRoot(root, () => hostSurfaces.exportSurface(maxAudience, format));
   if (format === 'openapi') {
     const specs = result.renderedSet ?? [];
     if (portalId) {
@@ -1063,105 +1005,4 @@ export function removeRelation(cfg: HostConfig, credential: string | null, id: s
   }
   removeProjectRelation(cfg.dataDir, id);
   tryAppendAudit(cfg, buildAuditEvent(principal, 'relation.remove', 'info', 'landscape', { target: id }));
-}
-
-// ── Landscape Portal (HTTP) ──────────────────────────────────────────────────
-//
-// Pure forwarding to the orchestrator functions above. Rides the ADMIN-plane
-// listener (mirroring identity.ts / policy.ts), owning its own error → status
-// mapping (401/403/404/400) so faults never fall through to the admin-plane catch.
-// Endpoints match ilandscape_portal exactly. Called by http.ts when the admin
-// listener sees a `/landscape/*` path.
-
-export function handleLandscapeRequest(
-  cfg: HostConfig,
-  credential: string | null,
-  req: IncomingMessage,
-  res: ServerResponse,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  body: any,
-  url: URL,
-): void {
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent); // ['landscape', ...]
-  try {
-    if (parts[1] === 'units') {
-      // PUT /landscape/units/{id} — the path segment IS the qualified dot-path
-      // id. When the body carries no slug/parent, derive them from the id (its
-      // last dot-segment / its prefix) so the PUT-by-id shape works unchanged
-      // under qualified ids.
-      if (req.method === 'PUT' && parts.length === 3) {
-        const qualifiedId = parts[2];
-        const unit = { ...(body as OrganizationUnitRecord), id: qualifiedId };
-        if (!unit.slug) unit.slug = qualifiedId.split('.').pop() ?? qualifiedId;
-        const lastDot = qualifiedId.lastIndexOf('.');
-        if (unit.parentId === undefined && lastDot > 0) unit.parentId = qualifiedId.slice(0, lastDot);
-        return sendJson(res, 200, upsertUnit(cfg, credential, unit));
-      }
-    }
-
-    if (parts[1] === 'projects') {
-      // PUT /landscape/projects/{id}/placements/{unitId}
-      if (req.method === 'PUT' && parts.length === 5 && parts[3] === 'placements') {
-        const placement = { ...(body as ProjectPlacement), projectId: parts[2], unitId: parts[4] };
-        return sendJson(res, 200, placeProject(cfg, credential, placement));
-      }
-      // POST /landscape/projects/{id}/public-surface/refresh
-      if (req.method === 'POST' && parts.length === 5 && parts[3] === 'public-surface' && parts[4] === 'refresh') {
-        return sendJson(res, 200, refreshPublicSurface(cfg, credential, parts[2]));
-      }
-      // GET /landscape/projects/{id}/visible-surfaces
-      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'visible-surfaces') {
-        return sendJson(res, 200, listVisibleSurfaces(cfg, credential, parts[2]));
-      }
-      // GET /landscape/projects/{id}/surface?format=native|openapi&audience=<level>&spec=<portalId>
-      // Generate-and-download (the diagram pattern) — never a served UI. `spec`
-      // picks ONE of a multi-portal project's per-portal OpenAPI documents.
-      if (req.method === 'GET' && parts.length === 4 && parts[3] === 'surface') {
-        const artifact = exportProjectSurface(
-          cfg,
-          credential,
-          parts[2],
-          url.searchParams.get('format') ?? 'native',
-          url.searchParams.get('audience') ?? 'instance',
-          url.searchParams.get('spec') ?? undefined,
-        );
-        res.writeHead(200, {
-          'content-type': artifact.contentType,
-          'content-disposition': `attachment; filename="${artifact.filename}"`,
-        });
-        res.end(artifact.body);
-        return;
-      }
-    }
-
-    if (parts[1] === 'relations') {
-      // GET /landscape/relations?project=
-      if (req.method === 'GET' && parts.length === 2) {
-        return sendJson(res, 200, listRelations(cfg, credential, url.searchParams.get('project') ?? undefined));
-      }
-      // PUT /landscape/relations/{id}
-      if (req.method === 'PUT' && parts.length === 3) {
-        const relation = { ...(body as ProjectRelationRecord), id: parts[2] };
-        return sendJson(res, 200, upsertRelation(cfg, credential, relation));
-      }
-      // DELETE /landscape/relations/{id}
-      if (req.method === 'DELETE' && parts.length === 3) {
-        removeRelation(cfg, credential, parts[2]);
-        return sendJson(res, 200, { ok: true });
-      }
-    }
-
-    // GET /landscape/graph?scope=
-    if (req.method === 'GET' && parts[1] === 'graph' && parts.length === 2) {
-      return sendJson(res, 200, generateLandscape(cfg, credential, url.searchParams.get('scope') ?? undefined));
-    }
-
-    sendJson(res, 404, { error: 'not found' });
-  } catch (err) {
-    if (err instanceof UnauthenticatedError) return sendJson(res, 401, { error: 'unauthorized' });
-    if (err instanceof ForbiddenError) return sendJson(res, 403, { error: 'forbidden' });
-    const msg = err instanceof Error ? err.message : String(err);
-    if (/not found|unknown project|does not exist/i.test(msg)) return sendJson(res, 404, { error: msg });
-    return sendJson(res, 400, { error: msg });
-  }
 }

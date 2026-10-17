@@ -2,64 +2,445 @@ kind: value-object
 id: source_file_facts
 name: SourceFileFacts
 description: >-
-  Pure analysis facts for one resolved L4 sourcePath — the unit of the CodeModel. Name sets are
-  anchor tiers for realization checking: declaredNames satisfy the 'declared' conformance tier,
-  anchoredNames additionally satisfy the 'anchored' tier. Carries the analysis grade so findings can
-  state how confident the analysis was (exact AST vs pattern table vs generic scan).
+  Pure analysis facts for one resolved source path — an implementation's, a method's or a sim
+  harness's; the unit of the CodeModel. Name sets are anchor tiers for realization checking:
+  declaredNames satisfy the 'declared' conformance tier, anchoredNames additionally satisfy the
+  'anchored' tier. Carries the analysis grade so findings can state how confident the analysis was
+  (exact AST vs pattern table vs generic scan).
 subsystem: sdd_validator
 fields:
   - name: path
     type: string
-    description: Project-relative resolved source path (the key many implementations may share, N:1)
+    description: >-
+      Project-relative resolved source path (the key many implementations and methods may share,
+      N:1)
     optional: false
   - name: status
-    type: string
-    description: >-
-      analyzed | missing (sourcePath resolves to no file) | escaped (absolute or parent-escaping
-      path, refused by containment) | unreadable (binary or read failure)
+    type: SourceFileStatus
+    description: Whether the file could be read for analysis.
     optional: false
   - name: language
     type: string
     description: Effective language the file was analyzed as (from extension + language tables)
     optional: true
   - name: analysisGrade
-    type: string
-    description: >-
-      exact (AST) | pattern (declarative per-language pattern table) | generic (word-boundary scan)
-      — carried onto finding messages
+    type: AnalysisGrade
+    description: How the file was analyzed; carried onto finding messages
     optional: true
   - name: declaredNames
-    type: string[]
+    type: list<string>
     description: >-
       Declaration-tier anchors: named declarations at any nesting depth, destructuring bindings,
       object-literal keys, import bindings, and export specifiers (export-* barrels chased through
       relative specifiers with a visited set)
     optional: false
   - name: anchoredNames
-    type: string[]
+    type: list<string>
     description: >-
       Weaker anchors: exact string-literal occurrences (tool/route registrations) and
       property-access references (forwarding through a namespace, e.g. specs.loadComponentSpecs) —
       satisfy only the 'anchored' conformance tier
     optional: false
   - name: exportedNames
-    type: string[]
+    type: list<string>
     description: Exported bindings of the file (Level 2 dependency-conformance and UNDECLARED_EXPORT fuel)
     optional: false
   - name: imports
-    type: string[]
+    type: list<string>
     description: >-
       Runtime import/require module specifiers found in the file (dependency-conformance fuel).
       Type-only imports are excluded — type coupling is allowed by default and never forms a
       dependency edge.
     optional: false
   - name: reexports
-    type: string[]
+    type: list<string>
     description: >-
       Module specifiers of export-from declarations — surface republication, not collaboration:
       never accused as an undeclared dependency, but realizes a declared forwarding edge (a portal
       barrel republishing its orchestrator).
     optional: false
-methods: []
+  - name: functionComplexity
+    type: map<string, int>
+    description: >-
+      Cyclomatic complexity per named function-like (function, method and accessor declarations, and
+      function or arrow initializers of named slots); exact grade only, and same-named functions
+      record their maximum — fuel for the detail-sufficiency lint
+    optional: true
+  - name: topLevelMutableBindings
+    type: list<string>
+    description: >-
+      Module-scope let and var bindings; exact grade only — fuel for the hidden-state lint, which
+      cannot see mutation of const-bound containers
+    optional: true
+  - name: reexportOnly
+    type: bool
+    description: >-
+      True when the file declares nothing of its own and every name it publishes comes from a
+      re-export — a pure re-export barrel, which has no code to claim. Exact grade only: a weaker
+      grade cannot tell a barrel from a file it failed to parse, so it leaves this unset rather than
+      guess.
+    optional: true
+  - name: functionCallSites
+    type: map<string, list<CallSiteFact>>
+    description: >-
+      Direct call SITES per named function-like, with the shape each call was written in (nested
+      named functions carry their own entries; anonymous callbacks count toward their enclosing
+      function); exact grade only, and same-named functions union their sites — functionBodies keeps
+      them apart. A function-like WITH A BODY always gets an entry, empty when it calls nothing; a
+      name with NO entry has no body in this file to read — which is the whole of hasFunctionBody,
+      and why an empty entry is never dropped
+    optional: true
+  - name: importBindings
+    type: map<string, ImportBindingFact>
+    description: >-
+      Runtime (value) import bindings by local name; exact grade only — a weaker grade sees module
+      specifiers but never which local name they bound. The closed set a call site's origin is
+      resolved through
+    optional: true
+  - name: fieldTypes
+    type: map<string, list<string>>
+    description: >-
+      The type names an instance FIELD is DECLARED with, by field name — read off class property
+      declarations and constructor parameter properties, which is where a constructor-injected
+      collaborator says what it is; exact grade only. A declaration names a type when it is a plain
+      type reference, or a member-preserving utility (Pick, Omit, Partial, Required, Readonly)
+      around one, which names the type it wraps. Same-named fields of different classes in one file
+      keep every declared type, since the file cannot say which class a call site's `this` was, and
+      a wider answer only ever widens what a call may have reached. A field with no annotation
+      records nothing: what an initializer INFERS is not what the code declares
+    optional: true
+  - name: typeOnlyBindings
+    type: map<string, string>
+    description: >-
+      The module specifier each TYPE-ONLY import binding came from, by local name; exact grade only.
+      The half of the import list importBindings deliberately leaves out, because a type binding can
+      never be a call ORIGIN — and exactly what a declared field type is resolved through, which is
+      why it is kept apart rather than folded in
+    optional: true
+  - name: localTypes
+    type: map<string, list<string>>
+    description: >-
+      The type names a locally BOUND name is DECLARED with, by name — read off function and method
+      parameters and off variable declarations that carry an annotation, which is where a module
+      that wires its collaborators as closures writes down what each one is; exact grade only. Keyed
+      by name across the whole file, as fieldTypes is: the facts cannot say which function a call
+      site sits in, and a receiver is as often a parameter of an ENCLOSING function as of the one
+      that calls it — a closure captures it. Same-named bindings therefore keep every declared type,
+      and a wider answer only ever widens what a call may have reached. A binding the file annotates
+      with nothing records nothing, and so does one annotated with anything but a plain type
+      reference or a member-preserving utility around one (read as fieldTypes reads it): what an
+      initializer INFERS is not what the code declares
+    optional: true
+  - name: typeShapes
+    type: map<string, TypeShapeFact>
+    description: >-
+      The members of each named shape the file declares, by declaration name — what lets a type
+      spec's `fields` be checked against the data the code actually carries, rather than read as
+      truth by the ERD and every brief. EXACT grade only: below it a member list cannot be told from
+      a mention, and a guess about somebody's data model is worse than silence.
+    optional: true
+  - name: functionParams
+    type: map<string, list<list<ParameterFact>>>
+    description: >-
+      The parameter lists of each named function-like in the file, by name — what lets a contract's
+      declared `params` be checked against the signature that realizes them, the last of the three
+      code-to-spec readings nothing had ever made. EVERY body under a name is kept, not the first: a
+      file routinely holds a class member and the module-level facade that forwards to it under one
+      name, with different parameters, and picking one silently drops the other's leading argument
+      from view. Same-named bodies therefore keep every candidate, exactly as the field-type facts
+      do, and a reader accuses only what all of them agree on. Overloads record the implementation
+      signature, the one with a body, because that is the one a caller reaches. EXACT grade only:
+      below it a parameter list cannot be told from a call.
+    optional: true
+  - name: functionRoutes
+    type: map<string, list<RouteFact>>
+    description: >-
+      The routes each named function-like in the file handles, by name — what lets a listener's
+      mount be read against the contract endpoints of the portal it serves, so a route the router
+      answers that no contract declares cannot go unnoticed again. EXACT grade only: reading a guard
+      as a route needs the conditions as expressions, not as text. A function with no recognisable
+      route records none rather than an empty guess.
+    optional: true
+  - name: reexportBindings
+    type: list<ReexportBindingFact>
+    description: >-
+      What each export-from declaration republishes, name by name: a named one with both sides of
+      its rename (`export { a as b } from 'm'` publishes `b` as m's `a`), a star with `*` on both
+      sides. Runtime re-exports only — a type-only one republishes no function. Exact grade only: it
+      is what lets a reader follow a republished name to the module that wrote it, and a weaker
+      grade leaves it unset rather than guess
+    optional: true
+  - name: asyncFunctions
+    type: list<string>
+    description: >-
+      The named function-likes in the file that complete later — declared `async`, or annotated to
+      return a Promise — listed once per such BODY, in the order the bodies are met, exactly as
+      functionParams keeps one signature per body: a name with several bodies (a class member and
+      the facade forwarding to it) is judged on what they all say, as many entries as signatures
+      being every body and none being no body. What ASYNC_MISMATCH compares a contract method's
+      `async` returns with. EXACT grade only.
+    optional: true
+  - name: enumValues
+    type: map<string, list<string>>
+    description: >-
+      The values of each enum-like declaration in the file, by declaration name, in declared order:
+      a string-literal union alias, the string array a `z.enum([...])` constant holds (an alias
+      `z.infer<typeof X>` followed one hop, as a derived shape is), or a string enum's member
+      values. What lets an enum type's values be checked against the code (UNREALIZED_ENUM_VALUE,
+      UNDECLARED_ENUM_VALUE). EXACT grade only; a union mixing non-literals is not enum-like and is
+      left out.
+    optional: true
+  - name: aliasTypes
+    type: map<string, string>
+    description: >-
+      The right side of each type alias the file declares, as written, by alias name — every alias
+      whose right side is not an object shape (`type PackPath = string`). What a named scalar's
+      holds is compared with through the file's dialect (TYPE_HOLDS_MISMATCH). EXACT grade only.
+    optional: true
+  - name: functionBodies
+    type: map<string, list<FunctionBodyFact>>
+    description: >-
+      The same call sites BODY by body under each function-like's name, each carrying where that
+      body is bound (module scope, a member of a named container, or nested); exact grade only.
+      Where functionCallSites unions every same-named body, this keeps them apart, so an exported
+      facade and the class member of the same name it forwards to are read as the two functions they
+      are. A barrel carries the module-scope body of each name it republishes — never a member,
+      which no export names. Which body a name means is bodySitesOf's question
+    optional: true
+  - name: exportAliases
+    type: list<ExportAliasFact>
+    description: >-
+      The forwarding bindings the file publishes with no module specifier of its own (see
+      ExportAliasFact): each `export { local as exported }` specifier of a runtime export clause,
+      renamed or not, and each identifier-valued property `{ exported: local }` / `{ exported }` of
+      an exported top-level object literal, under that object's binding name. EXACT grade only. What
+      lets a reader follow `export { bootstrapInstance as init }` or an adapter object of forwards
+      to the name whose body realizes it; the analyzer itself carries that body onto the published
+      name when the local name settles on exactly one — a module-scope body of this file with no
+      nested same-named one, or an import binding whose module holds one — and leaves the name
+      bodiless otherwise
+    optional: true
+  - name: returnTypes
+    type: map<string, string>
+    description: >-
+      The type name each named function-like RETURNS, by function name, recorded only where the code
+      settles it: a return annotation naming a type outright (unwrapping Promise), else,
+      unannotated, a body whose ONE return statement constructs a plainly named class (`return new
+      C()`). Same-named functions that disagree, a generic, union or literal annotation, and several
+      returns record nothing. EXACT grade only. What a `fn().method()` receiver is followed through
+    optional: true
+  - name: memberTypes
+    type: map<string, list<string>>
+    description: >-
+      The type names each PROPERTY of a named shape the file declares is DECLARED with, keyed
+      <shape>.<property> — an interface's or a type literal alias's property signatures, and a
+      class's property declarations and constructor parameter properties; exact grade only. What a
+      receiver CHAIN (call_site_fact.receiverPath) is followed through: a bag of collaborators
+      handed to a constructor names each one's type exactly here. Read the way fieldTypes is — a
+      plain type reference, or the type a member-preserving utility (Pick, Omit, Partial, Required,
+      Readonly) wraps — and a property annotated with anything else records nothing
+    optional: true
+  - name: aliasTargets
+    type: map<string, string>
+    description: >-
+      The one type each type alias NAMES outright, by alias name — `type HabitRepositoryContract =
+      Pick<HabitRepository, 'find'>` names HabitRepository, `type Store = SpecStore` names
+      SpecStore; exact grade only. Read the way fieldTypes is, so a union, an intersection, a
+      literal or any other generic names nothing. The ONE hop a declared type is followed through
+      when it is an alias of this file: a field typed with a narrowed alias of a collaborator is
+      still that collaborator
+    optional: true
+  - name: implementsClauses
+    type: map<string, list<string>>
+    description: >-
+      The interface names each top-level named class's `implements` clause writes, by class name;
+      exact grade only. What lets a receiver whose declared type is an interface written in a shared
+      contracts file be followed to the class that implements it, wherever that class lives — a
+      possible origin, never a proven one, like every declared type
+    optional: true
+  - name: resolvedCalls
+    type: list<ResolvedCallFact>
+    description: >-
+      Every call expression of the file as the TypeScript type checker resolved it (see
+      ResolvedCallFact), in source order; exact grade only, and only where a compiler with a type
+      checker was loaded. What the Portal write-shortcut twin and the unnarrated-write check read
+      first: the checker follows every spelling of a receiver to the declaration, where the shape
+      facts follow the spellings they know
+    optional: true
+  - name: crossProjectImports
+    type: list<CrossProjectImportFact>
+    description: >-
+      Each import of the file — a runtime or a type-only one — from ANOTHER project's source (a
+      folder holding its own .wai/project.yaml that is not the analyzed project's root) that the
+      type checker resolves to nothing: the module is gone, or it does not export the name imported.
+      Recorded only where a type checker read the file; absent when every such import resolves
+    optional: true
+  - name: routePrefixes
+    type: map<string, string>
+    description: >-
+      The ONE prefix each named function strips off a path before matching it
+      (`path.slice(BASE.length)`, `.replace(BASE, '')`), as the text it settles on, by function
+      name; a function stripping none, several, or one that does not settle has no entry. What a
+      route table read by the same router is written under. EXACT grade only, re-read with the type
+      checker settling each value where one was loaded
+    optional: true
+  - name: tableSpreads
+    type: map<string, list<string>>
+    description: >-
+      The names each top-level const spreads into itself, by const name — `routes =
+      [...ingestRoutes, ...statsRoutes]` spreads ingestRoutes and statsRoutes — as the code spells
+      them (a local table or an import binding), for an array or object literal spreading at least
+      one identifier; absent otherwise. EXACT grade only. What tells a route table the server
+      dispatches from the parts it dispatches them as
+    optional: true
+  - name: functionReturns
+    type: map<string, list<string?>>
+    description: >-
+      The return annotation of each named function-like, one entry per body in the order
+      functionParams keeps its signatures: as written, whitespace-normalized, or null for a body
+      that annotates none. What RETURN_TYPE_MISMATCH compares a contract's returns with. EXACT
+      grade, and the Python reader
+    optional: true
+  - name: classMembers
+    type: map<string, list<ClassMemberFact>>
+    description: >-
+      The members each top-level named class declares, by class name — what tells the public surface
+      of a component's realizing class from its private factoring. EXACT grade, and the Python
+      reader
+    optional: true
+  - name: reads
+    type: list<CodeReading>
+    description: >-
+      What the analysis read in this file beyond declared names, set by a reader that reads a
+      language's signatures without a type checker (the Python reader): the conformance checks its
+      facts are fuel for. Absent for an exact-grade file, which reads everything, and for a plain
+      pattern or generic scan, which reads names alone
+    optional: true
+  - name: classReferences
+    type: list<string>
+    description: >-
+      The top-level named classes (classMembers' keys) the file's own code names outside their own
+      declaration — constructed, extended or implemented, annotated with, tested by instanceof or
+      isinstance, passed or returned as a value; an export clause publishing one is no use. What
+      tells an exported class nothing uses from the module's own factoring
+      (UNDECLARED_PUBLIC_MEMBER). EXACT grade, and the Python reader
+    optional: true
+methods:
+  - name: resolveImport
+    signature: >-
+      resolveImport(specifier: string, knownPaths: Set<string>, packages?: map<string, string>):
+      string | undefined
+    returns: string?
+    description: >-
+      Resolve one of this file's import specifiers against a set of known source paths. A relative
+      one: join it with this file's directory, then try the joined path, .js swapped for .ts or
+      .tsx, the .ts, .tsx and .js extensions, and an index file. A package specifier: the source
+      file `packages` maps it to (code_model.packages — the local packages of this repository), when
+      that file is known. Undefined for a package specifier the map does not name — a third-party
+      package — and when nothing matches
+  - name: callSitesOf
+    signature: 'callSitesOf(fn: string): CallSiteFact[] | undefined'
+    returns: list<CallSiteFact>?
+    description: >-
+      The call sites written inside one named function-like, or undefined when the file holds no
+      BODY under that name. The two answers are different findings and must never be collapsed: an
+      empty array is a body that calls nothing, undefined is nothing to read
+  - name: hasFunctionBody
+    signature: 'hasFunctionBody(symbol: string): boolean'
+    returns: bool
+    description: >-
+      Whether the file holds a function-like BODY under a name, as the model measured it: a
+      function, method or accessor declaration, or a function/arrow initializer bound to a named
+      slot. A name declared WITHOUT one — an overload signature, an ambient declaration, an
+      interface or type member, a plain value binding, an import binding, a re-export specifier —
+      answers false. Only exact grade measures bodies, so a file below it always answers false and a
+      caller that would ACCUSE on the answer must check the grade itself
+  - name: importBindingOf
+    signature: 'importBindingOf(name: string): ImportBindingFact | undefined'
+    returns: ImportBindingFact?
+    description: >-
+      The runtime import binding this file makes under a local name, or undefined when the name is
+      not an import of this file — it is local, global, or bound type-only
+  - name: fieldTypesOf
+    signature: 'fieldTypesOf(field: string): string[]'
+    returns: list<string>
+    description: >-
+      The type names an instance field is declared with, or EMPTY when the file declares no such
+      field, annotates it with nothing, or was analyzed below exact grade — an empty answer being
+      what keeps an unresolvable field from becoming a guess
+  - name: typeBindingOf
+    signature: 'typeBindingOf(name: string): string | undefined'
+    returns: string?
+    description: >-
+      The module specifier a NAME was imported from, whether the import was type-only or a runtime
+      one, since a declared type may be spelled either way; undefined when the file imports no such
+      name, which leaves the name local, global or ambient
+  - name: localTypesOf
+    signature: 'localTypesOf(name: string): string[]'
+    returns: list<string>
+    description: >-
+      The type names a locally bound name is declared with, or EMPTY when the file binds no such
+      name, annotates it with nothing, or was analyzed below exact grade — the empty answer being
+      what keeps an unannotated receiver from becoming a guess, exactly as it is for a field
+  - name: dialect
+    signature: 'dialect(): TypeDialect?'
+    params: []
+    returns: TypeDialect?
+    description: >-
+      The type dialect shipped for the language this file was analyzed as (type_dialect.forLanguage
+      of its effective language), or none — what a conformance rule reads this file's type
+      annotations through. None means the rule stays silent on types for this file rather than
+      guess.
+    symbol: dialectOf
+  - name: bodySitesOf
+    signature: 'bodySitesOf(fn: string, container?: string, member?: bool): ResolvedBody?'
+    params:
+      - name: fn
+        type: string
+      - name: container
+        type: string
+        description: >-
+          What the reference names as the body's owner: an anchor's exportedVia handle, or a member
+          call's plain-identifier receiver
+        optional: true
+      - name: member
+        type: bool
+        description: True when the reference was written through a receiver at all
+        optional: true
+    returns: ResolvedBody?
+    description: >-
+      The call sites of the ONE body a name means, told apart from its same-named neighbours by
+      where each is bound; none when the file holds no body under the name. Only the code settles
+      which body a name means, and where it does not this answers what the name-keyed union always
+      answered — never a guess: with a container the file binds bodies of this name under, those
+      bodies; else a BARE reference means the module-scope bodies when the name has some and NO
+      nested one (a bare name in the module's scope binds the top-level declaration, a member is
+      reachable only through its container, and a nested body could shadow the name where it sits);
+      else every body under the name, unioned, as callSitesOf answers
+  - name: returnTypeOf
+    signature: 'returnTypeOf(fn: string): string?'
+    params:
+      - name: fn
+        type: string
+    returns: string?
+    description: >-
+      The type name a named function-like returns, where the code settles it (returnTypes), or none
+      — the silence a fn(...).method() receiver keeps when the code does not say what fn returns. An
+      own-property lookup, so a function named like an object built-in reads nothing
+  - name: memberTypesOf
+    signature: 'memberTypesOf(shape: string, property: string): string[]'
+    returns: list<string>
+    description: >-
+      The type names a property of a named shape this file declares is declared with, or EMPTY when
+      the file declares no such shape or property, annotates it with nothing, or was analyzed below
+      exact grade — the empty answer keeping an unresolvable link of a receiver chain from becoming
+      a guess
+  - name: aliasTargetOf
+    signature: 'aliasTargetOf(name: string): string | undefined'
+    returns: string?
+    description: >-
+      The type a type alias this file declares names outright, or undefined when the name is no such
+      alias or its right side names no single type
+sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-07-11T20:29:53.999Z'
+updatedAt: '2026-10-17T19:36:49.683Z'

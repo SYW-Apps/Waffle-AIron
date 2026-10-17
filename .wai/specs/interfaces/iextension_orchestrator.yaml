@@ -6,22 +6,251 @@ methods:
   - name: loadProjectExtensions
     description: >-
       Load everything governing the current project: globally installed packs (unless
-      extensions.useGlobalPacks is false), then the packs declared in project config — project packs
-      win on collision. An uninitialized project simply has none.
+      extensions.useGlobalPacks is false), then the project's declared entries — legacy path refs
+      and by-name SELECTIONS resolved against the committed bundle, then the pack store. Project
+      packs win on collision. An unresolvable selection contributes an EXTENSION_LOAD_ERROR instead
+      of silently reducing the rule set; the packs that did resolve still apply. An uninitialized
+      project simply has none.
     signature: 'loadProjectExtensions(): LoadedExtensions'
     returns: LoadedExtensions
     params: []
-  - name: loadExtensions
+  - name: load
     description: >-
       Load extension packs from explicit refs (all project-scoped) resolved against the given
       project root — the programmatic entry used when a caller injects its own pack set.
-    signature: 'loadExtensions(packRefs: string[], projectRoot: string): LoadedExtensions'
+    signature: 'load(packRefs: list<string>, projectRoot: string): LoadedExtensions'
     returns: LoadedExtensions
     params:
       - name: packRefs
-        type: string[]
+        type: list<string>
       - name: projectRoot
         type: string
+    invokedBy:
+      kind: runtime
+      caller: >-
+        Wrapper products embedding wairon as a library call load directly as the public library
+        entry point (docs/extending-wairon.md); no internal call chain exists by design.
+  - name: packEntryLabel
+    description: >-
+      A stable human label for one configured pack entry — the path for a legacy ref, or
+      name[@version] for a selection. For messages and listings, never for loading.
+    signature: 'packEntryLabel(entry: PackSelection): string'
+    returns: string
+    params:
+      - name: entry
+        type: PackSelection
+        description: A configured pack entry (a legacy path ref string, or a selection).
+  - name: packEntryRef
+    description: >-
+      The loadable ref for one configured pack entry: a legacy path/module ref passes through
+      unchanged; a selection resolves against the committed bundle then the store. Null when a
+      selection cannot be resolved, leaving the caller to decide whether that is an error it reports
+      or an entry it skips.
+    signature: 'packEntryRef(entry: PackSelection, projectRoot: string): string?'
+    returns: string?
+    params:
+      - name: entry
+        type: PackSelection
+      - name: projectRoot
+        type: string
+  - name: globalPacksEnabled
+    description: >-
+      Whether machine-wide packs (the pack store) ALSO apply to a project that has not said. False
+      by default: a project's doctrine is what the project declares, so installing a pack makes it
+      available rather than authoritative. One accessor so every reader and every config writer
+      agrees on the default.
+    signature: 'globalPacksEnabled(config: ProjectConfig): bool'
+    returns: bool
+    params:
+      - name: config
+        type: ProjectConfig
+  - name: diagnoseProjectPacks
+    description: >-
+      Report this project's pack situation for `wairon doctor`: selections that do not resolve,
+      installed packs the project does NOT apply, machine-wide packs it applies by opting in, and
+      whether it ever declared a position on machine-wide packs at all. That last flag is what
+      distinguishes a project that deliberately applies nothing from one that never decided — the
+      latter used to inherit machine-wide doctrine automatically, so its gate may now be weaker than
+      its author expects. Never throws.
+    signature: 'diagnoseProjectPacks(): PackDiagnosis'
+    returns: PackDiagnosis
+    params: []
+  - name: defaultPackSelections
+    description: >-
+      The store packs whose manifests declare `applyByDefault: true`, shaped as selections ready to
+      seed into a NEW project. Reads each installed pack's manifest and skips any that fails to
+      load, so a broken pack seeds nothing. Never throws — a machine with no such packs seeds an
+      empty list. The distinction it exists for: a machine-wide install becomes a default for
+      projects created from now on (written into the new project's config, visible in review and
+      removable) rather than retroactive authority over every project on disk.
+    signature: 'defaultPackSelections(): list<PackSelection>'
+    returns: list<PackSelection>
+    params: []
+  - name: packStoreDir
+    description: >-
+      Where installed packs live on this machine. Published because `wairon packs` reports the path
+      to a person who may need to look in it; the orchestrator fronts the store adapter so no
+      consumer has to know the layout.
+    signature: 'packStoreDir(): string'
+    returns: string
+    params: []
+    guarantees:
+      - idempotent
+  - name: listInstalledPacks
+    description: >-
+      Every pack installed on this machine, whatever any project has declared. The distinction
+      matters: installed and applied are different states, and a pack present but undeclared is
+      exactly what `wairon doctor` reports.
+    signature: 'listInstalledPacks(): list<InstalledPack>'
+    returns: list<InstalledPack>
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveInstalledPack
+    description: >-
+      One installed pack by name, at a given version or the newest when none is named, or nothing
+      when it is not installed.
+    signature: 'resolveInstalledPack(name: string, version: string): InstalledPack?'
+    returns: InstalledPack?
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or the newest when omitted
+    guarantees:
+      - idempotent
+  - name: installPackFromDirectory
+    description: >-
+      Install a pack from a directory on disk, recording where it came from so a later listing can
+      say whether it was fetched or made locally.
+    signature: 'installPackFromDirectory(sourceDir: string, origin: string): InstalledPack'
+    returns: InstalledPack
+    params:
+      - name: sourceDir
+        type: string
+        description: The directory holding the pack
+      - name: origin
+        type: string
+        description: Where it came from, for the record
+    effect: write
+  - name: uninstallPack
+    description: >-
+      Remove an installed pack, answering whether there was one to remove. Removing from the machine
+      store never edits a project: a project that declared the pack still declares it, and that
+      mismatch is something to report rather than silently repair.
+    signature: 'uninstallPack(name: string, version: string): bool'
+    returns: bool
+    params:
+      - name: name
+        type: string
+        description: The pack name
+      - name: version
+        type: string
+        description: A specific version, or every version when omitted
+    effect: write
+  - name: globalPacksDir
+    description: >-
+      Where machine-wide packs live (WAIRON_PACKS_DIR, else the default under the home directory),
+      forwarded from the pack source.
+    signature: 'globalPacksDir(): string'
+    returns: string
+    params: []
+  - name: discoverPacks
+    description: >-
+      The pack refs in a directory, sorted for a deterministic load order; empty for a missing or
+      unreadable directory. Forwarded from the pack source.
+    signature: 'discoverPacks(dir: string): list<string>'
+    returns: list<string>
+    params:
+      - name: dir
+        type: string
+  - name: packDirEntry
+    description: The entry file that makes a directory a pack, or null when the directory is not one.
+    signature: 'packDirEntry(dir: string): string?'
+    returns: string?
+    params:
+      - name: dir
+        type: string
+  - name: loadPacks
+    description: >-
+      Load the given packs, each under its scope, against a project root into one LoadedExtensions —
+      a failed pack rides on the result's errors rather than throwing. What a caller uses to probe a
+      pack in isolation.
+    signature: 'loadPacks(refs: list<PackRef>, projectRoot: string): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: refs
+        type: list<PackRef>
+      - name: projectRoot
+        type: string
+  - name: checkDeclarativePack
+    description: >-
+      Judge a parsed manifest against the declarative-pack schema: the first schema error's message,
+      or null when the manifest is a valid declarative pack. How a caller that must refuse rule and
+      code packs tells them apart before installing anything.
+    signature: 'checkDeclarativePack(manifest: any): string?'
+    returns: string?
+    params:
+      - name: manifest
+        type: any
+        description: The parsed manifest document, untyped until this judges it
+  - name: loadFor
+    description: >-
+      Load everything that would govern a project under the given configuration, which need not be
+      the stored one: exactly loadProjectExtensions' resolution and merge (machine-wide packs when
+      the configuration enables them, then its declared entries — legacy path refs and by-name
+      selections resolved against the bundle, then the store — project packs winning on collision,
+      an unresolvable selection recorded under its own code), over `config`'s entries. With a
+      candidate whose manifest is supplied, that manifest is merged at the candidate entry's
+      position instead of resolving the entry, so a hosted install can be measured before its YAML
+      is on disk. Writes nothing. The one loader both the stored run and a dry run use, which is
+      what keeps a dry validate equal to the run after the write.
+    signature: 'loadFor(config: ProjectConfig, candidate?: PackCandidate): LoadedExtensions'
+    returns: LoadedExtensions
+    params:
+      - name: config
+        type: ProjectConfig
+        description: >-
+          The configuration to load for: the stored one, or a candidate built with
+          project_config.withPack
+      - name: candidate
+        type: PackCandidate
+        description: The pack write being measured, when its manifest is supplied rather than on disk
+        optional: true
+    guarantees:
+      - idempotent
+  - name: manifestOf
+    description: >-
+      The manifest one pack entry resolves to, read the loader's way: a selection resolved against
+      the bundle then the store (a pinned integrity verified), a legacy path ref against the project
+      root. Null when it does not resolve or fails to parse — the caller reports why; the gate
+      already reports the same entry under its own code. Writes nothing.
+    signature: 'manifestOf(entry: PackSelection | PackPath): ExtensionPack?'
+    returns: ExtensionPack?
+    params:
+      - name: entry
+        type: PackSelection | PackPath
+        description: A by-name selection or a legacy path reference
+    guarantees:
+      - idempotent
+  - name: parseDeclarativePack
+    description: >-
+      Read a parsed manifest as a DECLARATIVE pack: the ExtensionPack the loader would build from it
+      (the declarative-pack schema's defaults filled in, no programmatic rules), exactly as a
+      vendored YAML pack is read from disk. Throws the first schema error when it is not one. How a
+      caller holding a pack's content before anything is on disk (a hosted preview, a policy write
+      measured before its vendoring) supplies it as a pack impact candidate's manifest. Writes
+      nothing.
+    signature: 'parseDeclarativePack(manifest: any): ExtensionPack'
+    returns: ExtensionPack
+    params:
+      - name: manifest
+        type: any
+        description: The parsed manifest document, untyped until this reads it
+lint:
+  allow: []
 status: complete
 createdAt: '2026-07-14T18:59:08.560Z'
-updatedAt: '2026-07-14T20:23:49.190Z'
+updatedAt: '2026-10-07T21:50:00.273Z'

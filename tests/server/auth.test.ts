@@ -9,7 +9,8 @@ import {
   authenticateSession,
 } from '../../src/server/auth.js';
 import { createCredential, findByTokenHash, hashToken } from '../../src/server/credentials.js';
-import { createWebSession, WEB_SESSION_PREFIX } from '../../src/server/websessions.js';
+import { createWebSession } from '../../src/server/websessions.js';
+import { WEB_SESSION_PREFIX } from '../../src/server/types.js';
 import { upsertUser } from '../../src/server/users.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import * as identity from '../../src/server/identity.js';
@@ -393,7 +394,7 @@ describe('auth specialist (sdd_host)', () => {
     // End-to-end: the binding CONFERS live authority — the built-in sso-admin
     // role resolves instance-level project:admin, so the token reaches an
     // instance-admin-gated read surface.
-    expect(Array.isArray(identity.listIdentityProviders(cfg, token))).toBe(true);
+    expect(Array.isArray(identity.listProviders(cfg, token))).toBe(true);
 
     // The session bridge resolves the identical live permissionSubject.
     const s = createWebSession(dataDir, {

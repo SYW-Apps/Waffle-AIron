@@ -9,18 +9,18 @@ methods:
     description: >-
       Load the persisted assignment collection from permissions.json under the hosted data root and
       hold it as the authoritative in-memory representation.
-    signature: 'load(): PermissionAssignment[]'
-    returns: PermissionAssignment[]
+    signature: 'load(): list<PermissionAssignment>'
+    returns: list<PermissionAssignment>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory assignment collection to the supplied complete set after the
       registry has persisted it.
-    signature: 'replaceAll(assignments: PermissionAssignment[]): void'
+    signature: 'replaceAll(assignments: list<PermissionAssignment>): void'
     returns: void
     params:
       - name: assignments
-        type: PermissionAssignment[]
+        type: list<PermissionAssignment>
 status: complete
 createdAt: '2026-07-15T20:27:47.138Z'
-updatedAt: '2026-07-15T22:22:07.388Z'
+updatedAt: '2026-10-04T10:19:14.553Z'

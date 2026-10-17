@@ -1,0 +1,92 @@
+id: project_config_store_impl
+name: Project Config Store Implementation
+description: >-
+  Read-through holding of `.wai/project.yaml`: parsed against the ProjectConfig schema on every
+  read, merged back on every write so unknown keys survive, and written as an edit of the document
+  so its comments survive too.
+contract: iproject_config_store
+sourcePath: src/config/project-config.ts
+methods:
+  - name: read
+    narrative: []
+    intent: >-
+      Reads the document through the fs adapter and parses it against the ProjectConfig schema,
+      applying its defaults; returns null when the file is absent. One default is read from the
+      project rather than the schema: a document that never states rules.materializeAgentFiles was
+      written before agent files became opt-in, when they were always materialized, so it reads true
+      while COMMITTED wairon-managed agent files (the managed marker, or an
+      -owner/-implementer/-architect.md name) sit in the configured targets' output directories
+      inside the project root, and false otherwise — an upgrade then keeps the committed agent
+      files, and the first save writes the setting down explicitly instead of a false that would
+      have the next lock delete them. Which files count is asked of the git source adapter's
+      trackedFiles: only a file the project's git index tracks (committed or staged) is evidence, so
+      an ignored or untracked leftover in a gitignored agents folder never switches materialization
+      on for a project that runs on live briefs. When there is no git to ask (the project is in no
+      work tree, or git is not installed) every managed file present counts, as before — silently
+      treating a non-git project's agent files as disposable would have the next lock delete files a
+      person keeps. A document that fails the schema raises the validation error with the project
+      root and the offending fields, never a partially defaulted configuration.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
+      - git_source_adapter.trackedFiles
+  - name: write
+    narrative: []
+    intent: >-
+      Refuses a configuration that fails the schema before anything is written. Otherwise reads the
+      current document through the fs adapter, overlays the known fields of the given configuration,
+      keeps every key the schema does not know exactly as it was, and hands the merged document to
+      the fs adapter's writeDocument — an edit of the file's YAML node tree, so comments, key order
+      and the quoting of unchanged scalars survive and only the values that changed move. A field
+      the configuration newly sets lands at its place in the schema's field order (a new `id` next
+      to `name`); a new `externals` alias follows the aliases already declared.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
+      - project_config_fs_adapter.writeDocument
+  - name: exists
+    narrative: []
+    intent: >-
+      Reports whether the configuration file exists, through the fs adapter; it never parses the
+      document, so a malformed file still counts as existing.
+    calls:
+      - project_config_fs_adapter.documentExists
+  - name: declares
+    narrative: []
+    intent: >-
+      Reads the raw document through the fs adapter and reports whether the given top-level or
+      dotted field (for example `extensions.useGlobalPacks`) is present in it, as opposed to
+      supplied by a schema default; false when the file is absent.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
+  - name: readField
+    narrative: []
+    intent: >-
+      Reads the document through the fs adapter and walks the dotted path without parsing against
+      the schema; returns undefined when the file, or any segment of the path, is absent.
+    calls:
+      - project_config_fs_adapter.documentExists
+      - project_config_fs_adapter.readDocument
+  - name: rewriteScalars
+    narrative: []
+    intent: >-
+      Answers at once for no edits. Otherwise reads the document's text through the fs adapter
+      (refusing a project with no configuration), splits it into lines keeping each line's ending,
+      and reads the block structure off them — each key, each sequence item's dash and each inline
+      scalar with its column, block-scalar bodies skipped. Each edit's path is walked through that
+      structure (a key at the region's own column, the n-th item at it); a path that ends anywhere
+      but an inline scalar on one line — a flow collection, a multi-line value — is refused naming
+      the path. The scalar found must hold the edit's `from` (else refused), and is rewritten in its
+      own quoting: single stays single, double stays double, plain stays plain where plain reads the
+      same and becomes single-quoted where it would not; anything after it on the line, a comment
+      included, is kept. The edited text is parsed again and must equal the original document with
+      exactly those values set — otherwise refused. Every refusal names the project root and writes
+      nothing; a dry run stops there too; otherwise the text is written back through the fs adapter.
+    calls:
+      - project_config_fs_adapter.readText
+      - project_config_fs_adapter.writeText
+detail: intent
+status: complete
+createdAt: '2026-09-13T11:19:15.916Z'
+updatedAt: '2026-10-05T20:59:34.294Z'

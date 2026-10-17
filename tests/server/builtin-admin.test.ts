@@ -421,7 +421,7 @@ describe('adminGroupClaims → sso-admin role provisioning (sdd_host)', () => {
     // is driven client-side by their project:admin visible scopes.
     expect(getCurrentContext(cfg, sessionId).isAdmin).toBe(false);
     // The role's resolved instance-level project:admin authorizes IdP reads.
-    expect(Array.isArray(identity.listIdentityProviders(cfg, sessionId))).toBe(true);
+    expect(Array.isArray(identity.listProviders(cfg, sessionId))).toBe(true);
   });
 
   it('web sign-in with no matching group stays binding-free (tier 3)', async () => {
@@ -486,6 +486,6 @@ describe('adminGroupClaims → sso-admin role provisioning (sdd_host)', () => {
     const url2 = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://cli.example/cb');
     await identity.completeSsoLogin(cfg, stateFrom(url2), 'code-2');
     expect(findUserByExternalSubject(dataDir, PROVIDER_ID, 'ext-1')!.roleBindings).toEqual([]);
-    expect(() => identity.listIdentityProviders(cfg, token1)).toThrow(/project:admin/i);
+    expect(() => identity.listProviders(cfg, token1)).toThrow(/project:admin/i);
   });
 });

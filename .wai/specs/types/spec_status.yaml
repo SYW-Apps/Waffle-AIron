@@ -1,0 +1,21 @@
+kind: enum
+id: spec_status
+name: SpecStatus
+description: >-
+  How far a subsystem, component, interface or implementation spec is through design. An omitted
+  status is parsed as complete, so a spec written before statuses existed keeps being judged in
+  full.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: draft
+    description: >-
+      Sketched: judged in draft context, where completeness findings are downgraded and the --ci
+      gate waives draft warnings
+  - name: design
+    description: 'Being designed: structure is settled enough to review, details may still be missing'
+  - name: complete
+    description: 'Finished: judged in full, and what a lock certifies'
+createdAt: '2026-10-04T23:09:48.911Z'
+updatedAt: '2026-10-04T23:09:54.913Z'

@@ -1,0 +1,399 @@
+id: iwiring_rules
+name: Wiring Rules Interface
+description: >-
+  One method per rule, named after it, in run order. Each takes the run's RuleContext, reports
+  through its addIssue, and declares the codes it reports as findings. These rules judge whether the
+  execution graph is connected and complete; unused-detection and durability-round-trip take their
+  reachability from the narrative graph projector.
+component: wiring_rules
+methods:
+  - name: dependencyCycles
+    description: >-
+      Rule dependency-cycles. The component dependsOn graph must be a DAG; the first cycle through a
+      component in the run's scope is reported with its full path.
+    signature: 'dependencyCycles(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: CIRCULAR_DEPENDENCY
+        severity: error
+        summary: Circular dependency between components
+  - name: dispatchTableBindings
+    description: >-
+      Rule dispatch-table-bindings. A dispatch table belongs to a Portal, binds each capability
+      once, and binds it to an existing component.method inside the portal's own subsystem (the
+      portal dispatches inward) that the portal declares under dependsOn or owns — the table is a
+      real runtime invocation path.
+    signature: 'dispatchTableBindings(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DISPATCH_ON_NON_PORTAL
+        severity: error
+        summary: Dispatch table declared on a component that is not a Portal
+      - code: DUPLICATE_CAPABILITY
+        severity: error
+        summary: Capability bound more than once in one dispatch table
+      - code: UNSERVED_CAPABILITY
+        severity: error
+        summary: >-
+          Capability has no existing server (bad table binding, or dispatch step routing a
+          capability the target Portal does not serve)
+      - code: DISPATCH_CROSS_SUBSYSTEM
+        severity: error
+        summary: Dispatch binding targets a component outside the portal's subsystem
+      - code: UNDECLARED_DISPATCH_TARGET
+        severity: error
+        summary: Dispatch binding targets a component the portal does not depend on or own
+  - name: dispatchStepRouting
+    description: >-
+      Rule dispatch-step-routing. A dispatch narrative step must name the capability it routes and
+      route it through a Portal whose dispatch table actually serves that capability; a guarantee
+      the step asserts must be declared by the contract method the capability resolves to.
+    signature: 'dispatchStepRouting(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MALFORMED_DISPATCH_STEP
+        severity: error
+        summary: >-
+          Dispatch step missing its capability (targetComponent presence is
+          narrative-target-references' finding)
+      - code: UNSERVED_CAPABILITY
+        severity: error
+        summary: >-
+          Capability has no existing server (bad table binding, or dispatch step routing a
+          capability the target Portal does not serve)
+      - code: NARRATIVE_SEMANTIC_UNBACKED
+        severity: warning
+        summary: Dispatch step asserts a guarantee the bound capability method does not declare
+  - name: lifecycleEntrypoints
+    description: >-
+      Rule lifecycle-entrypoints. Declared subsystem lifecycle entrypoints (init/shutdown flows)
+      must name an existing component and a method on one of its interfaces — they are reachability
+      roots, so a dangling entrypoint would silently detach every flow rooted in it.
+    signature: 'lifecycleEntrypoints(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVALID_LIFECYCLE_ENTRYPOINT
+        severity: error
+        summary: Lifecycle entrypoint names a missing component or method
+      - code: LIFECYCLE_CROSS_SUBSYSTEM
+        severity: error
+        summary: Lifecycle entrypoint roots a flow in another subsystem's component
+  - name: invokedByDescription
+    description: >-
+      Rule invoked-by-description. An invokedBy declaration names a caller outside the modeled graph
+      and silences unused-detection for its method, so the claim must stay reviewable: its "caller"
+      prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO
+      invokes the method and when. A Portal-level invokedBy (the entry every verb of the Portal
+      inherits) is held to the same floor, on the Portal.
+    signature: 'invokedByDescription(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVOKED_BY_UNDESCRIBED
+        severity: warning
+        summary: invokedBy declaration whose caller prose is missing or placeholder-thin
+  - name: unusedDetection
+    description: >-
+      Rule unused-detection. Walks the narrative execution graph (call steps, register handoffs,
+      dispatch-table routing, lifecycle flows) from every declared root and flags the components and
+      methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer;
+      each method of an interface that implements an imported extension point (the producer calls
+      it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic
+      reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its
+      Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its
+      own and a published component is not either, so a Portal verb that no modelled caller reaches
+      and nobody declared an entry for is reported: the message names the two remedies, modelling
+      the caller or declaring the entry with its scope. A network-scoped entry counts as declared
+      here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared
+      roots) already reaches is stale and is reported. An entry never is, because it also states the
+      verb's scope for the network rules and the flow matrix.
+    signature: 'unusedDetection(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNUSED_COMPONENT
+        severity: warning
+        summary: >-
+          Component never reached by any narrative call chain from a declared root; for a Portal,
+          none of its verbs is called by a modelled caller or declared an entry
+      - code: UNUSED_METHOD
+        severity: warning
+        summary: >-
+          Method never called by any narrative step; for a Portal verb, no modelled caller reaches
+          it and no entry is declared for it
+      - code: INVOKED_BY_REDUNDANT
+        severity: warning
+        summary: >-
+          A runtime invokedBy declaration on a method the internal narrative walk already reaches:
+          stale, remove it
+  - name: unusedTypes
+    description: >-
+      Rule unused-types. Flags types no field of any type, no interface method signature, no
+      contract method's signatureFrom, no other type's method signature and no export table
+      references. References are matched through the type-reference grammar (generic arguments,
+      collections, qualified ids), and the declaring type's own generic parameters are left out: a
+      type parameter is not a reference to a type. A signature type is used when a method names it
+      as its signatureFrom or a param is typed by it. A type exported by an L1 or L0 export entry
+      (typeDef) is used by definition: its consumers are outside this tree. A type named only by its
+      OWN methods stays unused, the way a function that only calls itself is.
+    signature: 'unusedTypes(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNUSED_TYPE
+        severity: warning
+        summary: Type never referenced by fields, signatures, type methods or an export table
+  - name: durabilityRoundTrip
+    description: >-
+      Rule durability-round-trip. A durable Store (persisted RAM projection) must carry
+      effect-tagged contract methods, and its mutations — write-effect methods, and lifecycle-effect
+      methods, which change what exists — require a hydration read-back reachable from a lifecycle
+      init entrypoint. read-through is exempt (every read IS the read-back), as are ram-projection
+      (rebuilt not restored) and cache (evictable, loss-safe). The flagship semantic check is
+      opt-out by declaration, never silently absent — the declaration itself is enforced by
+      durability-declaration.
+    signature: 'durabilityRoundTrip(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: MISSING_EFFECT_TAG
+        severity: warning
+        summary: 'Durable Store contract method lacks an effect: read | write | lifecycle tag'
+      - code: MISSING_HYDRATION
+        severity: error
+        summary: Durable Store is written but no read-back is reachable from any lifecycle init entrypoint
+  - name: untypedSeams
+    description: >-
+      Rule untyped-seams. Methods on a subsystem's published components (its public surface) should
+      not take or return `any` — the one untyped type of the grammar, which object, unknown, json
+      and Json are canonicalised to — judged through each method's named types and parsed
+      expressions so a prose signature is judged like structured params (its tokens still read
+      leniently): cross-subsystem contracts are the swap seam and must be typed. Generic-dispatch
+      portals carry per-capability types via their dispatch table instead.
+    signature: 'untypedSeams(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNTYPED_SEAM
+        severity: warning
+        summary: Bare Json/any/unknown/object parameter or return crossing a subsystem public surface
+  - name: proseClaims
+    description: >-
+      Rule prose-claims. Flags durability/side-effect claims that exist only in prose: a local step
+      description or an intent paragraph claiming persistence ("persisted", "persistence", "survives
+      restart", "registered into") on a logic component whose narrative has no call, register or
+      dispatch edge to any data-layer component (Store/Registry/Index/Adapter/Repository). Text
+      inside quotes or backticks names a value or quotes a message and claims nothing. Data-layer
+      components are exempt — they ARE the persistence.
+    signature: 'proseClaims(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNREALIZED_CLAIM
+        severity: warning
+        summary: Durability/side-effect claim in prose with no matching structural edge
+  - name: uniqueInvariantIds
+    description: >-
+      Rule unique-invariant-ids. An entity's declared invariant ids must be unique within the
+      entity: a narrative step asserts an invariant by "<type-id>.<invariant-id>", so a repeated id
+      makes one assertion stand for two properties and satisfying either silences both.
+    signature: 'uniqueInvariantIds(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DUPLICATE_INVARIANT_ID
+        severity: error
+        summary: An entity declares two invariants with the same id
+  - name: invariantBacking
+    description: >-
+      Rule invariant-backing. The invariant registry: entities may declare domain invariants
+      (type.invariants), anchored through their componentClass. Every write-effect contract method
+      of the owning component must carry a narrative step asserting each invariant
+      (step.assertsInvariants: "<type-id>.<invariant-id>") — the same declared-and-backed shape as
+      semantic guarantees. This is an HONEST lint over declarations: a green run means every write
+      path visibly claims the invariant, never that the narrative or code actually enforces it. An
+      invariant with no resolvable owner or no declared write path is unanchored, and nothing
+      further is claimed about it.
+    signature: 'invariantBacking(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: INVARIANT_UNANCHORED
+        severity: warning
+        summary: >-
+          An entity declares invariants but has no componentClass, its componentClass does not
+          resolve, or the owning component declares no write-effect contract methods
+      - code: UNASSERTED_INVARIANT
+        severity: warning
+        summary: >-
+          A write-effect method of the invariant's owning component has no narrative step asserting
+          it
+  - name: invariantReferences
+    description: >-
+      Rule invariant-references. Every invariant a narrative step asserts (step.assertsInvariants)
+      must resolve to a declared entity invariant: the reference splits at its last dot into a type
+      reference and an invariant id, and some entity matching that type reference must declare that
+      id. A reference nothing declares is an error — the step claims a property that exists nowhere.
+      The message says which: when the type reference carries a qualifier (`alias::type`) and the
+      bare reference does resolve, the cause is the qualifier — typically the project's own alias
+      written from inside it — and the message names it and the bare reference to write instead,
+      never claiming that no entity declares the invariant.
+    signature: 'invariantReferences(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNKNOWN_INVARIANT_REF
+        severity: error
+        summary: A narrative step asserts an invariant that no entity declares
+  - name: eventTopology
+    description: >-
+      Rule event-topology. Bipartite completeness of the declared pub/sub graph: every topic a
+      component emits (emits declarations, MessageBus publish endpoints) must have at least one
+      subscriber (subscribesTo declarations, MessageBus subscribe endpoints), and every subscription
+      must have at least one source. Pairing is by exact topic name, and a topic is reported once
+      per component however many declarations bind it there. Trees that declare no event edges see
+      nothing — the rule costs request/response systems zero noise. Warnings + lint.allow: a topic
+      produced for (or consumed from) an EXTERNAL system is a legitimate, declarable exception.
+    signature: 'eventTopology(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: UNCONSUMED_TOPIC
+        severity: warning
+        summary: Topic is emitted but nothing in the tree subscribes to it
+      - code: UNSOURCED_SUBSCRIPTION
+        severity: warning
+        summary: Topic is subscribed to but nothing in the tree emits it
+  - name: entryDeclarations
+    description: >-
+      Rule entry-declarations. Holds every invokedBy declaration, on a contract method or on a
+      Portal component, to the shape the reachability model gives it. An entry belongs to a Portal
+      verb: a caller outside the design reaches it over the Portal's transport, so kind entry on
+      anything but a Portal is reported. A scope describes where network callers come from, so a
+      scope on a local or in-process verb, or on a runtime declaration, is reported. The kinds
+      retired with the reachability model (external, sibling-subsystem) are read compatibly for one
+      release and reported with the kind they are read as, which doctor --fix writes. A prose check
+      of the declaration itself: it neither walks the graph nor reads the family.
+    signature: 'entryDeclarations(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ENTRY_ON_NON_PORTAL
+        severity: error
+        summary: >-
+          An entry (invokedBy kind entry) declared on a method of a component that is not a Portal;
+          a runtime hook declares kind runtime
+      - code: ENTRY_SCOPE_NOT_NETWORK
+        severity: warning
+        summary: >-
+          A scope on an entry whose Portal's transport crosses no network (local or in-process), or
+          on a runtime declaration
+      - code: INVOKED_BY_RETIRED_KIND
+        severity: warning
+        summary: >-
+          An invokedBy declaration of a retired kind (external, sibling-subsystem), read as entry or
+          runtime for one release
+  - name: networkBoundaries
+    description: >-
+      Rule network-boundaries. It judges what the bound project's own gate can see: its own network
+      declaration and the components of its own tree. When the project declares a network, it
+      projects the project's own reach model (reach_model_projector) and reports the network
+      arbiter's findings on it: GATEWAY_BYPASSED, MULTIPLE_GATEWAYS and EXPORT_BEYOND_NETWORK, whose
+      codes the arbiter declares. The rule registers them in the catalog under this rule's name. A
+      project that declares no network has nothing to judge here. The networks around a member, and
+      the proofs that need its siblings, are the family run's to judge
+      (family_validator.checkReach).
+    signature: 'networkBoundaries(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: GATEWAY_BYPASSED
+        severity: error
+        summary: >-
+          Inside a declared network, a non-gateway Portal takes an entry from outside it, or a
+          modelled call from outside the network lands on one
+      - code: MULTIPLE_GATEWAYS
+        severity: notice
+        summary: >-
+          A declared network has more than one gateway Portal taking entries from outside it:
+          allowed, not recommended
+      - code: EXPORT_BEYOND_NETWORK
+        severity: warning
+        summary: >-
+          An export at an audience wider than project on a network-transport verb that callers
+          beyond the network cannot reach
+  - name: adapterTransport
+    description: >-
+      Rule adapter-transport. An Adapter calls a verb on its target Portal's interface, so its
+      transport is the target's: inferred from the target Portal when the Adapter states none (HTTP
+      for an HTTP API, a database connection for a database Portal, ...). An Adapter MAY state its
+      own transport; when it does and a Portal it calls (one it names in dependsOn, or the target of
+      one of its call, register or dispatch steps or declared calls) has another transport, that is
+      ADAPTER_TRANSPORT_MISMATCH, one finding per target — so changing a Portal's transport shows
+      its impact on every Adapter that calls it. A Portal the tree cannot resolve (an external one)
+      is not judged here. Reads the components and narratives of the tree.
+    signature: 'adapterTransport(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: ADAPTER_TRANSPORT_MISMATCH
+        severity: error
+        summary: An Adapter states a transport other than the transport of a Portal it calls
+status: complete
+createdAt: '2026-09-14T06:08:14.964Z'
+updatedAt: '2026-10-06T23:07:19.895Z'

@@ -1,0 +1,80 @@
+kind: value-object
+id: public_interface
+name: PublicInterface
+description: >-
+  One entry of a subsystem's export table: what the subsystem makes visible to the other subsystems
+  of its project, like a module's pub(crate) exports. An OWN item binds a transport kind and details
+  to a component (optionally narrowed to one interface) or a type the subsystem owns. A RE-EXPORT
+  names another subsystem of the project in `from` and one component (optionally narrowed) or one
+  type from that subsystem's export table, optionally renamed with `as` — `export { x as y } from
+  './s'`. `from` alone re-exports everything that subsystem exports (a wildcard). Own items and
+  re-exports mix freely in one table. A re-export is a name, not a licence: another subsystem still
+  depends on the owning subsystem's published component.
+fields:
+  - name: type
+    type: PublicInterfaceType
+    description: >-
+      LEGACY, no longer authored: an entry's export kind is derived from its backing Portal's
+      transport (transport.exportKind). Read compatibly for one release; doctor --fix drops a value
+      that agrees with the derived one and reports one that does not
+    optional: true
+  - name: details
+    type: string
+    description: >-
+      Consumer-facing description of an own item. Required on an own component item; a re-export
+      inherits its target's.
+    optional: true
+  - name: component
+    type: string
+    description: >-
+      For an own item, the component that realizes it. For a re-export, the component re-exported
+      from `from`.
+    optional: true
+  - name: interface
+    type: string
+    description: The L3 interface the entry narrows to.
+    optional: true
+  - name: consumers
+    type: list<string>
+    description: >-
+      The subsystems an own item is published to. Absent, anyone may depend on it; present, only
+      these subsystems may — when every entry publishing the component names consumers, the union of
+      those lists is the whole set. The provider says who may call, the way a Java module exports a
+      package to named modules, instead of each caller's subset being copied into a contract of its
+      own. Each id is a subsystem reference, so in a chained subproject it is qualified into the
+      subproject's namespace exactly as the entry's component is, and written back relative to it.
+    optional: true
+  - name: from
+    type: string
+    description: >-
+      Re-export source: another subsystem of the same project. With neither `component` nor
+      `typeDef` the entry re-exports everything that subsystem exports.
+    optional: true
+  - name: typeDef
+    type: string
+    description: 'A type exported as is: owned by this subsystem, or re-exported from `from`.'
+    optional: true
+  - name: as
+    type: string
+    description: >-
+      The public name. Defaults to the narrowed interface, then the component or type id; must fit
+      [a-z0-9-_]+ (else EXPORT_INVALID).
+    optional: true
+  - name: role
+    type: ExportRole
+    description: >-
+      What consumers do with the entry: call it (the default) or implement it (an extension point;
+      an Adapter may back it, EXPORT_UNCONSUMABLE otherwise)
+    optional: true
+methods:
+  - name: isOwnComponentItem
+    signature: 'isOwnComponentItem(): boolean'
+    returns: bool
+    description: >-
+      Whether the entry is an OWN component item — neither a re-export (`from`) nor a type export
+      (`typeDef`). Only an own component item publishes a component: the public-surface rules judge
+      it, and it alone licenses a cross-subsystem dependency.
+    symbol: isOwnComponentEntry
+sourcePath: src/models/specs.ts
+createdAt: '2026-09-19T22:58:35.555Z'
+updatedAt: '2026-10-06T12:54:25.654Z'

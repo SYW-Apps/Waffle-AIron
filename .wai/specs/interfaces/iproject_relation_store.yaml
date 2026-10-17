@@ -9,18 +9,32 @@ methods:
     description: >-
       Load the persisted cross-project relation set from the relations.json file under the hosted
       data root and hold it as the authoritative in-memory representation, returning it.
-    signature: 'load(): ProjectRelationRecord[]'
-    returns: ProjectRelationRecord[]
+    signature: 'load(): list<ProjectRelationRecord>'
+    returns: list<ProjectRelationRecord>
     params: []
   - name: replaceAll
     description: >-
       Atomically swap the in-memory relation set to the supplied complete set after the registry has
       persisted it.
-    signature: 'replaceAll(records: ProjectRelationRecord[]): void'
+    signature: 'replaceAll(relations: list<ProjectRelationRecord>): void'
     returns: void
     params:
-      - name: records
-        type: ProjectRelationRecord[]
+      - name: relations
+        type: list<ProjectRelationRecord>
+        description: The complete relation set that replaces the stored one
+lint:
+  allow:
+    - code: UNUSED_METHOD
+      at: load
+      reason: >-
+        The read-through store's hydration is called by the repository FACADE, not by a member:
+        every exported facade function in src/server/relations.ts constructs the store, calls
+        load(), and only then forwards to the registry or index. A Repository facade narrative is
+        held to a single call step (FACADE_FORWARDING), so that hydration call has nowhere to live
+        in the model and load has no modelled caller. Modelling the hydration as a facade method of
+        its own that forwards to the read-back (or letting the facade doctrine carry a
+        hydrate-then-forward pair) is the decision owed; declaring a call from the registry or index
+        would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:52.453Z'
-updatedAt: '2026-07-09T22:13:20.528Z'
+updatedAt: '2026-10-04T22:34:59.463Z'

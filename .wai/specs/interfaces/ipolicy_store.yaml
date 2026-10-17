@@ -15,8 +15,8 @@ methods:
       yields null (no policy ever configured); a missing identity-providers file yields an empty
       collection. An unreadable file or structurally invalid JSON fails with a storage error naming
       the path — the store never silently drops a persisted policy or provider configuration.
-    signature: 'load(): InstancePackPolicy | null'
-    returns: InstancePackPolicy | null
+    signature: 'load(): InstancePackPolicy?'
+    returns: InstancePackPolicy?
     params: []
   - name: replaceActive
     description: >-
@@ -32,4 +32,4 @@ methods:
         type: InstancePackPolicy
 status: complete
 createdAt: '2026-07-09T20:46:15.267Z'
-updatedAt: '2026-07-10T08:16:21.937Z'
+updatedAt: '2026-10-04T10:19:15.756Z'

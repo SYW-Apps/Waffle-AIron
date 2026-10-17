@@ -1,0 +1,173 @@
+id: identity_migration_impl
+name: Identity Migration Implementation
+description: >-
+  src/migrations/identity.ts. Reference edits come from the graph's authoredReferences (position,
+  authored text, the alias it went through), never from a text search.
+contract: iidentity_migration
+sourcePath: src/migrations/identity.ts
+methods:
+  - name: planRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the target project from the bound node by its member alias path (the bound project
+          when empty): none is not-a-member, its directory absent is member-absent; a family that is
+          not whole is family-partial; a new id the identifier grammar refuses (identifier.problemAs
+          project-id: [a-z0-9-_.] starting and ending alphanumeric, at most 64 characters, never a
+          Windows device name or super) is id-invalid, carrying the grammar's own reason — the dry
+          run and the applied run refuse alike — and one any family node answers to is id-collision
+        type: local
+      - stepNumber: 2
+        description: Is the rename possible?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: approved
+        description: >-
+          Read the target's lock record, for the id its approval recorded (the note that the rename
+          resolves an id-locked member, and the PROJECT_ID_RENAMED the re-lock clears)
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: approvalRecord
+      - stepNumber: 5
+        description: >-
+          Collect the holders of the old id: every family node whose alias table binds to the target
+          — the parent's member entry and each external — each with the alias it uses and whether
+          that alias equals the old id
+        type: local
+      - stepNumber: 6
+        description: >-
+          For each holder, plan its edits: an alias equal to the old id is renamed to the new id and
+          each authored reference that went through it (the graph's authoredReferences with that
+          referrer and alias, at their positions, L0 `from` entries included) is respelled with the
+          new first segment; an alias that differs is kept, and an external's `project` is repointed
+          to the new id; a pin under the alias is carried to its new key and producer id. A
+          reference at a position the writer does not parse is reference-unwritable
+        type: local
+      - stepNumber: 7
+        description: >-
+          Plan the target's own edit: its id moved, the old one appended to previousIds; add the
+          notes — a project outside the family that declares the target as an external is not looked
+          for by a rename (only a parent composing it as a member is, below): each must rewrite its
+          own external, its next gate reporting the id change, and `wairon externals consumers
+          --search <dir>` lists them; and, when the member's key follows the id (its alias was the
+          old id), the deployment-side names the key change: the bindings keys and observed-flow
+          names written as the old key or `<old key>::…` (its default workload name and its
+          subsystems' and Portals' keys) are to be renamed to the new key, which the network
+          commands meanwhile resolve through previousIds, each such use reported
+        type: local
+      - stepNumber: 8
+        description: >-
+          When the target is the top of the family read (a project bound at its own root), read its
+          consumers from its own root — the family in reach and a parent that composes it as a `../`
+          sibling member, which the family read at the target never holds; a member of the family
+          read is declared by its parent inside it, which the plan already writes
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 9
+        description: >-
+          Name each consumer outside the projects the plan writes in a note: its project, its
+          folder, and the alias and section it declares the target under; nothing in it is written.
+          A parent declaring it as a member is to re-lock there once the target is re-locked, to pin
+          its new approval; a project declaring it as an external is to rewrite its own external
+          (its next gate reports the id change)
+        type: local
+      - stepNumber: 10
+        description: Answer the plan, every written project to re-lock, the target first
+        type: return
+        outcome: the rename plan
+  - name: planAliasRename
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Find the alias in the bound node's alias table: in neither map is not-a-member; a new
+          alias the identifier grammar refuses (identifier.problemAs alias) is alias-invalid,
+          carrying its reason, and one either map declares is alias-taken
+        type: local
+      - stepNumber: 2
+        description: Is the rename possible?
+        type: branch
+        condition: a refusal was recorded
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer the refusals
+        type: return
+        outcome: refused plan
+      - stepNumber: 4
+        label: edits
+        description: >-
+          Plan the bound project's edits only: the alias rekeyed; every authored reference of the
+          bound project that went through the alias respelled with the new first segment at its
+          position, L0 `from` entries included; an external's pin carried to the new alias with the
+          same producer; a local spec id equal to the new alias is a note
+        type: local
+      - stepNumber: 5
+        description: >-
+          Under each other family project that pins the bound project, read its externals' status:
+          the alias is the bound project's own, so a pin whose every use is unchanged is taken again
+          after the rename (the names it uses are the same; only how the bound project re-exports
+          them is spelled) — one already broken is left with a note, never laundered
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: getExternalsStatus
+      - stepNumber: 6
+        description: Answer the plan
+        type: return
+        outcome: the alias-rename plan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Remember the caller's binding and bind the rehearsal's top root, where every spec key is
+          the one the plan was computed with
+        type: local
+      - stepNumber: 2
+        description: Respell each spec's planned references in one call per spec, before any alias moves
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: rewriteReferences
+      - stepNumber: 3
+        description: For each holder, bind its rehearsal root and rekey each planned alias
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: renameAlias
+      - stepNumber: 4
+        description: Repoint each planned external's producer id
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: repointExternal
+      - stepNumber: 5
+        description: Is this a project rename?
+        type: branch
+        condition: plan.request.verb is rename
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Bind the target's rehearsal root and move its id, the old one into previousIds
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: renameId
+      - stepNumber: 7
+        label: pins
+        description: >-
+          Last, for each holder with a pin under a planned alias, bind its rehearsal root and carry
+          the pin to its new key and producer id, digest unchanged
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: renamePin
+      - stepNumber: 8
+        description: Then re-take each family consumer's pin the plan read intact, under its own rehearsal root
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: pinExternals
+      - stepNumber: 9
+        description: Restore the caller's binding
+        type: local
+status: complete
+createdAt: '2026-09-30T20:34:43.534Z'
+updatedAt: '2026-10-16T22:52:16.861Z'

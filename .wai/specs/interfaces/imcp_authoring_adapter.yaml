@@ -1,0 +1,110 @@
+id: imcp_authoring_adapter
+name: MCP Authoring Client Adapter Interface
+description: >-
+  Client adapter contract for the MCP subsystem's hop into sdd_authoring: every spec write an MCP
+  tool makes on an author's behalf, reached through the authoring portal instead of the spec store
+  (in-process today; swappable for a remote transport).
+component: mcp_authoring_adapter
+methods:
+  - name: updateSpecGated
+    description: >-
+      Forward the sdd_update_spec patch to the authoring portal's gate: the intrinsic rules judge
+      the merged candidate and refuse it before anything reaches disk, and a dry run runs that whole
+      write and answers with the report it would have produced without touching a file.
+    signature: >-
+      updateSpecGated(kind: WritableSpecKind, id: string, delta: SpecDelta, dryRun?: bool):
+      SpecChangeReport
+    returns: SpecChangeReport
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The stored spec's id
+      - name: delta
+        type: SpecDelta
+        description: The partial change to merge, carrying the delta's own verbs
+      - name: dryRun
+        type: bool
+        description: Answer with what the delta would do and write nothing
+        optional: true
+  - name: moveMethods
+    description: >-
+      Forward the sdd_move_methods request to the authoring portal's gate: the move is judged as a
+      whole and refused before anything reaches disk, and a dry run runs that same move and answers
+      with the report it would have produced without writing.
+    signature: 'moveMethods(from: string, to: string, methods: list<string>, dryRun?: bool): MethodMoveReport'
+    returns: MethodMoveReport
+    params:
+      - name: from
+        type: string
+        description: The component id the methods currently belong to
+      - name: to
+        type: string
+        description: The component id that should receive them
+      - name: methods
+        type: list<string>
+        description: The method names to move
+      - name: dryRun
+        type: bool
+        description: Answer with what the move would do and write nothing
+        optional: true
+  - name: writeSpec
+    description: >-
+      Forward a create tool's whole-spec restatement to the authoring portal: the seam applies it to
+      the stored spec, judges it and writes it, and answers with the write receipt.
+    signature: 'writeSpec(restatement: SpecRestatement): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: restatement
+        type: SpecRestatement
+        description: The spec as the tool's arguments state it, with the fields the tool's input can express
+  - name: deleteSpec
+    description: >-
+      Forward the sdd_delete_spec request, with its dry-run and force requests, to the authoring
+      portal, which deletes the spec with its subtree and reports what went and the tests a removed
+      method invalidated.
+    signature: 'deleteSpec(kind: WritableSpecKind, id: string, dryRun?: bool, force?: bool): SpecDeletion'
+    returns: SpecDeletion
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
+      - name: id
+        type: string
+        description: The spec id
+      - name: dryRun
+        type: bool
+        description: Answer with the plan — what would be removed, what references it — and remove nothing
+        optional: true
+      - name: force
+        type: bool
+        description: >-
+          Delete even though other specs still reference what goes, leaving those references for
+          validate to report
+        optional: true
+  - name: moveSpec
+    description: >-
+      Forward to authoring_portal.moveSpec: move a component or a type to another subsystem through
+      the gate
+    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: component or type
+      - name: id
+        type: string
+        description: The spec to move
+      - name: subsystem
+        type: string
+        description: The subsystem it moves to
+        optional: true
+      - name: dryRun
+        type: bool
+        description: Answer the plan and write nothing
+        optional: true
+status: complete
+createdAt: '2026-09-18T21:42:03.998Z'
+updatedAt: '2026-10-09T00:33:46.184Z'

@@ -1,11 +1,13 @@
 import * as packs from './packs.js';
-import * as policy from './policy.js';
+import * as projectPolicy from './policy.js';
 import * as admin from './admin.js';
 import * as identity from './identity.js';
 import * as operations from './operations.js';
 import * as gitbacking from './gitbacking.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
+import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
+import type { PackImpact } from '../models/pack-impact.js';
 import type {
   AuditEvent,
   AuditQuery,
@@ -31,10 +33,32 @@ import type {
 // instance exposure policy.
 //
 // Every method is a pure 1:1 forward passing the caller's credential to the
-// OWNING orchestrator, which authenticates and authorizes through the
-// permission resolver — no authorization logic and no state lives here, so the
+// OWNING orchestrator, which authenticates and authorizes through
+// permission rules — no authorization logic and no state lives here, so the
 // two portals stay lean and the gates stay single-sourced.
 // ---------------------------------------------------------------------------
+
+// ── spec-tree transfer (.waitree) ─────────────────────────────────────────────
+
+export function exportProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  includeDerived?: boolean,
+  allowPartial?: boolean,
+): TreeExportResult {
+  return admin.exportProjectTree(cfg, credential, project, includeDerived, allowPartial);
+}
+
+export function importProjectTree(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  archive: Uint8Array,
+  replaceExisting?: boolean,
+): TreeImportResult {
+  return admin.importProjectTree(cfg, credential, project, archive, replaceExisting);
+}
 
 // ── packs ─────────────────────────────────────────────────────────────────────
 
@@ -82,30 +106,48 @@ export function adoptProjectPack(cfg: HostConfig, credential: string | null, pro
   return packs.adoptProjectPack(cfg, credential, project, name);
 }
 
+/** What installing (content given) or adopting (content omitted) a declarative
+ *  pack would change on the project, writing nothing (project:read upstream). */
+export function previewProjectPack(
+  cfg: HostConfig,
+  credential: string | null,
+  project: string,
+  name: string,
+  content?: string,
+): PackImpact {
+  return packs.previewProjectPack(cfg, credential, project, name, content);
+}
+
+/** What removing a registered pack would change on the project, writing nothing
+ *  (project:read upstream). */
+export function previewProjectPackRemoval(cfg: HostConfig, credential: string | null, project: string, name: string): PackImpact {
+  return packs.previewProjectPackRemoval(cfg, credential, project, name);
+}
+
 // ── pack/profile policy ───────────────────────────────────────────────────────
 
 export function getPackPolicy(cfg: HostConfig, credential: string | null): InstancePackPolicy {
-  return policy.getPackPolicy(cfg, credential);
+  return projectPolicy.getPackPolicy(cfg, credential);
 }
 
-export function setPackPolicy(cfg: HostConfig, credential: string | null, packPolicy: InstancePackPolicy): InstancePackPolicy {
-  return policy.setPackPolicy(cfg, credential, packPolicy);
+export function setPackPolicy(cfg: HostConfig, credential: string | null, policy: InstancePackPolicy): InstancePackPolicy {
+  return projectPolicy.setPackPolicy(cfg, credential, policy);
 }
 
 export function evaluateProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
-  return policy.evaluateProjectPolicy(cfg, credential, projectId);
+  return projectPolicy.evaluateProjectPolicy(cfg, credential, projectId);
 }
 
 export function reconcileProjectPolicy(cfg: HostConfig, credential: string | null, projectId: string): PolicyEvaluationResult {
-  return policy.reconcileProjectPolicy(cfg, credential, projectId);
+  return projectPolicy.reconcileProjectPolicy(cfg, credential, projectId);
 }
 
 export function getProjectConfig(cfg: HostConfig, credential: string | null, projectId: string): ProjectConfigView {
-  return policy.getProjectConfig(cfg, credential, projectId);
+  return projectPolicy.getProjectConfig(cfg, credential, projectId);
 }
 
 export function setProjectType(cfg: HostConfig, credential: string | null, projectId: string, projectType: string): ProjectConfigView {
-  return policy.setProjectType(cfg, credential, projectId, projectType);
+  return projectPolicy.setProjectType(cfg, credential, projectId, projectType);
 }
 
 export function listProjectProfiles(cfg: HostConfig, credential: string | null, project: string): AvailableProfile[] {
@@ -183,7 +225,7 @@ export function unbindBackingScope(cfg: HostConfig, credential: string | null, b
 }
 
 export function syncBackingScope(cfg: HostConfig, credential: string | null, bindingId: string): boolean {
-  return gitbacking.syncBackingScope(cfg, credential, bindingId);
+  return gitbacking.syncScope(cfg, credential, bindingId);
 }
 
 // ── audit viewer ──────────────────────────────────────────────────────────────
@@ -202,6 +244,6 @@ export function getExposurePolicy(cfg: HostConfig, credential: string | null): H
   return operations.getExposurePolicy(cfg, credential);
 }
 
-export function setExposurePolicy(cfg: HostConfig, credential: string | null, exposure: HostExposurePolicy): HostExposurePolicy {
-  return operations.setExposurePolicy(cfg, credential, exposure);
+export function setExposurePolicy(cfg: HostConfig, credential: string | null, policy: HostExposurePolicy): HostExposurePolicy {
+  return operations.setExposurePolicy(cfg, credential, policy);
 }

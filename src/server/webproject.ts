@@ -3,18 +3,17 @@ import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authoriz
 import { listProjectRecords } from './projects.js';
 import { listProjectPlacements } from './organization.js';
 import {
-  lockProject as adminLockProject,
-  promoteProject as adminPromoteProject,
   destroyProject as adminDestroyProject,
 } from './admin.js';
 import { initializeProjectWithProfile } from './policy.js';
-import type { LockRecord } from '../core/lockfile.js';
+import { lockProject as lifecycleLockProject } from './projectlifecycle.js';
 import type {
+  GovernedProjectCreation,
   HostConfig,
   HostedProjectRecord,
+  ProjectActionOutcome,
   ProjectInitRequest,
   ProjectProfileSelection,
-  PromoteResult,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -25,9 +24,9 @@ import type {
 // first-class data-plane credential that resolves to a Principal exactly like a
 // bearer token).
 //
-// create/lock/promote/destroy are THIN forwards to the admin orchestrator,
+// create/lock/destroy are THIN forwards to the admin orchestrator,
 // passing the session id AS the credential. Those admin functions authorize
-// through the permission resolver (project:create / project:write /
+// through permission rules (project:create / project:write /
 // project:admin over the org tree) and re-validate, so a signed-in human manages
 // exactly the projects their permissions allow — no new authorization surface is
 // introduced here.
@@ -44,7 +43,7 @@ import type {
  * on. "Can act on" is the UNION of project:read, project:write, and
  * project:admin actionable scopes: a user who can WRITE (or admin) a project
  * must be able to SEE it and open its canvas even without an explicit
- * project:read grant — capabilities are independent atoms in the resolver, so
+ * project:read grant — capabilities are independent atoms in permission rules, so
  * this consumer-side union is where "any access → visible" is expressed (the
  * same pattern as the landscape readView's read ∪ admin). Breadcrumb (context)
  * scopes are excluded: an ancestor shown only for navigation is not a project
@@ -95,32 +94,28 @@ export function createProject(
   id: string,
   unitId: string,
   profileSelection?: ProjectProfileSelection,
-): HostedProjectRecord {
+): GovernedProjectCreation {
   // step 1: the init request (id, REQUIRED owner unit, optional profile).
   const request: ProjectInitRequest = {
     id,
     ownerUnitId: unitId,
     ...(profileSelection !== undefined ? { profileSelection } : {}),
   };
-  return initializeProjectWithProfile(cfg, sessionId, request); // steps 2–3 (forward)
+  // Steps 2-3: forward, and answer the GovernedProjectCreation — the record with
+  // what the policy applied, which the web UI shows after creation.
+  return initializeProjectWithProfile(cfg, sessionId, request);
 }
 
 /**
- * Lock a project (validate-as-complete, then write the StateId-scoped lock).
- * Forwards to admin_orchestrator.lockProject passing the sessionId as the
- * credential — project:write permission is enforced there.
+ * Lock a project: the same decision the MCP lock tool makes for the signed-in
+ * principal. Forwards to project_lifecycle_orchestrator.lockProject passing the
+ * sessionId as the credential — approval:decide over the project locks directly
+ * (recorded under the caller's name); a writer gets a pending approval request
+ * someone with approval rights decides; anyone else is refused. The permission
+ * check lives there, so this route cannot bypass it.
  */
-export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): LockRecord {
-  return adminLockProject(cfg, sessionId, projectId); // step 1 (forward)
-}
-
-/**
- * Mark a locked project ready for promotion after the StateId re-check. Forwards
- * to admin_orchestrator.promoteProject passing the sessionId as the credential —
- * project:write permission is enforced there.
- */
-export function promoteProject(cfg: HostConfig, sessionId: string, projectId: string): PromoteResult {
-  return adminPromoteProject(cfg, sessionId, projectId); // step 1 (forward)
+export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): ProjectActionOutcome {
+  return lifecycleLockProject(cfg, sessionId, projectId); // step 1 (forward)
 }
 
 /**

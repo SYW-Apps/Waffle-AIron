@@ -1,0 +1,43 @@
+kind: value-object
+id: external_removal
+name: ExternalRemoval
+description: >-
+  The answer to removing one external (`wairon externals remove`, sdd_remove_external): whether its
+  declaration was taken out of `.wai/project.yaml`, whether its pin (lock entry and snapshot) went
+  with it — so no orphaned pin is left behind — or why nothing was removed, in one sentence.
+subsystem: sdd_surfaces
+fields:
+  - name: alias
+    type: string
+    description: The alias asked for
+    optional: false
+  - name: removed
+    type: bool
+    description: >-
+      Whether this call took the declaration out of .wai/project.yaml (false on a refusal, a dry
+      run, and an orphaned pin).
+    optional: false
+  - name: unpinned
+    type: bool
+    description: >-
+      Whether this call removed the alias's lock entry and pinned snapshot (false on a refusal and a
+      dry run).
+    optional: false
+  - name: refusal
+    type: string
+    description: 'Why nothing was removed: the alias is neither declared nor pinned'
+    optional: true
+  - name: dryRun
+    type: bool
+    description: >-
+      Present, true, on a dry run: nothing was written, and wouldRemove says what the real run
+      removes — a dry run never reads like an apply.
+    optional: true
+  - name: wouldRemove
+    type: ExternalRemovalPlan
+    description: 'On a dry run: what the real run would take out.'
+    optional: true
+methods: []
+sourcePath: src/models/specs.ts
+createdAt: '2026-10-06T23:03:02.727Z'
+updatedAt: '2026-10-07T22:05:35.588Z'

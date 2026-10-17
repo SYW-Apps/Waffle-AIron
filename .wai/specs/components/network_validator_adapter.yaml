@@ -1,0 +1,15 @@
+id: network_validator_adapter
+name: Network Validator Adapter
+description: >-
+  The client of sdd_validator's published portal for the derived networking: it asks for the reach
+  model of the bound project (its family at a project that declares members). The validator is the
+  one authority on what reaches what, so the derived outputs can never disagree with the network
+  verdicts.
+subsystem: sdd_network
+componentType: Adapter
+owns: []
+dependsOn:
+  - validator_portal
+status: complete
+createdAt: '2026-10-06T13:10:06.089Z'
+updatedAt: '2026-10-06T13:10:06.717Z'

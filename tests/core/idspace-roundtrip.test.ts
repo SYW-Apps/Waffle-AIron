@@ -6,7 +6,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
   loadSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -18,7 +18,8 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { createChainedSubsystem } from '../../src/core/provision.js';
+import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { validateProject } from '../../src/core/validation.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -83,14 +84,14 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
   function buildFixture(): string {
     rootDir = makeRoot();
     // Root-level component the child references across the tree.
-    saveSubsystemSpec(subsystem('core-sub'));
+    saveSpec('subsystem', subsystem('core-sub'));
     saveComponentSpec(component('crates-portal', 'core-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
 
     // Chained child project mounted as "transpiler".
-    createChainedSubsystem(subsystem('transpiler', { projectPath: 'packages/transpiler' }), 'transpiler');
+    writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler' }), 'transpiler');
     const childDir = path.join(rootDir, 'packages', 'transpiler');
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('transpiler', { parentSystem: 'transpiler' }));
+    child.save('subsystem', subsystem('transpiler', { parentSystem: 'transpiler' }));
     child.saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['super::crates-portal'] }));
     child.saveInterfaceSpec(iface('itranspiler-orch', 'transpiler-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -167,8 +168,9 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       dependsOn: ['local-helper', 'super::crates-portal'],
     });
     invalidateSpecCache();
-    expect(loadComponentSpec('transpiler::transpiler-orch')!.dependsOn)
-      .toEqual(['transpiler::local-helper', 'crates-portal']);
+    // A plain list merges (round 6): the held dependency stays, the new one joins, each qualified.
+    expect([...loadComponentSpec('transpiler::transpiler-orch')!.dependsOn].sort())
+      .toEqual(['crates-portal', 'transpiler::local-helper']);
   });
 
   it('cross-tree dependsOn survives component re-save', () => {
@@ -193,7 +195,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
     rootDir = makeRoot();
 
     // Mount `amid` under the top root.
-    saveSubsystemSpec(subsystem('amid', { projectPath: 'amid' }));
+    saveSpec('subsystem', subsystem('amid', { projectPath: 'amid' }));
     const aDir = path.join(rootDir, 'amid');
     fs.mkdirSync(path.join(aDir, '.wai', 'specs'), { recursive: true });
 
@@ -203,9 +205,9 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       schemaVersion: '1.0.0', name: 'amid-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    a.saveSubsystemSpec(subsystem('a-core', { parentSystem: 'amid-system' }));
+    a.save('subsystem', subsystem('a-core', { parentSystem: 'amid-system' }));
     a.saveComponentSpec(component('a-portal', 'a-core', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    a.saveSubsystemSpec(subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
+    a.save('subsystem', subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
 
     // bleaf's tree, authored via bleaf's workspace. b-orch (in bleaf) depends on
     // a-portal (in amid, one level up), authored as the relative super:: form.
@@ -216,7 +218,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       schemaVersion: '1.0.0', name: 'bleaf-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    b.saveSubsystemSpec(subsystem('b-core', { parentSystem: 'bleaf-system' }));
+    b.save('subsystem', subsystem('b-core', { parentSystem: 'bleaf-system' }));
     b.saveComponentSpec(component('b-orch', 'b-core', { dependsOn: ['super::a-portal'] }));
     invalidateSpecCache();
 
@@ -239,6 +241,8 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
   });
 });
 
+// Stage 3: a member's own subsystem named like its alias is `network_http::network_http` —
+// an honest key, never merged with the mount (which is a member declaration, not a subsystem).
 describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug)', () => {
   let rootDir: string;
   afterEach(() => {
@@ -249,10 +253,10 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
 
   function buildFixture(): string {
     rootDir = makeRoot();
-    createChainedSubsystem(subsystem('network_http', { projectPath: 'packages/network_http' }), 'network_http');
+    writeLegacyMount(subsystem('network_http', { projectPath: 'packages/network_http' }), 'network_http');
     const childDir = path.join(rootDir, 'packages', 'network_http');
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('network_http', {
+    child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
       publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
     }));
@@ -264,16 +268,16 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
   it('re-saving the loaded (qualified) subsystem does not throw and round-trips', () => {
     const childDir = buildFixture();
 
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(loaded).not.toBeNull();
-    // Loaded through the parent, the member is namespace-qualified.
+    // Loaded through the parent, the member is keyed under its project.
     expect(loaded!.publicInterfaces[0].component).toBe('network_http::http-portal');
 
     // THE bug: this threw "Refusing to write invalid subsystem spec" on lock.
-    expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
+    expect(() => saveSpec('subsystem', loaded!)).not.toThrow();
 
     invalidateSpecCache();
-    const reloaded = loadSubsystemSpec('network_http');
+    const reloaded = loadSubsystemSpec('network_http::network_http');
     expect(reloaded!.publicInterfaces[0].component).toBe('network_http::http-portal');
 
     // On disk the child file carries the plain local id.
@@ -285,26 +289,26 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
   it('lifecycle entrypoint component refs round-trip with the same member prefix', () => {
     const childDir = buildFixture();
     const child = workspaceFor(childDir);
-    child.saveSubsystemSpec(subsystem('network_http', {
+    child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
       publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
       lifecycle: [{ phase: 'init', component: 'http-portal', method: 'provision' }],
     }));
     invalidateSpecCache();
 
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(loaded!.lifecycle![0].component).toBe('network_http::http-portal');
 
-    expect(() => saveSubsystemSpec(loaded!)).not.toThrow();
+    expect(() => saveSpec('subsystem', loaded!)).not.toThrow();
     invalidateSpecCache();
-    expect(loadSubsystemSpec('network_http')!.lifecycle![0].component).toBe('network_http::http-portal');
+    expect(loadSubsystemSpec('network_http::network_http')!.lifecycle![0].component).toBe('network_http::http-portal');
   });
 
   it('dryRunSerializeSpecs is clean on a healthy tree and predicts a writer refusal', () => {
     buildFixture();
 
     // Warm the cache the way validate does, then dry-run: clean.
-    const loaded = loadSubsystemSpec('network_http');
+    const loaded = loadSubsystemSpec('network_http::network_http');
     expect(dryRunSerializeSpecs()).toEqual([]);
 
     // Corrupt the in-memory spec so the write pipeline would refuse it: a
@@ -312,12 +316,12 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     // publicInterfaces schema rejects.
     loaded!.publicInterfaces[0].component = 'other_ns::sneaky';
     const issues = dryRunSerializeSpecs();
-    expect(issues.some(i => i.code === 'ROUNDTRIP_SERIALIZATION' && i.specId === 'network_http')).toBe(true);
+    expect(issues.some(i => i.code === 'ROUNDTRIP_SERIALIZATION' && i.specId === 'network_http::network_http')).toBe(true);
     expect(issues[0].severity).toBe('error');
   });
 });
 
-describe('standalone child: cross-tree refs warn instead of erroring like typos', () => {
+describe('standalone child: cross-tree refs are judged by the owner alone (stage 4)', () => {
   let rootDir: string;
   afterEach(() => {
     setProjectRoot(null);
@@ -325,11 +329,11 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('an unresolvable super:: target raises CROSS_TREE_REF_UNRESOLVED (warning), not INVALID_TARGET_COMPONENT_REFERENCE', async () => {
+  it('an unresolvable super:: target is EXTERNAL_CHECK_UNAVAILABLE (warning, never a pass), not INVALID_TARGET_COMPONENT_REFERENCE', async () => {
     // Simulate opening a chained child standalone: its file carries a
     // super:: ref whose target lives in the (absent) parent project.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('transpiler'));
+    saveSpec('subsystem', subsystem('transpiler'));
     saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['super::crates-portal'] }));
     saveInterfaceSpec(iface('itranspiler-orch', 'transpiler-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -346,25 +350,28 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
     } as ImplementationSpec);
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
-    const res = validateSddTree();
-    // Two warnings: the call step (contracts rule) AND the dependsOn edge
-    // (stereotype-deps) — both honest, neither a typo-grade error.
-    const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
-    expect(crossTree).toHaveLength(2);
-    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
-    expect(crossTree.map(i => i.message).join('\n')).toMatch(/validate from the parent project/);
+    const { validateProject } = await import('../../src/core/validation.js');
+    const res = validateProject();
+    // Two warnings from project-boundaries, the one judge: the dependsOn edge
+    // and the call step — a deprecated form naming no alias has nothing to be
+    // judged against, which is never a pass and never a typo-grade error.
+    const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
+    expect(unavailable.map(i => i.specId).sort()).toEqual(['transpiler-impl', 'transpiler-orch']);
+    expect(unavailable.every(i => i.severity === 'warning' && i.resolution?.outcome === 'unavailable')).toBe(true);
+    expect(unavailable.map(i => i.message).join('\n')).toMatch(/doctor --fix/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 
-  it('validating a chained subproject STANDALONE replaces uncovered parent-tree refs with UNVERIFIED_EXTERNAL_REF + a clear notice (does not explode)', async () => {
-    // Parent project mounts `kid` as a chained subproject; kid references a
-    // component that lives in the parent (absent when kid is validated alone).
+  it('location-independent: a chained child gets the same verdict with its parent on disk — a bare parent id is its own typo', async () => {
+    // Parent project mounts `kid` as a chained subproject; kid depends on a
+    // parent component BY BARE ID. From inside a mount a bare id qualifies to
+    // `kid::parent-portal`, which does not exist — a typo-grade error, and the
+    // parent says so.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('parent-sub'));
+    saveSpec('subsystem', subsystem('parent-sub'));
     saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
-    saveSubsystemSpec(subsystem('kid', { projectPath: 'kid' }));
+    saveSpec('subsystem', subsystem('kid', { projectPath: 'kid' }));
 
     const kidDir = path.join(rootDir, 'kid');
     fs.mkdirSync(path.join(kidDir, '.wai', 'specs'), { recursive: true });
@@ -373,60 +380,43 @@ describe('standalone child: cross-tree refs warn instead of erroring like typos'
       schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
-    kid.saveSubsystemSpec(subsystem('k-core', { parentSystem: 'kid-system' }));
+    kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
     // A dependency on a component that only exists in the parent tree.
     kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent-portal'] }));
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
+    const { validateProject } = await import('../../src/core/validation.js');
 
-    // From the PARENT root the whole tree resolves — no cross-tree noise.
+    // From the PARENT root: the kid's finding is the kid's own gate's.
     setProjectRoot(rootDir);
     invalidateSpecCache();
-    const fromParent = validateSddTree();
-    expect(fromParent.issues.filter(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT')).toHaveLength(0);
+    const fromParent = validateProject();
+    expect(fromParent.issues.filter(i => i.specId?.startsWith('kid::'))).toEqual([]);
 
-    // From KID's own root the parent ref cannot resolve — no vendored surface
-    // snapshot covers it, so the finding is REPLACED by one precise
-    // UNVERIFIED_EXTERNAL_REF warning (the old behavior downgraded the original
-    // code in place) with one notice, so `validate` passes instead of exploding.
+    // From KID's own root: a bare id naming nothing of the kid is its own typo,
+    // judged without walking up — the same verdict with or without the parent.
     setProjectRoot(kidDir);
     invalidateSpecCache();
-    const fromKid = validateSddTree();
-    expect(fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
-    const notice = fromKid.issues.find(i => i.code === 'CHAINED_SUBPROJECT_CONTEXT');
-    expect(notice).toBeDefined();
-    expect(notice!.message).toMatch(/chained subproject/);
-    expect(notice!.message).toMatch(/1 cross-tree reference/);
-    expect(notice!.crossTreeContext).toBe(true);
-    // The replacement warning names the original finding, the unresolvable
-    // reference, and the remedy — and is marked cross-tree (so --ci waives it).
-    const unverified = fromKid.issues.filter(i => i.code === 'UNVERIFIED_EXTERNAL_REF');
-    expect(unverified).toHaveLength(1);
-    expect(unverified[0].severity).toBe('warning');
-    expect(unverified[0].crossTreeContext).toBe(true);
-    expect(unverified[0].message).toContain('INVALID_DEPENDENCY_REFERENCE');
-    expect(unverified[0].message).toContain('parent-portal');
-    expect(unverified[0].message).toMatch(/re-lock the parent/);
-    expect(unverified[0].message).toMatch(/surface externals/);
-    expect(fromKid.valid).toBe(true);
+    const fromKid = validateProject();
+    const invalid = fromKid.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE');
+    expect(invalid.map(i => [i.specId, i.severity])).toEqual([['k-orch', 'error']]);
+    expect(fromKid.valid).toBe(false);
   });
 
-  it('a root-name-qualified target (waffler_core::x form, authored from a parent) warns, not errors, from the child root', async () => {
-    // The exact field report: refs stored as `<parent-subsystem>::x` (NOT super::)
-    // because they were authored from the parent root. From the child dir the
-    // leading segment names no local subsystem — an honest cross-tree edge, not a
-    // typo, so it must warn (CROSS_TREE_REF_UNRESOLVED), not flood hard errors.
+  it('a root-name-qualified target (waffler_core::x form, authored from a parent) is EXTERNAL_UNDECLARED from the child root', async () => {
+    // Refs stored as `<parent-subsystem>::x` (NOT super::) because they were
+    // authored from the parent root. From the child dir the first segment names
+    // none of its subsystems, aliases or foreign providers: an undeclared
+    // dependency on another project (stage 4), reported once — never a typo flood.
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('transpiler'));
+    saveSpec('subsystem', subsystem('transpiler'));
     saveComponentSpec(component('transpiler-orch', 'transpiler', { dependsOn: ['waffler_core::blueprints-portal'] }));
     invalidateSpecCache();
 
-    const { validateSddTree } = await import('../../src/core/validation.js');
-    const res = validateSddTree();
-    const crossTree = res.issues.filter(i => i.code === 'CROSS_TREE_REF_UNRESOLVED');
-    expect(crossTree.length).toBeGreaterThanOrEqual(1);
-    expect(crossTree.every(i => i.severity === 'warning')).toBe(true);
+    const { validateProject } = await import('../../src/core/validation.js');
+    const res = validateProject();
+    const undeclared = res.issues.filter(i => i.code === 'EXTERNAL_UNDECLARED');
+    expect(undeclared.map(i => [i.specId, i.severity, i.resolution?.outcome])).toEqual([['transpiler-orch', 'error', 'forbidden']]);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
 });
@@ -441,7 +431,7 @@ describe('keyed merges for dispatch and lifecycle arrays', () => {
 
   it('a one-entry dispatch delta upserts by capability instead of erasing the table', () => {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a', {
+    saveSpec('subsystem', subsystem('sub-a', {
       lifecycle: [
         { phase: 'init', component: 'boot-orch', method: 'hydrate' },
         { phase: 'shutdown', component: 'boot-orch', method: 'drain' },
@@ -526,7 +516,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   function buildFixture(): void {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a'));
+    saveSpec('subsystem', subsystem('sub-a'));
     saveComponentSpec(component('orch-a', 'sub-a'));
     saveInterfaceSpec(iface('iorch-a', 'orch-a', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -548,7 +538,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('default insert relocates incoming jumps past the new step and returns a notice', () => {
     buildFixture();
-    const notices = updateSpec('implementation', 'impl-orch-a', {
+    const { notices } = updateSpec('implementation', 'impl-orch-a', {
       methods: [{
         name: 'run',
         narrative: [{ stepNumber: 3, action: 'insert', description: 'inserted cleanup', type: 'local' }],
@@ -567,7 +557,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('captureJumps never captures a loop endStep — the region grows to keep its original last step', () => {
     rootDir = makeRoot();
-    saveSubsystemSpec(subsystem('sub-a'));
+    saveSpec('subsystem', subsystem('sub-a'));
     saveComponentSpec(component('loop-orch', 'sub-a'));
     saveInterfaceSpec(iface('iloop-orch', 'loop-orch', [
       { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
@@ -603,7 +593,7 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
 
   it('captureJumps: true retargets incoming jumps onto the inserted step, no notice', () => {
     buildFixture();
-    const notices = updateSpec('implementation', 'impl-orch-a', {
+    const { notices } = updateSpec('implementation', 'impl-orch-a', {
       methods: [{
         name: 'run',
         narrative: [{ stepNumber: 3, action: 'insert', description: 'inserted cleanup', type: 'local', captureJumps: true }],
@@ -617,5 +607,273 @@ describe('narrative insert vs jump targets (captureJumps)', () => {
     expect(run.narrative.find(s => s.type === 'branch')!.onFalseStep).toBe(3);
     // captureJumps is merge instruction, not narrative content.
     expect((run.narrative.find(s => s.description === 'inserted cleanup') as any).captureJumps).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// File paths across the id space: a chained child's implementation file paths
+// are relative to the CHILD root. A write through the parent re-expresses a
+// parent-relative path that lands inside the child and leaves every other path
+// verbatim — so the child's own gate checks the file the author named, and
+// load → save stays a fixpoint.
+// ---------------------------------------------------------------------------
+
+describe("a chained child's implementation file paths are relative to its own root", () => {
+  let rootDir: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+    rootDir = undefined;
+  });
+
+  function mountKid(): string {
+    rootDir = makeRoot();
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const kid = workspaceFor(kidDir);
+    kid.save('subsystem', subsystem('kid', { parentSystem: 'kid' }));
+    kid.saveComponentSpec(component('kid-orch', 'kid'));
+    kid.saveInterfaceSpec(iface('ikid-orch', 'kid-orch', [
+      { name: 'run', description: 'runs', signature: 'run(): void', returns: 'void' },
+    ]));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    return kidDir;
+  }
+
+  const kidImpl = (over: Partial<ImplementationSpec> = {}): ImplementationSpec => ({
+    id: 'kid::kid-impl', name: 'impl', description: 'd', contract: 'kid::ikid-orch',
+    methods: [{ name: 'run', narrative: [{ stepNumber: 1, description: 'run it', type: 'local' }] }],
+    status: 'draft', createdAt: now, updatedAt: now, ...over,
+  } as ImplementationSpec);
+
+  /** The implementation as the CHILD reads it from its own root. */
+  const fromKid = (kidDir: string): ImplementationSpec | null => {
+    invalidateSpecCache();
+    return workspaceFor(kidDir).loadImplementationSpec('kid-impl');
+  };
+
+  it('a path written through the parent, relative to the parent root, is stored relative to the child root', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/run.ts', simPath: 'packages/kid/sim/run.sim.ts' }));
+
+    const own = fromKid(kidDir);
+    expect(own?.sourcePath).toBe('src/run.ts');
+    expect(own?.simPath).toBe('sim/run.sim.ts');
+    // The parent reads the same child-relative path back.
+    setProjectRoot(rootDir!);
+    expect(loadImplementationSpec('kid::kid-impl')?.sourcePath).toBe('src/run.ts');
+  });
+
+  it('load → save through the parent keeps a child-relative path as it is', () => {
+    const kidDir = mountKid();
+    workspaceFor(kidDir).saveImplementationSpec(kidImpl({ id: 'kid-impl', contract: 'ikid-orch', sourcePath: 'src/run.ts' }));
+    invalidateSpecCache();
+    setProjectRoot(rootDir!);
+
+    const loaded = loadImplementationSpec('kid::kid-impl')!;
+    expect(loaded.sourcePath).toBe('src/run.ts');
+    saveImplementationSpec(loaded);
+    saveImplementationSpec(loadImplementationSpec('kid::kid-impl')!);
+
+    expect(fromKid(kidDir)?.sourcePath).toBe('src/run.ts');
+  });
+
+  it('a path that does not land inside the child is taken as child-relative and kept verbatim', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({ sourcePath: 'src/elsewhere.ts' }));
+    expect(fromKid(kidDir)?.sourcePath).toBe('src/elsewhere.ts');
+  });
+
+  // A method may name its own source file; that path follows exactly the rules
+  // of the implementation's own sourcePath.
+  const runStep = [{ stepNumber: 1, description: 'run it', type: 'local' as const }];
+
+  it("each method's own sourcePath is re-expressed against the child root exactly like the implementation's", () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({
+      sourcePath: 'packages/kid/src/run.ts',
+      methods: [{ name: 'run', sourcePath: 'packages/kid/src/commands/run.ts', narrative: runStep }],
+    }));
+
+    const own = fromKid(kidDir);
+    expect(own?.sourcePath).toBe('src/run.ts');
+    expect(own?.methods[0].sourcePath).toBe('src/commands/run.ts');
+  });
+
+  it('a method sourcePath that does not land inside the child is kept verbatim', () => {
+    const kidDir = mountKid();
+    saveImplementationSpec(kidImpl({
+      methods: [{ name: 'run', sourcePath: 'src/commands/elsewhere.ts', narrative: runStep }],
+    }));
+    expect(fromKid(kidDir)?.methods[0].sourcePath).toBe('src/commands/elsewhere.ts');
+  });
+
+  it("load normalizes a method's sourcePath like the implementation's, and load → save through the parent is a fixpoint", () => {
+    const kidDir = mountKid();
+    workspaceFor(kidDir).saveImplementationSpec(kidImpl({
+      id: 'kid-impl', contract: 'ikid-orch', sourcePath: './src/run.ts',
+      methods: [{ name: 'run', sourcePath: './src/commands/run.ts', narrative: runStep }],
+    }));
+    invalidateSpecCache();
+    setProjectRoot(rootDir!);
+
+    const loaded = loadImplementationSpec('kid::kid-impl')!;
+    expect(loaded.sourcePath).toBe('src/run.ts');
+    expect(loaded.methods[0].sourcePath).toBe('src/commands/run.ts');
+
+    saveImplementationSpec(loaded);
+    invalidateSpecCache();
+    const again = loadImplementationSpec('kid::kid-impl')!;
+    expect(again.methods[0].sourcePath).toBe('src/commands/run.ts');
+    saveImplementationSpec(again);
+
+    expect(fromKid(kidDir)?.methods[0].sourcePath).toBe('src/commands/run.ts');
+  });
+
+  it("the child's own gate checks the file the parent's author named", async () => {
+    const { validateProject } = await import('../../src/core/validation.js');
+    const kidDir = mountKid();
+    fs.mkdirSync(path.join(kidDir, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(kidDir, 'src', 'run.ts'), 'export function run(): void {}\n');
+    const missingFromKid = (): string[] => {
+      invalidateSpecCache();
+      setProjectRoot(kidDir);
+      return validateProject().issues
+        .filter((i) => i.code === 'MISSING_SOURCE_FILE' || i.code === 'SOURCE_FILE_PLANNED' || i.code === 'SOURCE_PATH_ESCAPES_ROOT')
+        .map((i) => `${i.code} @${i.specId}`);
+    };
+
+    // Named from the parent root, it resolves to the real file from the child's.
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/run.ts' }));
+    expect(missingFromKid()).toEqual([]);
+
+    // The control: a file that does not exist is still reported from the child
+    // (planned, since nothing the implementation names exists yet).
+    setProjectRoot(rootDir!);
+    saveImplementationSpec(kidImpl({ sourcePath: 'packages/kid/src/missing.ts' }));
+    expect(missingFromKid()).toEqual(['SOURCE_FILE_PLANNED @kid-impl']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A member's own subsystem named after its alias is keyed under the member's
+// project id at every depth (`extra::extra`), never merged with the mount — and
+// a grandchild loads, validates and round-trips exactly as a first-level
+// member does (stage 3).
+// ---------------------------------------------------------------------------
+
+describe('a member\'s own subsystem named like its alias, at every depth', () => {
+  let rootDir: string | undefined;
+
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+    rootDir = undefined;
+  });
+
+  /** top → kid (flat) → extra (flat, mounted inside kid). */
+  function nestedFlatFamily(): { extraDir: string } {
+    rootDir = makeRoot();
+    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    const kidDir = path.join(rootDir, 'packages', 'kid');
+    const kid = workspaceFor(kidDir);
+    kid.save('subsystem', subsystem('kid', { parentSystem: 'kid' }));
+    kid.saveComponentSpec(component('kid-comp', 'kid'));
+    invalidateSpecCache();
+
+    setProjectRoot(kidDir);
+    writeLegacyMount(subsystem('extra', { parentSystem: 'kid', projectPath: 'packages/extra' }), 'extra');
+    const extraDir = path.join(kidDir, 'packages', 'extra');
+    const extra = workspaceFor(extraDir);
+    extra.save('subsystem', subsystem('extra', { parentSystem: 'extra' }));
+    extra.saveComponentSpec(component('extra-comp', 'extra'));
+    invalidateSpecCache();
+    setProjectRoot(rootDir);
+    return { extraDir };
+  }
+
+  it('loads the grandchild\'s own subsystem under its key, with its components pointing at it', () => {
+    nestedFlatFamily();
+
+    const index = workspaceFor(rootDir!).scanAll();
+    const extras = index.subsystems.filter((s) => s.id.startsWith('extra'));
+    expect(extras.map((s) => [s.id, s.projectPath])).toEqual([['extra::extra', undefined]]);
+    expect(index.components.find((c) => c.id === 'extra::extra-comp')?.subsystem).toBe('extra::extra');
+  });
+
+  it('validates with no dangling subsystem reference and round-trips the member through the top root', async () => {
+    const { extraDir } = nestedFlatFamily();
+    const { validateProject } = await import('../../src/core/validation.js');
+
+    const res = validateProject();
+    expect(res.issues.filter((i) => i.code === 'INVALID_SUBSYSTEM_REFERENCE').map((i) => i.specId)).toEqual([]);
+
+    saveComponentSpec(loadComponentSpec('extra::extra-comp')!);
+    invalidateSpecCache();
+    expect(workspaceFor(extraDir).loadComponentSpec('extra-comp')?.subsystem).toBe('extra');
+  });
+});
+
+describe('public_interface.consumers are subsystem references in a chained subproject', () => {
+  let rootDir: string;
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
+  });
+
+  /** A child project mounted as "pharmacy" whose dispensing surface is published to its sibling "stock". */
+  function buildFixture(): string {
+    rootDir = makeRoot();
+    writeLegacyMount(subsystem('pharmacy', { projectPath: 'services/pharmacy' }), 'pharmacy');
+    const childDir = path.join(rootDir, 'services', 'pharmacy');
+    const child = workspaceFor(childDir);
+    child.save('subsystem', subsystem('stock', { parentSystem: 'pharmacy' }));
+    child.save('subsystem', subsystem('dispensing', {
+      parentSystem: 'pharmacy',
+      publicInterfaces: [{ type: 'Custom', details: 'dispense orders', component: 'dispensing-portal', consumers: ['stock'] }],
+    }));
+    child.saveComponentSpec(component('dispensing-portal', 'dispensing', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    invalidateSpecCache();
+    return childDir;
+  }
+
+  const storedConsumers = (childDir: string): string => fs.readFileSync(
+    path.join(childDir, '.wai', 'specs', 'dispensing', '.index.yaml'), 'utf8');
+
+  it('qualifies each consumers id into the subproject namespace on load, like the entry component', () => {
+    buildFixture();
+    const dispensing = loadSubsystemSpec('pharmacy::dispensing');
+    expect(dispensing?.publicInterfaces).toEqual([
+      { type: 'Custom', details: 'dispense orders', component: 'pharmacy::dispensing-portal', consumers: ['pharmacy::stock'] },
+    ]);
+  });
+
+  it('resolves them from the parent: the sibling is a subsystem of the tree, not an unknown consumer', () => {
+    buildFixture();
+    const codes = validateProject({ recursive: true }).issues.map((i) => i.code);
+    expect(codes).not.toContain('PUBLIC_INTERFACE_UNKNOWN_CONSUMER');
+  });
+
+  it('writes them back relative to the subproject, so load → save → load is a fixpoint', () => {
+    const childDir = buildFixture();
+    saveSpec('subsystem', loadSubsystemSpec('pharmacy::dispensing')!);
+    invalidateSpecCache();
+    expect(storedConsumers(childDir)).toMatch(/consumers:\s*\n\s*- stock/);
+    expect(loadSubsystemSpec('pharmacy::dispensing')?.publicInterfaces[0].consumers).toEqual(['pharmacy::stock']);
+  });
+
+  it('qualifies a delta\'s consumers with local names, exactly as the loader would', () => {
+    const childDir = buildFixture();
+    updateSpec('subsystem', 'pharmacy::dispensing', {
+      publicInterfaces: [{ component: 'dispensing-portal', consumers: ['stock', 'dispensing'] }],
+    });
+    invalidateSpecCache();
+    expect(loadSubsystemSpec('pharmacy::dispensing')?.publicInterfaces[0].consumers).toEqual(['pharmacy::stock', 'pharmacy::dispensing']);
+    expect(storedConsumers(childDir)).toMatch(/- stock\s*\n\s*- dispensing/);
   });
 });

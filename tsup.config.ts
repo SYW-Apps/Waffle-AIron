@@ -10,6 +10,9 @@ export default defineConfig({
   outDir: 'dist',
   clean: true,
   sourcemap: true,
+  // TypeScript declarations for the LIBRARY entry only (package.json `types`):
+  // the CLI entry is an executable, never imported. One rolled-up dist/index.d.ts.
+  dts: { entry: { index: 'src/index.ts' } },
   splitting: false,
   bundle: true,
   // swagger-ui-dist ships ~1.5 MB of prebuilt browser assets we read from disk at

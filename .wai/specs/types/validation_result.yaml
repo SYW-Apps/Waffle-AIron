@@ -1,14 +1,100 @@
 kind: value-object
 id: validation_result
 name: ValidationResult
-description: Aggregate outcome of a validation run over the spec tree or registry
+description: >-
+  Aggregate outcome of a validation run: the owner's gate over one project (validateProject), or a
+  family run (validateFamily) that carries every selected project's own verdict verbatim beside the
+  composition and family findings. Nothing in it depends on where the run was started:
+  resolve-through-parent and its resolvedThrough marker are gone (stage 4).
 fields:
   - name: valid
-    type: boolean
-    description: True when no error-severity issues were found
+    type: bool
+    description: >-
+      True when no error-severity issues were found; warnings and notices never make a result
+      invalid
+    optional: false
   - name: issues
-    type: ValidationIssue[]
-    description: All findings (errors and warnings) collected during the run
-methods: []
+    type: list<ValidationIssue>
+    description: All findings (errors, warnings and notices) collected during the run
+    optional: false
+  - name: hint
+    type: string
+    description: >-
+      One line, never a finding. The owner's gate: present when the project declares externals,
+      saying that `validate --family` composes them against their live producers — the gate itself
+      judged them against the pins alone. A family run: present when externals were left out because
+      their producers lie outside the run's reach, counting them and naming `validate --family` from
+      the project that declares them.
+    optional: true
+  - name: projects
+    type: list<ProjectVerdict>
+    description: >-
+      A family run only: one line per selected project (the root first, then its members in scan
+      order) with its own gate's totals. Absent on the owner's gate.
+    optional: true
+  - name: analysis
+    type: CodeAnalysis
+    description: >-
+      The as-complete run only (validateAsComplete): the code-conformance half of this result
+      summarized with the analyzer that produced it — its identity, the codes code-judging rules
+      declare, and the counts per severity among `issues`. Absent on the owner's gate and on a
+      family run.
+    optional: true
+  - name: composed
+    type: list<string>
+    description: >-
+      A family run only: the aliases of the bound project's externals the run composed as part of
+      its gate (their producers within the run's reach). The advisory live comparison
+      (validator_portal.adviseExternals) is handed them, so they get no second word. Absent on the
+      owner's gate, and when nothing was composed.
+    optional: true
+  - name: codeReading
+    type: string
+    description: >-
+      One line, never a finding: how the owner's gate read the code — the weakest analysis grade any
+      file was read at (exact, pattern, generic) and, at exact grade, the compiler and its version,
+      the project's own or wairon's copy; or that no source file the design names exists yet.
+      `wairon validate` prints it, and sdd_validate_tree carries the same sentence in its hint.
+      Absent on a family run's members.
+    optional: true
+  - name: codeCompact
+    type: string
+    description: >-
+      The code reading in a few words, per language — its grade and what it did not check — for the
+      closing verdict line: a pass says how much it read
+    optional: true
+methods:
+  - name: changesTo
+    signature: 'changesTo(after: ValidationResult): FindingChanges'
+    returns: FindingChanges
+    description: >-
+      How `after` differs from this result, finding by finding: introduced (only in after), resolved
+      (only here) and regraded (in both, at another severity), each finding identified by code,
+      project key, spec and its message with the severity word removed. Pure over the two results'
+      own issues; it never re-runs anything. The comparison behind a pack impact's dry validate,
+      realized as the free function findingChanges in src/models/pack-impact.ts.
+    sourcePath: src/models/pack-impact.ts
+    symbol: findingChanges
+  - name: designOnly
+    signature: 'designOnly(): ValidationResult'
+    returns: ValidationResult
+    description: >-
+      This result with every issue whose code is one of analysis.codes removed, `valid` recomputed
+      over what remains, and `analysis` kept: the DESIGN half, which is what a lock gates on and
+      certifies. Pure over the result's own fields; a result with no analysis answers itself
+      unchanged. The lock refuses only on the errors this answers, and records its counts as the
+      lock's validationResult.
+    sourcePath: src/models/lock.ts
+  - name: ciBlocking
+    signature: 'ciBlocking(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    description: >-
+      The findings that fail `wairon validate --ci`: every error, and every warning but the
+      draft-related ones --ci waives (the DRAFT_*_WARNING family, and UNUSED_COMPONENT in draft
+      context); notices never count. Pure; the one reading `validate --ci` and the release
+      re-validation share.
+    sourcePath: src/models/lock.ts
+    symbol: ciBlockingIssues
+sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-02T00:00:00.000Z'
+updatedAt: '2026-10-17T15:42:25.296Z'

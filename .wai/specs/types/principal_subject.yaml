@@ -31,5 +31,6 @@ fields:
     description: Verified email address when available.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:22.659Z'
-updatedAt: '2026-07-08T19:34:22.665Z'
+updatedAt: '2026-09-19T11:07:13.601Z'

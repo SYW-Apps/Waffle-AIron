@@ -5,56 +5,70 @@ description: >-
   Runtime exposure posture for a hosted Wairon instance. It controls which control-plane surfaces
   are bound over HTTP, which are local/CLI-only, and whether browser UI, identity, landscape, or
   policy surfaces are enabled. The secure default posture disables every HTTP control-plane surface
-  (admin API, admin UI, identity, landscape, project-policy, and operations); cliControlEnabled
-  defaults to true and requireTls defaults to true, so the data plane is the only surface exposed by
-  default.
+  (admin API, admin UI, the web UI, identity, landscape, project-policy, and operations);
+  cliControlEnabled defaults to true and requireTls defaults to true, so the data plane is the only
+  surface exposed by default.
 fields:
   - name: adminApiMode
-    type: string
-    description: 'Admin API exposure mode: "disabled", "local_only", "private_network", or "public".'
+    type: AdminApiMode
+    description: Admin API exposure mode.
     optional: false
   - name: adminUiEnabled
-    type: boolean
+    type: bool
     description: Whether the optional browser admin UI is served.
     optional: false
   - name: identityApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft identity/audit control-plane API is served over HTTP.
     optional: false
   - name: landscapeApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft landscape control-plane API is served over HTTP.
     optional: false
   - name: projectPolicyApiEnabled
-    type: boolean
+    type: bool
     description: Whether the draft project policy control-plane API is served over HTTP.
     optional: false
   - name: cliControlEnabled
-    type: boolean
+    type: bool
     description: >-
       Whether local CLI/container execution may use the same control workflows even when HTTP admin
       APIs are disabled.
     optional: false
   - name: requireTls
-    type: boolean
+    type: bool
     description: >-
       Whether externally exposed HTTP control-plane surfaces must be served behind TLS or trusted
       TLS termination.
     optional: false
   - name: allowedOrigins
-    type: string[]
+    type: list<string>
     description: Optional allowed browser origins for UI/control-plane requests.
     optional: true
   - name: allowedNetworks
-    type: string[]
+    type: list<string>
     description: Optional CIDR/network labels allowed to reach private-network control-plane surfaces.
     optional: true
   - name: operationsApiEnabled
-    type: boolean
+    type: bool
     description: >-
       Whether the operations control-plane API for read-only health, usage, and advisory quota
       reporting is served over HTTP.
     optional: false
-methods: []
+  - name: webUiEnabled
+    type: bool
+    description: 'Whether the browser web UI (canvas, specs, admin) is served. Opt-in: default false.'
+    optional: false
+methods:
+  - name: effective
+    signature: 'effective(override?: HostExposurePolicy | null): HostExposurePolicy'
+    returns: HostExposurePolicy
+    description: >-
+      The effective exposure posture for a partial override: each flag the override sets wins, and
+      every unset flag keeps the compatible default (the admin API local-only, the admin UI and
+      control-plane APIs on, TLS required, the web UI off).
+    sourcePath: src/server/policy.ts
+    symbol: effectiveExposure
+sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:28.871Z'
-updatedAt: '2026-07-10T11:21:07.205Z'
+updatedAt: '2026-10-04T23:53:34.408Z'

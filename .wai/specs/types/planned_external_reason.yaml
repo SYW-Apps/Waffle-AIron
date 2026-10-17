@@ -1,0 +1,17 @@
+kind: enum
+id: planned_external_reason
+name: PlannedExternalReason
+description: Why a migration plans an externals declaration in a consumer.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/chaining-migration.ts
+values:
+  - name: reference
+    description: The consumer's references cross into the producer
+  - name: legacy-pin
+    description: The consumer held a stage-1 family pin of its parent, which this declaration replaces
+  - name: positional
+    description: The consumer's bare references reached the producer only by position, and now import from it
+createdAt: '2026-10-04T23:24:46.130Z'
+updatedAt: '2026-10-04T23:24:46.585Z'

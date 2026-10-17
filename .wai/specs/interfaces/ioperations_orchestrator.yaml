@@ -14,8 +14,8 @@ methods:
       super-admin sees all), list both server-global pack tiers and read each in-scope project's
       pack/profile references, then assemble a redacted instance health report (diagnostic checks —
       including pack-shadowing and missing-pack-references — plus usage snapshots) via the
-      diagnostics specialist. Read-only; performs no writes and no audit.
-    signature: 'getHealthReport(credential: string, scope: string): InstanceHealthReport'
+      diagnostics component. Read-only; performs no writes and no audit.
+    signature: 'getHealthReport(credential: string, scope?: string): InstanceHealthReport'
     returns: InstanceHealthReport
     params:
       - name: credential
@@ -29,8 +29,8 @@ methods:
       operations:read grant; results are filtered to the caller's scope. Resolve the caller's
       operations:read scope, narrow the hosted project records to the in-scope projects (a
       super-admin sees all), and return redacted resource usage snapshots. Read-only.
-    signature: 'getUsage(credential: string, scope: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'getUsage(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
@@ -45,38 +45,14 @@ methods:
       all), and evaluate them against the advisory ResourceQuotaPolicy (resolved from host config,
       secure default when unset), returning snapshots annotated with observe/warn advisory quota
       messages. Advisory only — never blocks or throttles.
-    signature: 'evaluateQuota(credential: string, scope: string): ResourceUsageSnapshot[]'
-    returns: ResourceUsageSnapshot[]
+    signature: 'evaluateQuota(credential: string, scope?: string): list<ResourceUsageSnapshot>'
+    returns: list<ResourceUsageSnapshot>
     params:
       - name: credential
         type: string
       - name: scope
         type: string
         optional: true
-  - name: getExposurePolicy
-    description: >-
-      Authenticate, require instance-level project:admin, and return the persisted instance exposure
-      policy (webUiEnabled/requireTls posture), substituting the safe default (web UI off) when none
-      has been configured. A read; not audited.
-    signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
-    returns: HostExposurePolicy
-    params:
-      - name: credential
-        type: string
-  - name: setExposurePolicy
-    description: >-
-      Authenticate, require instance-level project:admin, replace the instance exposure policy
-      wholesale through the policy repository, and audit at security level (the exposure posture
-      gates the whole web surface).
-    signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
-    returns: HostExposurePolicy
-    params:
-      - name: credential
-        type: string
-      - name: policy
-        type: HostExposurePolicy
-    guarantees:
-      - atomic
 status: complete
 createdAt: '2026-07-09T09:10:20.273Z'
-updatedAt: '2026-07-16T15:29:11.485Z'
+updatedAt: '2026-10-04T10:19:07.587Z'

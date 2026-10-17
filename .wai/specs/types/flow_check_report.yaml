@@ -1,0 +1,49 @@
+kind: value-object
+id: flow_check_report
+name: FlowCheckReport
+description: >-
+  Observed live flows compared with the allowed matrix: what runs that the design does not have,
+  what the design allows that never ran, and calls to verbs no contract declares.
+subsystem: sdd_network
+fields:
+  - name: unexpected
+    type: list<ObservedFlow>
+    description: >-
+      Observed, but no flow of the matrix allows it: an undocumented dependency, a misconfiguration
+      or an intrusion
+    optional: false
+  - name: unexercised
+    type: list<NetworkFlow>
+    description: >-
+      Allowed, but never observed in the window: a dead dependency, a stale design, or a rule to
+      tighten
+    optional: false
+  - name: unknownVerbs
+    type: list<ObservedFlow>
+    description: >-
+      Observed at L7 on an allowed workload pair, but no verb of the called Portal has that method
+      and path
+    optional: false
+  - name: disallowed
+    type: list<ObservedFlow>
+    description: >-
+      Observed on a verb the design declares (its method and path match one), but no flow allows it
+      from this source, or only a flow the gate refuses: a boundary violation, not a typo in the
+      export
+    optional: false
+  - name: gateFindings
+    type: list<string>
+    description: >-
+      The gate findings over the reach model the check was judged against, each as `CODE (severity):
+      message`; a flow an error sits on allowed nothing
+    optional: false
+  - name: notes
+    type: list<string>
+    description: >-
+      One line per observed or bindings name that resolved only through a project's former name
+      (previousIds): the flow was matched, and the name should be renamed
+    optional: true
+methods: []
+sourcePath: src/network/types.ts
+createdAt: '2026-10-06T13:09:49.170Z'
+updatedAt: '2026-10-07T06:19:26.250Z'

@@ -9,7 +9,14 @@ import * as fs from 'fs';
 // Created on first write; all fields are optional.
 // ---------------------------------------------------------------------------
 
-export type UpdateChannel = 'stable' | 'beta' | 'preview';
+export type UpdateChannel = 'stable' | 'beta' | 'preview' | 'dev';
+
+/** Every channel, narrowest first — the order `wairon update --channel` accepts. */
+export const UPDATE_CHANNELS: UpdateChannel[] = ['stable', 'beta', 'preview', 'dev'];
+
+export function isUpdateChannel(value: string): value is UpdateChannel {
+  return (UPDATE_CHANNELS as string[]).includes(value);
+}
 
 export interface UserConfig {
   /** Which release channel to track for updates. Default: 'stable' */
@@ -21,17 +28,6 @@ export interface UserConfig {
    * via npm, the bin entries in package.json are always registered.
    */
   disabledAliases?: string[];
-  /**
-   * Absolute path to the directory where wairon binaries are installed.
-   * Written by the install script and used by `wairon aliases` to know
-   * where to create/remove symlinks or .cmd wrappers.
-   */
-  installDir?: string;
-  /**
-   * The active profile id to use when no per-project profile is set.
-   * Profiles are defined in ~/.wairon/profiles.json.
-   */
-  activeProfile?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.wairon');
@@ -62,35 +58,19 @@ export function setChannel(channel: UpdateChannel): void {
 }
 
 export function getChannel(): UpdateChannel {
-  return loadUserConfig().channel ?? 'stable';
+  // A hand-edited or future-version config can carry a channel this build does
+  // not know. Fall back to the narrowest channel rather than letting an
+  // unrecognized value widen what a stable install is willing to install.
+  const channel = loadUserConfig().channel;
+  return channel && isUpdateChannel(channel) ? channel : 'stable';
 }
 
 export function getDisabledAliases(): string[] {
   return loadUserConfig().disabledAliases ?? [];
 }
 
-export function setDisabledAliases(disabled: string[]): void {
+export function setDisabledAliases(names: string[]): void {
   const config = loadUserConfig();
-  config.disabledAliases = disabled;
-  saveUserConfig(config);
-}
-
-export function getInstallDir(): string | undefined {
-  return loadUserConfig().installDir;
-}
-
-export function setInstallDir(dir: string): void {
-  const config = loadUserConfig();
-  config.installDir = dir;
-  saveUserConfig(config);
-}
-
-export function getActiveProfileId(): string | undefined {
-  return loadUserConfig().activeProfile;
-}
-
-export function setActiveProfileId(id: string | undefined): void {
-  const config = loadUserConfig();
-  config.activeProfile = id;
+  config.disabledAliases = names;
   saveUserConfig(config);
 }

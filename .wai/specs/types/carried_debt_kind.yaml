@@ -1,0 +1,18 @@
+kind: enum
+id: carried_debt_kind
+name: CarriedDebtKind
+description: >-
+  Why a reason group of the conformance debt register carries its findings. drift and undecided are
+  owed; unreadable is a limit to live with.
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+values:
+  - name: drift
+    description: The spec and the code genuinely disagree, and an author fixes one of them
+  - name: undecided
+    description: The finding is right and the fix waits on a modelling decision nobody has taken
+  - name: unreadable
+    description: The analysis cannot follow the shape the code is written in, so nothing in the tree is wrong
+createdAt: '2026-10-04T23:11:23.528Z'
+updatedAt: '2026-10-04T23:11:23.963Z'

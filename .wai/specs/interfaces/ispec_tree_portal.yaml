@@ -1,0 +1,502 @@
+id: ispec_tree_portal
+name: Core Portal Interface
+description: Inbound Portal contract for the core subsystem, exposing services to client adapters.
+component: spec_tree_portal
+methods:
+  - name: loadSystemSpec
+    description: Loads the system spec
+    signature: 'loadSystemSpec(): SystemSpec | null'
+    returns: SystemSpec?
+  - name: loadSubsystemSpecs
+    description: Loads subsystem specs
+    signature: 'loadSubsystemSpecs(): SubsystemSpec[]'
+    returns: list<SubsystemSpec>
+  - name: loadComponentSpecs
+    description: Loads component specs
+    signature: 'loadComponentSpecs(): ComponentSpec[]'
+    returns: list<ComponentSpec>
+  - name: loadInterfaceSpecs
+    description: Loads interface specs
+    signature: 'loadInterfaceSpecs(): InterfaceSpec[]'
+    returns: list<InterfaceSpec>
+  - name: loadImplementationSpecs
+    description: Loads implementation specs
+    signature: 'loadImplementationSpecs(): ImplementationSpec[]'
+    returns: list<ImplementationSpec>
+  - name: loadSubsystemSpec
+    description: Loads a single subsystem spec by id
+    signature: 'loadSubsystemSpec(id: string): SubsystemSpec | null'
+    returns: SubsystemSpec?
+  - name: loadComponentSpec
+    description: Loads a single component spec by id
+    signature: 'loadComponentSpec(id: string): ComponentSpec | null'
+    returns: ComponentSpec?
+  - name: loadInterfaceSpec
+    description: Loads a single interface spec by id
+    signature: 'loadInterfaceSpec(id: string): InterfaceSpec | null'
+    returns: InterfaceSpec?
+  - name: loadImplementationSpec
+    description: Loads a single implementation spec by id
+    signature: 'loadImplementationSpec(id: string): ImplementationSpec | null'
+    returns: ImplementationSpec?
+  - name: renderDiagram
+    description: >-
+      Render the current project's spec tree into the requested diagram format and return the
+      artifact string; the canvas draws the relation health passed in.
+    signature: 'renderDiagram(format: DiagramFormat, relations?: list<ProjectRelations>): string'
+    returns: string
+    params:
+      - name: format
+        type: DiagramFormat
+        description: The format to render
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health for the canvas; omitted, the canvas says it was not checked
+        optional: true
+  - name: loadTypeSpecs
+    description: Loads type specs
+    signature: 'loadTypeSpecs(): TypeSpec[]'
+    returns: list<TypeSpec>
+  - name: dryRunSerializeSpecs
+    description: >-
+      Re-serialize every loaded spec in memory through the exact save-path pipeline (relativization
+      + writer schema, no I/O) and return the refusal issues (ROUNDTRIP_SERIALIZATION). Accepts an
+      optional scope predicate so scoped validation skips out-of-scope specs before serializing.
+    signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
+    returns: list<ValidationIssue>
+  - name: buildProjectGraph
+    description: >-
+      Project the current project's spec tree into a level-filtered WebGraphModel and return it (the
+      live JSON graph the hosting server serves to the web UI).
+    signature: 'buildProjectGraph(level: int): WebGraphModel'
+    returns: WebGraphModel
+    params:
+      - name: level
+        type: int
+  - name: resolveChainingParent
+    description: >-
+      Report the chaining-mount context of the bound root (parent root + mounting subsystem id), or
+      null — including when the bound request may not read above its root. Pure 1:1 forward.
+    signature: 'resolveChainingParent(): ChainingParentRef | null'
+    returns: ChainingParentRef?
+  - name: exportSpecTree
+    description: >-
+      Packs the bound project's whole spec tree (its own .wai plus every chained subproject) into a
+      .waitree archive with provenance
+    signature: 'exportSpecTree(includeDerived?: bool): TreeExportResult'
+    returns: TreeExportResult
+    params:
+      - name: includeDerived
+        type: bool
+        optional: true
+  - name: resolveSubprojectForNamespace
+    description: Resolve a chained mount's namespace to its project root, or null. Pure 1:1 forward.
+    signature: 'resolveSubprojectForNamespace(namespace: string): string?'
+    returns: string?
+    params:
+      - name: namespace
+        type: string
+  - name: listDirectChainedSubprojects
+    description: 'Published read: the direct chained subprojects of a project root, one level deep.'
+    signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
+    returns: list<ChainedSubprojectDir>
+    params:
+      - name: projectRoot
+        type: string
+        description: The project whose own spec tree declares the mounts
+    guarantees:
+      - idempotent
+  - name: consumedContractInputs
+    description: >-
+      Forward to core_orchestrator.consumedContractInputs: the consumed contract inputs a verdict at
+      the bound project can consult — its own root's, never a member's
+    signature: 'consumedContractInputs(): list<string>'
+    returns: list<string>
+    params: []
+  - name: loadTypeSpec
+    description: Read one type specification by id.
+    signature: 'loadTypeSpec(id: string): TypeSpec?'
+    returns: TypeSpec?
+    params:
+      - name: id
+        type: string
+        description: The type's id
+  - name: getStatusReport
+    description: >-
+      Published read: how complete the spec tree is, marked up however the caller asked, and whether
+      it could be reported on at all. Forwarded to the project status.
+    signature: 'getStatusReport(options: StatusOptions, decor: StatusDecor): StatusReport'
+    returns: StatusReport
+    params:
+      - name: options
+        type: StatusOptions
+        description: How much of the tree to cover
+      - name: decor
+        type: StatusDecor
+        description: How to mark up each kind of thing, or nothing for plain text
+    guarantees:
+      - idempotent
+  - name: specPathsInScope
+    description: >-
+      Published read: every spec file path inside a scope, for an approval taken over part of a
+      tree. Forwarded to the spec loader.
+    signature: 'specPathsInScope(scopeSubsystem: string): list<string>'
+    returns: list<string>
+    params:
+      - name: scopeSubsystem
+        type: string
+        description: The subsystem to scope to, or the whole tree when omitted
+    guarantees:
+      - idempotent
+  - name: loadSpec
+    description: >-
+      Load one spec of the named kind by id, or null when none is stored — for a caller that holds
+      the kind as data. Routed through the core orchestrator.
+    signature: >-
+      loadSpec(kind: WritableSpecKind, id: string): (SystemSpec | SubsystemSpec | ComponentSpec |
+      InterfaceSpec | ImplementationSpec | TypeSpec)?
+    returns: (SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec)?
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed); informational for the L0
+  - name: findChainingParent
+    description: >-
+      Published read: the ancestor project that mounts a child root as a chained subsystem, found by
+      walking up from it below an optional ceiling. Unlike resolveChainingParent it answers for any
+      root the caller names and does NOT consult the request's reach, so a caller must gate on its
+      own reach before it calls and pass the root it may not climb above as the ceiling.
+    signature: 'findChainingParent(childRoot: string, ceiling?: string): ChainingParentRef?'
+    returns: ChainingParentRef?
+    params:
+      - name: childRoot
+        type: string
+        description: The root to start the walk from
+      - name: ceiling
+        type: string
+        description: A root the walk never climbs above
+        optional: true
+  - name: scanAllSpecs
+    description: >-
+      Published read: the bound tree's spec index at the given recursion depth — every loaded spec
+      by kind and the file each is stored in. Sets the depth the following spec reads use.
+    signature: 'scanAllSpecs(options?: SpecScanOptions): SpecIndex'
+    returns: SpecIndex
+    params:
+      - name: options
+        type: SpecScanOptions
+        description: How deep into chained subprojects the scan reads
+        optional: true
+  - name: getLoaderIssues
+    description: >-
+      Published read: the loader's diagnostics for the bound tree — the files that failed their
+      schema or could not be parsed while it was read.
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params: []
+  - name: clearLoaderIssues
+    description: >-
+      Forget the loader's diagnostics and drop the cached index, so the next read of the tree starts
+      from disk and records its diagnostics afresh. Writes no spec.
+    signature: 'clearLoaderIssues(): void'
+    returns: void
+    params: []
+  - name: assertContainedProjectPath
+    description: >-
+      Published read: a subsystem's projectPath resolved within a project root, refusing a path that
+      is absolute or escapes the root, and answering the contained absolute child root.
+    signature: 'assertContainedProjectPath(projectRoot: string, projectPath: string): string'
+    returns: string
+    params:
+      - name: projectRoot
+        type: string
+      - name: projectPath
+        type: string
+  - name: buildCanvasDataModel
+    description: >-
+      Published read: the canvas model renderDiagram('canvas') draws, returned as data for a client
+      that mounts the shared renderer itself.
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health to carry on the model; omitted, it carries none
+        optional: true
+  - name: resolveSubsystemExports
+    description: >-
+      One subsystem's resolved export table, with the problems met resolving it as facts — a
+      passthrough read of the spec repository.
+    signature: 'resolveSubsystemExports(subsystemId: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: subsystemId
+        type: string
+        description: The (qualified) id of the subsystem
+    guarantees:
+      - idempotent
+  - name: resolveProjectExports
+    description: >-
+      A project's resolved L0 export table — what other projects may consume — with the problems met
+      resolving it as facts: the bound root's, or a member project's at the given namespace; the one
+      table the surface projector, the validator, the canvas and the hosted landscape read exports
+      from. A passthrough read of the spec repository.
+    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
+    returns: ResolvedExportTable
+    params:
+      - name: project
+        type: string
+        description: The namespace of a member project; omitted for the bound root
+        optional: true
+    guarantees:
+      - idempotent
+  - name: projectFamily
+    description: >-
+      The project graph of the current scan — one node per project root, an owner for every spec id,
+      the cross-project references, the leading-`::` references authors wrote and the family's
+      identity problems. A passthrough read of the spec repository.
+    signature: 'projectFamily(): ProjectFamily'
+    returns: ProjectFamily
+    params: []
+    guarantees:
+      - idempotent
+  - name: exportUsage
+    description: >-
+      One member project's references into another, mapped onto the producer's public names (used)
+      or not (unexported) — bare names bound through the consumer's `use` imports counted exactly
+      like `alias::name` references (export_index.usage). A passthrough read of the spec repository.
+    signature: 'exportUsage(consumer: string, producer: string): ExportUsage'
+    returns: ExportUsage
+    params:
+      - name: consumer
+        type: string
+        description: The consumer's namespace in the family graph
+      - name: producer
+        type: string
+        description: The producer's namespace in the family graph
+    guarantees:
+      - idempotent
+  - name: resolveExternals
+    description: >-
+      The bound project's declared externals — and its referenced project members (a `../`, git or
+      hosted source; stage 8) — each bound to its producer through its family, an explicit
+      source.path, a git source materialized in the fetch cache, or the hosted lookup, with the
+      project's references into each producer by public name. Read-only; the caller's binding is
+      restored before it answers.
+    signature: 'resolveExternals(offline?: bool): list<ExternalBinding>'
+    returns: list<ExternalBinding>
+    params:
+      - name: offline
+        type: bool
+        description: Read no producer over the network (see external_producers.resolveDeclared)
+        optional: true
+  - name: excerptParent
+    description: >-
+      With a part's root bound (stage 8): the excerpt of its parent it can be judged against alone,
+      read with the parent on disk at the part's PartOf.path. Read-only; refused, naming why, when
+      the bound root is not a part or its parent is not there or does not claim it.
+    signature: 'excerptParent(): ParentExcerpt'
+    returns: ParentExcerpt
+    params: []
+  - name: signatureFacts
+    description: >-
+      What the current scan's signature resolution recorded: every signatureFrom met and how it
+      resolved, and every stored signature text its params contradict (spec_loader.signatureFacts).
+      A passthrough read of the spec repository.
+    signature: 'signatureFacts(): SignatureFacts'
+    returns: SignatureFacts
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveSignatures
+    description: >-
+      Resolve the signatures of specs read outside the scan — a part's own specs together with its
+      pinned parent excerpt, whose documents are stored forms — exactly as the scan resolves its own
+      (signature_resolver.resolveTree): each sourced method given its source's params and returns,
+      each params-bearing method its derived text, and the facts beside them. Pure: nothing is read
+      or written.
+    signature: >-
+      resolveSignatures(interfaces: list<InterfaceSpec>, components: list<ComponentSpec>, types:
+      list<TypeSpec>): SignatureResolution
+    returns: SignatureResolution
+    params:
+      - name: interfaces
+        type: list<InterfaceSpec>
+        description: The interfaces to resolve, stored or already resolved
+      - name: components
+        type: list<ComponentSpec>
+        description: The components a method source's head is read against
+      - name: types
+        type: list<TypeSpec>
+        description: The types, the signature types among them
+    guarantees:
+      - idempotent
+  - name: typeSpellingFacts
+    description: >-
+      What the current scan's type canonicalisation recorded: every stored type position that is an
+      alias of its canonical spelling, and every one that is not canonical at all
+      (spec_loader.typeSpellingFacts). A passthrough read of the spec repository.
+    signature: 'typeSpellingFacts(): TypeSpellingFacts'
+    returns: TypeSpellingFacts
+    params: []
+    guarantees:
+      - idempotent
+  - name: retiredReachFacts
+    description: >-
+      What the current scan met in the forms the reachability model retired
+      (spec_loader.retiredReachFacts): the stored portalType, listener mounts, retired invokedBy
+      kinds, authored export types and in-process Custom endpoints the loader read compatibly. A
+      passthrough read of the spec repository; the validator's entry-declarations rule reports the
+      retired kinds from it.
+    signature: 'retiredReachFacts(): list<RetiredReachFact>'
+    returns: list<RetiredReachFact>
+    params: []
+    guarantees:
+      - idempotent
+  - name: resolveExternalCandidate
+    description: >-
+      One external declaration the bound project does not hold yet, bound to its producer exactly as
+      the written one will be (see external_producers.resolveCandidate), so a declaration is checked
+      against its producer before anything is written. Read-only; the caller's binding is restored
+      before it answers.
+    signature: 'resolveExternalCandidate(alias: string, declaration: ExternalDeclaration): ExternalBinding'
+    returns: ExternalBinding
+    params:
+      - name: alias
+        type: string
+        description: The alias the declaration would be written under
+      - name: declaration
+        type: ExternalDeclaration
+        description: The normalized declaration
+  - name: listExternalConsumers
+    description: >-
+      The projects that consume the bound project: the family in reach, and — with search folders —
+      every project root in them declaring it as an external by path or git (`wairon externals
+      consumers [--search <dir>…]`, sdd_list_consumers). Dispatched to the external-producers
+      workflow. Read-only.
+    signature: 'listExternalConsumers(search?: list<string>): list<ExternalConsumer>'
+    returns: list<ExternalConsumer>
+    params:
+      - name: search
+        type: list<string>
+        description: Folders to scan for consumers outside the family
+        optional: true
+  - name: approvedRevision
+    description: >-
+      The bound project's tree at its last committed approval, or at a named git revision,
+      materialized read-only in the fetch cache — the baseline of a public-surface changelog
+      (`wairon surface diff`). Dispatched to the external-producers workflow.
+    signature: 'approvedRevision(against?: string): approved_revision'
+    returns: approved_revision
+    params:
+      - name: against
+        type: string
+        description: A git revision; the last committed approval when omitted
+        optional: true
+    effect: io
+  - name: crossProjectWriteRefusal
+    description: >-
+      Forward to core_orchestrator.crossProjectWriteRefusal: the one sentence refusing a write that
+      lands in another project, or — asked to exist — names a spec the bound project does not hold;
+      or undefined
+    signature: >-
+      crossProjectWriteRefusal(targets: list<SpecRef>, tool: string, call?: string, existing?:
+      bool): string?
+    returns: string?
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: Every spec the write would write, create under or delete
+      - name: tool
+        type: string
+        description: The tool the caller answers for
+      - name: call
+        type: string
+        description: >-
+          The exact call to make at the owning project's root, when the caller can spell it (a
+          rename with its arguments); absent, the tool with the target's kind and local id
+        optional: true
+      - name: existing
+        type: bool
+        description: >-
+          Whether the targets must exist: one the bound project does not hold is refused, as another
+          project's when only a member holds that bare id, else as missing
+        optional: true
+  - name: publishedUsesOf
+    description: >-
+      Forward to core_orchestrator.publishedUsesOf: the public names a removal takes something away
+      from
+    signature: 'publishedUsesOf(removed: list<SpecRef>, methods: list<string>): list<ExportUse>'
+    returns: list<ExportUse>
+    params:
+      - name: removed
+        type: list<SpecRef>
+        description: The specs a deletion removes
+      - name: methods
+        type: list<string>
+        description: The contract methods removed, as <interface>.<method>
+  - name: lockTree
+    description: >-
+      Forward to spec_loader.lockTree: take the cross-process write lock of the bound project's spec
+      tree and re-read the tree, before a write tool runs
+    signature: 'lockTree(): void'
+    returns: void
+  - name: unlockTree
+    description: >-
+      Forward to spec_loader.unlockTree: release the bound project's spec-tree write lock once a
+      write tool has answered
+    signature: 'unlockTree(): void'
+    returns: void
+  - name: readPinnedSpec
+    description: >-
+      Forward to spec_loader.readPinnedSpec: an external's spec read by `alias::name` from the
+      pinned snapshot this project holds, marked read-only and pinned
+    signature: 'readPinnedSpec(kind: string, id: string): PinnedSpecRead?'
+    returns: PinnedSpecRead?
+    params:
+      - name: kind
+        type: string
+        description: component, interface or type
+      - name: id
+        type: string
+        description: The `alias::name` asked for
+  - name: memberRevisions
+    description: >-
+      Each live member of the bound project with its root, the bound project's usage of it and its
+      tree at the approval it is judged against (the one the bound project's lock records, else the
+      member's own last), materialized read-only. Dispatched to the external-producers workflow.
+    signature: 'memberRevisions(recordedIn?: string): list<member_revision>'
+    returns: list<member_revision>
+    params:
+      - name: recordedIn
+        type: string
+        description: >-
+          Another tree of the bound project (its tree at an earlier revision, in the fetch cache)
+          whose lock records the member approvals to read instead of the bound root's — surface
+          diff's baseline reads each member as THAT approval recorded it
+        optional: true
+    effect: io
+  - name: inspectLock
+    description: >-
+      Forward to spec_loader.inspectLock: the bound project's spec-tree write lock as its file
+      stands — holder, age, whether it is live and whether the next write breaks it — or none
+    signature: 'inspectLock(): TreeLockState?'
+    returns: TreeLockState?
+    params: []
+  - name: readProjectSystem
+    description: >-
+      Forward to spec_loader.readProjectSystem: the L0 a system id names (this project's by one of
+      its names, a member's own read from its root by `alias::system`), or why none answers
+    signature: 'readProjectSystem(id: string): ProjectSystemRead'
+    returns: ProjectSystemRead
+    params:
+      - name: id
+        type: string
+        description: 'The system id asked for: a name of this L0, or `alias::name`'
+    effect: read
+status: complete
+createdAt: '2026-06-19T12:00:00Z'
+updatedAt: '2026-10-16T12:01:38.259Z'

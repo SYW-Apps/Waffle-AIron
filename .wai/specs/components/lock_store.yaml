@@ -1,0 +1,23 @@
+id: lock_store
+name: Lock Store
+description: >-
+  The project's commit-scoped lock record boundary (.wai/lock.json): read the current LockRecord or
+  write a new one. A standalone read-through Store — the file is the persistence medium, this
+  component is the state boundary; every read hits the file, so hydration is definitionally covered.
+  (Previously mistyped as a file-backed Registry; retyped per the registry-taxonomy review so the
+  durability machinery sees it.)
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Sanctioned lightweight form: a single commit-scoped lock record with two operations — a
+        Repository (Store + Registry + Index) around one file would be ceremony. Consumers are
+        workflow-layer (core_orchestrator).
+status: complete
+createdAt: '2026-07-04T12:44:48.994Z'
+updatedAt: '2026-09-17T16:34:43.229Z'

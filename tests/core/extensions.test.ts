@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { loadProjectExtensions } from '../../src/core/extensions.js';
 import { listSkillResources } from '../../src/core/skills.js';
@@ -15,7 +15,7 @@ import { resolveAgentTopology } from '../../src/core/agent_resolver.js';
 // EXTENSION_LOAD_ERROR. Loaded from .wai/project.yaml → extensions.packs.
 // ---------------------------------------------------------------------------
 
-function createTempProject(packs: string[] = []) {
+function createTempProject(packs: string[] = [], opts: { useGlobalPacks?: boolean } = {}) {
   invalidateSpecCache();
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-test-'));
 
@@ -28,7 +28,11 @@ function createTempProject(packs: string[] = []) {
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {},
-    ...(packs.length ? { extensions: { packs } } : {}),
+    // Hermetic BY DEFAULT: global packs (~/.wairon/packs) are auto-loaded for
+    // every project on the machine, so a contributor with a pack installed would
+    // otherwise see its profiles, rules, and skills leak into these assertions.
+    // Tests that are ABOUT global loading opt in explicitly.
+    extensions: { useGlobalPacks: opts.useGlobalPacks ?? false, ...(packs.length ? { packs } : {}) },
     createdAt: '2026-07-03T10:00:00Z',
     updatedAt: '2026-07-03T10:00:00Z',
   }));
@@ -88,7 +92,7 @@ describe('extension packs', () => {
     proj.writeSpec('component', 'worker-a', 'schemaVersion: 1.0.0\nid: worker-a\nname: worker-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Actor');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PROFILE_FORBIDDEN_STEREOTYPE' && i.specId === 'worker-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
     } finally { proj.cleanup(); }
@@ -124,7 +128,7 @@ methods:
       - { stepNumber: 4, description: done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flow = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(flow.some(i => i.specId === 'impl-orch-a' && i.message.includes('router'))).toBe(true);
     } finally { proj.cleanup(); }
@@ -135,7 +139,7 @@ methods:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: make-automation');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -155,7 +159,7 @@ methods:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PACK_RULE_FIRED' && i.specId === 'sub-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toBe(false);
     } finally { proj.cleanup(); }
@@ -184,14 +188,14 @@ lint:
       reason: acknowledged for the test`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PACK_RULE_FIRED')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE')).toBe(false);
       expect(res.issues.some(i => i.code === 'UNUSED_LINT_ALLOW')).toBe(false);
     } finally { proj.cleanup(); }
   });
 
-  it('auto-loads global packs (WAIRON_PACKS_DIR) and honors useGlobalPacks: false', () => {
+  it('loads global packs (WAIRON_PACKS_DIR) when enabled and honors useGlobalPacks: false', () => {
     const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-packs-'));
     fs.writeFileSync(path.join(globalDir, 'org.yaml'), `name: org-doctrine
 profiles:
@@ -199,12 +203,12 @@ profiles:
     family: neutral
 `);
     process.env.WAIRON_PACKS_DIR = globalDir;
-    // Project references the globally-provided profile.
-    const proj = createTempProject();
+    // Project references the globally-provided profile, with global loading ON.
+    const proj = createTempProject([], { useGlobalPacks: true });
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
     proj.activate();
     try {
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(false);
     } finally {
       proj.cleanup();
       delete process.env.WAIRON_PACKS_DIR;
@@ -233,11 +237,45 @@ profiles:
     proj2.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
     proj2.activate();
     try {
-      expect(validateSddTree().issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE' && i.specId === 'sub-a')).toBe(true);
     } finally {
       proj2.cleanup();
       delete process.env.WAIRON_PACKS_DIR;
       try { fs.rmSync(globalDir2, { recursive: true, force: true }); } catch { /* win */ }
+    }
+  });
+
+  // Pins the default for an OMITTED `extensions.useGlobalPacks`, now `false`: a
+  // machine-wide pack does NOT govern a project that never mentioned it. This is
+  // what closes the reproducibility hole — doctrine travels with the repo, so a
+  // clone (and CI, which has no store) validates against the same rule set as the
+  // author's machine. `wairon doctor` reports installed-but-unapplied packs so the
+  // change is loud rather than a quietly weaker gate.
+  it('documents the default: an omitted useGlobalPacks does NOT apply global packs', () => {
+    const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-default-'));
+    fs.writeFileSync(path.join(globalDir, 'org.yaml'), 'name: org-doctrine\nprofiles:\n  org-profile:\n    family: neutral\n');
+    process.env.WAIRON_PACKS_DIR = globalDir;
+    const proj = createTempProject();
+    // No `extensions` key at all — the shape a project that never opted in has.
+    proj.writeFile('.wai/project.yaml', JSON.stringify({
+      schemaVersion: '1.0.0',
+      name: 'test-project',
+      projectType: 'backend',
+      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      rules: {},
+      createdAt: '2026-07-03T10:00:00Z',
+      updatedAt: '2026-07-03T10:00:00Z',
+    }));
+    proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem\nprofile: org-profile');
+    proj.activate();
+    try {
+      // The global pack's profile does NOT resolve — the project never asked for
+      // it, so referencing its profile is an unknown profile.
+      expect(validateProject().issues.some(i => i.code === 'UNKNOWN_PROFILE')).toBe(true);
+    } finally {
+      proj.cleanup();
+      delete process.env.WAIRON_PACKS_DIR;
+      try { fs.rmSync(globalDir, { recursive: true, force: true }); } catch { /* win */ }
     }
   });
 
@@ -246,7 +284,7 @@ profiles:
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const err = res.issues.find(i => i.code === 'EXTENSION_LOAD_ERROR');
       expect(err).toBeDefined();
       expect(err!.severity).toBe('error');
@@ -268,7 +306,8 @@ id: known-a
 name: known-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/domain-pattern
     version: 1.0.0`);
@@ -277,12 +316,13 @@ id: unknown-a
 name: unknown-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/missing-pattern`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'unknown-a')).toBe(true);
       expect(res.issues.some(i => i.code === 'UNKNOWN_PATTERN_REF' && i.specId === 'known-a')).toBe(false);
     } finally { proj.cleanup(); }
@@ -301,13 +341,14 @@ id: comp-a
 name: comp-a
 description: d
 subsystem: sub-a
-componentType: Specialist
+componentType: Orchestrator
+dependencyClass: pure
 patterns:
   - id: org/domain-pattern
     version: 2.0.0`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'PATTERN_VERSION_MISMATCH' && i.specId === 'comp-a')).toBe(true);
     } finally { proj.cleanup(); }
   });
@@ -364,16 +405,16 @@ describe('component variants', () => {
   it('resolves a component variant and flags unknown / base-mismatched ones', () => {
     const proj = createTempProject();
     proj.writeFile('.wai/variants/publisher.yaml', `id: publisher
-base: Specialist
+base: Orchestrator
 guidance: Fan-out emitter; reuse the shared publisher helper.
 `);
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
     proj.writeSpec('component', 'bad-base', 'schemaVersion: 1.0.0\nid: bad-base\nname: bad-base\ndescription: d\nsubsystem: sub-a\ncomponentType: Adapter\nvariant: publisher');
-    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: nope');
+    proj.writeSpec('component', 'unknown-v', 'schemaVersion: 1.0.0\nid: unknown-v\nname: unknown-v\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: nope');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.some(i => i.code === 'UNKNOWN_VARIANT' && i.specId === 'unknown-v')).toBe(true);
       expect(res.issues.some(i => i.code === 'VARIANT_BASE_MISMATCH' && i.specId === 'bad-base')).toBe(true);
       expect(res.issues.some(i => (i.code === 'UNKNOWN_VARIANT' || i.code === 'VARIANT_BASE_MISMATCH') && i.specId === 'pub-a')).toBe(false);
@@ -383,10 +424,10 @@ guidance: Fan-out emitter; reuse the shared publisher helper.
   it('merges global (WAIRON_VARIANTS_DIR) and project variants, project winning', () => {
     const globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-global-variants-'));
     fs.writeFileSync(path.join(globalDir, 'shared.yaml'), 'id: shared\nbase: Adapter\nguidance: global version\n');
-    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Specialist\nguidance: global publisher\n');
+    fs.writeFileSync(path.join(globalDir, 'publisher.yaml'), 'id: publisher\nbase: Orchestrator\nguidance: global publisher\n');
     process.env.WAIRON_VARIANTS_DIR = globalDir;
     const proj = createTempProject();
-    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: PROJECT publisher\n');
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Orchestrator\nguidance: PROJECT publisher\n');
     proj.activate();
     try {
       const byId = new Map(loadProjectVariants().map(v => [v.id, v]));
@@ -401,10 +442,10 @@ guidance: Fan-out emitter; reuse the shared publisher helper.
 
   it('injects variant guidance + same-variant siblings into the owner agent context', () => {
     const proj = createTempProject();
-    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Specialist\nguidance: Fan-out emitter, reuse the shared helper.\n');
+    proj.writeFile('.wai/variants/publisher.yaml', 'id: publisher\nbase: Orchestrator\nguidance: Fan-out emitter, reuse the shared helper.\n');
     proj.writeSpec('subsystem', 'sub-a', 'schemaVersion: 1.0.0\nid: sub-a\nname: SubA\ndescription: d\nparentSystem: TestSystem');
-    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
-    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Specialist\nvariant: publisher');
+    proj.writeSpec('component', 'pub-a', 'schemaVersion: 1.0.0\nid: pub-a\nname: pub-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
+    proj.writeSpec('component', 'pub-b', 'schemaVersion: 1.0.0\nid: pub-b\nname: pub-b\ndescription: d\nsubsystem: sub-a\ncomponentType: Orchestrator\ndependencyClass: pure\nvariant: publisher');
     proj.activate();
     try {
       const owner = resolveAgentTopology().find(a => a.id === 'sub-a-owner');

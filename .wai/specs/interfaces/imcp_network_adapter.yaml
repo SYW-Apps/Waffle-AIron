@@ -1,0 +1,28 @@
+id: imcp_network_adapter
+name: MCP Network Adapter Interface
+description: Forwards onto the network portal.
+component: mcp_network_adapter
+methods:
+  - name: flows
+    description: 'Forward to network_portal.flows: the allowed-flows matrix.'
+    signature: 'flows(options: ValidationOptions, format: NetworkOutputFormat): NetworkDocument'
+    returns: NetworkDocument
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: format
+        type: NetworkOutputFormat
+  - name: why
+    description: 'Forward to network_portal.why: why one party may reach another.'
+    signature: 'why(options: ValidationOptions, from: string, to: string): FlowExplanation'
+    returns: FlowExplanation
+    params:
+      - name: options
+        type: ValidationOptions
+      - name: from
+        type: string
+      - name: to
+        type: string
+status: complete
+createdAt: '2026-10-06T13:14:13.142Z'
+updatedAt: '2026-10-06T13:14:13.837Z'

@@ -1,0 +1,17 @@
+id: diagram_layout
+name: Diagram Layout
+description: >-
+  Where every box goes: pure geometry over a graph of subsystems, components and the patterns that
+  contain them, with no knowledge of what any of it will be drawn as. It exists apart from the
+  exporters that use it because the same arrangement has to hold across two unrelated wire formats —
+  a drawio XML and an excalidraw scene of the same tree must lay out identically or they are not the
+  same diagram. Its file is named canvas-layout.ts for historical reasons; the canvas does not call
+  it and never has.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-09-20T16:38:28.886Z'
+updatedAt: '2026-09-20T16:38:28.901Z'

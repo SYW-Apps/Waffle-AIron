@@ -1,0 +1,200 @@
+name: Approved design (wairon lock-check)
+
+# Reusable workflow: refuse a merge whose SPECS were never approved.
+#
+# In spec-driven development a human approves a design by running `wairon lock`,
+# which records a gate identity for the parsed spec tree in the committed
+# .wai/lock.json. Nothing checks that record at merge time, so an approval taken
+# AFTER the merge leaves the default branch holding specs nobody said yes to —
+# silently. This workflow makes that visible.
+#
+# Import it from any repository:
+#
+#   jobs:
+#     approved-design:
+#       uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
+#       with:
+#         wairon-version: '<version>'
+#
+# <version> is the version you lock with — what `wairon --version` prints where
+# you run `wairon lock`: a release X.Y.Z (tag vX.Y.Z), or a dev build
+# X.Y.Z-dev.N (tag vX.Y.Z-dev.N). Check it is on npm first:
+# `npm view @wairon/cli@<version> version`. This workflow and `wairon
+# lock-check` first ship with 6.0.0 and its dev builds.
+#
+# Pin @<ref> to a TAG, never to `main` or `dev`. A moving branch means the check
+# gating your merges can change under you between two runs of the same commit —
+# and this is a workflow that decides whether code merges.
+#
+# WHAT IT PROVES: that the design in the commit being merged is the design that
+# was approved. On a `pull_request` event the default checkout is the merge
+# commit, so that is literally what is judged.
+#
+# WHAT IT DOES NOT PROVE: WHO approved. `lockedBy` on the record is a claim, not
+# an attestation; a lock record can be written by anyone who can run the CLI.
+# Pull-request review is what establishes who reviewed — this establishes that
+# the thing merging is the thing reviewed.
+#
+# WHAT IT ALSO RUNS (input `validate`, default true): `wairon validate --ci` in
+# the same directory, after the approval check — whether the design is LEGAL.
+# Point `working-directory` at the FAMILY ROOT (the project that declares the
+# members): there the plain gate is the family run, the one place the network
+# proofs (ENTRY_UNPROVEN, gateways, cross-project reach) are judged. A member
+# validated alone judges only its own gate.
+#
+# Before that validate run (and only then) it installs the PROJECT's own
+# dependencies when there is a package.json (input `install`, default "auto":
+# package-lock.json → npm ci, pnpm-lock.yaml → pnpm, yarn.lock → yarn). The
+# conformance gate reads TypeScript/JavaScript code with the project's own
+# TypeScript compiler; without it every file is analyzed below exact grade and
+# `--ci` fails on CONFORMANCE_DEGRADED — a finding about the runner, not the
+# design. The approval check alone never installs anything.
+#
+# It also does not BLOCK a merge on its own. A workflow can only fail a job;
+# making a failing job stop a merge is a branch-protection / ruleset setting on
+# the repository ("Require status checks to pass"), which no workflow can
+# declare for itself. Add this job's name there once you want it enforced.
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: 'Directory holding the .wai/ tree to check (default: the repository root).'
+        type: string
+        required: false
+        default: '.'
+      wairon-version:
+        description: 'Version or npm dist-tag of @wairon/cli to install (e.g. "latest", "5.1.0", "beta").'
+        type: string
+        required: false
+        default: 'latest'
+      strict:
+        description: >-
+          Also fail when nothing was ever approved, or when there is no spec tree at all.
+          Default false: a project that never runs `wairon lock` passes with a notice, so
+          importing this workflow cannot make an existing repository start failing.
+        type: boolean
+        required: false
+        default: false
+      validate:
+        description: >-
+          Also run `wairon validate --ci` in working-directory after the approval check (default
+          true). At the family root (the project that declares the members) this is the family
+          run, which judges the network proofs no member's own gate can.
+        type: boolean
+        required: false
+        default: true
+      install:
+        description: >-
+          How to install the project's dependencies before `wairon validate --ci` (only when
+          validate is on). "auto" (default): nothing without a package.json; otherwise the
+          nearest lockfile from working-directory up to the repository root picks the package
+          manager (package-lock.json or npm-shrinkwrap.json → `npm ci`, pnpm-lock.yaml →
+          `pnpm install --frozen-lockfile`, yarn.lock → `yarn install --immutable` or
+          `--frozen-lockfile`), and a package.json with no lockfile → `npm install`. "none":
+          install nothing. Anything else is run as the install command, in working-directory.
+        type: string
+        required: false
+        default: 'auto'
+      node-version:
+        description: 'Node.js version used to install and run the CLI.'
+        type: string
+        required: false
+        default: '20'
+      runs-on:
+        description: 'Runner label for the job (e.g. "ubuntu-latest", or a self-hosted label).'
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+
+jobs:
+  lock-check:
+    name: Approved design
+    runs-on: ${{ inputs.runs-on }}
+
+    steps:
+      # The default checkout: on `pull_request` this is the merge commit, which
+      # is the design that would actually land. That is the subject of the gate.
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      # No `npm ci` and no build here: the APPROVAL check needs the CLI, not the
+      # consumer's toolchain. Installing one package is most of why it runs in
+      # seconds. The project's dependencies are installed further down, only
+      # when the validate step runs (it reads the code with them).
+      - name: Install @wairon/cli
+        run: |
+          npm install --global "@wairon/cli@${{ inputs.wairon-version }}"
+          wairon --version
+
+      # Reads the spec tree, hashes it together with the governing doctrine, and
+      # compares that gate identity against the committed lock record. It does
+      # NOT run the conformance validator — that is `wairon validate`, a
+      # different question (is this design legal), run by the next step.
+      - name: Is the merged design the approved design?
+        working-directory: ${{ inputs.working-directory }}
+        run: wairon lock-check ${{ inputs.strict && '--strict' || '' }}
+
+      # The conformance gate reads TypeScript/JavaScript code with the PROJECT's
+      # own TypeScript compiler. On a fresh checkout there is none until the
+      # project's dependencies are installed, and every file is then analyzed
+      # below exact grade: --ci fails on CONFORMANCE_DEGRADED. So install them —
+      # with the project's own package manager — before validating.
+      - name: Install the project's dependencies
+        if: ${{ inputs.validate && inputs.install != 'none' }}
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          INSTALL: ${{ inputs.install }}
+        run: |
+          set -euo pipefail
+          if [ "$INSTALL" != "auto" ]; then
+            echo "Installing with the given command: $INSTALL"
+            eval "$INSTALL"
+            exit 0
+          fi
+          if [ ! -f package.json ] && [ ! -f "$GITHUB_WORKSPACE/package.json" ]; then
+            echo "No package.json: no project dependencies to install."
+            exit 0
+          fi
+          dir="$PWD"
+          while :; do
+            if [ -f "$dir/package-lock.json" ] || [ -f "$dir/npm-shrinkwrap.json" ]; then
+              (cd "$dir" && npm ci --no-audit --no-fund)
+              exit 0
+            fi
+            if [ -f "$dir/pnpm-lock.yaml" ]; then
+              corepack enable
+              (cd "$dir" && pnpm install --frozen-lockfile)
+              exit 0
+            fi
+            if [ -f "$dir/yarn.lock" ]; then
+              corepack enable
+              if [ -f "$dir/.yarnrc.yml" ]; then
+                (cd "$dir" && yarn install --immutable)
+              else
+                (cd "$dir" && yarn install --frozen-lockfile)
+              fi
+              exit 0
+            fi
+            if [ "$dir" = "$GITHUB_WORKSPACE" ] || [ "$dir" = "/" ]; then break; fi
+            dir="$(dirname "$dir")"
+          done
+          # A package.json with no lockfile anywhere up to the repository root.
+          if [ -f package.json ]; then
+            npm install --no-audit --no-fund
+          else
+            (cd "$GITHUB_WORKSPACE" && npm install --no-audit --no-fund)
+          fi
+
+      # Is the design LEGAL: the conformance gate, warnings fatal (--ci). At a
+      # project that declares members this is the family run — every member's
+      # own gate, plus the family proofs only the root can make.
+      - name: Is the design legal (family run at the root)?
+        if: ${{ inputs.validate }}
+        working-directory: ${{ inputs.working-directory }}
+        run: wairon validate --ci

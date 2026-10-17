@@ -12,23 +12,21 @@ fields:
     optional: false
   - name: displayName
     type: string
-    description: Human-readable project name.
+    description: >-
+      Human-readable project name, written as `name` into the new project's .wai/project.yaml (the
+      id when omitted).
     optional: true
   - name: description
     type: string
-    description: Hosted-instance project description.
+    description: Short project description, written as `description` into the new project's .wai/project.yaml.
     optional: true
   - name: ownerUnitId
     type: string
     description: >-
       The organization unit that owns the project. REQUIRED — every project is placed at creation so
-      the permission resolver can always enumerate it; a fresh instance must create its first
-      organization unit before initializing projects.
+      permission rules can always enumerate it; a fresh instance must create its first organization
+      unit before initializing projects.
     optional: false
-  - name: environment
-    type: string
-    description: Optional environment label such as "development", "staging", or "production".
-    optional: true
   - name: profileSelection
     type: ProjectProfileSelection
     description: >-
@@ -36,5 +34,6 @@ fields:
       profile selection.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:58:47.944Z'
-updatedAt: '2026-07-16T00:18:37.663Z'
+updatedAt: '2026-10-03T17:05:15.620Z'

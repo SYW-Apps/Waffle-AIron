@@ -1,0 +1,203 @@
+# Contributing to wairon
+
+The conventions for making a delegated change — never hand-edit `.wai/`, read
+every write back, the lock is the human's, measure before repairing, prove a
+behaviour by revert without `git checkout` — are **not** in this file. They ship
+with the tool, as the **Working conventions** section of the `sdd-implement`
+skill (`src/templates/skills/sdd-implement.md`, installed as
+`.agents/skills/sdd-implement/SKILL.md` and its siblings). Read them there: they
+are true of any wairon project, and the brief-writing half is in `sdd-delegate`.
+
+This file is only what is true of **this repository** and would be wrong to ship
+to a wairon user.
+
+---
+
+## Line endings: CRLF in the working tree, LF in the index
+
+Git stores LF and checks out CRLF here. `.gitattributes` pins only `*.sh` to LF
+(a CRLF shebang breaks `#!/usr/bin/env bash` on the Linux CI runners).
+
+Most tools that write files emit LF, which turns a three-line change into a
+whole-file diff. After any scripted or tool-driven write, normalise the file back
+and confirm `git diff --stat` shows only the lines you meant.
+
+**The rule is preserve what the file has, not "make it CRLF".** The heading above
+describes the common case, not a uniform one: measured across `src/**/*.ts`, 212
+files are CRLF, 52 are LF and 3 are mixed. `install.ps1`, `src/commands/aliases.ts`
+and several tests are LF. Because `core.autocrlf` is true, git normalises on the way
+in and `git status` reads clean either way, so the difference is invisible until a
+scripted edit built for the wrong ending fails to match its anchor — or silently
+rewrites the whole file. Detect each file's endings before editing it and write back
+what was there.
+
+Most obvious ways to check for carriage returns lie, including one that wraps the correct check:
+
+| Command | What it actually does |
+|---|---|
+| `grep '\r' f` | In a basic regular expression `\r` is the letter `r`. It matches every line containing an `r`, so an LF-only file "has carriage returns". |
+| `grep $'\r' f` | Passes a real CR byte — but grep opens the file in text mode here and strips CR before matching, so it reports **0** on a genuinely CRLF file. |
+| `grep -Uc $'\r' f` | Correct. `-U` suppresses the text conversion, so the CR survives to the match. |
+| `file f` | Correct. Says `with CRLF line terminators`, or says nothing about them. |
+| `x=$(grep -Uc $'\r' f)` | Lies, even though the command inside it is the correct one. Capturing it collapses the lone-CR argument to an empty pattern, which matches every line, so what comes back is the file's **line count** whatever its endings are. Run the check unwrapped, or put the CR in a variable first (`CR=$'\r'; grep -Uc "$CR" f`). |
+
+Two traps for scripted edits specifically:
+
+- **Never let a normaliser touch text that itself contains `\r` or `\n` escapes.**
+  A script that rewrites every line ending to CRLF will also rewrite the escape
+  sequence you meant to insert, putting a real carriage return inside a string
+  literal — which is an unterminated-string parse error, found at build time
+  rather than at write time. Build such text with `String.fromCharCode(13)`.
+- **A quoted heredoc still loses doubled backslashes here.** `<<'EOF'` keeps a lone
+  backslash but collapses `\\` to `\`, so `p.replace(/\\/g, "/")` arrives as
+  `p.replace(/\/g, "/")` — an unterminated character class, and a syntax error at run
+  time. **It does not always fail loudly.** The same collapse inside an anchor string turns
+  `\\n` into a real newline, so the text simply does not match and the edit is skipped
+  with no error at all — which is how it was found the second time. Write the script with
+  the file-writing tool, or avoid doubled backslashes, and check the edit applied.
+
+Byte counts show it too: a CRLF file loses exactly one byte per line when it is
+flattened, so `wc -c` before and after a rewrite is evidence.
+
+**Four generated files are deliberately LF — do not "fix" them:**
+
+```
+.wai/context/domains.md
+.wai/context/wairon-guide.md
+.wai/docs/topology.md
+.wai/rules/topology.yaml
+```
+
+---
+
+## Run wairon from this checkout, not the global install
+
+```
+npm run build
+node dist/cli/index.js <command>
+```
+
+A globally installed `wairon` can lag this working tree — including its
+validator, so it can pass a tree the code here rejects, or lock one under an
+older rule set. The MCP server also runs `dist/`, so build *before* reconnecting
+it.
+
+---
+
+## The gates, and today's baseline
+
+| Gate | Baseline |
+|---|---|
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | 289 files / 4755 tests |
+| `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
+| `npm run build` | clean |
+| `npm run build:web` | clean (typechecks the SPA) |
+| `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 303 findings / 406 units |
+| `node dist/cli/index.js validate --ci` | passes |
+
+The counts are a floor, not a target — they move as the suite grows, so update
+this table when they do. `validate` also prints the **conformance debt register**
+(findings carried under `rules.conformance.carried`); it is informational and
+does not fail the gate, but a number that moved is a result worth reporting.
+
+Some tests assert on the text of the shipped skill and agent templates
+(`tests/core/template-vocabulary.test.ts`, `tests/core/skill-composition.test.ts`).
+Changing that text is *supposed* to fail them — that is the assertion doing its
+job. Fix it to match the new text; loosening it to match anything removes the one
+thing keeping the templates and the validator's vocabulary in step.
+
+A rule's `summary` is spec data, not a code string. `tests/core/rule-catalog.test.ts`
+proves the registry's codes and the L3 `findings[].summary` values on
+`iheuristic_rules.yaml` (and its siblings) are ONE list, so changing a summary in
+the rule file alone fails the suite. Change it through the authoring tools first and
+let the code string follow. This catches every contributor who touches a rule's
+codes, and the suite is currently the only place that says so.
+
+---
+
+## A stale MCP server
+
+When the build on disk changed after the server started — which is exactly what
+`npm run build` does mid-session — every `sdd_*` answer carries
+`staleServer: true` and a `⚠ STALE SERVER` banner, and `sdd_get_status` leads
+with it. What happens to a write depends on what the rebuild changed:
+
+- **The spec or tool schemas changed** (the server compares its own schema
+  fingerprint with the one the build on disk computes): every spec write, dry
+  runs included, is REFUSED and writes nothing, and the answers carry
+  `writesRefused: true`. A stale process with old schemas silently drops the
+  fields a newer schema introduced, and has — three times.
+- **Only the build changed:** writes still go through, under the warning.
+
+Either way the cure is the human reconnecting the server
+(`/mcp reconnect wairon`). So author specs *before* a rebuild that changes a
+schema. For a server old enough not to carry the flag, the tell is the shape of
+the answer: a current `sdd_update_spec` returns a structured change report
+naming what moved, an old one a single sentence.
+
+---
+
+## Narrative jumps: use labels, not hand-counted step numbers
+
+Inserting a step into an L5 narrative renumbers every later step, and
+`sdd_update_spec` relocates the jump fields with it. That relocation has gone
+wrong before, and the failure is quiet: a branch keeps a plausible number that
+now points one step past where it meant to land, and nothing but a careful
+re-read catches it.
+
+Only STORED jumps relocate. A jump the delta itself writes — on a step it
+inserts, appends or edits — is read in the numbering the whole delta leaves
+behind, after all of its inserts and deletes, so write it as the final
+narrative will number it.
+
+Every jump-by-number field has a symbolic twin resolved at write time —
+`label` on the step, and `onTrueLabel` / `onFalseLabel` / `toLabel` / `endLabel`
+on the jump. A labelled jump survives an insert because it never named a number.
+Prefer labels whenever a narrative is likely to grow.
+
+When a numeric jump is edited anyway, verify the flow afterwards rather than
+trusting the change report:
+
+```
+awk '/^  - name: METHOD/{f=1} f&&/^  - name: /&&!/METHOD/{exit} f' <impl>.yaml \
+  | grep -E 'stepNumber|type:|onTrueStep|onFalseStep|toStep|outcome'
+```
+
+That prints the control flow on its own, which is short enough to read in one
+pass and is where a mis-relocated target is obvious.
+
+---
+
+## Releasing
+
+A release is a dev to main merge, and it goes through the release QA gate first: a release
+candidate, the automated checks, a fixed panel of persona seats, and a committed verdict that CI
+reads on pull requests into main. The procedure and the reasons are in `docs/release-qa.md`; the
+commands are in `qa/README.md`. The upgrade test (`tests/e2e/upgrade-from-v5.1.0.test.ts`) runs on
+every pull request, so a CHANGELOG upgrade step that stops working is found when the code changes.
+
+---
+
+## Untracked paths are somebody else's work in flight
+
+Run `git status` before you start. This repo regularly carries an uncommitted
+design folder under `docs/design/` while an investigation is open (at the time of
+writing, `docs/design/chained-subsystems/`). Do not touch, commit, stash, or
+clean anything untracked that your task did not name.
+
+---
+
+## Where repo-local guidance lives — and where it cannot
+
+`CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` at the repo root
+are rewritten wholesale by `wairon generate` (`writeRootGuideDelegator`), and
+`.claude/` is gitignored entirely. Neither survives, so neither is a home for
+anything a future contributor or agent should inherit. That home is **this file**
+— and a brief points at it by name rather than paraphrasing it.
+
+---
+
+## Bugs and questions
+
+Actively developed. Open an issue.

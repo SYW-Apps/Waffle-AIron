@@ -1,0 +1,15 @@
+kind: enum
+id: family_pin_role
+name: FamilyPinRole
+description: Whose surface a stage-1 family pin holds.
+subsystem: sdd_surfaces
+fields: []
+methods: []
+sourcePath: src/core/surfaces.ts
+values:
+  - name: parent
+    description: The parent's family surface
+  - name: sibling
+    description: One sibling's published surface
+createdAt: '2026-10-04T23:33:57.289Z'
+updatedAt: '2026-10-04T23:33:57.713Z'

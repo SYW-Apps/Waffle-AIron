@@ -1,0 +1,31 @@
+id: iexternals_repository
+name: Externals Repository Interface
+description: >-
+  Facade contract for the pinned-externals aggregate at the bound root: the lock and the snapshots
+  it names.
+component: externals_repository
+methods:
+  - name: readLock
+    description: The externals lock at the bound root, or null when none was written.
+    signatureFrom: pinned_externals_store.readLock
+  - name: saveLock
+    description: Replace the externals lock at the bound root.
+    signatureFrom: pinned_externals_store.writeLock
+  - name: readSnapshot
+    description: The pinned snapshot for an alias, or null.
+    signatureFrom: pinned_externals_store.readSnapshot
+  - name: saveSnapshot
+    description: Replace the pinned snapshot for an alias.
+    signatureFrom: pinned_externals_store.writeSnapshot
+  - name: removeSnapshot
+    description: Remove the pinned snapshot for an alias; whether one existed.
+    signatureFrom: pinned_externals_store.removeSnapshot
+  - name: readExcerpt
+    description: A part's pinned parent excerpt (stage 8), or null when never pinned or unreadable.
+    signatureFrom: pinned_externals_store.readExcerpt
+  - name: saveExcerpt
+    description: Replace a part's pinned parent excerpt.
+    signatureFrom: pinned_externals_store.writeExcerpt
+status: complete
+createdAt: '2026-09-26T18:12:05.304Z'
+updatedAt: '2026-10-03T21:09:44.059Z'

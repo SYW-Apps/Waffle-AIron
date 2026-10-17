@@ -3,7 +3,7 @@
     "wairon": {
       "command": "node",
       "args": [
-        "C:/Users/ShutYourWaffle/source/Waffle-AIron/dist/cli/index.js",
+        "./dist/cli/index.js",
         "mcp",
         "serve"
       ],

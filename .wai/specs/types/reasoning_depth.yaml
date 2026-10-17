@@ -1,0 +1,18 @@
+kind: enum
+id: reasoning_depth
+name: ReasoningDepth
+description: >-
+  How much judgment an agent's work carries, derived from the component stereotype: a Store is
+  plumbing its L3 and L5 fully describe, an Orchestrator carries the decision logic.
+fields: []
+methods: []
+sourcePath: src/models/execution.ts
+values:
+  - name: mechanical
+    description: Fully described by the specs; transcription
+  - name: standard
+    description: Ordinary implementation judgment
+  - name: deep
+    description: Decision logic that needs real reasoning
+createdAt: '2026-10-04T23:12:30.947Z'
+updatedAt: '2026-10-04T23:12:31.372Z'

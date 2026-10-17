@@ -1,0 +1,32 @@
+kind: value-object
+id: field_change_reading
+name: FieldChangeReading
+description: >-
+  The field-level changes inside one used member's live closure between a consumer's pinned snapshot
+  and the producer's live one — the traced renames, the fields added and the fields removed — and
+  whether they are the member's whole change.
+fields:
+  - name: renames
+    type: list<string>
+    description: Each traced rename, read `field "<type>.<old>" renamed to "<new>"`
+    optional: false
+  - name: added
+    type: list<string>
+    description: >-
+      Each field added to a closure type the pin held under the same id, read `field "<type>.<name>"
+      added`
+    optional: false
+  - name: removed
+    type: list<string>
+    description: Each field gone from such a type with no trace naming it, read `field "<type>.<name>" removed`
+    optional: false
+  - name: fieldsOnly
+    type: bool
+    description: >-
+      Whether undoing the renames, dropping the added fields and restoring the removed ones gives
+      back the pinned member digest exactly
+    optional: false
+methods: []
+sourcePath: src/models/surface-references.ts
+createdAt: '2026-10-09T16:50:43.489Z'
+updatedAt: '2026-10-09T16:50:45.212Z'

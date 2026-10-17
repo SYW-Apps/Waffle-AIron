@@ -4,8 +4,8 @@ name: ApiKeyRecord
 description: >-
   A persisted MCP/API credential: the hashed bearer token bound server-side to an owner identity and
   a projects narrowing. The token carries no permissions of its own — within its narrowing it acts
-  as the owner user's live permission (the resolver gates per project). The plaintext key is shown
-  once at mint time and never stored.
+  as the owner user's live permission (permission rules gate per project). The plaintext key is
+  shown once at mint time and never stored.
 subsystem: sdd_host
 fields:
   - name: id
@@ -17,22 +17,23 @@ fields:
     description: Salted hash of the bearer token; compared in constant time
     optional: false
   - name: role
-    type: string
+    type: DisplayRole
     description: >-
-      Legacy coarse display role ('editor'/'admin'), optional and display-only — NOT an authority
-      source (authorization resolves from the owner's permissionSubject). Set by the legacy
-      master-only mintKey path; unset by the user-bound mint flows.
+      Legacy coarse display role, optional and display-only — NOT an authority source (authorization
+      resolves from the owner's permissionSubject). Set by the legacy master-only mintKey path;
+      unset by the user-bound mint flows.
     optional: true
   - name: projects
-    type: string[]
+    type: list<string>
     description: >-
-      The token's project narrowing: the project ids this token may act on, or "*" for the owner's
-      full accessible set. An entry MAY be subproject-qualified — 'projectId::subsystemId' (nested
-      mounts compose, e.g. 'proj::a::b') — scoping the token INTO that chained subproject:
-      data-plane requests then bind the mounted child root instead of the project root. The token
-      carries no permissions of its own — within this narrowing it acts as the owner user's LIVE
-      permission (the resolver gates per project; a subproject qualifier narrows reach, it never
-      widens or refines grants).
+      The token's project narrowing: the hosted record ids this token may act on, or "*" for the
+      owner's full accessible set. An entry naming a project covers that project and every member
+      below it, transitively (projects nest like units), so a family root's entry reaches its
+      members with no expansion. Since stage 7 a member is a record of its own; the upgrade rewrites
+      every member-QUALIFIED entry ('projectId::alias', one alias per hop) to the member's record
+      id, and a qualified entry left unrewritten still resolves for one release, to the member's
+      record. The token carries no permissions of its own — within this narrowing it acts as the
+      owner user's LIVE permission, resolved over each bound record's chain.
     optional: false
   - name: createdAt
     type: string
@@ -58,6 +59,16 @@ fields:
     type: string
     description: ISO-8601 revocation timestamp when the token has been revoked instead of hard-deleted.
     optional: true
-methods: []
+methods:
+  - name: hashOf
+    signature: 'hashOf(token: string): string'
+    returns: string
+    description: >-
+      The keyHash a record stores for a plaintext bearer token: its salted SHA-256 digest under the
+      credential store's namespace. Every minting and lookup site hashes the same way, so no record
+      ever holds a plaintext token.
+    sourcePath: src/server/credentials.ts
+    symbol: hashToken
+sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-07-24T18:20:41.520Z'
+updatedAt: '2026-10-04T23:40:19.839Z'

@@ -4,30 +4,42 @@ import { Command } from 'commander';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { logger, setLogLevel } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
-// The runner imports each command adapter module DIRECTLY (not through the
-// commands barrel) so the physical import graph mirrors the declared
-// cli_runner → adapter edges (dependency conformance).
+// cli_portal — the `wairon` binary's inbound surface. This file parses argv
+// and dispatches each command to cli_runner: the workflows in ./runner.ts and
+// the command modules that realize cli_runner's methods. It reaches no adapter
+// itself, so its import graph is the portal → runner edge and nothing else.
+import {
+  lockCommand,
+  validateCommand,
+  statusCommand,
+  lockCheckCommand,
+  runRules,
+  runPatterns,
+  runVariants,
+  runPacks,
+  runPack,
+  runAgent,
+  mcpInstallCommand,
+  announceBinding,
+  runNetworkFlows,
+  runNetworkPolicy,
+  runNetworkDiagram,
+  runNetworkCheck,
+  runNetworkWhy,
+  runNetworkDeclare,
+  runNetworkUndeclare,
+} from './runner.js';
 import { runAliasesList, runAliasesEnable, runAliasesDisable } from '../commands/aliases.js';
 import { runInit } from '../commands/init.js';
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree } from '../commands/lock.js';
-import type { LockOptions } from '../commands/lock.js';
-import { runValidate, validateAsComplete } from '../commands/validate.js';
-import { assertProjectInitialized, loadProjectConfig, AI_PATHS } from '../config/loader.js';
-import { pathExists } from '../utils/fs.js';
 import { runList } from '../commands/list.js';
 import { runShow } from '../commands/show.js';
-import { runMcpServe, runMcpInstall, runMcpStatus } from '../commands/mcp.js';
+import { runMcpServe, runMcpStatus } from '../commands/mcp.js';
 import { runUpdate, cleanStaleBinary } from '../commands/update.js';
-import { runStatus } from '../commands/status.js';
 import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
 import { runDiagram } from '../commands/diagram.js';
-import { listRules } from '../commands/rules.js';
-import { listPatterns } from '../commands/patterns.js';
-import { listVariants } from '../commands/variants.js';
-import { addPack, listPacks, removePack, initPack, buildPack } from '../commands/packs.js';
 import {
   runServe,
   runDev,
@@ -38,20 +50,32 @@ import {
   runHostDoctor,
   runHostKey,
   runHostLock,
-  runHostPromote,
   runHostGit,
   runHostProducer,
   runHostSecret,
   runHostPacks,
 } from '../commands/host.js';
 import { runProduce } from '../commands/produce.js';
-import { runSurface, generateChildSnapshots } from '../commands/surface.js';
+import { runSurface, runExport } from '../commands/surface.js';
+import { runExternals } from '../commands/externals.js';
+import { runRemote, runLogin, runLogout } from '../commands/remote.js';
 import {
-  runSubsystemAdd,
-  runSubsystemMove,
+  runMemberAdd,
+  runMemberMove,
+  runMemberAttach,
+  runMemberDetach,
+  runMemberAdopt,
+  runMemberRenameAlias,
+  runProjectRename,
   runSubsystemExternalize,
-  runSubsystemInternalize,
+  runMemberInternalize,
+  runMemberPromote,
+  runMemberDemote,
+  runMemberUpdate,
 } from '../commands/subsystem.js';
+import { showExecution, setExecutionTier } from '../commands/execution.js';
+import { runTypeRenameField } from '../commands/type.js';
+import { runMethodRename, runMethodRenameParam } from '../commands/method.js';
 
 // Clean up any .old binary left over from a previous Windows self-update
 cleanStaleBinary();
@@ -68,10 +92,15 @@ program
   .version(WAIRON_VERSION, '-v, --version')
   .option('--verbose', 'enable verbose output')
   .option('--silent', 'suppress all output except errors')
-  .hook('preAction', (thisCommand) => {
+  .hook('preAction', (thisCommand, actionCommand) => {
     const opts = thisCommand.opts();
     if (opts.verbose) setLogLevel('verbose');
     else if (opts.silent) setLogLevel('silent');
+    // Name the project the command is about to act on (stderr; silent under
+    // --silent) — and refuse it on a configuration that does not parse.
+    const names: string[] = [];
+    for (let c: Command | null = actionCommand; c && c.parent; c = c.parent) names.unshift(c.name());
+    announceBinding(names.join(' '));
   });
 
 // ---------------------------------------------------------------------------
@@ -85,8 +114,9 @@ program
   .option('--pack <source>', 'vendor + register an extension pack right after init (repeatable)', (v: string, all: string[]) => [...all, v], [] as string[])
   .action(async (opts) => {
     await runInit({ yes: opts.yes });
+    // Each --pack is the runner's `pack add`, never the packs adapter called from here.
     for (const source of opts.pack as string[]) {
-      await addPack(source);
+      await runPack('add', source, { global: false, yes: opts.yes });
     }
   });
 
@@ -101,115 +131,47 @@ program
   .option('--domain <id>', 'limit to agents in a single domain')
   .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
   .option('--root', 'only generate root-level agents')
-  .option('--no-recurse', 'only generate this project\'s layer; do not cascade into chained subprojects')
+  .option('--family', 'also generate each member\'s own layer in its own root (generate never cascades otherwise)')
+  .option('--no-recurse', 'accepted for one release: generating only this project\'s layer is now the default')
   .option('--no-prune', 'do not remove wairon-managed agent files that are no longer in the topology')
   .option('--dry-run', 'preview what would be generated without writing files')
+  .option('--global', 'also write (and prune) a target whose output directory resolves outside the project root, backing up each file replaced there')
   .action(async (opts) => {
     await runGenerate({
+      global: opts.global === true,
       target: opts.target,
       domain: opts.domain,
       domains: opts.domains,
       root: opts.root,
-      // commander maps --no-recurse / --no-prune to opts.recurse/opts.prune === false
-      recurse: opts.recurse,
+      // --family walks the members explicitly; --no-recurse is the default now
+      // and is accepted for one release. commander maps --no-prune to opts.prune === false.
+      family: opts.family === true,
       prune: opts.prune,
       dryRun: opts.dryRun,
     });
   });
 
 // ---------------------------------------------------------------------------
-// lock
+// lock-check · lock — the workflows are cli_runner's (src/cli/runner.ts)
 // ---------------------------------------------------------------------------
 
-// cli_runner.runLock — the local `wairon lock` workflow: gate on the
-// as-complete dry-run validation (an invalid tree is never frozen), freeze the
-// tree through the lock adapter, and — when the tree mounts chained children —
-// regenerate the family and sibling surface snapshots into every child so a
-// locked parent ships fresh surfaces.
-//
-// Why validate-as-complete: the conformance gate downgrades completeness
-// errors to warnings while a spec is `draft`, so a draft tree can "pass" yet
-// break the moment it's locked. The gate validates the tree AS IF everything
-// were complete (the status flip happens in-memory inside the validator and is
-// restored) and the lock is refused unless it is clean at full strictness. A
-// failed or cancelled lock leaves every file byte-for-byte unchanged.
-async function runLock(options: LockOptions): Promise<void> {
-  assertProjectInitialized();
-
-  if (!pathExists(AI_PATHS.specsSystem())) {
-    logger.error('No SDD spec tree found (.wai/specs). Nothing to lock.');
-    process.exit(1);
-  }
-
-  const projectConfig = loadProjectConfig();
-
-  logger.info('Analyzing and validating specifications in-memory...');
-  const dry = validateAsComplete({
-    rules: projectConfig.rules,
-    projectType: projectConfig.projectType,
-    scopeSubsystem: options.subsystem,
-    recursive: options.recursive ?? true,
+program
+  .command('lock-check')
+  .description('Merge gate: is the design in this working tree the design that was approved? Compares the tree\'s gate identity against .wai/lock.json as it is in the working tree (in CI, the file committed in the checked-out revision; locally, an uncommitted record counts too). Exits 1 when the design moved past its approval; passes with a notice when the project never locked, unless --strict.')
+  .option('--strict', 'also fail when nothing was ever approved, or when there is no spec tree at all')
+  .action(async (opts) => {
+    await lockCheckCommand(opts);
   });
-
-  const errors = dry.issues.filter((i) => i.severity === 'error');
-  if (errors.length > 0) {
-    logger.header('Cannot lock — the spec tree does not validate as complete');
-    let errorCount = 0;
-    const MAX_PRINT = 100;
-    let skippedErrors = 0;
-    for (const i of errors) {
-      if (errorCount < MAX_PRINT) {
-        logger.error(`${i.specId ? `[${i.specId}] ` : ''}[${i.code}] ${i.message}`);
-        errorCount++;
-      } else {
-        skippedErrors++;
-      }
-    }
-    if (skippedErrors > 0) {
-      logger.error(`... and ${skippedErrors} more error(s) omitted.`);
-    }
-    logger.blank();
-    logger.info('Fix the errors above, then run `wairon lock` again. Nothing was changed.');
-    process.exit(1);
-  }
-
-  // --- Freeze through the lock adapter (summary + confirmation live there) ---
-  logger.header('Lock SDD specs');
-  const record = await lockTree(options, dry);
-  if (!record) {
-    logger.info('Cancelled. Nothing was changed.');
-    return;
-  }
-
-  // --- A locked parent ships fresh surfaces: regenerate the family and
-  // sibling snapshots into every chained child (no-op when none are mounted).
-  const childPaths = generateChildSnapshots();
-  if (childPaths.length > 0) {
-    logger.blank();
-    logger.success(`Regenerated the family/sibling surfaces into ${childPaths.length} chained child snapshot(s):`);
-    for (const p of childPaths) logger.info(`  ${p}`);
-  }
-
-  logger.blank();
-  await runGenerate({ domain: options.subsystem });
-
-  logger.blank();
-  logger.success('Specs locked and agent topology generated.');
-  logger.info(`Lock record written (.wai/lock.json): stateId ${record.stateId.algorithm}:${record.stateId.digest} — status ${record.status}.`);
-  logger.warn(
-    'Restart any running AI agent sessions (Claude Code / Antigravity / Codex) so the newly ' +
-      'generated implementer agents load — they are not picked up mid-session.',
-  );
-}
 
 program
   .command('lock')
-  .description('Final check before implementation: validate the spec tree as complete, freeze all specs to complete, and (re)generate the agent topology — only if it validates')
+  .description('Record human approval of the design: validate the spec tree as complete, write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
-  .option('--no-recursive', 'do not recursively validate subprojects')
+  .option('--no-recursive', 'accepted for one release and ignored: a lock approves this project only; each member locks at its own root')
+  .option('--all', 'list every changed spec in the summary instead of summarizing a long list')
   .action(async (opts) => {
-    await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive });
+    await lockCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -219,11 +181,13 @@ program
 program
   .command('validate')
   .description('Validate the project configuration and the SDD Spec Tree')
-  .option('--ci', 'treat warnings as errors for CI pipelines')
+  .option('--ci', 'treat warnings as errors for CI pipelines (notices are printed and counted, never fatal)')
   .option('--subsystem <id>', 'only validate the specified subsystem (granular)')
-  .option('--no-recursive', 'do not recursively validate subprojects')
+  .option('--no-recursive', "at a project that declares members: run the owner's gate alone instead of the family run")
+  .option('--family', "run the family run from here: every member's own gate, and this project's externals composed against their live producers")
+  .option('--all', 'print every finding (by default the first 100 per severity are printed, followed by per-code totals)')
   .action(async (opts) => {
-    await runValidate({ ci: opts.ci, subsystem: opts.subsystem, recursive: opts.recursive });
+    await validateCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -232,11 +196,12 @@ program
 
 program
   .command('status')
-  .description('Show a hierarchical completeness graph of the SDD Spec Tree')
+  .description('Show the spec tree with its authoring readiness (how far each spec is written out, from its draft/design/complete status) and, separately, its approval state from .wai/lock.json')
   .option('--subsystem <id>', 'only show status for the specified subsystem')
-  .option('--no-recursive', 'do not recursively show status for subprojects')
+  .option('--no-recursive', 'show this project only, without its members')
+  .option('--all', 'list every spec that moved since the approval, not the first few')
   .action(async (opts) => {
-    await runStatus({ subsystem: opts.subsystem, recursive: opts.recursive });
+    await statusCommand(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -245,45 +210,42 @@ program
 
 program
   .command('doctor')
-  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, and spec-tree issues')
-  .option('--fix', 'regenerate stale in-project guides/context/skills and register the MCP server')
+  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
+  .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
+  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation | reachability); never combines with --fix")
+  .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix); a write outside the project root also needs --global")
+  .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {
-    await runDoctor({ fix: opts.fix });
+    await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes, global: opts.global === true });
   });
 
 // ---------------------------------------------------------------------------
 // rules
 // ---------------------------------------------------------------------------
 
-// cli_runner dispatch for the pack-ecosystem commands — consistent with
-// runValidate/runGenerate/…: the orchestrator routes each subcommand to its
-// command adapter rather than the commander action calling the adapter inline.
-async function runRules(): Promise<void> {
-  await listRules();
-}
-async function runPatterns(): Promise<void> {
-  await listPatterns();
-}
-async function runVariants(): Promise<void> {
-  await listVariants();
-}
-async function runPacks(action: string, arg?: string, opts: { global?: boolean } = {}): Promise<void> {
-  if (action === 'add') await addPack(arg!, opts);
-  else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, opts);
-}
-async function runPack(
-  action: string,
-  arg?: string,
-  opts: { global?: boolean; kind?: string; dir?: string; skill?: boolean; out?: string } = {},
-): Promise<void> {
-  if (action === 'init') await initPack(arg!, { kind: opts.kind === 'code' ? 'code' : 'declarative', dir: opts.dir, skill: opts.skill });
-  else if (action === 'build') await buildPack(arg ?? '.', { out: opts.out });
-  else if (action === 'add') await addPack(arg!, { global: opts.global });
-  else if (action === 'list') await listPacks();
-  else if (action === 'remove') await removePack(arg!, { global: opts.global });
-  else throw new WaironError('unknown pack action (expected init | build | add | list | remove)');
-}
+
+// ---------------------------------------------------------------------------
+// execution — the resource axis: what each agent's work costs to do
+// ---------------------------------------------------------------------------
+
+const executionCmd = program
+  .command('execution')
+  .description('Execution budgets: what each agent\'s work is like and the model/turn/tool allowance it earns');
+
+executionCmd
+  .command('show')
+  .alias('ls')
+  .description('Show the current budget tier and the derived allowance for every agent')
+  .action(async () => {
+    await showExecution();
+  });
+
+executionCmd
+  .command('set-tier <tier>')
+  .description('Set the aggressiveness dial: off | free | default | trade | aggressive')
+  .action(async (tier: string) => {
+    await setExecutionTier(tier);
+  });
 
 const rulesCmd = program
   .command('rules')
@@ -311,8 +273,9 @@ packCmd
   .option('--kind <kind>', 'pack variant: declarative | code', 'declarative')
   .option('--dir <path>', 'target directory (default ./<name>)')
   .option('--skill', 'include a skills/<id>/SKILL.md stub')
+  .option('-y, --yes', 'accepted for scripts; init never prompts')
   .action(async (name: string, opts) => {
-    await runPack('init', name, { kind: opts.kind, dir: opts.dir, skill: opts.skill });
+    await runPack('init', name, { kind: opts.kind, dir: opts.dir, skill: opts.skill, yes: opts.yes });
   });
 
 packCmd
@@ -324,11 +287,75 @@ packCmd
   });
 
 packCmd
+  .command('install <source>')
+  .description('Install a pack into this wairon install\'s store (a .wpack/.zip or a pack directory). Applies to NOTHING until a project selects it — unless this project selects it floating, then its impact is shown first')
+  .option('-y, --yes', 'install without showing the impact report (an update of a floating selection)')
+  .action(async (source: string, opts) => {
+    await runPack('install', source, { yes: opts.yes });
+  });
+
+packCmd
+  .command('uninstall <name>')
+  .description('Remove a pack from the store (name or name@version; every version when unversioned)')
+  .action(async (name: string) => {
+    await runPack('uninstall', name);
+  });
+
+packCmd
+  .command('use <name>')
+  .description('Select an installed pack for THIS project (name or name@version), recording it in .wai/project.yaml')
+  .option('--source <url>', 'record an explicit fetch URL (overrides the origin recorded at install time)')
+  .option('--pin', 'freeze the resolved version and its content digest instead of tracking latest installed')
+  .option('--bundle', 'mark for committing a copy under .wai/packs/ so the repo needs no machine setup')
+  .option('-y, --yes', 'apply without showing the impact report')
+  .action(async (name: string, opts) => {
+    await runPack('use', name, { source: opts.source, bundle: opts.bundle, pin: opts.pin, yes: opts.yes });
+  });
+
+packCmd
+  .command('impact <name>')
+  .description('Show what a pack changes (name or name@version), writing nothing: its doctrine against wairon\'s defaults, the profiles that would govern here, and the findings that change on this project')
+  .action(async (name: string) => {
+    await runPack('impact', name);
+  });
+
+packCmd
+  .command('sync')
+  .description('Install every declared-but-missing pack from the source its selection records — the one command a fresh machine or CI runner needs')
+  .action(async () => {
+    await runPack('sync');
+  });
+
+packCmd
+  .command('bundle [name]')
+  .description('Commit a copy of a selected pack under .wai/packs/ so a clone and CI need no pack store (default: every selection marked --bundle)')
+  .option('--all', 'bundle every pack this project selects')
+  .action(async (name: string | undefined, opts) => {
+    await runPack('bundle', name, { all: opts.all });
+  });
+
+packCmd
+  .command('unuse <name>')
+  .description('Deselect a pack for this project (it stays installed in the store)')
+  .option('-y, --yes', 'deselect without showing the impact report')
+  .action(async (name: string, opts) => {
+    await runPack('unuse', name, { yes: opts.yes });
+  });
+
+packCmd
+  .command('which <name>')
+  .description('Identify which installed pack a name resolves to: version, path, content digest, and recorded origin')
+  .action(async (name: string) => {
+    await runPack('which', name);
+  });
+
+packCmd
   .command('add <source>')
   .description('Install a pack: a .wpack/.zip is extracted + registered, a plain file/dir is vendored; --global installs machine-wide')
   .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
+  .option('-y, --yes', 'apply without showing the impact report')
   .action(async (source: string, opts) => {
-    await runPack('add', source, { global: opts.global });
+    await runPack('add', source, { global: opts.global, yes: opts.yes });
   });
 
 packCmd
@@ -344,8 +371,9 @@ packCmd
   .alias('rm')
   .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
   .option('-g, --global', 'remove from the global packs folder')
+  .option('-y, --yes', 'remove without showing the impact report')
   .action(async (name: string, opts) => {
-    await runPack('remove', name, { global: opts.global });
+    await runPack('remove', name, { global: opts.global, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------
@@ -426,13 +454,14 @@ program
   .description('Generate architecture diagrams from the spec tree — interactive canvas by default; Mermaid / draw.io / Excalidraw via --format')
   .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
   .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
-  .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v) => parseInt(v, 10))
+  .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v: string) => (/^\d+$/.test(v) ? parseInt(v, 10) : v))
   .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
   .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
   .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
   .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
   .option('--format <fmt>', 'alias for the flags above: mermaid | canvas | drawio | excalidraw')
-  .option('--out <path>', 'write to a file (or directory with --all; default .wai/docs/diagrams) instead of stdout')
+  .option('--out <path>', 'the file to write (a directory with --all); every format writes a file — default under .wai/docs/diagrams/ (system.md for Mermaid, canvas.html for the canvas); a .mmd path writes raw Mermaid')
+  .option('--no-health', 'skip comparing each consumption relation with its live producer: the canvas draws those edges as not checked')
   .action(async (opts) => {
     await runDiagram({
       subsystem: opts.subsystem,
@@ -444,6 +473,7 @@ program
       excalidraw: opts.excalidraw,
       format: opts.format,
       out: opts.out,
+      health: opts.health,
     });
   });
 
@@ -468,6 +498,17 @@ program
   .description('Show details of a specific agent resolved from the spec tree')
   .action(async (id: string) => {
     await runShow(id);
+  });
+
+// ---------------------------------------------------------------------------
+// agent — live delegation briefs + user-owned per-agent guidance (cli_runner.runAgent)
+// ---------------------------------------------------------------------------
+
+program
+  .command('agent <action> <id>')
+  .description('Live agent briefs: `brief <id>` prints the live delegation brief; `customize <id>` scaffolds the user-owned guidance file .wai/agents/<id>.md')
+  .action(async (action: string, id: string) => {
+    await runAgent(action, id);
   });
 
 // ---------------------------------------------------------------------------
@@ -515,21 +556,23 @@ mcpCmd
     await runMcpServe();
   });
 
+
 mcpCmd
   .command('install')
   .description('Register the wairon MCP server in the Claude Code settings.json or Antigravity mcp_config.json')
   .option('--global', 'install into the global/home config instead of the project (respects CLAUDE_CONFIG_DIR / GEMINI_CONFIG_DIR)')
   .option('--config-dir <path>', "explicit config dir to install into (validated for the agent; requires --backend). Reliable alternative to relying on the shell's CLAUDE_CONFIG_DIR")
   .option('--backend <type>', 'target AI assistant: claude | gemini (aliases: agy, antigravity → gemini)')
-  .action(async (opts) => {
-    await runMcpInstall({ global: opts.global, configDir: opts.configDir, backend: opts.backend });
-  });
+  .option('--hosted <url>', 'register a HOSTED entry against this instance instead of the local stdio server')
+  .option('--project <id>', 'hosted: the project the agent should be bound to')
+  .option('--token <token>', 'hosted: the bearer to carry (else the credential stored by `wairon login`)')
+  .action(mcpInstallCommand);
 
 mcpCmd
   .command('status')
   .description('Show whether the wairon MCP server is registered in Claude Code and Antigravity settings')
-  .action(async () => {
-    await runMcpStatus();
+  .action(() => {
+    runMcpStatus();
   });
 
 // ---------------------------------------------------------------------------
@@ -551,15 +594,19 @@ program
 
 program
   .command('surface <action>')
-  .description('public surface exchange: export | import | list | generate-children | externals')
+  .description('public surface exchange: export | import | list | diff (the public-surface changelog since the last approval)')
   .option('--audience <level>', 'export ceiling: project | department | instance | partner | external (default instance)')
   .option('--format <fmt>', 'export format: native | openapi (default native)')
   .option('--out <path>', 'export output path (else print)')
   .option('--portal <id>', 'export: select one portal\'s OpenAPI spec (a multi-portal project renders one document per portal)')
   .option('--source <path>', 'import: the surface document (native snapshot YAML or OpenAPI)')
   .option('--origin <origin>', 'import provenance: exchanged | authored (default authored)')
+  .option('--against <ref|file>', 'diff: a git revision or a saved native surface snapshot to compare with (default: the last committed approval)')
+  .option('--json', 'diff: print the structured answer')
   .action(async (action: string, opts) => {
     await runSurface(action, {
+      against: opts.against,
+      json: opts.json,
       audience: opts.audience,
       format: opts.format,
       out: opts.out,
@@ -570,12 +617,108 @@ program
   });
 
 // ---------------------------------------------------------------------------
+// export — the design export (cli_runner.runExport → sdd_surfaces)
+// ---------------------------------------------------------------------------
+
+program
+  .command('export')
+  .description('the whole design, resolved, as one JSON document (format wairon-design) for generators and translators; stamped with the lock-check approval verdict. Prints to stdout unless --out names a file')
+  .option('--out <file>', 'write the JSON to this file (else print it to stdout, and nothing else)')
+  .action(async (opts) => {
+    await runExport(opts.out);
+  });
+
+// ---------------------------------------------------------------------------
+// externals — the other projects this project consumes (declared in
+// .wai/project.yaml `externals`): add, pin, status, list
+// ---------------------------------------------------------------------------
+
+program
+  .command('externals <action> [aliases...]')
+  .description('declared externals: add <alias> [<source>] | pin [alias…] | status (exit 1 incompatible, 2 not compared) | list | remove <alias> | use <alias> --add/--remove | consumers')
+  .option('--json', 'print the structured answer instead of the table')
+  .option('--project <id>', "add: the producer's project id when it differs from the alias")
+  .option('--ref <ref>', 'add: git only — the branch, tag or full commit the pin follows')
+  .option('--dir <dir>', "add: git only — the producer's root inside the repository")
+  .option('--use <names>', "add: public names to import bare, comma-separated ('*' for all)")
+  .option('--description <text>', 'add: what the producer is to this project')
+  .option('--no-pin', 'add: declare only, without pinning')
+  .option('--dry-run', 'add, use, remove: say what would change, write nothing (add still reads the producer)')
+  .option('--add <names>', "use: public names to import bare, comma-separated ('*' for all)")
+  .option('--remove <names>', 'use: names to stop importing, comma-separated')
+  .option('--search <dirs...>', 'consumers: also scan these folders (and the project roots directly under them) for projects declaring this one as an external')
+  .action(async (action: string, aliases: string[] | undefined, opts) => {
+    await runExternals(action, aliases ?? [], {
+      ...(opts.search !== undefined ? { search: (opts.search as string[]).flatMap((d) => d.split(',')).map((d) => d.trim()).filter(Boolean) } : {}),
+      json: opts.json,
+      project: opts.project,
+      ref: opts.ref,
+      dir: opts.dir,
+      ...(opts.use !== undefined ? { use: String(opts.use).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+      description: opts.description,
+      pin: opts.pin,
+      dryRun: opts.dryRun,
+      ...(opts.add !== undefined ? { add: String(opts.add).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+      ...(opts.remove !== undefined ? { remove: String(opts.remove).split(',').map((u: string) => u.trim()).filter(Boolean) } : {}),
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// remote — migrate a spec tree between this checkout and a hosted instance
+// ---------------------------------------------------------------------------
+
+program
+  .command('login <url>')
+  .description('store a bearer credential for a hosted instance on this machine')
+  .option('--token <token>', 'the bearer credential (else WAIRON_REMOTE_TOKEN) — mint one in the hosted UI under Tokens')
+  .option('--project <id>', 'verify the credential against this project before storing it')
+  .action(async (url: string, opts) => {
+    await runLogin(url, { token: opts.token, project: opts.project });
+  });
+
+program
+  .command('logout [url]')
+  .description('forget a stored credential for a hosted instance (local only — does NOT revoke it), or list what is stored')
+  .action(async (url: string | undefined) => {
+    await runLogout(url);
+  });
+
+program
+  .command('remote <action>')
+  .description('hosted instance: push | pull (migrate a spec tree) · attach | detach | status (bind this checkout)')
+  .option('--url <url>', 'hosted instance base URL (else WAIRON_REMOTE_URL)')
+  .option('--project <id>', 'hosted project id — a member is a project bound by its own id (else WAIRON_REMOTE_PROJECT); narrow a person to a subsystem with `wairon host permission set --subsystem`, not the id')
+  .option('--token <token>', 'bearer credential (else WAIRON_REMOTE_TOKEN) — mint one in the hosted UI under Tokens')
+  .option('--unit <id>', 'push: create the destination project first, owned by this organization unit')
+  .option('--force', 'replace an authored spec tree at the destination (it is backed up first)')
+  .option('--include-derived', 'push: pack regenerable artifacts (diagrams, generated topology) too')
+  .option(
+    '--allow-partial',
+    'build the archive even when some chained mounts cannot be packed, listing them as skipped (default: refuse)',
+  )
+  .option('--archive <path>', 'also write the transferred archive to this path (file or directory)')
+  .option('--dir <path>', 'pull: the local project root to import into (default: this project)')
+  .action(async (action: string, opts) => {
+    await runRemote(action, {
+      url: opts.url,
+      project: opts.project,
+      token: opts.token,
+      unit: opts.unit,
+      force: opts.force,
+      includeDerived: opts.includeDerived,
+      allowPartial: opts.allowPartial,
+      archive: opts.archive,
+      dir: opts.dir,
+    });
+  });
+
+// ---------------------------------------------------------------------------
 // serve  — run the hosting server (sdd_host)
 // ---------------------------------------------------------------------------
 
 program
   .command('serve')
-  .description('Run the wairon hosting server: HTTP MCP for many isolated projects + admin API')
+  .description('Run the wairon hosting server: HTTP MCP for many isolated projects + admin API. The web UI is off until enabled; operator setup (web UI, sign-in, SSO): "Hosting" in docs/cli.md')
   .option('--host <host>', 'data-plane bind host (default 0.0.0.0)')
   .option('--port <port>', 'data-plane port (default 8080)')
   .option('--admin-host <host>', 'admin-plane bind host (default 127.0.0.1)')
@@ -612,7 +755,7 @@ program
 
 const hostCmd = program
   .command('host')
-  .description('Administer the hosting server: projects, API keys, and state-scoped lock/promote');
+  .description('Administer the hosting server: projects, API keys, and the state-scoped lock');
 
 hostCmd
   .command('project <action>')
@@ -640,7 +783,7 @@ hostCmd
   .description('create an organization unit (projects are placed into units at creation)')
   .option('--slug <slug>', 'unit slug (REQUIRED for create; a root unit\'s id IS its slug)')
   .option('--name <name>', 'display name (defaults to the slug)')
-  .option('--kind <kind>', 'unit kind (business_entity | department | team | …)', 'team')
+  .option('--kind <kind>', 'unit kind (business_entity | department | team | …); default business_entity for a top-level unit, team under --parent')
   .option('--parent <unitId>', 'qualified id of the parent unit (omit for a root unit)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
@@ -663,6 +806,7 @@ hostCmd
   .option('--capability <capability>', 'project:read | project:create | project:write | project:admin | approval:decide')
   .option('--value <value>', 'yes | approval | no | inherit', 'yes')
   .option('--project <id>', 'anchor the assignment at a project scope')
+  .option('--subsystem <id>', 'with --project: anchor at a subsystem of that project (project:write only, yes | no | inherit)')
   .option('--unit <unitId>', 'anchor the assignment at an organization-unit scope')
   .option('--instance', 'anchor the assignment at the instance scope (the default)')
   .option('--id <assignmentId>', 'assignment id (for remove)')
@@ -673,6 +817,7 @@ hostCmd
       capability: opts.capability,
       value: opts.value,
       project: opts.project,
+      subsystem: opts.subsystem,
       unit: opts.unit,
       instance: opts.instance,
       id: opts.id,
@@ -700,15 +845,6 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (opts) => {
     await runHostLock({ project: opts.project, dataDir: opts.dataDir });
-  });
-
-hostCmd
-  .command('promote')
-  .description('promote a locked project after re-checking its StateId (never merges to production)')
-  .requiredOption('--project <id>', 'project id')
-  .option('--data-dir <path>', 'data root')
-  .action(async (opts) => {
-    await runHostPromote({ project: opts.project, dataDir: opts.dataDir });
   });
 
 hostCmd
@@ -752,9 +888,10 @@ hostCmd
   .option('--project <id>', 'target a hosted project (omit for server-global)')
   .option('--name <name>', 'pack name / file stem')
   .option('--file <path>', 'declarative pack YAML file (for install)')
+  .option('-y, --yes', 'install or remove a project pack without showing its impact or asking (scripts)')
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
-    await runHostPacks(action, { project: opts.project, name: opts.name, file: opts.file, dataDir: opts.dataDir });
+    await runHostPacks(action, { project: opts.project, name: opts.name, file: opts.file, dataDir: opts.dataDir, yes: opts.yes });
   });
 
 hostCmd
@@ -768,43 +905,195 @@ hostCmd
   });
 
 // ---------------------------------------------------------------------------
-// subsystem — create/relocate external (chained) subprojects
+// member — the projects this project contains (project.yaml `members`)
+// ---------------------------------------------------------------------------
+
+const memberCmd = program
+  .command('member')
+  .description('Manage members — the projects this project contains, declared in project.yaml `members`');
+
+memberCmd
+  .command('add <alias> <source>')
+  .description('Create a member at <source> — services/x (contained), ../x (a sibling checkout) or a git URL[#commit] — a PART by default (its subsystems are this project\'s own), or with --project an independent project')
+  .option('--project', 'create an independent project (its id = <alias>, its own L0 and lock) instead of a part')
+  .option('--description <text>', 'what the member is to this project (also a project\'s bootstrapped L0 vision)')
+  .option('--report', 'print what would be created — refused exactly as the write would be — and write nothing')
+  .action(async (alias: string, source: string, opts) => {
+    await runMemberAdd(alias, source, { description: opts.description, project: opts.project, report: opts.report });
+  });
+
+memberCmd
+  .command('update <alias>')
+  .description("Move a git member's pinned commit to its ref's head (or --ref / --commit), printing the spec files it adds, changes and removes; never locks")
+  .option('--ref <ref>', 'the branch or tag to follow this time')
+  .option('--commit <sha>', 'an exact commit to pin')
+  .option('--report', 'print what would change and write nothing')
+  .action(async (alias: string, opts) => {
+    await runMemberUpdate(alias, { ref: opts.ref, commit: opts.commit, report: opts.report });
+  });
+
+memberCmd
+  .command('move <alias> <path>')
+  .description('Relocate a member: move its directory and point its `members` entry there (a legacy L1 mount is moved into `members` first)')
+  .action(async (alias: string, memberPath: string) => {
+    await runMemberMove(alias, memberPath);
+  });
+
+// The family migrations: each plans first and prints the plan, applies only
+// once confirmed (--yes answers; --report prints and writes nothing), applies
+// all or nothing, and never locks — it names the projects to re-lock.
+const collect = (value: string, previous: string[] = []): string[] => [...previous, value];
+
+memberCmd
+  .command('attach <alias> <path>')
+  .description('Make the existing project at <path> a member, keeping its L0, subsystems, packs and lock (`member add` scaffolds a new one)')
+  .option('--description <text>', 'what the member is to this project')
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, memberPath: string, opts) => {
+    await runMemberAttach(alias, memberPath, { description: opts.description, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('detach <alias>')
+  .description('Take a member out of the family: this project and every family consumer then reach it as an external by path, pinned')
+  .option('--widen', 'widen exactly the exports the family uses that the member gives the family alone to the instance audience (shown in the plan), instead of refusing')
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberDetach(alias, { widen: opts.widen, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('adopt <alias>')
+  .description("Make this project's external found by path — inside it, or a `../` sibling — a member again (detach's inverse)")
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberAdopt(alias, { report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('rename-alias <old> <new>')
+  .description("Rename one alias of this project (a member or an external) and respell this project's references through it; no member or sibling changes")
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, newAlias: string, opts) => {
+    await runMemberRenameAlias(alias, newAlias, { report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('internalize <alias>')
+  .description("Fold a member — every subsystem of it — back into this project, its own metadata sent to explicit homes and every family consumer re-pointed at this project")
+  .option('--into <subsystem>', "the subsystem that receives the member's L0 vision (required when it holds several subsystems)")
+  .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
+  .option('--export <name>', "a public name of the member this project exports afterwards (repeatable), beyond those the family uses", collect, [])
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberInternalize(alias, { into: opts.into, packs: opts.packs, exports: opts.export, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('promote <alias>')
+  .description('Make a part an independent project in place: its id, an L0 exporting what this project uses of it, references respelled alias::name, pins on both sides')
+  .option('--id <id>', "the new project's id (default: the alias)")
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberPromote(alias, { id: opts.id, report: opts.report, yes: opts.yes });
+  });
+
+memberCmd
+  .command('demote <alias>')
+  .description("Make a project member a part of this project in place (promote's inverse); refused while another family project consumes it")
+  .option('--home <subsystem>', "the subsystem that receives the member's L0 vision (required when it holds several subsystems and its vision says more than its name)")
+  .option('--packs <adopt|drop>', 'what to do with a pack only the member selects')
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (alias: string, opts) => {
+    await runMemberDemote(alias, { into: opts.home, packs: opts.packs, report: opts.report, yes: opts.yes });
+  });
+
+// ---------------------------------------------------------------------------
+// project rename — a project's id, family-wide
+// ---------------------------------------------------------------------------
+
+const projectCmd = program
+  .command('project')
+  .description('Act on a project of the family');
+
+projectCmd
+  .command('rename <new-id>')
+  .description("Move a project's id — this project's, or a member's named by --project — and every reference to the old id across the family; lists every project to re-lock")
+  .option('--project <alias-path>', "the member whose id moves, as an alias path from this project (e.g. billing/payments)")
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
+  .action(async (newId: string, opts) => {
+    await runProjectRename(newId, { project: opts.project, report: opts.report, yes: opts.yes });
+  });
+
+// ---------------------------------------------------------------------------
+// type rename-field — a field of a type, its references respelled, its old name traced
+// ---------------------------------------------------------------------------
+
+const typeCmd = program
+  .command('type')
+  .description("Act on a type of this project's spec tree");
+
+typeCmd
+  .command('rename-field <type> <field> <new-name>')
+  .description("Rename a field of a type and respell every reference to it (a foreign key's `references: <type>.<field>`); the old name joins the field's rename trace (previousNames, `formerly` in the design export) and every consumer reaching an export that carries the field is named")
+  .option('--dry-run', 'Print what the rename would respell and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .action(async (typeId: string, field: string, newName: string, opts: { dryRun?: boolean; search?: string[] }) => {
+    await runTypeRenameField(typeId, field, newName, { dryRun: opts.dryRun, search: opts.search });
+  });
+
+// ---------------------------------------------------------------------------
+// method rename-param — a parameter of a contract method, its old name traced
+// ---------------------------------------------------------------------------
+
+const methodCmd = program
+  .command('method')
+  .description("Act on a contract method of this project's spec tree");
+
+methodCmd
+  .command('rename <component> <method> <new-name>')
+  .description("Rename a contract method and retarget every reference to it; the old name joins its rename trace (previousNames, `formerly` in the design export) and every consumer that calls it through an export is named as one the rename breaks")
+  .option('--dry-run', 'Print what the rename would move, retarget and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .option('--no-pin-symbol', 'Do not pin an implementation without a symbol to the old name (its code is not written yet)')
+  .action(async (componentId: string, method: string, newName: string, opts: { dryRun?: boolean; search?: string[]; pinSymbol?: boolean }) => {
+    await runMethodRename(componentId, method, newName, { dryRun: opts.dryRun, search: opts.search, pinSymbol: opts.pinSymbol });
+  });
+
+methodCmd
+  .command('rename-param <component> <method> <param> <new-name>')
+  .description("Rename a parameter of a contract method; the old name joins the parameter's rename trace (previousNames, `formerly` in the design export), each signature is re-derived, an HTTP path placeholder that bound it is respelled (on its followers through signatureFrom too) and every consumer calling it through an export is named")
+  .option('--dry-run', 'Print what the rename would move, respell and break, and write nothing')
+  .option('--search <dirs...>', 'Folders to scan for consumer checkouts outside the family')
+  .action(async (componentId: string, method: string, param: string, newName: string, opts: { dryRun?: boolean; search?: string[] }) => {
+    await runMethodRenameParam(componentId, method, param, newName, { dryRun: opts.dryRun, search: opts.search });
+  });
+
+// ---------------------------------------------------------------------------
+// subsystem externalize — move an internal subsystem's specs into a part (or a member project)
 // ---------------------------------------------------------------------------
 
 const subsystemCmd = program
   .command('subsystem')
-  .description('Manage subsystems — create and relocate external (chained) subprojects');
-
-subsystemCmd
-  .command('add <id>')
-  .description('Add an external subsystem: scaffold a child wairon project at --project-path and wire it into this project')
-  .requiredOption('--project-path <dir>', 'relative path where the child subproject lives / will be created')
-  .option('--name <name>', 'human-readable display name (defaults to id)')
-  .action(async (id: string, opts) => {
-    await runSubsystemAdd(id, { projectPath: opts.projectPath, name: opts.name });
-  });
-
-subsystemCmd
-  .command('move <id>')
-  .description('Relocate an external subsystem: move its subproject directory and update its projectPath link')
-  .requiredOption('--project-path <dir>', 'the new relative path for the subproject directory')
-  .action(async (id: string, opts) => {
-    await runSubsystemMove(id, { projectPath: opts.projectPath });
-  });
+  .description('Act on a subsystem of this project');
 
 subsystemCmd
   .command('externalize <id>')
-  .description('Migrate an internal subsystem out into a standalone subproject at --project-path (moves specs, rewrites references; you move the source code)')
-  .requiredOption('--project-path <dir>', 'destination directory for the subproject')
+  .description("Move an internal subsystem's specs into a part at --path — a storage move, nothing else changes — or with --as project into a member project, family-wide and all or nothing (you move the source code)")
+  .requiredOption('--path <dir>', "the part's directory (a new one, or an existing part's)")
+  .option('--as <part|project>', 'part (default): a storage move; project: the move followed by a promote')
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (required in a non-interactive shell)')
   .action(async (id: string, opts) => {
-    await runSubsystemExternalize(id, { projectPath: opts.projectPath });
-  });
-
-subsystemCmd
-  .command('internalize <id>')
-  .description('Migrate an external subsystem back into this project (moves specs back, deletes its child .wai project)')
-  .action(async (id: string) => {
-    await runSubsystemInternalize(id);
+    await runSubsystemExternalize(id, { path: opts.path, as: opts.as, report: opts.report, yes: opts.yes });
   });
 
 // ---------------------------------------------------------------------------
@@ -815,9 +1104,10 @@ program
   .command('update')
   .description('Check and install the latest wairon release')
   .option('--check', 'only check for updates without installing')
-  .option('--channel <name>', 'switch release channel (stable|beta|preview)')
+  .option('--channel <name>', 'switch release channel (stable|beta|preview|dev)')
   .action(async (opts) => {
-    await runUpdate({ check: opts.check, channel: opts.channel });
+    // The parsed flags are exactly runUpdate's options (--check, --channel).
+    await runUpdate(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -873,16 +1163,90 @@ skillsCmd
   .command('list')
   .alias('ls')
   .description('List the built-in SDD skills')
-  .action(async () => {
-    await runSkillsList();
+  .action(() => {
+    runSkillsList();
   });
 
 skillsCmd
   .command('install')
   .alias('sync')
   .description('Install/refresh the SDD skills into each active target tool')
-  .action(async () => {
-    await runSkillsInstall();
+  .action(() => {
+    runSkillsInstall();
+  });
+
+// ---------------------------------------------------------------------------
+// network — derived from the design; deployment facts come from a bindings
+// file kept outside .wai/ (docs/network.md)
+// ---------------------------------------------------------------------------
+
+const networkCmd = program
+  .command('network')
+  .description('Derived networking: the allowed-flows matrix, generated NetworkPolicy, the network diagram, a check of observed live flows, and why one flow is allowed');
+
+networkCmd
+  .command('flows')
+  .description('Print the allowed-flows matrix: who reaches which verb, over which transport, through which networks and gateway, on what evidence')
+  .option('--format <format>', 'json | csv | markdown', 'json')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkFlows(opts);
+  });
+
+networkCmd
+  .command('policy')
+  .description('Generate Kubernetes NetworkPolicy from the matrix and your bindings file (design names to selectors, namespaces, ports)')
+  .option('--bindings <file>', 'the bindings file the team keeps outside .wai/ (required)')
+  .option('--format <format>', 'kubernetes-network-policy', 'kubernetes-network-policy')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkPolicy(opts);
+  });
+
+networkCmd
+  .command('diagram')
+  .description('Print the network picture as a Mermaid flowchart: networks as nested boundaries, gateways, outside, flows per workload pair')
+  .option('--out <file>', 'write it to a file instead of stdout')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkDiagram(opts);
+  });
+
+networkCmd
+  .command('check')
+  .description('Compare observed live flows (CSV or JSON: source, destination[, transport, method, path, count]) with the matrix; exits 1 on an unexpected or disallowed flow or an unknown verb')
+  .option('--observed <file>', 'the observed-flow export (required)')
+  .option('--bindings <file>', 'the bindings file the observed names follow (lets a selector label value stand for its design name)')
+  .option('--format <format>', 'text | json', 'text')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (opts) => {
+    await runNetworkCheck(opts);
+  });
+
+networkCmd
+  .command('why <from> <to>')
+  .description('Explain from the design why <from> (outside, network[:<id>], a project, subsystem or component) may reach <to> (a project, portal or portal.verb); exits 1 when nothing allows it')
+  .option('--format <format>', 'text | json', 'text')
+  .option('--no-recursive', "at a project that declares members: this project's own flows, not its family's")
+  .action(async (from: string, to: string, opts) => {
+    await runNetworkWhy({ ...opts, from, to });
+  });
+
+networkCmd
+  .command('declare')
+  .description('Declare that this project and every member below it form one isolated network boundary (writes `network` in .wai/project.yaml — no hand edit); the network rules then judge the design')
+  .option('--description <text>', 'what the network encloses, in your words; shown on the network diagram')
+  .action(async (opts) => {
+    await runNetworkDeclare(opts);
+  });
+
+networkCmd
+  .command('undeclare')
+  .description("Remove this project's network declaration from .wai/project.yaml")
+  .action(async (opts) => {
+    await runNetworkUndeclare(opts);
   });
 
 // ---------------------------------------------------------------------------
@@ -893,11 +1257,17 @@ async function main(): Promise<void> {
   try {
     await program.parseAsync(process.argv);
   } catch (err) {
+    // Whatever a command throws reaches the user as ONE line: a WaironError's
+    // message as it is, any other error's message the same way. The stack is a
+    // bug report's business, printed only when WAIRON_DEBUG is set.
     if (err instanceof WaironError) {
       logger.error(err.message);
-      process.exit(1);
+    } else {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error(message || String(err));
+      if (process.env.WAIRON_DEBUG && err instanceof Error && err.stack) process.stderr.write(`${err.stack}\n`);
     }
-    throw err;
+    process.exit(1);
   }
 }
 

@@ -1,89 +1,92 @@
 id: mcp_portal_impl
 name: MCP Portal Implementation
 description: >-
-  Dispatches sdd_* tool calls to the MCP orchestrator; server bootstrap is forwarded to the MCP
-  server supervisor. Realized today inside src/mcp/server.ts (the portal role is folded into the
-  server module pending the code-side split).
+  Dispatches the sdd_* tool calls and resource reads that arrive as MCP JSON-RPC to the MCP
+  workflows. Realized inside src/mcp/server.ts; mcp_hosting_portal's createMcpServer mounts these
+  handlers on the server it builds.
 contract: imcp_portal
 sourcePath: src/mcp/server.ts
 methods:
-  - name: createMcpServer
-    narrative:
-      - stepNumber: 1
-        description: Forward createMcpServer call to the MCP server supervisor
-        type: call
-        targetComponent: mcp_server
-        targetMethod: createMcpServer
-  - name: sdd_initialize_system
+  - name: initializeSystem
     narrative:
       - stepNumber: 1
         description: Dispatch to the initializeSystem workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: initializeSystem
-  - name: sdd_add_subsystem
+    symbol: sdd_initialize_system
+  - name: addSubsystem
     narrative:
       - stepNumber: 1
         description: Dispatch to the addSubsystem workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: addSubsystem
-  - name: sdd_add_component
+    symbol: sdd_add_subsystem
+  - name: addComponent
     narrative:
       - stepNumber: 1
         description: Dispatch to the addComponent workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: addComponent
-  - name: sdd_define_interface
+    symbol: sdd_add_component
+  - name: defineInterface
     narrative:
       - stepNumber: 1
         description: Dispatch to the defineInterface workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: defineInterface
-  - name: sdd_write_narrative
+    symbol: sdd_define_interface
+  - name: writeNarrative
     narrative:
       - stepNumber: 1
         description: Dispatch to the writeNarrative workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: writeNarrative
-  - name: sdd_validate_tree
+    symbol: sdd_write_narrative
+  - name: validateTree
     narrative:
       - stepNumber: 1
+        description: >-
+          Pending transaction banner first: each unfinished family-migration transaction under the
+          bound root becomes an entry in the answer's notices list (never an error), naming it and
+          pointing at `wairon doctor --fix`
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: pending
+      - stepNumber: 2
         description: Dispatch to the validateTree workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: validateTree
-  - name: sdd_get_status
+    symbol: sdd_validate_tree
+  - name: getStatus
     narrative:
       - stepNumber: 1
+        description: >-
+          Pending transaction banner first: the notice lines for unfinished family-migration
+          transactions under the bound root, led in the answer (text and structured content) so an
+          agent sees them before a tree a crash may have half-swapped
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: pending
+      - stepNumber: 2
         description: Dispatch to the getStatus workflow
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: getStatus
-  - name: sdd_move_subsystem_project
+    symbol: sdd_get_status
+  - name: externalizeSubsystem
     narrative:
       - stepNumber: 1
-        description: Dispatch to the moveSubsystemProject workflow
+        description: Build the externalize request and dispatch it to the migration workflow with dryRun
         type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: moveSubsystemProject
-  - name: sdd_externalize_subsystem
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the externalizeSubsystem workflow
-        type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: externalizeSubsystem
-  - name: sdd_internalize_subsystem
-    narrative:
-      - stepNumber: 1
-        description: Dispatch to the internalizeSubsystem workflow
-        type: call
-        targetComponent: mcp_orchestrator
-        targetMethod: internalizeSubsystem
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_externalize_subsystem
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -91,6 +94,13 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: listResources
+      - stepNumber: 2
+        description: >-
+          The same registrar wires the MCP resources/read request to the portal's resource read,
+          handed to the SDK as its request handler.
+        type: register
+        targetComponent: mcp_portal
+        targetMethod: readResource
     symbol: registerSkillResources
   - name: readResource
     narrative:
@@ -99,14 +109,310 @@ methods:
         type: call
         targetComponent: mcp_orchestrator
         targetMethod: readResource
-    symbol: registerSkillResources
-  - name: sdd_list_external_interfaces
+    symbol: serveResourceRead
+  - name: getAgentBrief
     narrative:
       - stepNumber: 1
-        description: Dispatch to the external-surface discovery workflow
+        description: Dispatch the tool call to the agent-brief workflow
         type: call
         targetComponent: mcp_orchestrator
-        targetMethod: listExternalInterfaces
+        targetMethod: getAgentBrief
+    symbol: sdd_get_agent_brief
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameComponent workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameComponent
+    symbol: sdd_rename_component
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameMethod workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameMethod
+    symbol: sdd_rename_method
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the updateSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: updateSpec
+    symbol: sdd_update_spec
+  - name: setEndpoints
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the setEndpoints workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: setEndpoints
+    symbol: sdd_set_endpoints
+  - name: setPublicInterfaces
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the setPublicInterfaces workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: setPublicInterfaces
+    symbol: sdd_set_public_interfaces
+  - name: getSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the getSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: getSpec
+    symbol: sdd_get_spec
+  - name: addType
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the addType workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: addType
+    symbol: sdd_add_type
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the move workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveMethods
+    symbol: sdd_move_methods
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch the tool call to the delete workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: deleteSpec
+    symbol: sdd_delete_spec
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's resolved configuration through the config repository, answering
+          null when it has none
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: getProjectConfig
+  - name: pinExternals
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the externals pin workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: pin
+    symbol: sdd_pin_externals
+  - name: getExternalsStatus
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the externals status workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: status
+    symbol: sdd_get_externals_status
+  - name: addMember
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the addMember workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: addMember
+    symbol: sdd_add_member
+  - name: moveMember
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the moveMember workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveMember
+    symbol: sdd_move_member
+  - name: internalizeMember
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Build the internalize request, its destination from into, packs and exports, and dispatch
+          it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_internalize_member
+  - name: packImpact
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the packImpact workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: packImpact
+    symbol: sdd_pack_impact
+  - name: attachMember
+    narrative:
+      - stepNumber: 1
+        description: Build the attach request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_attach_member
+  - name: renameProject
+    narrative:
+      - stepNumber: 1
+        description: Build the rename request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_rename_project
+  - name: renameMemberAlias
+    narrative:
+      - stepNumber: 1
+        description: Build the rename-alias request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_rename_member_alias
+  - name: detachMember
+    narrative:
+      - stepNumber: 1
+        description: Build the detach request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_detach_member
+  - name: adoptMember
+    narrative:
+      - stepNumber: 1
+        description: Build the adopt request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_adopt_member
+  - name: promoteMember
+    narrative:
+      - stepNumber: 1
+        description: Build the promote request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_promote_member
+  - name: demoteMember
+    narrative:
+      - stepNumber: 1
+        description: Build the demote request and dispatch it to the migration workflow with dryRun
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: run
+    symbol: sdd_demote_member
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameType workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameType
+    symbol: sdd_rename_type
+  - name: addExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gather the tool's arguments into an ExternalRequest and dispatch to the declare-external
+          workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: declare
+    symbol: sdd_add_external
+  - name: getNetworkFlows
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the network flows workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: flows
+    symbol: sdd_get_network_flows
+  - name: explainFlow
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the flow explanation workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: explain
+    symbol: sdd_explain_flow
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the network declaration workflow
+        type: call
+        targetComponent: mcp_network_orchestrator
+        targetMethod: declare
+    symbol: sdd_set_network
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the remove-external workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: remove
+    symbol: sdd_remove_external
+  - name: updateExternal
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Gather the tool's arguments into an ExternalUseRequest and dispatch to the update-external
+          workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: updateUse
+    symbol: sdd_update_external
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameField workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameField
+    symbol: sdd_rename_field
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameParam workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameParam
+    symbol: sdd_rename_param
+  - name: listConsumers
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the consumers workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: consumers
+    symbol: sdd_list_consumers
+  - name: diffSurface
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the surface-changelog workflow
+        type: call
+        targetComponent: mcp_externals_orchestrator
+        targetMethod: diff
+    symbol: sdd_surface_diff
+  - name: renameSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the renameSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: renameSpec
+    symbol: sdd_rename_spec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the moveSpec workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: moveSpec
+    symbol: sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:14:39.730Z'
+updatedAt: '2026-10-09T00:34:04.451Z'

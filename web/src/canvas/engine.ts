@@ -78,11 +78,23 @@ export function mountCanvas(host, model, opts = {}) {
   });
   ROOT.getElementById('issueCount').textContent =
     MODEL.issues.filter(function (i) { return i.severity === 'error'; }).length + 'e/' +
-    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w';
+    MODEL.issues.filter(function (i) { return i.severity === 'warning'; }).length + 'w/' +
+    MODEL.issues.filter(function (i) { return i.severity === 'notice'; }).length + 'n';
+  // A node is marked failing only for an error or a warning; one that holds
+  // only notices gets its own quieter mark, never the failing one.
+  function issueMark(id) {
+    var list = state.showIssues && issuesBySpec[id];
+    if (!list) return '';
+    return list.some(function (i) { return i.severity !== 'notice'; }) ? ' hasIssue' : ' hasNotice';
+  }
 
-  var PATTERN_TYPES = { Repository:1, Gateway:1, FeatureComponent:1, RouterComponent:1 };
+  var PATTERN_TYPES = { Repository:1, FeatureComponent:1, RouterComponent:1 };
+  // A retired Specialist or Gateway renders as a plain box marked retired, so a
+  // tree not yet migrated keeps its picture; a Gateway is no pattern.
   function stereoClass(t) {
+    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
+    if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
     if (t === 'Adapter') return 'adapter';
     if (PATTERN_TYPES[t]) return 'patternLeaf';
@@ -105,9 +117,11 @@ export function mountCanvas(host, model, opts = {}) {
   function childCompsOf(subId) {
     return MODEL.components.filter(function (c) { return c.subsystem === subId && !c.owner; });
   }
+  // Only a pattern contains members: a retired Gateway still lists what it
+  // owned, but it has nothing inside to drill into.
   function memberCompsOf(compId) {
     var c = compById[compId];
-    return c ? c.owns.map(function (id) { return compById[id]; }).filter(Boolean) : [];
+    return c && PATTERN_TYPES[c.componentType] ? c.owns.map(function (id) { return compById[id]; }).filter(Boolean) : [];
   }
   function childrenOf(scope) {
     var out = [];
@@ -140,7 +154,8 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function childOfScopeContaining(compId, scope) {
     var c = compById[compId];
-    if (!c) return null;
+    // A consumption edge may land on a referenced project's node itself (stage 8).
+    if (!c) return scope.kind === 'system' && subById[compId] ? { kind: 'subsystem', id: compId } : null;
     var subs = subsystemChainOf(c);
     var owners = ownerChainOf(c);
     if (scope.kind === 'system') {
@@ -159,7 +174,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function anchorNodeId(entry) { return entry.kind === 'subsystem' ? SN(entry.id) : CN(entry.id); }
   function nameOf(entry) {
-    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name : entry.id; }
+    if (entry.kind === 'subsystem') { var s = subById[entry.id]; return s ? s.name + (s.storage ? '\n\u29C9 ' + s.storage : '') : entry.id; }
     var c = compById[entry.id]; return c ? c.name : entry.id;
   }
 
@@ -320,10 +335,13 @@ export function mountCanvas(host, model, opts = {}) {
         entry:   { fill: '#dcebff', stroke: '#2f5fa8', text: '#0f2a4d' },
         logic:   { fill: '#ece2fb', stroke: '#6d3fbf', text: '#2a1650' },
         data:    { fill: '#f7ecd0', stroke: '#8a6116', text: '#3d2c05' },
+        query:   { fill: '#f3dcc8', stroke: '#a0521d', text: '#3b1d08' },
         adapter: { fill: '#dcf2e4', stroke: '#2e7d4f', text: '#0e3320' },
         patternLeaf: { fill: '#eef1f5', stroke: '#5f6b78', text: '#1a1f24' },
+        retired: { fill: '#ebe8e4', stroke: '#857b73', text: '#35302b' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
+      relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
     },
     syw: {
       pageEdge: '#7c8ca3', edgeText: '#aebdd2', cross: '#ff6b81', ink: '#eef2f8',
@@ -339,10 +357,13 @@ export function mountCanvas(host, model, opts = {}) {
         entry:   { fill: '#0d2b4d', stroke: '#22ddff', text: '#d8f6ff' },
         logic:   { fill: '#2a2052', stroke: '#a78bfa', text: '#eae2ff' },
         data:    { fill: '#3a2c10', stroke: '#f59e0b', text: '#ffe9c2' },
+        query:   { fill: '#3f2418', stroke: '#fdba74', text: '#ffedd5' },
         adapter: { fill: '#0f3323', stroke: '#34d399', text: '#d3f8e6' },
         patternLeaf: { fill: '#1b2740', stroke: '#93a1b8', text: '#eef2f8' },
+        retired: { fill: '#24211f', stroke: '#a8a29e', text: '#e7e5e4' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
+      relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
     },
   };
 
@@ -367,8 +388,10 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.entry', style: { 'background-color': t.stereo.entry.fill, 'border-color': t.stereo.entry.stroke, color: t.stereo.entry.text } },
       { selector: '.logic', style: { 'background-color': t.stereo.logic.fill, 'border-color': t.stereo.logic.stroke, color: t.stereo.logic.text } },
       { selector: '.data', style: { 'background-color': t.stereo.data.fill, 'border-color': t.stereo.data.stroke, color: t.stereo.data.text } },
+      { selector: '.query', style: { 'background-color': t.stereo.query.fill, 'border-color': t.stereo.query.stroke, color: t.stereo.query.text } },
       { selector: '.adapter', style: { 'background-color': t.stereo.adapter.fill, 'border-color': t.stereo.adapter.stroke, color: t.stereo.adapter.text } },
       { selector: '.patternLeaf', style: { 'background-color': t.stereo.patternLeaf.fill, 'border-color': t.stereo.patternLeaf.stroke, color: t.stereo.patternLeaf.text, 'border-style': 'dashed' } },
+      { selector: '.retired', style: { 'background-color': t.stereo.retired.fill, 'border-color': t.stereo.retired.stroke, color: t.stereo.retired.text, 'border-style': 'double', 'border-width': 4 } },
       { selector: '.subsysBox', style: { 'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText, 'font-weight': 'bold', 'font-size': 12.5 } },
       { selector: 'node.public', style: { 'border-width': 3.5 } },
       { selector: ':parent', style: { 'text-valign': 'top', 'text-halign': 'center', 'font-size': 12, 'font-weight': 'bold', 'text-margin-y': -5, padding: '10px', 'background-opacity': 1 } },
@@ -403,9 +426,21 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: 'edge.bundle', style: { width: 4.5, opacity: 0.7 } },
       { selector: 'edge.toghost', style: { 'line-style': 'dashed', opacity: 0.75 } },
       { selector: 'edge.inneredge', style: { width: 1.1, 'arrow-scale': 0.6, opacity: 0.8 } },
+      // Relation health on consumption edges: the health colour replaces the
+      // boundary-hop colour, and unavailable is dotted as well as grey, so the
+      // state never rests on colour alone (the glyph is the edge's label).
+      { selector: 'edge.rel-unchecked', style: { 'line-color': t.pageEdge, 'target-arrow-color': t.pageEdge } },
+      { selector: 'edge.rel-ok', style: { 'line-color': t.relOk, 'target-arrow-color': t.relOk } },
+      { selector: 'edge.rel-drifted', style: { 'line-color': t.relDrift, 'target-arrow-color': t.relDrift } },
+      { selector: 'edge.rel-incompatible', style: { 'line-color': t.relBad, 'target-arrow-color': t.relBad } },
+      { selector: 'edge.rel-unavailable', style: { 'line-color': t.relUnknown, 'target-arrow-color': t.relUnknown, 'line-style': 'dotted' } },
+      { selector: '.extProject', style: { 'border-style': 'dashed' } },
       { selector: 'edge.stubHover', style: { 'line-color': t.selGlow, 'target-arrow-color': t.selGlow, width: 2.6, opacity: 1, 'z-compound-depth': 'top' } },
       { selector: '.dimmed', style: { opacity: 0.13 } },
       { selector: '.hasIssue', style: { 'border-color': t.issue, 'border-style': 'dashed', 'border-width': 3 } },
+      // Notices only: the node keeps its own border colour and width (no layout
+      // nudge), drawn dotted so it reads as noted rather than failing.
+      { selector: '.hasNotice', style: { 'border-style': 'dotted' } },
       // Overlay only (no border) — a border changes node geometry, which nudges
       // the compound parent and makes hover flicker; overlay never affects layout.
       { selector: '.sel', style: { 'overlay-color': t.selGlow, 'overlay-opacity': 0.34, 'overlay-padding': 6 } },
@@ -436,19 +471,98 @@ export function mountCanvas(host, model, opts = {}) {
     ];
   }
 
+  // ---- relation health (consumption edges) ----------------------------------
+  // The model carries relations only when health was computed; without them a
+  // consumption edge is drawn neutral and the legend says it was not checked —
+  // never green for something nobody compared.
+  var HAS_RELATIONS = Array.isArray(MODEL.relations);
+  var REL_BY_ID = {};
+  (MODEL.relations || []).forEach(function (r) { REL_BY_ID[r.id] = r; });
+  var HEALTH_RANK = { ok: 1, drifted: 2, unavailable: 3, incompatible: 4 };
+  var HEALTH_GLYPH = { ok: '\u2713', drifted: '\u0394', incompatible: '\u2715', unavailable: '?' };
+  var HAS_CONSUMPTION = MODEL.edges.some(function (e) { return !!e.consumption; });
+  function edgeHealth(edge) {
+    var r = edge.relation ? REL_BY_ID[edge.relation] : null;
+    return r ? r.health : (HAS_RELATIONS ? 'unavailable' : null);
+  }
+  // Where edges fold into one, the worst health wins.
+  function worseHealth(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return HEALTH_RANK[b] > HEALTH_RANK[a] ? b : a;
+  }
+  function relationsComparedAt() {
+    var at = null;
+    (MODEL.relations || []).forEach(function (r) { if (!at || r.comparedAt < at) at = r.comparedAt; });
+    return at;
+  }
+  function shortPin(r) {
+    if (r.pinnedCommit) return r.pinnedCommit.slice(0, 7);
+    return r.pinnedDigest ? r.pinnedDigest.replace(/^[a-z0-9-]+:/, '').slice(0, 12) : '';
+  }
+  function relationName(r) { return (r.consumer || 'this project') + ' \u2192 ' + r.producer; }
+  function relationText(r) {
+    var lines = [relationName(r) + ': ' + HEALTH_GLYPH[r.health] + ' ' + r.health];
+    r.uses.forEach(function (u) { lines.push('  ' + u.name + ' \u2014 ' + u.state + (u.detail ? ': ' + u.detail : '')); });
+    if (r.unchanged) lines.push('  ' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged');
+    if (r.detail) lines.push('  ' + r.detail);
+    var pin = shortPin(r);
+    lines.push((pin ? 'pinned ' + pin + ' \u00B7 ' : '') + 'compared ' + r.comparedAt);
+    return lines.join('\n');
+  }
+  function relationHtml(r) {
+    var pin = shortPin(r);
+    return '<div class="method"><div class="mname">' + esc(relationName(r)) + '<span class="grow"></span><span class="chip">' + HEALTH_GLYPH[r.health] + ' ' + esc(r.health) + '</span></div>'
+      + r.uses.map(function (u) { return '<div class="mdesc">' + esc(u.name) + ' \u2014 ' + esc(u.state) + (u.detail ? ': ' + esc(u.detail) : '') + '</div>'; }).join('')
+      + (r.unchanged ? '<div class="mdesc">' + r.unchanged + ' use' + (r.unchanged === 1 ? '' : 's') + ' unchanged</div>' : '')
+      + (r.detail ? '<div class="mdesc">' + esc(r.detail) + '</div>' : '')
+      + '<div class="mdesc">' + (pin ? 'pinned ' + esc(pin) + ' \u00B7 ' : '') + 'compared ' + esc(r.comparedAt) + '</div></div>';
+  }
+  // The relations whose consumption edges start or land inside a node.
+  function relationsTouching(sid) {
+    var seen = {}, out = [];
+    var inside = function (x) {
+      var c = compById[x];
+      return x === sid || x.indexOf(sid + '::') === 0 || !!(c && (c.subsystem === sid || c.subsystem.indexOf(sid + '::') === 0));
+    };
+    MODEL.edges.forEach(function (e) {
+      if (!e.relation || seen[e.relation] || !(inside(e.to) || inside(e.from))) return;
+      seen[e.relation] = true;
+      if (REL_BY_ID[e.relation]) out.push(REL_BY_ID[e.relation]);
+    });
+    return out;
+  }
+  // The one legend row, only when the model has a consumption edge.
+  function relationLegend(t) {
+    if (!HAS_CONSUMPTION) return '';
+    if (!HAS_RELATIONS) return '<br>relations: <span style="color:' + t.pageEdge + '">health not checked</span>';
+    var at = relationsComparedAt();
+    return '<br>relations: <span style="color:' + t.relOk + '">\u2713 ok</span>&nbsp; <span style="color:' + t.relDrift + '">\u0394 drifted</span>&nbsp; '
+      + '<span style="color:' + t.relBad + '">\u2715 incompatible</span>&nbsp; <span style="color:' + t.relUnknown + '">? unavailable (dotted)</span>'
+      + (at ? '&nbsp; \u00B7 as of ' + esc(at) : '');
+  }
+  // A project's own page, only through the host's open-project hook (the web
+  // app): never in a standalone file or on a shared page, which have none.
+  function openProjectButton(s) {
+    if (!s.recordId || typeof opts === 'undefined' || !opts || typeof opts.onOpenProject !== 'function') return '';
+    return '<div class="openbtn"><button class="tbtn" data-openproject-id="' + esc(s.recordId) + '">Open project \u2197</button></div>';
+  }
+
   function renderLegend() {
     var t = THEMES[state.theme];
     var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
     ROOT.getElementById('legend').innerHTML =
       sw({ fill: t.subFill, stroke: t.subStroke }) + 'Subsystem&nbsp; ' +
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
-      sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
+      sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.query) + 'Query&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
       sw(t.stereo.patternLeaf) + 'Pattern&nbsp; ' +
+      sw(t.stereo.retired) + '\u00ABSpecialist\u00BB/\u00ABGateway\u00BB retired, shown until migrated&nbsp; ' +
       sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; ' +
       sw(t.proxyIn) + '\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +
       'on select: <span style="color:' + t.selGlow + '">\u2192 depends on</span>&nbsp; <span style="color:' + t.warn + '">\u2190 used by</span>' +
-      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '');
+      (state.dataCoupling ? '&nbsp; · &nbsp;<span style="color:' + t.typeV.stroke + '">- - \u25B8 uses models</span>' : '') +
+      relationLegend(t);
   }
 
   // ---- view layout ---------------------------------------------------------------
@@ -915,6 +1029,14 @@ export function mountCanvas(host, model, opts = {}) {
       if (!agg[key]) agg[key] = { src: src, tgt: tgt, n: 0, cross: false, ghost: ghost };
       agg[key].n++;
       if (edge.cross) agg[key].cross = true;
+      if (edge.consumption) {
+        agg[key].consumption = true;
+        agg[key].health = worseHealth(agg[key].health, edgeHealth(edge));
+        if (edge.relation) {
+          var rels = agg[key].rels || (agg[key].rels = []);
+          if (rels.indexOf(edge.relation) < 0) rels.push(edge.relation);
+        }
+      }
     });
     return { agg: agg, ghosts: ghosts };
   }
@@ -1134,7 +1256,7 @@ export function mountCanvas(host, model, opts = {}) {
       return '';
     }
     function visibleFields(t) {
-      if (det === 'names') return [];
+      if (det === 'names' || t.values || t.holds) return [];
       if (det === 'keys') return t.fields.filter(function (f) { return markerOf(t, f) !== ''; });
       return t.fields;
     }
@@ -1177,15 +1299,21 @@ export function mountCanvas(host, model, opts = {}) {
     function tableShape(t) {
       var fields = visibleFields(t);
       var meths = det === 'full' ? t.methods : [];
-      var head = t.name + '  \u00AB' + t.kind + '\u00BB';
-      var rows = fields.map(function (f) { return rowText(t, f); })
+      // A signature type is drawn with its derived text in place of a field list.
+      var sig = t.signature && det !== 'names' ? t.signature : '';
+      // An enum is drawn with its values in place of a field list.
+      var vals = t.values && det !== 'names' ? t.values : [];
+      // A named scalar is drawn compactly: its name and the primitive it holds.
+      var head = t.name + (t.holds ? ' = ' + t.holds : '') + '  \u00AB' + t.kind + '\u00BB';
+      var rows = (sig ? [sig] : []).concat(vals.map(function (v) { return '\u2022 ' + v.name; }))
+        .concat(fields.map(function (f) { return rowText(t, f); }))
         .concat(meths.map(function (m) { return '\u0192 ' + m.name + '(): ' + m.returns; }));
       var longest = head.length + 4;
       rows.forEach(function (r) { if (r.length > longest) longest = r.length; });
       var plain = rows.length === 0;
       var pw = Math.max(170, head.length * 6.8 + 26);
       var W = Math.max(210, Math.min(400, longest * 6.6 + 30));
-      return { fields: fields, meths: meths, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + fields.length * ROW_H + meths.length * ROW_H };
+      return { fields: fields, meths: meths, sig: sig, vals: vals, head: head, plain: plain, w: plain ? pw : W, h: plain ? 40 : TH_H + (sig ? ROW_H : 0) + vals.length * ROW_H + fields.length * ROW_H + meths.length * ROW_H };
     }
 
     // Emit one type table with its top-left at (ax, ay); returns its size.
@@ -1194,7 +1322,7 @@ export function mountCanvas(host, model, opts = {}) {
       var kindCls = t.kind === 'entity' ? 'typeEntity' : 'typeValue';
       var dim = !typeMatches(t);
       var extra = (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[t.id] ? ' hasIssue' : '')
+        + issueMark(t.id)
         + (state.selectedKind === 'type' && state.selected === t.id ? ' sel' : '');
       if (sh.plain) {
         eles.push({
@@ -1209,6 +1337,20 @@ export function mountCanvas(host, model, opts = {}) {
         position: { x: ax + sh.w / 2, y: ay + TH_H / 2 }, classes: 'typeHead ' + kindCls + (dim ? ' dimmed' : ''), grabbable: false,
       });
       var ry = ay + TH_H;
+      if (sh.sig) {
+        eles.push({
+          data: { id: 'TS~' + t.id, parent: 'T~' + t.id, label: sh.sig, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow methRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      }
+      sh.vals.forEach(function (v, vi) {
+        eles.push({
+          data: { id: 'TV~' + t.id + '~' + vi, parent: 'T~' + t.id, label: '\u2022 ' + v.name, w: sh.w, h: ROW_H, tw: sh.w - 14 },
+          position: { x: ax + sh.w / 2, y: ry + ROW_H / 2 }, classes: 'typeRow' + (dim ? ' dimmed' : ''), grabbable: false,
+        });
+        ry += ROW_H;
+      });
       sh.fields.forEach(function (f) {
         var rid = 'TF~' + t.id + '~' + f.name;
         rowIds[rid] = 1;
@@ -1475,16 +1617,16 @@ export function mountCanvas(host, model, opts = {}) {
       var classes, label;
       var isPub = e.kind === 'component' && compById[e.id] && compById[e.id].public;
       if (e.kind === 'subsystem') {
-        classes = 'subsysBox';
+        classes = 'subsysBox' + (subById[e.id] && subById[e.id].external ? ' extProject' : '');
         label = nameOf(e) + (e.hasKids && !inner ? '\n\u25B8 open' : '');
       } else {
         var c = compById[e.id];
         classes = stereoClass(c.componentType);
-        label = c.name + '\n\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
+        label = c.name + '\n\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB' + (e.hasKids && !inner ? ' \u25B8' : '');
       }
       classes += (e.hasKids ? ' drillable' : '') + (isPub ? ' public' : '')
         + (dim ? ' dimmed' : '')
-        + (state.showIssues && issuesBySpec[e.id] ? ' hasIssue' : '')
+        + issueMark(e.id)
         + (state.selectedKind === e.kind && state.selected === e.id ? ' sel' : '');
       if (inner) {
         var boxNode = { data: { id: aid, label: e.kind === 'subsystem' ? nameOf(e) : nameOf(e), w: p.w, h: p.h, tw: p.w - 16 }, classes: classes };
@@ -1683,9 +1825,13 @@ export function mountCanvas(host, model, opts = {}) {
       var bundle = e.n > 1;
       var dim = state.query && (dimmedAnchors[e.src] || dimmedAnchors[e.tgt]);
       var route = routeData(e.src, e.tgt, key);
+      // A consumption edge carries its relation's health: the glyph at its middle,
+      // its colour (and line, dotted when unavailable) by class.
+      var glyph = e.health ? HEALTH_GLYPH[e.health] : '';
+      var relCls = e.consumption ? 'rel rel-' + (e.health || 'unchecked') + ' ' : '';
       eles.push({
-        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: bundle ? e.n + ' links' : '', cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
-        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + (dim ? 'dimmed' : ''),
+        data: { id: 'e' + (i++), source: e.src, target: e.tgt, lbl: (bundle ? e.n + ' links' : '') + (glyph ? (bundle ? ' ' : '') + glyph : ''), rels: (e.rels || []).join('|'), cpDist: route.cpDist, cpWeight: route.cpWeight, taxiTurn: route.taxiTurn },
+        classes: 'routed ' + (e.cross ? 'cross ' : '') + (bundle ? 'bundle ' : '') + (e.ghost ? 'toghost ' : '') + relCls + (dim ? 'dimmed' : ''),
       });
     });
 
@@ -2185,6 +2331,27 @@ export function mountCanvas(host, model, opts = {}) {
   cy.on('mouseover', 'node', function (ev) { setHover(ev.target); });
   cy.on('mouseout', 'node', function (ev) { if (hoveredNode && hoveredNode.id() === ev.target.id()) setHover(null); });
 
+  // Relation health: hovering a consumption edge shows its relation(s) — which
+  // uses changed or were removed, why one could not be compared, the pin and
+  // when it was compared; tapping it shows the same in the details panel.
+  function relationsOfEdge(edge) {
+    return (edge.data('rels') || '').split('|').filter(Boolean).map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+  }
+  cy.on('mouseover', 'edge.rel', function (ev) {
+    var tip = ROOT.getElementById('relTip');
+    var rels = relationsOfEdge(ev.target);
+    tip.textContent = rels.length ? rels.map(relationText).join('\n\n') : 'relation health not checked';
+    var at = ev.renderedPosition || { x: 0, y: 0 };
+    tip.style.left = (at.x + 12) + 'px';
+    tip.style.top = (at.y + 12) + 'px';
+    tip.style.display = 'block';
+  });
+  cy.on('mouseout', 'edge.rel', function () { ROOT.getElementById('relTip').style.display = 'none'; });
+  cy.on('tap', 'edge.rel', function (ev) {
+    var ids = ev.target.data('rels') || '';
+    if (ids) select('relation', ids, false);
+  });
+
   cy.on('tap', 'node', function (ev) {
     var t = idOf(ev.target);
     if (t.group) return;
@@ -2242,7 +2409,15 @@ export function mountCanvas(host, model, opts = {}) {
     var hasKids = t.kind === 'subsystem'
       ? (childSubsOf(t.id).length + childCompsOf(t.id).length) > 0
       : memberCompsOf(t.id).length > 0;
-    if (hasKids) navigateTo(t.kind, t.id);
+    if (hasKids) { navigateTo(t.kind, t.id); return; }
+    // A project node with nothing to drill into (a referenced or external one):
+    // its own page through the host's open-project hook when it carries a
+    // record id, else its details panel — its storage and its relations.
+    var ps = t.kind === 'subsystem' ? subById[t.id] : null;
+    if (ps && ps.project) {
+      if (ps.recordId && typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') { opts.onOpenProject(ps.recordId); return; }
+      select('subsystem', t.id, false);
+    }
   });
   cy.on('dragfree', 'node', function () { harvestPositions(); });
 
@@ -2296,9 +2471,14 @@ export function mountCanvas(host, model, opts = {}) {
         if (b.getAttribute('data-vm') === 'databases' && !showDatabaseTab) {
           b.style.display = 'none';
         }
+        // The network view is the host's (the web app's /canvas/<project>/network):
+        // shown only when the host can open it.
+        var canOpenNetwork = typeof opts !== 'undefined' && opts && typeof opts.onOpenNetwork === 'function';
+        if (b.getAttribute('data-vm') === 'network' && canOpenNetwork) b.style.display = '';
         b.addEventListener('click', function () {
           var vm = b.getAttribute('data-vm');
-          if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
+          if (vm === 'network' && canOpenNetwork) opts.onOpenNetwork();
+          else if (vm === 'databases' && showDatabaseTab) navigateTo('databases', typesScopeFromView());
           else if (vm === 'types') navigateTo('types', typesScopeFromView());
           else if (vm === 'components') navigateTo(state.view.id ? 'subsystem' : 'system', state.view.id || null);
         });
@@ -3073,6 +3253,7 @@ export function mountCanvas(host, model, opts = {}) {
       case 'try': return s.n + '. \u26E8 try \u2014 ' + s.text;
       case 'parallel': return s.n + '. \u2225 ' + s.text;
       case 'jump': return s.n + '. \u21B7 ' + s.text;
+      case 'register': return s.n + '. \u27F2 register \u2014 ' + s.text;
       case 'return': return s.n + '. \u23CE return' + (s.outcome ? ' \u2014 ' + s.outcome : '');
       case 'throw': return s.n + '. \u26A1 throw' + (s.err ? ' ' + s.err : '');
       default: return s.n + '. ' + s.text;
@@ -3096,7 +3277,9 @@ export function mountCanvas(host, model, opts = {}) {
     (graph.joins || []).forEach(function (j2) { joinByHeader[j2.header] = j2; });
     graph.steps.forEach(function (s, i) {
       var id = 'n' + s.n;
-      var isCall = (s.kind === 'call' || s.kind === 'dispatch') && !!s.call;
+      // Register steps render like calls (target edge + label) — the label
+      // itself says "register", keeping the handoff visually distinct.
+      var isCall = (s.kind === 'call' || s.kind === 'dispatch' || s.kind === 'register') && !!s.call;
       // A detached call's target renders as a separate ghost node (below), so
       // the step node itself stays plain and undrillable.
       var isDetached = isCall && !!s.detach;
@@ -3259,7 +3442,7 @@ export function mountCanvas(host, model, opts = {}) {
       var mi = methodInfo(top.comp, top.method);
       var parts = ['<div class="fstep" style="opacity:.7">No step-by-step narrative \u2014 showing intent / contract:</div>'];
       if (mi) {
-        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code></div>');
+        parts.push('<div class="fstep"><code>' + escText(mi.m.signature) + '</code>' + (mi.m.signatureFrom ? ' from <code>' + escText(mi.m.signatureFrom) + '</code>' : '') + '</div>');
         parts.push('<div class="fstep">' + escText(mi.m.description) + (mi.m.returns ? ' \u2014 returns ' + escText(mi.m.returns) : '') + '</div>');
       }
       if (intent) parts.push('<div class="fstep" style="font-style:italic">' + escText(intent) + '</div>');
@@ -3351,7 +3534,7 @@ export function mountCanvas(host, model, opts = {}) {
     comps.push({ id: 'start', name: flowTitle() + '()', subsystem: 'flow', componentType: 'Start', public: false, owns: [] });
     graph.steps.forEach(function (s) {
       var name = flowStepLabel(s) + (s.call && !s.detach ? ' \u2192 ' + s.call.component + '.' + s.call.method + '()' : '');
-      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch') ? 'Call' : 'Step', public: false, owns: [] });
+      comps.push({ id: 'n' + s.n, name: name, subsystem: 'flow', componentType: (s.kind === 'call' || s.kind === 'dispatch' || s.kind === 'register') ? 'Call' : 'Step', public: false, owns: [] });
     });
     // Virtual flow nodes (join bars, detached-call ghosts) export as plain
     // steps so the editable diagrams keep the fan-out/join and detachment.
@@ -3426,7 +3609,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
   function issueHtml(list) {
     return list.map(function (i) {
-      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><br>' + esc(i.message) + '</div>';
+      return '<div class="issue ' + esc(i.severity) + '"><code>' + esc(i.code) + '</code><span class="sev">' + esc(i.severity) + '</span><br>' + esc(i.message) + '</div>';
     }).join('');
   }
 
@@ -3476,7 +3659,7 @@ export function mountCanvas(host, model, opts = {}) {
     cy.nodes().removeClass('sel');
     cy.edges().removeClass('fieldhl');
     if (id) {
-      var node = nodeForRef(kind, id);
+      var node = kind === 'relation' ? cy.collection() : nodeForRef(kind, id);
       if (node.length) {
         node.addClass('sel');
         applyFocus(node);
@@ -3552,7 +3735,7 @@ export function mountCanvas(host, model, opts = {}) {
     if (focusKind === 'component' && compById[focusId]) {
       var c = compById[focusId];
       head = '<h2>' + esc(c.name) + '</h2>'
-        + staticChip('\u00AB' + c.componentType + (c.portalType ? '/' + c.portalType : '') + '\u00BB')
+        + staticChip('\u00AB' + c.componentType + (c.transport ? '/' + c.transport : '') + '\u00BB')
         + (c.public ? staticChip('published') : '')
         + (c.status ? staticChip(c.status) : '')
         + (scopeFocus ? staticChip('current view') : '')
@@ -3600,6 +3783,7 @@ export function mountCanvas(host, model, opts = {}) {
                   : '<span class="chip" style="opacity:.6">no narrative</span>')
               + '</div>'
               + '<code>' + esc(m.signature) + '</code>'
+              + (m.signatureFrom ? '<div class="mdesc">signature from <code style="display:inline">' + esc(m.signatureFrom) + '</code></div>' : '')
               + '<div class="mdesc">' + esc(m.description) + ' \u2014 returns ' + typeRefHtml(m.returns) + '</div>'
               + (mIntent && !hasNarr ? '<div class="mdesc" style="font-style:italic">' + esc(mIntent) + '</div>' : '')
               + (m.params ? '<div class="mdesc">params: ' + m.params.map(function (p) { return esc(p.name) + ': ' + typeRefHtml(p.type); }).join(', ') + '</div>' : '')
@@ -3631,7 +3815,7 @@ export function mountCanvas(host, model, opts = {}) {
         var xt = compById[pd.extId];
         head = '<h2>' + esc(xt ? xt.name : pd.extId) + '</h2>'
           + staticChip(pd.dir === 'in' ? '\u21E0 external caller' : 'external dependency \u21E2')
-          + (xt ? staticChip('\u00AB' + xt.componentType + (xt.portalType ? '/' + xt.portalType : '') + '\u00BB') : '')
+          + (xt ? staticChip('\u00AB' + xt.componentType + (xt.transport ? '/' + xt.transport : '') + '\u00BB') : '')
           + (xt ? chip(xt.subsystem, 'subsystem', xt.subsystem) : '');
         body += '<p class="desc">' + (pd.dir === 'in'
           ? 'Lives outside this box and depends on something inside it. The dashed line shows the actual cross-boundary link while this port is selected.'
@@ -3646,6 +3830,10 @@ export function mountCanvas(host, model, opts = {}) {
             via.map(function (v) { return chip(v.label, v.kind, v.id); }).join(''), true);
         }
       }
+    } else if (focusKind === 'relation') {
+      var rl = String(focusId).split('|').map(function (rid) { return REL_BY_ID[rid]; }).filter(Boolean);
+      head = '<h2>' + esc(rl.length === 1 ? relationName(rl[0]) : rl.length + ' relations') + '</h2>' + staticChip('relation');
+      body += rl.map(relationHtml).join('');
     } else if (focusKind === 'type') {
       var ty = null;
       MODEL.types.forEach(function (t2) { if (t2.id === focusId) ty = t2; });
@@ -3699,7 +3887,22 @@ export function mountCanvas(host, model, opts = {}) {
                 + '</div>';
             }).join('')
           : '<span class="desc">no fields</span>';
-        body += section('Fields', ty.fields.length, fieldsInner, true);
+        if (ty.signature) {
+          body += section('Signature', 1, '<div class="method"><code>' + esc(ty.signature) + '</code></div>', true);
+        } else if (ty.holds) {
+          body += section('Holds', 1, '<div class="method"><code>' + esc(ty.holds) + '</code>'
+            + '<div class="mdesc">A named scalar: one ' + esc(ty.holds) + ' under this name.</div></div>', true);
+        } else if (ty.values) {
+          body += section('Values', ty.values.length, ty.values.length
+            ? ty.values.map(function (v) {
+                return '<div class="method"><div class="mname">' + esc(v.name) + '</div>'
+                  + (v.description ? '<div class="mdesc">' + esc(v.description) + '</div>' : '')
+                  + '</div>';
+              }).join('')
+            : '<span class="desc">no values</span>', true);
+        } else {
+          body += section('Fields', ty.fields.length, fieldsInner, true);
+        }
         if (ty.usedBy && ty.usedBy.length) {
           body += section('Used by methods', ty.usedBy.length, ty.usedBy.map(function (u) {
             return chip(u.component + '.' + u.method + '()', 'component', u.component);
@@ -3729,8 +3932,14 @@ export function mountCanvas(host, model, opts = {}) {
         + (scopeFocus ? staticChip('current view') : '')
         + (scopeFocus ? '' : openViewButton('subsystem', s.id, subKids > 0))
         + openApiButton(subsystemExposesApi(s.id), '')
-        + openSpecButton('subsystem', s.id);
+        + openSpecButton('subsystem', s.id)
+        + (s.project ? staticChip(s.external ? 'external project' : 'project') : '')
+        + (s.storage ? staticChip(s.storage) : '')
+        + openProjectButton(s);
       body += '<p class="desc">' + esc(s.description) + '</p>';
+      var nodeRels = relationsTouching(s.id);
+      if (nodeRels.length) body += section('Relations', nodeRels.length, nodeRels.map(relationHtml).join(''), true);
+      else if (s.project && HAS_CONSUMPTION && !HAS_RELATIONS) body += section('Relations', null, '<span class="desc">relation health was not checked</span>', true);
       if (s.trustedLinks.length) {
         body += section('Trusted links (fast lanes)', s.trustedLinks.length, s.trustedLinks.map(function (t2) {
           return '<div class="method">' + chip(t2.subsystem, 'subsystem', t2.subsystem) + '<div class="mdesc">' + esc(t2.reason) + '</div></div>';
@@ -3796,6 +4005,14 @@ export function mountCanvas(host, model, opts = {}) {
           }
         });
       })(ospecs[si]);
+    }
+    var oprojs = panel.querySelectorAll('[data-openproject-id]');
+    for (var opi = 0; opi < oprojs.length; opi++) {
+      (function (b) {
+        b.addEventListener('click', function () {
+          if (typeof opts !== 'undefined' && opts && typeof opts.onOpenProject === 'function') opts.onOpenProject(b.getAttribute('data-openproject-id'));
+        });
+      })(oprojs[opi]);
     }
     var flows = panel.querySelectorAll('[data-flow-comp]');
     for (var j = 0; j < flows.length; j++) {

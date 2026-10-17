@@ -1,0 +1,57 @@
+kind: enum
+id: chaining_finding_kind
+name: ChainingFindingKind
+description: 'What a chaining-migration finding is about: something the migration will not do for a person.'
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/chaining-migration.ts
+values:
+  - name: id-ambiguous
+    description: No usable id, a planned id outside the grammar, or one that collides with another project's
+  - name: id-locked
+    description: >-
+      A member keeps the id its lock approved, which differs from its alias; changing it is the
+      rename migration
+  - name: declaration-orphaned
+    description: An existing external finds its producer by an id the producer is about to leave
+  - name: target-unpublished
+    description: A subsystem-owned item is not in its subsystem's L1 table, so no L0 re-export can follow it
+  - name: target-missing
+    description: 'The reference names nothing the producer declares: the reference is wrong'
+  - name: name-taken
+    description: The item's default public name already binds another target in the producer
+  - name: narrowed
+    description: The item is exported, but under a narrowing that does not declare the member reached
+  - name: subsystem-reference
+    description: An L1 re-export that names another project's subsystem wholesale
+  - name: alias-invalid
+    description: A planned alias outside the alias grammar
+  - name: alias-taken
+    description: A planned alias the consumer already uses
+  - name: project-absent
+    description: A project the plan must write has no configuration
+  - name: member-absent
+    description: >-
+      A member the family declares has no directory (blocking: references into it cannot be
+      rewritten)
+  - name: family-partial
+    description: The climb stopped at a hop out of reach
+  - name: mount-field-conflict
+    description: >-
+      A legacy mount's published entry names a public name the member's table binds to another
+      target (blocking)
+  - name: mount-field-unhomed
+    description: A legacy mount carries a field no member can hold (blocking until a person moves or drops it)
+  - name: rewrite-unavailable
+    description: A deprecated reference with no canonical text
+  - name: positional-ambiguous
+    description: A bare name keys onto several projects and no tie-break leaves exactly one; a person picks
+  - name: import-shadowed
+    description: >-
+      A positional import would share its name with a spec of the consumer itself, so it is not
+      written
+  - name: import-collision
+    description: Two planned imports would supply one bare name to one consumer
+createdAt: '2026-10-04T23:24:42.021Z'
+updatedAt: '2026-10-04T23:24:42.467Z'

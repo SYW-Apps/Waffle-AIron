@@ -1,0 +1,15 @@
+{
+  "stateId": {
+    "algorithm": "sha256",
+    "digest": "d17f3b3ffb958cce63348d454d4ab11ce1b55f7c5b0bf9baae1dbce500e1b47b"
+  },
+  "lockedAt": "2026-10-17T11:46:28.475Z",
+  "lockedBy": "qa-fixture",
+  "validatorVersion": "5.1.0",
+  "validationResult": {
+    "valid": true,
+    "errors": 0,
+    "warnings": 10
+  },
+  "status": "ready"
+}

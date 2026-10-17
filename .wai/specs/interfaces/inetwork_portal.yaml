@@ -1,0 +1,26 @@
+id: inetwork_portal
+name: Network Portal Interface
+description: 'The derived networking front door: read-only, in-process.'
+component: network_portal
+methods:
+  - name: flows
+    description: 'Forward to network_orchestrator.flows: the allowed-flows matrix.'
+    signatureFrom: network_orchestrator.flows
+  - name: policy
+    description: 'Forward to network_orchestrator.policy: generated network policy.'
+    signatureFrom: network_orchestrator.policy
+  - name: diagram
+    description: 'Forward to network_orchestrator.diagram: the network picture as Mermaid.'
+    signatureFrom: network_orchestrator.diagram
+  - name: view
+    description: 'Forward to network_orchestrator.view: the canvas''s network view model.'
+    signatureFrom: network_orchestrator.view
+  - name: check
+    description: 'Forward to network_orchestrator.check: observed flows against the matrix.'
+    signatureFrom: network_orchestrator.check
+  - name: why
+    description: 'Forward to network_orchestrator.why: why one party may reach another.'
+    signatureFrom: network_orchestrator.why
+status: complete
+createdAt: '2026-10-06T13:11:13.662Z'
+updatedAt: '2026-10-06T13:11:14.309Z'

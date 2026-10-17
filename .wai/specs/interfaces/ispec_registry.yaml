@@ -9,20 +9,25 @@ methods:
     description: Validates and persists the L0 system specification.
     signature: 'saveSystemSpec(spec: SystemSpec): void'
     returns: void
-  - name: saveSubsystemSpec
-    description: Validates and persists a subsystem specification.
-    signature: 'saveSubsystemSpec(spec: SubsystemSpec): void'
-    returns: void
   - name: saveComponentSpec
-    description: Validates and persists a component specification, returning placement notices.
+    description: >-
+      Validates and persists a component specification, returning placement notices. A spec arriving
+      at draft, or without a status, keeps the status already stored unless the caller states the
+      demotion.
     signature: 'saveComponentSpec(spec: ComponentSpec): void'
     returns: void
   - name: saveInterfaceSpec
-    description: Validates and persists an interface specification, returning placement notices.
+    description: >-
+      Validates and persists an interface specification, returning placement notices. A spec
+      arriving at draft, or without a status, keeps the status already stored unless the caller
+      states the demotion.
     signature: 'saveInterfaceSpec(spec: InterfaceSpec): void'
     returns: void
   - name: saveImplementationSpec
-    description: Validates and persists an implementation specification, returning placement notices.
+    description: >-
+      Validates and persists an implementation specification, returning placement notices. A spec
+      arriving at draft, or without a status, keeps the status already stored unless the caller
+      states the demotion.
     signature: 'saveImplementationSpec(spec: ImplementationSpec): void'
     returns: void
   - name: dryRunSerializeSpecs
@@ -31,9 +36,138 @@ methods:
       paths use — same relativization, same schema parse — without touching the filesystem; returns
       one ROUNDTRIP_SERIALIZATION issue per refused spec and never throws for an unserializable one.
     signature: 'dryRunSerializeSpecs(include?: (specId: string) => boolean): ValidationIssue[]'
-    returns: ValidationIssue[]
+    returns: list<ValidationIssue>
     guarantees:
       - idempotent
+  - name: invalidateCache
+    description: >-
+      Drop every workspace's cached index IN PLACE (never evicting the workspace itself, so a caller
+      holding a reference keeps receiving invalidations). Every save path already calls this; it is
+      exposed on the contract for the one case that bypasses them — a spec tree that arrived as a
+      directory swap, which the cache's own change detection would otherwise only notice after its
+      staleness window.
+    signature: 'invalidateCache(): void'
+    returns: void
+    guarantees:
+      - idempotent
+    effect: write
+  - name: save
+    description: >-
+      Persist one spec through the typed writer of its kind, answering with that writer's placement
+      notices; the stored status is kept on a draft or status-less save unless the caller states the
+      demotion. Placement follows the spec's home (stage 8): a spec the scan read from a part is
+      written back to its file in that part; a NEW component, interface or implementation goes where
+      its subsystem lives; a NEW subsystem goes to the bound root's own specs folder (a subsystem
+      joins a part by `subsystem externalize --path <the part's directory>`, a storage move); a type
+      follows its owning subsystem. A part fetched from git is read-only here — its files are the
+      fetch cache's — so a write that would land in one is refused before anything is written
+      (PartReadOnly), naming the repository and the commit: it is edited in its own repository and
+      taken in by `wairon member update`. Inside a hosted request the request's write reach judges
+      the spec too: a spec of a subsystem the request may not change (a hosted subsystem rule), or
+      of no subsystem when the request may not write the project, is refused before anything is
+      written (SubsystemWriteDenied), naming the subsystem and the rung that decided it. Outside a
+      hosted request nothing more is judged.
+    signature: >-
+      save(kind: WritableSpecKind, spec: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec
+      | ImplementationSpec | TypeSpec): list<string>
+    returns: list<string>
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: spec
+        type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+        description: The spec to persist, of that kind
+    effect: write
+  - name: delete
+    description: >-
+      Delete one spec document of the named kind through the typed delete of that kind; false when
+      none existed. A kind of system is refused: the L0 cannot be deleted. Inside a hosted request a
+      spec of a subsystem the request may not change is refused before anything is removed
+      (SubsystemWriteDenied), as save refuses it.
+    signature: 'delete(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: 'The kind of spec the id names (never system: the L0 is not deleted)'
+      - name: id
+        type: string
+        description: The spec id (namespaced if needed)
+    effect: write
+  - name: deleteMount
+    description: >-
+      Delete the bound project's legacy L1 mount declaration for one alias — the subsystem document
+      carrying projectPath that the scan reads as a member declaration and never loads as a
+      subsystem. Idempotent: false when the project holds no such document. The caller carries the
+      mount's fields and declares the member first; this only removes the old form.
+    signature: 'deleteMount(alias: string): bool'
+    returns: bool
+    params:
+      - name: alias
+        type: string
+        description: The mount subsystem's local id in the bound project
+    guarantees:
+      - idempotent
+    effect: write
+  - name: normalizeReferences
+    description: >-
+      Re-save one spec with every reference in its canonical stage-3 form: the writer's inverse
+      applied to each in-memory value WITHOUT the authored-text carry, so a deprecated leading `::`,
+      `super::` or member-path reference — and a self-prefixed one, the project's own id (for a
+      member that declares no id, also the alias its parent declares it under) as the first segment,
+      `registry::x` or the dotted `registry.x`, raw type positions included — is written as a bare
+      local id or `alias::publicName` and an alias form stays as it is. Targets never change — only
+      their spelling. Refuses a reference whose canonical form cannot be written (bound outside or
+      unresolved while carrying a deprecated form), naming it. Answers whether the stored text
+      changed; a spec already canonical writes nothing.
+    signature: 'normalizeReferences(kind: WritableSpecKind, id: string): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names (the L0 holds no references to normalize)
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+    guarantees:
+      - idempotent
+    effect: write
+  - name: rewriteReferences
+    description: >-
+      Respell references at parsed positions of one spec: for each edit, the reference standing at
+      its position — a whole reference value, or at a type position the one qualified token inside
+      the type string, the display signature beside it included — whose text equals `from` is
+      replaced by `to`, and nothing else in the document moves. An edit whose `to` already stands at
+      its position was applied before and writes nothing (idempotent). Refuses the whole spec before
+      writing, naming the position and both texts, when an edit's `from` is not at its position and
+      its `to` is not either. Never re-derives a spelling and never whole-string or
+      substring-matches the file. Compares the serialized document with the stored one and writes
+      through the file store only when they differ, answering whether it wrote; the lock is never
+      touched.
+    signature: 'rewriteReferences(kind: WritableSpecKind, id: string, edits: list<ReferenceEdit>): bool'
+    returns: bool
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of spec the id names
+      - name: id
+        type: string
+        description: The spec's in-memory key, from the family's top root
+      - name: edits
+        type: list<ReferenceEdit>
+        description: The edits for this spec
+    guarantees:
+      - idempotent
+  - name: lockTree
+    description: >-
+      Take the cross-process write lock of the bound project's spec tree (spec_file_store.lockTree),
+      then make every workspace re-read its tree's file signature on its next scan, instead of after
+      the cache's time-to-live: a write that follows reads what another session wrote before it,
+      never a cached tree. Two sessions writing one spec serialize instead of losing one write.
+    signature: 'lockTree(): void'
+    returns: void
+    effect: io
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-07-18T22:57:54.007Z'
+updatedAt: '2026-10-09T12:16:30.715Z'

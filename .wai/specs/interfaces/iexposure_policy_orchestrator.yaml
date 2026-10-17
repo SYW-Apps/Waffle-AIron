@@ -1,0 +1,35 @@
+id: iexposure_policy_orchestrator
+name: Exposure Policy Orchestrator Interface
+description: >-
+  Contract for the instance exposure-policy administration: read or replace the
+  webUiEnabled/requireTls posture. Both methods authenticate the caller and require instance-level
+  project:admin; the replacement is audited at security level and is the only write.
+component: exposure_policy_orchestrator
+methods:
+  - name: getExposurePolicy
+    description: >-
+      Authenticate, require instance-level project:admin, and return the persisted instance exposure
+      policy (webUiEnabled/requireTls posture), substituting the safe default (web UI off) when none
+      has been configured. A read; not audited.
+    signature: 'getExposurePolicy(credential: string): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+  - name: setExposurePolicy
+    description: >-
+      Authenticate, require instance-level project:admin, replace the instance exposure policy
+      wholesale through the policy repository, and audit at security level (the exposure posture
+      gates the whole web surface).
+    signature: 'setExposurePolicy(credential: string, policy: HostExposurePolicy): HostExposurePolicy'
+    returns: HostExposurePolicy
+    params:
+      - name: credential
+        type: string
+      - name: policy
+        type: HostExposurePolicy
+    guarantees:
+      - atomic
+status: complete
+createdAt: '2026-09-13T12:08:35.941Z'
+updatedAt: '2026-09-13T12:09:16.925Z'

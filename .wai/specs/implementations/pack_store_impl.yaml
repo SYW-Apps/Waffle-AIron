@@ -1,0 +1,222 @@
+id: pack_store_impl
+name: Pack Store Implementation
+description: >-
+  File-backed I/O for the container's extension-pack store: the server-global packs directory
+  (WAIRON_PACKS_DIR, defaulted onto the data volume) and a bound project's vendored packs under
+  .wai/packs/. It never reads or writes .wai/project.yaml: project-scoped probes take the loaded
+  project configuration as input, a project install returns the probe whose ref the calling
+  orchestrator registers, and a project removal deletes only the vendored files of a registration
+  the orchestrator has matched and deregistered. Reuses the core extension loader to probe and to
+  enforce the declarative-pack schema. Installs are declarative-only; code packs are refused here.
+contract: ipack_store
+sourcePath: src/server/packs.ts
+injectedParams:
+  - cfg
+methods:
+  - name: installGlobalPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Rejects an unsafe pack name (anything outside [A-Za-z0-9._-], to prevent path traversal).
+      Parses the content as YAML and validates it against the declarative-pack schema (name +
+      profiles + language/platform tables); a programmatic/code pack — or any parse or shape failure
+      — is refused with guidance to install code packs via the trusted filesystem (a baked image
+      layer or a mounted packs volume). On success writes it atomically as <name>.yaml into the
+      MUTABLE instance packs directory (WAIRON_PACKS_DIR), creating that directory if needed; the
+      immutable image-layer directory is never written. Returns its probe (tier 'instance').
+    calls:
+      - host_core_adapter.checkDeclarativePack
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallGlobalPack
+  - name: removeGlobalPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolves the named pack (by file stem or declared name) in the MUTABLE instance packs
+      directory and deletes it; the immutable image-layer directory is never touched, so a pack that
+      exists only in the image tier cannot be removed here (the attempt raises a clear error).
+      Removing an instance pack that shadowed a same-named image pack re-exposes the image pack.
+      Removal intentionally invalidates any project that still references the pack — that fallout
+      surfaces via the missing-pack-references drift check.
+    symbol: storeRemoveGlobalPack
+  - name: listProjectPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Probes each entry of the supplied configuration's extensions.packs against the bound project
+      root: a by-name selection is resolved to its loadable ref through the core adapter (the
+      committed bundle first) and a legacy path ref passes through unchanged; each is listed under
+      its declared label, returning a descriptor per pack (or its load error, including a selection
+      that does not resolve). Never reads .wai/project.yaml — the caller loaded the configuration;
+      an absent configuration yields an empty list. Assumes a project root is already bound in
+      scope.
+    calls:
+      - host_core_adapter.packEntryLabel
+      - host_core_adapter.packEntryRef
+      - host_core_adapter.loadExtensionPacks
+    symbol: storeListProjectPacks
+  - name: installProjectPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Rejects an unsafe pack name, then validates the content as a declarative pack exactly as the
+      global install does. On success vendors it atomically into the bound project's
+      .wai/packs/<name>.yaml (re-installing refreshes the file). Writes nothing to
+      .wai/project.yaml: returns its probe, whose ref is that project-relative path reference, for
+      the calling orchestrator to register (registration appends only when absent, so a re-install
+      leaves a single registration). Because the pack and its registration are committed with the
+      project, every clone and CI then enforce it.
+    symbol: storeInstallProjectPack
+  - name: removeProjectPack
+    narrative: []
+    detail: intent
+    intent: >-
+      Deletes the vendored files of a registration the calling orchestrator has already matched and
+      deregistered: the files at the given path reference, or — when no reference is given (a
+      by-name selection) — the pack's bundle directory .wai/packs/<name>/. Guarded to never delete a
+      path outside .wai/packs, so a reference pointing elsewhere keeps its files; a path that is
+      already gone is not an error. Reads and writes no configuration.
+    symbol: storeRemoveProjectPack
+  - name: storeListGlobalPacks
+    narrative: []
+    intent: >-
+      Discovers pack refs across BOTH server-global tiers — the immutable image-layer directory
+      (WAIRON_IMAGE_PACKS_DIR, default /opt/wairon/packs) and the mutable instance directory
+      (WAIRON_PACKS_DIR, or <data-dir>/packs) — read fresh, and probes each in isolation via the
+      core extension loader. Returns their union as descriptors, each tagged with its tier; when the
+      same pack name exists in both tiers the instance copy is the effective one and the image copy
+      is marked shadowed, so drift is visible in the listing itself. Never throws for a bad pack —
+      the error rides on its descriptor so one broken pack cannot hide the rest. No credential gate:
+      the pre-authorized read every caller reaches after its own authorization.
+    calls:
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.discoverPacks
+      - host_core_adapter.loadExtensionPacks
+  - name: executeApprovedListProjectPacks
+    narrative: []
+    intent: >-
+      Binds the named project's isolated root and probes the packs the supplied configuration
+      registers exactly as listProjectPacks does — no credential gate; the approval workflow or
+      permission rules have already authorized the caller, and the caller loaded the configuration.
+  - name: executeApprovedInstallProjectPack
+    narrative: []
+    intent: >-
+      Binds the named project's isolated root and vendors the pack content into its .wai/packs/
+      exactly as installProjectPack does, returning the probe whose ref the caller registers — no
+      credential gate; the approval workflow or permission rules have already authorized the caller.
+      Writes nothing to .wai/project.yaml.
+  - name: installGlobalPackArchive
+    narrative: []
+    detail: intent
+    intent: >-
+      Install a declarative pack from a .wpack archive into the MUTABLE instance packs directory
+      (the image tier is never written). Inspect the envelope via the host SDK adapter and reject a
+      code pack (kind: code) — the declarative-only surface policy — before any bytes touch disk.
+      Derive the pack name from the envelope (or the optional override) and sanitize it to the
+      pack-name charset, then extract the archive into <instance packs dir>/<name> via the SDK
+      adapter under hosted-strict limits (the SDK enforces zip-slip / entry-count / size /
+      compression-ratio / depth and verifies integrity). Re-check the extracted pack.yaml parses as
+      a declarative pack via the core adapter (defense in depth), removing the partial extraction on
+      failure. Probe and return the PackDescriptor (tier instance). Fails loudly on an unsafe
+      archive, a code pack, or a non-declarative payload.
+    calls:
+      - host_sdk_adapter.inspectArchive
+      - host_sdk_adapter.extractArchive
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallGlobalPackArchive
+  - name: installProjectPackArchive
+    narrative: []
+    detail: intent
+    intent: >-
+      Bound-project counterpart of installGlobalPackArchive: reject code packs, safely extract the
+      declarative pack into the project's .wai/packs/<name>/ under hosted-strict limits (SDK
+      adapter), and return its probe, whose ref is the '.wai/packs/<name>' directory reference the
+      calling orchestrator registers (committed with the project, so every clone and CI enforce it).
+      Writes nothing to .wai/project.yaml. Assumes the orchestrator has already bound the project
+      root. Fails loudly on unsafe / code / non-declarative input.
+    calls:
+      - host_sdk_adapter.inspectArchive
+      - host_sdk_adapter.extractArchive
+      - host_core_adapter.loadExtensionPacks
+    symbol: storeInstallProjectPackArchive
+  - name: executeApprovedResolveGlobalPacks
+    narrative: []
+    detail: intent
+    intent: >-
+      Resolve a set of policy-supplied pack names against the server-global pack set, with no
+      authentication (a pre-authorized internal entry) and no mutation of any tier. For each
+      requested name, search BOTH tiers — the mutable instance directory (WAIRON_PACKS_DIR) first,
+      then the immutable image-layer directory (WAIRON_IMAGE_PACKS_DIR) — accepting both a file-form
+      pack (<name>.yaml/.yml) and a directory-form pack (a <name>/ directory holding a pack entry
+      file), and matching the requested name against EITHER the file stem OR the loaded pack's
+      manifest name. On a match, load and serialize the pack's declarative content to a single
+      declarative document suitable for vendoring, and emit a ResolvedGlobalPack carrying the
+      requested name, the pack's CANONICAL manifest name, the serialized content, and the
+      originating tier ('instance' or 'image'); the instance tier wins on a same-name collision. A
+      requested name with no match in either tier — or one whose only candidate is
+      unreadable/corrupt and fails to probe — is collected into the unresolved list rather than
+      throwing, so a bad or absent pack is REPORTED, never silently dropped. Returns a
+      PackResolution partitioning the input into resolved packs and unresolved names. Never writes
+      to any packs directory.
+  - name: storeListAvailableProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregate the selectable profiles with no authentication (a pre-authorized internal read).
+      Read the built-in profile ids via the validator adapter and emit each as an AvailableProfile
+      with source "builtin". Then probe the server-global packs across both tiers (reusing the
+      two-tier listing) and, for each successfully loaded pack, emit each profile id it contributes
+      with source set to the pack's canonical name and family carried through from the pack's
+      ProfileDef when present. Dedupe by (id, source). A pack that fails to load contributes nothing
+      (its error rides on its descriptor elsewhere); this read never throws. Never mutates any tier.
+    calls:
+      - host_validator_adapter.builtinProfileIds
+      - host_core_adapter.globalPacksDir
+      - host_core_adapter.discoverPacks
+      - host_core_adapter.loadExtensionPacks
+  - name: executeApprovedListProjectProfiles
+    narrative: []
+    detail: intent
+    intent: >-
+      Aggregates the profiles selectable for ONE project with no authentication (a pre-authorized
+      internal read), binding that project's isolated root. Emits every built-in profile id via the
+      core adapter with source "builtin" and installed true. Then loads the packs registered in the
+      configuration the caller supplies for that project (extensions.packs) through the core
+      extension loader and emits each profile they contribute with source set to the pack's
+      canonical name and installed true — the tier the instance-wide catalog cannot see, so a pack
+      uploaded straight into a project no longer hides its profiles; an absent configuration
+      contributes no project tier. Finally probes the server-global packs across both tiers and
+      emits each profile they contribute with installed false: adoptable, and vendored by the write
+      path when selected. Carries family through from each ProfileDef when present, dedupes by (id,
+      source) with the project tier winning, and never throws — a pack that fails to load simply
+      contributes nothing. Reads no .wai/project.yaml and mutates no tier.
+  - name: executeApprovedEnsureProfileInstalled
+    narrative: []
+    detail: intent
+    intent: >-
+      Makes one profile id able to actually govern a project, with no authentication (a
+      pre-authorized internal call). A known project kind or built-in profile id resolves
+      immediately with source "builtin" and nothing adopted. Otherwise the project-scoped catalog
+      built from the supplied configuration decides: a profile already contributed by a pack that
+      configuration registers returns with that pack as its source and nothing adopted; a profile
+      contributed only by a server-global pack has that pack resolved through the two-tier
+      resolution seam and vendored into the project by its canonical name through the install path,
+      returned with adoptedPackName set and adoptedPackRef set to the adopted pack's vendored path
+      reference (the ref of the install's probe). It never writes .wai/project.yaml, so the adopted
+      pack is NOT registered here: the side effect is reported for the calling orchestrator to
+      register adoptedPackRef rather than hidden, and no caller composes the vendored path itself. A
+      profile id no tier contributes RAISES an error naming the id and the tiers searched — writing
+      it as the project's projectType would leave the whole profile doctrine silently unenforced, so
+      it is refused instead of applied. Idempotent: a profile the supplied configuration already
+      makes resolvable is returned untouched, and a repeat call made before the caller registered an
+      earlier adoption re-vendors the same content and reports the same adoption, so the flow
+      converges.
+    calls:
+      - host_validator_adapter.builtinProjectKinds
+      - host_validator_adapter.builtinProfileIds
+detail: intent
+status: complete
+createdAt: '2026-07-04T18:42:57.340Z'
+updatedAt: '2026-10-04T19:55:01.991Z'

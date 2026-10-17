@@ -1,0 +1,18 @@
+kind: enum
+id: surface_origin
+name: SurfaceOrigin
+description: >-
+  Where a surface snapshot came from — its provenance, which decides how far a consumer may trust it
+  as a contract.
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: generated
+    description: Projected from the producer's own spec tree
+  - name: exchanged
+    description: Imported from a snapshot the producer exported
+  - name: authored
+    description: Written by hand on the consumer's side, for a producer that publishes none
+createdAt: '2026-10-04T23:11:09.266Z'
+updatedAt: '2026-10-04T23:11:09.649Z'

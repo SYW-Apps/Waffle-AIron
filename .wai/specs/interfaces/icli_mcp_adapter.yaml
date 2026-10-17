@@ -1,0 +1,91 @@
+id: icli_mcp_adapter
+name: CLI MCP Configuration Adapter Interface
+description: >-
+  Registration and read-back of the wairon MCP server entry in the AI tools' configuration files,
+  plus the stdio server entry point itself.
+component: cli_mcp_adapter
+methods:
+  - name: detectHostedMcpSource
+    description: >-
+      Read the wairon entry out of the agent's MCP configuration for this checkout and report what
+      it points at: a LOCAL stdio server over this tree, or a HOSTED http server with its instance
+      URL and (when the entry carries them) the project selector and bearer credential. Returns null
+      when no wairon entry is registered anywhere. Pure read — never writes, and never fails a
+      command: an unparseable config reads as "nothing registered".
+    signature: 'detectHostedMcpSource(cwd?: string): DetectedMcpSource?'
+    returns: DetectedMcpSource?
+    params:
+      - name: cwd
+        type: string
+        description: The directory to detect from; the process working directory when omitted
+        optional: true
+    guarantees:
+      - idempotent
+  - name: installMcpServer
+    description: >-
+      Register (or self-heal) the wairon MCP server entry for the selected AI backends: a LOCAL
+      stdio entry pinned to this project by default, or a HOSTED http entry naming an instance,
+      project and bearer when those are supplied. A local entry needs an initialized project; a
+      hosted one needs none — it works in an empty folder and writes only the entry. Only the
+      `wairon` entry is written; every other server and key in the file is preserved. A file it
+      replaces OUTSIDE the project root (a user or machine-wide configuration) is first copied
+      beside itself as <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the
+      previous value can always be restored.
+    signature: 'installMcpServer(options?: mcp_install_options): void'
+    returns: void
+    params:
+      - name: options
+        type: mcp_install_options
+        optional: true
+  - name: reportMcpStatus
+    description: >-
+      Report, per known config location, whether a wairon server entry is registered and what it
+      points at — the diagnostic behind `wairon mcp status`.
+    signature: 'reportMcpStatus(): void'
+    returns: void
+    guarantees:
+      - idempotent
+  - name: serveMcpStdio
+    description: >-
+      Run the wairon MCP server on the stdio transport, resolving the project root it attaches to
+      (pinned env, else the nearest .wai above the cwd) and announcing the resolution on stderr so a
+      silent mis-attachment is observable. The entry point an AI tool spawns; it does not return
+      until the transport closes.
+    signature: 'serveMcpStdio(): Promise<void>'
+    returns: async void
+  - name: planInstall
+    description: >-
+      What installMcpServer would write for these options, computed exactly as it computes it and
+      writing nothing: per resolved backend, the file, whether it lies outside the project root, the
+      wairon entry it holds now and the one it would get, and whether it is already up to date. The
+      plan a caller prints and confirms before it lets an install touch a machine-wide file.
+    signature: 'planInstall(options: mcp_install_options): list<McpConfigWrite>'
+    returns: list<McpConfigWrite>
+    params:
+      - name: options
+        type: mcp_install_options
+        description: The same options installMcpServer would be given
+    guarantees:
+      - idempotent
+  - name: findLegacyPlugin
+    description: >-
+      Where the legacy global Antigravity plugin sits (`<gemini home>/config/plugins/wairon`), or
+      null when there is none. A plugin named "wairon" collides with the wairon MCP server, so a
+      repair retires it. Pure read.
+    signature: 'findLegacyPlugin(): string?'
+    returns: string?
+    params: []
+    guarantees:
+      - idempotent
+  - name: retireLegacyPlugin
+    description: >-
+      Move the legacy global Antigravity plugin out of the plugins directory — to `<gemini
+      home>/config/wairon-plugin.wairon-backup-<timestamp>`, where it no longer loads — instead of
+      deleting it, and answer where it went; null when there was none. Never deletes: the directory
+      is the user's, and a backup is what lets a mistaken repair be undone.
+    signature: 'retireLegacyPlugin(): string?'
+    returns: string?
+    params: []
+status: complete
+createdAt: '2026-08-12T18:42:15.287Z'
+updatedAt: '2026-10-17T14:35:31.509Z'

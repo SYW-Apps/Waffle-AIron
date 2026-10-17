@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { readYamlFile } from '../../src/utils/yaml.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 
@@ -68,10 +69,14 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
       'sdd_initialize_system', 'sdd_add_subsystem', 'sdd_add_component',
       'sdd_define_interface', 'sdd_set_endpoints', 'sdd_write_narrative',
       'sdd_add_type', 'sdd_update_spec', 'sdd_delete_spec', 'sdd_get_spec',
-      'sdd_validate_tree', 'sdd_get_status', 'sdd_list_external_interfaces',
-      'sdd_move_subsystem_project', 'sdd_externalize_subsystem', 'sdd_internalize_subsystem',
+      'sdd_validate_tree', 'sdd_get_status',
+      'sdd_add_member', 'sdd_move_member', 'sdd_externalize_subsystem', 'sdd_internalize_member',
     ]) {
       expect(names).toContain(expected);
+    }
+    // Renamed and removed with no aliases (stage 3): members are configuration.
+    for (const gone of ['sdd_move_subsystem_project', 'sdd_internalize_subsystem', 'sdd_set_subsystem_project_path']) {
+      expect(names).not.toContain(gone);
     }
   }, 30_000);
 
@@ -95,7 +100,7 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
       name: 'sdd_add_component',
       arguments: {
         id: 'billing-portal', name: 'Billing Portal', description: 'Inbound HTTP front door',
-        subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API',
+        subsystem: 'billing', componentType: 'Portal', transport: 'HTTP',
         dependsOn: ['billing-orchestrator'],
       },
     }));
@@ -225,7 +230,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     } }));
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'core-portal', name: 'Core Portal', description: 'front door',
-      subsystem: 'core', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['core-orch'],
+      subsystem: 'core', componentType: 'Portal', transport: 'HTTP', dependsOn: ['core-orch'],
     } }));
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'core-orch', name: 'Core Orchestrator', description: 'workflow', subsystem: 'core', componentType: 'Orchestrator',
@@ -242,15 +247,16 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     try { fs.rmSync(projDir, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  it('externalizes then internalizes a subsystem, rewriting the cross-ref, with no new errors', async () => {
+  it('externalizes then internalizes a subsystem, rewriting the cross-ref; the one new error is the unexported member', async () => {
     const before = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
     expect(errorsOf(before)).toEqual([]);
 
     // --- externalize ---
-    unwrapText(await client.callTool({ name: 'sdd_externalize_subsystem', arguments: { subsystem: 'core', projectPath: 'packages/core' } }));
+    unwrapText(await client.callTool({ name: 'sdd_externalize_subsystem', arguments: { subsystem: 'core', path: 'packages/core', as: 'project' } }));
 
-    const mount = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_get_spec', arguments: { kind: 'subsystem', id: 'core' } })));
-    expect(mount.projectPath).toBe('packages/core');
+    // A member, declared in project.yaml `members` — no L1 mount is written.
+    expect((readYamlFile(path.join(projDir, '.wai', 'project.yaml')) as { members?: unknown }).members).toEqual({ core: 'packages/core' });
+    expect(fs.existsSync(path.join(projDir, '.wai', 'specs', 'core', '.index.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(projDir, 'packages', 'core', '.wai', 'project.yaml'))).toBe(true);
     expect(fs.existsSync(path.join(projDir, 'packages', 'core', '.wai', 'specs', 'core', 'core-portal', '.index.yaml'))).toBe(true);
     expect(fs.existsSync(path.join(projDir, '.wai', 'specs', 'core', 'core-portal'))).toBe(false);
@@ -259,10 +265,17 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(adapterExt.dependsOn).toEqual(['core::core-portal']);
 
     const afterExt = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_validate_tree', arguments: {} })));
-    expect(errorsOf(afterExt)).toEqual([]); // ref rewrite kept it error-free
+    // The ref rewrite resolves, and the moved portal is exported from the
+    // member's L0 (its subsystem already published it), so nothing the move
+    // did is an error. The parent declares a member now, so the tool runs the
+    // family run: the member's own gate is in it too.
+    expect(errorsOf(afterExt)).toEqual([]);
+    expect(afterExt.projects.map((p: { key: string }) => p.key)).toEqual(['', 'core']);
+    expect((readYamlFile(path.join(projDir, 'packages', 'core', '.wai', 'specs', '.index.yaml')) as { publicInterfaces?: unknown }).publicInterfaces)
+      .toEqual([{ from: 'core', component: 'core-portal', audience: 'project' }]);
 
     // --- internalize ---
-    unwrapText(await client.callTool({ name: 'sdd_internalize_subsystem', arguments: { subsystem: 'core' } }));
+    unwrapText(await client.callTool({ name: 'sdd_internalize_member', arguments: { alias: 'core' } }));
 
     const restored = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_get_spec', arguments: { kind: 'subsystem', id: 'core' } })));
     expect(restored.projectPath ?? null).toBeNull();
@@ -276,20 +289,19 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     expect(errorsOf(afterInt)).toEqual([]);
   }, 120_000);
 
-  it('creates a chained subsystem at a path and relocates it', async () => {
-    // sdd_add_subsystem with projectPath scaffolds the child project.
-    unwrapText(await client.callTool({ name: 'sdd_add_subsystem', arguments: {
-      id: 'ext', name: 'Ext', description: 'external from birth', projectPath: 'packages/ext',
+  it('creates a member at a path and relocates it', async () => {
+    const members = (): unknown => (readYamlFile(path.join(projDir, '.wai', 'project.yaml')) as { members?: Record<string, unknown> }).members?.ext;
+    // sdd_add_member scaffolds the member project and declares it in `members`.
+    unwrapText(await client.callTool({ name: 'sdd_add_member', arguments: {
+      alias: 'ext', source: 'packages/ext', description: 'external from birth', as: 'project',
     } }));
     expect(fs.existsSync(path.join(projDir, 'packages', 'ext', '.wai', 'specs', '.index.yaml'))).toBe(true);
-    const ext = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_get_spec', arguments: { kind: 'subsystem', id: 'ext' } })));
-    expect(ext.projectPath).toBe('packages/ext');
+    expect(members()).toEqual({ source: 'packages/ext', description: 'external from birth' });
 
-    // sdd_move_subsystem_project relocates it.
-    unwrapText(await client.callTool({ name: 'sdd_move_subsystem_project', arguments: { subsystem: 'ext', newProjectPath: 'services/ext' } }));
+    // sdd_move_member relocates it.
+    unwrapText(await client.callTool({ name: 'sdd_move_member', arguments: { alias: 'ext', newPath: 'services/ext' } }));
     expect(fs.existsSync(path.join(projDir, 'packages', 'ext'))).toBe(false);
     expect(fs.existsSync(path.join(projDir, 'services', 'ext', '.wai', 'specs', '.index.yaml'))).toBe(true);
-    const moved = JSON.parse(unwrapText(await client.callTool({ name: 'sdd_get_spec', arguments: { kind: 'subsystem', id: 'ext' } })));
-    expect(moved.projectPath).toBe('services/ext');
+    expect(members()).toEqual({ source: 'services/ext', description: 'external from birth' });
   }, 120_000);
 });

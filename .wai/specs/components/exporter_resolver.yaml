@@ -1,0 +1,19 @@
+id: exporter_resolver
+name: Exporter Resolver
+description: >-
+  Which exporter serves a configured target. Seven target names resolve onto three exporters,
+  because four tools share Claude's file format and two share Gemini's. The table is fixed at module
+  load and nothing registers into it at runtime — `registerExporter` is exported and called by
+  nothing, in `src` or in `tests` — so this is a dispatch table rather than a Registry, and it holds
+  no state worth a Store. An unknown target is refused by name rather than defaulted, because
+  silently writing the wrong tool's format is worse than not writing.
+subsystem: sdd_core
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - claude_exporter
+  - gemini_exporter
+  - custom_exporter
+status: complete
+createdAt: '2026-09-20T19:45:20.603Z'
+updatedAt: '2026-09-20T19:45:20.617Z'

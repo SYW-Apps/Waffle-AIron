@@ -6,6 +6,8 @@ description: >-
   references).
 contract: iuser_registry
 sourcePath: src/server/users.ts
+injectedParams:
+  - dataDir
 methods:
   - name: upsert
     narrative: []
@@ -15,6 +17,9 @@ methods:
       set durably via write-temp-then-rename so a crash never truncates the file, then push the new
       set into the store with replaceAll and return the stored record. When persistence fails, no
       in-memory state changes and the storage error propagates to the caller.
+    calls:
+      - user_store.load
+      - user_store.replaceAll
     symbol: registryUpsert
   - name: setStatus
     narrative: []
@@ -23,16 +28,65 @@ methods:
       (active, suspended, deactivated) while preserving identity, grant, and audit-history fields
       untouched, stamp updatedAt, then persist and swap exactly as upsert does. Invalid status
       values are rejected before any mutation.
+    calls:
+      - user_store.load
+      - user_store.replaceAll
     symbol: registrySetStatus
   - name: remapUnitReferences
-    narrative: []
-    detail: intent
+    narrative:
+      - stepNumber: 1
+        description: Nothing moved and nothing was removed
+        type: branch
+        condition: remap and removedScopeIds are both empty
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return without touching the store
+        type: return
+        outcome: unchanged
+      - stepNumber: 3
+        description: Load every hosted-user record
+        type: call
+        targetComponent: user_store
+        targetMethod: load
+      - stepNumber: 4
+        description: Rewrite each record's unit references
+        type: loop
+        loopKind: forEach
+        over: records
+        endStep: 6
+      - stepNumber: 5
+        description: 'Home unit: a moved unitId takes its new id, a unitId inside a removed subtree is cleared'
+        type: local
+      - stepNumber: 6
+        description: >-
+          Role bindings: drop the ones scoped to a removed id and retarget the ones scoped to a
+          moved id, noting whether anything changed
+        type: local
+      - stepNumber: 7
+        description: An untouched set is not rewritten
+        type: branch
+        condition: no record changed
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Return without writing
+        type: return
+        outcome: unchanged
+      - stepNumber: 9
+        description: Persist the rewritten set atomically
+        type: call
+        targetComponent: user_store
+        targetMethod: replaceAll
+    detail: full
     intent: >-
       For every user record, rewrite its home unitId and each role binding's scopeId to the new id
       when the old matches a remap entry, and clear its home unitId or a role binding whose scope is
       in removedScopeIds. Rewrite the persisted user collection via write-temp-then-rename and
       refresh the store. Users referencing none of the ids are untouched.
+    calls: []
+    symbol: registryRemapUnitReferences
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-07-15T22:49:39.444Z'
+updatedAt: '2026-10-04T19:41:51.388Z'

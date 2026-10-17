@@ -1,9 +1,9 @@
 id: iadmin_portal
 name: Admin Portal Interface
 description: >-
-  Control-plane admin API contract: project, API-key (token), pack, producer, secret, git, lock, and
-  promote workflows. Every method authenticates a bootstrap/admin (master) credential and rejects
-  any non-admin principal before any effect.
+  Control-plane admin API contract: project, API-key (token), pack, producer, secret, git and lock
+  workflows. Every method authenticates a bootstrap/admin (master) credential and rejects any
+  non-admin principal before any effect.
 component: admin_portal
 methods:
   - name: createProject
@@ -25,7 +25,7 @@ methods:
   - name: listProjects
     description: List hosted projects.
     signature: 'listProjects(credential: string): HostedProjectRecord[]'
-    returns: HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
     endpoint:
       transport: HTTP
       method: GET
@@ -52,7 +52,7 @@ methods:
   - name: listKeys
     description: List API keys authorized for a project.
     signature: 'listKeys(credential: string, project: string): ApiKeyRecord[]'
-    returns: ApiKeyRecord[]
+    returns: list<ApiKeyRecord>
     endpoint:
       transport: HTTP
       method: GET
@@ -65,14 +65,6 @@ methods:
       transport: HTTP
       method: POST
       path: /admin/projects/{id}/lock
-  - name: promoteProject
-    description: Promote a locked project after re-checking its StateId; never merges to production itself.
-    signature: 'promoteProject(credential: string, project: string): PromoteResult'
-    returns: PromoteResult
-    endpoint:
-      transport: HTTP
-      method: POST
-      path: /admin/projects/{id}/promote
   - name: generateDiagram
     description: Generate and return a project's diagram artifact.
     signature: 'generateDiagram(credential: string, project: string, format: string): string'
@@ -152,7 +144,7 @@ methods:
   - name: listProducers
     description: List a project's producers.
     signature: 'listProducers(credential: string, project: string): ProducerConfig[]'
-    returns: ProducerConfig[]
+    returns: list<ProducerConfig>
     endpoint:
       transport: HTTP
       method: GET
@@ -168,15 +160,15 @@ methods:
   - name: listSecrets
     description: List configured secret keys.
     signature: 'listSecrets(credential: string): string[]'
-    returns: string[]
+    returns: list<string>
     endpoint:
       transport: HTTP
       method: GET
       path: /admin/secrets
   - name: listGlobalPacks
     description: List the server-global installed packs.
-    signature: 'listGlobalPacks(credential: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listGlobalPacks(credential: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -214,8 +206,8 @@ methods:
       path: /admin/packs/{name}
   - name: listProjectPacks
     description: List a project's registered packs.
-    signature: 'listProjectPacks(credential: string, project: string): PackDescriptor[]'
-    returns: PackDescriptor[]
+    signature: 'listProjectPacks(credential: string, project: string): list<PackDescriptor>'
+    returns: list<PackDescriptor>
     params:
       - name: credential
         type: string
@@ -224,7 +216,7 @@ methods:
     endpoint:
       transport: HTTP
       method: GET
-      path: /admin/projects/{id}/packs
+      path: /admin/projects/{project}/packs
   - name: installProjectPack
     description: Install a declarative pack into a project (declarative-only; code packs are refused).
     signature: >-
@@ -243,7 +235,7 @@ methods:
     endpoint:
       transport: HTTP
       method: PUT
-      path: /admin/projects/{id}/packs/{name}
+      path: /admin/projects/{project}/packs/{name}
   - name: removeProjectPack
     description: Remove one of a project's registered packs.
     signature: 'removeProjectPack(credential: string, project: string, name: string): void'
@@ -258,14 +250,14 @@ methods:
     endpoint:
       transport: HTTP
       method: DELETE
-      path: /admin/projects/{id}/packs/{name}
+      path: /admin/projects/{project}/packs/{name}
   - name: listApprovals
     description: >-
       List approval requests for the human decision surface, optionally filtered by status and
       project. Human decision surface for the project-lifecycle approval exception until the admin
       UI lands.
-    signature: 'listApprovals(credential: string, status: string, project: string): ApprovalRequest[]'
-    returns: ApprovalRequest[]
+    signature: 'listApprovals(credential: string, status?: string, project?: string): list<ApprovalRequest>'
+    returns: list<ApprovalRequest>
     params:
       - name: credential
         type: string
@@ -284,7 +276,7 @@ methods:
       Approve or deny a pending approval request. Human decision surface for the project-lifecycle
       approval exception until the admin UI lands.
     signature: >-
-      decideApproval(credential: string, requestId: string, approved: boolean, reason: string):
+      decideApproval(credential: string, requestId: string, approved: bool, reason?: string):
       ApprovalRequest
     returns: ApprovalRequest
     params:
@@ -293,14 +285,14 @@ methods:
       - name: requestId
         type: string
       - name: approved
-        type: boolean
+        type: bool
       - name: reason
         type: string
         optional: true
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/approvals/{id}/decision
+      path: /admin/approvals/{requestId}/decision
   - name: executeApproval
     description: >-
       Execute an approved request's privileged action. Human decision surface for the
@@ -315,7 +307,90 @@ methods:
     endpoint:
       transport: HTTP
       method: POST
-      path: /admin/approvals/{id}/execute
+      path: /admin/approvals/{requestId}/execute
+  - name: exportProjectTree
+    description: >-
+      Return a project's whole spec tree as a .waitree archive download — the operator's migration
+      surface, alongside the diagram download.
+    signature: 'exportProjectTree(credential: string, project: string): bytes'
+    returns: bytes
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /admin/projects/{project}/tree
+  - name: importProjectTree
+    description: >-
+      Replace a project's spec tree from a .waitree archive carried as base64 in the JSON body,
+      backing up the previous tree. The admin plane is uniformly JSON; the raw-stream upload path is
+      the web portal's /web/projects/tree/import.
+    signature: >-
+      importProjectTree(credential: string, project: string, archiveBase64: string,
+      replaceExisting?: bool): TreeImportResult
+    returns: TreeImportResult
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: archiveBase64
+        type: string
+      - name: replaceExisting
+        type: bool
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{project}/tree
+  - name: previewProjectPack
+    description: >-
+      Measure, writing nothing, what installing a declarative pack (the YAML in the body) or
+      adopting a server-global one (no body) would change on the project: the pack's doctrine
+      against wairon's defaults, the profiles of it that would govern, and the findings that change.
+      What a client shows before PUT /admin/projects/{id}/packs/{name}.
+    signature: >-
+      previewProjectPack(credential: string, project: string, name: string, content?: string):
+      PackImpact
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+      - name: content
+        type: string
+        optional: true
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{project}/packs/{name}/impact
+    guarantees:
+      - idempotent
+  - name: previewProjectPackRemoval
+    description: >-
+      Measure, writing nothing, what removing one of the project's registered packs would change —
+      what a client shows before DELETE /admin/projects/{id}/packs/{name}.
+    signature: 'previewProjectPackRemoval(credential: string, project: string, name: string): PackImpact'
+    returns: PackImpact
+    params:
+      - name: credential
+        type: string
+      - name: project
+        type: string
+      - name: name
+        type: string
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /admin/projects/{project}/packs/{name}/removal-impact
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:05.545Z'
-updatedAt: '2026-07-16T00:18:55.142Z'
+updatedAt: '2026-10-07T22:29:21.448Z'

@@ -12,16 +12,17 @@ fields:
     description: Raw archive entry path (as stored, pre-normalization)
     optional: false
   - name: uncompressedSize
-    type: number
+    type: int
     optional: false
   - name: compressedSize
-    type: number
+    type: int
     optional: false
   - name: kind
-    type: string
-    description: '"file" | "dir" | "symlink"'
+    type: ArchiveEntryKind
+    description: What the entry is.
     optional: false
 methods: []
 componentClass: pack_archive_adapter
+sourcePath: sdk/src/types.ts
 createdAt: '2026-07-21T18:13:01.742Z'
-updatedAt: '2026-07-21T18:13:01.875Z'
+updatedAt: '2026-10-07T06:28:06.038Z'

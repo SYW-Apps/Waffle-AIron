@@ -1,0 +1,14 @@
+kind: enum
+id: export_table_level
+name: ExportTableLevel
+description: Whose export table a resolved table is.
+fields: []
+methods: []
+sourcePath: src/models/exports.ts
+values:
+  - name: subsystem
+    description: One subsystem's L1 table
+  - name: project
+    description: A project's L0 table
+createdAt: '2026-10-04T23:34:16.939Z'
+updatedAt: '2026-10-04T23:34:17.389Z'

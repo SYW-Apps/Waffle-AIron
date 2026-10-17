@@ -1,0 +1,44 @@
+kind: value-object
+id: project_system_read
+name: ProjectSystemRead
+description: >-
+  The L0 a system id names, read for a spec read: this project's own L0 by one of its names, a
+  member project's own L0 exactly as stored at its root (its export table included), or the reason
+  no L0 answers — a name the L0 does not go by, a part (its subsystems are the bound project's own),
+  an external (its pin records only the names it exports), or a prefix that is no alias. Never one
+  project's L0 under another's id, and never written back.
+subsystem: sdd_core
+fields:
+  - name: alias
+    type: string
+    description: The alias (or the project id) the read went through; empty for this project's own L0
+    optional: false
+  - name: project
+    type: string
+    description: The project the alias names; empty when it names none
+    optional: false
+  - name: root
+    type: string
+    description: The member's root, or the external's pinned snapshot file, relative to the bound project
+    optional: false
+  - name: source
+    type: string
+    description: 'What the id names: own, member, part, external or unknown'
+    optional: false
+  - name: spec
+    type: SystemSpec
+    description: The member's L0 exactly as stored; absent when no L0 answers
+    optional: true
+  - name: exports
+    type: list<string>
+    description: An external's exported public names, as its pin records them
+    optional: true
+  - name: problem
+    type: string
+    description: Why no L0 answers; absent exactly when spec is set
+    optional: true
+methods: []
+sourcePath: src/core/specs.ts
+symbol: ProjectSystemRead
+createdAt: '2026-10-15T16:04:01.798Z'
+updatedAt: '2026-10-15T16:06:36.061Z'

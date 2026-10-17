@@ -5,6 +5,8 @@ description: >-
   to the index, setPackPolicy goes to the registry; no logic lives here.
 contract: ipolicy_repository
 sourcePath: src/server/policy.ts
+injectedParams:
+  - dataDir
 methods:
   - name: getPackPolicy
     narrative:
@@ -65,4 +67,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T20:47:51.139Z'
-updatedAt: '2026-07-18T23:33:40.288Z'
+updatedAt: '2026-09-23T21:19:52.787Z'

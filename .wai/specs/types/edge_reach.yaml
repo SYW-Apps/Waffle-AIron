@@ -1,0 +1,38 @@
+kind: enum
+id: edge_reach
+name: EdgeReach
+description: >-
+  Where a dependency edge's reference lands. A library edge is judged by library-calls alone; every
+  boundary and matrix rule skips it, so the exemption is made once, here, rather than repeated per
+  rule.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/core/rules/types.ts
+values:
+  - name: internal
+    description: A component of this tree in the source's subsystem
+  - name: cross-subsystem
+    description: A component of this tree in another subsystem
+  - name: library
+    description: >-
+      It leaves the project and resolves to an exported InProcess Portal of another project (a
+      member or a declared external): a library call, which any component may make directly. Judged
+      by library-calls (LIBRARY_CALL_IMPURE, LANGUAGE_BRIDGE_MISSING), never by the Adapter or the
+      stereotype matrix
+  - name: surface
+    description: >-
+      It leaves the project and resolves to a declared contract entry that is not a library: a
+      declared external's pin or a foreign surface snapshot
+  - name: ambiguous
+    description: >-
+      Foreign snapshots of several providers expose the name with different contracts, so none of
+      them may judge the edge
+  - name: cross-project
+    description: >-
+      It leaves the project and does not resolve (forbidden, missing, unavailable or an ambiguous
+      import): project-boundaries' single finding
+  - name: missing
+    description: A local id that names nothing
+createdAt: '2026-10-04T23:13:45.977Z'
+updatedAt: '2026-10-06T13:01:24.103Z'

@@ -1,0 +1,23 @@
+id: git_config_store
+name: Git Config Store
+description: >-
+  The project's git-backing config boundary (.wai/git.json): remote URL, default branch, working
+  branch, and enabled flag. A standalone read-through Store — the file is the persistence medium,
+  this component is the state boundary; every read hits the file, so hydration is definitionally
+  covered.
+subsystem: sdd_git
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Option F registry-taxonomy ruling (2026-07-19): deliberate standalone Store — per-project
+        git-backing configuration is genuinely simple held state (one config file per scoped repo),
+        consumed only by the git orchestrator. durability: read-through to be declared once the
+        level3 branch merges (the enum value does not exist in this branch's schema).
+status: complete
+createdAt: '2026-07-04T16:31:20.264Z'
+updatedAt: '2026-09-17T16:37:00.555Z'

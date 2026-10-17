@@ -1,0 +1,20 @@
+id: ibilling-portal
+name: IBillingPortal
+description: HTTP surface for charges
+component: billing-portal
+methods:
+  - name: postCharge
+    description: Accept a charge request
+    signature: 'postCharge(orderId: string): string'
+    returns: string
+    params:
+      - name: orderId
+        type: string
+        description: The orderId
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /charges
+status: complete
+createdAt: '2026-10-17T11:46:27.416Z'
+updatedAt: '2026-10-17T11:46:28.371Z'

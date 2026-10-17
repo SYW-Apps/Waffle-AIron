@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import {
   saveSystemSpec,
-  saveSubsystemSpec,
+  saveSpec,
   saveComponentSpec,
   saveInterfaceSpec,
   saveImplementationSpec,
@@ -42,7 +42,7 @@ describe('buildGraphModel — level-of-detail project graph', () => {
       createdAt: now,
       updatedAt: now,
     });
-    saveSubsystemSpec({
+    saveSpec('subsystem', {
       id: 'billing',
       name: 'Billing',
       description: 'billing',

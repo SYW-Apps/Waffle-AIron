@@ -1,0 +1,28 @@
+id: topology_store
+name: Topology Store
+description: >-
+  The topology configuration a project holds on disk. Durable file state, read through on every
+  access rather than cached — `wairon generate` and the MCP server both read it, and a stale copy
+  would generate agent files from a topology the tree no longer has. A project with no file reads as
+  empty rather than failing, because an uninitialized project is a legitimate state and the commands
+  that bootstrap one have to be able to ask.
+
+
+  It is now a member of `topology_repository` rather than standalone. It was standalone while the
+  only operations were read-the-file and write-the-file, with an allow saying the shape would be
+  revisited when a member earned it; `domain_registry` earned it. The store keeps exactly its own
+  job — bytes on disk — and knows nothing about what a domain is.
+
+
+  It resolves its file locations through the project's path helper, which belongs to NO component on
+  purpose: `aiPathsAt` is used by nineteen modules and is a shared convention rather than a
+  responsibility, exactly as the YAML and directory helpers under `spec_file_store` are.
+  `src/utils/fs.ts` is the precedent — forty-eight importers, deliberately unclaimed, zero findings.
+subsystem: sdd_core
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-09-20T20:39:52.665Z'
+updatedAt: '2026-09-20T22:01:37.164Z'

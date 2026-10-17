@@ -9,18 +9,18 @@ methods:
     description: >-
       Load the persisted share-link collection; a missing file yields an empty set, a malformed file
       fails with a storage error naming the path.
-    signature: 'load(): ShareLink[]'
-    returns: ShareLink[]
+    signature: 'load(): list<ShareLink>'
+    returns: list<ShareLink>
     params: []
   - name: replaceAll
     description: Swap the persisted collection wholesale via write-temp-then-rename.
-    signature: 'replaceAll(links: ShareLink[]): void'
+    signature: 'replaceAll(links: list<ShareLink>): void'
     returns: void
     params:
       - name: links
-        type: ShareLink[]
+        type: list<ShareLink>
     guarantees:
       - atomic
 status: complete
 createdAt: '2026-07-17T22:29:08.769Z'
-updatedAt: '2026-07-18T10:10:39.782Z'
+updatedAt: '2026-10-04T10:19:31.380Z'

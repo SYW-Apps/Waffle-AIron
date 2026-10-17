@@ -1,0 +1,138 @@
+kind: value-object
+id: spec_index
+name: SpecIndex
+description: >-
+  The bound tree as one scan read it: every loaded spec by kind, and the file each one is stored in.
+  What a reader outside the loader needs to relate a spec to its file — the validator matches
+  approved files to specs through it.
+subsystem: sdd_core
+fields:
+  - name: subsystems
+    type: list<SubsystemSpec>
+    description: Every loaded subsystem spec
+    optional: false
+  - name: components
+    type: list<ComponentSpec>
+    description: Every loaded component spec
+    optional: false
+  - name: interfaces
+    type: list<InterfaceSpec>
+    description: Every loaded interface spec
+    optional: false
+  - name: implementations
+    type: list<ImplementationSpec>
+    description: Every loaded implementation spec
+    optional: false
+  - name: types
+    type: list<TypeSpec>
+    description: Every loaded type spec
+    optional: false
+  - name: groups
+    type: list<any>
+    description: Every loaded type group
+    optional: false
+  - name: paths
+    type: map<string, map<string, string>>
+    description: >-
+      Per kind, each spec id's absolute file path. Each per-kind map has no prototype and is read by
+      own key only, so an id that is also a JavaScript prototype name (constructor) is a spec like
+      any other — never a duplicate of a built-in, never a function where a path belongs
+    optional: false
+  - name: signatures
+    type: SignatureFacts
+    description: >-
+      What the scan's signature resolution recorded: each signatureFrom it met and how it resolved,
+      and each stored signature text its params contradict
+    optional: false
+  - name: typeSpellings
+    type: TypeSpellingFacts
+    description: >-
+      What the scan's type canonicalisation recorded: each stored type position that is an alias of
+      its canonical spelling, and each that is not canonical at all. The loaded interfaces and types
+      hold canonical text, so this is the only place the stored spellings are still visible
+    optional: false
+  - name: retiredReach
+    type: list<RetiredReachFact>
+    description: >-
+      The retired reachability forms the scan met (listener mounts, portalType, retired invokedBy
+      kinds, Custom portals binding no endpoint), kept on the index like typeSpellings so the
+      reachability migration reads exactly what was loaded.
+    optional: false
+methods:
+  - name: retiredBy
+    signature: 'retiredBy(kind: string, id: string): string?'
+    params:
+      - name: kind
+        type: string
+        description: component, interface, implementation or type
+      - name: id
+        type: string
+        description: The id about to be taken, qualified for a subsystem-owned type
+    returns: string?
+    description: >-
+      The spec of this kind whose rename trace (previousIds) lists the id, or none: the holder that
+      retired it. A type is matched within its owner (the same subsystem, or system-level). The
+      writer and the rename tools ask it before giving an id to a new spec, and refuse with
+      id-retired naming the holder — a consumer holding the old key would otherwise read the new
+      spec as the renamed one.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexRetiredBy
+  - name: subtreeOf
+    signature: 'subtreeOf(kind: WritableSpecKind, id: string): list<SpecRef>'
+    params:
+      - name: kind
+        type: WritableSpecKind
+        description: The kind of the spec being deleted (never system)
+      - name: id
+        type: string
+        description: Its id; a type within its owner
+    returns: list<SpecRef>
+    description: >-
+      Every spec deleting this one takes with it, the spec itself last: an implementation is only
+      itself; a contract takes its implementations; a component takes its contracts with their
+      implementations and the members it owns, each with its own subtree; a subsystem takes its
+      components and the types it owns. A container's content means nothing without it, so leaving
+      it behind is an orphan, never a choice. Empty when no spec of the kind holds the id.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexSubtreeOf
+  - name: referencesTo
+    signature: 'referencesTo(targets: list<SpecRef>, system?: SystemSpec): list<SpecReference>'
+    params:
+      - name: targets
+        type: list<SpecRef>
+        description: The specs a deletion would remove
+      - name: system
+        type: SystemSpec
+        description: The L0, whose export table a scan's index does not carry
+        optional: true
+    returns: list<SpecReference>
+    description: >-
+      Every reference a spec OUTSIDE the targets holds to one of them, each with its position: a
+      component's subsystem, owns, dependsOn and dispatch; a contract's component and the head of a
+      signature source; an implementation's contract, a call, register or dispatch step's target and
+      a declared call; a subsystem's published interfaces, lifecycle entrypoints and trusted links;
+      the L0's export table; and every type position that names a target type by its name or id. A
+      reference from one target to another is not listed: it leaves with both.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexReferencesTo
+  - name: methodReferencesTo
+    signature: 'methodReferencesTo(component: string, methods: list<string>): list<SpecReference>'
+    params:
+      - name: component
+        type: string
+        description: The component whose contract methods are removed
+      - name: methods
+        type: list<string>
+        description: The method names removed from its contracts
+    returns: list<SpecReference>
+    description: >-
+      Every reference a spec holds to one of the named contract methods of the component, each with
+      its position: a call, register or dispatch narrative step naming component and method, a
+      declared call `<component>.<method>`, a dispatch-table binding, a subsystem lifecycle
+      entrypoint, and a contract method taking its signature from it (signatureFrom). Each target is
+      the component's contract that declares the method. Pure.
+    sourcePath: src/models/specs.ts
+    symbol: specIndexMethodReferences
+sourcePath: src/core/specs.ts
+createdAt: '2026-09-25T21:05:18.930Z'
+updatedAt: '2026-10-09T00:25:15.832Z'

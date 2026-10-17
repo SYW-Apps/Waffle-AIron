@@ -1,0 +1,21 @@
+kind: enum
+id: share_access_outcome
+name: ShareAccessOutcome
+description: How one access to a share link ended, as the access log records it.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: served
+    description: The view or artifact was served
+  - name: denied-disabled
+    description: The link is disabled
+  - name: denied-expired
+    description: The link has expired
+  - name: not-found
+    description: No such link, or no such artifact
+  - name: denied-download
+    description: The link does not permit downloading that artifact
+createdAt: '2026-10-04T23:18:31.983Z'
+updatedAt: '2026-10-04T23:18:32.406Z'

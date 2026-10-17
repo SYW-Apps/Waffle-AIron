@@ -20,7 +20,7 @@ import type { ApprovalRequest, ApprovalDecision } from './types.js';
 //   - ApprovalIndex    : the read path — by-id lookup and filtered,
 //                        newest-first queries over the store's set; never mutates.
 //   - facade           : the exported create/decide/getById/list/markCompleted/
-//                        expirePending functions; pure 1:1 forwarding to the
+//                        cancel/expirePending functions; pure 1:1 forwarding to the
 //                        roles above (writes -> registry, reads -> index).
 //
 // An approval request is the record of a privileged action awaiting an
@@ -188,9 +188,10 @@ class ApprovalRegistry {
   /**
    * Locate the request by id (not-found error when absent) and transition it to
    * completed only from an approved status (any other status is a validation
-   * error), then persist and refresh the store.
+   * error), setting the executionSummary when one is given, then persist and
+   * refresh the store.
    */
-  markCompleted(id: string): ApprovalRequest {
+  markCompleted(id: string, executionSummary?: string): ApprovalRequest {
     const requests = this.store.all();
     const idx = requests.findIndex((r) => r.id === id);
     if (idx === -1) {
@@ -203,12 +204,44 @@ class ApprovalRegistry {
           `only an approved request can be completed.`,
       );
     }
-    const completed: ApprovalRequest = { ...current, status: 'completed' };
+    const completed: ApprovalRequest = {
+      ...current,
+      status: 'completed',
+      ...(executionSummary !== undefined ? { executionSummary } : {}),
+    };
     const next = [...requests];
     next[idx] = completed;
     persistRequests(this.dataDir, next);
     this.store.replaceAll(next);
     return completed;
+  }
+
+  /**
+   * Locate the request by id (not-found error when absent) and transition it to
+   * cancelled only from an approved status (any other status is a validation
+   * error), recording the reason as its executionSummary, then persist and
+   * refresh the store. Used when the approved workflow refused because the
+   * request no longer describes what would be done; a cancelled request is
+   * final and is never executed.
+   */
+  cancel(id: string, reason: string): ApprovalRequest {
+    const requests = this.store.all();
+    const idx = requests.findIndex((r) => r.id === id);
+    if (idx === -1) {
+      throw new Error(`Approval request "${id}" not found.`);
+    }
+    const current = requests[idx];
+    if (current.status !== 'approved') {
+      throw new Error(
+        `Approval request "${id}" is ${current.status}, not approved; only an approved request can be cancelled.`,
+      );
+    }
+    const cancelled: ApprovalRequest = { ...current, status: 'cancelled', executionSummary: reason };
+    const next = [...requests];
+    next[idx] = cancelled;
+    persistRequests(this.dataDir, next);
+    this.store.replaceAll(next);
+    return cancelled;
   }
 
   /**
@@ -222,7 +255,7 @@ class ApprovalRegistry {
     const next = this.store.all().map((r) => {
       if (r.status === 'pending' && r.expiresAt !== undefined && Date.parse(r.expiresAt) <= nowMs) {
         changed++;
-        return { ...r, status: 'expired' };
+        return { ...r, status: 'expired' as const };
       }
       return r;
     });
@@ -307,11 +340,19 @@ export function listApprovalRequests(
   return new ApprovalIndex(store).list(status, projectId, requestedByUserId, kind);
 }
 
-/** Mark an approved request completed after its privileged workflow ran (atomic). */
-export function markApprovalCompleted(dataDir: string, id: string): ApprovalRequest {
+/** Mark an approved request completed after its privileged workflow ran (atomic),
+ *  recording what the workflow changed when it reports it (a project:init). */
+export function markApprovalCompleted(dataDir: string, id: string, executionSummary?: string): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
   store.load();
-  return new ApprovalRegistry(dataDir, store).markCompleted(id);
+  return new ApprovalRegistry(dataDir, store).markCompleted(id, executionSummary);
+}
+
+/** Cancel an approved request that can no longer execute, recording why (atomic). */
+export function cancelApprovalRequest(dataDir: string, id: string, reason: string): ApprovalRequest {
+  const store = new ApprovalStore(dataDir);
+  store.load();
+  return new ApprovalRegistry(dataDir, store).cancel(id, reason);
 }
 
 /** Expire pending requests at or past their expiresAt; returns the count expired (atomic). */

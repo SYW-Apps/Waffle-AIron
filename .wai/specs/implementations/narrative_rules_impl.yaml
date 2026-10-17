@@ -1,0 +1,1042 @@
+id: narrative_rules_impl
+name: Narrative Rules Implementation
+description: >-
+  The narrative rule family: each rule lives in its own file under src/core/rules/narrative/ and
+  exports a rule object whose check(ctx) realizes the method named after it.
+contract: inarrative_rules
+simPath: tests/core/validation.test.ts
+methods:
+  - name: guaranteeTokens
+    sourcePath: src/core/rules/narrative/guarantee-tokens.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          known = the builtin guarantee tokens SEMANTIC_GUARANTEES (idempotent, atomic,
+          transactional, exactly-once) together with the pack-declared ctx.ext.guarantees; fixHint
+          names the builtin tokens, the pack-declared ones when there are any, and the remedy: fix
+          the spelling, or declare the token in an extension pack's guarantees list
+        type: local
+      - stepNumber: 2
+        label: declaredTokens
+        description: Check every guarantee token an L3 method declares
+        type: loop
+        over: >-
+          each guarantee token declared by each method (method.guarantees, none when absent) of each
+          interface in ctx.interfaces
+        endStep: 4
+      - stepNumber: 3
+        description: Is the declared token unknown?
+        type: branch
+        condition: known does not contain the token
+        onFalseStep: 2
+      - stepNumber: 4
+        label: reportDeclared
+        description: >-
+          Report UNKNOWN_GUARANTEE (warning; draft context: the interface's status is draft or
+          design, or ctx.isComponentDraft(interface.component)) on the interface, naming the method
+          and the token no narrative assertion can match, followed by fixHint
+        type: local
+      - stepNumber: 5
+        label: assertedTokens
+        description: Check every guarantee token a narrative step asserts
+        type: loop
+        over: >-
+          each guarantee token asserted by each narrative step (step.assertsGuarantees, none when
+          absent) of each method of each implementation in ctx.implementations
+        endStep: 7
+      - stepNumber: 6
+        description: Is the asserted token unknown?
+        type: branch
+        condition: known does not contain the token
+        onFalseStep: 5
+      - stepNumber: 7
+        label: reportAsserted
+        description: >-
+          Report UNKNOWN_GUARANTEE (warning; draft context ctx.isImplementationDraft(impl)) on the
+          implementation, naming the step number, the method and the token no L3 contract can back,
+          followed by fixHint
+        type: local
+    symbol: check
+    exportedVia: guaranteeTokensRule
+  - name: narrativeStepConfig
+    sourcePath: src/core/rules/narrative/narrative-step-config.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 4
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        label: problems
+        description: >-
+          Report every step-config problem the narrative carries, in the order the derivation
+          returns them: duplicate labels first, then duplicate step numbers, then each step's own
+          config and jump targets
+        type: loop
+        over: implMethod.stepConfigVerdict().problems
+        endStep: 4
+      - stepNumber: 4
+        label: reportProblem
+        description: >-
+          Report problem.code at the severity this rule declares for it — DUPLICATE_STEP_LABEL,
+          MALFORMED_FLOW_STEP and INVALID_STEP_JUMP are errors, FOREIGN_STEP_FIELD a warning; draft
+          context isDraftCtx — with problem.detail following the method-and-implementation prefix
+        type: local
+    symbol: check
+    exportedVia: narrativeStepConfigRule
+  - name: narrativeReachability
+    sourcePath: src/core/rules/narrative/narrative-reachability.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 8
+      - stepNumber: 2
+        description: >-
+          Reachability and region nesting are only judged over a narrative with steps whose step
+          config is sound: a graph built over jumps that land nowhere calls sound steps dead, and
+          narrative-step-config already says why it is unsound
+        type: branch
+        condition: implMethod.narrative has steps and implMethod.stepConfigVerdict().sound
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = implMethod.stepGraph(); walk depth-first from its first step number following
+          graph.successorsOf, collecting the visited step numbers
+        type: local
+      - stepNumber: 4
+        description: Is any step dead?
+        type: branch
+        condition: some of the narrative's step numbers were not visited
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report UNREACHABLE_STEP (warning; draft context isDraftCtx) once, listing every unvisited
+          step number and the first step they cannot be reached from
+        type: local
+      - stepNumber: 6
+        label: regionPairs
+        description: Check that regions nest or are disjoint
+        type: loop
+        over: >-
+          each ordered pair (a, b) of the narrative's regions: every loop, try and parallel step
+          with an endStep, spanning its header to its endStep
+        endStep: 8
+      - stepNumber: 7
+        description: Do the two regions interleave?
+        type: branch
+        condition: b's header lies in a's body (after a's header, up to a's end) and b ends beyond a's end
+        onFalseStep: 6
+      - stepNumber: 8
+        label: reportOverlap
+        description: >-
+          Report REGION_OVERLAP (error; draft context isDraftCtx) naming both regions' kinds and
+          spans: regions must be nested or disjoint
+        type: local
+    symbol: check
+    exportedVia: narrativeReachabilityRule
+  - name: narrativeJumpEdges
+    sourcePath: src/core/rules/narrative/narrative-jump-edges.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl) as the
+          draft context of its findings
+        type: loop
+        over: each method of each implementation in ctx.implementations
+        endStep: 12
+      - stepNumber: 2
+        description: >-
+          Jump edges are only judged over a narrative with steps whose step config is sound: an edge
+          to a step the narrative does not have is narrative-step-config's finding, and judging it
+          here would blame the region instead
+        type: branch
+        condition: implMethod.narrative has steps and implMethod.stepConfigVerdict().sound
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          regions = every loop, try and parallel step with an endStep, spanning its header to its
+          endStep; edges = every step's set onTrueStep, onFalseStep, defaultStep, toStep and
+          finallyStep, and every cases[i].step and catches[i].step, as (from step, to step, field,
+          the step's type)
+        type: local
+      - stepNumber: 4
+        label: edgeRegions
+        description: Judge each jump edge against each region
+        type: loop
+        over: each pair of a jump edge and a region
+        endStep: 6
+      - stepNumber: 5
+        description: Does the edge enter the region other than through its header?
+        type: branch
+        condition: >-
+          the edge lands in the region's body from a step that is neither the region's header nor in
+          its body
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportJumpInto
+        description: >-
+          Report JUMP_INTO_REGION (warning; draft context isDraftCtx) naming the step, the field,
+          the region and the landing step: regions are entered through their header
+        type: local
+      - stepNumber: 7
+        label: backwardEdges
+        description: Judge each jump edge on its own direction
+        type: loop
+        over: the jump edges
+        endStep: 9
+      - stepNumber: 8
+        description: Is the edge an unstructured backward jump?
+        type: branch
+        condition: >-
+          the edge leaves a branch, switch or jump step for an earlier step, and it is not a
+          continue: no loop region has its header at the target with the source in its body
+        onFalseStep: 7
+      - stepNumber: 9
+        label: reportBackward
+        description: >-
+          Report BACKWARD_JUMP (warning; draft context isDraftCtx) naming the step, the field and
+          the target: model repetition with a loop step
+        type: local
+      - stepNumber: 10
+        label: tryBodies
+        description: Check that no try body falls through into its handlers
+        type: loop
+        over: each try step with an endStep
+        endStep: 12
+      - stepNumber: 11
+        description: Does the body's success path run into a handler?
+        type: branch
+        condition: >-
+          the body's last step (the narrative's step numbered endStep) is a local, call, register or
+          dispatch step, and the step number following endStep is one of the try's catch steps or
+          its finallyStep
+        onFalseStep: 10
+      - stepNumber: 12
+        label: reportFallthrough
+        description: >-
+          Report FALLTHROUGH_INTO_HANDLER (warning; draft context isDraftCtx) naming the body's last
+          step and the handler step it falls into: end the body with a jump, return or throw
+        type: local
+    symbol: check
+    exportedVia: narrativeJumpEdgesRule
+  - name: contractSymmetry
+    sourcePath: src/core/rules/narrative/contract-symmetry.ts
+    narrative:
+      - stepNumber: 1
+        label: impls
+        description: For each implementation spec
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 9
+      - stepNumber: 2
+        description: Skip an implementation whose contract interface does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl), the draft context of the findings on
+          this implementation, and collect the contract's method names and the implementation's
+          method names
+        type: local
+      - stepNumber: 4
+        label: extraMethods
+        description: Check each implementation method against the contract
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 6
+      - stepNumber: 5
+        description: Is the method absent from the contract?
+        type: branch
+        condition: the method's name is not among the contract's method names
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportUnexpected
+        description: >-
+          Report UNEXPECTED_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the method and the contract it is not defined on
+        type: local
+      - stepNumber: 7
+        label: missingMethods
+        description: Check each contract method against the implementation
+        type: loop
+        loopKind: forEach
+        over: contract.methods
+        endStep: 9
+      - stepNumber: 8
+        description: Is the contract method left unimplemented?
+        type: branch
+        condition: the contract method's name is not among the implementation's method names
+        onFalseStep: 7
+      - stepNumber: 9
+        label: reportMissing
+        description: >-
+          Report MISSING_IMPLEMENTATION_METHOD (error; draft context isDraftCtx) on the
+          implementation, naming the contract method and its interface
+        type: local
+    symbol: check
+    exportedVia: contractSymmetryRule
+  - name: narrativeTargetReferences
+    sourcePath: src/core/rules/narrative/narrative-target-references.ts
+    narrative:
+      - stepNumber: 1
+        label: targetEntries
+        description: >-
+          Resolve the target every entry of a method names, whatever kind of entry names it: call,
+          dispatch and register steps all name one, and so does each entry of that same method's
+          declared calls — the narrative-less spelling of a call step, which arrives read apart into
+          a component and a method and with no step number to point at. Register steps
+          (runtime-callback handoffs) name a target exactly like call steps do and get IDENTICAL
+          validation — the handoff must point at a real dependency's real method even though it
+          never invokes
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative, then that same method's
+          declared calls, of every implementation impl in ctx.implementations whose contract
+          ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 17
+      - stepNumber: 2
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
+          ctx.componentMap.get(contract.component), the calling component; where a finding points,
+          which is " (step N)" for a narrative step and nothing at all for a declared call; and the
+          verb every finding reads with, which is all the entry kinds differ by: 'dispatches
+          through' for a dispatch step, 'registers callback' for a register step, 'declares a call
+          to' for a declared call, and 'calls' otherwise
+        type: local
+      - stepNumber: 3
+        label: requiredTargets
+        description: >-
+          Which required target the entry fails to name decides what is reported; an entry that
+          names no component is never judged on its method as well
+        type: switch
+        'on': >-
+          the required target the entry fails to name: its target component — which a declared call
+          whose reference does not read as "<component>.<method>" also fails to name — else its
+          target method when a call or register step has no step.targetMethod, and neither otherwise
+        cases:
+          - value: targetComponent
+            step: 4
+          - value: targetMethod
+            step: 6
+        defaultStep: 8
+      - stepNumber: 4
+        label: noTargetComponent
+        description: >-
+          Report what the entry failed to name: MALFORMED_DECLARED_CALL (error; draft context
+          isDraftCtx) naming the method and the reference exactly as written, with the
+          "<component>.<method>" spelling it should have had, when the entry is a declared call
+          whose reference does not read that way; MISSING_TARGET_COMPONENT (error; draft context
+          isDraftCtx) naming the method, the step type and the step number otherwise
+        type: local
+      - stepNumber: 5
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 6
+        description: >-
+          Report MISSING_TARGET_METHOD (error; draft context isDraftCtx) naming the method, the step
+          type and the step number
+        type: local
+      - stepNumber: 7
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 8
+        label: inTree
+        description: >-
+          Only a target this tree contains is judged here; whether one it does not resolves against
+          the stored surface snapshots is cross-tree-references', and what such a surface exposes is
+          surface-reference-backing's
+        type: branch
+        condition: ctx.componentMap.get(step.targetComponent) resolves a component of this tree
+        onFalseStep: 1
+      - stepNumber: 9
+        label: declaredDependency
+        description: The caller must declare every collaborator an entry reaches
+        type: branch
+        condition: >-
+          caller resolves, the entry's target component is not the caller itself, and the caller
+          neither dependsOn nor owns it
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id)) naming the caller, the verb, the component it reaches
+          without declaring it, and where
+        type: local
+      - stepNumber: 11
+        label: namedMethod
+        description: >-
+          A dispatch step names a capability rather than a method; resolving it against the target
+          Portal's dispatch table is dispatch-step-routing's
+        type: branch
+        condition: the entry is a call step, a register step or a declared call
+        onFalseStep: 1
+      - stepNumber: 12
+        label: resolveTargetMethod
+        description: Does the target component's contract carry the called method?
+        type: branch
+        condition: >-
+          some interface in ctx.interfacesByComponent.get(step.targetComponent) (none when absent)
+          has a method named step.targetMethod; the first that does supplies the target method
+        onFalseStep: 17
+      - stepNumber: 13
+        label: guarantees
+        description: >-
+          Semantic cross-check (consistency, not truth): the gate cannot read prose, but it can
+          catch a step that asserts a guarantee the contract it calls does not declare. Whether the
+          method truly delivers it is implementation correctness, not this. A declared call asserts
+          no guarantee, so it never enters here
+        type: loop
+        loopKind: forEach
+        over: the entry's assertsGuarantees (none when it asserts no guarantee)
+        endStep: 15
+      - stepNumber: 14
+        description: Is the asserted guarantee undeclared on the called contract?
+        type: branch
+        condition: the target method's L3 guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 13
+      - stepNumber: 15
+        label: callUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx or
+          ctx.isComponentDraft(step.targetComponent)) naming the step, the guarantee and the called
+          method, with the remedy: declare it on that method, or revise the narrative
+        type: local
+      - stepNumber: 16
+        description: Continue with the next step once every asserted guarantee is checked
+        type: jump
+        toStep: 1
+      - stepNumber: 17
+        label: invalidMethod
+        description: >-
+          Report INVALID_TARGET_METHOD_REFERENCE (error; draft context isDraftCtx or
+          ctx.isComponentDraft(the target component)) naming the method, the verb, the target
+          component and where — and, when a method of the target component's contracts lists the
+          called name in its rename trace (previousNames, `<contract>.<name>` or the bare name),
+          that it was renamed to that method, per the rename trace, with "did you mean" the new
+          name: the same hint a renamed type carries, read here from a member's or this project's
+          own contracts alike
+        type: local
+    symbol: check
+    exportedVia: narrativeTargetReferencesRule
+  - name: crossTreeReferences
+    sourcePath: src/core/rules/narrative/cross-tree-references.ts
+    narrative:
+      - stepNumber: 1
+        label: targetSteps
+        description: >-
+          One resolution path for every entry kind: call, dispatch and register steps name a target
+          the same way and differ only in the verb their finding reads with
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative of every implementation
+          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 10
+      - stepNumber: 2
+        label: outsideTree
+        description: >-
+          Only a target this tree does not contain is resolved here; a step that names no target, or
+          no target method where its kind needs one, and a target the tree does contain are all
+          narrative-target-references'
+        type: branch
+        condition: >-
+          step.targetComponent is set, step.targetMethod is set unless the step dispatches, and
+          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree
+        onFalseStep: 1
+      - stepNumber: 3
+        label: classifyRef
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); fromSubsystem = the subsystem of the
+          calling component ctx.componentMap.get(contract.component), when it resolves; resolution =
+          ctx.resolveCrossProject(impl.id, the step, step.targetComponent), set when the reference
+          leaves the bound project (an alias of a member or an external, an undeclared first
+          segment, a foreign provider, a deprecated form) and null for a local id; and the verb:
+          'dispatches through', 'registers callback' or 'calls'
+        type: local
+      - stepNumber: 4
+        description: >-
+          Only a reference that leaves the project is looked up in a contract outside it; a local id
+          that names nothing is a typo
+        type: branch
+        condition: resolution is set
+        onFalseStep: 8
+      - stepNumber: 5
+        description: >-
+          resolved = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) — the contract entry
+          the resolution landed on: a contained member's live table, the external's pin, or a
+          foreign snapshot
+        type: local
+      - stepNumber: 6
+        label: surfaceVerdict
+        description: >-
+          Act on the resolution: resolved is left to surface-reference-backing, which judges what
+          the entry exposes; ambiguous (foreign snapshots that disagree) is reported here; every
+          other outcome is project-boundaries' single finding
+        type: switch
+        'on': resolution.outcome
+        cases:
+          - value: ambiguous
+            step: 10
+          - value: resolved
+            step: 1
+        defaultStep: 7
+      - stepNumber: 7
+        label: reportedElsewhere
+        description: >-
+          Forbidden, missing and unavailable are reported once, by project-boundaries, with the
+          resolution: continue with the next step. (The retired CROSS_TREE_REF_UNRESOLVED warning
+          and its advice to validate from the parent are gone.)
+        type: jump
+        toStep: 1
+      - stepNumber: 8
+        label: invalidRef
+        description: >-
+          Report INVALID_TARGET_COMPONENT_REFERENCE (error; draft context isDraftCtx): the method
+          reaches a component that does not exist, naming the verb, the component and the step
+        type: local
+      - stepNumber: 9
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 10
+        label: ambiguousRef
+        description: >-
+          Report SURFACE_REF_AMBIGUOUS (error; draft context isDraftCtx; carrying the resolution)
+          with the message resolved.ambiguityMessage(subject, step.targetComponent), where subject
+          names the reaching clause: 'Method <method> in implementation <impl> dispatches (step <n>)
+          through' for a dispatch step, and 'Method <method> in implementation <impl>
+          calls|registers callback "<targetMethod>" (step <n>) on' otherwise
+        type: local
+    symbol: check
+    exportedVia: crossTreeReferencesRule
+  - name: surfaceReferenceBacking
+    sourcePath: src/core/rules/narrative/surface-reference-backing.ts
+    narrative:
+      - stepNumber: 1
+        label: targetSteps
+        description: >-
+          One path for every entry kind: call, dispatch and register steps reach a surface the same
+          way and differ only in what the surface must expose
+        type: loop
+        loopKind: forEach
+        over: >-
+          the call, dispatch and register steps of every method narrative of every implementation
+          impl in ctx.implementations whose contract ctx.interfaceMap.get(impl.contract) resolves
+        endStep: 15
+      - stepNumber: 2
+        label: resolvedTarget
+        description: >-
+          Only a target that left the project AND resolved to a single declared contract entry is
+          judged here: a malformed step and a target this tree contains are
+          narrative-target-references', and a reference whose resolution is anything but resolved is
+          cross-tree-references' (ambiguous) or project-boundaries' (forbidden, missing,
+          unavailable)
+        type: branch
+        condition: >-
+          step.targetComponent is set; step.targetMethod is set unless the step dispatches;
+          ctx.componentMap.get(step.targetComponent) resolves nothing in this tree;
+          ctx.resolveCrossProject(impl.id, the step, step.targetComponent) is resolved; and resolved
+          = ctx.resolveSurfaceRef(step.targetComponent, fromSubsystem) names the entry — a contained
+          member's live table, the external's pin, or a foreign snapshot
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Compute isDraftCtx = ctx.isImplementationDraft(impl); caller =
+          ctx.componentMap.get(contract.component); and the verb every finding reads with:
+          'dispatches through', 'registers callback' or 'calls'. Every finding below is a contract
+          verdict on a resolved reference, and carries that resolution
+        type: local
+      - stepNumber: 4
+        label: declaredDependency
+        description: >-
+          A target resolved through a surface is a collaborator like a local one. The loader
+          qualifies a cross-tree dependsOn entry exactly as it qualifies the step's target, so a
+          declared edge names the same reference
+        type: branch
+        condition: >-
+          caller resolves, step.targetComponent is not the caller itself, and the caller neither
+          dependsOn nor owns it
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report UNDECLARED_DEPENDENCY_CALL (error; draft context isDraftCtx or
+          ctx.isComponentDraft(caller.id); carrying the resolution) naming the caller, the verb and
+          the component in the other project it reaches without declaring it
+        type: local
+      - stepNumber: 6
+        label: whatMustBeExposed
+        description: A dispatch step routes a capability; a call or register step names a method
+        type: branch
+        condition: the step is a dispatch step
+        onFalseStep: 10
+      - stepNumber: 7
+        label: servedCapability
+        description: Validate the dispatched capability against the DECLARED surface
+        type: branch
+        condition: >-
+          step.capability is set and resolved.entry.dispatch (none when absent) has no binding for
+          that capability
+        onFalseStep: 1
+      - stepNumber: 8
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; carrying the resolution)
+          naming the capability, the portal in the other project, the providing project and the
+          entry id that does not serve it
+        type: local
+      - stepNumber: 9
+        description: Continue with the next step
+        type: jump
+        toStep: 1
+      - stepNumber: 10
+        label: exposedMethod
+        description: Validate the called method against the DECLARED surface
+        type: branch
+        condition: resolved.entry.methods has a method named step.targetMethod, the surface method
+        onFalseStep: 15
+      - stepNumber: 11
+        label: surfaceGuarantees
+        description: >-
+          Check each guarantee the step asserts against the surface method, the same consistency
+          check a local contract gets
+        type: loop
+        loopKind: forEach
+        over: step.assertsGuarantees (none when the step asserts no guarantee)
+        endStep: 13
+      - stepNumber: 12
+        description: Is the asserted guarantee undeclared on the surface?
+        type: branch
+        condition: the surface method's guarantees (none when absent) do not include the asserted guarantee
+        onFalseStep: 11
+      - stepNumber: 13
+        label: surfaceUnbacked
+        description: >-
+          Report NARRATIVE_SEMANTIC_UNBACKED (warning; draft context isDraftCtx; carrying the
+          resolution) naming the step, the method, the guarantee, the providing project and the
+          entry method that does not declare it
+        type: local
+      - stepNumber: 14
+        description: Continue with the next step once every asserted guarantee is checked
+        type: jump
+        toStep: 1
+      - stepNumber: 15
+        label: methodNotExposed
+        description: >-
+          Report SURFACE_REF_NOT_EXPOSED (error; draft context isDraftCtx; carrying the resolution)
+          naming the method, the verb, the component in the other project, the providing project and
+          the entry id that does not expose it — and, when a method of that entry lists the called
+          name in its rename trace (`formerly`), that it was renamed to it (follow the rename);
+          otherwise that a pin taken before the producer published the name cannot know it, so once
+          the producer exports it the remedy is a re-pin (`wairon externals pin <alias>`)
+        type: local
+    symbol: check
+    exportedVia: surfaceReferenceBackingRule
+  - name: meaninglessBranches
+    sourcePath: src/core/rules/narrative/meaningless-branches.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl)
+        type: loop
+        loopKind: forEach
+        over: each method of each implementation in ctx.implementations
+        endStep: 8
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = the completed step graph from the shared completedStepGraph helper:
+          implMethod.narrative with a completion step appended, a return step numbered one past
+          every step number and every jump field value, read through stepGraph; so each place flow
+          falls off the end of the narrative (a simple step, a parallel arm whose join lies past the
+          end, a branch's true arm, a switch's default, a loop or try exit) continues at the
+          completion step under the step graph's own successor semantics
+        type: local
+      - stepNumber: 4
+        label: decisionSteps
+        description: Look for decisions that decide nothing
+        type: loop
+        loopKind: forEach
+        over: implMethod.narrative
+        endStep: 8
+      - stepNumber: 5
+        description: Do both arms of a branch go to one step?
+        type: branch
+        condition: >-
+          the step is a branch with onFalseStep set whose targets are a single step: onFalseStep
+          together with onTrueStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the true arm's fall-through included:
+          the last step of a parallel arm falls through to its join)
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the branch step and
+          the one step both arms go to
+        type: local
+      - stepNumber: 7
+        label: switchCheck
+        description: Do every case and the default of a switch go to one step?
+        type: branch
+        condition: >-
+          the step is a switch with cases whose targets are a single step: its case steps together
+          with defaultStep when that is set, else together with every step
+          graph.successorsOf(step.stepNumber) continues it at (the default's fall-through included:
+          at the end of a parallel arm the join, past the narrative's end the completion step)
+        onFalseStep: 4
+      - stepNumber: 8
+        label: reportSwitch
+        description: >-
+          Report MEANINGLESS_BRANCH (warning; draft context isDraftCtx) naming the switch step and
+          the one step every case and the default go to
+        type: local
+    symbol: check
+    exportedVia: meaninglessBranchesRule
+  - name: inescapableCycles
+    sourcePath: src/core/rules/narrative/inescapable-cycles.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: For each implementation method, with isDraftCtx = ctx.isImplementationDraft(impl)
+        type: loop
+        loopKind: forEach
+        over: each method of each implementation in ctx.implementations
+        endStep: 6
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          graph = the completed step graph from the shared completedStepGraph helper:
+          implMethod.narrative with a completion step appended, a return step numbered one past
+          every step number and every jump field value, so falling off the end of the narrative
+          counts as leaving the flow under the step graph's own successor semantics
+        type: local
+      - stepNumber: 4
+        label: stepCycles
+        description: Look for step cycles that never terminate
+        type: loop
+        loopKind: forEach
+        over: >-
+          each strongly connected component of the step graph, from the shared
+          stronglyConnected(graph.stepNumbers, graph.successorsOf) (iterative Tarjan)
+        endStep: 6
+      - stepNumber: 5
+        description: Is the cycle inescapable?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one step, or a step that is its own successor), no
+          member has a successor outside it, and no member is a return or throw step
+        onFalseStep: 4
+      - stepNumber: 6
+        label: reportCycle
+        description: >-
+          Report INESCAPABLE_CYCLE (warning; draft context isDraftCtx) listing the cycle's steps in
+          ascending order: once entered, the flow never terminates
+        type: local
+    symbol: check
+    exportedVia: inescapableCyclesRule
+  - name: unconditionalCallCycles
+    sourcePath: src/core/rules/narrative/unconditional-call-cycles.ts
+    narrative:
+      - stepNumber: 1
+        label: methods
+        description: >-
+          For each implementation method of a component, with component = the component of impl's
+          contract; cross-component call edges collect into callEdges, empty at the start
+        type: loop
+        loopKind: forEach
+        over: >-
+          each method of each implementation in ctx.implementations whose contract resolves in
+          ctx.interfaceMap to a component that resolves in ctx.componentMap
+        endStep: 6
+      - stepNumber: 2
+        description: Skip a method without a narrative
+        type: branch
+        condition: implMethod.narrative has steps
+        onFalseStep: 1
+      - stepNumber: 3
+        label: edgeSteps
+        description: Collect the method's cross-component call edges
+        type: loop
+        loopKind: forEach
+        over: implMethod.narrative
+        endStep: 6
+      - stepNumber: 4
+        description: >-
+          Resolve the step's call target: a call step with targetComponent and targetMethod targets
+          them; a dispatch step with targetComponent and capability targets the component and method
+          bound to that capability in the portal's dispatch table
+          (ctx.componentMap.get(step.targetComponent)?.dispatch), when one is bound. Register steps
+          are never collected: a handoff defers the invocation, so it cannot recurse
+        type: local
+      - stepNumber: 5
+        description: Does the step make a call into a known component?
+        type: branch
+        condition: a target was resolved and ctx.componentMap has its component
+        onFalseStep: 3
+      - stepNumber: 6
+        label: recordEdge
+        description: >-
+          Add to callEdges the edge from '<component.id>::<method name>' to '<target
+          component>::<target method>' with the implementation, the method name, the step number and
+          the target label 'component.method'; the edge is unconditional when the shared
+          isUnavoidable helper finds the step on every path to completion: over the completed step
+          graph with the step removed, the first step cannot complete, where the steps that can
+          complete are the least set in which a return or throw step completes, a parallel header
+          completes when every arm entry does (all arms run), a doWhile header completes only when
+          its body entry does (the body runs before the test, so what the body cannot avoid the loop
+          cannot avoid), a try header never completes around the step its body begins at (it
+          executes before any handler can catch anything; anything deeper in the body stays
+          avoidable, since a throw before it diverts to the handler), and any other step completes
+          when some successor does
+        type: local
+      - stepNumber: 7
+        description: >-
+          Build the unconditional call graph: adjacency groups the unconditional edges of callEdges
+          by their from key, and its nodes are every from and to key
+        type: local
+      - stepNumber: 8
+        label: callCycles
+        description: Look for call cycles with no guarded edge
+        type: loop
+        loopKind: forEach
+        over: >-
+          each strongly connected component of the unconditional call graph, from the shared
+          stronglyConnected over the node indices and their adjacency successors
+        endStep: 10
+      - stepNumber: 9
+        description: Is the call cycle unconditional?
+        type: branch
+        condition: >-
+          the component is a cycle (more than one node, or a node with an edge to itself) and has
+          member edges, the unconditional edges between its nodes
+        onFalseStep: 8
+      - stepNumber: 10
+        label: reportCallCycle
+        description: >-
+          Report UNCONDITIONAL_CALL_CYCLE (warning; draft context when any member edge's
+          implementation is ctx.isImplementationDraft) on the implementation of the anchor, the
+          member edge that sorts first by from key, then implementation id, compared by code unit,
+          then step number, naming the cycle's nodes in sorted order and the anchor's step, method,
+          implementation and target: it recurses without a base case
+        type: local
+    symbol: check
+    exportedVia: unconditionalCallCyclesRule
+  - name: narrativeDetail
+    sourcePath: src/core/rules/narrative/narrative-detail.ts
+    narrative:
+      - stepNumber: 1
+        label: impls
+        description: For each implementation spec
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 12
+      - stepNumber: 2
+        description: Skip an implementation whose contract does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          component = ctx.componentMap.get(contract.component); isDraftCtx =
+          ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 4
+        label: methods
+        description: Hold each implementation method to its detail level
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 12
+      - stepNumber: 5
+        description: Skip a method the contract does not define
+        type: branch
+        condition: contract.methods has a method named implMethod.name (contractMethod)
+        onFalseStep: 4
+      - stepNumber: 6
+        description: 'Levels are floors, not ceilings: a method with a narrative passes'
+        type: branch
+        condition: implMethod.narrative is empty
+        onFalseStep: 4
+      - stepNumber: 7
+        description: >-
+          eff = implMethod.effectiveDetail(impl, component): the method's detail, else the
+          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
+          when the component does not resolve)
+        type: local
+      - stepNumber: 8
+        description: Does the method owe a narrative?
+        type: branch
+        condition: eff.level is full
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Report MISSING_NARRATIVE (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and whether full was declared or is the component type's default
+        type: local
+      - stepNumber: 10
+        description: Continue with the next method
+        type: jump
+        toStep: 4
+      - stepNumber: 11
+        label: intentFloor
+        description: Intent, and calls-only with nothing to choreograph, must clear the intent floor
+        type: branch
+        condition: >-
+          contractMethod.passesIntentFloor(implMethod.intent, else contractMethod.description) is
+          false
+        onFalseStep: 4
+      - stepNumber: 12
+        label: reportIntentFloor
+        description: >-
+          Report INTENT_FLOOR (error when eff.explicit, else warning; draft context isDraftCtx)
+          naming the method and its level: its behavioural prose is missing or placeholder-thin
+        type: local
+    symbol: check
+    exportedVia: narrativeDetailRule
+  - name: detailSufficiency
+    sourcePath: src/core/rules/narrative/detail-sufficiency.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          code = ctx.codeIndex(): the run's source files keyed by canonical path, the same index the
+          conformance family reads
+        type: local
+      - stepNumber: 2
+        label: impls
+        description: >-
+          Gather the methods the dial holds below full with nothing written — the only methods this
+          rule judges; dialedDown is empty at the start
+        type: loop
+        loopKind: forEach
+        over: ctx.implementations
+        endStep: 7
+      - stepNumber: 3
+        description: Skip an implementation whose contract does not resolve
+        type: branch
+        condition: ctx.interfaceMap.get(impl.contract) resolves the contract
+        onFalseStep: 2
+      - stepNumber: 4
+        description: >-
+          component = ctx.componentMap.get(contract.component); draftContext =
+          ctx.isImplementationDraft(impl)
+        type: local
+      - stepNumber: 5
+        label: methods
+        description: >-
+          detail = implMethod.effectiveDetail(impl, component): the method's detail, else the
+          implementation's, either one explicit, else the component's defaultNarrativeDetail() (full
+          when the component does not resolve)
+        type: loop
+        loopKind: forEach
+        over: impl.methods
+        endStep: 7
+      - stepNumber: 6
+        description: >-
+          Is the dial holding this method below full with nothing written? A method the contract
+          does not define is contract-symmetry's finding, levels are floors so a narrated method
+          passes, and a method held to full owes a narrative rather than sufficiency
+          (narrative-detail reports that)
+        type: branch
+        condition: >-
+          contract.methods has a method named implMethod.name, implMethod.narrative is empty, and
+          detail.level is not full
+        onFalseStep: 5
+      - stepNumber: 7
+        label: collect
+        description: >-
+          Add the method to dialedDown with its implementation, its component, its resolved detail
+          and draftContext
+        type: local
+      - stepNumber: 8
+        label: judge
+        description: Judge each dialed-down method on both readings
+        type: loop
+        loopKind: forEach
+        over: dialedDown
+        endStep: 16
+      - stepNumber: 9
+        description: >-
+          tier = implMethod.conformance, else impl.conformance, else
+          component.defaultConformanceTier() (declared when the component does not resolve); file =
+          implMethod.sourceFile(impl.sourcePath); symbol = implMethod.symbol, else implMethod.name;
+          limit = ctx.complexityConfigFor(component?.subsystem)?.maxUnnarratedComplexity, else the
+          private DEFAULT_MAX_UNNARRATED_COMPLEXITY (8)
+        type: local
+      - stepNumber: 10
+        label: codeSide
+        description: >-
+          The code side: measure only when the method has a source file of this root and a trusted
+          name-to-symbol mapping
+        type: branch
+        condition: >-
+          file is set, tier is not off, and the component is not in a chained subproject (a resolved
+          component for which ctx.isInChainedSubproject(component.subsystem) holds)
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          facts = code.factsAt(file); complexity = facts.functionComplexity[symbol] as an own
+          property, only when facts is analyzed at exact grade — a weaker grade measures nothing
+          rather than guessing
+        type: local
+      - stepNumber: 12
+        label: measured
+        description: Is real branching hiding below the dial?
+        type: branch
+        condition: complexity was measured and exceeds limit
+        onFalseStep: 15
+      - stepNumber: 13
+        description: >-
+          Report UNNARRATED_COMPLEXITY (warning; draft context draftContext) naming the level, the
+          symbol, the file, the measured complexity and the limit
+        type: local
+      - stepNumber: 14
+        description: >-
+          Evidence outranks expectation: a method already accused of hiding real branching is not
+          accused twice — continue with the next dialed-down method
+        type: jump
+        toStep: 8
+      - stepNumber: 15
+        label: specSide
+        description: 'The spec side: is a logic stereotype explicitly dialed below its full floor?'
+        type: branch
+        condition: >-
+          detail.explicit, and the component resolves and component.isLogic() holds: an
+          Orchestrator, Supervisor or Actor (or a Specialist until it is migrated)
+        onFalseStep: 8
+      - stepNumber: 16
+        label: belowStereotype
+        description: >-
+          Report DETAIL_BELOW_STEREOTYPE (warning; draft context draftContext) naming the explicit
+          level and the logic stereotype whose full floor it sits below
+        type: local
+    symbol: check
+    exportedVia: detailSufficiencyRule
+status: complete
+createdAt: '2026-09-14T23:18:39.432Z'
+updatedAt: '2026-10-07T18:42:21.671Z'

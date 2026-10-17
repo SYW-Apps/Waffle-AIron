@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ methods:
     intent: Pops the oldest pending job from the backing store; returns null on an empty queue. No locking — single consumer by design.`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flowIssues = res.issues.filter(i => ['MALFORMED_FLOW_STEP', 'INVALID_STEP_JUMP', 'UNREACHABLE_STEP', 'MISSING_NARRATIVE', 'INTENT_FLOOR'].includes(i.code));
       expect(flowIssues).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -147,7 +147,7 @@ methods:
       - { stepNumber: 4, description: dangling jump, type: jump, toStep: 99 }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const cs = codes(res);
       expect(cs).toContain('MALFORMED_FLOW_STEP');
       expect(cs).toContain('INVALID_STEP_JUMP');
@@ -196,7 +196,7 @@ methods:
       - { stepNumber: 4, description: done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const cs = codes(res);
       expect(cs).toContain('REGION_OVERLAP');       // loop 1..3 vs try 2..4 interleave
       expect(cs).toContain('JUMP_INTO_REGION');     // step 6 jumps to 3, inside the loop body
@@ -233,7 +233,7 @@ methods:
       - { stepNumber: 5, description: all done, type: return, outcome: success }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const structural = res.issues.filter(i => ['REGION_OVERLAP', 'JUMP_INTO_REGION', 'FALLTHROUGH_INTO_HANDLER', 'BACKWARD_JUMP'].includes(i.code));
       expect(structural).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -265,7 +265,7 @@ methods:
       - { stepNumber: 3, description: dead code after the terminator, type: local }`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unreachable = res.issues.filter(i => i.code === 'UNREACHABLE_STEP');
       expect(unreachable).toHaveLength(1);
       expect(unreachable[0].message).toContain('step(s) 3');
@@ -279,11 +279,33 @@ describe('type shape rules', () => {
     proj.writeSpec('type', 'ghost-shape', 'kind: value-object\nid: ghost-shape\nname: GhostShape\ndescription: a placeholder\nfields: []\nmethods: []');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
       expect(hollow).toHaveLength(1);
       expect(hollow[0].specId).toBe('ghost-shape');
       expect(hollow[0].severity).toBe('warning');
+    } finally { proj.cleanup(); }
+  });
+
+  it('an enum models its values and a signature type its params and returns: neither is HOLLOW_TYPE', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'track', 'kind: enum\nid: track\nname: Track\ndescription: a release track\nvalues:\n  - name: stable\n  - name: beta');
+    proj.writeSpec('type', 'mark', 'kind: signature\nid: mark\nname: Mark\ndescription: a text markup\nparams:\n  - name: text\n    type: string\nreturns: string');
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'HOLLOW_TYPE')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a named scalar models the primitive it holds: it is not HOLLOW_TYPE', () => {
+    const proj = createTempProject();
+    proj.writeSpec('type', 'order-id', 'kind: value-object\nid: order-id\nname: OrderId\ndescription: the number of one order\nholds: string');
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'HOLLOW_TYPE')).toEqual([]);
+      expect(res.issues.filter(i => i.code === 'NAMED_SCALAR_MEMBERS')).toEqual([]);
     } finally { proj.cleanup(); }
   });
 });
@@ -304,7 +326,7 @@ lint:
     proj.writeSpec('type', 'other-hollow', 'kind: value-object\nid: other-hollow\nname: OtherHollow\ndescription: d\nfields: []\nmethods: []');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const hollow = res.issues.filter(i => i.code === 'HOLLOW_TYPE');
       expect(hollow).toHaveLength(1); // only the spec WITHOUT the allow
       expect(hollow[0].specId).toBe('other-hollow');
@@ -312,7 +334,7 @@ lint:
     } finally { proj.cleanup(); }
   });
 
-  it('never suppresses error-severity findings, but the matching allow is not flagged stale', () => {
+  it('never suppresses error-severity findings, and says the allow cannot cover an error', () => {
     const proj = createTempProject();
     proj.writeSpec('type', 'broken', `kind: value-object
 id: broken
@@ -328,9 +350,12 @@ lint:
       reason: trying to silence an architecture error`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNDEFINED_TYPE_REFERENCE')).toHaveLength(1); // error survives
-      expect(res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW')).toHaveLength(0); // but the allow matched
+      const audit = res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
+      expect(audit).toHaveLength(1); // the allow covers nothing, and says why
+      expect(audit[0].message).toContain('an error cannot be allowed');
+      expect(audit[0].message).not.toContain('no such finding fired');
       expect(res.valid).toBe(false);
     } finally { proj.cleanup(); }
   });
@@ -353,7 +378,7 @@ lint:
       reason: it used to be hollow but is filled now`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const unknown = res.issues.filter(i => i.code === 'UNKNOWN_LINT_ALLOW_CODE');
       const stale = res.issues.filter(i => i.code === 'UNUSED_LINT_ALLOW');
       expect(unknown).toHaveLength(1);
@@ -398,7 +423,7 @@ methods:
     proj.writeSpec('implementation', 'impl-orch-u', implBody('impl-orch-u', 'iorch-u'));
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const flow = res.issues.filter(i => i.code === 'LANGUAGE_FOREIGN_FLOW');
       expect(flow).toHaveLength(3); // try + doWhile + throw, only in the rust subsystem
       expect(flow.every(i => i.specId === 'impl-orch-r')).toBe(true);
@@ -410,7 +435,7 @@ methods:
 describe('narrative detail dial', () => {
   it('stereotype defaults: Store falls to intent — thin description trips the INTENT_FLOOR as a warning', () => {
     const proj = createTempProject();
-    proj.component('portal-d', 'Portal', 'portalType: HTTP_API\ndependsOn: [store-d]');
+    proj.component('portal-d', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [store-d]');
     proj.component('store-d', 'Store');
     proj.writeSpec('interface', 'iportal-d', `schemaVersion: 1.0.0
 id: iportal-d
@@ -450,7 +475,7 @@ methods:
   - name: read`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const floor = res.issues.filter(i => i.code === 'INTENT_FLOOR');
       expect(floor).toHaveLength(1);
       expect(floor[0].severity).toBe('warning'); // stereotype-defaulted, not declared
@@ -460,7 +485,7 @@ methods:
 
   it('a substantive L3 description satisfies the intent floor without any L4 prose', () => {
     const proj = createTempProject();
-    proj.component('portal-e', 'Portal', 'portalType: HTTP_API\ndependsOn: [store-e]');
+    proj.component('portal-e', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [store-e]');
     proj.component('store-e', 'Store');
     proj.writeSpec('interface', 'iportal-e', `schemaVersion: 1.0.0
 id: iportal-e
@@ -500,7 +525,7 @@ methods:
   - name: read`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'MISSING_NARRATIVE')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -535,7 +560,7 @@ methods:
     detail: intent`);
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       const missing = res.issues.filter(i => i.code === 'MISSING_NARRATIVE');
       const floor = res.issues.filter(i => i.code === 'INTENT_FLOOR');
       expect(missing).toHaveLength(1);
@@ -545,9 +570,15 @@ methods:
     } finally { proj.cleanup(); }
   });
 
-  it('unused-detection falls back to L2 edges for intent-level methods (no false UNUSED for their collaborators)', () => {
+  // -------------------------------------------------------------------------
+  // Declared calls: what a method whose narrative does not show its calls says
+  // it calls. There is NO fallback behind them - the walk takes the declared
+  // edges and nothing else - so the pair below is the whole behaviour: the same
+  // tree fires UNUSED_* without a declaration and is quiet with one.
+  // -------------------------------------------------------------------------
+  const declaredCallTree = (calls?: string) => {
     const proj = createTempProject();
-    proj.component('portal-g', 'Portal', 'portalType: HTTP_API\ndependsOn: [adapter-g]');
+    proj.component('portal-g', 'Portal', 'portalType: HTTP_API\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [adapter-g]');
     proj.component('adapter-g', 'Adapter', 'dependsOn: [orch-g]');
     proj.component('orch-g', 'Orchestrator');
     proj.writeSpec('interface', 'iportal-g', `schemaVersion: 1.0.0
@@ -589,15 +620,15 @@ methods:
   - name: handle
     narrative:
       - { stepNumber: 1, description: forward through the adapter, type: call, targetComponent: adapter-g, targetMethod: forward }`);
-    // Adapter: calls-only stereotype default, EMPTY narrative — falls to the
-    // intent floor (passes via its L3 description) and must not orphan orch-g.
+    // Adapter: calls-only stereotype default, EMPTY narrative. Its declared
+    // calls - when it declares any - are the only edges it contributes.
     proj.writeSpec('implementation', 'impl-adapter-g', `schemaVersion: 1.0.0
 id: impl-adapter-g
 name: ImplAdapterG
 description: d
 contract: iadapter-g
 methods:
-  - name: forward`);
+  - name: forward${calls ?? ''}`);
     proj.writeSpec('implementation', 'impl-orch-g', `schemaVersion: 1.0.0
 id: impl-orch-g
 name: ImplOrchG
@@ -607,12 +638,40 @@ methods:
   - name: process
     narrative:
       - { stepNumber: 1, description: run the business logic, type: local }`);
+    return proj;
+  };
+
+  it('an empty-narrative method that declares its calls reaches exactly what it named', () => {
+    const proj = declaredCallTree('\n    calls: [orch-g.process]');
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'UNUSED_METHOD')).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an empty-narrative method that declares NO calls reaches nothing - the detail dial does not vouch for its collaborators', () => {
+    const proj = declaredCallTree();
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'UNUSED_COMPONENT').map(i => i.specId)).toEqual(['orch-g']);
+      expect(res.issues.filter(i => i.code === 'INTENT_FLOOR')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a declared call is held to the call step\'s questions: parse, declared collaborator, method on the contract', () => {
+    const proj = declaredCallTree('\n    calls: [orch-g, orch-g.absent, stranger.process]');
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(res.issues.filter(i => i.code === 'MALFORMED_DECLARED_CALL')).toHaveLength(1);
+      expect(res.issues.filter(i => i.code === 'INVALID_TARGET_METHOD_REFERENCE')).toHaveLength(1);
+      // "stranger" is no component of this tree: that is cross-tree-references'
+      // subject, exactly as it is for a call step.
+      expect(res.issues.filter(i => i.code === 'UNDECLARED_DEPENDENCY_CALL')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

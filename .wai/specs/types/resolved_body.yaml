@@ -1,0 +1,21 @@
+kind: value-object
+id: resolved_body
+name: ResolvedBody
+description: >-
+  The bodies one name resolved to in a file, with an identity a call walk de-duplicates on:
+  `<container>.<name>` for a member, `<name>` for the module binding, `*<name>` for the union of
+  every same-named body where the code does not settle which one the name means.
+subsystem: sdd_validator
+fields:
+  - name: key
+    type: string
+    description: 'The resolved identity: <container>.<name>, <name>, or *<name> for the union'
+    optional: false
+  - name: sites
+    type: list<CallSiteFact>
+    description: The call sites of the resolved bodies
+    optional: false
+methods: []
+sourcePath: src/models/code-model.ts
+createdAt: '2026-10-04T22:32:22.719Z'
+updatedAt: '2026-10-04T22:32:23.081Z'

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 
 // ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: ['idempotent'], stepAsserts: ['idempotent'] });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(unknownIssues(res)).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -135,7 +135,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: ['idempotnet'] });
     proj.activate();
     try {
-      const found = unknownIssues(validateSddTree());
+      const found = unknownIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].specId).toBe('irecord-store');
@@ -149,7 +149,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: ['atomic'], stepAsserts: ['atomical'] });
     proj.activate();
     try {
-      const found = unknownIssues(validateSddTree());
+      const found = unknownIssues(validateProject());
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-flow-orch');
       expect(found[0].message).toContain('"atomical"');
@@ -162,7 +162,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: ['compensating'], stepAsserts: ['compensating'] });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(unknownIssues(res)).toHaveLength(0);
       expect(res.issues.filter(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED')).toHaveLength(0);
     } finally { proj.cleanup(); }
@@ -174,7 +174,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: [], stepAsserts: ['compensating'] });
     proj.activate();
     try {
-      const res = validateSddTree();
+      const res = validateProject();
       expect(unknownIssues(res)).toHaveLength(0);
       const unbacked = res.issues.filter(i => i.code === 'NARRATIVE_SEMANTIC_UNBACKED');
       expect(unbacked).toHaveLength(1);
@@ -189,7 +189,7 @@ describe('guarantee-token vocabulary — open schema, validator-checked', () => 
     proj.scenario({ methodGuarantees: ['monotonic'], stepAsserts: ['monotonic'] });
     proj.activate();
     try {
-      expect(unknownIssues(validateSddTree())).toHaveLength(0);
+      expect(unknownIssues(validateProject())).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });

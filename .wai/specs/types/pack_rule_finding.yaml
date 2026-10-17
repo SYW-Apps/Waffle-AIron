@@ -1,0 +1,29 @@
+kind: value-object
+id: pack_rule_finding
+name: Finding
+description: >-
+  One issue a code-pack rule reports about the spec tree, as @wairon/sdk publishes it to pack
+  authors; wairon surfaces its code namespaced by the pack.
+subsystem: sdd_sdk
+fields:
+  - name: code
+    type: string
+    description: Pack-local issue code (surfaced namespaced, e.g. <PACK>_<CODE>)
+    optional: false
+  - name: severity
+    type: pack_rule_severity
+    description: error or warning
+    optional: false
+  - name: message
+    type: string
+    description: Human-readable explanation of the violation
+    optional: false
+  - name: specId
+    type: string
+    description: The spec id the finding is anchored to
+    optional: true
+methods: []
+componentClass: sdk_portal
+sourcePath: sdk/src/authoring.ts
+createdAt: '2026-10-04T18:23:13.931Z'
+updatedAt: '2026-10-04T18:23:14.449Z'

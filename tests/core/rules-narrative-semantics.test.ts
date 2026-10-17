@@ -2,9 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { validateSddTree } from '../../src/core/validation.js';
+import { validateProject } from '../../src/core/validation.js';
 import { buildCodeModel } from '../../src/core/source-analysis.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { bodySitesOf } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
 // L5 semantic lints — spec-level bug detection, restricted to what structure
@@ -95,7 +96,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'INESCAPABLE_CYCLE');
+      const found = byCode(validateProject(), 'INESCAPABLE_CYCLE');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('2 → 3');
@@ -118,7 +119,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -136,7 +137,7 @@ describe('INESCAPABLE_CYCLE — provable non-termination in one narrative', () =
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -156,7 +157,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'MEANINGLESS_BRANCH');
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('decides nothing');
     } finally { proj.cleanup(); }
@@ -183,7 +184,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(1);
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -201,7 +202,7 @@ describe('MEANINGLESS_BRANCH — decisions that decide nothing', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 });
@@ -220,7 +221,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE');
+      const found = byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('orch-a::ping');
       expect(found[0].message).toContain('orch-b::pong');
@@ -245,7 +246,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -256,7 +257,7 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     proj.impl('orch-a', ['methods:', '  - name: ping', '    narrative:', CALL(1, 'orch-a', 'ping'), '      - { stepNumber: 2, description: Done, type: return, outcome: done }'].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
     } finally { proj.cleanup(); }
   });
 
@@ -277,7 +278,157 @@ describe('UNCONDITIONAL_CALL_CYCLE — unbounded recursion across components', (
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('antipatterns follow the step graph — parallel joins and completion', () => {
+  const CALL = (n: number, comp: string, method: string) =>
+    `      - { stepNumber: ${n}, description: Call ${comp}.${method}, type: call, targetComponent: ${comp}, targetMethod: ${method} }`;
+  const DONE = (n: number) => `      - { stepNumber: ${n}, description: Done, type: return, outcome: done }`;
+
+  it('MEANINGLESS_BRANCH: a branch ending a parallel arm falls through to the join, not into the next arm', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the lookups, type: parallel, branches: [{ step: 2 }, { step: 4 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Warm the cache, type: local }',
+      '      - { stepNumber: 3, description: Skip to the join once the cache is warm, type: branch, condition: cache is warm, onFalseStep: 6 }',
+      '      - { stepNumber: 4, description: Fetch the profile, type: local }',
+      '      - { stepNumber: 5, description: Fetch the settings, type: local }',
+      DONE(6),
+    ].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
+      expect(found.map(i => i.message)).toEqual([expect.stringContaining('branch step 3 sends both arms to step 6')]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MEANINGLESS_BRANCH: a switch default ending a parallel arm falls through to the join', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the lookups, type: parallel, branches: [{ step: 2 }, { step: 4 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Classify the request, type: local }',
+      '      - { stepNumber: 3, description: Skip to the join for bulk requests, type: switch, on: request kind, cases: [{ value: bulk, step: 6 }] }',
+      '      - { stepNumber: 4, description: Fetch the profile, type: local }',
+      '      - { stepNumber: 5, description: Fetch the settings, type: local }',
+      DONE(6),
+    ].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'MEANINGLESS_BRANCH');
+      expect(found.map(i => i.message)).toEqual([expect.stringContaining('switch step 3 sends every case (and the default) to step 6')]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('MEANINGLESS_BRANCH stays silent for a switch whose default completes the method off the end', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the job state, type: local }',
+      '      - { stepNumber: 2, description: Handle the job once more, type: local }',
+      '      - { stepNumber: 3, description: Route the job by its state, type: switch, on: job state, cases: [{ value: retry, step: 2 }, { value: requeue, step: 2 }] }',
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'MEANINGLESS_BRANCH')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('INESCAPABLE_CYCLE stays silent when the cycle exits by falling off the end of the narrative', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Prepare the run context, type: local }',
+      '      - { stepNumber: 2, description: Poll the state, type: local }',
+      '      - { stepNumber: 3, description: Poll again until the state settles, type: branch, condition: state settled, onFalseStep: 2 }',
+    ].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'INESCAPABLE_CYCLE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE: every parallel arm runs, so a call inside an arm is unavoidable', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch-a]');
+    proj.contract('orch-a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: ping',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the notification and the audit, type: parallel, branches: [{ step: 2 }, { step: 3 }], endStep: 3 }',
+      CALL(2, 'orch-b', 'pong'),
+      '      - { stepNumber: 3, description: Record the audit entry, type: local }',
+      DONE(4),
+    ].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE: an arm that can skip its call guards the cycle, even when the arm completes at a join past the end', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch-a]');
+    proj.contract('orch-a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch-a', [
+      'methods:',
+      '  - name: ping',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Fan out the notification and the audit, type: parallel, branches: [{ step: 2 }, { step: 5 }], endStep: 5 }',
+      '      - { stepNumber: 2, description: Skip the notification once it was sent, type: branch, condition: already notified, onTrueStep: 4, onFalseStep: 3 }',
+      CALL(3, 'orch-b', 'pong'),
+      '      - { stepNumber: 4, description: Note the notification outcome, type: local }',
+      '      - { stepNumber: 5, description: Record the audit entry, type: local }',
+    ].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch-a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('UNCONDITIONAL_CALL_CYCLE anchors on the first cycle member by code unit, not by locale collation', () => {
+    // By code unit "-" (U+002D) sorts before "_" (U+005F), while locale
+    // collation puts "_" first. The anchor follows the order the path reports.
+    const proj = createTempProject();
+    proj.component('orch_a', 'Orchestrator', 'dependsOn: [orch-b]');
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [orch_a]');
+    proj.contract('orch_a', ['ping']);
+    proj.contract('orch-b', ['pong']);
+    proj.impl('orch_a', ['methods:', '  - name: ping', '    narrative:', CALL(1, 'orch-b', 'pong'), DONE(2)].join('\n'));
+    proj.impl('orch-b', ['methods:', '  - name: pong', '    narrative:', CALL(1, 'orch_a', 'ping'), DONE(2)].join('\n'));
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'UNCONDITIONAL_CALL_CYCLE');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('orch-b::pong → orch_a::ping');
+      expect(found[0].specId).toBe('impl-orch-b');
     } finally { proj.cleanup(); }
   });
 });
@@ -307,7 +458,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', "import { put } from './store.js';\nexport function runFlow(): void { put(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -320,11 +471,11 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', 'export function runFlow(): void { /* forgot the store */ }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].severity).toBe('warning');
       expect(found[0].message).toContain('store-a.put');
-      expect(found[0].message).toContain('set membership');
+      expect(found[0].message).toContain('resolves to the target');
     } finally { proj.cleanup(); }
   });
 
@@ -341,7 +492,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -357,7 +508,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/orch.ts', "import { saveSnapshot } from './store.js';\nexport function runFlow(): void { saveSnapshot(); }\n");
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -385,7 +536,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/store.ts', 'export function put(): void {}\n');
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -410,7 +561,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     proj.source('src/store.ts', 'export function put(): void {}\nexport function save(): void { /* forwards nothing */ }\n');
     proj.activate();
     try {
-      const found = byCode(validateSddTree(), 'CALL_STEP_UNREALIZED');
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
       expect(found).toHaveLength(1);
       expect(found[0].message).toContain('store-a.put');
       expect(found[0].message).toContain('"save"');
@@ -426,7 +577,7 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     offProj.source('src/orch.ts', 'export function runFlow(): void {}\n');
     offProj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { offProj.cleanup(); }
 
     const pyProj = createTempProject();
@@ -437,8 +588,159 @@ describe('CALL_STEP_UNREALIZED — the narrative call must exist in the realized
     pyProj.source('src/orch.py', 'def runFlow():\n    pass\n');
     pyProj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { pyProj.cleanup(); }
+  });
+
+  // A narrated runFlow whose own body lives in a command module of its own.
+  const METHOD_FILE_CALL = (implPath: string | undefined) => [
+    ...(implPath ? [`sourcePath: ${implPath}`] : []),
+    'methods:',
+    '  - name: runFlow',
+    '    sourcePath: src/commands/run-flow.ts',
+    '    narrative:',
+    '      - { stepNumber: 1, description: Delegate to the store, type: call, targetComponent: store-a, targetMethod: put }',
+    '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+  ].join('\n');
+
+  it('reads the realized function in the method\'s own source file, naming that file', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL('src/orch.ts'));
+    // the implementation file keeps a stale runFlow that still calls the store
+    proj.source('src/orch.ts', "import { put } from './store.js';\nexport function runFlow(): void { put(); }\n");
+    proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* the store call was dropped */ }\n');
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"src/commands/run-flow.ts"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('a call made in the method\'s own source file is realized even when the implementation file lacks it', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL('src/orch.ts'));
+    proj.source('src/orch.ts', 'export function runFlow(): void {}\n');
+    proj.source('src/commands/run-flow.ts', "import { put } from '../store.js';\nexport function runFlow(): void { put(); }\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a method naming its own source file is checked even when the implementation names no path', () => {
+    const proj = createTempProject();
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['runFlow']);
+    storeSide(proj);
+    proj.impl('orch-a', METHOD_FILE_CALL(undefined));
+    proj.source('src/commands/run-flow.ts', 'export function runFlow(): void { /* forgot the store */ }\n');
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(1);
+    } finally { proj.cleanup(); }
+  });
+});
+
+// F80: an adapter whose contract speaks the consumer's language republishes
+// its provider under the ADAPTER's name — `export { a as b } from 'm'`. The
+// hop is an identity forward exactly like the unaliased `export { a } from
+// 'm'`, and both halves of the relation must read it that way.
+describe('F80 — an aliased re-export forwards like an unaliased one', () => {
+  /** A provider store, a thin adapter re-exporting it under its own contract name, and an orchestrator calling the adapter. */
+  const aliasedAdapter = (proj: ReturnType<typeof createTempProject>, adapterSource: string, orchSource: string) => {
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['listSnapshots']);
+    proj.impl('store-a', 'sourcePath: src/store.ts\nmethods:\n  - name: listSnapshots\n    detail: intent\n    intent: Answers every snapshot held, in the order they were stored; an empty store answers none.');
+    proj.source('src/store.ts', 'export function listSnapshots(): string[] { return []; }\n');
+    proj.component('store-adapter', 'Adapter', 'dependsOn: [store-a]');
+    proj.contract('store-adapter', ['loadSurfaceSnapshots']);
+    proj.impl('store-adapter', [
+      'sourcePath: src/adapters/store.ts',
+      'methods:',
+      '  - name: loadSurfaceSnapshots',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Call listSnapshots on the store, type: call, targetComponent: store-a, targetMethod: listSnapshots }',
+    ].join('\n'));
+    proj.source('src/adapters/store.ts', adapterSource);
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-adapter]');
+    proj.contract('orch-a', ['runFlow']);
+    proj.impl('orch-a', [
+      'sourcePath: src/orch.ts',
+      'methods:',
+      '  - name: runFlow',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the snapshots through the adapter, type: call, targetComponent: store-adapter, targetMethod: loadSurfaceSnapshots }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/orch.ts', orchSource);
+  };
+  const CONSUMER = "import { loadSurfaceSnapshots } from './adapters/store.js';\nexport function runFlow(): void { loadSurfaceSnapshots(); }\n";
+
+  it('the adapter\'s own call step is realized by `export { a as b } from` — the identity forward, aliased', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { listSnapshots as loadSurfaceSnapshots } from '../store.js';\n", CONSUMER);
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
+      expect(byCode(res, 'CALL_ORIGIN_UNRESOLVED')).toEqual([]);
+      expect(byCode(res, 'METHOD_BODY_NOT_FOUND')).toEqual([]);
+      expect(byCode(res, 'UNREALIZED_METHOD')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('follows the alias through a chain of re-exports, aliased at every hop', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { snapshots as loadSurfaceSnapshots } from './barrel.js';\n", CONSUMER);
+    proj.source('src/adapters/barrel.ts', "export { listSnapshots as snapshots } from '../store.js';\n");
+    proj.activate();
+    try {
+      // The middle hop is a file no spec names: it is in the code model because
+      // the run declares its source root, as a project that wants its unclaimed
+      // code seen does. A file outside the model is not read.
+      const res = validateProject({ rules: { conformance: { sourceRoots: ['src'] } } as never });
+      expect(byCode(res, 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('a consumer claiming the PROVIDER\'s method is realized by calling the adapter\'s alias — the call lands where m.a lives', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { listSnapshots as loadSurfaceSnapshots } from '../store.js';\n", CONSUMER);
+    proj.component('orch-b', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-b', ['audit']);
+    proj.impl('orch-b', [
+      'sourcePath: src/audit.ts',
+      'methods:',
+      '  - name: audit',
+      '    narrative:',
+      '      - { stepNumber: 1, description: Read the snapshots, type: call, targetComponent: store-a, targetMethod: listSnapshots }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    proj.source('src/audit.ts', "import { loadSurfaceSnapshots } from './adapters/store.js';\nexport function audit(): void { loadSurfaceSnapshots(); }\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('the alias is load-bearing: re-exporting a DIFFERENT provider function under the contract name still flags the step', () => {
+    const proj = createTempProject();
+    aliasedAdapter(proj, "export { countSnapshots as loadSurfaceSnapshots } from '../other.js';\n", CONSUMER);
+    proj.source('src/other.ts', 'export function countSnapshots(): number { return 0; }\n');
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].specId).toBe('impl-store-adapter');
+      expect(found[0].message).toContain('store-a.listSnapshots');
+    } finally { proj.cleanup(); }
   });
 });
 
@@ -450,7 +752,11 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
     createdAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-18T10:00:00Z',
   });
 
-  it('collects direct identifier and property-access callees per named function', () => {
+  /** The callee names of one named function-like, off its recorded call sites. */
+  const calleeNames = (facts: { functionCallSites?: Record<string, { name: string }[]> }, fn: string): string[] =>
+    (facts.functionCallSites ?? {})[fn].map((s) => s.name);
+
+  it('collects direct identifier and property-access call sites per named function, each carrying its shape', () => {
     const dir = mkTemp();
     try {
       fs.writeFileSync(path.join(dir, 'a.ts'), [
@@ -458,10 +764,16 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'export function driver(specs: { load(): void }): void { helper(); specs.load(); }',
         'export function bystander(): void {}',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
-      const fc = model.files[0].functionCalls!;
-      expect(fc.driver).toEqual(expect.arrayContaining(['helper', 'load']));
-      expect(fc.bystander).toEqual([]);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
+      const sites = model.files[0].functionCallSites!;
+      expect(calleeNames(model.files[0], 'driver')).toEqual(expect.arrayContaining(['helper', 'load']));
+      // Shape is the fact a name alone would lose: `helper()` resolves through
+      // this file's import binding, `specs.load()` through its receiver.
+      expect(sites.driver).toEqual(expect.arrayContaining([
+        { name: 'helper', member: false },
+        { name: 'load', member: true, via: 'specs' },
+      ]));
+      expect(sites.bystander).toEqual([]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -489,7 +801,7 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
     ].join('\n'));
     proj.activate();
     try {
-      expect(byCode(validateSddTree(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
+      expect(byCode(validateProject(), 'CALL_STEP_UNREALIZED')).toHaveLength(0);
     } finally { proj.cleanup(); }
   });
 
@@ -500,11 +812,108 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
         'declare function inner(): void; declare function outerOnly(): void;',
         'export function outer(): void { function nested(): void { inner(); } nested(); outerOnly(); }',
       ].join('\n'));
-      const model = buildCodeModel([impl('a.ts')], dir);
-      const fc = model.files[0].functionCalls!;
-      expect(fc.outer).toEqual(expect.arrayContaining(['nested', 'outerOnly']));
-      expect(fc.outer).not.toContain('inner');
-      expect(fc.nested).toEqual(['inner']);
+      const model = buildCodeModel([impl('a.ts')], [], dir);
+      expect(calleeNames(model.files[0], 'outer')).toEqual(expect.arrayContaining(['nested', 'outerOnly']));
+      expect(calleeNames(model.files[0], 'outer')).not.toContain('inner');
+      expect(calleeNames(model.files[0], 'nested')).toEqual(['inner']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe('same-named functions in one file are judged as the bodies they are', () => {
+  const mkTemp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-bodies-'));
+  const impl = (sourcePath: string) => ({
+    id: 'impl-x', name: 'x', description: 'd', contract: 'ix',
+    sourcePath, methods: [], status: 'complete' as const,
+    createdAt: '2026-07-18T10:00:00Z', updatedAt: '2026-07-18T10:00:00Z',
+  });
+  const names = (body: { sites: { name: string }[] } | undefined): string[] => (body?.sites ?? []).map((s) => s.name).sort();
+
+  it('keeps a module function, a class member and an object member of one name apart, and unions only where the code cannot say', () => {
+    const dir = mkTemp();
+    try {
+      fs.writeFileSync(path.join(dir, 'a.ts'), [
+        'declare function a(): void; declare function b(): void; declare function c(): void; declare function d(): void;',
+        'export function save(): void { a(); }',
+        'export class Workspace { save(): void { b(); } }',
+        'export const store = { save(): void { c(); } } as const;',
+        'export function holder(): void { const local = { load(): void { d(); } }; local.load(); }',
+        'export function load(): void { a(); }',
+      ].join('\n'));
+      const facts = buildCodeModel([impl('a.ts')], [], dir).files[0];
+      // The bare name binds the module function; a member only through its container.
+      expect(names(bodySitesOf(facts, 'save'))).toEqual(['a']);
+      expect(bodySitesOf(facts, 'save')!.key).toBe('save');
+      expect(names(bodySitesOf(facts, 'save', 'Workspace'))).toEqual(['b']);
+      expect(names(bodySitesOf(facts, 'save', 'store'))).toEqual(['c']);
+      // A receiver the file binds no container to holds a value the model cannot follow: the union, as before.
+      expect(names(bodySitesOf(facts, 'save', 'somethingElse', true))).toEqual(['a', 'b', 'c']);
+      // A nested body of the name could shadow it where it sits, so the bare name stays the union.
+      expect(names(bodySitesOf(facts, 'load'))).toEqual(['a', 'd']);
+      expect(bodySitesOf(facts, 'load')!.key).toBe('*load');
+      // The name-keyed union is unchanged.
+      expect((facts.functionCallSites ?? {}).save.map((s) => s.name).sort()).toEqual(['a', 'b', 'c']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  /** A loader whose exported `saveThing` forwards to the workspace member of the same name, beside the registry it may call. */
+  const facadeProject = (loaderNarrative: string[], module: string[]) => {
+    const proj = createTempProject();
+    proj.component('loader-a', 'Orchestrator', 'dependsOn: [registry-a]');
+    proj.contract('loader-a', ['saveThing']);
+    proj.component('registry-a', 'Registry');
+    proj.contract('registry-a', ['invalidate']);
+    proj.impl('registry-a', 'sourcePath: src/specs.ts\nmethods:\n  - name: invalidate\n    symbol: registryInvalidate\n    detail: intent\n    intent: Drops every cached entry so the next read goes back to the files; never fails.');
+    proj.impl('loader-a', ['sourcePath: src/specs.ts', 'methods:', '  - name: saveThing', '    narrative:', ...loaderNarrative].join('\n'));
+    proj.source('src/specs.ts', module.join('\n'));
+    return proj;
+  };
+  const LOCAL_STEP = '      - { stepNumber: 1, description: Hand the thing to the current workspace, type: local }';
+  const CALL_STEP = '      - { stepNumber: 1, description: Invalidate the registry, type: call, targetComponent: registry-a, targetMethod: invalidate }';
+  /** The member of the facade's name makes the registry call; the facade only forwards. */
+  const MEMBER_CALLS = [
+    'export function registryInvalidate(): void {}',
+    'class Workspace { saveThing(): void { registryInvalidate(); } }',
+    'const current = (): Workspace => new Workspace();',
+    'export function saveThing(): void { current().saveThing(); }',
+  ];
+
+  it('does not read the facade as making the same-named member\'s colocated call (the old union accused it)', () => {
+    const proj = facadeProject([LOCAL_STEP], MEMBER_CALLS);
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_COLOCATED_CALL')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('judges the function on its own body: a call only an unrelated same-named member makes does not realize its step (the old union accepted it)', () => {
+    // The module function never reaches the member: it records the save and
+    // returns. Only the Audit class's own `saveThing` invalidates.
+    const proj = facadeProject([CALL_STEP], [
+      'export function registryInvalidate(): void {}',
+      'declare function record(): void;',
+      'class Audit { saveThing(): void { registryInvalidate(); } }',
+      'export function saveThing(): void { record(); }',
+      'export const audit = new Audit();',
+    ]);
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'CALL_STEP_UNREALIZED');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"saveThing"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('still accuses the facade when it makes the colocated call itself', () => {
+    const proj = facadeProject([LOCAL_STEP], [
+      'export function registryInvalidate(): void {}',
+      'class Workspace { saveThing(): void {} }',
+      'const current = (): Workspace => new Workspace();',
+      'export function saveThing(): void { current().saveThing(); registryInvalidate(); }',
+    ]);
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_COLOCATED_CALL')).toHaveLength(1);
+    } finally { proj.cleanup(); }
   });
 });

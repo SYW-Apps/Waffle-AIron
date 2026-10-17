@@ -1,0 +1,253 @@
+import * as path from 'path';
+import type { ChainingMigrationPlan } from './chaining-migration.js';
+import type { InternalizeDestination } from '../models/project.js';
+import type { ReferenceEdit } from '../models/project-family.js';
+
+// ---------------------------------------------------------------------------
+// The value objects of sdd_migrations (stage 6): a family migration as it is
+// asked for, planned, rehearsed, committed and recovered. Plain data — the
+// behaviour a spec gives them (MigrationPlan.blocked / isEmpty) is the pair of
+// functions at the bottom.
+// ---------------------------------------------------------------------------
+
+/** The family migrations a request can ask for. */
+export type MigrationVerb = 'attach' | 'rename' | 'rename-alias' | 'detach' | 'adopt' | 'internalize' | 'externalize' | 'promote' | 'demote' | 'chaining';
+
+/** migration_request — one family migration as a person or an agent asks for it. */
+export interface MigrationRequest {
+  verb: MigrationVerb;
+  alias?: string;
+  path?: string;
+  project?: string;
+  newId?: string;
+  newAlias?: string;
+  subsystem?: string;
+  destination?: InternalizeDestination;
+  /** attach: what the member is to the bound project, written into its `members` entry. */
+  description?: string;
+  /** detach: widen exactly the used family-only exports to the instance audience instead of refusing. */
+  widen?: boolean;
+  /** false: plan without rehearsing (doctor's summary). Absent or true: a full plan. */
+  rehearse?: boolean;
+  /**
+   * true: the door (the CLI's migration commands, the MCP member tools) asks
+   * the plan to announce the findings its result will have that the projects
+   * it changes do not report now. Absent: an internal plan is not judged twice.
+   */
+  announce?: boolean;
+  /**
+   * detach and adopt on a hosted instance: move the project between its
+   * family's tree and an isolated root of its own in the same transaction.
+   * Absent everywhere else.
+   */
+  relocation?: MemberRelocation;
+  /** externalize (stage 8): part (the default) — a storage move — or project, the move followed by a promote. */
+  as?: string;
+}
+
+/**
+ * member_relocation — how a hosted detach or adopt also MOVES the project,
+ * inside the same transaction as the verb's edits and the host store writes.
+ * The coordinator (the host data directory) contains every family root and
+ * every isolated root, so every owner lies within it.
+ */
+export interface MemberRelocation {
+  /** Where the project's files go, absolute: detach — its new isolated root; adopt — the member path. Must not exist. */
+  to: string;
+  /** The host data directory, absolute: the transaction's coordinator and an owner itself. */
+  coordinator: string;
+  /** The host store files the coordinator owner contributes, relative to it. */
+  areas: string[];
+  /** adopt: the adopted project's current isolated root, absolute. Absent for detach. */
+  from?: string;
+}
+
+/** What kind of semantic change a planned edit makes. */
+export type PlannedEditKind = 'id' | 'member' | 'external' | 'reference' | 'export' | 'pin' | 'move' | 'delete' | 'promote' | 'demote';
+
+/** planned_edit — one semantic change a migration makes in one owner project. */
+export interface PlannedEdit {
+  /** The owner project's key in the family graph ('' is the family's top root). */
+  project: string;
+  kind: PlannedEditKind;
+  /** One line naming the edit as the report prints it. */
+  detail: string;
+  reference?: ReferenceEdit;
+  /** The write that realizes it (a membership, identity or boundary verb); absent for a chaining edit. */
+  write?: PlannedWrite;
+}
+
+/**
+ * planned_write — the one write that realizes a planned edit: the owner root
+ * the writer binds (as its rehearsal image) and the client-adapter write it
+ * makes there, with its arguments exactly as planned.
+ */
+export interface PlannedWrite {
+  /** The owner's live root directory, absolute. */
+  root: string;
+  /** setId | declareMember | removeMember | declareExternal | repointExternal | removeExternal | renameAlias | renameId | importNames | rewriteReferences | internalizeMember | externalizeSubsystem | pinExternals | renamePin | unpin */
+  call: string;
+  /** Its arguments, in order. */
+  args: unknown[];
+}
+
+/** migration_refusal — one reason a family migration will not apply. */
+export interface MigrationRefusal {
+  code: string;
+  project: string;
+  detail: string;
+}
+
+/** The two areas a transaction keeps files in: staged copies to swap in, and backups to roll back to. */
+export type TransactionArea = 'staged' | 'backup';
+
+/** What a migration does to one file. */
+export type FileChangeAction = 'write' | 'create' | 'delete';
+
+/** file_change — one file a migration replaces, creates or deletes in one owner project. */
+export interface FileChange {
+  /** The owner project's root directory, absolute. */
+  project: string;
+  /** The file, relative to the owner's root, forward slashes (under .wai/, or anywhere in a whole owner). */
+  path: string;
+  action: FileChangeAction;
+  /** sha256 of the live file when the rehearsal copied it; absent for create. */
+  baseDigest?: string;
+  /** sha256 of the bytes the swap puts in place; absent for delete. */
+  stagedDigest?: string;
+}
+
+/** transaction_scope — what a rehearsal copies. */
+export interface TransactionScope {
+  familyRoot: string;
+  projects: string[];
+  /**
+   * Paths relative to each owner root to copy, compare and swap, forward
+   * slashes; absent means ['.wai'] (every family migration). A file named here
+   * that does not exist is a create when the rehearsal writes it.
+   */
+  areas?: string[];
+  /**
+   * Owner roots copied, compared and swapped IN FULL (every file under them,
+   * .wai/transactions/ excluded): a relocated project's old directory, whose
+   * files leave as deletes, and its new root, whose files arrive as creates.
+   */
+  whole?: string[];
+  /**
+   * Stage 8: the directory every owner's image is laid out under — the nearest
+   * common ancestor of the coordinator and every owner, so a sibling checkout
+   * outside the family root keeps its place beside it; the coordinator when
+   * absent. Computed by the rehearsal, never by a caller.
+   */
+  base?: string;
+}
+
+/** rehearsal — a private copy of a family's .wai trees. */
+export interface Rehearsal {
+  id: string;
+  directory: string;
+  familyRoot: string;
+  /** Each copied project's live root → its rehearsal root. */
+  roots: Map<string, string>;
+  /** Each copied live file (absolute) → sha256 of its bytes when copied. */
+  baseDigests: Map<string, string>;
+  /** The scope's areas, when it named any: only these are compared. */
+  areas?: string[];
+  /** The scope's owners copied whole: every file under them is compared. */
+  whole?: string[];
+  /** Stage 8: the directory the owners are laid out under (absent reads as the family root). */
+  base?: string;
+}
+
+/** The phases a journal passes through. */
+export type TransactionPhase = 'staging' | 'staged' | 'swapping' | 'committed' | 'rolled-back';
+
+/** transaction_journal — one owner project's record of a staged transaction. */
+export interface TransactionJournal {
+  id: string;
+  verb: string;
+  /** This owner's root, absolute when written; re-read relative to where the journal was found. */
+  owner: string;
+  /** The coordinator's root relative to this owner ('' when this owner is the coordinator). */
+  coordinator: string;
+  /** Coordinator only: every owner's root relative to the coordinator. */
+  owners: string[];
+  phase: TransactionPhase;
+  entries: FileChange[];
+  dirsCreated: string[];
+  dirsRemoved: string[];
+  startedAt: string;
+  /** Files a restore could not put back (a journal left for `doctor --fix`). */
+  unrestored?: string[];
+}
+
+/** transaction_outcome — what committing a staged transaction came to. */
+export interface TransactionOutcome {
+  committed: boolean;
+  written: FileChange[];
+  failure?: string;
+  restored: boolean;
+  unrestored: string[];
+}
+
+/** What doctor did about one unfinished transaction. */
+export type RecoveryAction = 'pending' | 'rolled-back' | 'cleaned' | 'refused';
+
+/** recovered_transaction — what doctor found and did about one unfinished transaction. */
+export interface RecoveredTransaction {
+  id: string;
+  verb: string;
+  owners: string[];
+  phase: string;
+  action: RecoveryAction;
+  detail: string;
+}
+
+/** migration_plan — a family migration planned and not yet applied. */
+export interface MigrationPlan {
+  request: MigrationRequest;
+  familyRoot: string;
+  whole: boolean;
+  edits: PlannedEdit[];
+  refusals: MigrationRefusal[];
+  changes: FileChange[];
+  relock: string[];
+  notes: string[];
+  rehearsal?: Rehearsal;
+  chaining?: ChainingMigrationPlan;
+}
+
+/** family_migration_report — the answer of applying a family migration. */
+export interface FamilyMigrationReport {
+  plan: MigrationPlan;
+  applied: boolean;
+  outcome?: TransactionOutcome;
+  relock: string[];
+  /**
+   * The files written to set a project the migration made up for its own
+   * sessions (guides and root pointer, skills, .mcp.json), relative to its
+   * root — present when the route that applied it scaffolds (the MCP tools).
+   */
+  sessionScaffold?: string[];
+}
+
+/** migration_plan.blocked — true when any refusal is present. */
+export function blocked(plan: MigrationPlan): boolean {
+  return plan.refusals.length > 0;
+}
+
+/** migration_plan.isEmpty — true when there is no file change (a completed migration re-plans empty). */
+export function isEmpty(plan: MigrationPlan): boolean {
+  return plan.changes.length === 0;
+}
+
+/** rehearsal behaviour — a project's rehearsal root: the rehearsal's image of its live directory. */
+export function rehearsalRoot(rehearsal: Rehearsal, directory: string): string {
+  return rehearsal.roots.get(path.resolve(directory)) ?? path.join(rehearsal.directory, path.relative(rehearsal.base ?? rehearsal.familyRoot, directory));
+}
+
+/** rehearsal behaviour — a path written in the rehearsal, named by its live project; any other path unchanged. */
+export function liveName(rehearsal: Rehearsal, written: string): string {
+  const rel = path.relative(rehearsal.directory, written);
+  return rel.startsWith('..') || path.isAbsolute(rel) ? written : path.join(rehearsal.base ?? rehearsal.familyRoot, rel);
+}

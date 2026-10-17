@@ -1,0 +1,284 @@
+id: position_migration_orchestrator_impl
+name: Position Migration Orchestrator Implementation
+description: >-
+  Plans the mount moves, reference rewrites and stage 4's positional imports and self-prefix
+  rewrites from the family's graph (the positional match is position_reader's), and writes them into
+  the chaining migration's rehearsal after its ids, exports and externals and before its pins:
+  members under each parent's rehearsal binding, imports under each consumer's, rewrites under the
+  rehearsal's top binding (each spec addressed by the key it answers to once the plan's ids are
+  declared), family-pin deletion under each member's; the caller's binding is restored on every
+  path.
+contract: iposition_migration_orchestrator
+sourcePath: src/migrations/position-migration.ts
+methods:
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        label: mounts
+        description: Plan each legacy mount's move
+        type: loop
+        loopKind: forEach
+        over: the graph's nodes carrying a legacy mount, parents in walk order
+        endStep: 9
+      - stepNumber: 2
+        description: >-
+          Under the parent's binding, read its configuration: the `members` entries it already
+          declares
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Plan the member entry in the parent: the mount's alias, its projectPath as the path, its
+          description carried into the long form. An equal `members` entry already present leaves
+          only the L1 document to delete; a different one under the alias is a blocking
+          mount-field-conflict
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read the member's current L0 table, so a carried entry can be checked against every name
+          it already binds
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        label: entries
+        description: Carry each published entry of the mount
+        type: loop
+        loopKind: forEach
+        over: the mount's publicInterfaces entries
+        endStep: 8
+      - stepNumber: 6
+        description: >-
+          Read the member component the entry names, for the member subsystem that owns it: the
+          carried entry's source
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadSpec
+      - stepNumber: 7
+        description: >-
+          Read that subsystem's L1 table: an L0 re-export can only follow what the subsystem
+          publishes to its own project, so a component it does not publish yet is published there
+          first
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveSubsystemExports
+      - stepNumber: 8
+        label: carry
+        description: >-
+          Carry the entry into the member's L0 as `{ from: <the member subsystem owning the
+          component>, component, interface?, type, details, audience: project }` (the family reached
+          it through the mount, so the member exports it to the family); a component its subsystem
+          does not publish at L1 yet is marked publishAtL1 — apply publishes it there as an own item
+          with the entry's type and details first, which is where the mount's transport kind and
+          details belong. An entry that names no component exports nothing and retires, listed; an
+          entry the table already binds to the same target carries nothing and retires, listed; a
+          public name the table binds to another target is a blocking mount-field-conflict; a
+          component the member does not hold is a blocking mount-field-unhomed. The entries'
+          `consumers` (subsystems of the parent) retire with the mount and are listed
+        type: local
+      - stepNumber: 9
+        label: fields
+        description: >-
+          Sort the mount's remaining fields: an empty publicInterfaces or trustedLinks and lint
+          allows about the mount itself retire and are listed; a non-empty trustedLinks (a fast lane
+          cannot cross a project), a lifecycle, profile, targetLanguage, designDepth or ext is a
+          blocking mount-field-unhomed naming the field and where the member would hold it — nothing
+          is dropped silently
+        type: local
+      - stepNumber: 10
+        label: locations
+        description: >-
+          Plan stage 8's one doctor step, the other member-declaration repair: every member declared
+          with the deprecated long-form `path` key is rewritten to the one location key — the
+          shorthand `alias: <path>` when the entry holds nothing else, else the long form's `source`
+          — its meaning unchanged, each listed. What a member is follows from its content, so no
+          kind is ever written
+        type: local
+      - stepNumber: 11
+        description: >-
+          Report each member-absent problem of the graph as a blocking member-absent finding:
+          references into a missing member cannot be rewritten, and its mount cannot be moved
+        type: local
+      - stepNumber: 12
+        label: references
+        description: Plan each deprecated reference's rewrite
+        type: loop
+        loopKind: forEach
+        over: >-
+          the graph's authored references whose form is leading, super or path and whose rewrite
+          differs from the text as written (one that only needs its external declared is the
+          chaining migration's externals, not a rewrite), raw positions included
+        endStep: 13
+      - stepNumber: 13
+        label: rewrite
+        description: >-
+          Plan the rewrite from the authored text to the scan's rewrite (a bare local id when it
+          lands in its own project, else `alias::publicName` — the producer's id as the alias where
+          the referrer declares none yet, which the chaining migration's externals declare, and the
+          target's local id where no public name binds it, which its exports add); a reference with
+          no rewrite is a rewrite-unavailable finding saying why
+        type: local
+      - stepNumber: 14
+        label: positional
+        description: >-
+          Stage 4's positional step, over the graph's authored references the owner's scope leaves
+          to it: every bare name no import supplies (unresolved) and every self-prefixed form (the
+          project's own id as the first segment, `registry.x` or `registry::x`). With none, the step
+          is skipped. Load every type of the family as the top's scan sees them
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 15
+        description: >-
+          Read every project's resolved L0 export table: a name a project already exports is matched
+          on its public name first
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 16
+        description: >-
+          Match those references by position — the same match the upgrade report explains, which
+          decides in rounds what a re-run after apply would decide (a producer the consumer will
+          declare, and a name a producer will export, count as declared and exported), so the
+          migration stays idempotent
+        type: call
+        targetComponent: position_reader
+        targetMethod: match
+      - stepNumber: 17
+        label: plan-matches
+        description: >-
+          Plan from each match. import: an import of the public name on the consumer's alias for the
+          producer (its existing external or member alias, else the producer's id, marked
+          declaresExternal), one entry per (consumer, alias, name) listing every reference it
+          resolves and the reason the producer was chosen, marked exportPlanned when the producer
+          exports the target under no public name (its default public name is then the one
+          imported). The migration never writes a named import a local spec of the consumer would
+          shadow (the same nameKey): that name is an import-shadowed finding naming the local spec,
+          and its references are left as they are. self-prefix: a rewrite to the bare local id (form
+          self-prefix). ambiguous: one positional-ambiguous finding per (consumer, name) listing
+          every candidate, every spec writing it and what each tie-break rule left, the references
+          left as they are — a person picks. Imports that would supply one bare name to one consumer
+          twice — two planned, or a planned one beside a named `use` of another alias the consumer
+          already holds — are dropped for that name and reported (import-collision). none: nothing —
+          a genuine dangling reference, which the gate reports
+        type: local
+      - stepNumber: 18
+        label: held-back
+        description: >-
+          Hold back every rewrite planned in a spec that also holds a reference the loader binds
+          with no canonical text — a deprecated form bound outside or unresolved, or a bare name no
+          planned import makes resolve: the re-save refuses that spec whole, so its rewrites wait
+          with it, named in its rewrite-unavailable finding
+        type: local
+      - stepNumber: 19
+        description: 'Answer the plan: members, location rewrites, rewrites, imports and findings'
+        type: return
+        outcome: PositionMigrationPlan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        label: members
+        description: Move each planned mount
+        type: loop
+        loopKind: forEach
+        over: each project's planned members, parents in walk order
+        endStep: 2
+      - stepNumber: 2
+        label: move
+        description: >-
+          Under the parent's rehearsal binding, declare the member in its `members` and delete the
+          L1 mount document — the carried entries were written with the member's exports already; an
+          already-moved mount writes nothing
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: moveMountToMembers
+      - stepNumber: 3
+        label: locations
+        description: Then the location rewrites, once every member is declared under `members`
+        type: loop
+        loopKind: forEach
+        over: the plan's location rewrites, top root first
+        endStep: 4
+      - stepNumber: 4
+        label: relocate
+        description: >-
+          Under the declaring project's rehearsal root, rewrite the entry's deprecated `path` to
+          `source` (or the shorthand) — an entry already written in the one key writes nothing
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: updateMember
+      - stepNumber: 5
+        label: imports
+        description: >-
+          Then the positional imports — after the moves, so an import on a legacy mount's alias
+          finds it declared under `members`, and after the chaining migration wrote the exports and
+          the externals they name
+        type: loop
+        loopKind: forEach
+        over: each project's planned imports, grouped per alias
+        endStep: 7
+      - stepNumber: 6
+        description: Bind the consumer's rehearsal root
+        type: local
+      - stepNumber: 7
+        label: import
+        description: >-
+          Add the alias's planned names to its `use` in the consumer's project.yaml — names already
+          imported write nothing, and nothing a person wrote is removed or reordered
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: importNames
+      - stepNumber: 8
+        description: >-
+          Bind the rehearsal's top root: the deprecated forms bind from there, so every rewrite is
+          read and written where its target is still found. A spec is addressed by the key it
+          answers to now — its project's planned id where the plan declared one
+        type: local
+      - stepNumber: 9
+        label: rewrites
+        description: Rewrite the planned references, one spec at a time
+        type: loop
+        loopKind: forEach
+        over: the plan's rewrites grouped by spec
+        endStep: 10
+      - stepNumber: 10
+        label: normalize
+        description: >-
+          Re-save the spec with every reference in its canonical form, raw positions included; a
+          reference that no longer has one is refused there, by name, before that spec is written
+        type: call
+        targetComponent: migration_core_adapter
+        targetMethod: normalizeReferences
+      - stepNumber: 11
+        label: pins
+        description: >-
+          Delete the superseded stage-1 family pins last in this migration, once the externals that
+          replace them are declared — nothing reads them since stage 3; the chaining migration pins
+          the externals after this, from the final spelling
+        type: loop
+        loopKind: forEach
+        over: each project's superseded pins
+        endStep: 12
+      - stepNumber: 12
+        label: unpin
+        description: >-
+          Under the project's rehearsal binding, remove the pin's snapshot; one already gone writes
+          nothing
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: removeSnapshot
+      - stepNumber: 13
+        description: >-
+          Restore the caller's binding. Collect every write in write order and every project whose
+          approval the writes staled: a parent whose `members` changed and L1 mount went, a project
+          whose spec files were rewritten, a member whose pins went (gate inputs)
+        type: local
+      - stepNumber: 14
+        description: Answer the writes and the projects to re-lock
+        type: return
+        outcome: PositionMigrationResult
+detail: full
+status: complete
+createdAt: '2026-09-27T10:45:51.006Z'
+updatedAt: '2026-10-02T20:45:34.609Z'

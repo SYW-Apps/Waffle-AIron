@@ -1,0 +1,28 @@
+kind: enum
+id: network_output_format
+name: NetworkOutputFormat
+description: >-
+  The formats the derived networking writes. The neutral matrix formats carry every fact; the policy
+  formats are well-known targets generated from them. Istio AuthorizationPolicy (per-verb, L7) is
+  the planned second policy target.
+subsystem: sdd_network
+fields: []
+methods: []
+sourcePath: src/network/types.ts
+values:
+  - name: json
+    description: 'The flow matrix as JSON: the source every other output is derived from'
+  - name: csv
+    description: The flow matrix as CSV, one row per flow, for spreadsheets and audits
+  - name: markdown
+    description: The flow matrix as a Markdown table, for review comments
+  - name: kubernetes-network-policy
+    description: >-
+      Kubernetes NetworkPolicy documents, one ingress policy per bound workload, admitting exactly
+      its matrix sources
+  - name: mermaid
+    description: >-
+      A Mermaid flowchart: networks as nested subgraphs, gateways on their boundary, an outside
+      node, edges per workload pair
+createdAt: '2026-10-06T13:09:41.893Z'
+updatedAt: '2026-10-06T13:09:42.518Z'

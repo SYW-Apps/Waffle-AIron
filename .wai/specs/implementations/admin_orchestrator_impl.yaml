@@ -1,20 +1,22 @@
 id: admin_orchestrator_impl
 name: Admin Orchestrator Implementation
 description: >-
-  Control-plane workflows: credential auth then project/key lifecycle, git-aware lock/promote,
-  diagrams, and git backing. Project create/destroy/lock/promote are scope-aware (a super-admin via
-  the master credential or an instance-wide grant, or a unit-scoped admin holding the matching
-  capability for an organization unit); the remaining key/git/producer/secret/diagram workflows stay
+  Control-plane workflows: credential auth then project/key lifecycle, git-aware lock, diagrams, and
+  git backing. Project create/destroy/lock are scope-aware (a super-admin via the master credential
+  or an instance-wide grant, or a unit-scoped admin holding the matching capability for an
+  organization unit); the remaining key/git/producer/secret/diagram workflows stay
   master-credential-only.
 contract: iadmin_orchestrator
 sourcePath: src/server/admin.ts
+injectedParams:
+  - cfg
 methods:
   - name: listProjects
     narrative:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -28,7 +30,7 @@ methods:
       - stepNumber: 4
         description: List hosted projects
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the project list
@@ -39,7 +41,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -66,15 +68,23 @@ methods:
         outcome: rejected — *:* keys are not mintable
       - stepNumber: 6
         description: >-
+          Admit the project the key is narrowed to through the project repository: a project no
+          hosted record holds (or a member-qualified entry naming no member) refuses the mint before
+          anything is generated, so a key is never minted for a project that does not exist
+        type: call
+        targetComponent: project_repository
+        targetMethod: admitNarrowing
+      - stepNumber: 7
+        description: >-
           Generate a random API key and its salted hash; assemble an ApiKeyRecord bound to the
           project and role
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Persist the credential
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: create
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the plaintext key (shown once)
         type: return
         outcome: plaintext key
@@ -83,7 +93,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -97,7 +107,7 @@ methods:
       - stepNumber: 4
         description: Revoke the credential by id
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: revoke
       - stepNumber: 5
         description: Return once revoked
@@ -108,7 +118,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -122,7 +132,7 @@ methods:
       - stepNumber: 4
         description: List the project's credentials
         type: call
-        targetComponent: credential_registry
+        targetComponent: credential_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the key list
@@ -133,7 +143,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -148,11 +158,27 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 5
-        description: Render the diagram in scope
+        description: Only the canvas draws relation health; the other formats carry no relation edges
+        type: branch
+        condition: the format is canvas
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter,
+          stamped with when it was compared, with the reach the master credential has — the whole
+          instance, so the project's whole family and every hosted producer its externals name are
+          in reach
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
+          Render the diagram in scope, handing the canvas the relations so each consumption edge
+          carries its health
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the diagram artifact
         type: return
         outcome: diagram artifact
@@ -161,7 +187,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -176,11 +202,27 @@ methods:
         description: Bind the project's isolated root
         type: local
       - stepNumber: 5
-        description: Render the diagram in scope
+        description: Only the canvas draws relation health; the other formats carry no relation edges
+        type: branch
+        condition: the format is canvas
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Read the family's relation health over the bound root through the host validator adapter,
+          stamped with when it was compared, with the reach the master credential has — the whole
+          instance, so the project's whole family and every hosted producer its externals name are
+          in reach
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyRelations
+      - stepNumber: 7
+        description: >-
+          Render the diagram in scope, handing the canvas the relations so each consumption edge
+          carries its health
         type: call
         targetComponent: host_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the diagram artifact as an attachment
         type: return
         outcome: diagram artifact
@@ -189,7 +231,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -203,7 +245,7 @@ methods:
       - stepNumber: 4
         description: Mint a signed view token for the project's canvas
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signViewToken
       - stepNumber: 5
         description: Compose the /view/diagram URL carrying the token
@@ -217,7 +259,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -231,7 +273,7 @@ methods:
       - stepNumber: 4
         description: Store the secret at runtime
         type: call
-        targetComponent: secret_registry
+        targetComponent: secret_repository
         targetMethod: write
       - stepNumber: 5
         description: Return once set
@@ -242,7 +284,7 @@ methods:
       - stepNumber: 1
         description: Authenticate the master credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateMaster
       - stepNumber: 2
         description: If not an admin principal, reject
@@ -256,7 +298,7 @@ methods:
       - stepNumber: 4
         description: List configured secret keys (names only)
         type: call
-        targetComponent: secret_registry
+        targetComponent: secret_repository
         targetMethod: list
       - stepNumber: 5
         description: Return the secret key names
@@ -267,7 +309,7 @@ methods:
       - stepNumber: 1
         description: Allocate and register the project
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: create
       - stepNumber: 2
         description: Bind the new project's isolated root
@@ -292,113 +334,179 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Bind the root this lock concerns: the project's isolated root, or — when a subproject
-          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
-          containment-checked qualified resolution so a qualifier can never resolve outside the
-          project root. Every step below therefore operates on the bound tree.
-        type: local
+          Resolve the project's repository scope — its family root's isolated root (the family's one
+          git binding) and its own .wai/ pathspec — and bind the project's own root (a member
+          record's derived from its parent's root and memberPath; no qualifier exists any more).
+          Every step below validates and writes the bound tree only; nothing below it is ever
+          written
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
       - stepNumber: 2
         description: >-
-          Sync the default branch into the working branch so the lock is based on the latest (no-op
-          for a native project, and equally a no-op for a subproject-scoped lock: the git binding is
-          read from the BOUND root and a child tree carries none — the child is not the git unit).
+          Sync the default branch into the working branch at the family repository root so the lock
+          is based on the latest (a no-op for a native family).
         type: call
         targetComponent: host_git_adapter
         targetMethod: sync
       - stepNumber: 3
-        description: Validate the tree as-complete
+        label: capture
+        description: >-
+          CAPTURE the gate identity before anything is judged: own content, design doctrine, own
+          inputs, composition, and each direct member's recorded subject. This is the identity the
+          record will certify (inputs-captured-before-validation).
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 4
+        description: Was this lock requested about a particular design?
+        type: branch
+        condition: >-
+          an expected identity was passed (the request's gateStateId) and the captured identity
+          differs from it
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse, writing nothing: the design changed after the lock was requested, so approving now
+          would certify a design nobody asked to have approved. The requester asks again.
+        type: throw
+        error: the design changed since the lock was requested
+      - stepNumber: 6
+        description: >-
+          Validate the tree as-complete; the result carries the code half summarized with its
+          analyzer
         type: call
         targetComponent: host_validator_adapter
         targetMethod: validateAsComplete
-      - stepNumber: 4
-        description: If validation reports errors, refuse to lock
+      - stepNumber: 7
+        description: >-
+          Take the design half of the result (ValidationResult.designOnly): what the approval
+          certifies and what may refuse it. Code-conformance findings are recorded beside the claim
+          (`code`, reported in the outcome as "code: N errors recorded beside the claim") and never
+          refuse the lock — CI enforces code conformance, not the lock
+        type: local
+      - stepNumber: 8
+        description: If the design half reports errors, refuse to lock
         type: branch
-        condition: result reports errors
-        onFalseStep: 6
-      - stepNumber: 5
-        description: Return cannot-lock with the validation errors
+        condition: the design half reports errors
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Return cannot-lock with the design errors, having written nothing
         type: return
         outcome: cannot lock — validation failed
-      - stepNumber: 6
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 7
-        description: Compute the validated StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 8
-        description: >-
-          Commit the .wai/-scoped tree and push, returning the commit and compare URL a human opens
-          the PR from — the lock is the semantic checkpoint that triggers the auto-publish. A no-op
-          for a native project, and for a subproject-scoped lock (no binding at the bound child
-          root), so a subproject freeze never commits or pushes against the parent's repository; the
-          parent's next lock or scoped commit carries the frozen child tree.
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
-      - stepNumber: 9
-        description: >-
-          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready, plus commitSha/compareUrl when git-backed)
-        type: local
       - stepNumber: 10
-        description: Persist the lock record
+        description: >-
+          Read the direct members' approval states, each project member computed at its own root,
+          with their subjects (depth 1) — and each part, as a part with its content digest and
+          commit (stage 8)
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 11
+        description: >-
+          Read the bound tree's project configuration: its composition block
+          (requireApprovedMembers) and its effective id (project_config.effectiveId(), a defaulted
+          one included), recorded as projectId so validate can later report PROJECT_ID_CHANGED
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 12
+        description: >-
+          Does the project require approved members, and is a PROJECT member not approved? (A part's
+          approval is this lock)
+        type: branch
+        condition: >-
+          composition.requireApprovedMembers is true and a direct member is drifted or never
+          approved
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
+        description: >-
+          Refuse, writing nothing, naming each drifted or never-approved direct member with its
+          state (and, for an upgrade-only drift, that it needs a re-lock once): each member locks at
+          its own root first — a parent never approves below itself (require-refuses)
+        type: throw
+        error: 'composition.requireApprovedMembers: direct members not approved'
+      - stepNumber: 14
+        description: >-
+          Capture the approved tree as one DESIGN digest per OWN spec file (its design view in
+          canonical form — code linkage and timestamps out) — its parts' included (stage 8), keyed
+          `members/<alias>/<path inside the part>`; a project member's files are its own lock's.
+          Nothing is written into the spec files
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: captureApprovedSpecs
+      - stepNumber: 15
+        label: confirm
+        description: Recompute the gate identity immediately before writing
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 16
+        description: Did any input move while the lock ran?
+        type: branch
+        condition: the recomputed identity differs from the captured one
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Refuse, writing nothing: a spec, the doctrine, an input, the composition block or a
+          member's approval changed while this lock ran, so the validation just performed does not
+          describe what would be recorded. Run the lock again
+        type: throw
+        error: the lock's inputs changed while it ran
+      - stepNumber: 18
+        description: >-
+          Assemble a format-3 LockRecord: stateId = the captured identity (design gate algorithm),
+          lockedAt, the AUTHENTICATED approver the caller resolved from the credential,
+          validatorVersion, validationResult = the design half's counts, status ready, the effective
+          id as projectId, the captured specs with specsReading `design`, gateParts = each input of
+          the captured identity on its own (exactly as the local lock records them), `members` =
+          each direct member's alias → a project member's {as: project, project, subject, state} or
+          a part's {as: part, contentDigest, commit when known, state approved}, and `code` = the
+          result's analysis without its codes list. No `children` is written
+        type: local
+      - stepNumber: 19
+        description: >-
+          Persist the record BEFORE publishing, so the commit that ships the specs also contains the
+          approval that certifies them
         type: call
         targetComponent: host_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 11
-        description: Return the lock record (with the compare URL to open the PR when git-backed)
+      - stepNumber: 20
+        description: >-
+          Commit ONLY the project's own .wai/ pathspec at the family repository root and push,
+          returning the commit and compare URL a human opens the PR from. A no-op for a native
+          family
+        type: call
+        targetComponent: host_git_adapter
+        targetMethod: publish
+      - stepNumber: 21
+        description: Only a real publish has a commit to record.
+        type: branch
+        condition: nothing was published (native family, or a clean pathspec)
+        onTrueStep: 22
+        onFalseStep: 23
+      - stepNumber: 22
+        description: Return the persisted record unchanged.
         type: return
         outcome: lock record
-  - name: executeApprovedPromote
-    narrative:
-      - stepNumber: 1
+      - stepNumber: 23
         description: >-
-          Bind the root this promotion concerns: the project's isolated root, or — when a subproject
-          qualifier was supplied — the chained CHILD's tree, resolved through the project registry's
-          containment-checked qualified resolution. The lock record read, the StateId recomputation
-          and the staleness verdict below all concern the bound tree.
+          Extend the record with commitSha and compareUrl — known only AFTER the commit, so these
+          two fields are re-written into a record the commit already carries.
         type: local
-      - stepNumber: 2
-        description: Read the current lock record
+      - stepNumber: 24
+        description: Persist the two published fields.
         type: call
         targetComponent: host_core_adapter
-        targetMethod: readLockRecord
-      - stepNumber: 3
-        description: If no lock record exists, refuse
-        type: branch
-        condition: no lock record exists
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Return not-locked
+        targetMethod: writeLockRecord
+      - stepNumber: 25
+        description: Return the published record.
         type: return
-        outcome: not locked — lock first
-      - stepNumber: 5
-        description: Recompute the current StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 6
-        description: If the current StateId differs from the lock's StateId, refuse as stale
-        type: branch
-        condition: current StateId differs from the lock's StateId
-        onFalseStep: 8
-      - stepNumber: 7
-        description: Return stale-lock
-        type: return
-        outcome: stale lock — re-lock required
-      - stepNumber: 8
-        description: >-
-          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
-          merge here
-        type: local
-      - stepNumber: 9
-        description: Return the promote result
-        type: return
-        outcome: promote result
+        outcome: lock record with the compare URL to open the PR
   - name: createProject
     narrative:
       - stepNumber: 1
@@ -406,7 +514,7 @@ methods:
           Authenticate the caller credential (bootstrap master resolves to an instance-admin, or a
           user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
@@ -418,7 +526,7 @@ methods:
           Resolve the caller's project:create permission over the target scope (an instance-admin
           bypasses to yes)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 4
         description: >-
@@ -435,7 +543,7 @@ methods:
       - stepNumber: 6
         description: Allocate and register the project
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: create
       - stepNumber: 7
         description: Bind the new project's isolated root
@@ -460,12 +568,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -480,7 +588,7 @@ methods:
       - stepNumber: 5
         description: Deregister the project and remove its tree
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: remove
       - stepNumber: 6
         description: Return once destroyed
@@ -492,12 +600,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential (bootstrap master or a user-bound token)
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
-        description: Resolve the caller's project:write permission over the target project
+        description: >-
+          Resolve the caller's approval:decide permission over the target project: a lock is the
+          project's approval
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -508,140 +618,40 @@ methods:
       - stepNumber: 4
         description: Reject the lock
         type: throw
-        error: Forbidden — locking a project requires project:write over it
+        error: Forbidden — locking a project approves it, which requires approval:decide over it
       - stepNumber: 5
-        description: Bind the project's isolated root
-        type: local
+        description: >-
+          Name the approver the lock records: the authenticated caller's subject, or the instance
+          master credential
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: approverFor
       - stepNumber: 6
-        description: Sync the default branch into the working branch (no-op for native projects)
+        description: >-
+          Lock through the pre-authorized entry with the authenticated caller as approver: the same
+          workflow an approved request runs, so capture-before-validation, the design-only gate, the
+          member states and requireApprovedMembers hold identically on both paths
         type: call
-        targetComponent: host_git_adapter
-        targetMethod: sync
+        targetComponent: admin_orchestrator
+        targetMethod: executeApprovedLock
       - stepNumber: 7
-        description: Validate the tree as-complete
-        type: call
-        targetComponent: host_validator_adapter
-        targetMethod: validateAsComplete
-      - stepNumber: 8
-        description: If validation reports errors, refuse to lock
-        type: branch
-        condition: result reports errors
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
-        description: Return cannot-lock with the validation errors
-        type: return
-        outcome: cannot lock — validation failed
-      - stepNumber: 10
-        description: Promote every spec to complete
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: promoteAllComplete
-      - stepNumber: 11
-        description: Compute the validated StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 12
-        description: >-
-          Publish to git: commit the promoted working tree and push, returning the commit + compare
-          URL (no-op for native)
-        type: call
-        targetComponent: host_git_adapter
-        targetMethod: publish
-      - stepNumber: 13
-        description: >-
-          Assemble a LockRecord (stateId, lockedAt, lockedBy, validatorVersion, validationResult,
-          status ready, plus commitSha/compareUrl when git-backed)
-        type: local
-      - stepNumber: 14
-        description: Persist the lock record
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: writeLockRecord
-      - stepNumber: 15
-        description: Return the lock record (with the compare URL to open the PR when git-backed)
+        description: Return the lock record
         type: return
         outcome: lock record
-    detail: full
-  - name: promoteProject
-    narrative:
-      - stepNumber: 1
-        description: Authenticate the caller credential (bootstrap master or a user-bound token)
-        type: call
-        targetComponent: auth_specialist
-        targetMethod: authenticateCredential
-      - stepNumber: 2
-        description: Resolve the caller's project:write permission over the target project
-        type: call
-        targetComponent: authorization_specialist
-        targetMethod: authorize
-      - stepNumber: 3
-        description: If the effective value is not yes, deny
-        type: branch
-        condition: the effective value is not yes
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: Reject the promotion
-        type: throw
-        error: Forbidden — promoting a project requires project:write over it
-      - stepNumber: 5
-        description: Bind the project's isolated root
-        type: local
-      - stepNumber: 6
-        description: Read the current lock record
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: readLockRecord
-      - stepNumber: 7
-        description: If no lock record exists, refuse
-        type: branch
-        condition: no lock record exists
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
-        description: Return not-locked
-        type: return
-        outcome: not locked — lock first
-      - stepNumber: 9
-        description: Recompute the current StateId
-        type: call
-        targetComponent: host_core_adapter
-        targetMethod: computeStateId
-      - stepNumber: 10
-        description: If the current StateId differs from the lock's StateId, refuse as stale
-        type: branch
-        condition: current StateId differs from the lock's StateId
-        onTrueStep: 11
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Return stale-lock
-        type: return
-        outcome: stale lock — re-lock required
-      - stepNumber: 12
-        description: >-
-          Mark the change-set ready for promotion (the human merges the PR when git-backed); never
-          merge here
-        type: local
-      - stepNumber: 13
-        description: Return the promote result
-        type: return
-        outcome: promote result
     detail: full
   - name: enableGit
     narrative:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (binding a
           repository is project administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -655,17 +665,35 @@ methods:
         error: Forbidden — binding a repository requires project:admin over the project
       - stepNumber: 5
         description: >-
+          When a personal access token was supplied inline, store it as this connection's own
+          credential under the project's scoped git secret key, BEFORE the clone so authentication
+          is available (project:admin over the project authorizes storing it); a connection without
+          a token stores nothing and falls back to the shared git-token
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 6
+        description: >-
           Ensure the project record and an empty directory exist (no native provisioning) and bind
           the root
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
+        description: >-
+          Resolve the clone's token from the host's own secret repository: the connection's own
+          credential ref first, when it has one, so each connection can carry a distinct PAT, else
+          the shared git-token (none at all for a public remote)
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolveGit
+      - stepNumber: 8
         description: >-
           Bind the project to its REAL repository (clone the remote onto the isolated working
-          branch); wairon will commit ONLY .wai/ inside it
+          branch), handing the git plane the resolved token as an argument; wairon will commit ONLY
+          .wai/ inside it
         type: call
         targetComponent: host_git_adapter
         targetMethod: enable
-      - stepNumber: 7
+      - stepNumber: 9
         description: Return the project record
         type: return
         outcome: project record
@@ -674,12 +702,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -708,12 +736,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:write permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -742,14 +770,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:write permission over the target project (a commit is a spec
           write's save, not administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -763,18 +791,28 @@ methods:
         error: Forbidden — committing a project's specs requires project:write over it
       - stepNumber: 5
         description: >-
-          Bind the project's isolated root and resolve the staging scope: .wai/ by default, or
-          .wai/specs/<subsystem>/ when a subsystem is given (a subsystem scope is a staging
-          convenience only — git history stays per-repo); default the message when none is given
-        type: local
+          Resolve the project's repository scope: its family root's isolated root (the family's one
+          repository) and its own .wai/ pathspec ('.wai/' for a family root, '<member path>/.wai/'
+          for a member) — a member commits through its family root's repository, confined to its own
+          tree
+        type: call
+        targetComponent: project_repository
+        targetMethod: repositoryScope
       - stepNumber: 6
+        description: >-
+          Bind the repository root and narrow the pathspec to <project .wai>/specs/<subsystem>/ when
+          a subsystem is given (a staging convenience only — git history stays per-repository; a
+          member's own history is the log filtered to its pathspec); default the message, naming the
+          project
+        type: local
+      - stepNumber: 7
         description: >-
           Publish the scoped commit and push (commit = local save, push = the actual backup); a
           clean scope publishes nothing
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
-      - stepNumber: 7
+      - stepNumber: 8
         description: Return the publish outcome
         type: return
         outcome: GitPublish
@@ -783,12 +821,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -817,14 +855,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (the backup cadence
           is binding administration)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -855,16 +893,20 @@ methods:
           List the hosted project records (pre-authorized internal sweep — the host supervisor's
           timer is the only caller; never exposed on a portal)
         type: call
-        targetComponent: project_registry
+        targetComponent: project_repository
         targetMethod: list
       - stepNumber: 2
-        description: For each hosted project
+        description: >-
+          For each hosted FAMILY ROOT record (a member record has no repository of its own and is
+          swept with its family)
         type: loop
         loopKind: forEach
-        over: the hosted project records
+        over: the hosted family root records
         endStep: 7
       - stepNumber: 3
-        description: Bind the iterated project's isolated root
+        description: >-
+          Bind the family root's isolated root and collect the family's pathspecs: its own .wai/ and
+          every member record's <path>/.wai/
         type: local
       - stepNumber: 4
         description: Read the project's git-backing status
@@ -880,7 +922,9 @@ methods:
         onTrueStep: 6
         onFalseStep: 7
       - stepNumber: 6
-        description: Publish the .wai/-scoped backup commit and push
+        description: >-
+          Publish one backup commit covering the family's pathspecs and push — never a path outside
+          a project's .wai/
         type: call
         targetComponent: host_git_adapter
         targetMethod: publish
@@ -898,14 +942,14 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
           Resolve the caller's project:admin permission over the target project (a producer
           publishes the project's specs to an external target)
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -934,12 +978,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -957,17 +1001,48 @@ methods:
       - stepNumber: 6
         description: Mint a signed view token for the project's canvas
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: signViewToken
       - stepNumber: 7
         description: Compose the canvas link from the public base URL and token
         type: local
       - stepNumber: 8
-        description: Project and push the project to the target
+        description: Read the project's configured producers
+        type: call
+        targetComponent: host_producer_adapter
+        targetMethod: list
+      - stepNumber: 9
+        description: Is the target configured? An unconfigured target needs no token
+        type: branch
+        condition: the target is configured
+        onFalseStep: 13
+      - stepNumber: 10
+        description: >-
+          Resolve the target's token (<target>-token) from the host's own secret repository — the
+          value never leaves the host except as this one call's argument
+        type: call
+        targetComponent: secret_repository
+        targetMethod: resolve
+      - stepNumber: 11
+        description: Is a token stored?
+        type: branch
+        condition: no token is stored for the target
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Refuse the run before the producer does anything, naming the environment variable and the
+          host secret to set
+        type: throw
+        error: No <Target> token
+      - stepNumber: 13
+        label: produce
+        description: >-
+          Project and push the project to the target, handing the producer the token resolved above
+          as an argument (none for an unconfigured target, which the producer refuses by name)
         type: call
         targetComponent: host_producer_adapter
         targetMethod: produce
-      - stepNumber: 9
+      - stepNumber: 14
         description: Return once produced
         type: return
         outcome: produced
@@ -976,12 +1051,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -1010,12 +1085,12 @@ methods:
       - stepNumber: 1
         description: Authenticate the caller credential
         type: call
-        targetComponent: auth_specialist
+        targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: Resolve the caller's project:admin permission over the target project
         type: call
-        targetComponent: authorization_specialist
+        targetComponent: authorization
         targetMethod: authorize
       - stepNumber: 3
         description: If the effective value is not yes, deny
@@ -1039,12 +1114,145 @@ methods:
         description: Return the producer list
         type: return
         outcome: producer list
-lint:
-  allow:
-    - code: UNDECLARED_DEPENDENCY
-      reason: >-
-        admin.ts reads the state id via computeStateId directly instead of routing through
-        host_core_adapter — documented shortcut on the lock/promote path; refactor candidate.
+  - name: exportProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: Resolve the caller's project:read permission over the target project
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the export
+        type: throw
+        error: Forbidden — exporting a project's spec tree requires project:read over it
+      - stepNumber: 5
+        description: >-
+          Bind the project's root — a member's own root when the project is a member record (derived
+          from its parent's root and memberPath through the containment guard)
+        type: local
+      - stepNumber: 6
+        description: Pack the bound tree into a .waitree archive within that scope
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: exportSpecTree
+      - stepNumber: 7
+        description: Return the archive and its provenance
+        type: return
+        outcome: exported tree
+  - name: importProjectTree
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential (bootstrap master or a user-bound token)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Resolve the caller's project:admin permission over the target project — deliberately above
+          project:write, because this replaces the whole design rather than editing one spec
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 3
+        description: If the effective value is not yes, deny
+        type: branch
+        condition: the effective value is not yes
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Reject the import
+        type: throw
+        error: Forbidden — importing a project's spec tree requires project:admin over it
+      - stepNumber: 5
+        description: >-
+          Resolve the caller's approval:decide permission over the project: an archive may carry
+          approval records, and only someone who may approve the project brings one in
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 6
+        description: Bind the project's root — a member's own root when the project is a member record
+        type: local
+      - stepNumber: 7
+        description: >-
+          Import the archive within that scope, ALWAYS refusing executable entries (it arrived over
+          the wire), passing the caller's replace choice through unchanged, and asking for
+          dropApprovals unless the caller's approval:decide over the project is yes
+        type: call
+        targetComponent: host_core_adapter
+        targetMethod: importSpecTree
+      - stepNumber: 8
+        description: Return what was written and where the replaced tree was backed up
+        type: return
+        outcome: imported tree
+  - name: registerLocalDevProject
+    narrative:
+      - stepNumber: 1
+        description: Admit only a development-mode host configuration
+        type: branch
+        condition: the host configuration is not in development mode
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Refuse: registration at a caller-named directory is reserved for the local development
+          server
+        type: throw
+        error: Error
+      - stepNumber: 3
+        description: Register the project record at the working directory
+        type: call
+        targetComponent: project_repository
+        targetMethod: register
+      - stepNumber: 4
+        description: Return the registered record
+        type: return
+        outcome: project record
+  - name: gateIdentity
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the root exactly as executeApprovedLock does: the project's own root — a member
+          record's derived from its parent's root and memberPath
+        type: local
+      - stepNumber: 2
+        description: Compute the bound tree's gate identity
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 3
+        description: Return it rendered `<algorithm>:<digest>`
+        type: return
+        outcome: gate identity
+  - name: approverFor
+    narrative:
+      - stepNumber: 1
+        description: Decide whether a subject was resolved
+        type: branch
+        condition: no subject (the master credential)
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Return the instance master credential as the approver, source hosted
+        type: return
+        outcome: the master approver
+      - stepNumber: 3
+        description: Return the subject's user id and display name as the approver, source hosted
+        type: return
+        outcome: the subject's approver identity
+    detail: full
+    symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-07-25T16:36:39.166Z'
+updatedAt: '2026-10-17T16:23:55.424Z'

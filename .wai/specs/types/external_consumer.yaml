@@ -1,0 +1,118 @@
+kind: value-object
+id: external_consumer
+name: ExternalConsumer
+description: >-
+  One project that consumes the bound project, as `wairon externals consumers` and
+  sdd_list_consumers list it from the producer's root: which project, under which alias and
+  declaration section it reaches the producer, which of the producer's public names its specs use,
+  and which names it still writes that the producer no longer exports. The family graph read from
+  the highest root the climb reaches, plus — when folders are searched — every project root in them
+  declaring the producer by a path or git source (a sibling checkout outside the family). A hosted
+  consumer declares its dependency on its own side and is never listed here.
+subsystem: sdd_core
+fields:
+  - name: project
+    type: string
+    description: The consumer's effective project id, else its key in the family
+    optional: false
+  - name: key
+    type: string
+    description: The consumer's key in the family graph read ('' for the family's top root)
+    optional: false
+  - name: directory
+    type: string
+    description: The consumer's root on disk
+    optional: false
+  - name: alias
+    type: string
+    description: The alias the consumer reaches the producer by
+    optional: false
+  - name: section
+    type: string
+    description: 'Where the consumer declares it: externals, or members (a project containing the producer)'
+    optional: false
+  - name: names
+    type: list<string>
+    description: >-
+      The producer's public names the consumer's specs use, sorted; empty when it declares the
+      producer but uses nothing yet
+    optional: false
+  - name: broken
+    type: list<string>
+    description: >-
+      The names its specs still write that bind to no public name of the producer — what a breaking
+      change just broke — sorted; absent when none
+    optional: true
+  - name: found
+    type: string
+    description: '`search` for a project root met in a searched folder outside the family; absent for the family'
+    optional: true
+  - name: uses
+    type: list<ExportUse>
+    description: >-
+      What its specs use, method-granular: each public name with the contract methods (or `type`, or
+      `capability:<name>`) its references reach on it and the specs that reach it, sorted by name —
+      what a producer reads before it renames a method; absent when it uses nothing
+    optional: true
+methods:
+  - name: reaches
+    signature: 'reaches(publicNames: list<string>, member: string): bool'
+    params:
+      - name: publicNames
+        type: list<string>
+        description: The public names that publish the member
+      - name: member
+        type: string
+        description: The contract method (or `type`)
+    returns: bool
+    description: >-
+      Whether this consumer's specs reach `member` on one of `publicNames` — a method its references
+      call on an exported contract (or, for `type`, an exported type it names). What tells a
+      producer that renaming that method breaks this consumer. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: consumerReaches
+  - name: narrowedTo
+    signature: 'narrowedTo(publicNames: list<string>, member: string): ExternalConsumer'
+    params:
+      - name: publicNames
+        type: list<string>
+        description: The public names that publish the member
+      - name: member
+        type: string
+        description: The contract method a rename breaks
+    returns: ExternalConsumer
+    description: >-
+      This consumer as a rename of `member` on one of `publicNames` breaks it: only those public
+      names, each with that one member, its names narrowed alike, so a rename dry run
+      (sdd_rename_method's, sdd_rename_param's and sdd_rename_field's `breaks`) names what breaks —
+      as the CLI dry run's "N consumer(s) call <method>" does — rather than the consumer's whole use
+      of the producer. Its specs narrow to the ones whose references reach THAT member (the use's
+      memberSpecs entry for it); a use recorded without per-member specs keeps the specs that reach
+      the public name. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: narrowedToMember
+  - name: narrowedToUses
+    signature: 'narrowedToUses(published: list<ExportUse>): ExternalConsumer?'
+    params:
+      - name: published
+        type: list<ExportUse>
+        description: Each public name a rename moves something on, with the members that carry it
+    returns: ExternalConsumer?
+    description: >-
+      This consumer as a rename that moves something on several public names and members breaks it
+      (a field or type rename reaches a consumer through every exported type embedding it and every
+      exported method whose signature closure names one; a parameter rename through every entry
+      publishing the method or a follower's verb): narrowedTo applied to each (public name, member)
+      pair the consumer reaches (reaches) — a pair also reached under a former public name
+      (formerNames) or a former method name (formerMembers) the consumer still writes, so one whose
+      reference no longer resolves since an earlier rename is kept — and a contract the consumer
+      depends on as a whole (a bare `dependsOn: alias::name`, a use with no members) reaches every
+      member published under it, since whatever calls it through that dependency — its code, its
+      binding — may call any of them; each former public name among the consumer's broken names kept
+      as a use of its own; the narrowed uses merged, or none when it reaches nothing, so it is not
+      one the rename breaks. Pure.
+    sourcePath: src/models/project-family.ts
+    symbol: narrowedToUses
+sourcePath: src/models/project-family.ts
+createdAt: '2026-10-06T23:03:22.646Z'
+updatedAt: '2026-10-09T00:19:22.084Z'

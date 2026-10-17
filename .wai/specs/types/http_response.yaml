@@ -4,11 +4,11 @@ name: HttpResponse
 description: 'An outbound HTTP response at the hosting boundary: status code, headers, and body.'
 fields:
   - name: status
-    type: number
+    type: int
     description: HTTP status code
     optional: false
   - name: headers
-    type: string[]
+    type: list<string>
     description: Raw response header lines
     optional: false
   - name: body
@@ -16,5 +16,11 @@ fields:
     description: Response body
     optional: true
 methods: []
+lint:
+  allow:
+    - code: MISSING_TYPE_SOURCE_PATH
+      reason: >-
+        No wairon declaration: the hosting boundary answers through Node's own http ServerResponse
+        (src/server/http.ts), a platform type, so no file of this project declares the shape.
 createdAt: '2026-07-04T12:58:06.691Z'
-updatedAt: '2026-07-04T12:58:06.704Z'
+updatedAt: '2026-10-07T06:30:14.202Z'

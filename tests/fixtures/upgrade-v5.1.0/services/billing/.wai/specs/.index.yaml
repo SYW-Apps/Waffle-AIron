@@ -1,0 +1,9 @@
+schemaVersion: 1.0.0
+name: Billing
+vision: Charges orders once and records the charge.
+boundaries: []
+globalRequirements: []
+databases: []
+targetLanguage: typescript
+createdAt: '2026-10-17T11:46:27.377Z'
+updatedAt: '2026-10-17T11:46:27.377Z'

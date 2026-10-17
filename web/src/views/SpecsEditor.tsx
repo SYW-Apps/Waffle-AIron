@@ -16,6 +16,7 @@ import {
   type Async,
 } from '../ui';
 import type { AvailableProfile } from '../types';
+import { buildDelta, type SpecKind } from './specDelta';
 
 /**
  * Stage F — the project Specs VALUE-editor.
@@ -34,7 +35,6 @@ import type { AvailableProfile } from '../types';
 
 // ── Kinds ────────────────────────────────────────────────────────────────────
 
-type SpecKind = 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
 
 interface Selected {
   kind: SpecKind;
@@ -46,15 +46,18 @@ interface Selected {
 
 const STATUS = ['draft', 'design', 'complete'];
 const COMPONENT_TYPE = [
-  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Registry',
-  'Adapter', 'Observer', 'Specialist', 'View', 'Repository', 'Gateway',
-  'FeatureComponent', 'RouterComponent',
+  'Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry',
+  'Adapter', 'Observer', 'View', 'Repository', 'FeatureComponent', 'RouterComponent',
 ];
-const PORTAL_TYPE = ['HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'Custom'];
+// Retired (STEREOTYPE_RETIRED): never offered as a choice — componentTypeOptions()
+// below includes one of these only when it is the component's CURRENT value, so a
+// tree not yet migrated still shows its type without letting anyone pick it anew.
+const RETIRED_COMPONENT_TYPE = ['Specialist', 'Gateway'];
+const PORTAL_TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom'];
 const DURABILITY = ['ram-projection', 'durable', 'read-through', 'cache'];
 const DESIGN_DEPTH = ['components', 'interfaces', 'implementations', 'narratives'];
-const METHOD_EFFECT = ['read', 'write'];
-const TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'Custom'];
+const METHOD_EFFECT = ['none', 'read', 'write', 'lifecycle', 'io'];
+const TRANSPORT = ['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom'];
 const HTTP_METHOD = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'];
 const GRAPHQL_OP = ['query', 'mutation', 'subscription'];
 const MB_DIRECTION = ['subscribe', 'publish'];
@@ -66,33 +69,21 @@ const EXTERNAL_LINK_TYPE = ['implementation', 'informative'];
 const AUTH_SCHEME = ['none', 'apiKey', 'bearer', 'basic', 'oauth2', 'openIdConnect', 'custom'];
 const AUTH_IN = ['header', 'query', 'cookie'];
 const OAUTH_FLOW = ['authorizationCode', 'clientCredentials', 'implicit', 'password'];
-const TYPE_KIND = ['entity', 'value-object'];
+const TYPE_KIND = ['entity', 'value-object', 'enum'];
 const TYPE_FIELD_KEY = ['primary', 'unique', 'foreign'];
+/** The primitives a named scalar may hold (type_spec.holds): every primitive but void and any. */
+const HOLDABLE_PRIMITIVES = ['string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration'];
 const BUILTIN_GUARANTEES = ['idempotent', 'atomic', 'transactional', 'exactly-once'];
 const PROJECT_KINDS = ['fullstack', 'system-of-systems', 'monorepo'];
 const BUILTIN_PROFILES = [
   'backend', 'frontend-reactive', 'frontend-controller', 'lowlevel-os',
   'game-ecs', 'realtime-embedded', 'plc-cyclic',
 ];
+/** The neutral type grammar's primitives and common shapes — the canonical spellings a write stores. */
 const PRIMITIVES = [
-  'string', 'number', 'boolean', 'void', 'null', 'undefined', 'any', 'unknown',
-  'object', 'Date', 'bigint', 'Buffer', 'Promise<void>',
+  'string', 'int', 'float', 'bool', 'bytes', 'date', 'datetime', 'duration', 'void', 'any',
+  'list<string>', 'map<string, string>', 'string?', 'async void',
 ];
-
-/** Top-level scalar/enum fields editable per kind (values only). */
-const SCALAR_FIELDS: Record<SpecKind, string[]> = {
-  system: ['vision'],
-  subsystem: ['name', 'description', 'status', 'profile', 'designDepth', 'targetLanguage'],
-  component: ['name', 'description', 'status', 'componentType', 'portalType', 'basePath', 'durability'],
-  interface: ['name', 'description'],
-  implementation: ['name', 'description', 'status', 'detail', 'conformance'],
-  type: ['name', 'description', 'kind'],
-};
-
-/** Optional enum fields the delta merge cannot UNSET (JSON drops undefined; the
- *  merge spreads, so '' would fail schema). Changing to a real value works;
- *  clearing a previously-set value is a no-op (documented). */
-const OPTIONAL_ENUM_FIELDS = new Set(['profile', 'designDepth', 'portalType', 'durability', 'detail', 'conformance']);
 
 /**
  * Validation-rail field map — `sdd_validate_tree` issue code → the editable
@@ -129,8 +120,11 @@ const CODE_FIELD_MAP: Record<string, string> = {
 
 /** Highest-severity flag per field, scoped to ONE spec's issues (the caller
  *  pre-filters by specId — see SpecsTab's openSpecFieldFlags). */
-type FieldFlags = Map<string, 'error' | 'warning'>;
+type FieldFlags = Map<string, 'error' | 'warning' | 'notice'>;
 const EMPTY_FIELD_FLAGS: FieldFlags = new Map();
+
+/** sdd_validate_tree's answer, split by severity — notices kept apart from warnings. */
+interface Validation { errors: any[]; warnings: any[]; notices: any[] }
 
 // ── Graph (picker source) ──────────────────────────────────────────────────────
 
@@ -171,7 +165,6 @@ interface ProjectConfigResp {
 }
 
 const byLabel = (a: GraphNode, b: GraphNode) => a.label.localeCompare(b.label);
-const jeq = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 // ── Small controls ─────────────────────────────────────────────────────────────
@@ -190,6 +183,18 @@ function EnumSelect(props: {
     ...props.options.map((o) => ({ value: o, label: o })),
   ];
   return <Select value={props.value ?? ''} onChange={props.onChange} options={opts} disabled={props.disabled} />;
+}
+
+/** The Component-type picker's options: every live stereotype, plus the CURRENT
+ *  value's retired type (Specialist/Gateway), marked retired, when it is one —
+ *  so an unmigrated component still shows its type, and nobody can choose a
+ *  retired type for any component going forward. */
+function componentTypeOptions(current: string | undefined): { value: string; label: string }[] {
+  const options = COMPONENT_TYPE.map((v) => ({ value: v, label: v }));
+  if (current && RETIRED_COMPONENT_TYPE.includes(current)) {
+    options.push({ value: current, label: `${current} (retired)` });
+  }
+  return options;
 }
 
 let comboSeq = 0;
@@ -492,7 +497,7 @@ const SCOPE_NOUN_LABEL: Record<RailScope['noun'], string> = {
  *  (CODE_FIELD_MAP, cross-checked against `openSpecId`) — the message itself
  *  is clickable to scroll to + highlight that field. */
 function ValidationRail(props: {
-  validation: { errors: any[]; warnings: any[] } | null;
+  validation: Validation | null;
   onValidate: () => Promise<void>;
   nodes: GraphNode[];
   onSelectSpec: (sel: { kind: string; id: string }) => void;
@@ -508,23 +513,28 @@ function ValidationRail(props: {
 }) {
   const toast = useToast();
   const v = props.validation;
-  const total = v ? v.errors.length + v.warnings.length : 0;
+  const total = v ? v.errors.length + v.warnings.length + v.notices.length : 0;
   const inScope = (i: any) => !props.scope || issueInScope(i.specId, props.scope);
   const scopedErrors = v ? v.errors.filter(inScope) : [];
   const scopedWarnings = v ? v.warnings.filter(inScope) : [];
-  const inScopeCount = scopedErrors.length + scopedWarnings.length;
+  const scopedNotices = v ? v.notices.filter(inScope) : [];
+  const inScopeCount = scopedErrors.length + scopedWarnings.length + scopedNotices.length;
   const elsewhereCount = total - inScopeCount;
   const showingAll = !props.scope || props.showAll;
   const displayedErrors = showingAll ? (v?.errors ?? []) : scopedErrors;
   const displayedWarnings = showingAll ? (v?.warnings ?? []) : scopedWarnings;
+  // Notices are listed apart and last: reported, never a problem that blocks
+  // anything (they never make the tree invalid and never fail --ci).
+  const displayedNotices = showingAll ? (v?.notices ?? []) : scopedNotices;
+  const labelClass = { error: 'err', warn: 'badge-warn', notice: 'finding-notice-label' } as const;
 
-  const Finding = (i: any, kindLabel: 'error' | 'warn', key: string) => {
+  const Finding = (i: any, kindLabel: 'error' | 'warn' | 'notice', key: string) => {
     const field = CODE_FIELD_MAP[i.code];
     const scrollable = !!field && !!props.openSpecId && i.specId === props.openSpecId;
     return (
       <li key={key} className={`finding f-${kindLabel}`}>
         <div className="finding-row">
-          <span className={kindLabel === 'error' ? 'err' : 'badge-warn'} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
+          <span className={labelClass[kindLabel]} style={kindLabel === 'warn' ? { padding: 0 } : undefined}>{kindLabel}</span>
           {i.code ? <code className="subtle">{i.code}</code> : null}
         </div>
         <div
@@ -550,8 +560,8 @@ function ValidationRail(props: {
         <span className="field-label">Validation</span>
         <AsyncButton variant="ghost" action={props.onValidate} onError={toast.bad}>Validate tree</AsyncButton>
       </div>
-      {!v && <p className="hint">Run a tree validation to list this project's errors and warnings here.</p>}
-      {v && total === 0 && <Badge tone="ok">clean — no errors or warnings</Badge>}
+      {!v && <p className="hint">Run a tree validation to list this project's errors, warnings and notices here.</p>}
+      {v && total === 0 && <Badge tone="ok">clean — no errors, warnings or notices</Badge>}
       {v && total > 0 && (
         <>
           {props.scope && (
@@ -566,14 +576,23 @@ function ValidationRail(props: {
           )}
           <div className="spec-validation-counts">
             {displayedErrors.length > 0 && <Badge tone="bad">{displayedErrors.length} errors</Badge>}{' '}
-            {displayedWarnings.length > 0 && <Badge tone="warn">{displayedWarnings.length} warnings</Badge>}
+            {displayedWarnings.length > 0 && <Badge tone="warn">{displayedWarnings.length} warnings</Badge>}{' '}
+            {displayedNotices.length > 0 && <Badge tone="neutral">{displayedNotices.length} notices</Badge>}
             {displayedErrors.length === 0 && displayedWarnings.length === 0 && (
-              <Badge tone="ok">clean — no issues on this {SCOPE_NOUN_LABEL[props.scope!.noun]}</Badge>
+              <Badge tone="ok">
+                {displayedNotices.length > 0
+                  ? 'no errors or warnings'
+                  : `clean — no issues on this ${SCOPE_NOUN_LABEL[props.scope!.noun]}`}
+              </Badge>
             )}
           </div>
+          {displayedNotices.length > 0 && (
+            <p className="hint">Notices are informational: they never make the tree invalid and never fail CI.</p>
+          )}
           <ul className="finding-list">
             {displayedErrors.map((i, n) => Finding(i, 'error', `e${n}`))}
             {displayedWarnings.map((i, n) => Finding(i, 'warn', `w${n}`))}
+            {displayedNotices.map((i, n) => Finding(i, 'notice', `n${n}`))}
           </ul>
         </>
       )}
@@ -646,156 +665,6 @@ function withCurrent(groups: { label: string; options: { value: string; label: s
   return known ? groups : [{ label: 'Current', options: [{ value, label: value }] }, ...groups];
 }
 
-// ── Delta builder ───────────────────────────────────────────────────────────────
-
-function scalarDelta(kind: SpecKind, orig: Record<string, unknown>, draft: Record<string, unknown>): Record<string, unknown> {
-  const delta: Record<string, unknown> = {};
-  for (const f of SCALAR_FIELDS[kind]) {
-    const nv = draft[f];
-    const ov = orig[f];
-    if (nv === ov) continue;
-    if ((nv === '' || nv === undefined) && ov === undefined) continue; // no-op
-    if (nv === undefined) continue;
-    if (nv === '' && OPTIONAL_ENUM_FIELDS.has(f)) continue; // merge cannot unset optional enums
-    delta[f] = nv;
-  }
-  return delta;
-}
-
-/** Interface method value deltas (merged by name; nested arrays/objects replace
- *  wholesale, so params/guarantees/endpoint are sent complete). */
-function interfaceMethodsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const dm of draft.methods ?? []) {
-    const om = (orig.methods ?? []).find((m: any) => m.name === dm.name);
-    if (!om) continue;
-    const ch: any = {};
-    if (dm.description !== om.description) ch.description = dm.description;
-    if (dm.signature !== om.signature) ch.signature = dm.signature;
-    if (dm.returns !== om.returns) ch.returns = dm.returns;
-    if ((dm.effect ?? '') !== (om.effect ?? '') && dm.effect) ch.effect = dm.effect;
-    if (!jeq(dm.guarantees ?? [], om.guarantees ?? [])) ch.guarantees = dm.guarantees ?? [];
-    if (!jeq(dm.params ?? [], om.params ?? [])) ch.params = dm.params ?? [];
-    if (!jeq(dm.endpoint, om.endpoint)) ch.endpoint = dm.endpoint;
-    if (Object.keys(ch).length) out.push({ name: dm.name, ...ch });
-  }
-  return out;
-}
-
-/** Implementation method value deltas (merged by name; narrative untouched). */
-function implMethodsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const dm of draft.methods ?? []) {
-    const om = (orig.methods ?? []).find((m: any) => m.name === dm.name);
-    if (!om) continue;
-    const ch: any = {};
-    if ((dm.detail ?? '') !== (om.detail ?? '') && dm.detail) ch.detail = dm.detail;
-    if ((dm.conformance ?? '') !== (om.conformance ?? '') && dm.conformance) ch.conformance = dm.conformance;
-    if ((dm.intent ?? '') !== (om.intent ?? '')) ch.intent = dm.intent ?? '';
-    if (Object.keys(ch).length) out.push({ name: dm.name, ...ch });
-  }
-  return out;
-}
-
-/** Type field value deltas (merged by name). */
-function typeFieldsDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  for (const df of draft.fields ?? []) {
-    const of = (orig.fields ?? []).find((f: any) => f.name === df.name);
-    if (!of) continue;
-    const ch: any = {};
-    if (df.type !== of.type) ch.type = df.type;
-    if ((df.description ?? '') !== (of.description ?? '')) ch.description = df.description ?? '';
-    if (!!df.optional !== !!of.optional) ch.optional = !!df.optional;
-    if ((df.key ?? '') !== (of.key ?? '') && df.key) ch.key = df.key; // cannot unset
-    if ((df.references ?? '') !== (of.references ?? '')) ch.references = df.references ?? '';
-    if (Object.keys(ch).length) out.push({ name: df.name, ...ch });
-  }
-  return out;
-}
-
-/** publicInterfaces value deltas (merged by component+interface). */
-function piDelta(orig: any, draft: any, kind: SpecKind): any[] {
-  const out: any[] = [];
-  const list = draft.publicInterfaces ?? [];
-  for (let i = 0; i < list.length; i++) {
-    const dpi = list[i];
-    const opi = (orig.publicInterfaces ?? [])[i];
-    if (!opi) continue;
-    const ch: any = {};
-    if ((dpi.type ?? '') !== (opi.type ?? '') && dpi.type) ch.type = dpi.type;
-    if ((dpi.details ?? '') !== (opi.details ?? '')) ch.details = dpi.details ?? '';
-    if (kind === 'system') {
-      if ((dpi.name ?? '') !== (opi.name ?? '')) ch.name = dpi.name ?? '';
-      if ((dpi.audience ?? '') !== (opi.audience ?? '') && dpi.audience) ch.audience = dpi.audience;
-    }
-    if (Object.keys(ch).length) {
-      out.push({
-        ...(opi.component !== undefined ? { component: opi.component } : {}),
-        ...(opi.interface !== undefined ? { interface: opi.interface } : {}),
-        ...ch,
-      });
-    }
-  }
-  return out;
-}
-
-/** Subsystem lifecycle deltas — description only (phase+component+method are the
- *  merge identity, so they are never changed here). */
-function lifecycleDelta(orig: any, draft: any): any[] {
-  const out: any[] = [];
-  const list = draft.lifecycle ?? [];
-  for (let i = 0; i < list.length; i++) {
-    const dl = list[i];
-    const ol = (orig.lifecycle ?? [])[i];
-    if (!ol) continue;
-    if ((dl.description ?? '') !== (ol.description ?? '')) {
-      out.push({ phase: ol.phase, component: ol.component, method: ol.method, description: dl.description ?? '' });
-    }
-  }
-  return out;
-}
-
-function buildDelta(kind: SpecKind, orig: any, draft: any): Record<string, unknown> {
-  const delta = scalarDelta(kind, orig, draft);
-  if (kind === 'component' && !jeq(draft.externalLinks ?? [], orig.externalLinks ?? [])) {
-    delta.externalLinks = draft.externalLinks ?? [];
-  }
-  if (kind === 'component' && !jeq(draft.auth ?? null, orig.auth ?? null)) {
-    delta.auth = draft.auth ?? { scheme: 'none' };
-  }
-  if (kind === 'implementation' && !jeq(draft.technologies ?? [], orig.technologies ?? [])) {
-    delta.technologies = draft.technologies ?? [];
-  }
-  if (kind === 'interface') {
-    const md = interfaceMethodsDelta(orig, draft);
-    if (md.length) delta.methods = md;
-  }
-  if (kind === 'implementation') {
-    const md = implMethodsDelta(orig, draft);
-    if (md.length) delta.methods = md;
-  }
-  if (kind === 'type') {
-    const fd = typeFieldsDelta(orig, draft);
-    if (fd.length) delta.fields = fd;
-  }
-  if (kind === 'subsystem' || kind === 'system') {
-    const pd = piDelta(orig, draft, kind);
-    if (pd.length) delta.publicInterfaces = pd;
-  }
-  if (kind === 'system') {
-    // boundaries/globalRequirements are non-special-cased top-level arrays, so
-    // the merge replaces them wholesale — send the full list on any change.
-    if (!jeq(draft.boundaries ?? [], orig.boundaries ?? [])) delta.boundaries = draft.boundaries ?? [];
-    if (!jeq(draft.globalRequirements ?? [], orig.globalRequirements ?? [])) delta.globalRequirements = draft.globalRequirements ?? [];
-  }
-  if (kind === 'subsystem') {
-    const ld = lifecycleDelta(orig, draft);
-    if (ld.length) delta.lifecycle = ld;
-  }
-  return delta;
-}
-
 // ── Endpoint editor (interface methods) ─────────────────────────────────────────
 
 function EndpointEditor(props: { endpoint: any; onChange: (ep: any) => void; disabled?: boolean }) {
@@ -837,6 +706,7 @@ function EndpointEditor(props: { endpoint: any; onChange: (ep: any) => void; dis
       {t === 'NamedPipe' && <Field label="Pipe"><TextInput value={ep.pipe ?? ''} onChange={(v) => set({ pipe: v })} disabled={props.disabled} /></Field>}
       {t === 'IPC' && <Field label="Channel"><TextInput value={ep.channel ?? ''} onChange={(v) => set({ channel: v })} disabled={props.disabled} /></Field>}
       {t === 'CLI' && <Field label="Command"><TextInput value={ep.command ?? ''} onChange={(v) => set({ command: v })} disabled={props.disabled} /></Field>}
+      {t === 'JSONRPC' && <Field label="JSON-RPC method"><TextInput value={ep.method ?? ''} onChange={(v) => set({ method: v })} disabled={props.disabled} /></Field>}
       {t === 'Custom' && <Field label="Address"><TextInput value={ep.address ?? ''} onChange={(v) => set({ address: v })} disabled={props.disabled} /></Field>}
     </div>
   );
@@ -992,7 +862,7 @@ function SpecForm(props: {
           </Field>
           {(draft.publicInterfaces ?? []).length > 0 && (
             <div className="stack-lg">
-              <span className="field-label">Gateway surface entries</span>
+              <span className="field-label">Public surface entries</span>
               {draft.publicInterfaces.map((pi: any, i: number) => (
                 <div key={i} className="sub-card">
                   <code className="subtle">{pi.id ?? pi.component ?? `entry ${i + 1}`}</code>
@@ -1064,9 +934,9 @@ function SpecForm(props: {
           </div>
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
           <div className="row-form">
-            <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><EnumSelect value={draft.componentType} onChange={(v) => set('componentType', v)} options={COMPONENT_TYPE} /></Field>
+            <Field label="Component type" fieldKey="componentType" highlight={flagFor('componentType')}><Select value={draft.componentType ?? ''} onChange={(v) => set('componentType', v)} options={componentTypeOptions(draft.componentType)} /></Field>
             {draft.componentType === 'Portal' && (
-              <Field label="Portal type"><EnumSelect value={draft.portalType} onChange={(v) => set('portalType', v)} options={PORTAL_TYPE} allowNone /></Field>
+              <Field label="Transport"><EnumSelect value={draft.transport} onChange={(v) => set('transport', v)} options={PORTAL_TRANSPORT} allowNone /></Field>
             )}
             {draft.componentType === 'Store' && (
               <Field label="Durability" fieldKey="durability" highlight={flagFor('durability')}><EnumSelect value={draft.durability} onChange={(v) => set('durability', v)} options={DURABILITY} allowNone /></Field>
@@ -1100,15 +970,20 @@ function SpecForm(props: {
                 <div key={m.name} className="sub-card">
                   <code className="subtle">{m.name}</code>
                   <Field label="Description"><TextInput value={m.description ?? ''} onChange={(v) => setArrItem('methods', i, { description: v })} /></Field>
+                  <Field label="Signature from" hint="A signature type, or a component.method this component reaches — the method then states no params or returns of its own.">
+                    <TextInput value={m.signatureFrom ?? ''} onChange={(v) => setArrItem('methods', i, { signatureFrom: v })} placeholder="e.g. billing_registry.create" />
+                  </Field>
                   <div className="row-form">
-                    <Field label="Signature"><TextInput value={m.signature ?? ''} onChange={(v) => setArrItem('methods', i, { signature: v })} /></Field>
-                    <Field label="Returns"><TextInput value={m.returns ?? ''} onChange={(v) => setArrItem('methods', i, { returns: v })} /></Field>
+                    {m.signatureFrom
+                      ? <Field label="Signature (from its source)"><TextInput value={(draft.resolvedSignatures ?? []).find((r: any) => r.method === m.name)?.signature ?? ''} onChange={() => undefined} disabled /></Field>
+                      : <Field label={(m.params ?? []).length > 0 ? 'Signature (derived from params)' : 'Signature'}><TextInput value={m.signature ?? ''} onChange={(v) => setArrItem('methods', i, { signature: v })} disabled={(m.params ?? []).length > 0} /></Field>}
+                    {!m.signatureFrom && <Field label="Returns"><TextInput value={m.returns ?? ''} onChange={(v) => setArrItem('methods', i, { returns: v })} /></Field>}
                     <Field label="Effect"><EnumSelect value={m.effect} onChange={(v) => setArrItem('methods', i, { effect: v })} options={METHOD_EFFECT} allowNone /></Field>
                   </div>
                   <Field label="Guarantees" hint="Builtin tokens plus any pack-declared ones.">
                     <TagInput values={m.guarantees ?? []} onChange={(v) => setArrItem('methods', i, { guarantees: v })} suggestions={BUILTIN_GUARANTEES} />
                   </Field>
-                  {(m.params ?? []).length > 0 && (
+                  {!m.signatureFrom && (m.params ?? []).length > 0 && (
                     <div className="stack-lg">
                       <span className="hint">Parameters</span>
                       {m.params.map((p: any, j: number) => (
@@ -1145,7 +1020,7 @@ function SpecForm(props: {
             <Field label="Conformance (default)"><EnumSelect value={draft.conformance} onChange={(v) => set('conformance', v)} options={CONFORMANCE} allowNone noneLabel="(stereotype default)" /></Field>
           </div>
           <Field label="Technologies" hint="External technologies this implementation binds to.">
-            <TagInput values={draft.technologies ?? []} onChange={(v) => set('technologies', v)} placeholder="e.g. mysql, sendgrid…" />
+            <TagInput values={(draft.technologies ?? []).map(technologyLabel)} onChange={(v) => set('technologies', v.map((label) => (draft.technologies ?? []).find((t: unknown) => technologyLabel(t) === label) ?? label))} placeholder="e.g. mysql, sendgrid…" />
           </Field>
           {(draft.methods ?? []).length > 0 && (
             <div className="stack-lg">
@@ -1181,14 +1056,37 @@ function SpecForm(props: {
         </div>
       )}
 
-      {/* ── Type (entity / value-object) ── */}
+      {/* ── Type (entity / value-object / enum / signature) ── */}
       {sel.kind === 'type' && (
         <div className="panel stack-lg">
           <div className="row-form">
             <Field label="Name"><TextInput value={draft.name ?? ''} onChange={(v) => set('name', v)} /></Field>
-            <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={TYPE_KIND} /></Field>
+            <Field label="Kind"><EnumSelect value={draft.kind} onChange={(v) => set('kind', v)} options={draft.kind === 'signature' ? ['signature'] : TYPE_KIND} disabled={draft.kind === 'signature'} /></Field>
           </div>
+          {draft.kind === 'signature' && (
+            <Field label="Signature (derived from params and returns)">
+              <TextInput value={`(${(draft.params ?? []).map((p: any) => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}): ${draft.returns ?? 'any'}`} onChange={() => undefined} disabled />
+            </Field>
+          )}
           <Field label="Description" fieldKey="description" highlight={flagFor('description')}><textarea className="input" rows={3} value={draft.description ?? ''} onChange={(e) => set('description', e.target.value)} /></Field>
+          {draft.kind === 'value-object' && (draft.fields ?? []).length === 0 && (
+            <Field label="Holds" fieldKey="holds" highlight={flagFor('holds')} hint="A named scalar: one primitive under this name, in place of fields (a newtype or type alias in every language).">
+              <EnumSelect value={draft.holds} onChange={(v) => set('holds', v || undefined)} options={HOLDABLE_PRIMITIVES} allowNone noneLabel="(not a named scalar)" />
+            </Field>
+          )}
+          {draft.kind === 'enum' && (draft.values ?? []).length > 0 && (
+            <div className="stack-lg">
+              <span className="field-label">Values (in declared order)</span>
+              {draft.values.map((v: any, i: number) => (
+                <div key={v.name} className="sub-card">
+                  <code className="subtle">{v.name}</code>
+                  <div className="row-form">
+                    <Field label="Description"><TextInput value={v.description ?? ''} onChange={(val) => setArrItem('values', i, { description: val })} /></Field>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {(draft.fields ?? []).length > 0 && (
             <div className="stack-lg">
               <span className="field-label">Fields</span>
@@ -1386,7 +1284,7 @@ function ComponentUnitEditor(props: {
   const navigate = useNavigate();
   const compNode = nodes.find((n) => n.id === componentId);
   // "Open in canvas" opens the component's PARENT (subsystem) view and focuses the
-  // component — a leaf (Specialist/Store/Actor/…) has no meaningful "inside" to drill
+  // component — a leaf (Orchestrator/Store/Actor/…) has no meaningful "inside" to drill
   // into. Subsystem route = its id with '::' → '/' segments; the component to focus
   // (and, for a method, the narrative flow) rides in the URL hash. No unit prefix.
   const parentRoute = compNode?.parentId ? compNode.parentId.split('::').map(encodeURIComponent).join('/') : '';
@@ -1495,7 +1393,7 @@ function ProjectConfigPanel(props: { projectId: string; config: Async<ProjectCon
     <div className="panel stack-lg">
       {locked && (
         <div className="lock-banner">
-          This project is locked — saving a spec change will invalidate the lock (a re-lock is required before promote).
+          This project is approved — saving a spec change puts this spec back in flux until it is approved again.
         </div>
       )}
       {cfg.profileResolvable === false && (
@@ -1545,7 +1443,7 @@ export function SpecsTab({
   const enc = encodeURIComponent(projectId);
   // Tree-wide validation lives at the tab level so results persist across spec
   // selection and render in the right rail (not inline, pushing the form down).
-  const [validation, setValidation] = useState<{ errors: any[]; warnings: any[] } | null>(null);
+  const [validation, setValidation] = useState<Validation | null>(null);
 
   // The picker tree stays live on the project channel (a spec write elsewhere
   // refetches it); the selected spec is loaded WITHOUT a channel so an in-flight
@@ -1649,12 +1547,20 @@ export function SpecsTab({
       const field = CODE_FIELD_MAP[i.code];
       if (field && map.get(field) !== 'error') map.set(field, 'warning');
     }
+    // A notice flags a field only when nothing stronger does, and in its own
+    // quiet tone — it never reads as a problem.
+    for (const i of validation.notices) {
+      if (i.specId !== selected.id) continue;
+      const field = CODE_FIELD_MAP[i.code];
+      if (field && !map.has(field)) map.set(field, 'notice');
+    }
     return map;
   }, [validation, selected]);
 
   async function runValidate() {
-    const res = await mcpCall<{ errors?: any[]; warnings?: any[] }>(projectId, 'sdd_validate_tree', {});
-    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [] });
+    const res = await mcpCall<{ errors?: any[]; warnings?: any[]; notices?: any[] }>(projectId, 'sdd_validate_tree', {});
+    // An instance older than the notice severity sends no notices list.
+    setValidation({ errors: res.errors ?? [], warnings: res.warnings ?? [], notices: res.notices ?? [] });
   }
 
   return (
@@ -1730,4 +1636,9 @@ export function SpecsTab({
       </AsyncView>
     </div>
   );
+}
+
+/** A technology entry's name: a bare string, or the `name` of a `{ name, matches }` entry (whose tokens the tag input keeps untouched). */
+function technologyLabel(tech: unknown): string {
+  return typeof tech === 'string' ? tech : String((tech as { name?: unknown })?.name ?? '');
 }

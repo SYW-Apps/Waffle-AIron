@@ -10,9 +10,12 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the pack source to an absolute path and require a pack entry: a missing path or a
-          directory without a pack entry file fails the command before anything is touched.
-        type: local
+          Resolve the pack source to an absolute path and require a pack entry (the core surface's
+          packDirEntry): a missing path or a directory without a pack entry file fails the command
+          before anything is touched.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packDirEntry
       - stepNumber: 2
         description: Probe-load the pack (scope-aware) to verify it parses BEFORE vendoring anything.
         type: local
@@ -42,59 +45,138 @@ methods:
         type: return
         outcome: global install complete
       - stepNumber: 8
+        description: 'Project vendoring requires a project: is this inside an initialized wairon project?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 9
         description: Project vendoring requires a project.
         type: branch
         condition: not inside an initialized wairon project
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
         description: Report and stop.
         type: return
         outcome: not-a-project error (suggests wairon init or --global); exit code 1
-      - stepNumber: 10
+      - stepNumber: 11
+        label: ask-gate
+        description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 16
+        onFalseStep: 12
+      - stepNumber: 12
+        label: measure
+        description: >-
+          Measure the pack before vendoring it: the probed manifest supplied as the candidate with
+          the path reference it would be registered under, since nothing is on disk yet — its
+          doctrine against wairon's defaults, the profiles of it that would govern, the findings
+          that change here
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 13
+        description: Print the impact report and ask whether to apply it
+        type: local
+      - stepNumber: 14
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 16
+      - stepNumber: 15
+        description: Stop without vendoring or registering anything
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 16
+        label: vendor
         description: Vendor the pack into .wai/packs/ under its basename (guarding against a self-copy).
         type: local
-      - stepNumber: 11
+      - stepNumber: 17
+        description: >-
+          Register the vendored ref in extensions.packs through the core portal: it is appended only
+          when absent, the write records useGlobalPacks itself, and the result says whether it was
+          added.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: registerPackRef
+      - stepNumber: 18
         description: First registration vs refresh.
         type: branch
-        condition: the vendored ref is not yet registered in extensions.packs
-        onTrueStep: 12
-        onFalseStep: 14
-      - stepNumber: 12
-        description: >-
-          Append the ref to extensions.packs, save project.yaml, and report the pack as vendored and
-          registered.
+        condition: the ref was newly registered
+        onTrueStep: 19
+        onFalseStep: 21
+      - stepNumber: 19
+        description: Report the pack as vendored and registered.
         type: local
-      - stepNumber: 13
+      - stepNumber: 20
         description: Skip the refresh arm.
         type: jump
-        toStep: 15
-      - stepNumber: 14
+        toStep: 22
+      - stepNumber: 21
         description: 'Already registered: refresh the vendored copy from the source and report the refresh.'
         type: local
-      - stepNumber: 15
+      - stepNumber: 22
         description: 'Print commit guidance: commit .wai/ so CI and every clone enforce the pack''s doctrine.'
         type: local
     detail: intent
     intent: >-
       Install a pack. A .wpack/.zip source is inspected + safely extracted via the SDK portal into
-      .wai/packs/<name>/ (or the global packs dir under --global) and the directory registered in
-      extensions.packs; a plain file/dir source is vendored under its basename as before. The pack
-      is probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
-      fails with a clear error and leaves no partial registration.
+      .wai/packs/<name>/ (or the global packs dir under --global); a plain file/dir source is
+      vendored under its basename as before. A project install refuses outside an initialized
+      project (the core portal's projectConfigExists); unless the run is unattended (--yes, or no
+      terminal), it then measures the probed manifest as a supplied candidate through
+      validator_portal.measurePackImpact, prints the report and asks — anything but yes returns with
+      nothing vendored or registered; a refresh of an already-registered pack is measured the same
+      way, as an update. It registers the directory ref through the core portal's registerPackRef,
+      which appends it only when absent and records useGlobalPacks itself; a false result means the
+      ref was already registered, and the pack is reported as refreshed instead. The pack is
+      probe-loaded to verify it parses before anything is registered; a malformed/unsafe source
+      fails with a clear error and leaves no partial registration. --global selects nothing for any
+      project and shows no report.
   - name: listPacks
     narrative:
       - stepNumber: 1
         description: >-
-          Probe each configured pack ref — the global tier (packs dir) then the project tier
-          (extensions.packs) — for its manifest summary (name, scope, what it provides) and any load
-          error, via the core extension loader's per-pack probe.
-        type: local
+          Is this inside an initialized wairon project? Outside one, nothing is read and only the
+          global tier is listed.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
       - stepNumber: 2
+        description: >-
+          Inside a project, read its configuration through the core portal: the declared pack
+          entries and whether machine-wide packs apply.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 3
+        description: >-
+          Decide whether machine-wide packs apply to this configuration (off by default; an absent
+          configuration reads as the defaults).
+        type: call
+        targetComponent: extension_portal
+        targetMethod: globalPacksEnabled
+      - stepNumber: 4
+        description: >-
+          Probe each configured pack ref — the global tier (packs dir) then the project tier (the
+          loaded extensions.packs entries) — for its manifest summary (name, scope, what it
+          provides) and any load error, via the core extension loader's per-pack probe.
+        type: local
+      - stepNumber: 5
         description: >-
           Print each pack with its name, scope, version, and what it provides (profiles, languages,
           rules, skills, patterns), plus any load errors.
         type: local
+    detail: intent
+    intent: >-
+      Prints the global/store tier and the project tier — the latter only inside an initialized
+      project (the core portal's projectConfigExists), read from the project configuration through
+      the core portal. A project entry is shown under its declared label — a path for a legacy ref,
+      name[@version] for a selection — probed at wherever it resolves, with a selection annotated as
+      resolving to its store or bundle location. A declared selection that resolves to nothing is
+      printed as an error, because the project is not getting doctrine it asked for. Notes where
+      pack rules surface and how to add packs.
   - name: removePack
     narrative:
       - stepNumber: 1
@@ -126,54 +208,100 @@ methods:
         type: return
         outcome: no such global pack; error with exit code 1
       - stepNumber: 7
+        description: 'Project deregistration requires a project: is this inside an initialized wairon project?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 8
         description: Project deregistration requires a project.
         type: branch
         condition: not inside an initialized wairon project
-        onTrueStep: 8
-        onFalseStep: 9
-      - stepNumber: 8
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
         description: Report and stop.
         type: return
         outcome: not-a-project error (suggests --global); exit code 1
-      - stepNumber: 9
-        description: >-
-          Probe each ref registered in extensions.packs until one matches the requested name, the
-          raw ref, or its basename.
-        type: local
       - stepNumber: 10
+        description: Read the project configuration through the core portal for its registered pack entries.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 11
+        description: >-
+          Probe each legacy path ref among the loaded entries until one matches the requested name,
+          the raw ref, or its basename; by-name selections are skipped, because `pack unuse` drops
+          those.
+        type: local
+      - stepNumber: 12
         description: Gate on the scan result.
         type: branch
         condition: a matching project pack was found
-        onTrueStep: 11
-        onFalseStep: 15
-      - stepNumber: 11
-        description: Deregister the ref from extensions.packs and save project.yaml.
+        onTrueStep: 13
+        onFalseStep: 22
+      - stepNumber: 13
+        description: An unattended run (--yes, or no terminal) removes without the report
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 18
+        onFalseStep: 14
+      - stepNumber: 14
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the matched path reference as the candidate with
+          `remove` — the pack's doctrine against wairon's defaults and the findings that change here
+          once it no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 15
+        description: Print the impact report and ask whether to remove
         type: local
-      - stepNumber: 12
+      - stepNumber: 16
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Stop without deregistering or deleting anything
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 18
+        label: deregister
+        description: >-
+          Deregister exactly the matched legacy ref through the core portal; by-name selections are
+          untouched.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: deregisterPackRef
+      - stepNumber: 19
         description: Only vendored files are deleted.
         type: branch
         condition: >-
           the ref's resolved files lie inside .wai/packs (containment guard — never delete
           user-owned paths)
-        onTrueStep: 13
-        onFalseStep: 14
-      - stepNumber: 13
+        onTrueStep: 20
+        onFalseStep: 21
+      - stepNumber: 20
         description: Done.
         type: return
         outcome: deregistered and vendored files deleted (reported)
-      - stepNumber: 14
+      - stepNumber: 21
         description: Done, files preserved.
         type: return
         outcome: deregistered; files outside .wai/packs left in place (reported)
-      - stepNumber: 15
+      - stepNumber: 22
         description: Report and stop.
         type: return
         outcome: no matching project pack registered; error with exit code 1
     detail: intent
     intent: >-
-      Deregister the named pack from project.yaml (or the global packs registration when --global)
-      and delete its vendored files under .wai/packs. Removing a pack that is not present is
-      reported to the user, not treated as an error.
+      Deregister the named legacy pack ref from the project configuration through the core portal —
+      refusing outside an initialized project (projectConfigExists), reading the registered entries
+      (loadProjectConfig), and dropping exactly the matched path ref (deregisterPackRef), which
+      leaves by-name selections untouched — and delete its vendored files under .wai/packs, leaving
+      files outside it in place; under --global, delete the matching pack from the global packs
+      directory instead. A pack that is not found is an error: the command exits with code 1.
   - name: initPack
     narrative:
       - stepNumber: 1
@@ -205,17 +333,584 @@ methods:
       Build a .wpack archive from a pack directory via the SDK portal and write it to
       <name>-<version>.wpack (or --out), reporting the path and size. The SDK seals integrity and
       validates the envelope against the inner pack manifest before emitting the archive.
+  - name: installPack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          An HTTP(S) source is downloaded to a temporary archive first, so a remote pack rejoins the
+          identical local-archive path below instead of getting its own validation route.
+        type: local
+      - stepNumber: 2
+        description: >-
+          A .wpack/.zip source is extracted into a temp directory through the SDK portal's hardened
+          path (envelope inspection, code-pack refusal, extraction limits); a plain directory source
+          is used as-is, and a bare pack FILE is refused because the store versions directories.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractPack
+      - stepNumber: 3
+        description: >-
+          Read the bound project's configuration, when the command runs inside one: does it select
+          this pack's name without a version pin?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: >-
+          Read the latest version of the name installed now: the one a floating selection resolves
+          to today
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 5
+        description: >-
+          Only an install that moves this project's floating selection is an update; and an
+          unattended run (--yes, or no terminal) applies without the report
+        type: branch
+        condition: >-
+          not inside a project, or the project does not select the name floating, or the new version
+          would not become the latest installed, or the run is unattended
+        onTrueStep: 10
+        onFalseStep: 6
+      - stepNumber: 6
+        label: measure-update
+        description: >-
+          Measure the update before the store write: the project's floating selection as the
+          candidate, with the extracted manifest supplied — the doctrine against wairon's defaults,
+          what the replaced version changed, the findings that change here
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 7
+        description: Print the impact report and ask whether to install
+        type: local
+      - stepNumber: 8
+        description: Installing a pack that changes a project's doctrine is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 10
+      - stepNumber: 9
+        description: 'Stop without installing: remove the temporary extraction and write nothing to the store'
+        type: return
+        outcome: declined; nothing installed
+      - stepNumber: 10
+        label: install
+        description: >-
+          Install the materialized directory into the pack store via the core surface, recording the
+          origin it came from.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: installPackFromDirectory
+      - stepNumber: 11
+        description: >-
+          Report what was installed (name, version, path, digest) and state plainly that it applies
+          to NOTHING until a project selects it — the distinction the old --global install never
+          made. When it moved this project's floating selection, say so instead: the selection now
+          resolves to this version; an unattended run adds that the impact was not shown and names
+          `wairon pack impact <name>`.
+        type: local
+      - stepNumber: 12
+        description: >-
+          Warn when the origin is a local path rather than a fetchable URL: a selection recorded
+          from it cannot be resolved by CI or a fresh clone.
+        type: local
+    detail: calls-only
+  - name: uninstallStorePack
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Split the name@version spec and remove the pack from the store via the core surface: that
+          version, or every version when none is named.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: uninstallPack
+      - stepNumber: 2
+        description: Did the removal match anything?
+        type: branch
+        condition: nothing in the store matched the spec
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: Error naming the store directory that holds no such pack.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 4
+        description: Stop.
+        type: return
+        outcome: no-such-pack error; nothing removed
+      - stepNumber: 5
+        description: >-
+          Report the removal and warn that any project still selecting the pack will now fail its
+          gate with PACK_NOT_INSTALLED — a loud failure, not a silently weakened rule set.
+        type: local
+    detail: intent
+    intent: >-
+      Splits the name@version spec and removes the pack from the store via the core surface — that
+      version, or every version when none is named. Reports the removal, or errors naming the store
+      directory when nothing matched, and warns that a project still selecting the pack will now
+      fail its gate with PACK_NOT_INSTALLED rather than quietly losing the doctrine.
+  - name: whichPack
+    narrative:
+      - stepNumber: 1
+        description: Does the spec resolve anywhere?
+        type: branch
+        condition: neither a committed bundle nor the store resolves the spec
+        onTrueStep: 2
+        onFalseStep: 5
+      - stepNumber: 2
+        description: Error naming the store directory that holds no such pack.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 3
+        description: Name the installed packs so a typo is obvious.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 4
+        description: Stop.
+        type: return
+        outcome: no-such-pack error
+      - stepNumber: 5
+        description: >-
+          Print where the pack resolves for THIS project, in the order a project resolves it: a
+          selection this project commits a bundle of resolves to that bundled copy (printed as
+          bundled, with the store copy noted when there is one), else the store's resolved version
+          (marked when it came from latest-by-default), path, content digest, and recorded origin;
+          when nothing resolves, name the installed packs so a typo is obvious.
+        type: local
+    detail: intent
+    intent: >-
+      Splits the name@version spec. Inside a project that selects the pack and commits a bundle of
+      it, answers the bundled copy first — the copy validate, `pack list` and a fresh clone with an
+      empty store resolve — naming its path and noting whether the store also holds it. Otherwise
+      resolves against the store via the core surface — the exact version when pinned, otherwise the
+      latest installed — and prints the resolved version (marked when it came from
+      latest-by-default), path, content digest, and recorded origin, flagging an unrecorded origin;
+      when nothing resolves it names the installed packs so a typo is obvious.
+  - name: usePack
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Selecting a pack requires a project.
+        type: branch
+        condition: not inside an initialized wairon project
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report and stop.
+        type: return
+        outcome: not-a-project error (suggests wairon init); exit code 1, nothing written
+      - stepNumber: 4
+        description: Resolve the requested name (and optional version) against the pack store.
+        type: local
+      - stepNumber: 5
+        description: A selection must name an installed pack.
+        type: branch
+        condition: no installed pack matches
+        onTrueStep: 6
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Read the installed packs to name them beside the store directory (packStoreDir) in the
+          error.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 7
+        description: Report the installed pack names and stop.
+        type: return
+        outcome: no-such-pack error; exit code 1, nothing written
+      - stepNumber: 8
+        description: >-
+          Build the selection to record: the name; the resolved version when one was requested or
+          --pin was passed; the digest under --pin; the source from --source or the recorded origin,
+          only when it is a fetchable URL; the bundle flag when asked
+        type: local
+      - stepNumber: 9
+        description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
+        type: branch
+        condition: '--yes was passed or stdin/stdout is not a terminal'
+        onTrueStep: 14
+        onFalseStep: 10
+      - stepNumber: 10
+        description: >-
+          Measure the selection before writing it: the pack's doctrine against wairon's defaults,
+          the profiles of it that would govern, and the findings that change on this project (a dry
+          validate of the current and the candidate configuration — nothing is written)
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 11
+        description: >-
+          Print the impact report — on an update, also what the replaced version changed — and ask
+          whether to apply it
+        type: local
+      - stepNumber: 12
+        description: Installing a pack is intentional
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Stop without writing
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 14
+        label: record
+        description: >-
+          Record the selection: any same-name selection is dropped and this one is appended last,
+          the highest precedence (project_config.withPack's reading, the one the report measured).
+          The result says whether a selection was replaced.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: upsertPackSelection
+      - stepNumber: 15
+        description: >-
+          Report "Re-selected" when a selection was replaced and "Selected" otherwise — an
+          unattended run adds that it applied without showing the impact and names `wairon pack
+          impact <name>`; note bundling under --bundle, warn when no fetchable source was recorded
+          and no bundle was requested, and remind to commit .wai/project.yaml.
+        type: return
+        outcome: selected or re-selected
+    detail: calls-only
+    intent: >-
+      Refuses outside a wairon project (the core portal's projectConfigExists). Resolves the
+      requested name (and optional version) against the store via the core surface, erroring with
+      the installed names when nothing matches. Builds the selection: the name always; the resolved
+      version when one was requested or --pin was passed; the content digest under --pin; the source
+      from --source or the store's recorded origin, but ONLY when that origin is a fetchable URL;
+      and the bundle flag when asked. Unless the run is unattended (--yes, or no terminal to ask
+      on), it measures the selection through validator_portal.measurePackImpact and prints the
+      report — the pack's changes against wairon's defaults, the profiles of it that would govern,
+      the findings that change here — and asks to apply; anything but yes returns with nothing
+      written. Records it through the core portal's upsertPackSelection, which drops any same-name
+      selection and appends this one last — the highest precedence — and reports "Re-selected" when
+      that replaced a selection and "Selected" otherwise; an unattended run says it applied without
+      showing the impact and names `wairon pack impact`. Warns when no fetchable source was recorded
+      and no bundle was requested, because CI and a fresh clone would then be unable to obtain the
+      pack.
+  - name: unusePack
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Deselecting a pack requires a project.
+        type: branch
+        condition: not inside an initialized wairon project
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report and stop.
+        type: return
+        outcome: not-a-project error (suggests wairon init); exit code 1, nothing written
+      - stepNumber: 4
+        description: 'Read this project''s configuration: does it select a pack of that name?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Nothing to measure when nothing is selected (the deselect then reports not-selected), and
+          an unattended run (--yes, or no terminal) deselects without the report
+        type: branch
+        condition: no selection of that name, or the run is unattended
+        onTrueStep: 10
+        onFalseStep: 6
+      - stepNumber: 6
+        label: measure-removal
+        description: >-
+          Measure the removal before writing it: the stored selection as the candidate with `remove`
+          — the pack's doctrine against wairon's defaults and the findings that change here once it
+          no longer applies
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 7
+        description: Print the impact report and ask whether to deselect
+        type: local
+      - stepNumber: 8
+        description: Removing a pack is as intentional as adding one
+        type: branch
+        condition: the answer is not yes
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Stop without writing
+        type: return
+        outcome: declined; nothing written
+      - stepNumber: 10
+        label: deselect
+        description: >-
+          Deselect the pack: only same-name selections are dropped — legacy path refs are untouched
+          — and nothing is written when none matched. The result says whether anything was dropped.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: removePackSelection
+      - stepNumber: 11
+        description: Only a selected pack can be deselected.
+        type: branch
+        condition: nothing was dropped
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: Report that this project does not select a pack of that name.
+        type: return
+        outcome: not-selected error; exit code 1, nothing written
+      - stepNumber: 13
+        description: >-
+          Report the deselection: the pack remains installed in the store, and its profiles, rules,
+          and assertions no longer apply here; an unattended run adds that it applied without
+          showing the impact and names `wairon pack impact <name>`.
+        type: return
+        outcome: deselected
+    detail: calls-only
+    intent: >-
+      Refuses outside a wairon project (the core portal's projectConfigExists). Unless the run is
+      unattended (--yes, or no terminal) and when the project selects a pack of that name, it
+      measures the removal through validator_portal.measurePackImpact (the stored selection with
+      `remove`), prints the report and asks — anything but yes returns with nothing written.
+      Deselects the pack through the core portal's removePackSelection, which drops only same-name
+      selections — legacy path refs are untouched, `pack remove` handles those — and writes nothing
+      when none matched. A false result is the "this project does not select a pack named" error
+      with exit code 1; otherwise it states plainly that the pack remains installed in the store
+      while its profiles, rules, and assertions no longer apply here.
+  - name: bundlePack
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Bundling requires a project.
+        type: branch
+        condition: not inside an initialized wairon project
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report and stop.
+        type: return
+        outcome: not-a-project error (suggests wairon init); exit code 1, nothing written
+      - stepNumber: 4
+        description: Read the project's pack selections.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Pick the targets: the named selection, every selection under --all, or those already
+          marked for bundling. When none match, report the error (exit code 1); nothing is then
+          bundled.
+        type: local
+      - stepNumber: 6
+        description: Bundle each target.
+        type: loop
+        loopKind: forEach
+        over: the targets
+        endStep: 7
+      - stepNumber: 7
+        description: >-
+          Resolve the pack against the STORE specifically, so an existing bundle cannot satisfy the
+          lookup. A pack that is not installed is an error naming the store (exit code 1) and the
+          next target still proceeds; otherwise replace any previous copy at
+          .wai/packs/<name>/<version>/, copy the pack in, and print the written path.
+        type: local
+      - stepNumber: 8
+        description: Only bundled packs are recorded.
+        type: branch
+        condition: nothing was bundled
+        onTrueStep: 9
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Stop without writing the configuration.
+        type: return
+        outcome: nothing bundled; configuration untouched
+      - stepNumber: 10
+        description: 'Record every bundled pack''s exact version and bundle: true on its selection, in one write.'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: markSelectionsBundled
+      - stepNumber: 11
+        description: >-
+          Report the bundled packs and remind to commit .wai/: a clone and CI now apply this
+          doctrine with no pack store and no network.
+        type: return
+        outcome: bundled
+    detail: calls-only
+    intent: >-
+      Refuses outside a wairon project (the core portal's projectConfigExists). Reads the project's
+      selections through the core portal (loadProjectConfig) and picks the targets: the named
+      selection, every selection under --all, or (with no argument) those already marked for
+      bundling — erroring when nothing matches. For each target, resolves the pack against the STORE
+      specifically (a bundle is what is being created, so the existing bundle must not satisfy the
+      lookup), replaces any previous copy at .wai/packs/<name>/<version>/, and copies the pack in; a
+      pack that is not installed is an error naming the store, and the remaining targets still
+      proceed. Then, when anything was bundled, records every bundled pack's exact version and
+      bundle: true on its selection in ONE core portal markSelectionsBundled call, so resolution
+      prefers the committed copy and the declared intent can never drift from the committed bytes.
+      Reports each written path plus the reminder to commit .wai/.
+  - name: syncPacks
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: Sync writes into this project's store selections, so it needs a project.
+        type: branch
+        condition: not inside a wairon project
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse, naming `wairon init`.
+        type: return
+        outcome: refused — no project
+      - stepNumber: 4
+        description: Read the project's pack selections through the core portal.
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Keep only the by-name selections that resolve to NOTHING today. An already-installed or
+          bundled pack is left untouched, which is what makes `pack sync` safe to run
+          unconditionally in CI.
+        type: local
+      - stepNumber: 6
+        description: A project may select no packs at all.
+        type: branch
+        condition: the project selects no packs
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Report that there is nothing to sync.
+        type: return
+        outcome: nothing selected
+      - stepNumber: 8
+        description: Everything may already be available.
+        type: branch
+        condition: every selection already resolves
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Report that all selected packs are already available.
+        type: return
+        outcome: already available
+      - stepNumber: 10
+        description: Fetch each missing selection in turn.
+        type: loop
+        loopKind: forEach
+        over: the unresolvable selections
+        endStep: 13
+      - stepNumber: 11
+        description: >-
+          Refuse this selection when it records no source, carries a {version} placeholder but pins
+          no version, or expands to something that is not a fetchable URL — each naming the manual
+          route. Otherwise expand {version} and ${VAR}, so a private URL takes its token from a CI
+          secret without ever being committed.
+        type: local
+      - stepNumber: 12
+        description: >-
+          Download the archive to a temporary file and extract it through the SDK portal's hardened
+          path — the same envelope inspection, code-pack refusal, and extraction limits a local
+          install gets, so a remote pack has no separate validation route.
+        type: call
+        targetComponent: sdk_portal
+        targetMethod: extractPack
+      - stepNumber: 13
+        label: sync_done
+        description: >-
+          Install into the store via the core surface, recording the ORIGINAL source template rather
+          than the expanded URL so a later sync re-expands it, and verify a pinned integrity digest
+          immediately — a substituted pack is caught here rather than later by the gate. One failed
+          selection never stops the others, and every temporary file is removed on both paths.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: installPackFromDirectory
+      - stepNumber: 14
+        description: Report how many packs were synced.
+        type: return
+        outcome: the synced count
+    detail: full
+    intent: >-
+      Refuses outside a wairon project (the core portal's projectConfigExists). Reads the project's
+      selections through the core portal and keeps only those that resolve to nothing today — an
+      already-installed or bundled pack is left untouched, so sync is safe to run unconditionally in
+      CI. For each missing one: refuses when it records no source, when its source carries a
+      {version} placeholder but the selection pins no version, or when the expanded source is not a
+      fetchable URL, each with the manual route named. Otherwise expands {version} and ${VAR} (so a
+      private URL takes its token from a CI secret without being committed), downloads the archive
+      to a temp file, extracts it through the SDK's hardened path, and installs it into the store
+      recording the ORIGINAL source template rather than the expanded URL. A pinned integrity digest
+      is checked immediately, so a substituted pack is caught at install rather than later by the
+      gate. One failed selection never stops the others; every temp file is cleaned up on both
+      paths.
+  - name: impactPack
+    narrative:
+      - stepNumber: 1
+        description: Is this inside an initialized wairon project?
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: projectConfigExists
+      - stepNumber: 2
+        description: An impact is measured on a project
+        type: branch
+        condition: not inside an initialized wairon project
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Report and stop
+        type: return
+        outcome: not-a-project error (suggests wairon init); exit code 1
+      - stepNumber: 4
+        label: resolve
+        description: Resolve the requested name (and optional version) against the pack store
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 5
+        description: Only an installed pack can be measured
+        type: branch
+        condition: no installed pack matches
+        onFalseStep: 8
+      - stepNumber: 6
+        description: Read the installed packs to name them beside the store directory in the error.
+        type: call
+        targetComponent: extension_portal
+        targetMethod: listInstalledPacks
+      - stepNumber: 7
+        description: Report the installed pack names and stop
+        type: return
+        outcome: no-such-pack error; exit code 1
+      - stepNumber: 8
+        label: config
+        description: 'Read this project''s configuration: does it already apply the pack exactly as asked?'
+        type: call
+        targetComponent: project_config_portal
+        targetMethod: loadProjectConfig
+      - stepNumber: 9
+        description: >-
+          Build the candidate: when the pack is applied exactly as asked, its stored entry with
+          `remove` (the report then reads as what the pack accounts for now); otherwise the
+          selection `pack use` would record for the request
+        type: local
+      - stepNumber: 10
+        description: Measure it, writing nothing
+        type: call
+        targetComponent: validator_portal
+        targetMethod: measurePackImpact
+      - stepNumber: 11
+        description: >-
+          Print the report: the doctrine changes grouped by profile, the profiles that govern here,
+          and the introduced, resolved and regraded findings with both runs' totals
+        type: return
+        outcome: impact shown; nothing written
+    detail: calls-only
 detail: calls-only
-lint:
-  allow:
-    - code: UNREALIZED_DEPENDENCY
-      reason: >-
-        cli_packs_adapter imports the published @wairon/sdk surface (`import { scaffoldPack,
-        buildPack, extractPack } from '@wairon/sdk'`), but sdd_sdk is a SEPARATE npm workspace
-        package (its sourcePaths are sdk/src/*). The Level-2 dependency analyzer resolves only
-        RELATIVE specifiers against the mapped source files, so a legitimate cross-package import of
-        the published portal reads as unrealized. The edge is real and correct — an analyzer
-        limitation at the workspace-package boundary.
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-07-21T18:45:19.246Z'
+updatedAt: '2026-10-06T19:11:59.884Z'

@@ -2,7 +2,8 @@ id: spec_loader_impl
 name: Spec Loader Implementation
 description: >-
   Pure repository facade: every method forwards 1:1 to the owned face that does the work — loads to
-  the Spec Index, saves and the round-trip dry run to the Spec Registry.
+  the Spec Index, export tables to the Export Index, saves and the round-trip dry run to the Spec
+  Registry.
 contract: ispec_loader
 sourcePath: src/core/specs.ts
 methods:
@@ -34,13 +35,6 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: loadSubsystemSpec
-  - name: saveSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Forward 1:1 to the registry write face
-        type: call
-        targetComponent: spec_registry
-        targetMethod: saveSubsystemSpec
   - name: loadComponentSpecs
     narrative:
       - stepNumber: 1
@@ -125,8 +119,237 @@ methods:
         type: call
         targetComponent: spec_file_store
         targetMethod: findChainingParent
+  - name: invalidateCache
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: invalidateCache
+    symbol: invalidateSpecCache
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: resolveSubprojectForNamespace
+  - name: inspectChainedRoots
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: inspectChainedRoots
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadTypeSpec
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: load
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: save
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: delete
+  - name: resolveSubsystemExports
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the export read face
+        type: call
+        targetComponent: export_index
+        targetMethod: resolveSubsystemExports
+  - name: resolveProjectExports
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the export read face
+        type: call
+        targetComponent: export_index
+        targetMethod: resolveProjectExports
+  - name: exportUsage
+    narrative:
+      - stepNumber: 1
+        description: Forward to the Export Index
+        type: call
+        targetComponent: export_index
+        targetMethod: usage
+  - name: graph
+    narrative:
+      - stepNumber: 1
+        description: Forward to the Project Family Index
+        type: call
+        targetComponent: project_family_index
+        targetMethod: graph
+  - name: deleteMount
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: deleteMount
+  - name: normalizeReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: normalizeReferences
+  - name: rewriteReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: rewriteReferences
+  - name: pinnedUsage
+    narrative:
+      - stepNumber: 1
+        description: Forward to the Export Index
+        type: call
+        targetComponent: export_index
+        targetMethod: pinnedUsage
+  - name: subsystemPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: subsystemPath
+    symbol: getSubsystemPath
+  - name: componentPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: componentPath
+    symbol: getComponentPath
+  - name: interfacePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: interfacePath
+    symbol: getInterfacePath
+  - name: implementationPath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: implementationPath
+    symbol: getImplementationPath
+  - name: snapshot
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: snapshot
+    symbol: snapshotSpecFiles
+  - name: signatureFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: signatureFacts
+  - name: typeSpellingFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: typeSpellingFacts
+  - name: retiredReachFacts
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: retiredReachFacts
+  - name: typePath
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: typePath
+    symbol: getTypePath
+  - name: lockTree
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the registry write face
+        type: call
+        targetComponent: spec_registry
+        targetMethod: lockTree
+  - name: unlockTree
+    narrative:
+      - stepNumber: 1
+        description: Release the write lock under the bound project root
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: unlockTree
+  - name: readPinnedSpec
+    narrative: []
+    detail: intent
+    intent: >-
+      Splits the id at its first `::`: the head must be an alias the bound project declares as an
+      external (a member's alias is not one — its specs are read under its key), the rest a public
+      name. Reads that alias's pinned snapshot (.wai/externals/<alias>.yaml) through the file store
+      and parses it as a surface snapshot; an absent or unreadable pin answers null. For a component
+      or an interface asked for (or no kind), answers the contract entry whose public name matches;
+      for a type, the exported type under that public name (its definition from the snapshot's type
+      closure). The answer carries the alias, the producer project, the snapshot file and its
+      StateId beside the entry, and is never cached or written: it is the pin's record, read-only.
+    calls:
+      - spec_file_store.read
+  - name: inspectLock
+    narrative:
+      - stepNumber: 1
+        description: Read the write lock under the bound project root
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: inspectLock
+  - name: readProjectSystem
+    narrative: []
+    detail: intent
+    intent: >-
+      A bare id answers this project's own L0 (the loader's L0 read) when it is `system`, the L0's
+      name or the project's effective id, and otherwise the names it is read by. An `alias::name` id
+      splits at its last `::`: the head is an alias of the bound project (bound through its alias
+      table to a member's key) or a member's key itself, the rest the name asked for. A member
+      project root the scan followed under that key answers with its own L0, read from its root's L0
+      file through the file store and parsed as an L0 — when the name is `system`, that L0's name or
+      the member's project id; any other name, an unreadable L0 or none at all answers the reason
+      instead, naming the names the member's L0 is read by. A part of the bound project answers that
+      it has no L0 of its own (its subsystems are this project's, under this project's L0). An
+      external with a readable pin answers that its L0 is not held here, naming the public names its
+      pin exports; a declared external without one, that it is read once pinned; anything else, that
+      the prefix is no member, part or external. Never one project's L0 under another's id, never
+      cached, never written.
+    calls:
+      - spec_file_store.read
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-07-24T18:02:05.760Z'
+updatedAt: '2026-10-15T16:06:32.539Z'

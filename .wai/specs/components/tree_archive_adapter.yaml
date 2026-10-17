@@ -1,0 +1,21 @@
+id: tree_archive_adapter
+name: Tree Archive Adapter
+description: >-
+  The sdd_core client adapter onto the @wairon/sdk published surface (sdk_portal) for spec-tree
+  archives, plus the filesystem moves an import needs. Forwards three archive capabilities — build a
+  .waitree from a set of tree roots, inspect one without extracting, and extract one under enforced
+  limits — so core never depends on the SDK's internals or on a ZIP library directly. Owns the small
+  set of directory operations that make an import recoverable and near-atomic: probe whether a
+  destination already holds a spec tree, allocate a staging directory beside it, and swap a fully
+  extracted staging tree into place, moving any previous tree aside to a timestamped backup in the
+  same operation. Extraction therefore never writes into a live tree — a rejected or corrupt archive
+  leaves the destination exactly as it was, and a completed replacement is undone by moving one
+  directory back.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn:
+  - sdk_portal
+status: complete
+createdAt: '2026-08-12T17:23:52.913Z'
+updatedAt: '2026-08-12T17:26:32.523Z'

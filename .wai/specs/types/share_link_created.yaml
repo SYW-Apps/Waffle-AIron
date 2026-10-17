@@ -14,5 +14,7 @@ fields:
     description: The raw unguessable token (shown once).
     optional: false
 methods: []
+sourcePath: src/server/types.ts
+symbol: ShareLinkCreated
 createdAt: '2026-07-17T22:32:45.511Z'
-updatedAt: '2026-07-17T22:32:45.575Z'
+updatedAt: '2026-10-07T06:28:57.861Z'

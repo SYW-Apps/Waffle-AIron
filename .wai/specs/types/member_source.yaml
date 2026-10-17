@@ -1,0 +1,16 @@
+kind: value-object
+id: member_source
+name: MemberSource
+description: >-
+  A member's location in its one string grammar, held as a string: a contained path
+  (`services/scheduler`), a sibling checkout (`../admin`), a git repository at a commit
+  (`git@host:acme/payments.git#<commit>`) or a hosted record (`hosted:marketplace`). It is the
+  shorthand a `members` entry may be instead of its long form, which carries the same location as
+  its `source`.
+subsystem: sdd_core
+fields: []
+methods: []
+sourcePath: src/models/project.ts
+holds: string
+createdAt: '2026-10-04T10:27:21.889Z'
+updatedAt: '2026-10-04T11:22:02.009Z'

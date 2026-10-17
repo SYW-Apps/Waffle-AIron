@@ -1,8 +1,11 @@
 id: mcp_orchestrator_impl
 name: MCP Orchestrator Implementation
 description: >-
-  The sdd_* tool workflows: input verification against existing parents, spec persistence via the
-  core client adapter, and conformance runs via the validator client adapter. Realized today inside
+  The sdd_* tool workflows: turning each tool's arguments into the write the authoring seam
+  performs, reads through the core client adapter, and conformance runs via the validator client
+  adapter. A tool knows its own input schema, so it states which fields that input can express; what
+  a write does with that knowledge — status, carry, clear, removal, the gate, the tests it
+  invalidates — is decided by the seam, identically for every door. Realized today inside
   src/mcp/server.ts tool handlers (pending the code-side split).
 contract: imcp_orchestrator
 sourcePath: src/mcp/server.ts
@@ -10,156 +13,146 @@ methods:
   - name: initializeSystem
     narrative:
       - stepNumber: 1
-        description: Persist the L0 system spec via the core client adapter
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveSystemSpec
-    symbol: sdd_initialize_system
-  - name: addComponent
-    narrative:
-      - stepNumber: 1
-        description: Verify the parent subsystem exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Persist the L2 component spec via the core client adapter
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveComponentSpec
-    symbol: sdd_add_component
-  - name: defineInterface
-    narrative:
-      - stepNumber: 1
-        description: Verify the owning component exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadComponentSpec
-      - stepNumber: 2
-        description: Persist the L3 interface spec via the core client adapter
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveInterfaceSpec
-    symbol: sdd_define_interface
-  - name: writeNarrative
-    narrative:
-      - stepNumber: 1
-        description: Verify the contract interface exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadInterfaceSpec
-      - stepNumber: 2
-        description: >-
-          Resolve symbolic step-label references (*Label twins of the jump-by-number flow fields)
-          against the authored steps' label anchors, rejecting the write on unknown or duplicate
-          labels so a typo never becomes a dangling numeric jump
-        type: local
-      - stepNumber: 3
-        description: Persist the L4 implementation spec via the core client adapter
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: saveImplementationSpec
-    symbol: sdd_write_narrative
-  - name: validateTree
-    narrative:
-      - stepNumber: 1
-        description: Run the conformance gate via the validator client adapter
-        type: call
-        targetComponent: mcp_validator_adapter
-        targetMethod: validateSddTree
-    symbol: sdd_validate_tree
-  - name: getStatus
-    narrative:
-      - stepNumber: 1
-        description: Load subsystem specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: Load component specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadComponentSpecs
-      - stepNumber: 3
-        description: Load interface specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 4
-        description: Load implementation specs for the dashboard
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 5
-        description: Compose the hierarchical completeness report
-        type: local
-    symbol: sdd_get_status
-  - name: addSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Verify the system spec exists (parent gate)
+        description: Read the L0 the bound tree already holds, if any, through the core client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
       - stepNumber: 2
-        description: Route external subprojects through the chained-subsystem path
+        description: >-
+          Decide whether this session may write the bound tree's L0: a session opened in a subfolder
+          binds UPWARD to the project above it, and re-initializing from there would replace that
+          project's name, vision, boundaries, requirements and targetLanguage
         type: branch
-        condition: the subsystem spec carries a projectPath
-        onTrueStep: 3
-        onFalseStep: 5
+        condition: >-
+          the bound tree holds an L0 and the session's folder (the folder the stdio session was
+          opened in, or the client's workspace root) is not the bound project's root
+        onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Scaffold the child project and wire the parent subsystem (idempotent when the child
-          already exists)
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: createChainedSubsystem
-      - stepNumber: 4
-        description: External subproject subsystem created and wired
+          Refuse, writing nothing: name the bound root and the L0 it holds, and the next step
+          `wairon init` names for the same folder — from the root, `wairon member add <alias> <path>
+          --project` makes the folder a member project designed from its own root — or open the
+          session at the root to re-author this L0 there
         type: return
-        outcome: external subsystem created
+        outcome: refused
+      - stepNumber: 4
+        description: >-
+          State the restatement: the L0 as the tool's arguments give it, and the fields this tool's
+          input can express
+        type: local
       - stepNumber: 5
-        description: Persist the in-tree L1 subsystem spec via the core client adapter
+        description: >-
+          Write it through the authoring client adapter, which re-authors an existing L0 in place
+          and carries what this input cannot express (databases, the project gateway
+          publicInterfaces, diagram defaults)
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 6
+        description: >-
+          Answer with the receipt: the sentence and its notices as text, the receipt itself as
+          structured content
+        type: return
+        outcome: written
+    symbol: sdd_initialize_system
+  - name: addComponent
+    narrative:
+      - stepNumber: 1
+        description: 'An Adapter that states no transport: read the components its dependsOn names'
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: saveSubsystemSpec
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          When the Portals among them share one transport, the Adapter takes it — it calls their
+          verbs over it — and the receipt says it was inferred; none, or Portals of several
+          transports, leaves it unstated
+        type: local
+      - stepNumber: 3
+        description: >-
+          State the restatement: the component as the tool's arguments give it, the fields this
+          tool's input can express, and the status stated, if any
+        type: local
+      - stepNumber: 4
+        description: >-
+          Write it through the authoring client adapter, which requires the subsystem and judges the
+          candidate against the intrinsic rules before anything reaches disk
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 5
+        description: Answer with the receipt
+        type: return
+        outcome: written
+    symbol: sdd_add_component
+  - name: defineInterface
+    narrative:
+      - stepNumber: 1
+        description: >-
+          State the restatement: the contract as the tool's arguments give it, the spec-level and
+          per-method fields this tool's input can express, and the status stated, if any
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which requires the component, carries each
+          method's endpoint binding, names every method a restatement removed, and reports the tests
+          a changed or removed method invalidated
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
+    symbol: sdd_define_interface
+  - name: writeNarrative
+    narrative:
+      - stepNumber: 1
+        description: >-
+          State the restatement: the implementation as the tool's arguments give it, each step
+          numbered by its position where the input left the number out, with the spec-level and
+          per-method fields this tool's input can express, and the status stated, if any
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which requires the contract, resolves every
+          *Label reference (an unresolved one refuses the whole write), names every method a
+          restatement removed, and reports the tests a changed or removed method invalidated
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
+    symbol: sdd_write_narrative
+  - name: addSubsystem
+    narrative:
+      - stepNumber: 1
+        description: >-
+          State the restatement: the subsystem as the tool's arguments give it, the fields this
+          tool's input can express, and the status stated, if any
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which requires the L0, derives parentSystem
+          from it, and refuses a projectPath (the legacy mount form)
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
     symbol: sdd_add_subsystem
-  - name: moveSubsystemProject
+  - name: moveMember
     narrative:
       - stepNumber: 1
-        description: Verify the subsystem exists
+        description: Relocate the member's directory and point its `members` entry there via core
         type: call
         targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Relocate the subproject directory and update its projectPath link
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: moveSubsystemProject
-  - name: externalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Verify the subsystem exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Externalize it into a standalone subproject via core
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: externalizeSubsystem
-  - name: internalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Verify the subsystem exists
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Internalize it back into the parent tree via core
-        type: call
-        targetComponent: mcp_core_adapter
-        targetMethod: internalizeSubsystem
+        targetMethod: moveMember
+    symbol: sdd_move_member
   - name: listResources
     narrative:
       - stepNumber: 1
@@ -167,25 +160,803 @@ methods:
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: listResources
-    symbol: registerSkillResources
+      - stepNumber: 2
+        description: >-
+          Resolve the current agent topology via the core client adapter and append one
+          wairon-agent:// brief descriptor per record — recomputed per request so a re-lock is
+          visible on the next list.
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveAgentTopology
+    symbol: listPublishedResources
   - name: readResource
     narrative:
       - stepNumber: 1
+        description: Route on the resource URI scheme
+        type: branch
+        condition: resourceId is a wairon-agent:// agent-brief id
+        onTrueStep: 2
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Compose that agent's live brief via the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: composeAgentBrief
+      - stepNumber: 3
+        description: Render the brief as the resource's markdown content
+        type: return
+        outcome: agent brief rendered
+      - stepNumber: 4
         description: Read one built-in SDD skill resource via the skills client adapter.
         type: call
         targetComponent: mcp_skills_adapter
         targetMethod: readResource
-    symbol: registerSkillResources
-  - name: listExternalInterfaces
+    symbol: readPublishedResource
+  - name: getAgentBrief
     narrative:
       - stepNumber: 1
         description: >-
-          Read the external-surface discovery entries through the surfaces adapter and shape the
-          tool response
+          Compose the agent's live delegation brief via the core client adapter and shape the tool
+          response
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: composeAgentBrief
+    symbol: sdd_get_agent_brief
+  - name: renameComponent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Rename the component and rewrite every reference to it via the core client adapter — or,
+          with dryRun, ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameComponent
+      - stepNumber: 3
+        description: >-
+          Shape the tool response from the report: each spec moved with its old and new id, and the
+          specs whose references were rewritten
+        type: return
+        outcome: ComponentRename
+  - name: renameMethod
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume the bound project — the family in reach, and the consumer
+          checkouts in the searched folders — before anything moves, each with the names and methods
+          its specs use
         type: call
         targetComponent: mcp_surfaces_adapter
-        targetMethod: listExternalInterfaces
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the contract method and retarget every reference to it via the core client adapter
+          — or, with dryRun, ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameMethod
+      - stepNumber: 4
+        description: >-
+          Shape the tool response from the report: the specs the method moved in (or would), the
+          specs whose references were retargeted, the specs whose prose still names it, the pinned
+          symbol when one was set, and `breaks` — every consumer read above whose specs reach the
+          old method on a public name the report says publishes it, a contract they depend on as a
+          whole included, each narrowed to what breaks (external_consumer.narrowedToUses: those
+          public names, with that one method), as the CLI dry run names it
+        type: return
+        outcome: MethodRename
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          When the delta removes contract methods, read the projects that consume the bound project
+          before anything moves — the family in reach and the searched folders — each with what its
+          specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 2
+        description: >-
+          Patch the stored spec through the authoring client adapter, so the same gate that judges a
+          create judges the merged candidate — an update can introduce a misplaced field as easily
+          as a create can
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 3
+        description: >-
+          When the write removed published methods, name the consumers it breaks: each consumer read
+          above narrowed to the published names and members it reaches
+          (external_consumer.narrowedToUses)
+        type: local
+      - stepNumber: 4
+        description: >-
+          Render the change report as the text answer and carry that same report as the structured
+          twin, so the sentence and the data are two renderings of one object and can never disagree
+        type: local
+    symbol: sdd_update_spec
+  - name: setEndpoints
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the L3 contract the bindings attach to; an id no contract holds is refused with the
+          authoring seam's boundary sentence (a dry run of an empty delta through the authoring
+          client adapter, answering for sdd_set_endpoints: another project's contract — a member's,
+          an external's, or a bare id only a member holds — or a missing one, in the one sentence
+          every write tool answers with), and so is a binding to a method it does not declare — a
+          delta would otherwise add a bare method under that name
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 2
+        description: >-
+          Read the component the contract belongs to through the core client adapter, for the
+          transport its portalType implies
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 3
+        description: >-
+          For each binding, normalize the transport to the endpoint vocabulary (a portalType
+          spelling maps explicitly: HTTP_API is HTTP), refuse a transport the Portal's portalType
+          does not carry — naming the one it implies — then build the raw endpoint from that
+          transport's own address fields and parse it against the endpoint schema; a binding the
+          schema rejects refuses the whole write with the offending field named, so a half-bound
+          contract is never saved
+        type: local
+      - stepNumber: 4
+        description: >-
+          When a binding replaces a route the contract already states, read the projects that
+          consume the bound project before anything moves — the family in reach and the searched
+          folders — each with what its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 5
+        description: >-
+          Bind them through the authoring client adapter as one delta naming each method with its
+          endpoint, forwarding the caller's dry run and answering for sdd_set_endpoints, so the
+          write is judged and reported like any other and a contract of another project is refused
+          naming this tool
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 6
+        description: >-
+          When the write moved a route a method already had (a change under its endpoint), read the
+          public names publishing those methods — the route a consumer's client spells moved under
+          each
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: publishedUsesOf
+      - stepNumber: 7
+        description: >-
+          Name the consumers the move breaks, as a rename names them: each consumer read above
+          narrowed to the published names and methods it reaches (external_consumer.narrowedToUses),
+          a contract it depends on as a whole included — carried on the report as published, breaks
+          and rerouted, so the text says the route moved (a client spelling the old route breaks
+          until it follows), never that something was removed
+        type: local
+      - stepNumber: 8
+        description: >-
+          Answer with the change report: every binding the write set or changed, and that nothing
+          changed when every binding already held
+        type: return
+        outcome: reported
+    symbol: sdd_set_endpoints
+  - name: setPublicInterfaces
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the L1 subsystem whose published surface is being set; an id no subsystem holds is
+          refused with the authoring seam's boundary sentence (a dry run of an empty delta through
+          the authoring client adapter, answering for sdd_set_public_interfaces), in the one
+          sentence every write tool answers with
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: >-
+          Express the replacement as one delta: a delete for every stored entry the list does not
+          restate (an entry is its component and interface), then the list itself — so the write
+          stays a single judged write and an entry left out is gone, which is what this tool
+          promises
+        type: local
+      - stepNumber: 3
+        description: >-
+          Apply it through the authoring client adapter, answering for sdd_set_public_interfaces, so
+          a subsystem of another project is refused naming this tool
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: updateSpecGated
+      - stepNumber: 4
+        description: 'Answer with the change report: every entry added, changed or removed'
+        type: return
+        outcome: reported
+    symbol: sdd_set_public_interfaces
+  - name: getSpec
+    narrative:
+      - stepNumber: 1
+        description: Was a kind asked for?
+        type: branch
+        condition: the read names a kind
+        onTrueStep: 5
+        onFalseStep: 2
+      - stepNumber: 2
+        description: >-
+          Infer the kind from the id: read it through each level's loader on the core client adapter
+          (the L0 by its name or "system") and keep the levels that hold it
+        type: local
+      - stepNumber: 3
+        description: Does exactly one level hold the id?
+        type: branch
+        condition: exactly one kind holds the id
+        onTrueStep: 5
+        onFalseStep: 4
+      - stepNumber: 4
+        description: >-
+          Refuse, naming the candidate kinds when several levels hold the id (pass kind to choose
+          one) or saying that no level holds it — unless no level holds it and the id is an
+          external's `alias::name`: then the pin's own kind answers (step 18), a contract entry or a
+          type, so a pinned read never needs a kind; or the id is a MEMBER's `alias::system` (or
+          `alias::<its L0 name>`): then the system read of step 6 answers it
+        type: return
+        outcome: kind not inferable
+      - stepNumber: 5
+        description: >-
+          Route the read on the kind asked for: each level has its own loader on the core client
+          adapter
+        type: switch
+        'on': the kind of spec to read
+        cases:
+          - value: system
+            step: 6
+          - value: subsystem
+            step: 8
+          - value: component
+            step: 10
+          - value: interface
+            step: 12
+          - value: implementation
+            step: 14
+          - value: type
+            step: 16
+        defaultStep: 18
+      - stepNumber: 6
+        description: >-
+          Read the L0 the id names through the core client adapter — the one place that decides it:
+          this project's own L0 by one of its names (`system`, the L0's name, the project id),
+          joining the shared answer path; a MEMBER's own L0 from its root by `alias::system` (or
+          `alias::<its L0 name>`), answered at once with a read-only memberProject marker (alias,
+          project, root); or refused naming why none answers (a name the L0 does not go by, a part,
+          an external whose pin holds only its exports, an unknown prefix) — never one project's L0
+          relabelled under another's id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: readProjectSystem
+      - stepNumber: 7
+        description: Join the shared answer path
+        type: jump
+        toStep: 17
+      - stepNumber: 8
+        description: Read the L1 subsystem spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 9
+        description: Join the shared answer path
+        type: jump
+        toStep: 17
+      - stepNumber: 10
+        description: Read the L2 component spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpec
+      - stepNumber: 11
+        description: Join the shared answer path
+        type: jump
+        toStep: 17
+      - stepNumber: 12
+        description: Read the L3 interface spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 13
+        description: Join the shared answer path
+        type: jump
+        toStep: 17
+      - stepNumber: 14
+        description: Read the L4 implementation spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadImplementationSpec
+      - stepNumber: 15
+        description: Join the shared answer path
+        type: jump
+        toStep: 17
+      - stepNumber: 16
+        description: Read the type spec by id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 17
+        label: found-check
+        description: >-
+          Decide whether a spec of that kind holds that id — the loaders resolve an `alias::name` id
+          through the bound project's alias table, as a write does, so a member's spec is found
+          under its key
+        type: branch
+        condition: the load found nothing
+        onTrueStep: 20
+        onFalseStep: 18
+      - stepNumber: 18
+        label: not-found
+        description: >-
+          No spec of this tree holds it: when the id is `alias::name` and the alias names an
+          external of this project, read the spec from the pinned snapshot this project holds of it
+          — the contract entry for a component, an interface or no kind, the type for a type (the
+          exported one, else one the pinned shapes carry, with the public names carrying it named in
+          the marker)
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: readPinnedSpec
+      - stepNumber: 19
+        description: >-
+          Answer the pinned read when the pin holds the name — the pinned entry as the spec, the
+          pinnedSnapshot marker beside it (alias, producer, snapshot file, StateId), read-only: an
+          external is written from its own root; narrowed to named methods as a spec of this tree is
+          (step 20: a name the entry does not hold refused, a partial-result marker) — else refuse a
+          read of a spec that does not exist, naming the kind and the id asked for
+        type: return
+      - stepNumber: 20
+        description: >-
+          When the read was narrowed to named methods: refuse the filter outright when the spec
+          declares no methods at all, or when a name it does not declare is asked for — naming the
+          ones it does, and returning nothing, so a misspelling never reads as a method with no
+          content. Otherwise keep the named methods and attach the partial-result marker: what is
+          shown, how many are omitted, and the warning that a write REPLACES the method list, so
+          re-authoring from this answer would remove every method left out
+        type: local
+      - stepNumber: 21
+        description: Decide whether the spec read carries variant guidance
+        type: branch
+        condition: the spec is a component that declares a variant
+        onFalseStep: 25
+      - stepNumber: 22
+        description: Load the variant registry through the core client adapter
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectVariants
+      - stepNumber: 23
+        description: Read every component, for the same-variant siblings
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 24
+        description: >-
+          Resolve the component's variant guidance — the variant's base, its implementation
+          guidance, and the same-variant sibling components — through the core client adapter, and
+          attach it as clearly derived and read-only
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveVariantGuidance
+      - stepNumber: 25
+        description: >-
+          Answer with the STORED spec and the derived markers beside it, so nothing derived can be
+          mistaken for something stored and written back; the text rendering folds them in, as it
+          always has
+        type: return
+        outcome: SpecReadResult
+    symbol: sdd_get_spec
+  - name: addType
+    narrative:
+      - stepNumber: 1
+        description: >-
+          State the restatement: the type as the tool's arguments give it, each field's optional
+          flag defaulted to false, the fields this tool's input can express, and the caller's dry
+          run
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter, which names every field or method a
+          restatement removed; a type carries no lifecycle status, so the receipt states none
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
+    symbol: sdd_add_type
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Hand the move to the authoring client adapter: its project boundary refuses a component
+          the bound project does not hold first — another project's (a member's or an external's, or
+          a bare id only a member holds) as living there, any other as missing, in the one sentence
+          every write tool answers with — so a mistyped id reads as a mistyped id rather than as a
+          rule refusing the design; then the move is judged as a whole and refused before anything
+          reaches disk
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: moveMethods
+    symbol: sdd_move_methods
+  - name: getProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core client adapter; a project with
+          none answers null rather than throwing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+    symbol: getProjectConfig
+  - name: getStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Ask the validator for the pin tree: this project's own approval state and each member's,
+          every one computed at that project's OWN root, so the states printed here are the ones
+          status prints from the member's root (status-agrees). The hosted data plane has already
+          bound a root within the credential's reach
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: familyApprovals
+      - stepNumber: 2
+        description: >-
+          Ask core for the completeness report through the adapter, handing it the pin tree so each
+          [Project] line carries its member's approval state and pin. Statically bound, never a lazy
+          require: this server is bundled, and a runtime require of a command file resolves against
+          the bundle's own directory — which worked from the CLI, whose bundle happened to contain
+          that file, and answered "Cannot find module" on the hosted data plane instead of the
+          report
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: getStatusReport
+      - stepNumber: 3
+        description: >-
+          Read the members the bound root declares — its project.yaml `members` entries and, for one
+          release, its legacy L1 mounts, each with its alias, path and form — so the context line
+          can name which projects this answer spans; a report that silently covered three projects
+          would read exactly like one that covered this one
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: listDirectChainedSubprojects
+      - stepNumber: 4
+        description: >-
+          Read the bound project's network declaration from its configuration, for one Network line:
+          declared (with its description; the network rules judge the design and
+          sdd_get_network_flows lists who reaches what), none declared here while an enclosing
+          family may declare one (judged at its root), or none declared — a status report that said
+          nothing let a fresh session tell its user a declared, gated boundary did not exist
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 5
+        description: >-
+          Ask what the lock says about the tree as it stands, passing the pin tree so the verdict
+          names members whose pin moved and the stage-5 upgrade. An agent reading this tool is
+          deciding whether it may write code against these specs, so a tree that has drifted from
+          its approval is the single most important thing this answer can carry — and silence would
+          read exactly like being current
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: approvalVerdict
+      - stepNumber: 6
+        description: >-
+          Compare this project's externals with their live producers, offline and advisory, via the
+          validator client adapter — so an agent deciding whether to write code against these specs
+          also sees a dependency that broke since it was pinned
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 7
+        description: >-
+          Answer it behind the tool-family context line, so a client reading one tool's output knows
+          which family of tools it belongs to — with an Externals section when any external moved
+          live, drifted or could not be compared (what moved, who uses it, the fix; the pin still
+          gates)
+        type: return
+        outcome: status
+    symbol: sdd_get_status
+  - name: addMember
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Note whether the folder the source names exists yet, resolved from the bound project root:
+          a `../` sibling that does not exist is a folder the call is about to create OUTSIDE this
+          project
+        type: local
+      - stepNumber: 2
+        description: >-
+          Scaffold the member project and declare it in `members` via core; the answer states the
+          required packs the new member was given and the requirements nothing installed satisfies
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: createMember
+      - stepNumber: 3
+        description: >-
+          Answer what was created and declared; when the call created a folder outside this project,
+          say so first — where it was created — so a new folder beside the project never appears
+          without a word
+        type: return
+    symbol: sdd_add_member
+  - name: validateTree
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core adapter: its rule severities and
+          projectType govern the gate, and whether it declares members decides the default run
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Which run? validation_options.selectsFamily(the configuration declares members) over the
+          tool's `family` and `recursive` flags — the same reading `wairon validate` makes
+        type: branch
+        condition: the options select the family run
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Run the family run via the validator client adapter — within the request's reach, which
+          the run narrows and never widens
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateFamily
+      - stepNumber: 4
+        description: >-
+          The family verdict holds every selected project's gate: go add the advisory live
+          comparison
+        type: jump
+        toStep: 6
+      - stepNumber: 5
+        label: ownerGate
+        description: Run the owner's gate via the validator client adapter
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: validateProject
+      - stepNumber: 6
+        label: advise
+        description: >-
+          Compare, offline and advisory, every external the run did not compose with its live
+          producer (the aliases a family run composed in reach are passed so they get no second
+          word) via the validator client adapter
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: adviseExternals
+      - stepNumber: 7
+        description: >-
+          At a member's own root, read the chaining parent within the request's reach: the owner's
+          gate there counts the member's network entries as declared, and the answer must say so as
+          `wairon validate` does — its network proofs are judged at the family root (a family run
+          asked here gets them from the enclosing family, narrowed to the member)
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 8
+        description: >-
+          Answer the verdict — the family run's (each finding under its project, each project's
+          totals counted from the findings listed under it) or the owner's gate's — split into
+          errors, warnings and notices, the advisory findings among them marked advisory
+          (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what moved live,
+          who uses it, the fix), which never make the tree invalid, with the run's hint — which
+          carries the code-reading line `wairon validate` prints, word for word — and, at a member's
+          root, the member line `wairon validate` prints
+        type: return
+        outcome: ValidationResult
+    symbol: sdd_validate_tree
+  - name: packImpact
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound project's configuration through the core adapter: does it apply the pack
+          exactly as asked?
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 2
+        description: >-
+          Build the candidate: the stored entry with `remove` when the pack is applied exactly as
+          asked, else the by-name selection (with the version when one was given)
+        type: local
+      - stepNumber: 3
+        description: >-
+          Measure it through the validator client adapter, writing nothing; a pack that does not
+          resolve answers the resolver's reason as the tool error
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: measurePackImpact
+      - stepNumber: 4
+        description: >-
+          Answer the impact as structured content, with a text rendering grouped by doctrine change,
+          governing profile and finding change
+        type: return
+        outcome: PackImpact
+    symbol: sdd_pack_impact
+  - name: renameType
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the type through the core client adapter, resolving the tool's id — qualified by its
+          owning subsystem when two subsystems own that id — to the type it names, so core receives
+          an unambiguous id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the type and rewrite every reference to it via the core client adapter — or, with
+          dryRun, ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameType
+      - stepNumber: 4
+        description: >-
+          Shape the tool response from the report: from and to, the specs rewritten, the public
+          names kept, the register edits, publishedIn, and `breaks` — every consumer read above
+          whose specs reach a public name carrying the type, narrowed to those names and members
+          (external_consumer.narrowedToUses)
+        type: return
+        outcome: TypeRename
+  - name: renameField
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the type through the core client adapter, resolving the tool's id — qualified by its
+          owning subsystem when two subsystems own that id — to the type it names, so core receives
+          an unambiguous id
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and members its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the field and respell every reference to it via the core client adapter — or, with
+          dryRun, ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameField
+      - stepNumber: 4
+        description: >-
+          Shape the tool response from the report: the type, from and to, the specs rewritten,
+          publishedIn, and `breaks` — every consumer read above whose specs reach a member of a
+          public name that carries the field (external_consumer.reaches), narrowed to those names
+          and members (external_consumer.narrowedTo)
+        type: return
+        outcome: FieldRename
+  - name: renameParam
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound tree's components through the core client adapter, and resolve the tool's
+          id, namespaced if needed, to the qualified component id among them, so core can refuse a
+          component inside a chained subproject
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Read the projects that consume the bound project — the family in reach, members included,
+          and the consumer checkouts in the searched folders — before anything moves, each with the
+          names and methods its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 3
+        description: >-
+          Rename the parameter of the contract method via the core client adapter — or, with dryRun,
+          ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameParam
+      - stepNumber: 4
+        description: >-
+          Shape the tool response from the report: the component, method, from and to (and
+          routedFrom, when the request named a method forwarding its signature and the rename was
+          made on its source), the interfaces it moved in, the placeholders respelled (its
+          followers' through signatureFrom included), publishedIn — the entries publishing the
+          method and every follower's verb — and `breaks`: every consumer read above that the
+          report's published list reaches, each narrowed to what it calls there, a call by a former
+          method name and a broken former public name included (external_consumer.narrowedToUses)
+        type: return
+        outcome: ParamRename
+  - name: renameSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Rename the contract or implementation through the core client adapter — or, with dryRun,
+          ask what the rename would do and write nothing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: renameSpecId
+      - stepNumber: 2
+        description: >-
+          Answer with the report: the spec renamed, the specs rewritten, the public names kept and
+          the register edits
+        type: return
+        outcome: SpecIdRename
+    symbol: sdd_rename_spec
+  - name: moveSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Move the spec — and every spec named in `together` with it, as one move — through the
+          authoring client adapter, which judges the moved components together in their tree before
+          anything is written, or, with dryRun, answers the plan for all of them
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: moveSpec
+      - stepNumber: 2
+        description: 'Answer with the report: what moved, what was rewritten, and the gate''s notices'
+        type: return
+        outcome: SpecMove
+    symbol: sdd_move_spec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the projects that consume the bound project — the family in reach, and the consumer
+          checkouts in the searched folders — before anything goes, each with the names and members
+          its specs use
+        type: call
+        targetComponent: mcp_surfaces_adapter
+        targetMethod: listConsumers
+      - stepNumber: 2
+        description: >-
+          Delete the spec with its subtree through the authoring client adapter, carrying the
+          caller's dry-run and force requests; it refuses a spec of another project, an id nothing
+          holds, and a referenced deletion unless forced, and reports what it published and the
+          tests a removed method invalidated
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: deleteSpec
+      - stepNumber: 3
+        description: >-
+          Name the consumers the deletion breaks: each consumer read above narrowed to the published
+          names and members it reaches (external_consumer.narrowedToUses); none when nothing it
+          removes is published
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer with the deletion and its breaks: every spec removed (or, on a dry run, that would
+          be), the references left, the published names, the consumers it breaks, and the tests to
+          revisit
+        type: return
+        outcome: answered
+    symbol: sdd_delete_spec
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-07-24T18:14:35.011Z'
+updatedAt: '2026-10-16T12:03:06.655Z'

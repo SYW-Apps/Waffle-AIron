@@ -1,0 +1,36 @@
+kind: value-object
+id: doctor_options
+name: DoctorOptions
+description: The flags of `wairon doctor`.
+subsystem: sdd_cli
+fields:
+  - name: fix
+    type: bool
+    description: >-
+      Apply the repairs before the report: today's fixed steps, then the chaining migration once
+      confirmed.
+    optional: true
+  - name: report
+    type: string
+    description: >-
+      Print one section's plan and nothing else, writing nothing. `chaining` is the one section; it
+      never combines with --fix.
+    optional: true
+  - name: 'yes'
+    type: bool
+    description: >-
+      Answer the chaining migration's confirmation for a non-interactive run. It does NOT answer a
+      write outside the project root — that takes --global as well.
+    optional: true
+  - name: global
+    type: bool
+    description: >-
+      Consent to the --fix writes outside the project root (a machine-wide MCP configuration, the
+      legacy global plugin). Together with --yes it answers their confirmation for a non-interactive
+      run; without it such a run skips them and says so. Each replaced file is backed up beside
+      itself either way.
+    optional: true
+methods: []
+sourcePath: src/commands/doctor.ts
+createdAt: '2026-09-26T21:12:12.389Z'
+updatedAt: '2026-10-04T10:20:03.557Z'

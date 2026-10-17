@@ -1,8 +1,9 @@
 import {
-  deriveThemeVariables,
   getThemeOption,
   resolveMode,
+  resolveThemeVariables,
   type AppearanceMode,
+  type CustomTheme,
 } from './themes';
 import { mixHex } from './colorUtils';
 
@@ -27,11 +28,15 @@ export function engineTheme(appearance: AppearanceMode): 'light' | 'syw' {
 
 /** The CSS custom-property overlay themeing the canvas chrome to the app's
  *  active palette + appearance. */
-export function engineVars(themeId: string, appearance: AppearanceMode): Record<string, string> {
+export function engineVars(
+  themeId: string,
+  appearance: AppearanceMode,
+  customThemes: CustomTheme[] = [],
+): Record<string, string> {
   const mode = resolveMode(appearance);
-  const theme = getThemeOption(themeId);
+  const theme = getThemeOption(themeId, customThemes);
   const primary = theme.swatches[0];
-  const v = deriveThemeVariables(primary, mode);
+  const v = resolveThemeVariables(theme, mode);
   // The classic canvas keeps its "deep space" GRADIENT background in dark
   // mode, re-derived strictly from the theme's OWN swatches (a hue rotation
   // drifted off-palette — reddish on non-Waffler themes): a whiff of the

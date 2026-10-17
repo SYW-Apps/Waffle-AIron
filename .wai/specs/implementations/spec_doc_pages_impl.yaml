@@ -1,0 +1,77 @@
+id: spec_doc_pages_impl
+name: Spec Doc Pages Implementation
+description: Projects the spec tree into a target-agnostic DocPage tree.
+contract: ispec_doc_pages
+sourcePath: src/producers/projection.ts
+methods:
+  - name: project
+    narrative:
+      - stepNumber: 1
+        description: Load the system spec
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load subsystem specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load component specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load interface specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load type specs, for the signature types the pages list
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: >-
+          Render the Mermaid component diagram; a tree with no components yet renders none and the
+          page carries no diagram
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 7
+        description: >-
+          Build the root 'wairon specs' DocPage: system overview, the Mermaid code block, the
+          optional canvas link, and a section listing each signature type with its derived text
+          (type_spec.derivedSignature)
+        type: local
+      - stepNumber: 8
+        description: >-
+          Add a child DocPage per subsystem; under each, a page per component rendering its
+          interfaces and methods, each method with the signature text the loaded tree carries and,
+          when it names a signatureFrom, the source beside it ("from X")
+        type: local
+      - stepNumber: 9
+        description: Return the DocPage tree
+        type: return
+        outcome: DocPage tree
+  - name: projectGraph
+    narrative:
+      - stepNumber: 1
+        description: Load component specs
+        type: call
+        targetComponent: producer_core_adapter
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Build GraphNodes from the components (id, label, the subsystem each component names, type)
+          and GraphEdges from their dependsOn, keeping only edges whose target is a loaded component
+        type: local
+      - stepNumber: 3
+        description: Return the GraphModel
+        type: return
+        outcome: GraphModel
+lint:
+  allow: []
+status: complete
+createdAt: '2026-07-04T17:39:59.030Z'
+updatedAt: '2026-10-04T19:59:50.542Z'

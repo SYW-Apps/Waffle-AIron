@@ -7,18 +7,18 @@ methods:
     description: >-
       Load the persisted binding collection; a missing file yields an empty set, a malformed file
       fails with a storage error naming the path.
-    signature: 'load(): GitBackingBinding[]'
-    returns: GitBackingBinding[]
+    signature: 'load(): list<GitBackingBinding>'
+    returns: list<GitBackingBinding>
     params: []
   - name: replaceAll
     description: Swap the persisted collection wholesale via write-temp-then-rename.
-    signature: 'replaceAll(bindings: GitBackingBinding[]): void'
+    signature: 'replaceAll(bindings: list<GitBackingBinding>): void'
     returns: void
     params:
       - name: bindings
-        type: GitBackingBinding[]
+        type: list<GitBackingBinding>
     guarantees:
       - atomic
 status: complete
 createdAt: '2026-07-16T15:38:48.260Z'
-updatedAt: '2026-07-16T15:48:49.201Z'
+updatedAt: '2026-10-04T10:18:49.951Z'

@@ -1,5 +1,14 @@
 schemaVersion: 1.0.0
+id: waffle-airon
 name: Waffle-AIron
+extensions:
+  # wairon's own doctrine is wairon's own — nothing from a developer's global
+  # packs folder (~/.wairon/packs) may govern this repo. Without this, whatever a
+  # contributor happens to have installed machine-wide silently injects profiles,
+  # rules, and skills here: the gate, `wairon skills list`, and the MCP
+  # instructions/resources then differ per developer, and CI (which has no global
+  # packs) disagrees with every local run.
+  useGlobalPacks: false
 targets:
   - type: claude
     outputDir: .claude/agents
@@ -29,6 +38,15 @@ rules:
     # per-spec lint.allow silences — governs both the GOD_COMPONENT and
     # EXCESSIVE_DEPENDENCIES rules. Genuinely bloated components still warn.
     maxComponentDependencies: 10
+    # This project IS a linter: sdd_validator's rules are dispatch ladders over
+    # a closed vocabulary, where the branch count is the subject matter, not
+    # tangled control flow. Judged against the shipped default (warn above
+    # moderate) the rule family would warn forever, so wairon holds its own
+    # tree to the next band up. The default is unchanged for everyone else,
+    # and it is not the problem: of this tree's 1061 narratives, 777 are
+    # linear and only 33 exceed the shipped default. A narrative that reaches
+    # severe still warns here.
+    cognitiveWarnAbove: complex
   # wairon's code realizes several spec-level roles inside shared modules
   # (e.g. portal+orchestrator+adapters folded into src/mcp/server.ts), so
   # per-component implementer agents would claim overlapping paths. Subsystem
@@ -42,5 +60,187 @@ rules:
     - portal
     - orchestrator
   enforceReproducibility: true
+  # Where wairon's own source lives, and what of it no spec claims yet.
+  # Declaring a source root is what opts a project into UNCLAIMED_SOURCE_FILE:
+  # a project that declares none walks nothing and the check stays silent.
+  conformance:
+    sourceRoots:
+      - src
+      - web/src
+    exclude:
+      # The vendored Cytoscape bundle shipped with the canvas template. Not
+      # ours to claim, and never will be, so it does not belong in a list
+      # that only shrinks.
+      - src/templates/canvas
+    # Where this project keeps its tests. Declaring them is what lets a gated
+    # write name the tests it just invalidated (F25) - a spec pass that changes
+    # a contract and says nothing is how a brief comes to promise green tests it
+    # has already broken. Separate from sourceRoots on purpose: tests are not
+    # code the specs claim, and listing them there would make every test file an
+    # UNCLAIMED_SOURCE_FILE.
+    testRoots:
+      - tests
+    # The debt register, frozen. Every file here is source wairon ships and
+    # no spec names — F17, written down where a reviewer sees the whole list
+    # instead of discovering it one file at a time. It can only SHRINK: claim
+    # a file with a sourcePath and delete its line, and an entry that is
+    # already claimed, a proven re-export barrel, or gone is reported
+    # (STALE_UNCLAIMED_ENTRY). A file that is neither claimed nor listed is
+    # reported the day it appears, which is the whole point.
+    unclaimed:
+      # Constants — the supported aliases, the version, the default target list.
+      # 16 importers and nothing to call.
+      - src/config/defaults.ts
+      # Stereotype predicates shared by three doctrine rules that are themselves
+      # modelled. Rule-family vocabulary.
+      - src/core/rules/doctrine/stereotype-terms.ts
+      # Assertion selectors shared by three extension rules that are themselves
+      # modelled. Rule-family vocabulary.
+      - src/core/rules/extension/declared-assertion.ts
+      # The rule barrel and the context every rule reads. 97 importers, and every rule
+      # it assembles IS modelled — 93 of the 100 rule files carry a spec. Modelling the
+      # assembly point as well would put a component between each rule and its own
+      # registration. See read-model.ts, which is its substrate and unclaimed for the
+      # same reason.
+      - src/core/rules/index.ts
+      # Graph helpers shared by three narrative cycle rules that are themselves
+      # modelled. Rule-family vocabulary.
+      - src/core/rules/narrative/completed-step-graph.ts
+      # The analysis substrate rules/index.ts builds the context from: the code index,
+      # the import graph, the realization and ownership indexes. Exactly one importer,
+      # and that importer is the barrel above. Claiming this without claiming the
+      # barrel would leave all seven builders with no modelled caller.
+      - src/core/rules/read-model.ts
+      # Invariant reference parsing shared by two wiring rules that are themselves
+      # modelled. Rule-family vocabulary.
+      - src/core/rules/wiring/invariant-ref.ts
+      # The package entry. It re-exports the core Portal and names the documented
+      # embedding API that no contract covers — validateSddTree, loadExtensions and
+      # their neighbours, which docs/extending-wairon.md documents and
+      # examples/wrapper/wrapper.js calls. A library surface, not a component.
+      - src/index.ts
+      # sdd_host's HTTP error shapes, 39 importers inside that subsystem. Vocabulary
+      # for replies, not a component that answers anything.
+      - src/server/errors.ts
+      # Request and response plumbing shared by the hosted handlers — reading a body,
+      # writing a status. The handlers are modelled; this is how they speak HTTP.
+      - src/server/httpio.ts
+      - src/server/realtime.ts
+      - src/server/swagger.ts
+      - src/server/websocket.ts
+      # Deterministic serialization for hashing. Pure, and the gate identity depends
+      # on it being exactly one implementation rather than a component someone could
+      # reasonably swap.
+      - src/utils/canonical-json.ts
+      # A file download helper for `wairon update`. Two importers, wraps one fetch.
+      - src/utils/download.ts
+      # The error types every subsystem throws and catches. 39 importers, no state,
+      # no decisions: modelling it would give all 39 a declared edge saying only
+      # "this one throws errors".
+      - src/utils/errors.ts
+      # Filename slugging. Pure.
+      - src/utils/filenames.ts
+      # An interactive prompt widget. One importer, and it decides nothing about this
+      # system — it asks a person a question.
+      - src/utils/filteredCheckbox.ts
+      # Terminal output, 26 importers. A component here would be on the dependency
+      # list of nearly every CLI narrative and would tell a reader nothing.
+      - src/utils/logger.ts
+      # Semver comparison. Pure arithmetic over strings.
+      - src/utils/version.ts
+      # Parse and serialize, 16 importers. Deliberately NOT the spec file store: it
+      # holds the syntax, the store holds the decisions about files.
+      - src/utils/yaml.ts
+      # The React SPA under web/. It was outside `sourceRoots` entirely until now,
+      # so it was not tracked debt — it was invisible, and could grow without any
+      # gate saying so. Listing it does not excuse it: these enter the ratchet like
+      # everything else and the list only shrinks. web/src/canvas is GENERATED by
+      # scripts/gen-canvas-engine.mjs and will be claimed by its owner under
+      # `conformance: off` when the diagram components are designed; it sits here
+      # until then rather than being excluded, because generated code wairon itself
+      # produces is ours to claim, not somebody else’s to ignore.
+      - web/src/App.tsx
+      - web/src/HeaderMenu.tsx
+      - web/src/RealtimeStatus.tsx
+      - web/src/ThemeControls.tsx
+      - web/src/api.ts
+      - web/src/canvas/engine.ts
+      - web/src/canvas/exporters.ts
+      - web/src/canvas/skeleton.ts
+      - web/src/canvas/styles.ts
+      - web/src/components/GitCredentialCard.tsx
+      - web/src/components/InfoTip.tsx
+      - web/src/components/ThemeMenu.tsx
+      - web/src/components/UnitSelect.tsx
+      - web/src/main.tsx
+      - web/src/realtime.tsx
+      - web/src/session.tsx
+      - web/src/settings.tsx
+      - web/src/theme/canvasBridge.ts
+      - web/src/theme/colorUtils.ts
+      - web/src/theme/themes.ts
+      - web/src/types.ts
+      - web/src/ui.tsx
+      - web/src/views/Approvals.tsx
+      - web/src/views/Audit.tsx
+      - web/src/views/CanvasRouter.tsx
+      - web/src/views/CanvasView.tsx
+      - web/src/views/Environment.tsx
+      - web/src/views/Health.tsx
+      - web/src/views/Home.tsx
+      - web/src/views/Instance.tsx
+      - web/src/views/Login.tsx
+      # The canvas's network view (DiagramView network) over GET /web/projects/network:
+      # a SPA view like its siblings here, which are not spec'd as View components.
+      - web/src/views/NetworkView.tsx
+      - web/src/views/Permissions.tsx
+      - web/src/views/ProjectOps.tsx
+      - web/src/views/Projects.tsx
+      - web/src/views/Providers.tsx
+      - web/src/views/Roles.tsx
+      - web/src/views/Sharing.tsx
+      - web/src/views/SpecsEditor.tsx
+      # The Specs editor's save delta, split out of SpecsEditor.tsx (no new code
+      # responsibility: the same view's logic, kept free of React for its round-trip test).
+      - web/src/views/specDelta.ts
+      - web/src/views/ThemeBuilder.tsx
+      - web/src/views/Tokens.tsx
+      - web/src/views/Units.tsx
+      - web/src/views/Users.tsx
+    # The conformance debt register: the code-vs-spec findings this tree carries
+    # as DECLARED debt, grouped by the reason that explains them. `unclaimed`'s
+    # one-way shape, for findings about code a spec does name.
+    #
+    # It is not a second lint.allow. An allow says "this finding is wrong here,
+    # by design", and means to live forever; an entry here says "this finding is
+    # RIGHT, and it is not paid yet". Only a CARRYABLE code may appear (anything
+    # else is an error), an entry carries a finding only when it lists EVERY
+    # unit that finding reports (so an aggregating finding cannot grow behind
+    # it), and an entry that stops applying is STALE_CARRIED_FINDING — so the
+    # register can only shrink, and `wairon validate` prints what is left.
+    #
+    # `kind` is what makes it a register rather than a suppression list:
+    # drift is spec-vs-code disagreement an author fixes, undecided is a
+    # modelling decision nobody has taken, unreadable is a shape the analysis
+    # cannot follow and there is nothing in the tree to fix for it.
+    carried:
+      # 1 finding(s), 1 unit(s).
+      - kind: drift
+        why: >-
+          SUBPROJECT_SEPARATOR is the `::` of the deprecated member-qualified selector form
+          (`projectId::alias`), published by the project repository's file and taken by the two
+          components that still build and read that form: member registration formats and matches
+          members' qualifiers with it, and the request orchestrator reads the top project id off the
+          qualifier a deprecated selector carried. The finding is right - a name crossing a boundary no contract
+          promised - and the form resolves for one release only. It is retired together with the
+          deprecated `projectId::alias` qualifier form: removing the form removes both call sites and
+          the constant, so modelling the separator now (a qualifier value object, or contract methods
+          on the project repository) would design a surface whose only purpose is to be deleted.
+        findings:
+          - code: UNDECLARED_EXPORT
+            spec: project_index_impl
+            at: 'src/server/projects.ts'
+            covers:
+              - 'SUBPROJECT_SEPARATOR'
 createdAt: '2026-06-10T20:23:10.714Z'
 updatedAt: '2026-06-10T20:23:10.714Z'

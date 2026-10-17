@@ -1,0 +1,82 @@
+kind: value-object
+id: validation_options
+name: ValidationOptions
+description: >-
+  What a validation run is allowed to vary. The contract used to read `validateSddTree():
+  ValidationResult` with the description "Performs full SDD tree validation" — six words for a
+  function with seven switches, three of which change whether a finding is an error or does not fire
+  at all. Since stage 4 the same options drive two functions, the owner's gate (validateProject) and
+  the family run (validateFamily), and selectsFamily is the one reading of which a caller asked for;
+  the crossTree switch that suppressed findings for a run that could not see the other side is gone
+  with resolve-through-parent.
+fields:
+  - name: rules
+    type: RulesConfig
+    description: >-
+      The rule severities and thresholds to judge with. Omitted, the project's own configuration is
+      read.
+    optional: true
+  - name: projectType
+    type: string
+    description: The project type whose doctrine applies; defaults to backend.
+    optional: true
+  - name: scopeSubsystem
+    type: string
+    description: Narrow the run to one subsystem's slice of the tree. Omitted, the whole tree is judged.
+    optional: true
+  - name: extensions
+    type: LoadedExtensions
+    description: >-
+      Pre-loaded extension packs, for the programmatic-wrapper path. Omitted, the packs the project
+      declares are loaded, which is how CLI and MCP callers get pack rules, profiles and languages
+      without passing anything.
+    optional: true
+  - name: treatAllAsComplete
+    type: bool
+    description: >-
+      Judge at full strictness: every spec is treated as complete, so the completeness rules that
+      relax while a spec is draft apply as errors. This is the as-complete gate behind `wairon
+      lock`. The flip must happen INSIDE the run, because invalidating the spec cache discards any
+      status set beforehand.
+    optional: true
+  - name: family
+    type: bool
+    description: >-
+      Ask for the family run explicitly (`validate --family`, MCP `family: true`). At a member this
+      is the one way to compose its externals against their live producers: the walk up to them is
+      then explicit, and still reach-gated (hosted, the credential's reach; it never widens it).
+      Omitted, a project that declares members runs its family and any other project runs its
+      owner's gate.
+    optional: true
+  - name: packSelections
+    type: list<PackSelection>
+    description: >-
+      The by-name pack selections the pack rules (pack-resolution, pack-reproducibility) judge.
+      Omitted, the project's own stored selections are read. Given only by a dry run that judges a
+      candidate configuration it has not written (pack_impact.measure), together with that
+      candidate's rules, projectType and loaded extensions, so every configuration input of the run
+      is the candidate's and the verdict equals the one the write would then produce.
+    optional: true
+  - name: memberDepth
+    type: int
+    description: >-
+      At a project that declares members: how many member levels the run reaches. Absent, every
+      level — the family run over the project and all its members (the default); 0, none — the
+      owner's gate alone; n, the family run selecting that many member levels. The owner's gate
+      reads its contained members' export tables whatever this says — its own references into them
+      are judged there — and never judges a member's specs. The CLI's --no-recursive and the MCP
+      tools' `recursive: false` are 0 at the edge.
+    optional: true
+methods:
+  - name: selectsFamily
+    signature: 'selectsFamily(declaresMembers: boolean): boolean'
+    returns: bool
+    description: >-
+      Whether these options ask for the family run rather than the owner's gate: true when `family`
+      is set, or when the bound project declares members and `memberDepth` is not 0. The one reading
+      of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the choice
+      cannot drift between them.
+    sourcePath: src/models/validation-options.ts
+sourcePath: src/core/validation.ts
+createdAt: '2026-09-20T14:26:35.723Z'
+updatedAt: '2026-10-04T10:53:59.173Z'

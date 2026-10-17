@@ -2,10 +2,13 @@ id: core_orchestrator_impl
 name: Core Orchestrator Implementation
 description: >-
   Concrete implementation of the Core Orchestrator: spec tree read/write workflows in
-  src/core/specs.ts. Provisioning, chained-subsystem, lock, state-hash, and diagram forwarding
-  methods are realized in sibling core modules (provision.ts, lockfile.ts, statehash.ts, diagram.ts)
-  republished by the core portal barrel — their structural-conformance method checks are dialed off
-  under the single-sourcePath Level 1 model; Level 2 dependency conformance will cover the edges.
+  src/core/specs.ts. Methods whose bodies live in sibling core modules name them in their own
+  sourcePath: the provisioning, chained-subsystem and rename workflows in provision.ts, and the
+  Specialist retirement in stereotype-migration.ts. The lock-record write and the diagram render are
+  real forwards in specs.ts, which the core portal barrel publishes, so a Portal reaches the lock
+  store's write only through this Orchestrator. The state-hash and lock-record read forwards,
+  realized in statehash.ts and lockfile.ts and republished by the barrel, keep their
+  method-realization checks dialed off.
 contract: icore_orchestrator
 sourcePath: src/core/specs.ts
 methods:
@@ -72,338 +75,605 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpec
-  - name: saveSystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveSystemSpec on spec loader
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSystemSpec
-  - name: saveSubsystemSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveSubsystemSpec on spec loader
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-  - name: saveComponentSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveComponentSpec on spec loader
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-  - name: saveInterfaceSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveInterfaceSpec on spec loader
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
-  - name: saveImplementationSpec
-    narrative:
-      - stepNumber: 1
-        description: Call saveImplementationSpec on spec loader
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
   - name: provisionProject
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Compose a default ProjectConfig and a bootstrap L0 SystemSpec named `name`
+        description: >-
+          Compose a default ProjectConfig declaring the id `name` slugified
+          (project_config.effectiveId of the composed configuration) and a bootstrap L0 SystemSpec
+          named `name`
         type: local
       - stepNumber: 2
+        description: >-
+          Write the default configuration through the project config Repository first, so a root
+          that already has one is refused before anything is written
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 3
         description: Persist the L0 system spec via the spec loader
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
-      - stepNumber: 3
-        description: Write the default project.yaml config at the bound project root
-        type: local
-    conformance: 'off'
   - name: computeStateId
     narrative:
       - stepNumber: 1
-        description: Delegate to the state hash specialist
+        description: Delegate to state_hash
         type: call
-        targetComponent: state_hash_specialist
-        targetMethod: hashSpecTree
-    conformance: 'off'
+        targetComponent: state_hash
+        targetMethod: compute
   - name: readLockRecord
     narrative:
       - stepNumber: 1
-        description: Read the lock record via the lock registry
+        description: Read the lock record via the lock store
         type: call
-        targetComponent: lock_registry
+        targetComponent: lock_store
         targetMethod: read
-    conformance: 'off'
   - name: writeLockRecord
     narrative:
       - stepNumber: 1
-        description: Write the lock record via the lock registry
+        description: Write the lock record via the lock store
         type: call
-        targetComponent: lock_registry
+        targetComponent: lock_store
         targetMethod: write
-    conformance: 'off'
-  - name: promoteAllComplete
-    narrative:
-      - stepNumber: 1
-        description: Load subsystem specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadSubsystemSpecs
-      - stepNumber: 2
-        description: For each subsystem
-        type: loop
-        loopKind: forEach
-        over: subsystems
-        endStep: 3
-      - stepNumber: 3
-        description: Re-save the subsystem with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-      - stepNumber: 4
-        description: Load component specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 5
-        description: For each component
-        type: loop
-        loopKind: forEach
-        over: components
-        endStep: 6
-      - stepNumber: 6
-        description: Re-save the component with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 7
-        description: Load interface specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 8
-        description: For each interface
-        type: loop
-        loopKind: forEach
-        over: interfaces
-        endStep: 9
-      - stepNumber: 9
-        description: Re-save the interface with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveInterfaceSpec
-      - stepNumber: 10
-        description: Load implementation specs
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadImplementationSpecs
-      - stepNumber: 11
-        description: For each implementation
-        type: loop
-        loopKind: forEach
-        over: implementations
-        endStep: 12
-      - stepNumber: 12
-        description: Re-save the implementation with status complete
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveImplementationSpec
-    conformance: 'off'
   - name: renderDiagram
     narrative:
       - stepNumber: 1
-        description: Delegate to the diagram specialist
+        description: Delegate to architecture_diagrams, passing the relation health through
         type: call
-        targetComponent: diagram_specialist
-        targetMethod: renderDiagram
-    conformance: 'off'
-  - name: createChainedSubsystem
+        targetComponent: architecture_diagrams
+        targetMethod: render
+  - name: createMember
+    sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Guard that the subsystem carries a projectPath
-        type: branch
-        condition: subsystem.projectPath is missing or empty
-        onFalseStep: 3
-      - stepNumber: 2
-        description: 'Reject: a chained subsystem requires a projectPath'
-        type: throw
-        error: projectPath is required to create a chained subsystem
-      - stepNumber: 3
-        description: Persist the parent L1 subsystem spec (with projectPath) at the bound project root
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-      - stepNumber: 4
         description: >-
-          Resolve the child project directory by joining the bound project root with
-          subsystem.projectPath
-        type: local
-      - stepNumber: 5
-        description: >-
-          Containment guard: reject a projectPath that escapes the owning project. The child project
-          directory must resolve to a location strictly within the bound project root
+          Guard the alias and the source: an alias the identifier grammar accepts
+          (identifier.problemAs alias — [a-z0-9-_]+, at most 64 characters, no leading "-", never a
+          Windows device name, super or __proto__), a non-empty source string one of the grammar's
+          forms parses (a hosted source refused — hosted project creation makes records), and a
+          contained path that is not the project's own .wai directory or inside it, which holds the
+          spec tree and its configuration and can never be a member
         type: branch
         condition: >-
-          the resolved child project directory is not contained within the bound project root (an
-          absolute path or a ../-escaping projectPath)
-        onFalseStep: 7
-      - stepNumber: 6
-        description: Reject a projectPath that resolves outside the project root
-        type: throw
-        error: projectPath must resolve within the project root
-      - stepNumber: 7
-        description: >-
-          Branch on whether the child is already fully initialized — both project.yaml and an L0
-          system spec present
-        type: branch
-        condition: the child directory already has both project.yaml and an L0 system spec
-        onTrueStep: 9
-        onFalseStep: 8
-      - stepNumber: 8
-        description: >-
-          Scope the project root to the child directory and NON-DESTRUCTIVELY complete its bootstrap
-          — create the specs dir, project.yaml, and L0 system spec only when each is absent
-          (preferring an existing system spec's name), so a fresh child becomes runnable standalone
-          and a partially-scaffolded child is completed without overwriting its existing spec tree —
-          then restore the parent root scope
-        type: local
-      - stepNumber: 9
-        description: Chained subsystem wired and child project ensured
-        type: return
-        outcome: chained subsystem created
-    conformance: 'off'
-  - name: moveSubsystemProject
-    narrative:
-      - stepNumber: 1
-        description: Load the target subsystem spec
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadSubsystemSpec
+          the alias breaks the identifier grammar, the path is empty, or the path names the .wai
+          directory or a folder inside it
+        onFalseStep: 3
       - stepNumber: 2
-        description: Guard that the subsystem is an external subproject
-        type: branch
-        condition: the subsystem has no existing projectPath
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'Reject: the subsystem is not an external subproject'
+        description: >-
+          Reject, naming the one thing that is wrong: the alias with identifier.problemAs's own
+          reason, an empty source, or a path inside .wai
         type: throw
-        error: subsystem has no projectPath to move (not an external subproject)
+        error: >-
+          member refused: the alias breaks the identifier grammar, the source is empty, or the path
+          is inside .wai
+      - stepNumber: 3
+        description: >-
+          Resolve the member directory — the bound project root joined with a contained or `../`
+          sibling path — and read the declaring project's configuration through the project config
+          Repository: the members and externals it declares, and the packs it requires of its
+          members (project_config.requiredPolicies) — the bound project's own requirements only:
+          nothing above it is read
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
       - stepNumber: 4
         description: >-
-          Resolve the old and new child directories from the bound project root; reject if the
-          target already exists; relocate the subproject directory on disk and set the subsystem's
-          projectPath to the new path
-        type: local
-      - stepNumber: 5
-        description: Persist the subsystem spec with its updated projectPath
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-    conformance: 'off'
-  - name: externalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Load the target subsystem
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Guard the subsystem exists and is currently internal
+          May it be created there, under that alias? A contained path must resolve strictly within
+          the project (absolute, inner-`..` and link-escaping paths escape); a `../` source must be
+          a sibling checkout ONE level up (`../<name>`, folders below it allowed) — one climbing
+          further out, or naming the project's own folder or one holding it, would scaffold a .wai
+          outside the family where nobody looks; and the alias must not already name an external, or
+          a member at another source (an equal declaration is a re-run completing a partial
+          scaffold). Each is refused before anything is scaffolded
         type: branch
-        condition: the subsystem is missing or already has a projectPath (already external)
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'Reject: cannot externalize a missing or already-external subsystem'
-        type: throw
-        error: 'cannot externalize: subsystem is missing or already external'
-      - stepNumber: 4
-        description: >-
-          Provision an isolated child project at projectPath (project.yaml + L0), scoped to the
-          child root
-        type: local
-      - stepNumber: 5
-        description: >-
-          Move the subsystem's spec subtree (its .index.yaml, components, interfaces,
-          implementations, and types) from the parent specs dir into the child specs dir
-        type: local
-      - stepNumber: 6
-        description: >-
-          Compose a minimal parent mount for the subsystem: id + parentSystem + projectPath with an
-          empty public surface
-        type: local
-      - stepNumber: 7
-        description: Persist the parent mount
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
-      - stepNumber: 8
-        description: >-
-          Rewrite cross-subsystem references across the remaining parent specs (dependsOn, narrative
-          call targets, type refs) from bare ids to the subsystem-namespaced ids
-        type: local
-      - stepNumber: 9
-        description: Invalidate the spec cache
-        type: local
-      - stepNumber: 10
-        description: Subsystem externalized into a standalone subproject
-        type: return
-        outcome: externalized
-    conformance: 'off'
-  - name: internalizeSubsystem
-    narrative:
-      - stepNumber: 1
-        description: Load the target subsystem
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadSubsystemSpec
-      - stepNumber: 2
-        description: Guard the subsystem exists and is currently external
-        type: branch
-        condition: the subsystem is missing or has no projectPath (not external)
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'Reject: cannot internalize a missing or non-external subsystem'
-        type: throw
-        error: 'cannot internalize: subsystem is missing or not external'
-      - stepNumber: 4
-        description: Guard the subproject is a single flat subsystem matching the mount id
-        type: branch
-        condition: the subproject declares subsystems other than the mount id (a multi-subsystem system)
+        condition: >-
+          the path escapes, climbs more than one folder out, names the project's own folder, or the
+          alias is already declared otherwise
         onFalseStep: 6
       - stepNumber: 5
-        description: 'Reject: the subproject is not a flat subsystem'
-        type: throw
-        error: 'cannot internalize: subproject is a multi-subsystem system, not a flat subsystem'
-      - stepNumber: 6
         description: >-
-          Move the subproject's spec subtree back under the parent subsystem folder, stripping the
-          namespace
-        type: local
+          Refuse, writing nothing, naming where the source lands and the accepted forms — inside the
+          project (`services/<name>`) or a sibling one level up (`../<name>`); a project that
+          already lives further away is declared with `wairon member attach` or `wairon externals
+          add`, never scaffolded — or the declaration that stands under the alias
+        type: throw
+        error: the member cannot be created there, or the alias is declared otherwise
+      - stepNumber: 6
+        description: Is the member in a git repository?
+        type: branch
+        condition: the member is declared by a git source
+        onFalseStep: 12
       - stepNumber: 7
-        description: Restore the parent subsystem spec from the child's realization, dropping projectPath
-        type: local
+        description: >-
+          Resolve the commit: the source's `#<commit>` when given, else the remote's default branch
+          head now; unreachable refuses, writing nothing
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
       - stepNumber: 8
-        description: Persist the internalized subsystem
+        description: >-
+          Fetch that commit and check the repository already holds the member at `dir`; nothing is
+          scaffolded in a repository wairon does not own — its content decides what the member is (a
+          part there must carry its PartOf naming the bound project, else MEMBER_KIND_MISMATCH) —
+          and the commit goes into the declaration as `#<commit>`. A git project member is read at
+          audience `instance`, as any consumer outside its family: one whose L0 export table exports
+          names, but none at `instance` or wider, is refused, writing nothing, with the audience
+          reason `wairon externals add` gives
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 9
+        description: A report (`--report`)?
+        type: branch
+        condition: report is set
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Answer the declaration it would write — the git member resolved, fetched and judged
+          exactly as above — written false, nothing written
+        type: return
+        outcome: MemberCreation (report)
+      - stepNumber: 11
+        description: A git member is only declared
+        type: jump
+        toStep: 23
+      - stepNumber: 12
+        description: >-
+          A report (`--report`)? Every refusal a path member meets is made here as the write would
+          make it — a part over a folder that already holds a project, a part outside the project
+          while this project has no id — and the plan answered: each file or folder it would create
+          (the specs folder, the member's configuration, its L0, the declaration in members), named
+          with where it lies
+        type: branch
+        condition: report is set
+        onFalseStep: 14
+      - stepNumber: 13
+        description: Answer the plan, written false; nothing was written
+        type: return
+        outcome: MemberCreation (report)
+      - stepNumber: 14
+        label: kind
+        description: A part (the default) or a project? A project is created by creating its content
+        type: branch
+        condition: 'a project is asked for (as: project)'
+        onFalseStep: 22
+      - stepNumber: 15
+        description: >-
+          Scope the project root to the member directory, so the next reads and writes address the
+          member project, and check whether the member already has a configuration
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+      - stepNumber: 16
+        description: 'Complete only what is missing: an existing configuration is never overwritten'
+        type: branch
+        condition: the member has no configuration
+        onFalseStep: 19
+      - stepNumber: 17
+        description: >-
+          List the packs installed in this wairon install's store, every version with its digest and
+          recorded origin, and scaffold the requirements once: for each required pack the highest
+          installed version its range admits (pack_requirement.admits), as `pack use --pin` records
+          it; a requirement no installed version satisfies is collected as unadopted and nothing is
+          written for it; when exactly one adopted requirement names a profile, it becomes the
+          member's projectType
+        type: call
+        targetComponent: extension_orchestrator
+        targetMethod: listInstalledPacks
+      - stepNumber: 18
+        description: >-
+          Write the member's default configuration, named after the alias (or the display name
+          given), declaring the alias as its project id, and carrying the scaffolded selections in
+          extensions.packs (and the required profile as projectType), through the project config
+          Repository. This is the only time a parent's requirements are written into a member:
+          afterwards they are the member's own selection, and an existing configuration is never
+          given any
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 19
+        label: bootstrap_l0
+        description: 'Keep an existing spec tree intact: bootstrap an L0 only for a member that has none'
+        type: branch
+        condition: the member has no L0 system spec
+        onFalseStep: 21
+      - stepNumber: 20
+        description: >-
+          Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
+          is the description given, else one line naming it a member of this project — so a fresh
+          member becomes runnable standalone
         type: call
         targetComponent: spec_loader
-        targetMethod: saveSubsystemSpec
+        targetMethod: saveSystemSpec
+      - stepNumber: 21
+        description: 'Restore the declaring project''s scope: the project is scaffolded'
+        type: jump
+        toStep: 23
+      - stepNumber: 22
+        label: part
+        description: >-
+          Scaffold a part: its specs directory and, when it is NOT contained, with the project root
+          scoped to it, a configuration holding only its PartOf (the bound project's id, the bound
+          root relative to it) — a contained part needs no configuration, its parent finds it; a
+          directory that already holds a project refuses (adopting an existing project is `member
+          attach`); then restore the declaring project's scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 23
+        label: declare
+        description: >-
+          Declare the member in the declaring project's `members` — the shorthand `alias: <source>`
+          (a git source with its `#<commit>`), the long form only to carry a description — through
+          the project config Repository; an equal declaration writes nothing
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 24
+        description: >-
+          Drop the spec loader's cache, so the next read sees the member just scaffolded and
+          declared rather than the tree as it was scanned before
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 25
+        description: >-
+          Member declared and ensured; answer what was created (part or project, its storage and
+          commit) and, for a project, the packs scaffolded
+        type: return
+        outcome: >-
+          member created: the MemberCreation (whether the configuration was created, the adopted
+          selections, the unadopted requirements, the projectType written)
+  - name: moveMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph of the bound root: the member the alias declares, with its
+          declaration form and path — a contained or `../` sibling project member, or (stage 8) a
+          part; one fetched from git or a hosted record is refused
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          Read the bound project's configuration through the project config Repository, for the
+          member's declared storage: a member fetched from git or held as a hosted record has no
+          directory of this project's to move and is refused, a sibling checkout is moved by its own
+          path
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 3
+        description: Guard that the alias declares a member
+        type: branch
+        condition: the bound root declares no member under the alias
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Reject: the alias names no member'
+        type: throw
+        error: no member is declared under that alias
+      - stepNumber: 5
+        label: legacy
+        description: Is the member still declared in the legacy L1 form?
+        type: branch
+        condition: the member is declared by a legacy L1 mount
+        onFalseStep: 10
+      - stepNumber: 6
+        label: carries-fields
+        description: Does the legacy mount carry more than a path and a description?
+        type: branch
+        condition: >-
+          the mount's L1 spec carries a field beyond projectPath and description that its member
+          would have to hold: a non-empty publicInterfaces or trustedLinks, a lint allow, a
+          lifecycle, profile, targetLanguage, designDepth or ext
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Refuse before anything is written, naming the fields and pointing at `wairon doctor
+          --fix`, whose chaining migration carries them into the member plan-first — a move never
+          drops a field
+        type: throw
+        error: the legacy mount carries fields a move cannot carry
+      - stepNumber: 8
+        label: declare
+        description: >-
+          Move the declaration into `members` first (its current path, the mount's description), so
+          wairon never rewrites the L1 form
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
       - stepNumber: 9
-        description: Delete the child .wai project (project.yaml + specs)
-        type: local
+        description: Delete the L1 mount document
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
       - stepNumber: 10
-        description: Rewrite references across the parent specs from the namespaced ids back to bare ids
+        label: relocate
+        description: >-
+          Resolve the old and new member directories from the bound project root — a contained one
+          under the containment guard, a sibling's by its leading `../`; reject a move that changes
+          the storage, a target on another volume, and one that already exists; relocate the
+          directory on disk; a sibling part's PartOf path is re-expressed from its new place
         type: local
       - stepNumber: 11
-        description: Invalidate the spec cache
-        type: local
+        description: Point the `members` entry at the new path
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setMemberPath
       - stepNumber: 12
-        description: Subsystem internalized back into the parent tree
+        description: Drop the spec loader's cache, so the next read sees the member where it now lives
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+  - name: externalizeSubsystem
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the target subsystem
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 2
+        description: >-
+          Guard the subsystem exists, is a subsystem, and lives in the bound project's own specs
+          folder (not already in a part or a member)
+        type: branch
+        condition: >-
+          the subsystem is missing, is a legacy mount (a member declaration, not a subsystem), or is
+          read from a part
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: cannot externalize a missing subsystem, one already in a part, or a member'
+        type: throw
+        error: 'cannot externalize: the subsystem is missing, already in a part, or a member'
+      - stepNumber: 4
+        description: >-
+          Create the part's specs directory at the path (under the containment guard; a directory
+          holding a project, or a new one already holding a configuration, refuses — creating one
+          never overwrites it) — a contained part needs no configuration — unless it already is this
+          project's part, which the subsystem joins. As a project, every promote refusal is found
+          here, before anything moves
+        type: local
+      - stepNumber: 5
+        description: >-
+          Move every spec file the subsystem owns into the part's specs dir, whatever the layout
+          keeps it in: its nested folder whole (its .index.yaml, components, interfaces,
+          implementations and types), and each file outside it at the same relative place under the
+          part — a type or group in the shared types/ folder naming it, and in the flat layout its
+          subsystems/ file, each component naming it, their contracts and those contracts'
+          implementations; a destination already taken refuses before anything moves, and a folder
+          the move empties goes. Each moved implementation's file paths — sourcePath, each method's
+          sourcePath, simPath, each binding-module path — and each moved type's — sourcePath and
+          each method's sourcePath — are re-expressed relative to the part's root, the same files.
+          Keys and references are untouched: the moved specs are still the bound project's own, so
+          nothing is respelled
+        type: local
+      - stepNumber: 6
+        description: >-
+          Back in the parent's scope, declare the part in `members` under the subsystem id by the
+          shorthand `alias: <path>` — unless the path is an existing part's, already declared
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 7
+        description: Is the moved subsystem to become a project?
+        type: branch
+        condition: 'the request asks for a project (as: project)'
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Promote the new part in place under the subsystem id — exactly promoteMember's writes
+          (configuration made a project's, minimal L0, exports on both sides for what crosses and
+          for every name the parent re-exports from it, references respelled across the new
+          boundary, crossing consumers entries dropped, the parent declared as its external, `as:
+          project`) and its refusals, which here leave nothing moved: the externalize as project is
+          one write or none. Keep its result
+        type: local
+      - stepNumber: 9
+        description: >-
+          Subsystem moved into a part (answer nothing), or into a member project (answer the
+          promote's result)
         type: return
-        outcome: internalized
-    conformance: 'off'
+        outcome: externalized, with the promote result for a project
+  - name: internalizeMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph of the bound root: the member under the alias, its declaration
+          form, its subsystems, project-level types, members and externals
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: Guard the alias declares a member
+        type: branch
+        condition: the bound root declares no member under the alias
+        onFalseStep: 4
+      - stepNumber: 3
+        description: 'Reject: the alias names no member'
+        type: throw
+        error: 'cannot internalize: no member is declared under that alias'
+      - stepNumber: 4
+        label: home
+        description: >-
+          Resolve the destination's home subsystem: the one it names, else the member's only
+          subsystem
+        type: local
+      - stepNumber: 5
+        description: Guard the home
+        type: branch
+        condition: >-
+          the home names no subsystem of the member or of the bound project, or none is named while
+          the member holds several subsystems and its L0 says more than its name
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Reject, naming the member's subsystems as the candidates
+        type: throw
+        error: 'cannot internalize: the member''s metadata needs a home subsystem (--into)'
+      - stepNumber: 7
+        label: read-member
+        description: >-
+          With the project root scoped to the member, read its configuration — members, externals,
+          packs, projectType, rules — through the project config Repository, then restore the bound
+          scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 8
+        description: >-
+          Collect every refusal before anything moves: a moved subsystem, project-level type or spec
+          file that would land on an existing one; a member fetched from git (its files are the
+          fetch cache's); and, for a project member only, a member or external alias the bound
+          project already declares differently, a pack the member selects that differs and the
+          destination neither adopts nor drops, conformance debt or severity overrides the parent
+          does not share, a destination export colliding with a public name the parent already
+          exports, or a file of its .wai that cannot end with its boundary. Every entry wairon
+          itself writes under a project's .wai is recognised (round 8 — `wairon init` writes
+          phased_design.md into every project it scaffolds): project.yaml; the lock; pins and
+          snapshots (externals.lock.yaml, externals); legacy surfaces; derived outputs (agents,
+          context, docs, generated, rules, templates, topology.yaml, mcp); the design workbook
+          phased_design.md; host and producer bindings (git.json, remote.json, producers.json); and
+          what the home project keeps — variants and vendored packs. An entry wairon never writes,
+          or a variant or pack file the home holds under the same name with other content, is
+          refused
+        type: local
+      - stepNumber: 9
+        description: Is anything refused?
+        type: branch
+        condition: the collected refusals are not empty
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: 'cannot internalize: the member cannot be taken in whole'
+      - stepNumber: 11
+        label: take-in
+        description: >-
+          Delete its legacy L1 mount document first (false, writing nothing, for a member declared
+          in `members`), so a moved subsystem can take the folder the mount document held
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
+      - stepNumber: 12
+        description: >-
+          Move every subsystem subtree of the member and its project-level types under the bound
+          project's specs, their keys becoming local, and re-express each moved implementation's
+          file paths (sourcePath, each method's sourcePath, simPath, each binding-module path) and
+          each moved type's (sourcePath, each method's sourcePath) relative to the bound root. Each
+          reference that crossed the old boundary is re-expressed with the target the scan bound it
+          to before the move, so the re-save below keeps every target — a type position through the
+          one type-reference rewriter a type move uses, token by token: a bare parameter type, a
+          generic argument (`list<alias::x>`), an optional (`alias::x?`), a union and a returns
+          alike, so no position keeps the alias the internalize retires
+        type: local
+      - stepNumber: 13
+        description: Is there a project boundary to dissolve, or only storage to move?
+        type: branch
+        condition: >-
+          the member is a project (stage 8: a part's specs are already the project's own, and it
+          holds no metadata to place)
+        onFalseStep: 21
+      - stepNumber: 14
+        description: >-
+          Place what the member held for its subsystems: append its L0 vision to the home
+          subsystem's description as a paragraph naming the member, and stamp its targetLanguage,
+          projectType (as profile) and designDepth on each moved subsystem that states none of its
+          own, where they differ from the bound project's — the projectType only when it is a
+          subsystem profile (built in, or registered by a pack the bound project loads) and the
+          designDepth only when it is a design depth; a value a subsystem cannot hold is not stamped
+          and is listed in the result's notCarried with the reason, never left to raise
+          UNKNOWN_PROFILE
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 15
+        description: >-
+          Place what the member held as a project in the bound project's L0: its boundaries,
+          globalRequirements and databases merged by identity (an equal entry once), its re-exports
+          from the member re-pointed at the moved subsystems, and a re-export for each destination
+          export, at the audience the member gave it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 16
+        description: >-
+          Declare each of the member's own members as the bound project's member under the same
+          alias, its path re-expressed from the bound root, its description and `use` kept (an equal
+          declaration writes nothing)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 17
+        description: >-
+          Declare each of the member's externals other than the parent as the bound project's
+          external under the same alias, a relative source re-expressed from the bound root
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 18
+        description: >-
+          Import the names each carried external's `use` held, so the moved specs' bare names still
+          resolve
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+      - stepNumber: 19
+        description: Does the destination adopt the member's packs?
+        type: branch
+        condition: the destination says adopt and the member selects a pack the bound project does not
+        onFalseStep: 21
+      - stepNumber: 20
+        description: Select each such pack in the bound project, pinned at the member's version and digest
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+      - stepNumber: 21
+        label: remove
+        description: >-
+          Remove the member from `members` (false, writing nothing, for a member declared in the
+          legacy form)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeMember
+      - stepNumber: 22
+        description: >-
+          Place in the bound project what it keeps of the member's .wai — each variant and vendored
+          pack file it lacks, named in placed (one equal to its own is simply deleted); a design
+          workbook that differs from the bound project's, names aside, is named in notCarried, so
+          the plan says so before anything is applied — then delete what remains of the member's
+          .wai — for a project its project.yaml, lock, pins and snapshots, derived outputs, legacy
+          surfaces, workbook and host bindings; for a part its PartOf configuration and its pin of
+          the parent — recording each file in the result's deleted list under its group
+        type: local
+      - stepNumber: 23
+        description: >-
+          Drop the spec loader's cache now the member's files have moved in and its .wai is gone, so
+          the references below are re-saved from the tree as it now stands - and once more after the
+          re-save, so the next read sees them as written
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 24
+        description: >-
+          Re-save every spec that referenced across the old boundary, targets unchanged: the
+          parent's `alias::name` references and the moved specs' `<parent id>::name` references
+          become local ids — each contract or type method whose stored signature text its respelled
+          params now contradict named first in signaturesRederived, the re-save writing the derived
+          text (spec_registry.normalizeReferences compares the stored text too); then drop the spec
+          cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 25
+        description: >-
+          Member internalized: answer what moved, where each piece went, the carried externals and
+          what was deleted
+        type: return
+        outcome: 'internalized: the InternalizeResult'
   - name: loadTypeSpecs
     narrative:
       - stepNumber: 1
@@ -421,9 +691,9 @@ methods:
   - name: buildProjectGraph
     narrative:
       - stepNumber: 1
-        description: Forward to the diagram specialist's pure graph projection
+        description: Forward to the pure graph projection of architecture_diagrams
         type: call
-        targetComponent: diagram_specialist
+        targetComponent: architecture_diagrams
         targetMethod: buildGraphModel
     detail: calls-only
   - name: resolveChainingParent
@@ -438,27 +708,3072 @@ methods:
       - stepNumber: 1
         description: >-
           Bind the given root READ-ONLY for the duration of this computation, remembering the
-          previous binding; a root with no loadable spec tree short-circuits to null
+          previous binding, and drop that root's cached index so the read below comes fresh from
+          disk
         type: local
       - stepNumber: 2
+        description: Read the bound root's system spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 3
+        description: 'A root with no loadable spec tree is not digested: its answer is null'
+        type: branch
+        condition: the root holds a loadable spec tree (a system spec was read)
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
         description: Digest the bound tree into its deterministic StateId
         type: call
-        targetComponent: state_hash_specialist
-        targetMethod: hashSpecTree
-      - stepNumber: 3
+        targetComponent: state_hash
+        targetMethod: compute
+      - stepNumber: 5
         description: Restore the previous root binding unconditionally (also on failure paths)
         type: local
-      - stepNumber: 4
-        description: Return the computed state hash
+      - stepNumber: 6
+        description: Return the computed state hash, or null when the root holds no loadable spec tree
         type: return
         outcome: StateId or null
-lint:
-  allow:
-    - code: UNREALIZED_DEPENDENCY
-      reason: >-
-        The lock/state-hash forwarding methods are realized in sibling core modules (provision.ts,
-        lockfile.ts, statehash.ts) — specs.ts itself never imports them; same split-file facade
-        documented on the structural-conformance per-method offs.
+  - name: resolveSubprojectForNamespace
+    narrative:
+      - stepNumber: 1
+        description: Resolve the mount through the spec loader's read face
+        type: call
+        targetComponent: spec_loader
+        targetMethod: resolveSubprojectForNamespace
+  - name: createProjectConfig
+    narrative:
+      - stepNumber: 1
+        description: Write the fresh configuration through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+  - name: upsertPackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+  - name: removePackSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removePackSelection
+  - name: setProjectType
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setProjectType
+  - name: recordProfileSelection
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: recordProfileSelection
+  - name: setExecutionTier
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setExecutionTier
+  - name: registerPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: registerPackRef
+  - name: deregisterPackRef
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: deregisterPackRef
+  - name: markSelectionsBundled
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: markSelectionsBundled
+  - name: ensureProjectInitialized
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Check whether the bound root already holds an L0 system spec
+        type: local
+      - stepNumber: 2
+        description: Does a system spec exist?
+        type: branch
+        condition: a system spec exists at the bound root
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Prefer the existing system spec's name over the fallback
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 4
+        description: Does the project already have a configuration?
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+      - stepNumber: 5
+        description: Complete only what is missing
+        type: branch
+        condition: the project has no configuration
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Create the default configuration under the chosen name, declaring the given id, else the
+          chosen name slugified
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 7
+        description: Is the system spec still missing?
+        type: branch
+        condition: no system spec exists at the bound root
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Write the bootstrap L0 system spec under the chosen name
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 9
+        description: Drop the spec loader cache when anything was written
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 10
+        description: Report which files were written
+        type: return
+        outcome: ProjectBootstrap
+  - name: listDirectChainedSubprojects
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the project config repository to that root, so the member declarations are read from
+          its own project.yaml rather than the ambient root's
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: at
+      - stepNumber: 2
+        description: >-
+          Read the project's member declarations at that root: its project.yaml `members`
+          (project_config.declaredMembers(), read through that root's binding, as the scan reads a
+          root's configuration) and, for one release, the subsystem specs of its own tree carrying a
+          projectPath; a `members` entry wins over a legacy mount under the same alias. A PART
+          (stage 8: a contained member whose folder holds no id, no L0 and no lock) is no chained
+          project — its subsystems are this root's own, generated, briefed and backfilled with it —
+          so it is not listed
+        type: local
+      - stepNumber: 3
+        description: Walk the member declarations
+        type: loop
+        loopKind: forEach
+        over: the project's member declarations, members entries first
+        endStep: 5
+      - stepNumber: 4
+        description: Resolve the path inside the project root; an absolute or escaping path is skipped
+        type: local
+      - stepNumber: 5
+        description: Record the member's directory with its alias and declaration form
+        type: local
+      - stepNumber: 6
+        description: Return the direct members
+        type: return
+        outcome: ChainedSubprojectDir[]
+  - name: readLockState
+    narrative:
+      - stepNumber: 1
+        description: Read the persisted lock record through the lock store
+        type: call
+        targetComponent: lock_store
+        targetMethod: read
+      - stepNumber: 2
+        description: No record means the project was never locked, a normal state rather than a fault
+        type: branch
+        condition: no lock record exists
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Return unlocked with no record, carrying current as the identity a lock would record
+        type: return
+        outcome: unlocked
+      - stepNumber: 4
+        description: >-
+          Compare the recorded gate identity with the one the caller computed now — or, for a
+          format-2 record, with current.asRecorded: the same identity recomputed under the algorithm
+          that record was taken with. Nothing is hashed here. Accepting asRecorded is what keeps a
+          lock taken before code linkage left the approval valid while nothing it covered moved
+        type: branch
+        condition: the record's stateId equals current, or equals current.asRecorded
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Return locked with the record and current
+        type: return
+        outcome: locked
+      - stepNumber: 6
+        description: >-
+          Return stale with the record and current, keeping the record: staleness is a judgement
+          about the record, so a caller can prompt for a re-lock rather than present the project as
+          never frozen
+        type: return
+        outcome: stale
+  - name: consumedContractInputs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the BOUND root's consumed contracts only: its stored surface snapshots under
+          .wai/surfaces, its pinned external snapshots under .wai/externals and its
+          .wai/externals.lock.yaml. No member root is read: a member's inputs are its own gate's,
+          and reach this project only through the member's composition subject. A missing directory
+          or lock holds none, and a malformed file is skipped rather than aborting the read. Read
+          locally: the snapshot and lock files are modelled in sdd_surfaces, which sdd_core must not
+          depend on
+        type: local
+      - stepNumber: 2
+        description: >-
+          Reduce each to its canonical content key: a snapshot with its provenance (stateId,
+          generatedAt, origin) stripped and the rest canonicalized, so re-pinning an unchanged
+          contract never moves the key; the lock canonicalized whole, since its digests and `used`
+          map are what a verdict consults. Each key names its kind (surface, external, lock) so
+          equal content in two kinds never collides
+        type: local
+      - stepNumber: 3
+        description: Return the root's content keys
+        type: return
+        outcome: string[]
+  - name: retireSpecialists
+    sourcePath: src/core/stereotype-migration.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every component spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Collect the Specialists, each unclassified. Gateways are not migrated here:
+          STEREOTYPE_RETIRED gives their manual steps
+        type: local
+      - stepNumber: 3
+        description: Classify over the dependency graph in passes, until a pass classifies nothing
+        type: loop
+        condition: the pass classified at least one Specialist
+        loopKind: doWhile
+        endStep: 14
+      - stepNumber: 4
+        description: Try each Specialist still unclassified
+        type: loop
+        loopKind: forEach
+        over: each Specialist still unclassified
+        endStep: 13
+      - stepNumber: 5
+        description: A Specialist with a dependency still unclassified waits for the next pass
+        type: branch
+        condition: 'every dependency is decided: none is a Specialist still unclassified'
+        onFalseStep: 4
+      - stepNumber: 6
+        description: Pure when every dependency is pure
+        type: branch
+        condition: >-
+          every dependency is pure: an Orchestrator declaring dependencyClass pure, or a Specialist
+          classified pure
+        onFalseStep: 9
+      - stepNumber: 7
+        description: Classify it pure
+        type: local
+      - stepNumber: 8
+        description: Go record its reason
+        type: jump
+        toStep: 13
+      - stepNumber: 9
+        description: Read when every dependency is pure or read logic, or a data facade it may read
+        type: branch
+        condition: >-
+          every dependency is pure or read logic (declared or classified), or a Repository, Index or
+          Adapter
+        onFalseStep: 12
+      - stepNumber: 10
+        description: Classify it read
+        type: local
+      - stepNumber: 11
+        description: Go record its reason
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: 'Leave its class unset, a workflow Orchestrator: some dependency fits neither class'
+        type: local
+      - stepNumber: 13
+        label: record
+        description: Record the dependencies that decided its class as its reason
+        type: local
+      - stepNumber: 14
+        description: Close the pass, noting whether it classified any Specialist
+        type: local
+      - stepNumber: 15
+        description: >-
+          Settle the Specialists still unclassified, those in a dependency cycle or waiting on one,
+          with the weakest class that fits: read when every dependency is pure or read logic, a
+          Repository, Index or Adapter, or another of them; otherwise unset. One left unset makes
+          those depending on it unset in turn, until nothing changes. Each records the dependencies
+          that decided it
+        type: local
+      - stepNumber: 16
+        description: >-
+          Read the project's own variants through the variant registry adapter, keeping those whose
+          base is Specialist
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: listProjectVariants
+      - stepNumber: 17
+        description: >-
+          Compose the plan: retyped, each Specialist with its dependencyClass when set and its
+          reason; rebasedVariants, the ids of those variants
+        type: local
+      - stepNumber: 18
+        description: Without apply, nothing is written
+        type: branch
+        condition: apply is false
+        onFalseStep: 20
+      - stepNumber: 19
+        description: Return the plan with applied false
+        type: return
+        outcome: planned
+      - stepNumber: 20
+        description: Write each retype
+        type: loop
+        loopKind: forEach
+        over: each retyped Specialist
+        endStep: 21
+      - stepNumber: 21
+        description: Save it with componentType Orchestrator and its dependencyClass when set
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 22
+        description: >-
+          Rebase those variant files in place through the variant registry adapter, from base
+          Specialist to base Orchestrator; its result gives the rebased ids
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: rebaseProjectVariants
+      - stepNumber: 23
+        description: Invalidate the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 24
+        description: Return the plan with applied true
+        type: return
+        outcome: applied
+  - name: renameComponent
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          Guard: the component must exist and be the bound project's own — the project boundary
+          every write asks (crossProjectWriteRefusal, asked to exist) before the read is trusted, so
+          a member's or an external's component — by its key, through an `alias::name`, or a bare id
+          only a member holds — is refused as living in another project, and an id no project holds
+          as missing, in the one sentence every write tool answers with
+        type: branch
+        condition: the component does not exist
+        onFalseStep: 4
+      - stepNumber: 3
+        label: spec-missing
+        description: >-
+          Refuse a component no project in reach holds, with the one sentence every write tool
+          answers with
+        type: throw
+        error: 'spec-missing: this project has no component with this id'
+      - stepNumber: 4
+        description: >-
+          Guard: the component must belong to the bound project itself — the project boundary every
+          write asks (crossProjectWriteRefusal), asked first for an id carrying `::`
+        type: branch
+        condition: 'componentId is namespaced into a chained mount (it carries the :: separator)'
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-spec
+        description: >-
+          Refuse a component inside another project with the one sentence every write tool answers
+          with: a member project is written from its own root, never through its parent's tree, so
+          the refusal names the member's folder and the same rename run there (its own MCP server:
+          open a session in that folder, which `wairon init` or the promote that made it gave a
+          guide and .mcp.json; or `wairon generate` and `wairon mcp install --backend claude` there
+          first); an external's is read-only here
+        type: throw
+        error: >-
+          chained-spec: the component lives in another project, naming which one and how it is
+          changed there
+      - stepNumber: 6
+        description: 'Guard: the new id must be a plain lowercase identifier'
+        type: branch
+        condition: >-
+          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
+          separator
+        onFalseStep: 8
+      - stepNumber: 7
+        label: invalid-id
+        description: Refuse a new id outside the grammar
+        type: throw
+        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
+      - stepNumber: 8
+        description: Load every component spec, for the component ids already taken
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 9
+        description: Load every interface spec, for the interface ids taken and the component's own contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 10
+        description: >-
+          Load every implementation spec, for the implementation ids taken and the realizations of
+          those contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 11
+        description: 'Guard: nothing may already hold the new ids, and no renamed spec may have retired them'
+        type: branch
+        condition: >-
+          newId is already a component id, or i<newId> is an interface id, or <newId>_impl is an
+          implementation id; or one of those ids is listed in the rename trace (previousIds) of a
+          spec of its kind (spec_index.retiredBy)
+        onFalseStep: 13
+      - stepNumber: 12
+        label: id-taken
+        description: >-
+          Refuse a new id already taken (id-taken), or one a renamed spec retired (id-retired,
+          naming the holder and saying that unsetting the holder's previousIds releases it — a
+          consumer holding the old key would read the new spec as the renamed one)
+        type: throw
+        error: >-
+          id-taken or id-retired: the new id, or the interface or implementation id it implies, is
+          in use or retired
+      - stepNumber: 13
+        description: >-
+          Collect what moves to a new id: the component's interface named i<componentId>, and the
+          implementation named <componentId>_impl that realizes one of the component's contracts.
+          Interfaces and implementations named otherwise keep their ids — their component and
+          contract references change, and their files follow the component's folder when the move is
+          written (moveRenamedSpecs); sdd_rename_spec renames one of them on its own
+        type: local
+      - stepNumber: 14
+        description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename): every renamed spec with its old and new id, and the component wherever
+          a covered unit or an edge site names it
+        type: local
+      - stepNumber: 15
+        description: >-
+          Rekey the debt register as a DRY RUN, before the first write: a register that cannot be
+          rewritten without disturbing its comments and formatting refuses the rename here, so it
+          never half-lands with its debt left behind reading as both paid and new
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 16
+        label: componentDryRun
+        description: >-
+          A dry run stops here, refused exactly as the real rename above: collect without writing
+          every spec the rewrite and the lint-allow rekey WOULD change and every export entry that
+          would get an `as`
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Return what the rename would do, marked dryRun: renamed, the ids it would rewrite (the
+          moved specs left out), the public names it would keep and the register edits the dry rekey
+          planned; nothing was written
+        type: return
+        outcome: ComponentRename (dry run)
+      - stepNumber: 18
+        description: >-
+          Rewrite every reference to a renamed id across the bound tree with the provisioning
+          rewriter, the moved specs' own files included: a component's dependsOn, owns and dispatch
+          components; a subsystem's lifecycle components and its published interfaces' component and
+          interface; the system's published interfaces' component and interface; narrative call,
+          dispatch and register targets, and a step's auth.from component source; an interface's
+          component; an implementation's contract; and an entity's componentClass. Before an L1 or
+          L0 export entry's component or interface is respelled, an entry that states no `as` (whose
+          public name was derived from the old id) gets `as: <that public name>` written, so the
+          published name and every consumer's pin stay
+        type: local
+      - stepNumber: 19
+        description: >-
+          Rekey every lint allow in the bound tree by the same move (identity_rename.rekeyAnchor): a
+          site on an edge naming the component and every covered unit naming it follow, and each
+          spec whose allows changed joins the rewritten specs — a spec the rename moves carries its
+          allows with it
+        type: local
+      - stepNumber: 20
+        description: Drop the cached spec index, so the saves below place specs by the rewritten owns
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 21
+        description: >-
+          Move each renamed spec to its new id: reload it as the rewrite left it, write it under the
+          new id where the loader places it, remove the file it left behind and drop the cached
+          index again
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveRenamedSpecs
+      - stepNumber: 22
+        description: >-
+          Rekey the debt register for real: every carried entry anchored on a renamed spec or naming
+          the component in its site or units, rewritten in place with every comment and all other
+          formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 23
+        description: >-
+          Return renamed (each moved spec's kind with its old and new id), rewritten (the ids of the
+          other specs whose references or lint allows changed), keptPublicNames (each export entry
+          that got an `as`) and carried (each register edit)
+        type: return
+  - name: renameMethod
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component whose contract method is renamed
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          Guard: the component must exist and belong to the bound project itself — the project
+          boundary every write asks (crossProjectWriteRefusal, asked to exist) FIRST, so a member's
+          or an external's component — through its alias, or a bare id only a member holds — is
+          refused as living in another project and an id no project holds as missing, in the one
+          sentence every write tool answers with
+        type: branch
+        condition: >-
+          the component does not exist, or componentId is namespaced into a chained mount (it
+          carries the :: separator)
+        onFalseStep: 4
+      - stepNumber: 3
+        label: spec-missing
+        description: >-
+          Refuse, writing nothing, with the one sentence every write tool answers with: a component
+          in another project (chained-spec — naming that project's folder and the session to open
+          there) or one no project holds (spec-missing)
+        type: throw
+        error: spec-missing or chained-spec
+      - stepNumber: 4
+        description: >-
+          Guard: the new name must be an identifier (identifier.problemAs method: at most 64
+          characters, no leading digit, never __proto__), never a word the subsystem's effective
+          targetLanguage reserves for a method (identifier.reservedIn — constructor in TypeScript,
+          fn or type in Rust), and in the method casing of the tree's language:
+          naming_rule_config.methodCasingFor(the subsystem's effective targetLanguage), the casing
+          the naming-conventions rule and the define tools judge by, so define and rename accept the
+          same names (snake_case in a Rust tree, camelCase in a TypeScript one). A contract of the
+          component that implements another project's extension point (`implements`) takes its
+          method names from the producer, in the producer's language, so for such a component any
+          identifier the language allows is accepted — IMPLEMENTS_MISMATCH judges the name against
+          the producer's, and the casing rule exempts it
+        type: branch
+        condition: >-
+          newName is outside the identifier grammar (identifier.problemAs), reserved in the target
+          language (identifier.reservedIn), or — when no contract of the component declares
+          `implements` — not in that casing
+        onFalseStep: 6
+      - stepNumber: 5
+        label: invalid-name
+        description: Refuse a new name outside the grammar
+        type: throw
+        error: >-
+          invalid-name: the new name must be an identifier in the tree's method casing that the
+          target language allows (naming the casing, or the language and an alternative)
+      - stepNumber: 6
+        description: >-
+          Load every interface spec, for the component's own contracts and the names they already
+          declare, and collect the contracts that move: every interface of this component that
+          declares methodName
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 7
+        description: 'Guard: the component must declare the method'
+        type: branch
+        condition: no contract of the component declares methodName
+        onFalseStep: 9
+      - stepNumber: 8
+        label: method-missing
+        description: Refuse a method the component does not declare
+        type: throw
+        error: 'method-missing: no contract of this component declares that method'
+      - stepNumber: 9
+        description: 'Guard: the new name must be free on every contract that moves, and not retired there'
+        type: branch
+        condition: >-
+          one of those contracts already declares a method under newName, or one of its methods
+          lists `<that contract>.<newName>` in its rename trace (previousNames)
+        onFalseStep: 11
+      - stepNumber: 10
+        label: name-taken
+        description: >-
+          Refuse a new name already declared on that interface (name-taken), or retired by one of
+          its methods (name-retired, naming the method whose previousNames holds it)
+        type: throw
+        error: 'name-taken or name-retired: that interface already declares, or retired, the new name'
+      - stepNumber: 11
+        description: >-
+          Load every implementation spec, for the realizations of those contracts and the narratives
+          that refer to the method
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 12
+        description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename: the method on this component becomes newName, on the contracts that
+          declare it and the implementations of those contracts that realize it) and rekey the debt
+          register as a DRY RUN, before the first write: a register that cannot be rewritten without
+          disturbing its comments and formatting refuses the rename here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 13
+        label: dry-run
+        description: Asked for a dry run?
+        type: branch
+        condition: dryRun is true
+        onTrueStep: 14
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          Answer what the rename WOULD do, writing nothing: the specs the method would move in (the
+          contracts that declare it and the implementations realizing it), the specs the rewriter
+          and the lint-allow rekey would retarget (both asked dry), the mentions left alone, the
+          export entries publishing it, the symbol a pin would set, and the register edits the dry
+          rekey above computed — marked dryRun
+        type: return
+        outcome: dry run
+      - stepNumber: 15
+        description: Move the method on every contract of the component that declares it
+        type: loop
+        loopKind: forEach
+        over: each contract that declares the method
+        endStep: 16
+      - stepNumber: 16
+        description: >-
+          Write the contract with the method under newName: its name, its former key `<contract
+          id>.<old name>` appended to its rename trace (previousNames), and, for a prose method (no
+          params and no signatureFrom), the method name inside its signature string. A method with
+          params has its text derived from the new name by the writer, and a sourced method stores
+          no text at all. Params, returns, signatureFrom, description, guarantees and findings stay
+          as they are
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 17
+        description: Move it on the implementations of those contracts too
+        type: loop
+        loopKind: forEach
+        over: each implementation realizing one of those contracts that declares the method
+        endStep: 20
+      - stepNumber: 18
+        description: >-
+          An implementation that named no symbol needs one now when its code exists: the function it
+          binds to still carries the old name. Its code exists when the file realizing the method
+          (its own sourcePath, else the implementation's) is on disk; with no code written yet there
+          is nothing to keep binding, so no pin is set unless the caller asks for one (pinSymbol
+          true), and a caller declining it (pinSymbol false) is never pinned
+        type: branch
+        condition: the method declares no symbol and pinSymbol is not false
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Pin it: declare symbol <the old name> on the moved method, so that function keeps binding,
+          and record it as the pinned symbol
+        type: local
+      - stepNumber: 20
+        description: >-
+          Write the implementation with the method under newName, carrying its narrative,
+          sourcePath, symbol, detail and intent unchanged
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 21
+        description: >-
+          Drop the cached spec index, so the retargeting below reads the moved names rather than the
+          cached ones
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 22
+        description: >-
+          Retarget every reference to the method with the provisioning rewriter, which persists what
+          it changes: narrative call, register and dispatch steps naming this component and this
+          method; dispatch-table bindings routing a capability to this component and method; and
+          lifecycle entrypoints naming it for a phase. Then rekey every lint allow in the bound tree
+          by the same move (identity_rename.rekeyAnchor): an allow at the method on a spec it moved
+          in follows to newName, and a covered <component>.<method> unit anywhere follows too.
+          Record the specs either rewrote
+        type: local
+      - stepNumber: 23
+        description: >-
+          Collect what names the method but is left alone: the specs whose description, intent or
+          narrative text still carries the old name, and the gRPC endpoint bindings whose wire
+          method still carries it. A rename never edits prose, and never changes a published wire
+          name. Collect too the public names of the L1 and L0 export entries whose contract carries
+          the method: a published member changed there, which is reported, never prevented
+        type: local
+      - stepNumber: 24
+        description: >-
+          Rekey the debt register for real: every carried entry anchored at the method on a spec it
+          moved in, or naming <component>.<method> in a covered unit, rewritten in place with every
+          comment and all other formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 25
+        description: >-
+          Return the report: the component, from and to, the specs the method moved in, the specs
+          whose references or lint allows were retargeted, the mentions left alone, the export
+          entries it is published in, the pinned symbol when one was set, and carried (each register
+          edit)
+        type: return
+        outcome: renamed
+  - name: moveRenamedSpecs
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Reload the component as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: Does the component's own interface move?
+        type: branch
+        condition: the component's interface named i<componentId> moves
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Reload the interface as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 4
+        description: Does the component's own implementation move?
+        type: branch
+        condition: the implementation named <componentId>_impl moves
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reload the implementation as the rewrite left it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpec
+      - stepNumber: 6
+        description: >-
+          Write the component under newId, its own id rewritten and its old id appended to its
+          rename trace (previousIds); the loader nests a member of a pattern under its owner
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 7
+        description: Save the moved interface?
+        type: branch
+        condition: the component's interface moves
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Write the interface under i<newId>, its id and component rewritten and its old id appended
+          to its previousIds
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 9
+        description: Save the moved implementation?
+        type: branch
+        condition: the component's implementation moves
+        onFalseStep: 14
+      - stepNumber: 10
+        description: >-
+          Resolve the moving implementation's current file and the file its new id and contract
+          would take, to tell whether the new path collides with it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: implementationPath
+      - stepNumber: 11
+        description: Does the new path collide with the implementation's current file?
+        type: branch
+        condition: >-
+          the implementation's new path is the file it already occupies (the nested layout, with a
+          contract that keeps its id)
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
+        description: 'Delete that file first: the loader refuses to write a spec over a file holding another id'
+        type: local
+      - stepNumber: 13
+        description: >-
+          Write the implementation under <newId>_impl, its id rewritten, its contract following a
+          renamed interface, and its old id appended to its previousIds
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 14
+        description: >-
+          Resolve where the component's old file lies: when it is an index file in a folder of its
+          own, that folder is the one the staying specs are found in and relocated from
+        type: call
+        targetComponent: spec_loader
+        targetMethod: componentPath
+      - stepNumber: 15
+        description: >-
+          Read every contract of the renamed component and every implementation realizing one,
+          beside the specs that moved to a new id: each keeps its id, but its file must follow the
+          component's folder
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 16
+        description: >-
+          Read every implementation, to keep those that realize one of those contracts and did not
+          move
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 17
+        description: >-
+          Resolve where each staying contract's file lies now, to relocate it beside the component's
+          new folder
+        type: call
+        targetComponent: spec_loader
+        targetMethod: interfacePath
+      - stepNumber: 18
+        description: >-
+          Re-save each of them where the loader now places it — beside the component under its new
+          id — and remove the file it left, so no spec stays in a folder named after a component
+          that no longer exists
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 19
+        description: Remove each moved spec's old file, found by its old id, and prune the folders left empty
+        type: local
+      - stepNumber: 20
+        description: >-
+          Drop the cached spec index again: the removed files changed the tree outside the save
+          paths
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 21
+        description: Return — every renamed spec now sits under its new id and the file it left is gone
+        type: return
+        outcome: void
+  - name: updateSpec
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the stored spec the delta addresses, through the loader entry for its level — this
+          component load and its five siblings; the L0 is a singleton whose load ignores the id
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: 'Guard: the addressed spec must exist'
+        type: branch
+        condition: no spec of that kind holds that id
+        onFalseStep: 4
+      - stepNumber: 3
+        label: spec-missing
+        description: >-
+          Refuse an update to a spec the bound tree does not hold, with the project boundary's
+          sentence (crossProjectWriteRefusal, asked to exist): another project's when only a member
+          holds that bare id, else the one sentence every write tool answers with for a missing spec
+        type: throw
+        error: 'spec-missing: this project has no spec of that kind under that id'
+      - stepNumber: 4
+        description: >-
+          Guard: a spec of a member project (its key lives in a chained subproject of the bound
+          tree) is written from that project's own root, as every other write tool refuses it — the
+          same project boundary every authored write asks (crossProjectWriteRefusal)
+        type: branch
+        condition: the addressed spec belongs to a member project
+        onFalseStep: 6
+      - stepNumber: 5
+        label: member-spec
+        description: >-
+          Refuse, writing nothing, naming the member project and its folder and the call to make in
+          a session there (the same guidance the renames give)
+        type: throw
+        error: 'chained-spec: the spec lives in another project'
+      - stepNumber: 6
+        label: system-kind-guard
+        description: 'Guard: a system-kind update must actually address the singleton L0'
+        type: branch
+        condition: the kind is system and the id names neither the singleton nor the system's own name
+        onFalseStep: 8
+      - stepNumber: 7
+        label: mis-selected-kind
+        description: >-
+          Refuse a mis-selected kind rather than silently rewriting the L0, and name the kind the
+          caller probably meant
+        type: throw
+        error: 'mis-selected-kind: kind system targets the singleton L0'
+      - stepNumber: 8
+        description: 'Guard: every delta key must be a field of the level, or one of the delta''s own verbs'
+        type: branch
+        condition: the delta names a key the level's canonical schema does not know
+        onFalseStep: 10
+      - stepNumber: 9
+        label: unknown-key
+        description: >-
+          Refuse the whole delta, naming each unknown key and its nearest known field — an unknown
+          key is dropped on write, so the edit would report success and change nothing
+        type: throw
+        error: 'unknown-key: the delta names a field the level does not have'
+      - stepNumber: 10
+        label: identity-guard
+        description: 'Guard: a delta edits what a spec says, never which spec it is or where it lives'
+        type: branch
+        condition: >-
+          the delta changes the spec's id or createdAt, a component's or a type's subsystem (unless
+          the stored subsystem is one the tree does not have — the repair of a stray; a system-level
+          type adopting a subsystem is a move, not a repair), an interface's component or an
+          implementation's contract, by value or by unset
+        onFalseStep: 12
+      - stepNumber: 11
+        label: identity-refused
+        description: >-
+          Refuse the whole delta in one sentence naming the field and the tool that owns the change
+          — sdd_rename_component or sdd_rename_type for an id, sdd_rename_spec for a contract's or
+          an implementation's own id, sdd_move_spec to move a component or a type to another
+          subsystem (or a type to or from system level), sdd_move_methods to move behaviour to
+          another component — and saying so where no tool exists yet (renaming a subsystem): the
+          engine would otherwise write a second spec under the new id, or move the file, and leave
+          every reference behind
+        type: throw
+        error: 'identity-refused: the delta changes which spec this is or where it lives'
+      - stepNumber: 12
+        description: >-
+          Merge the delta onto the stored spec: references qualify against the spec's namespace
+          first (a removal marker's value included), identity-keyed arrays upsert element by element
+          and honour their delete markers at every depth, narrative steps insert and delete in
+          ascending order, and `unset` removes the fields it names at the level it sits in while
+          `[]` clears the list it names. A list of plain values (strings, numbers, booleans — owns,
+          dependsOn, guarantees, previousNames, a matches list, the L0's globalRequirements written
+          as text) merges too, at every depth: each value the delta names that the list does not
+          hold is appended, every value it holds is kept, and a value is removed only by naming it
+          in a removal marker `{ value, action: 'delete' }` (or `remove: true`) — a requirement also
+          by `{ description, action: 'delete' }`, a requirement written as text and as `{
+          description }` being the same requirement, and a requirement added as `{ description }` to
+          a stored list of text only stored as text, the form its siblings take (anywhere else as
+          written); a marker naming a value the list does not hold is refused, naming the values it
+          does. So restating a list never loses a value, and only an explicit marker, `[]` or an
+          `unset` takes one away. An existing element merges field by field: a field the delta
+          leaves out, or passes as null, leaves the stored value untouched at every depth — a method
+          named without its narrative keeps its narrative, a step named without its catches keeps
+          them — so only `[]` or an `unset` ever clears one. Every STORED jump field relocates
+          around each insert and delete; a jump the delta itself writes — on an inserted, appended
+          or edited step — names its target in the numbering the whole delta leaves behind, after
+          all of its inserts and deletes, so no later step of the same delta moves it. A step whose
+          type changes is rebuilt for its new type keeping its description and label. A new element
+          takes the shape every stored one has: an implementation method the delta adds without a
+          narrative is an intent-level method with none ([]), one whose narrative is not a list is
+          refused naming the field, and a defaulted list an `unset` removed is back at its default —
+          the write path reads those lists before the schema does, and must never die on one with a
+          raw TypeError. A step delete is refused outright when it addresses no step, when a stored
+          jump still targets it, when a restated label or description does not match it, or when it
+          is a region header whose body would be left standing. When the delta names exactly the
+          stored elements of a list — the same identities, none added, none removed, no marker — in
+          another order, the merged list takes the delta's order: a reorder is an edit, never a
+          silent no-op, while an element the delta adds still appends. Two code-linkage lists of an
+          implementation are the exception: injectedParams and bindings, restated, REPLACE what is
+          stored — the first states the realization's leading (and trailing) parameters in order,
+          the second its binding modules, each whole, and an entry left over from an earlier
+          statement is itself reported (UNUSED_INJECTED_PARAM, BINDING_UNREAD) — while a removal
+          marker in them still removes one value and keeps the rest
+        type: local
+      - stepNumber: 13
+        description: >-
+          Resolve the narratives' symbolic label references against the merged numbering, a label
+          supplied by the delta replacing the stored number it twins; an unresolved reference aborts
+          the whole update, because a dropped reference would silently become a dangling numeric
+          jump
+        type: local
+      - stepNumber: 14
+        description: >-
+          Collect every difference between the stored spec and the merged one as an addressed
+          change, both read through the level's canonical schema so a key the writer would drop
+          cannot count as a change — a narrative by step identity across the renumbering, so an
+          insert reads as the step added, the shift as renumbered runs and the jumps that followed
+          their targets as relocations, never as every later step rewritten — and name every path
+          the delta carried that the write does not act on — one the schema drops at a depth the
+          permissive delta cannot refuse, and one whose value the stored spec already held; a list
+          the write reordered is acted on, never 'already held', and a type position the write
+          respelled to its canonical form (string[] stored as list<string>) is stored, never 'not
+          kept'. A reference is compared by its WRITTEN text, not only by what it binds to: a delta
+          naming a reference the stored spec holds in another spelling that binds to the same target
+          (`geo::distance` for a stored `geo::distance_portal`, the public name for the internal id)
+          is a respelling — a change, reported with both texts and written at its position, so the
+          spelling the gate asks for can be written by the tool meant to write it. Every change is
+          ECHOED in the spelling the write stores: compared on the bound form, a reference another
+          project provides is reported as the delta wrote it, else as the stored file holds it
+          (`geo::distance`), never as the producer's internal id it binds to
+          (`geo-sdk::distance_portal`), which no file carries. Read the stored FILE raw as well and
+          name every key it carries that the level's canonical schema does not know, each as `path:
+          value` (strippedKeys): the parse already discarded them, and the write re-serializes
+          through the schema, so they would otherwise be lost without a word. A list whose elements
+          stayed the same but changed place is reported as reordered, before and after naming both
+          orders; a list of plain values (a requirement written as text or as its description alike)
+          is compared value by value, so a mixed edit reads as the values added and removed, never
+          as the whole list set; and an unset that puts a defaulted list back at its default counts
+          as the removal it is
+        type: local
+      - stepNumber: 15
+        description: Decide whether there is anything to write
+        type: branch
+        condition: the merged spec matches what is stored
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Write nothing, leave the stored updatedAt untouched, and report that the delta matched
+          what is stored, naming the paths it did not act on; when the delta restated a list of
+          methods or fields and left stored ones out, the answer says that lists upsert — what a
+          delta leaves out is kept — and how to remove one: `{"name": "<method>", "action":
+          "delete"}`. A caller asking only what the delta would do is answered the same way, because
+          there is nothing it would do
+        type: return
+        outcome: unchanged
+      - stepNumber: 17
+        description: >-
+          Run the caller's injected judgement on the merged spec — the last point before anything
+          could reach disk, and run for a caller asking only what the delta would do as well, so an
+          answer that reports changes reports a write that would really be accepted
+        type: local
+      - stepNumber: 18
+        label: stage
+        description: >-
+          Stage the write exactly as the save will make it: the merged spec prepared for its level's
+          writer, parsed through the writer schema, and its home checked against the write reach —
+          for a dry run too, so a dry run is refused exactly when the write would be (an object in a
+          list of plain values, an unset required field) and the disk is the only thing it skips
+        type: local
+      - stepNumber: 19
+        description: Decide whether the caller wanted the write or only the account of it
+        type: branch
+        condition: the caller asked only what the delta would do
+        onFalseStep: 21
+      - stepNumber: 20
+        label: dry-run
+        description: >-
+          Answer with the changes the write would make, the paths it would not act on and the stored
+          keys it would drop (strippedKeys), marked as an account rather than a write: nothing is
+          stamped and not one byte of the stored file moves
+        type: return
+        outcome: dry run
+      - stepNumber: 21
+        description: >-
+          Stamp updatedAt and persist the merged spec through the saver for its level, allowing a
+          deliberate status demotion when the delta carried an explicit status
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 22
+        description: >-
+          Report what was written: every change it made, every path of the delta it did not act on,
+          the stored keys the write dropped (strippedKeys), the store's placement notices and the
+          judgement's warnings
+        type: return
+        outcome: written
+  - name: repairForeignStepFields
+    sourcePath: src/core/narrative-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every implementation spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 2
+        label: impls
+        description: Walk each implementation, collecting what its narratives carry that they cannot
+        type: loop
+        loopKind: forEach
+        over: each loaded implementation
+        endStep: 10
+      - stepNumber: 3
+        description: Walk every step of every one of its methods
+        type: loop
+        loopKind: forEach
+        over: each step of each method's narrative, in method then step order
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Read the step's foreign fields through narrative_step.foreignFields(), the one per-type
+          table a retype also rebuilds against
+        type: local
+      - stepNumber: 5
+        description: A step whose every field belongs to its type is left alone
+        type: branch
+        condition: the step carries at least one foreign field
+        onFalseStep: 8
+      - stepNumber: 6
+        description: >-
+          Record the repair: the implementation id, the method name, the step number, the step's own
+          type, and the foreign fields in declaration order
+        type: local
+      - stepNumber: 7
+        description: >-
+          Drop those fields from the step, in memory. Its type, description, label and every field
+          its type does carry are untouched — the repair removes what means nothing, it never
+          reinterprets the step
+        type: local
+      - stepNumber: 8
+        label: stepsEnd
+        description: On to the next step
+        type: local
+      - stepNumber: 9
+        description: >-
+          Only an implementation that changed is written, and only when the caller asked for the
+          write
+        type: branch
+        condition: apply, and this implementation had at least one step repaired
+        onFalseStep: 2
+      - stepNumber: 10
+        description: Save the repaired implementation spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 11
+        description: Drop the spec loader's cache, so the next read sees the repaired implementations
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 12
+        description: Answer with every repair, planned or written
+        type: return
+        outcome: the repairs, in tree order
+  - name: loadTypeSpec
+    narrative:
+      - stepNumber: 1
+        description: Call loadTypeSpec on spec loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpec
+  - name: moveMethods
+    narrative:
+      - stepNumber: 1
+        description: Load the source component spec
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          Check what the caller named: the source and target both exist and differ, every named
+          method is declared on the source contract, no name is already declared on the target or
+          retired there (listed as `<receiving contract>.<name>` in a target method's
+          previousNames), the target's receiving contract is decidable (none yet, one, or one named
+          i<target>), no other spec already holds the id of a contract or implementation the move
+          would create, and neither component sits inside a chained subproject
+        type: local
+      - stepNumber: 3
+        description: Decide whether the request itself is answerable
+        type: branch
+        condition: any of those checks failed
+        onTrueStep: 4
+        onFalseStep: 5
+      - stepNumber: 4
+        description: >-
+          Refuse before the first write, naming which check failed — a mistyped id must read as a
+          mistyped id, never as a rule refusing the design
+        type: throw
+        error: unmovable request
+      - stepNumber: 5
+        description: >-
+          Load the interfaces of both components, so the contract entries to move and the names
+          already declared on the target are both in hand
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 6
+        description: >-
+          Build the plan in memory: the contract entries that leave the source interface and arrive
+          on the target's — on i<target>, created at the source contract's status, when the target
+          declares no contract yet — each arriving entry appending its former key `<source
+          contract>.<name>` to its rename trace (previousNames); the implementation entries that
+          travel with them carrying narrative, sourcePath, symbol, detail, intent, calls and
+          findings — into <target>_impl, created inheriting the source implementation's sourcePath,
+          when no implementation realizes the receiving contract — the specs it creates named for
+          the report, and the dependencies the moved narratives call that the target does not have
+          yet
+        type: local
+      - stepNumber: 7
+        description: >-
+          Load every implementation to find the references that name the old home: narrative call,
+          register and dispatch steps, dispatch-table bindings, lifecycle entrypoints and `calls`
+          entries. Prose and wire endpoint addresses are recorded as mentions and left alone — a
+          move must not silently re-address an RPC
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 8
+        description: >-
+          Describe the move as the debt register and the lint allows key findings by it
+          (identity_rename): each spec the methods left re-homes the findings anchored at a moved
+          method to the spec they arrived in, and <from>.<method> becomes <to>.<method> wherever a
+          unit names it. Rekey every lint allow in the tree by it (identity_rename.rekeyAnchor),
+          staging each spec it changes like any other reference: an allow at a moved method moves to
+          the receiving spec, a covered unit follows in place
+        type: local
+      - stepNumber: 9
+        description: Decide whether a judgement was injected
+        type: branch
+        condition: the caller passed write hooks
+        onTrueStep: 10
+        onFalseStep: 14
+      - stepNumber: 10
+        description: >-
+          Judge the resulting source and target components at the write boundary; the hook throws to
+          refuse
+        type: local
+      - stepNumber: 11
+        description: Decide on the judgement
+        type: branch
+        condition: the hook refused the resulting target
+        onTrueStep: 12
+        onFalseStep: 14
+      - stepNumber: 12
+        description: >-
+          Enumerate the other components of the source's subsystem as candidate homes and ask the
+          hook to assess each without throwing, recording the dependencies each would have to add
+          and the rule codes that would refuse it
+        type: local
+      - stepNumber: 13
+        description: >-
+          Answer with the refusal: the rule codes, and the candidates ranked cheapest legal home
+          first with the requested target among them so its shortfall reads beside the rest. Nothing
+          has reached disk
+        type: return
+        outcome: refused
+      - stepNumber: 14
+        description: >-
+          Rekey the debt register as a DRY RUN: the register edits the move makes, computed and
+          proven writable without disturbing the register's comments and formatting before anything
+          is written — a register that cannot be edited that precisely refuses the move here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 15
+        description: Decide whether the caller wanted the write
+        type: branch
+        condition: the caller asked for a dry run
+        onTrueStep: 16
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Answer with the edits the move would have made, the register edits it would make, and
+          write nothing
+        type: return
+        outcome: previewed
+      - stepNumber: 17
+        description: >-
+          Write every edit in the plan — the specs it creates, both contracts, both implementations,
+          and each referencing implementation — restoring the ones already written if any write
+          fails, and deleting any it created, because a half-moved method leaves callers naming a
+          home it no longer has
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 18
+        description: >-
+          Rekey the debt register for real, as the last write of the move and inside the same guard:
+          a register that cannot be written restores every spec already written, so nothing moves by
+          halves
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 19
+        description: >-
+          Answer with what moved, what the move created, how many references followed it, the
+          register edits it made, and the prose still naming the old home
+        type: return
+        outcome: moved
+  - name: specPathsInScope
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the spec tree's own layout and collect every spec file path inside the scope — the
+          subsystem's index, its components with their contracts and implementations, and every type
+          whose `subsystem` names it (a subsystem's own type is inside it, wherever the layout
+          stores its file) — or all of them when no subsystem was named, the L0 and the
+          project-level types included
+        type: local
+      - stepNumber: 2
+        description: >-
+          Answer the paths, so an approval taken over part of a tree records exactly which files it
+          covers rather than implying the whole
+        type: return
+        outcome: paths
+  - name: loadSpec
+    narrative:
+      - stepNumber: 1
+        description: Load the spec of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSpec
+  - name: saveSpec
+    narrative:
+      - stepNumber: 1
+        description: Persist the spec of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+  - name: deleteSpec
+    narrative:
+      - stepNumber: 1
+        description: Delete the spec document of that kind through the loader
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
+  - name: findChainingParent
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk up from the child root, below the ceiling when one is given, through the spec
+          loader's chaining detection
+        type: call
+        targetComponent: spec_loader
+        targetMethod: findChainingParent
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's workspace index at the requested recursion depth: the cached one
+          while the tree's file signature is unchanged, else a fresh scan
+        type: local
+      - stepNumber: 2
+        description: Return the index
+        type: return
+        outcome: success
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Return the bound root workspace's recorded loader issues
+        type: return
+        outcome: success
+  - name: clearLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Empty the bound root workspace's recorded loader issues
+        type: local
+      - stepNumber: 2
+        description: Drop every cached spec index so the next read starts from disk
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          List the bound tree's spec files, and pair each one stored under a legacy (undotted) file
+          name with the name the current layout expects
+        type: local
+      - stepNumber: 2
+        description: Return the pairs
+        type: return
+        outcome: success
+  - name: findChainingSubprojectsMissingConfig
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the members recursively from the root — each project's `members` entries and, for one
+          release, its legacy L1 mounts — and keep each directory that holds a spec tree but no
+          project configuration
+        type: local
+      - stepNumber: 2
+        description: Return the directories
+        type: return
+        outcome: success
+  - name: backfillChainedSubprojectConfigs
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Walk the members recursively from the root, either declaration form; for each that holds a
+          spec tree but no project configuration, write a default configuration named for its alias
+          and declaring the alias as its project id, leaving its specs untouched
+        type: local
+      - stepNumber: 2
+        description: Return the directories repaired
+        type: return
+        outcome: success
+  - name: assertContainedProjectPath
+    narrative:
+      - stepNumber: 1
+        description: Resolve the projectPath against the root
+        type: local
+      - stepNumber: 2
+        description: Does the path escape the root — absolute, parent-escaping or through a link?
+        type: branch
+        condition: the resolved path escapes the root
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Refuse the path, naming it and the root
+        type: throw
+        error: Error
+      - stepNumber: 4
+        label: contained
+        description: Return the contained absolute child root
+        type: return
+        outcome: success
+  - name: loadProjectVariants
+    sourcePath: src/core/variants.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the layered variant registry
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: loadProjectVariants
+  - name: resolveVariantGuidance
+    sourcePath: src/core/variants.ts
+    narrative:
+      - stepNumber: 1
+        description: Resolve the component's variant guidance and siblings
+        type: call
+        targetComponent: variant_registry_adapter
+        targetMethod: resolveVariantGuidance
+  - name: setProjectId
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setId
+  - name: declareExternal
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+  - name: moveMountToMembers
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project graph of the bound root: the member the alias declares, with its legacy
+          mount as written (projectPath, description)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: Is there a legacy mount under the alias?
+        type: branch
+        condition: the bound root declares no member under the alias in the legacy L1 form
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Nothing to move: answer false when the alias is already an equal member, else refuse
+          naming the alias
+        type: return
+        outcome: already moved
+      - stepNumber: 4
+        label: declare
+        description: >-
+          Declare the member under the alias — the mount's projectPath as its path, its description
+          when it has one — through the project config Repository; a different member under the
+          alias is refused there and nothing below runs
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 5
+        description: >-
+          Delete the L1 mount document through the spec repository, so the member is declared in one
+          place
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteMount
+      - stepNumber: 6
+        description: Answer that it wrote
+        type: return
+        outcome: moved
+  - name: normalizeReferences
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Re-save the spec with its references in canonical form through the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+  - name: importNames
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+  - name: renameProjectId
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: renameId
+  - name: renameAlias
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: renameAlias
+  - name: repointExternal
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: repointExternal
+  - name: removeExternal
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeExternal
+  - name: declareMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Containment guard: resolve the member directory from the bound project root and reject a
+          path that does not resolve strictly within it, lexically and through links
+        type: branch
+        condition: the declaration's path escapes the bound project root
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Reject a path that resolves outside the project root
+        type: throw
+        error: a member path must resolve within the project root
+      - stepNumber: 3
+        label: declare
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+  - name: removeMember
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: removeMember
+  - name: rewriteReferences
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Respell the edits through the spec repository
+        type: call
+        targetComponent: spec_loader
+        targetMethod: rewriteReferences
+  - name: updateMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Containment guard on a contained path
+        type: branch
+        condition: >-
+          the changes carry a contained path that resolves strictly within the bound project root,
+          lexically and through links, or carry none
+        onFalseStep: 4
+      - stepNumber: 2
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 3
+        description: Answer whether it wrote
+        type: return
+        outcome: written or unchanged
+      - stepNumber: 4
+        description: Reject a contained path that resolves outside the project root
+        type: throw
+        error: PROJECTPATH_ESCAPE
+  - name: promoteMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: the part under the alias with its subsystems and spec
+          keys, and every reference that crosses between the part's specs and the rest of the bound
+          project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          Collect every refusal before anything is written: no part under the alias; a part fetched
+          from git; a trustedLink joining one of its subsystems and another of the bound project
+          (either direction); a component either side uses that its subsystem does not publish; an
+          id that a family project already holds
+        type: local
+      - stepNumber: 3
+        description: Is anything refused?
+        type: branch
+        condition: anything was refused
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: promote refused
+      - stepNumber: 5
+        description: >-
+          Read the bound project's configuration through the project config Repository: the parent's
+          effective id and the member's declaration, which says whether an asserted part must be
+          dropped
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 6
+        description: >-
+          Read the parent's L0 system spec, for the parent's name that the new project's minimal L0
+          and declarations refer to
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 7
+        description: >-
+          With the project root scoped to the part's directory, remove a non-contained part's PartOf
+          configuration (a contained part has none)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 8
+        description: >-
+          Under the same scope, check whether the part already has a configuration of its own, which
+          decides whether the next step sets its id or the one after creates the configuration
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: exists
+      - stepNumber: 9
+        description: >-
+          Declare its id — the one given, else the alias — creating its configuration (named after
+          its one subsystem, else the id) when the part has none, as a contained part never does
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setId
+      - stepNumber: 10
+        description: >-
+          When the part had no configuration (a contained part never has one), create the project's
+          default configuration, named after its one subsystem else its id, declaring that id
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: create
+      - stepNumber: 11
+        description: >-
+          Write its minimal L0: its vision the member's description, else one line naming it a
+          project of the parent
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 12
+        description: Drop the spec loader's cache, so the next read sees the part as the project it now is
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 13
+        description: >-
+          Back in the parent's scope, drop an asserted `as: part` from the member's declaration,
+          when it has one — the content now makes it a project; nothing else in the declaration
+          changes
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 14
+        description: >-
+          Respell every reference that crosses the new boundary at its parsed position, targets
+          unchanged, and record each: a component or contract position as before, and every
+          qualified token of every type expression at every type position the reference-position
+          table lists (an interface method's params, returns, signature and type signatureFrom; a
+          type's fields, params, returns and each type method's params, returns and signature; an
+          asserted invariant's type) — `alias::name` into the new project, `<parent id>::name` back
+          out, and the new project's own self-prefixed token (its id now equal to the prefix) bare.
+          Then re-save every respelled spec so the writer spells each again from where it lives
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 15
+        description: Drop the spec loader's cache, so the next read sees the references as respelled
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 16
+        description: >-
+          Declare the entries the new boundary made necessary: each verb of a new project's Portal
+          that a parent-side implementation calls (a call, register or dispatch step, or a declared
+          call, read before the respelling) and that has no entry of its own nor from its Portal
+          gets one on its contract method — kind entry, scope network on a network transport, the
+          caller prose naming the calling components and the parent — so the Portal is not left
+          unreached in its own gate; record each. Derived from the modelled calls, never invented: a
+          verb nobody calls gets none
+        type: local
+      - stepNumber: 17
+        description: >-
+          Record each topic the boundary now separates from its pair (emitted on one side and
+          subscribed only on the other, by emits/subscribesTo or a MessageBus endpoint), for the
+          plan: the family run pairs it across projects
+        type: local
+      - stepNumber: 18
+        description: >-
+          Drop each publicInterfaces consumers entry, on either side, that names a subsystem across
+          the new boundary — a consumers list admits only subsystems of its own tree, and between
+          projects the L0 export table governs who may use a name — removing the field when no entry
+          is left, and record each drop
+        type: local
+      - stepNumber: 19
+        description: >-
+          Under the new project's scope, declare the parent as an external under the parent's id
+          when its specs reference it (the same declaration again writes nothing); and declare every
+          other project the moved specs name — through an alias the parent declares under `members`
+          or `externals`, or a bare name imported through one's `use` — as the new project's
+          external under the same alias: a path re-expressed from the new project's root (a member's
+          path, or the parent external's), any other source as written, the producer's id when it is
+          not the alias, the imported names its specs use as its `use`; an alias the new project
+          already declares is left. Record each in externalsDeclared — the plan pins them with the
+          rest
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 20
+        description: >-
+          Re-point the parent's L0 entries that re-exported the part's subsystems (`from:
+          <subsystem>`) at the member (`from: <alias>`)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 21
+        description: >-
+          Export on its own side every name that crosses the new boundary and is not yet a public
+          name there — a type through its own subsystem (`{ typeDef }`) and an L0 entry re-exporting
+          it with `from: <its subsystem>`, a component its subsystem already publishes through its
+          L0 — and, in the new project, every name the parent's L0 re-exports from one of the part's
+          subsystems: an entry the new project already holds for that item is widened to the parent
+          entry's audience, else one is added naming the item (and the narrowed interface) under the
+          parent entry's public name (its `as`, else the item's own name) at the parent entry's
+          audience. Then re-point each such parent entry at the public name the new project now
+          exports it under (`from: <alias>`, the item named by that public name, its `as`, audience
+          and details kept), so no re-export names an item the member does not export and none is
+          wider than its source. Record each entry written or re-pointed
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 22
+        description: >-
+          Import by name each bare type a side no longer owns through the `use` of the alias that
+          now supplies it, so the text stays as written, and record each
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: importNames
+      - stepNumber: 23
+        description: >-
+          Re-express, under the new project's scope, every file path its implementations and types
+          name (sourcePath, each method's sourcePath, simPath, each binding-module path) that
+          escapes its root: the path the file has relative to the family root, read under the
+          member's root — the layout the code takes once it is moved in (the source is not moved:
+          until then it is planned code there). A path inside the root is left alone. Record each,
+          naming where the file still lies
+        type: local
+      - stepNumber: 24
+        description: >-
+          Re-derive the stored signature text of every contract and type method the respelling
+          changed the params of, on either side, by re-saving each loaded spec whose stored text its
+          params now contradict (the writer derives the text); record each before and after
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 25
+        description: >-
+          Part promoted to a project in place; nothing locked. Answer what was written across the
+          boundary: the respelled references, the exports and re-pointed re-exports, the imports,
+          the dropped consumers, the entries declared, the topics now crossing, the paths
+          re-expressed and the signature texts re-derived
+        type: return
+        outcome: the promote result
+  - name: demoteMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound root's project graph: the project member under the alias, its subsystems,
+          project-level types, members and externals, and every reference crossing between it and
+          the bound project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: graph
+      - stepNumber: 2
+        description: >-
+          With the project root scoped to the member, read its configuration — members, externals,
+          packs, projectType, rules — then restore the bound scope
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 3
+        description: >-
+          Drop the spec loader's cache, so the reads below see the member's tree under its own
+          binding rather than the one scanned before
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 4
+        description: >-
+          Under that binding, read the member's own L0 system spec: its vision, boundaries,
+          requirements and databases, which the refusals judge and which are placed in the bound
+          project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 5
+        description: Read the home subsystem the destination names, to check it exists in the bound project
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpec
+      - stepNumber: 6
+        description: >-
+          Collect every refusal before anything is written, exactly as internalizeMember collects
+          them (no project member under the alias, the home naming no subsystem, a carried alias
+          declared differently, a pack differing with no adopt or drop, conformance debt or severity
+          overrides the parent does not share, a destination export colliding, a file of its .wai
+          that cannot end with its boundary — every entry wairon itself writes is recognised,
+          phased_design.md included), and a member fetched from git. A member in a `../` sibling
+          checkout is a node of the family like a contained one; it is demoted to a part stored
+          outside, naming its parent
+        type: local
+      - stepNumber: 7
+        description: Is anything refused?
+        type: branch
+        condition: anything was refused
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Refuse before anything is written, listing every refusal
+        type: throw
+        error: demote refused
+      - stepNumber: 9
+        description: >-
+          Place what the member held for its subsystems: its L0 vision appended to the home
+          subsystem's description, its targetLanguage, projectType (as profile) and designDepth
+          stamped on each of its subsystems where they differ from the bound project's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 10
+        description: >-
+          Place what the member held as a project in the bound project's L0: its boundaries,
+          globalRequirements and databases merged by identity, and its re-exports from the member
+          re-pointed at its subsystems
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 11
+        description: >-
+          Declare each of the member's own members as the bound project's member, its location
+          re-expressed from the bound root
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareMember
+      - stepNumber: 12
+        description: >-
+          Declare each of the member's externals other than the parent as the bound project's
+          external
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: declareExternal
+      - stepNumber: 13
+        description: >-
+          Select each pack the destination adopts in the bound project, pinned at the member's
+          version and digest
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: upsertPackSelection
+      - stepNumber: 14
+        description: >-
+          Place in the bound project the member's variants and vendored packs it lacks (named in
+          placed; a differing workbook named in notCarried), then delete the member's L0, its lock,
+          its pins and snapshots, its derived outputs, its design workbook and its host bindings,
+          recording each file under its group — a part has none of them
+        type: local
+      - stepNumber: 15
+        description: >-
+          With the root scoped to the member: a non-contained member's configuration is replaced by
+          its PartOf alone; a contained member's configuration is deleted (the project fields were
+          carried above)
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setPartOf
+      - stepNumber: 16
+        description: >-
+          Back in the parent's scope, drop an asserted `as: project` and any `use` from the member's
+          declaration — the content now makes it a part
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 17
+        description: >-
+          Re-derive the stored signature text of every contract and type method the respelling back
+          changed the params of, by re-saving each loaded spec whose stored text its params now
+          contradict; record each in signaturesRederived (named here, before the re-save below would
+          write it silently)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 18
+        description: >-
+          Re-save every spec that referenced across the old boundary, targets unchanged: the
+          parent's `alias::name` references and the member's `<parent id>::name` references become
+          local ids — an `alias::<type>` token of a type expression or an asserted invariant written
+          `<subsystem>.<type>` (the bare id for a project-level type); a consumers list that still
+          restricts a surface widened by the subsystems across the old boundary that depend on it,
+          each recorded in consumersRestored; the exports and the parent external that existed only
+          for the boundary are dropped; then drop the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: normalizeReferences
+      - stepNumber: 19
+        description: >-
+          Drop the spec loader's cache, so the next read sees the member as the part it now is and
+          the references as re-saved
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 20
+        description: >-
+          Member demoted to a part in place: answer where each piece went, what was deleted and
+          which signature texts were re-derived; nothing locked
+        type: return
+        outcome: InternalizeResult
+  - name: advanceMember
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the bound configuration and take the member's git source and its pinned commit; an
+          alias that names no git member is refused
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 2
+        description: Was a commit given?
+        type: branch
+        condition: an exact commit was given
+        onTrueStep: 4
+        onFalseStep: 3
+      - stepNumber: 3
+        description: >-
+          Resolve the ref (the one given, else the source's, else the remote's default branch) to
+          its commit now; unreachable refuses, naming why
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: resolve
+      - stepNumber: 4
+        label: fetch
+        description: Materialize the new commit (and the pinned one, for the comparison) in the fetch cache
+        type: call
+        targetComponent: git_source_adapter
+        targetMethod: fetch
+      - stepNumber: 5
+        description: >-
+          Compare the member's spec files at the two commits by their path inside the member: added,
+          changed, removed
+        type: local
+      - stepNumber: 6
+        description: Write the new pin?
+        type: branch
+        condition: dryRun is set, or the commit did not move
+        onTrueStep: 8
+        onFalseStep: 7
+      - stepNumber: 7
+        description: Write the new commit into the member's source
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: updateMember
+      - stepNumber: 8
+        label: answer
+        description: >-
+          Answer from, to, the ref resolved, the spec files added, changed and removed, and whether
+          it was written; nothing locked
+        type: return
+        outcome: MemberAdvance
+  - name: describeProject
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: describeProject
+  - name: repairSignatures
+    sourcePath: src/core/signature-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: 'Read what the scan''s signature resolution recorded: the stale texts and the sources'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+      - stepNumber: 2
+        description: >-
+          Group into one repair per interface or type of the bound project itself (a contained
+          member's specs are keyed under its namespace and are its own doctor's): its stale texts as
+          regenerated, and its sourced methods with an equal restatement (a restated fact that does
+          not differ) as dropped. A differing restatement is never a repair, and neither is any
+          other method of the interface holding one: the writer stores every sourced method with
+          only its source, so re-saving that interface would silently decide the contract only its
+          author can — it stays as it is, reported by SIGNATURE_SOURCE_RESTATED, until the author
+          settles it
+        type: local
+      - stepNumber: 3
+        description: Was the write asked for?
+        type: branch
+        condition: apply, and at least one repair is planned
+        onFalseStep: 13
+      - stepNumber: 4
+        description: Read every interface, before the first write, since each save invalidates the index
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Read every type, before the first write, since each save invalidates the index
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 6
+        description: For each repaired spec
+        type: loop
+        loopKind: forEach
+        over: the planned repairs
+        endStep: 11
+      - stepNumber: 7
+        description: Is it an interface?
+        type: branch
+        condition: the repair's kind is interface
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Re-save the loaded interface: the writer stores every method in its stored form, so its
+          texts are derived and its sourced methods hold only the source
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 9
+        description: Done with this spec
+        type: jump
+        toStep: 11
+      - stepNumber: 10
+        label: type
+        description: >-
+          Re-save the loaded type, whose writer stores every params-bearing type method's derived
+          text
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 11
+        label: next
+        description: On to the next repaired spec
+        type: local
+      - stepNumber: 12
+        description: Drop the spec loader's cache, so the next read sees the re-saved specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 13
+        label: report
+        description: Answer the planned repairs, written or not
+        type: return
+        outcome: SignatureTextRepair[]
+    detail: full
+  - name: repairTypeSpellings
+    sourcePath: src/core/type-spelling-repair.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read what the scan's type canonicalisation recorded: the stored aliases and the positions
+          that are not canonical
+        type: call
+        targetComponent: spec_loader
+        targetMethod: typeSpellingFacts
+      - stepNumber: 2
+        description: >-
+          Read what the scan's signature resolution recorded, for the interfaces holding a sourced
+          method whose restatement differs from its source: the writer stores every sourced method
+          with only its source, so re-saving such an interface would silently decide the contract
+          only its author can
+        type: call
+        targetComponent: spec_loader
+        targetMethod: signatureFacts
+      - stepNumber: 3
+        description: >-
+          Group into one repair per interface or type of the bound project itself (a contained
+          member's specs are keyed under its namespace and are its own doctor's — the doctor
+          cascades into it): its respellings as rewritten — except on an interface holding a
+          differing restatement, whose aliases stay as they are (reported by TYPE_SPELLING_STALE
+          beside SIGNATURE_SOURCE_RESTATED) until its author settles the restatement; each of its
+          problems for which type_expression_problem.intProposal answers a proposal (a `number`
+          position whose name plainly says an integer) as that proposal, never applied; each for
+          which type_expression_problem.enumProposal answers one (a union of string literals) as an
+          enum proposal, never applied; and every other problem as needing an author
+        type: local
+      - stepNumber: 4
+        description: Was the write asked for?
+        type: branch
+        condition: apply, and at least one repair rewrites a position
+        onFalseStep: 14
+      - stepNumber: 5
+        description: Read every interface, before the first write, since each save invalidates the index
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 6
+        description: Read every type, before the first write, since each save invalidates the index
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 7
+        description: For each repair that rewrites a position
+        type: loop
+        loopKind: forEach
+        over: the planned repairs with rewritten positions
+        endStep: 12
+      - stepNumber: 8
+        description: Is it an interface?
+        type: branch
+        condition: the repair's kind is interface
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Re-save the loaded interface: the writer stores every type position canonical, and every
+          params-bearing method's derived text follows
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 10
+        description: Done with this spec
+        type: jump
+        toStep: 12
+      - stepNumber: 11
+        label: type
+        description: Re-save the loaded type, whose writer stores every type position canonical
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 12
+        label: next
+        description: On to the next repair
+        type: local
+      - stepNumber: 13
+        description: Drop the spec loader's cache, so the next read sees the re-saved specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 14
+        label: report
+        description: >-
+          Answer the planned repairs, written or not, with their int and enum proposals and the
+          positions needing an author
+        type: return
+        outcome: TypeSpellingRepair[]
+    detail: full
+  - name: renameType
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the type to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpec
+      - stepNumber: 2
+        description: >-
+          Read the subsystems, to tell a subsystem-qualified id naming one of this project's own
+          subsystems from an id naming another project's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: >-
+          Guard: the type must exist — asked after the project boundary of step 4 for an id whose
+          qualifier names no own subsystem, and through that same boundary (asked to exist) for one
+          the bound tree does not hold, so another project's type — through its alias, or a bare id
+          only a member holds — is refused as living in another project and an id no project holds
+          as missing, in the one sentence every write tool answers with
+        type: branch
+        condition: the type does not exist
+        onFalseStep: 5
+      - stepNumber: 4
+        label: spec-missing
+        description: >-
+          Refuse a type no project in reach holds, with the one sentence every write tool answers
+          with
+        type: throw
+        error: 'spec-missing: this project has no type with this id'
+      - stepNumber: 5
+        description: >-
+          Guard: the type must belong to the bound project itself — the project boundary every write
+          asks (crossProjectWriteRefusal), asked first for a qualifier naming no own subsystem, so
+          its sentence names the member project by its id and folder, or the external this project
+          only reads through its pin, as every other write tool does
+        type: branch
+        condition: 'typeId is namespaced into a member project (it carries an alias:: prefix)'
+        onFalseStep: 7
+      - stepNumber: 6
+        label: chained-spec
+        description: >-
+          Refuse a type inside another project with the one sentence every write tool answers with:
+          a member project is written from its own root, never through its parent's tree (the
+          doctrine: a project member is designed from its own root), so the refusal names the
+          member's folder and `sdd_rename_type <local id> <new id>` from a session opened there; an
+          external's is read-only here
+        type: throw
+        error: >-
+          chained-spec: the type lives in another project, naming which one and how it is changed
+          there
+      - stepNumber: 7
+        description: 'Guard: the new id must be a plain lowercase identifier'
+        type: branch
+        condition: >-
+          newId is outside the id grammar: not a lowercase identifier, or carrying a namespace
+          separator
+        onFalseStep: 9
+      - stepNumber: 8
+        label: invalid-id
+        description: Refuse a new id outside the grammar
+        type: throw
+        error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
+      - stepNumber: 9
+        description: Load every type spec, for the ids its owner already holds and the trace that retired any
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 10
+        description: 'Guard: no type of the same owner may hold or have retired the new id'
+        type: branch
+        condition: >-
+          a type of the same owner (the same subsystem, or system-level) has the id newId, or lists
+          it in its previousIds (spec_index.retiredBy)
+        onFalseStep: 12
+      - stepNumber: 11
+        label: id-taken
+        description: >-
+          Refuse a taken id (id-taken) or a retired one (id-retired, naming the holder and saying
+          that unsetting its previousIds releases it)
+        type: throw
+        error: 'id-taken or id-retired: another type of this owner holds or retired the new id'
+      - stepNumber: 12
+        description: >-
+          Describe the move as the debt register and lint allows key findings by it
+          (identity_rename: the type spec from its old id to its new one) and rekey the debt
+          register as a DRY RUN, before the first write: a register that cannot be rewritten that
+          precisely refuses the rename here
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 13
+        description: >-
+          Read every component, to know the subsystem each lives in: a component's types and the
+          specs that carry the type are respelled in their own owner's context
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 14
+        description: >-
+          Collect where a consumer reaches the type (publishedIn), as a field rename collects it:
+          the types that carry it — the renamed type, and every type whose fields, params or returns
+          name a carrying type, transitively — then each L1 and L0 export entry publishing a
+          carrying type (member `type`) or a contract whose methods name one in a param or returns
+          (those methods: the signature closure), each with its former public names and former
+          method names, so the tool can name every consumer whose code spells the type's old name
+        type: local
+      - stepNumber: 15
+        label: typeDryRun
+        description: >-
+          A dry run stops here, refused exactly as the real rename above: walk every spec without
+          writing to collect the specs whose type positions, typeDef or lint allows it WOULD respell
+          and the export entries that would get an `as`
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 17
+      - stepNumber: 16
+        description: >-
+          Return from and to, the ids it would rewrite, the public names it would keep, publishedIn
+          and the register edits the dry rekey planned, marked dryRun; nothing was written
+        type: return
+        outcome: TypeRename (dry run)
+      - stepNumber: 17
+        description: >-
+          Rewrite every reference to the type across the bound tree with a type-expression walk over
+          the raw spec files (the shared reference-field table reads a position whole and never
+          covered contract or type-method returns or typeDef, so it is left to the boundary moves):
+          in every type position — contract method params and returns, type fields, type-method
+          params and returns, signature-type params and returns — the named members of the
+          expression that read as this type (type_spec.matchesRef; when another type reads the same,
+          only in a spec of the type's own owner) are respelled in the style they were written, and
+          a params-derived signature text is re-derived; a signatureFrom, a table type's
+          linkedEntity, a field's references and an L1 or L0 export entry's typeDef naming the type
+          follow too — an export entry that states no `as` first getting `as: <its public name>`,
+          recorded as kept. Rename traces are never rewritten. Then rekey every lint allow naming
+          the type (identity_rename.rekeyAnchor). Record the specs either changed
+        type: local
+      - stepNumber: 18
+        description: Drop the cached spec index, so the save below reads the rewritten tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 19
+        description: >-
+          Write the type, reloaded as the rewrite left it, under newId with the same owner and its
+          old id appended to its rename trace (previousIds)
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 20
+        description: Remove the file it left behind under its old id
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
+      - stepNumber: 21
+        description: >-
+          Rekey the debt register for real: every carried entry anchored on the type, rewritten in
+          place with every comment and all other formatting kept
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 22
+        description: >-
+          Return from and to, rewritten (the other specs whose references or lint allows changed),
+          keptPublicNames, publishedIn and carried
+        type: return
+        outcome: renamed
+  - name: setNetwork
+    narrative:
+      - stepNumber: 1
+        description: Write through the project config Repository
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: setNetwork
+  - name: renameField
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the type specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 2
+        description: >-
+          Read the subsystems, to tell a subsystem-qualified id naming one of this project's own
+          subsystems from an id naming another project's
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: >-
+          For an unqualified id, load the type itself by id; a qualified id is found among the specs
+          loaded above
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpec
+      - stepNumber: 4
+        description: >-
+          Resolve the type: an `alias::` qualifier naming no own subsystem is another project's,
+          refused with the project boundary every write asks (crossProjectWriteRefusal); a
+          subsystem-qualified id names the type within that owner; none found is refused by that
+          same boundary, asked to exist — another project's when only a member holds that bare id,
+          else spec-missing — in the one sentence every write tool answers with
+        type: local
+      - stepNumber: 5
+        description: >-
+          The field must be declared on the type (field-missing), the new name must be an identifier
+          (identifier.problemAs field) the type's target language allows as a field
+          (identifier.reservedIn) (invalid-name), and no other field of the type may hold it
+          (name-taken) or list it in its previousNames (name-retired): refuse before any write
+        type: branch
+        condition: >-
+          the field exists, the new name is an identifier the target language allows, and it is
+          neither taken nor retired on the type
+        onFalseStep: 15
+      - stepNumber: 6
+        description: >-
+          Collect, without writing, every other type whose foreign key `references: <type>.<field>`
+          names the field (its head resolving to this type as the loader would), and judge the
+          type's file and each of those against the hosted request's write reach
+        type: local
+      - stepNumber: 7
+        description: >-
+          Collect where a consumer reaches the field (publishedIn): the types that carry it — the
+          renamed type, and every type whose field types name a carrying type, transitively — then
+          each L1 and L0 export entry publishing a carrying type (member `type`) or a contract whose
+          methods name one in a param or returns (those methods, a method taking its signature from
+          one included, as the loader resolves it); each entry carrying its former public names
+          (formerNames) and each method its former names (formerMembers), so a consumer still
+          writing a name an earlier rename retired is named among the breaks
+        type: local
+      - stepNumber: 8
+        description: >-
+          Collect the mentions left alone: the specs whose prose (descriptions, intents, narrative
+          step text) names the old field as a whole identifier, among the renamed type and the specs
+          that reach a type carrying it — naming one of those types by id, name or symbol, a
+          contract naming one in a param or returns, or an implementation of such a contract — so a
+          field name common elsewhere in the tree is not reported where the type is never in view
+        type: local
+      - stepNumber: 9
+        label: fieldDryRun
+        description: A dry run stops here, refused exactly as the real rename above
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Answer the FieldRename the rename would produce: the type, from, to, the ids it would
+          respell, publishedIn and the mentions, marked dryRun; nothing was written
+        type: return
+        outcome: FieldRename (dry run)
+      - stepNumber: 11
+        description: Respell each such reference in place to `<type>.<newName>`
+        type: local
+      - stepNumber: 12
+        description: >-
+          Drop the spec loader's cache, so the save below reads the tree with the references
+          respelled
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 13
+        description: >-
+          Save the type with the field renamed and its old name appended to the field's
+          previousNames
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 14
+        description: >-
+          Answer the FieldRename: the type, from, to, the ids of the specs respelled, publishedIn
+          and the mentions left alone
+        type: return
+        outcome: FieldRename
+      - stepNumber: 15
+        label: refuse
+        description: >-
+          Refuse with the reason that applies, naming what holds or retired the name; nothing was
+          written
+        type: throw
+        error: WaironError
+  - name: renameParam
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Load the component
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 2
+        description: >-
+          A component of another project — asked first through the project boundary every write asks
+          (crossProjectWriteRefusal, asked to exist), so one named through its alias or a bare id
+          only a member holds is refused as living in another project — or one no project holds, is
+          refused before anything is read further, in the one sentence every write tool answers with
+        type: branch
+        condition: the component exists and is not inside a chained subproject
+        onFalseStep: 20
+      - stepNumber: 3
+        description: >-
+          Load every interface spec, and collect the contracts of the component that declare the
+          method
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 4
+        description: >-
+          Does the method take its signature from another of this project's own contract methods (a
+          Portal verb whose signatureFrom names `component.method` of this project)?
+        type: branch
+        condition: >-
+          every moving contract's method forwards its signature from one source method of this
+          project, which declares the parameter
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Route the request to the source the signature comes from: rename the parameter there, dry
+          run or not as asked, so it reaches this method through its signatureFrom
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameParam
+      - stepNumber: 6
+        description: Answer the source's ParamRename with routedFrom naming the method asked for
+        type: return
+        outcome: ParamRename (routed to the source)
+      - stepNumber: 7
+        label: paramGuard
+        description: >-
+          Guard, before any write: the method must be declared (method-missing) and declare the
+          parameter on every moving contract (param-missing — a method that takes its signature from
+          another project's method or from a signature type is refused naming that source, and
+          saying a rename made there reaches this method through its signatureFrom); the new name
+          must be an identifier (identifier.problemAs param), never a word the target language
+          reserves for a parameter (identifier.reservedIn — a keyword in TypeScript, Rust or
+          Python), and — when rules.naming.variables is set and no contract of the component
+          implements another project's extension point — in that casing (invalid-name); and no other
+          parameter of the method may hold it (name-taken) or list it in its previousNames
+          (name-retired)
+        type: branch
+        condition: >-
+          the method and parameter are declared, the new name is acceptable, and it is neither taken
+          nor retired on the method
+        onFalseStep: 20
+      - stepNumber: 8
+        description: >-
+          Collect the followers — every contract method in the bound tree whose signatureFrom takes
+          `<component>.<method>`'s signature, so it reads the renamed parameter through the loader —
+          and what publishes the method: the export entries (L1 and L0) publishing a moving
+          contract, each with the method's name, and the entries publishing each follower's
+          contract, each with the follower's verb — every member with its former names
+          (previousNames) and every entry with its former public names — as published, its public
+          names as publishedIn
+        type: local
+      - stepNumber: 9
+        description: >-
+          Judge every interface file the rename would write — the moving contracts and each follower
+          whose HTTP binding spells the old placeholder — against the hosted request's write reach
+        type: local
+      - stepNumber: 10
+        label: paramDryRun
+        description: A dry run stops here, refused exactly as the real rename above
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Answer the ParamRename the rename would produce — the interfaces it would move in, every
+          placeholder it would respell (the own bindings' and the followers') and publishedIn —
+          marked dryRun; nothing was written
+        type: return
+        outcome: ParamRename (dry run)
+      - stepNumber: 12
+        label: contractLoop
+        description: Rename the parameter on each moving contract
+        type: loop
+        over: the moving contracts
+        endStep: 14
+      - stepNumber: 13
+        description: >-
+          Rename the parameter in place, appending its old name to the parameter's previousNames,
+          re-derive the method's signature text from its params, and respell an HTTP endpoint path
+          placeholder on the method's own binding in the form it was written — `{old}` to `{new}`,
+          the Express idiom `/:old` to `/:new` — recording each
+        type: local
+      - stepNumber: 14
+        description: Save the interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 15
+        label: followerLoop
+        description: Respell the placeholder on each follower
+        type: loop
+        over: the followers whose HTTP binding names the old placeholder
+        endStep: 17
+      - stepNumber: 16
+        description: >-
+          Respell the follower's HTTP endpoint path placeholder in the form it was written — `{old}`
+          to `{new}`, `/:old` to `/:new` — recording each; its params are the source's, which the
+          loader resolves
+        type: local
+      - stepNumber: 17
+        description: Save the follower's interface
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 18
+        description: Drop the loader cache so the next read sees the renamed parameter
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 19
+        description: >-
+          Answer the ParamRename: component, method, from, to, the interfaces it moved in, the
+          placeholders respelled (own and followers') and publishedIn
+        type: return
+        outcome: ParamRename
+      - stepNumber: 20
+        label: refuse
+        description: >-
+          Refuse with the reason that applies (spec-missing, chained-spec, method-missing,
+          param-missing, invalid-name, name-taken, name-retired), naming what holds or retired the
+          name; nothing was written
+        type: throw
+        error: WaironError
+  - name: findOrphanedSpecFiles
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer nothing when the specs folder is absent, or when it holds an L0 that reads
+          (.index.yaml at its root, or a legacy system.yaml) — then the tree is read the ordinary
+          way. An L0 file that is there but does not read as an L0 (empty, null, not YAML, failing
+          its schema) leaves the tree as unjudged as a deleted one
+        type: local
+      - stepNumber: 2
+        description: >-
+          List every spec file under the specs folder, each as its path from the project root with
+          POSIX separators, sorted
+        type: local
+      - stepNumber: 3
+        description: Return the files a deleted or unreadable L0 left standing, the L0 file itself left out
+        type: return
+        outcome: success
+  - name: crossProjectWriteRefusal
+    narrative:
+      - stepNumber: 1
+        description: For each target the write names
+        type: loop
+        loopKind: forEach
+        over: the targets
+        endStep: 11
+      - stepNumber: 2
+        description: >-
+          A target that is the L0 is the bound project's own; one whose id carries no namespace
+          separator is judged only by whether it must exist
+        type: branch
+        condition: 'the target is no L0 and its id carries ::'
+        onFalseStep: 6
+      - stepNumber: 3
+        description: >-
+          Read the key the target lives under: the stored spec's own key when the scan holds it,
+          else the id bound through the bound project's alias table (an `alias::name` lands on the
+          member's key) — and the deepest member key that prefixes it, and that member's root
+        type: local
+      - stepNumber: 4
+        description: >-
+          Decide whether the target lands in another project: a member project declared in `members`
+          (a legacy L1 mount keeps its old cross-tree writes), or an alias the bound project
+          declares as an external
+        type: branch
+        condition: >-
+          the key lies in a member project that is no legacy mount, or the first segment is an
+          external's alias
+        onFalseStep: 6
+      - stepNumber: 5
+        label: chained-spec
+        description: >-
+          Answer the one sentence every write tool answers with for another project's spec: it lives
+          in another project, and a project's specs are changed only from its own root — a member
+          named with its folder relative to the bound root, the session to open there (its own guide
+          and .mcp.json, or `wairon generate` and `wairon mcp install --backend claude` there first)
+          and the call to make there (the caller's exact call, else the tool with the target's kind
+          and local id); an external as read-only here, this project reading it only through its
+          pin, changed by its owner from its own root. Nothing was written
+        type: return
+        outcome: refusal
+      - stepNumber: 6
+        label: must-exist
+        description: >-
+          Decide whether the write needs the target and the bound tree does not hold it — a type
+          also held as <its subsystem>::<id>
+        type: branch
+        condition: existing is asked and the bound tree holds no spec of the kind under the id
+        onFalseStep: 11
+      - stepNumber: 7
+        description: >-
+          Read the member projects holding a spec of that kind under that bare id (none for a
+          qualified id; a legacy mount's specs are this tree's own and never counted)
+        type: local
+      - stepNumber: 8
+        description: Does a member hold it?
+        type: branch
+        condition: a member project holds the bare id
+        onFalseStep: 10
+      - stepNumber: 9
+        label: held-elsewhere
+        description: >-
+          Answer the one sentence every write tool answers with for another project's spec, naming
+          each member holding it and its folder, and that a bare id always names this project's own
+          spec — the sentence says where the spec lives, the write never goes there. Nothing was
+          written
+        type: return
+        outcome: refusal
+      - stepNumber: 10
+        label: missing
+        description: >-
+          Answer the one missing sentence every write tool shares: spec-missing: this project has no
+          <kind> "<id>". Nothing was written
+        type: return
+        outcome: missing
+      - stepNumber: 11
+        label: pass
+        description: 'The target passes: the bound project''s own, or one the write does not need to exist'
+        type: local
+      - stepNumber: 12
+        description: 'Every target passed: answer undefined'
+        type: return
+        outcome: undefined
+  - name: publishedUsesOf
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read every contract of the bound tree, for the components the removal takes and the
+          contracts declaring each removed method
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 2
+        description: >-
+          For each removed component or contract, every L1 and L0 export entry publishing it, with
+          all of its methods as members (each with its former names)
+        type: local
+      - stepNumber: 3
+        description: Read every type of the bound tree, for each removed type
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 4
+        description: >-
+          For each removed type, every public name a consumer reaches it through: the type and every
+          type embedding it exported as a type, and every exported contract whose methods name one
+          (those methods) — the carriers a field rename reports
+        type: local
+      - stepNumber: 5
+        description: >-
+          For each removed contract method, the entries publishing it on its own contract and every
+          published verb forwarding it by signatureFrom, under the follower's verb
+        type: local
+      - stepNumber: 6
+        description: Answer the uses merged under one entry per public name, sorted
+        type: return
+        outcome: list<ExportUse>
+  - name: renameSpecId
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Guard: only a contract or an implementation is renamed here — a component, a type, a
+          method, a field and a parameter each have their own rename
+        type: branch
+        condition: the kind is neither interface nor implementation
+        onFalseStep: 3
+      - stepNumber: 2
+        label: invalid-kind
+        description: Refuse, naming the tool that renames that kind
+        type: throw
+        error: 'invalid-kind: only an interface or an implementation is renamed on its own'
+      - stepNumber: 3
+        description: For a contract, load the contract to rename
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpec
+      - stepNumber: 4
+        description: For an implementation, load the implementation to rename instead of a contract
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpec
+      - stepNumber: 5
+        description: >-
+          Guard: the spec must belong to the bound project — the project boundary every write asks
+          (crossProjectWriteRefusal), asked first for an id carrying `::` — exist, and the new id
+          must fit the grammar
+        type: branch
+        condition: >-
+          no spec of the kind holds the id, or the id carries ::, or the new id is not a lowercase
+          identifier (an interface id begins with i)
+        onFalseStep: 7
+      - stepNumber: 6
+        label: refused
+        description: >-
+          Refuse before anything is written: spec-missing, chained-spec (naming the member's folder
+          and the session to open there), or invalid-id
+        type: throw
+        error: spec-missing, chained-spec or invalid-id
+      - stepNumber: 7
+        description: For an implementation, load every implementation, for the ids already taken
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 8
+        description: For a contract, load every contract, for the ids already taken
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 9
+        description: 'Guard: the new id must not be held or retired by a spec of the kind (spec_index.retiredBy)'
+        type: branch
+        condition: a spec of the kind holds the new id, or lists it in its previousIds
+        onFalseStep: 11
+      - stepNumber: 10
+        label: id-taken
+        description: 'Refuse: id-taken, or id-retired naming the holder and how to release it'
+        type: throw
+        error: id-taken or id-retired
+      - stepNumber: 11
+        description: >-
+          Describe the move as findings are keyed by it (identity_rename: the spec's old and new
+          id), and rekey the debt register as a DRY RUN — a register that cannot be rewritten that
+          precisely refuses here, before the first write
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 12
+        description: >-
+          Collect without writing every spec the rewrite would change — an implementation's contract
+          and an export entry's interface naming a renamed contract — every export entry that would
+          get `as`, and every lint allow that would be rekeyed
+        type: local
+      - stepNumber: 13
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 15
+      - stepNumber: 14
+        description: Return what the rename would do, marked dryRun; nothing was written
+        type: return
+        outcome: SpecIdRename (dry run)
+      - stepNumber: 15
+        description: >-
+          Write `as` on the export entries whose public name derived from the old id, rewrite every
+          reference, and rekey the lint allows, across the bound tree
+        type: local
+      - stepNumber: 16
+        description: 'Drop the cached spec index: the rewrite changed files outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 17
+        description: >-
+          For a contract, resolve its current file and the file its new id would take beside its
+          component, to clear the file when the two are the same
+        type: call
+        targetComponent: spec_loader
+        targetMethod: interfacePath
+      - stepNumber: 18
+        description: >-
+          For an implementation, resolve its current file and the file its new id would take, to
+          clear the file when the two are the same
+        type: call
+        targetComponent: spec_loader
+        targetMethod: implementationPath
+      - stepNumber: 19
+        description: >-
+          Write the spec under its new id, its old id appended to its rename trace (previousIds),
+          beside its owner — an implementation whose new path is the file it occupies has that file
+          cleared first — and remove the file it left; a renamed contract's implementations follow
+          it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveInterfaceSpec
+      - stepNumber: 20
+        description: >-
+          For an implementation, write it likewise under its new id, its contract unchanged and its
+          old id appended to its rename trace
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveImplementationSpec
+      - stepNumber: 21
+        description: Rekey the debt register for real
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: rekeyCarried
+      - stepNumber: 22
+        description: Return renamed, rewritten, keptPublicNames and carried
+        type: return
+        outcome: SpecIdRename
+  - name: moveSpec
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: 'Guard: only a component or a type moves between subsystems'
+        type: branch
+        condition: the kind is neither component nor type
+        onFalseStep: 3
+      - stepNumber: 2
+        label: invalid-kind
+        description: Refuse, naming what can move
+        type: throw
+        error: 'invalid-kind: only a component or a type moves to another subsystem'
+      - stepNumber: 3
+        description: 'Read the bound tree''s subsystems: the target must be one of the bound project''s own'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 4
+        description: Is a component moving?
+        type: branch
+        condition: the kind is component
+        onFalseStep: 15
+      - stepNumber: 5
+        description: >-
+          Read every component, for the one moving, the members it owns and the pattern that may own
+          it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 6
+        description: >-
+          Guard: the component exists, is the bound project's own, is owned by no pattern, and the
+          target is another subsystem of the bound tree
+        type: branch
+        condition: >-
+          the component is missing or in another project, a pattern owns it, or the target subsystem
+          is missing or the one it lives in
+        onFalseStep: 8
+      - stepNumber: 7
+        label: component-refused
+        description: >-
+          Refuse before anything is written: spec-missing, chained-spec, owned (move its owner),
+          subsystem-missing or same-subsystem
+        type: throw
+        error: the component cannot move there
+      - stepNumber: 8
+        description: >-
+          Collect what moves: the component and every member it owns (transitively), their contracts
+          and the implementations realizing those
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 9
+        description: >-
+          Plan what follows the old subsystem: its export entries and lifecycle entrypoints naming a
+          moved component — by its component or one of its contracts — go to the new subsystem, and
+          an L0 re-export from the old subsystem naming one is re-pointed at the new; each file it
+          will write and each reference it re-points is recorded for the report
+        type: local
+      - stepNumber: 10
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 12
+      - stepNumber: 11
+        description: Return the plan, marked dryRun; nothing was written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 12
+        description: >-
+          Write the subsystems and the L0 the move re-homes entries on — the old subsystem without
+          the moved export entries and lifecycle entrypoints, the new one with them, an L0 re-export
+          re-pointed
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 13
+        description: >-
+          Write each moved component under the new subsystem, an owner before its members: the
+          nested layout moves a component's folder — its contract and implementation files inside it
+          — to where its subsystem places it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 14
+        description: 'The component''s move is written: go to the cache drop'
+        type: jump
+        toStep: 23
+      - stepNumber: 15
+        description: Read every type, for the one moving and the ids the target already holds
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 16
+        description: >-
+          Guard: the type exists, is the bound project's own, the target is another subsystem of the
+          bound tree (or system level), and the target holds no type of that id
+        type: branch
+        condition: >-
+          the type is missing or in another project, the target is missing or where it lives, or the
+          id is taken there
+        onFalseStep: 18
+      - stepNumber: 17
+        label: type-refused
+        description: Refuse before anything is written, naming the reason
+        type: throw
+        error: the type cannot move there
+      - stepNumber: 18
+        description: >-
+          Plan the rewrites: every type reference that names the moved type through its old
+          subsystem — in either spelling the loader resolves, `old::type` or `old.type`, matched as
+          the loader matches (case and punctuation aside, a deprecated own-project prefix and a
+          foreign key's `.field` tail included), wherever it stands in a type expression: a bare
+          position, a generic argument (`list<old.type>`, `map<string, old::type>`), an optional
+          (`old::type?`), a union, a result, a returns, a field, a signature type — is respelled to
+          name the new subsystem in the same spelling (the bare id at system level), through the one
+          type-reference rewriter every type move shares; and the export tables follow: its L1
+          export entries move with it to the target subsystem, an L0 re-export from the old
+          subsystem naming it is re-pointed at the new, an L0 entry publishing it as a project-level
+          type (no `from`) re-exports it `from` the target subsystem — whose L1 gains the type's
+          export entry — and, for a type made system-level, its L0 entries lose `from` (keeping the
+          public name its L1 entry gave) and its L1 entries go. Each file to write and each
+          reference respelled or re-pointed is recorded for the report
+        type: local
+      - stepNumber: 19
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 21
+      - stepNumber: 20
+        description: Return the plan, marked dryRun; nothing was written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 21
+        description: >-
+          Rewrite the references and the export entries across the bound tree, each touched spec
+          keeping its updatedAt: a move is placement, not an edit, so moving back leaves the tree
+          byte-identical
+        type: local
+      - stepNumber: 22
+        description: >-
+          Write the type under its new owner, its updatedAt and its line endings kept: its stored
+          file is removed first through the store (the loader never moves a file on a save), pruning
+          each folder the removal leaves empty — a subsystem's types folder a type moved out of is
+          never left behind — and restored, byte for byte, when the save fails
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 23
+        description: 'Drop the cached spec index: files moved outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 24
+        description: >-
+          Return what moved, what was rewritten, the files written (a moved file as old → new) and
+          the references respelled or re-pointed
+        type: return
+        outcome: SpecMove
+  - name: rehearsalCopy
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Make a temporary folder and copy the bound project's .wai into it — the specs, the
+          configuration, the lock record and pins, the rules — leaving out what no judgement reads
+          and a copy must never carry: the generated outputs, the derived context, an unfinished
+          transaction and the write lock; a specs folder configured outside .wai is copied to the
+          same place relative to the copy
+        type: local
+      - stepNumber: 2
+        description: Answer the copy's root
+        type: return
+        outcome: string
+  - name: discardRehearsal
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Remove the copy's folder and everything in it
+        type: local
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-07-24T18:02:13.266Z'
+updatedAt: '2026-10-17T16:33:52.451Z'

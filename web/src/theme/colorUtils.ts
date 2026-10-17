@@ -120,6 +120,47 @@ export function rgbTriplet(hex: string): string {
   return rgb ? `${rgb.r}, ${rgb.g}, ${rgb.b}` : '34, 221, 255';
 }
 
+/** Parse a CSS color literal — #hex (3 or 6 digit), rgb()/rgba(), hsl()/hsla(). */
+export function parseCssColor(value: string): { r: number; g: number; b: number; a: number } | null {
+  const raw = value.trim();
+  const hex = raw.replace(/^#/, '');
+  if (raw.startsWith('#') || /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(hex)) {
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+      return { r: parseInt(hex[0] + hex[0], 16), g: parseInt(hex[1] + hex[1], 16), b: parseInt(hex[2] + hex[2], 16), a: 1 };
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+      return { r: parseInt(hex.slice(0, 2), 16), g: parseInt(hex.slice(2, 4), 16), b: parseInt(hex.slice(4, 6), 16), a: 1 };
+    }
+    return null;
+  }
+  const rgbMatch = raw.match(/^rgba?\(([^)]+)\)$/i);
+  if (rgbMatch) {
+    const parts = rgbMatch[1].split(',').map((p) => Number(p.trim()));
+    if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) return null;
+    const a = parts[3] !== undefined && !Number.isNaN(parts[3]) ? Math.min(1, Math.max(0, parts[3])) : 1;
+    const c = (v: number) => Math.min(255, Math.max(0, Math.round(v)));
+    return { r: c(parts[0]), g: c(parts[1]), b: c(parts[2]), a };
+  }
+  const hslMatch = raw.match(/^hsla?\(([^)]+)\)$/i);
+  if (hslMatch) {
+    const parts = hslMatch[1].split(',').map((p) => Number(p.trim().replace(/%$/, '')));
+    if (parts.length < 3 || parts.slice(0, 3).some(Number.isNaN)) return null;
+    const h = (((parts[0] % 360) + 360) % 360) / 360;
+    const s = clamp01(parts[1] / 100);
+    const l = clamp01(parts[2] / 100);
+    const a = parts[3] !== undefined && !Number.isNaN(parts[3]) ? clamp01(parts[3]) : 1;
+    const rgb = hslToRgb(h, s, l);
+    return { ...rgb, a };
+  }
+  return null;
+}
+
+/** Collapse any parseable CSS color to opaque #rrggbb; `fallback` when it isn't one. */
+export function colorToHex(value: string | undefined, fallback: string): string {
+  const parsed = value ? parseCssColor(value) : null;
+  return parsed ? rgbToHex(parsed.r, parsed.g, parsed.b) : fallback;
+}
+
 /** Iteratively lighten/darken `foreground` until it meets `targetRatio` against
  *  `background` (WCAG 2.1 AA), staying as close to the brand color as possible. */
 export function findClosestAccessibleColor(foreground: string, background: string, targetRatio = 4.5): string {

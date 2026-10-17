@@ -1,0 +1,71 @@
+id: binding_module_adapter_impl
+name: Binding Module Adapter Implementation
+description: >-
+  A syntax-level declaration reader for TypeScript and JavaScript binding modules: comments blanked
+  (doc comments kept for their alias::name tag), string and template literals skipped, braces and
+  parentheses balanced, so the exported functions, interfaces, classes, object type aliases and
+  enums and their members are read without a compiler.
+contract: ibinding_module_adapter
+sourcePath: src/core/binding-modules.ts
+methods:
+  - name: readBindingModules
+    narrative:
+      - stepNumber: 1
+        label: each
+        description: For each distinct path named
+        type: loop
+        over: the distinct paths, in the order named
+        endStep: 6
+      - stepNumber: 2
+        description: >-
+          Containment: an absolute path, or one whose resolution leaves the project root, is
+          answered escaped and never touched
+        type: branch
+        condition: the path stays within the project root
+        onFalseStep: 1
+      - stepNumber: 3
+        description: >-
+          Read the file: not a file on disk is missing (planned), a binary or unreadable one is
+          unreadable
+        type: local
+      - stepNumber: 4
+        description: Is it TypeScript or JavaScript by its extension?
+        type: branch
+        condition: the file was read and its language is TypeScript or JavaScript
+        onFalseStep: 1
+      - stepNumber: 5
+        description: >-
+          Blank the comments (keeping each doc comment's `alias::name` or `alias::name.method` for
+          the declaration it precedes, and each JSDoc `@typedef` with its `@property` lines as an
+          object type), skip string and template literals, and find each ES module `export` of a
+          function, interface, class, type alias or enum (an `export declare` too), each TypeScript
+          `export =`, and each CommonJS export — `exports.X =` / `module.exports.X =`, the
+          properties of `module.exports = { … }` (shorthand ones included; a property untagged takes
+          the whole object's tag), and a whole-module `module.exports = class X …` / `function X …`
+          / `X` — recording its name and starting line; a value that is a bare identifier is read
+          through the module's own declaration of that name (a class, function, interface, or a
+          const/let/var holding a class, function or object literal), taking that declaration's tag
+          when the export has none; an export form whose value cannot be seen into (`module.exports
+          = require(…)`, an identifier the module does not declare, a call) is recorded as an unread
+          form
+        type: local
+      - stepNumber: 6
+        description: >-
+          For a function (or a CommonJS function or arrow-function value): its parameter names,
+          split on the commas at depth zero of its parameter list (a destructured parameter recorded
+          as an empty name). For an interface, a class body, an object type literal or a CommonJS
+          object literal: each member at depth zero — a call signature or method (a `name: function
+          (…)` or arrow value too) with its parameter names, a function-typed field as a method, any
+          other as a data field with the type text it is declared with, a constructor and index
+          signatures skipped, and in a class or object literal a private member (`private`, `#name`,
+          or a name starting with `_`) skipped; for an enum, its member names as fields
+        type: local
+      - stepNumber: 7
+        description: >-
+          Answer one BindingModule per path: its status and, when read, its declarations in source
+          order and the unread export forms it met
+        type: return
+        outcome: read
+status: complete
+createdAt: '2026-10-08T08:21:54.979Z'
+updatedAt: '2026-10-09T00:21:49.303Z'

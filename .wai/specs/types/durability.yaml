@@ -1,0 +1,22 @@
+kind: enum
+id: durability
+name: Durability
+description: >-
+  How a Store's state survives a restart — the axis orthogonal to its access shape (bare Store or
+  Repository member). Every Store should declare one (MISSING_DURABILITY).
+fields: []
+methods: []
+sourcePath: src/models/specs.ts
+values:
+  - name: ram-projection
+    description: Rebuilt, not restored; exempt from the durability round-trip
+  - name: durable
+    description: >-
+      Persisted and held as a RAM copy, so its writes need a hydration read-back reachable from a
+      lifecycle init entrypoint (MISSING_HYDRATION)
+  - name: read-through
+    description: 'Persisted with no RAM copy: every read hits the backing medium, so every read is the read-back'
+  - name: cache
+    description: Evictable memo state whose loss preserves behaviour; hydration exempt
+createdAt: '2026-10-04T23:11:52.663Z'
+updatedAt: '2026-10-04T23:11:53.029Z'

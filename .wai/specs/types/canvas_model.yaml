@@ -1,0 +1,96 @@
+kind: value-object
+id: canvas_model
+name: CanvasModel
+description: >-
+  The whole tree as the interactive canvas needs it: the system with its vision, target language,
+  databases and view preferences, every subsystem and component with its prose, and the edges
+  between them; the type nodes and their references for the types/ERD view; and the validator's
+  findings for the issue overlay. Wider than the export model on purpose — the canvas is explorable,
+  so it carries what a reader clicks into, while a static export carries only what it can draw. It
+  is also the model the live web canvas consumes, which is why building it is a separate method from
+  rendering it.
+fields:
+  - name: system
+    type: any
+    description: >-
+      The system's name, vision, target language, declared databases, and the diagram view
+      preferences the canvas opens with.
+    optional: false
+  - name: generatedAt
+    type: string
+    description: When the model was built, stamped into the rendered page.
+    optional: false
+  - name: subsystems
+    type: list<any>
+    description: >-
+      Each subsystem's id, name and description — and, for a project with members, each PROJECT
+      member as a project node (stage 3), one in a `../` sibling checkout drawn the same way with
+      its storage badge (round 8), a referenced one (a git or hosted source; stage 8) drawn from
+      outside with its storage; and each external the bound project declares that is NOT a project
+      of its family (a `../` path outside it, git or hosted) as an EXTERNAL project node (`project`
+      and `external` set, its id the alias, its storage badge saying where it lives, drawn dashed),
+      so a family of peers that only consume each other still shows its relations; on a hosted
+      instance a member node — or an external node whose hosted record it names — carries the hosted
+      record id (recordId) only when the caller may read that record, and the engine makes exactly
+      those nodes open that project's own page through the host's open-project hook — a node without
+      one is drawn without a link. A contained project member opens by drilling into it, as a
+      subsystem does (its specs are in the model); a referenced or external one has no specs in the
+      model, so locally it opens its details panel: its storage, and the relations that land on it.
+      A part's subsystems are the project's own subsystems, each carrying the part's storage badge
+      (`storage`: `part <alias> · contained`, `… · ../admin`, `… · git <short commit>`) and opening
+      as any subsystem does — composition decides what is drawn, storage only how it is labelled.
+    optional: false
+  - name: components
+    type: list<any>
+    description: Each component with what the canvas shows about it, including the findings marked on it.
+    optional: false
+  - name: edges
+    type: list<any>
+    description: >-
+      Dependency and ownership edges between the nodes, each flagged when it crosses a subsystem
+      boundary; a dependency on a referenced project's public name, or on a declared external's,
+      lands on that project's node (a consumption edge, stage 8). A consumption edge — one whose
+      source and target lie in different projects of the family, or that lands on a referenced or
+      external project node — is flagged as one (`consumption`) whether or not health was computed,
+      so the canvas can draw it neutral and say health was not checked; it names the relation it
+      belongs to (`relation`: a CanvasRelation id, `<consumer>→<producer>`) when the model carries
+      relations, and takes that relation's health; an edge between two projects with relations
+      computed but no entry for its pair names an unavailable relation, never none.
+    optional: false
+  - name: relations
+    type: list<CanvasRelation>
+    description: >-
+      Relation health, one entry per consumer-project-to-producer-project pair the canvas draws an
+      edge between, with the per-use detail and the time it was compared. PRESENT only when health
+      was computed for this model (an empty list when nothing is consumed); ABSENT when it was not
+      (`wairon diagram --no-health`, a model built before this field) — then every consumption edge
+      is drawn neutral and the legend says relation health was not checked, so a canvas never shows
+      green for something no one compared. A snapshot or exported page carries the relations as they
+      were when it was built, each with its comparedAt.
+    optional: true
+  - name: types
+    type: list<any>
+    description: >-
+      The type nodes of the types/ERD view: each type's id, name, kind, fields, methods, the
+      interface methods that use it, and its database binding.
+    optional: false
+  - name: typeEdges
+    type: list<any>
+    description: >-
+      Type-to-type references derived from field types (the ERD edges): {from, to, field, card: 1 |
+      0..1 | *}.
+    optional: false
+  - name: dataEdges
+    type: list<any>
+    description: >-
+      Data-coupling edges: a component that uses a type another subsystem owns, pointed at that
+      subsystem's published portal ({from, to}).
+    optional: false
+  - name: issues
+    type: list<any>
+    description: 'The validator''s findings for the issue overlay: {severity, code, message, specId?}.'
+    optional: false
+methods: []
+sourcePath: src/core/canvas.ts
+createdAt: '2026-09-20T16:41:02.457Z'
+updatedAt: '2026-10-09T01:02:47.766Z'

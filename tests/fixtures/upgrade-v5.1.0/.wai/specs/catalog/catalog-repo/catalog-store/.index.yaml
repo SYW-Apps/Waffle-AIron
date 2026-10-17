@@ -1,0 +1,11 @@
+id: catalog-store
+name: Catalog Store
+description: Holds product records
+subsystem: catalog
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-10-17T11:46:26.810Z'
+updatedAt: '2026-10-17T11:46:28.188Z'

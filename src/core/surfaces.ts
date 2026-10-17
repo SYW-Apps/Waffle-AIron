@@ -1,32 +1,78 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getProjectRoot } from '../utils/fs.js';
-import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
+import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
+import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
+import { WaironError } from '../utils/errors.js';
 import {
   SurfaceSnapshot,
   SurfaceSnapshotSchema,
   SurfaceContractEntry,
   SurfaceTypeDef,
+  type MethodSignature,
   SurfaceOrigin,
   SURFACE_AUDIENCES,
-  SystemPublicInterface,
   NamedOpenApiSpec,
   TypeSpec,
+  ComponentSpec,
+  InterfaceSpec,
+  ResolvedExport,
+  effectiveProjectId,
+  writtenTypeRefs,
+  matchTypeRef,
+  methodTypeRefs,
+  isTypeVocabulary,
+  canonicalTypeRef,
+  contentDigest,
+  memberDigest,
+  carriedFactChanges,
+  fieldChangesSince,
+  surfaceChanges,
+  type SurfaceChange,
+  declaredExternals,
+  declaredMembers,
+  type PinnedExternal,
+  type ExportUsage,
+  type CrossProjectReference,
+  type ExternalBinding,
+  type ExternalConsumer,
+  type ExternalListing,
+  type ExternalLockEntry,
+  type ExternalPin,
+  type ExternalStatus,
+  type ExternalUseStatus,
+  type ExternalsLock,
+  type PinnedParent,
+  type ResolvedExternal,
+  isPart,
+  type DesignApproval,
+  type DesignExport,
 } from '../models/index.js';
+// surfaces_core_adapter: every name this subsystem takes from sdd_core lands on
+// the adapter's own module, which re-exports it from the core portals.
 import {
   loadSystemSpec,
-  loadSubsystemSpecs,
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
-  resolveChainingParent,
-  computeStateIdAt,
-} from './specs.js';
-import { computeStateId } from './statehash.js';
-import { extractTypeIdentifiers, matchTypeRef, methodTypeRefs, BUILTIN_TYPES } from './rules/type-analysis.js';
-import { fromOpenApi, isOpenApiDocument, toOpenApiSet } from './openapi.js';
-import type { ValidationIssue } from './validation.js';
+  computeStateId,
+  resolveProjectExports,
+  loadProjectConfig,
+  resolveExternals,
+  excerptParent,
+  listExternalConsumers,
+  getLoaderIssues,
+  approvedRevision,
+  memberRevisions,
+} from './adapters/surfaces-core.js';
+// The pinned-externals aggregate (externals_repository): the lock and the
+// snapshots it names, apart from the legacy .wai/surfaces snapshots.
+import { externalsRepository } from './externals.js';
+import { fromOpenApi, isOpenApiDocument, toOpenApiSet, type OpenApiRenderContext } from './openapi.js';
+// design_exporter: the design export's projector, beside the snapshot's.
+import { exportDesign as projectDesign } from './design-export.js';
+import { ownGet } from '../utils/own.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Exchange (sdd_surfaces)
@@ -59,30 +105,42 @@ export function stateIdString(): string {
 // Projection (surface_projector)
 // ---------------------------------------------------------------------------
 
+/** A type's qualified id: its subsystem-qualified id when it has an owner, else its id. */
+function qualifiedTypeId(spec: TypeSpec): string {
+  return spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`) ? `${spec.subsystem}::${spec.id}` : spec.id;
+}
+
 /**
  * Transitive type closure: every type reachable from the exported method
- * signatures (params + returns), following field type references. The
- * snapshot must be self-contained — types are the one sanctioned
- * cross-boundary "internal", so a consumer's type resolution has to work
- * without the producing tree.
+ * signatures (params + returns) and from the exported types, following field
+ * type references. The snapshot must be self-contained — types are the one
+ * sanctioned cross-boundary "internal", so a consumer's type resolution has
+ * to work without the producing tree.
+ *
+ * Types are gathered by QUALIFIED id: two subsystems that each own a type of
+ * one name both arrive, where keying on the bare id kept whichever matched
+ * first and silently dropped the other. The first keeps its id; a later one
+ * with the same id is written under its qualified id, so no two definitions
+ * in one snapshot share an id.
  */
-function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[]): SurfaceTypeDef[] {
+function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[], exported: TypeSpec[] = []): SurfaceTypeDef[] {
   const included = new Map<string, TypeSpec>();
   const queue: string[] = [];
 
+  const include = (spec: TypeSpec): void => {
+    const key = qualifiedTypeId(spec);
+    if (included.has(key)) return;
+    included.set(key, spec);
+    queue.push(key);
+  };
   const enqueueRef = (ref: string): void => {
-    if (BUILTIN_TYPES.has(ref.toLowerCase())) return;
+    if (isTypeVocabulary(ref)) return;
     for (const spec of types) {
-      const qualifiedId = spec.subsystem && !spec.id.startsWith(`${spec.subsystem}::`)
-        ? `${spec.subsystem}::${spec.id}`
-        : spec.id;
-      if (matchTypeRef(ref, qualifiedId) && !included.has(spec.id)) {
-        included.set(spec.id, spec);
-        queue.push(spec.id);
-      }
+      if (matchTypeRef(ref, qualifiedTypeId(spec))) include(spec);
     }
   };
 
+  for (const spec of exported) include(spec);
   for (const entry of entries) {
     for (const m of entry.methods) {
       for (const ref of methodTypeRefs(m)) enqueueRef(ref);
@@ -90,227 +148,265 @@ function computeTypeClosure(entries: SurfaceContractEntry[], types: TypeSpec[]):
   }
   while (queue.length) {
     const spec = included.get(queue.shift()!)!;
+    // The named types each parsed type expression references (type_expression.namedRefs).
     for (const field of spec.fields) {
-      for (const ref of extractTypeIdentifiers(field.type)) enqueueRef(ref);
+      for (const ref of writtenTypeRefs(field.type, 'field')) enqueueRef(ref);
+    }
+    // A signature type's closure runs through its params and returns, as a data type's runs through its fields.
+    for (const param of spec.params ?? []) {
+      for (const ref of writtenTypeRefs(param.type, 'signature-param')) enqueueRef(ref);
+    }
+    if (spec.returns) {
+      for (const ref of writtenTypeRefs(spec.returns, 'signature-returns')) enqueueRef(ref);
     }
   }
 
-  return [...included.values()].map(t => ({
-    id: t.id,
-    name: t.name,
-    kind: t.kind,
-    fields: t.fields.map(f => ({
-      name: f.name,
-      type: f.type,
-      ...(f.description ? { description: f.description } : {}),
-      ...(f.optional ? { optional: true } : {}),
-    })),
-  }));
+  const usedIds = new Set<string>();
+  return [...included.entries()].map(([qualified, t]) => {
+    const id = usedIds.has(t.id) ? qualified : t.id;
+    usedIds.add(id);
+    const describe = <V extends { name: string; type: string; description?: string; optional?: boolean; previousNames?: string[] }>(v: V) => ({
+      name: v.name,
+      type: v.type,
+      ...(v.description ? { description: v.description } : {}),
+      ...(v.optional ? { optional: true } : {}),
+      // A renamed field (or signature param) travels with its rename trace —
+      // provenance, outside every digest — so a consumer reads the rename.
+      ...formerlyOf(v.previousNames, v.name),
+    });
+    return {
+      id,
+      name: t.name,
+      kind: t.kind,
+      fields: t.fields.map(describe),
+      // A signature type travels complete: its params and returns with it.
+      ...(t.kind === 'signature'
+        ? { params: (t.params ?? []).map(describe), returns: t.returns ?? 'any' }
+        : {}),
+      // An enum travels with its values, in declared order.
+      ...(t.kind === 'enum'
+        ? { values: (t.values ?? []).map(v => ({ name: v.name, ...(v.description ? { description: v.description } : {}) })) }
+        : {}),
+      // A named scalar travels with the primitive it holds.
+      ...(t.holds !== undefined ? { holds: t.holds } : {}),
+      // Its own methods (checked constructors, pure operations) travel with it — carried, never digested.
+      ...(t.methods && t.methods.length
+        ? { methods: t.methods.map((m) => ({ name: m.name, signature: m.signature, ...(m.params ? { params: m.params.map(describe) } : {}), returns: m.returns, ...(m.description ? { description: m.description } : {}) })) }
+        : {}),
+      // A renamed type travels with its rename trace — provenance, outside every digest.
+      ...formerlyOf(t.previousIds, t.id),
+    };
+  });
+}
+
+/** The last segment of a possibly-qualified id: the name a public table spells it by. */
+function lastSegment(id: string): string {
+  return id.split('::').pop() ?? id;
 }
 
 /**
- * Project the own tree's L0 gateway surface into a contract-grade snapshot.
- * `maxAudience` is the consumer's distance class: an entry is included when
- * its declared reach covers that distance (rank(entry) >= rank(maxAudience)).
- * The family ceiling 'project' therefore includes everything.
+ * A rename trace as a snapshot carries it (`formerly`): the former names, each
+ * by its last segment, deduplicated in order, without the current name; no
+ * field at all when nothing was renamed. Provenance, never signature — it
+ * enters neither memberDigest nor contentDigest, so carrying it moves no pin.
  */
-export function projectOwnSurface(maxAudience: string): SurfaceSnapshot {
+function formerlyOf(trace: readonly string[] | undefined, current: string): { formerly?: string[] } {
+  const now = lastSegment(current);
+  const names = [...new Set((trace ?? []).map(lastSegment))].filter((n) => n !== now);
+  return names.length ? { formerly: names } : {};
+}
+
+/** The effective id of the bound project, when it has a configuration to take one from. */
+function boundProjectId(): string | undefined {
+  try {
+    const config = loadProjectConfig();
+    return config ? effectiveProjectId(config) ?? undefined : undefined;
+  } catch {
+    // A configuration that fails its schema is reported by the paths that
+    // load it; the snapshot simply records no id.
+    return undefined;
+  }
+}
+
+/** One component export as a contract entry: the canonical target's contract, under its public name. */
+function contractEntry(entry: ResolvedExport, comp: ComponentSpec, interfaces: InterfaceSpec[]): SurfaceContractEntry {
+  const methods = interfaces
+    .filter(i => i.component === comp.id && (!entry.interface || i.id === entry.interface))
+    .flatMap(i => i.methods)
+    // The loaded tree carries every method resolved: a sourced method already
+    // holds its source's params and returns inline, so the snapshot drops the
+    // signatureFrom — it names no producer-internal method. A rename trace
+    // travels as `formerly` (each former key's method name), which no digest
+    // reads: a renamed method moves no digest beyond the name it changed.
+    .map(({ signatureFrom: _source, previousNames: trace, ...method }) => ({
+      ...method,
+      ...formerlyOf(trace?.map((key) => key.slice(key.lastIndexOf('.') + 1)), method.name),
+    }));
+  // The entry's own rename trace: the former public names, when the public
+  // name is the one the narrowed interface's (else the component's) id gives —
+  // an export renamed with `as` keeps its public name through a rename.
+  const named = entry.interface ? interfaces.find((i) => i.id === entry.interface) : comp;
+  const derived = lastSegment(entry.interface ?? comp.id) === entry.publicName;
+  return {
+    id: entry.publicName,
+    name: entry.name ?? comp.name,
+    audience: entry.audience ?? 'instance',
+    type: entry.type ?? 'Custom',
+    component: comp.id,
+    methods,
+    ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
+    // Project the backing Portal's auth + basePath so the codec can emit
+    // OpenAPI security + per-portal servers self-contained from the snapshot.
+    ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
+    ...(comp.basePath ? { basePath: comp.basePath } : {}),
+    // The backing Portal's transport and abi, so a consumer tells a library
+    // (InProcess, called directly) from a network or local surface, and the
+    // entry's role (call, the default, or implement). Carried, never digested:
+    // a pin taken before they were carried lacks them and reads as derived,
+    // never as drifted (contentDigest and memberDigest leave them out).
+    ...(comp.componentType === 'Portal' && comp.transport ? { transport: comp.transport } : {}),
+    ...(comp.componentType === 'Portal' && comp.abi ? { abi: comp.abi } : {}),
+    ...(entry.role ? { role: entry.role } : {}),
+    details: entry.details ?? '',
+    ...(entry.version ? { version: entry.version } : {}),
+    ...(entry.stability ? { stability: entry.stability } : {}),
+    componentType: comp.componentType,
+    ...(entry.interface ? { interface: entry.interface } : {}),
+    ...(derived ? formerlyOf(named?.previousIds, entry.publicName) : {}),
+  };
+}
+
+/**
+ * Project the own tree's resolved L0 export table into a contract-grade
+ * snapshot. `maxAudience` is the consumer's distance class: an entry is
+ * included when its declared reach covers that distance (rank(entry) >=
+ * rank(maxAudience)). The family ceiling 'project' therefore includes
+ * everything. Every re-export was followed to its canonical target by the
+ * export index, so each entry carries its target's contract under its public
+ * name, and a consumer never walks the producer's chain.
+ */
+export function projectOwnSurface(maxAudience: string, ownHttpPortals = false): SurfaceSnapshot {
+  // Step 1: the L0 (its name keys the snapshot).
   const system = loadSystemSpec();
   if (!system) {
     throw new Error('Cannot project a surface: the L0 system spec is missing.');
   }
-  const subsystems = loadSubsystemSpecs();
+  // Steps 2-5: the resolved table and the specs its targets name.
+  const table = resolveProjectExports();
   const components = loadComponentSpecs();
   const interfaces = loadInterfaceSpecs();
   const types = loadTypeSpecs();
 
+  // Step 6: the entries at or below the audience ceiling.
   const floor = audienceRank(maxAudience);
-  const rawEntries: SystemPublicInterface[] = system.publicInterfaces ?? [];
+  const visible = table.entries.filter(e => audienceRank(e.audience ?? 'instance') >= floor);
 
+  // Steps 7-8: each component entry's canonical contract, with its auth and basePath.
   const entries: SurfaceContractEntry[] = [];
-  for (const raw of rawEntries) {
-    const audience = raw.audience ?? 'instance';
-    if (audienceRank(audience) < floor) continue;
-    if (!raw.component) continue; // unbound gateway entries cannot be exported
-
-    const comp = components.find(c => c.id === raw.component);
-    if (!comp) continue;
-    const compInterfaces = interfaces.filter(i =>
-      i.component === comp.id && (!raw.interface || i.id === raw.interface));
-    const methods = compInterfaces.flatMap(i => i.methods);
-
-    const subsystemType = subsystems
-      .find(s => s.id === comp.subsystem)?.publicInterfaces
-      .find(pi => pi.component === comp.id)?.type;
-
-    entries.push({
-      id: raw.id ?? raw.interface ?? comp.id,
-      name: raw.name ?? comp.name,
-      audience,
-      type: raw.type ?? subsystemType ?? 'Custom',
-      component: comp.id,
-      methods,
-      ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
-      // Project the backing Portal's auth + basePath so the codec can emit
-      // OpenAPI security + per-portal servers self-contained from the snapshot.
-      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
-      ...(comp.basePath ? { basePath: comp.basePath } : {}),
-      details: raw.details ?? '',
-      ...(raw.version ? { version: raw.version } : {}),
-      ...(raw.stability ? { stability: raw.stability } : {}),
-    });
+  for (const entry of visible) {
+    if (entry.kind !== 'component') continue;
+    const comp = components.find(c => c.id === entry.component);
+    if (comp) entries.push(contractEntry(entry, comp, interfaces));
   }
-
-  return SurfaceSnapshotSchema.parse({
-    projectName: system.name,
-    origin: 'generated',
-    stateId: stateIdString(),
-    generatedAt: new Date().toISOString(),
-    interfaces: entries,
-    types: computeTypeClosure(entries, types),
-  });
-}
-
-/** The parent surface a chained child may see — the family ceiling includes project-audience entries. */
-export function projectChildSurface(): SurfaceSnapshot {
-  return projectOwnSurface('project');
-}
-
-/** The local (namespace-stripped) name of a possibly-qualified spec id. */
-function localName(id: string): string {
-  return id.split('::').pop()!;
-}
-
-/**
- * The stereotypes that can legally serve a cross-boundary caller, and therefore
- * the only ones a sibling surface may project. This is exactly the set the
- * boundary rules already sanction as a cross-subsystem dependency target
- * (Portal / Gateway — see rules/stereotype-deps.ts) plus the Observer that may
- * back a MessageBus public interface (see rules/public-surface.ts). Anything
- * else is declarable as a published entry but never consumable across a
- * boundary, so projecting it would export a contract no sibling can call.
- */
-const CROSS_BOUNDARY_TARGETS: ReadonlySet<string> = new Set(['Portal', 'Gateway', 'Observer']);
-
-/**
- * Project ONE subsystem's published surface — its L1 publicInterfaces realized
- * by a component that can legally serve a cross-boundary caller (a Portal, a
- * Gateway, or an Observer for an event surface), with full L3 contracts,
- * dispatch tables, and the transitive type closure — into a self-contained
- * contract-grade snapshot at the family ('project') audience ceiling. This is
- * the SIBLING view a chained child receives: siblings expose exactly what they
- * publish, nothing wider. The publishable set matches what the boundary rules
- * already sanction as a cross-subsystem dependency target, so a subsystem
- * publishing through a Gateway is projected rather than silently absent from
- * every child. A published entry whose backing component can NEVER be a
- * cross-boundary target is omitted and REPORTED as a non-fatal diagnostic. The
- * snapshot is keyed '<systemName>::<subsystemId>' so sibling surfaces never
- * collide with the parent family surface or foreign imports, and carries the
- * parent tree's StateId provenance.
- */
-export function projectSubsystemSurface(subsystemId: string): SurfaceSnapshot {
-  const system = loadSystemSpec();
-  if (!system) {
-    throw new Error('Cannot project a subsystem surface: the L0 system spec is missing.');
-  }
-  const subsystems = loadSubsystemSpecs();
-  const target = subsystems.find(s => s.id === subsystemId);
-  if (!target) {
-    throw new Error(`Cannot project a subsystem surface: subsystem "${subsystemId}" does not exist.`);
-  }
-  const components = loadComponentSpecs();
-  const interfaces = loadInterfaceSpecs();
-  const types = loadTypeSpecs();
-
-  const entries: SurfaceContractEntry[] = [];
-  // Published entries whose backing component can never be a cross-boundary
-  // target: omitted from the projection AND reported below, so an author learns
-  // why a child cannot see them instead of finding an unexplained gap.
-  const unprojectable: { component: string; componentType: string }[] = [];
-  for (const pub of target.publicInterfaces ?? []) {
-    // Unbound entries, and entries naming a component that does not exist, are
-    // deliberately NOT reported here — the validator already raises those as
-    // errors (PUBLIC_INTERFACE_UNBOUND / PUBLIC_INTERFACE_INVALID_COMPONENT), so
-    // a diagnostic would be duplicate noise.
-    if (!pub.component) continue; // unbound published entries cannot be exported
-    // An external (chained) sibling's members load namespace-qualified; match both forms.
-    const comp = components.find(c =>
-      c.id === pub.component || c.id === `${subsystemId}::${pub.component}`);
-    if (!comp) continue;
-    // Siblings expose exactly what they publish, and only through a component a
-    // cross-boundary caller can actually reach. A published entry backed by
-    // anything else (a 'Custom' entry over a Specialist or an Orchestrator, say)
-    // is unprojectable — collected for reporting rather than silently dropped.
-    if (!CROSS_BOUNDARY_TARGETS.has(comp.componentType)) {
-      unprojectable.push({ component: pub.component, componentType: comp.componentType });
-      continue;
+  // Step 8b (a service document only): every HTTP Portal of the project's own,
+  // exported or not. The L0 export table says what OTHER wairon projects may
+  // consume; a project's own API document describes what its HTTP callers —
+  // browsers, other services — send, which no export governs. An unexported
+  // Portal is the project's alone, so it is in only at the `project` ceiling:
+  // a document shared at a wider audience carries what the table shares there.
+  if (ownHttpPortals && floor <= audienceRank('project')) {
+    for (const comp of components) {
+      // The bound project's own Portals only: a member's (a qualified id) is that project's API.
+      if (comp.componentType !== 'Portal' || comp.transport !== 'HTTP' || comp.id.includes('::') || entries.some((e) => e.component === comp.id)) continue;
+      const own: ResolvedExport = { publicName: comp.id, kind: 'component', source: comp.subsystem, component: comp.id, componentType: comp.componentType, type: 'REST', audience: 'project', via: [] };
+      entries.push(contractEntry(own, comp, interfaces));
     }
-
-    const compInterfaces = interfaces.filter(i =>
-      i.component === comp.id
-      && (!pub.interface || i.id === pub.interface || i.id === `${subsystemId}::${pub.interface}`));
-    const methods = compInterfaces.flatMap(i => i.methods);
-
-    entries.push({
-      id: localName(pub.interface ?? comp.id),
-      name: comp.name,
-      // Family ceiling: a sibling surface is consumable by the system family only.
-      audience: 'project',
-      type: pub.type ?? 'Custom',
-      // The snapshot carries the LOCAL portal name — consumers resolve cross-tree
-      // refs by their final segment.
-      component: localName(comp.id),
-      methods,
-      ...(comp.dispatch && comp.dispatch.length ? { dispatch: comp.dispatch } : {}),
-      // Project the backing component's auth + basePath so the codec can emit
-      // OpenAPI security + per-portal servers self-contained from the snapshot.
-      ...(comp.auth && comp.auth.scheme !== 'none' ? { auth: comp.auth } : {}),
-      ...(comp.basePath ? { basePath: comp.basePath } : {}),
-      details: pub.details ?? '',
-    });
   }
 
-  // Report the skipped-what-and-why at generation time (same shape the variant
-  // loader uses for a skipped variant file) — a gap in a child's sibling surface
-  // is explained now rather than discovered later as a missing contract.
-  for (const skipped of unprojectable) {
-    console.error(
-      `[surfaces] skipped "${subsystemId}::${skipped.component}": a published ${skipped.componentType} can never serve a cross-boundary caller, so it stays out of every chained child's sibling surface — publish this surface through a Portal, a Gateway, or an Observer (for events).`,
-    );
-  }
+  // Step 9: exported types listed apart, and the closure over both.
+  const exportedTypes = visible.filter(e => e.kind === 'type');
+  const exportedSpecs = exportedTypes
+    .map(e => types.find(t => t.id === e.typeDef && (t.subsystem ?? e.source) === e.source))
+    .filter((t): t is TypeSpec => !!t);
+  const closure = computeTypeClosure(entries, types, exportedSpecs);
+  const closureIdOf = (e: ResolvedExport): string => {
+    const spec = types.find(t => t.id === e.typeDef && (t.subsystem ?? e.source) === e.source);
+    if (!spec) return String(e.typeDef);
+    return closure.some(d => d.id === qualifiedTypeId(spec)) ? qualifiedTypeId(spec) : spec.id;
+  };
 
-  return SurfaceSnapshotSchema.parse({
-    projectName: `${system.name}::${subsystemId}`,
+  // Steps 10-12: the project's id, the StateId, and the stamp — with the
+  // producer's targetLanguage, what a consumer in another language judges a
+  // native-ABI library call against.
+  const projectId = boundProjectId();
+  const targetLanguage = system.targetLanguage?.trim().toLowerCase();
+  // The public names the L0 declares that no longer resolve (a named
+  // re-export whose source dropped or renamed the item): provenance a
+  // consumer that used one is told, outside every digest.
+  const unresolvedExports = table.problems
+    .filter((p) => p.kind === 'invalid' && p.publicName !== undefined && p.source !== undefined
+      && !table.entries.some((e) => e.publicName === p.publicName))
+    .map((p) => ({ id: p.publicName!, source: p.source!, ...(p.renamedTo ? { renamedTo: p.renamedTo } : {}) }));
+  return canonicalReferences(SurfaceSnapshotSchema.parse({
+    projectName: system.name,
+    ...(projectId ? { projectId } : {}),
+    ...(targetLanguage ? { targetLanguage } : {}),
     origin: 'generated',
     stateId: stateIdString(),
     generatedAt: new Date().toISOString(),
     interfaces: entries,
-    types: computeTypeClosure(entries, types),
-  });
+    types: closure,
+    ...(exportedTypes.length
+      ? { exportedTypes: exportedTypes.map(e => ({ id: e.publicName, type: closureIdOf(e), audience: e.audience ?? 'instance' })) }
+      : {}),
+    ...(unresolvedExports.length ? { unresolvedExports } : {}),
+  }));
+}
+
+/**
+ * The snapshot with every type reference inside it — parameter and return
+ * types, the display signature, and every closure field — written in its
+ * canonical form (surface_snapshot.canonicalTypeRef), never as the author
+ * spelled it: restating a reference in another legal spelling changes no byte.
+ */
+function canonicalReferences(snapshot: SurfaceSnapshot): SurfaceSnapshot {
+  const canon = (expr: string): string => canonicalTypeRef(snapshot, expr);
+  return {
+    ...snapshot,
+    interfaces: snapshot.interfaces.map((entry) => ({
+      ...entry,
+      methods: entry.methods.map((m) => ({
+        ...m,
+        // Rebuilt from the structured params when it has them: a parameter's
+        // NAME is never a type position, so one spelled like a type
+        // (`order_id: order_id`) keeps its name.
+        signature: m.params?.length
+          ? `${m.name}(${m.params.map((p) => `${p.name}${p.optional ? '?' : ''}: ${canon(p.type)}`).join(', ')}): ${canon(m.returns)}`
+          : canon(m.signature),
+        returns: canon(m.returns),
+        ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
+      })),
+    })),
+    types: snapshot.types.map((def) => ({
+      ...def,
+      fields: def.fields.map((f) => ({ ...f, type: canon(f.type) })),
+      ...(def.params ? { params: def.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}),
+      ...(def.returns !== undefined ? { returns: canon(def.returns) } : {}),
+      ...(def.methods ? { methods: def.methods.map((m) => ({ ...m, returns: canon(m.returns), ...(m.params ? { params: m.params.map((p) => ({ ...p, type: canon(p.type) })) } : {}) })) } : {}),
+    })),
+  };
 }
 
 // ---------------------------------------------------------------------------
 // Stored snapshots (surface_repository over .wai/surfaces/)
+//
+// Three components, one file (N:1), each an object over the one below it:
+//   surface_fs_adapter  — the only block that touches .wai/surfaces/;
+//   surface_store       — read-through state: every read is the file read,
+//                         nothing is held in memory, so a CLI that pins and a
+//                         hosted server that reads always see the same files;
+//   surface_repository  — the facade consumers use, forwarding 1:1.
 // ---------------------------------------------------------------------------
-
-export function listSnapshots(rootDir: string = getProjectRoot()): SurfaceSnapshot[] {
-  const dir = surfacesDir(rootDir);
-  if (!fs.existsSync(dir)) return [];
-  const out: SurfaceSnapshot[] = [];
-  for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
-    try {
-      out.push(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))));
-    } catch {
-      // A malformed snapshot never aborts the read — it is simply not available.
-    }
-  }
-  return out;
-}
-
-export function getSnapshot(projectName: string, rootDir: string = getProjectRoot()): SurfaceSnapshot | null {
-  return listSnapshots(rootDir).find(s => s.projectName === projectName) ?? null;
-}
 
 /** Snapshot filename for a storage key. The key itself (projectName, possibly
  *  '<systemName>::<subsystemId>' for sibling surfaces) lives IN the document —
@@ -320,43 +416,252 @@ function snapshotFilename(projectName: string): string {
   return `${safeFilenamePart(projectName)}.yaml`;
 }
 
-export function saveSnapshot(snapshot: SurfaceSnapshot, rootDir: string = getProjectRoot()): string {
+/**
+ * Write a snapshot only when its CONTENT differs from what is already on disk.
+ *
+ * Every projection stamps a fresh `generatedAt` and the tree's current
+ * `stateId`, so an unconditional write would rewrite the bytes of every pinned
+ * surface on every pin — even when the published contract is identical — and
+ * show a child's whole surface set as modified in git after a parent changed
+ * one subsystem.
+ *
+ * Provenance is exactly what `surfaceContentKey` strips: a file whose content
+ * still matches does not need rewriting.
+ */
+function writeSnapshotIfChanged(
+  snapshot: SurfaceSnapshot,
+  rootDir: string,
+): { path: string; changed: boolean } {
   const dir = surfacesDir(rootDir);
   fs.mkdirSync(dir, { recursive: true });
   const p = path.join(dir, snapshotFilename(snapshot.projectName));
-  writeYamlFile(p, SurfaceSnapshotSchema.parse(snapshot));
-  return p;
-}
+  const next = SurfaceSnapshotSchema.parse(snapshot);
 
-export function removeSnapshot(projectName: string, rootDir: string = getProjectRoot()): boolean {
-  const dir = surfacesDir(rootDir);
-  const direct = path.join(dir, snapshotFilename(projectName));
-  if (fs.existsSync(direct)) {
-    fs.unlinkSync(direct);
-    return true;
-  }
-  // Legacy files written before filename sanitization (raw project names):
-  // locate by the snapshot's stored key, not the filename.
-  if (!fs.existsSync(dir)) return false;
-  for (const file of fs.readdirSync(dir)) {
-    if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
-    const p = path.join(dir, file);
+  if (fs.existsSync(p)) {
     try {
-      const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
-      if (snap.projectName === projectName) {
-        fs.unlinkSync(p);
-        return true;
+      const existing = SurfaceSnapshotSchema.parse(readYamlFile(p));
+      if (surfaceContentKey(existing) === surfaceContentKey(next)) {
+        return { path: p, changed: false };
       }
     } catch {
-      // A malformed snapshot is not the one we were asked to remove.
+      // Unreadable or written by an older schema — rewrite it rather than
+      // leaving something the loader cannot parse.
     }
   }
-  return false;
+
+  writeYamlFile(p, next);
+  return { path: p, changed: true };
 }
 
-/** Validator-facing load (validator_surfaces_adapter realization). */
-export function loadSurfaceSnapshots(): SurfaceSnapshot[] {
-  return listSnapshots();
+// ── surface_fs_adapter ──────────────────────────────────────────────────────
+
+/** isurface_fs_adapter. */
+export interface SurfaceFsAdapter {
+  readAllSnapshots(): SurfaceSnapshot[];
+  writeSnapshot(snapshot: SurfaceSnapshot): string;
+  deleteSnapshot(projectName: string): boolean;
+}
+
+export const surfaceFsAdapter: SurfaceFsAdapter = {
+  readAllSnapshots() {
+    const dir = surfacesDir(getProjectRoot());
+    if (!fs.existsSync(dir)) return [];
+    const out: SurfaceSnapshot[] = [];
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+      try {
+        out.push(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))));
+      } catch {
+        // A malformed snapshot never aborts the read — it is simply not available.
+      }
+    }
+    return out;
+  },
+  writeSnapshot(snapshot) {
+    return writeSnapshotIfChanged(snapshot, getProjectRoot()).path;
+  },
+  deleteSnapshot(projectName) {
+    const dir = surfacesDir(getProjectRoot());
+    const direct = path.join(dir, snapshotFilename(projectName));
+    if (fs.existsSync(direct)) {
+      fs.unlinkSync(direct);
+      return true;
+    }
+    // Legacy files written before filename sanitization (raw project names):
+    // locate by the snapshot's stored key, not the filename.
+    if (!fs.existsSync(dir)) return false;
+    for (const file of fs.readdirSync(dir)) {
+      if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
+      const p = path.join(dir, file);
+      try {
+        const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
+        if (snap.projectName === projectName) {
+          fs.unlinkSync(p);
+          return true;
+        }
+      } catch {
+        // A malformed snapshot is not the one we were asked to remove.
+      }
+    }
+    return false;
+  },
+};
+
+// ── surface_store ───────────────────────────────────────────────────────────
+
+/** isurface_store — read-through: each method is one file operation. */
+export interface SurfaceStore {
+  put(snapshot: SurfaceSnapshot): string;
+  get(projectName: string): SurfaceSnapshot | null;
+  list(): SurfaceSnapshot[];
+  remove(projectName: string): boolean;
+}
+
+export const surfaceStore: SurfaceStore = {
+  put(snapshot) {
+    return surfaceFsAdapter.writeSnapshot(snapshot);
+  },
+  get(projectName) {
+    return surfaceFsAdapter.readAllSnapshots().find(s => s.projectName === projectName) ?? null;
+  },
+  list() {
+    return surfaceFsAdapter.readAllSnapshots();
+  },
+  remove(projectName) {
+    return surfaceFsAdapter.deleteSnapshot(projectName);
+  },
+};
+
+// ── surface_repository ──────────────────────────────────────────────────────
+
+/** isurface_repository — the facade: each method one call to the store. */
+export interface SurfaceRepository {
+  saveSnapshot(snapshot: SurfaceSnapshot): string;
+  getSnapshot(projectName: string): SurfaceSnapshot | null;
+  listSnapshots(): SurfaceSnapshot[];
+  removeSnapshot(projectName: string): boolean;
+}
+
+export const surfaceRepository: SurfaceRepository = {
+  saveSnapshot(snapshot) {
+    return surfaceStore.put(snapshot);
+  },
+  getSnapshot(projectName) {
+    return surfaceStore.get(projectName);
+  },
+  listSnapshots() {
+    return surfaceStore.list();
+  },
+  removeSnapshot(projectName) {
+    return surfaceStore.remove(projectName);
+  },
+};
+
+// ── surface_orchestrator: the stored-snapshot reads and removal ─────────────
+
+/** surface_orchestrator.listSnapshots — every snapshot the bound root holds. */
+export function listSnapshots(): SurfaceSnapshot[] {
+  return surfaceRepository.listSnapshots();
+}
+
+/** surface_orchestrator.getSnapshot — the named project's snapshot, or null. */
+export function getSnapshot(projectName: string): SurfaceSnapshot | null {
+  return surfaceRepository.getSnapshot(projectName);
+}
+
+/** surface_orchestrator.removeSnapshot — remove the named project's snapshot; whether one existed. */
+export function removeSnapshot(projectName: string): boolean {
+  return surfaceRepository.removeSnapshot(projectName);
+}
+
+/**
+ * surface_orchestrator.listPinnedExternals — the owner's gate read of the bound
+ * project's pins: each declared external's alias with its lock entry and the
+ * snapshot that entry names, read from the bound root's own
+ * .wai/externals.lock.yaml and .wai/externals/ through the externals
+ * Repository. It never resolves a producer, never reads another root and never
+ * climbs: an alias never pinned, or whose snapshot file is missing or
+ * malformed, is answered with its problem instead of a snapshot. Writes nothing.
+ */
+export function listPinnedExternals(): PinnedExternal[] {
+  // Step 1: the declared aliases and producer ids only — nothing is bound. A
+  // referenced project member (stage 8: a git or hosted source) is judged
+  // against its pin exactly as an external; a part among them is dropped by
+  // the gate, which knows what the scan found it to be. A `../` sibling member
+  // is composed live like a contained one (round 8): never pinned.
+  let declared: { alias: string; project: string }[] = [];
+  try {
+    const config = loadProjectConfig();
+    declared = config ? [
+      ...declaredExternals(config),
+      ...declaredMembers(config).filter((m) => !m.problem && m.storage !== 'contained' && m.storage !== 'path').map((m) => ({ alias: m.alias, project: m.alias })),
+    ] : [];
+  } catch {
+    // A configuration that fails its schema is reported by the paths that load it.
+    return [];
+  }
+  // Step 2: the externals lock; one that cannot be read pins nothing.
+  let lock: ExternalsLock | null = null;
+  let lockProblem: string | undefined;
+  try {
+    lock = externalsRepository.readLock();
+  } catch (e) {
+    lockProblem = `the externals lock cannot be read: ${e instanceof Error ? e.message : String(e)}`;
+  }
+  // Steps 3-5: each declared alias, with its entry and snapshot — or the problem.
+  return declared.map(({ alias, project }): PinnedExternal => {
+    if (lockProblem) return { alias, project, problem: lockProblem };
+    const entry = ownGet(lock?.externals, alias);
+    if (!entry) return { alias, project, problem: `the external "${alias}" was never pinned (run \`wairon externals pin\`)` };
+    const snapshot = externalsRepository.readSnapshot(alias);
+    if (!snapshot) return { alias, project: entry.project, entry, problem: `the pinned snapshot ${entry.snapshot} is missing or unreadable (re-pin with \`wairon externals pin\`)` };
+    return { alias, project: entry.project, entry, snapshot };
+  });
+}
+
+/**
+ * surface_orchestrator.unrecordedUses — the uses of each PINNED external that
+ * its pin does not record: every public name (and method of one) the bound
+ * project's specs use now through the alias, counted offline exactly as a pin
+ * counts them, that the lock entry's `used` map does not hold — keeping only
+ * the ones the pinned snapshot carries (a use it does not carry is a design
+ * error the gate reports, which no re-pin cures). Keyed by alias, each value
+ * `<name>` or `<name>.<method>`, sorted; an alias with none is left out. No
+ * producer is read; writes nothing.
+ */
+export function unrecordedUses(): Record<string, string[]> {
+  // Step 1: the pinned externals, each with its entry and snapshot.
+  const pinned = listPinnedExternals().filter((p) => p.entry !== undefined && p.snapshot !== undefined);
+  // Steps 2-3: none pinned, nothing to resolve.
+  if (pinned.length === 0) return {};
+  // Step 4: the declared externals resolved offline — only their usages are read.
+  const bindings = resolveExternals(true);
+  // Step 5: each pinned alias's uses its lock entry does not hold.
+  const out: Record<string, string[]> = {};
+  for (const p of pinned) {
+    const usage = bindings.find((b) => b.external.alias === p.alias)?.usage;
+    const locked = p.entry!.used ?? {};
+    const snapshot = p.snapshot!;
+    const carriesName = (name: string): boolean => snapshot.interfaces.some((e) => e.id === name) || (snapshot.exportedTypes ?? []).some((t) => t.id === name);
+    const missing = new Set<string>();
+    for (const use of usage?.used ?? []) {
+      const recorded = locked[use.publicName];
+      // A name recorded with no members covers the whole name, as the live comparison reads it.
+      if (recorded !== undefined && Object.keys(recorded).length === 0) continue;
+      if (use.members.length === 0) {
+        if (recorded === undefined && carriesName(use.publicName)) missing.add(use.publicName);
+        continue;
+      }
+      for (const member of use.members) {
+        if (recorded !== undefined && member in recorded) continue;
+        if (memberDigest(snapshot, use.publicName, member) === null) continue;
+        missing.add(member === 'type' ? use.publicName : `${use.publicName}.${member}`);
+      }
+    }
+    if (missing.size > 0) out[p.alias] = [...missing].sort(compareOrdinal);
+  }
+  // Step 6.
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +682,8 @@ export interface SurfaceExportResult {
   /** EVERY written path. A multi-portal openapi export with no portal selection
    *  writes one file per portal, so callers can report all of them. */
   writtenPaths?: string[];
+  /** The type names a rendered OpenAPI document still reads as `Unresolved type`, sorted; absent when every one resolved. */
+  unresolvedTypes?: string[];
 }
 
 /** Narrow a rendered set to the named portal. An unknown portalId is REFUSED —
@@ -405,11 +712,14 @@ function perPortalPath(resolvedOut: string, portalId: string): string {
  *  native format (and for an openapi export that renders no portals at all), the
  *  single document when one portal remains, else ONE FILE PER PORTAL — never just
  *  the first, which would silently drop the other APIs. */
-function writeSurfaceFile(outPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
-  const resolved = path.resolve(outPath);
+function writeSurfaceFile(targetPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
+  const resolved = path.resolve(targetPath);
   fs.mkdirSync(path.dirname(resolved), { recursive: true });
   if (!renderedSet || renderedSet.length === 0) {
-    writeYamlFile(resolved, snapshot);
+    // A file is what its name says: `--out x.json` gets JSON (import reads it
+    // back too — JSON is YAML), anything else the YAML snapshot.
+    if (path.extname(resolved).toLowerCase() === '.json') fs.writeFileSync(resolved, `${JSON.stringify(snapshot, null, 2)}\n`);
+    else writeYamlFile(resolved, snapshot);
     return [resolved];
   }
   if (renderedSet.length === 1) {
@@ -432,8 +742,11 @@ function exportResult(
   writtenPaths: string[],
 ): SurfaceExportResult {
   const rendered = renderedSet?.length === 1 ? renderedSet[0].document : undefined;
+  // Every type a document could not resolve: reported, never passed under a ✔.
+  const unresolved = [...new Set((renderedSet ?? []).flatMap((spec) => [...spec.document.matchAll(/Unresolved type: ([^"\\]+)/g)].map((m) => m[1].trim())))].sort();
   return {
     snapshot,
+    ...(unresolved.length ? { unresolvedTypes: unresolved } : {}),
     ...(rendered !== undefined ? { rendered } : {}),
     ...(renderedSet ? { renderedSet } : {}),
     ...(writtenPaths.length === 1 ? { writtenTo: writtenPaths[0] } : {}),
@@ -441,20 +754,258 @@ function exportResult(
   };
 }
 
+/**
+ * Refusal of an OpenAPI export that has no HTTP Portal to describe — an
+ * in-process library, or nothing exported at the audience: OpenAPI does not
+ * apply, and the native snapshot is never written in its place.
+ */
+export class OpenApiNotApplicableError extends Error {
+  constructor(snapshot: SurfaceSnapshot, maxAudience: string) {
+    const kinds = [...new Set(snapshot.interfaces.map((e) => e.type))].sort();
+    super(snapshot.interfaces.length
+      ? `OpenAPI does not apply to "${snapshot.projectName}": it exposes no HTTP Portal at audience ≥ ${maxAudience} — its ${snapshot.interfaces.length} exported interface(s) are ${kinds.join(', ')}${kinds.includes('InProcess') ? ' (an in-process library is called, not requested over HTTP)' : ''}, which no OpenAPI document describes. Nothing was written; export the native snapshot (\`--format native\`) instead.`
+      : `OpenAPI does not apply to "${snapshot.projectName}": it has no HTTP Portal (a Portal with transport HTTP) to describe, and exports no interface at audience ≥ ${maxAudience}. Nothing was written.`);
+    this.name = 'OpenApiNotApplicableError';
+  }
+}
+
+/**
+ * What an OpenAPI rendering reads beyond the snapshot: each declared
+ * external's pinned snapshot (where `alias::name` in a schema resolves), and
+ * the version the project declares in its package manifest.
+ */
+function openApiContext(): OpenApiRenderContext {
+  const version = declaredVersion(getProjectRoot());
+  return { externals: foreignSurfaces(), ...(version ? { version } : {}) };
+}
+
+/**
+ * What every other project the bound one names `alias::name` in publishes,
+ * by alias: each declared external's (or referenced member's) pinned
+ * snapshot, and each contained member project's surface as its L0 export
+ * table exports it now — read at its own root, under its alias and its id.
+ * A member that cannot be projected (a part, an unreadable tree) and an
+ * unreadable pin are left out: their types read as unresolved. `members`,
+ * when given, are the member surfaces to use by alias instead of reading each
+ * where the bound tree's configuration locates it — a baseline tree in the
+ * fetch cache holds no `../` sibling.
+ */
+export function foreignSurfaces(members?: ReadonlyMap<string, SurfaceSnapshot>): Map<string, SurfaceSnapshot> {
+  const out = new Map<string, SurfaceSnapshot>();
+  try {
+    for (const p of listPinnedExternals()) if (p.snapshot) out.set(p.alias, p.snapshot);
+  } catch {
+    // An unreadable pin resolves nothing.
+  }
+  let declared: { alias: string; path?: string; source: { path?: string }; storage: string; problem?: string }[] = [];
+  try {
+    const config = loadProjectConfig();
+    declared = config ? declaredMembers(config) : [];
+  } catch {
+    declared = [];
+  }
+  const root = getProjectRoot();
+  for (const m of declared) {
+    // A member surface handed in (the baseline's, as its approval recorded it) is used as it is.
+    const given = members?.get(m.alias);
+    if (given && !out.has(m.alias)) {
+      out.set(m.alias, given);
+      if (given.projectId && !out.has(given.projectId)) out.set(given.projectId, given);
+      continue;
+    }
+    // A contained member and a `../` sibling are read live, where they are
+    // stored (round 8) — a sibling's location is its source path (round 9:
+    // only a contained member carried `path`, so a sibling never resolved).
+    const location = m.path ?? m.source.path;
+    if (m.problem || (m.storage !== 'contained' && m.storage !== 'path') || location === undefined || out.has(m.alias)) continue;
+    try {
+      const surface = runWithProjectRoot(path.resolve(root, location), () => projectOwnSurface('project'));
+      out.set(m.alias, surface);
+      if (surface.projectId && !out.has(surface.projectId)) out.set(surface.projectId, surface);
+    } catch {
+      // A part, or a member whose tree cannot be projected: its types stay unresolved.
+    }
+  }
+  // The bound project's own surface under its own id: a member that consumes
+  // this project's L0 re-exports (the shape `member promote` writes) names its
+  // types `<this project's id>::name`, which resolve here.
+  try {
+    const own = boundProjectId();
+    if (own !== undefined && !out.has(own)) out.set(own, projectOwnSurface('project'));
+  } catch {
+    // No L0 to project: its own id resolves nothing.
+  }
+  return out;
+}
+
+/**
+ * A surface with every type its published shapes name from another project
+ * (`alias::name`) expanded into its closure under that spelling — from the
+ * pinned snapshot or the member's live surface `foreign` holds, with the
+ * types those name inside their own producer respelled `alias::<id>` and
+ * their rename traces carried — so a re-pin that reshapes a type the
+ * project's own API answers with moves the project's own surface. A name no
+ * foreign surface holds stays as it is.
+ */
+export function withForeignTypes(snapshot: SurfaceSnapshot, foreign: ReadonlyMap<string, SurfaceSnapshot>): SurfaceSnapshot {
+  const types = [...snapshot.types];
+  const have = new Set(types.map((t) => t.id));
+  const queue: string[] = [];
+  // A reference is read whole, every `::` segment of it: `a::b::c` is alias `a`
+  // naming `b::c` inside it, never `a::b` and a stray `c`.
+  const scan = (text: string | undefined): void => {
+    for (const token of (text ?? '').match(/[A-Za-z0-9_-]+(?:::[A-Za-z0-9_-]+)+/g) ?? []) queue.push(token);
+  };
+  for (const e of snapshot.interfaces) for (const m of e.methods) { for (const p of m.params ?? []) scan(p.type); scan(m.returns); }
+  for (const t of types) { for (const f of t.fields) scan(f.type); for (const p of t.params ?? []) scan(p.type); scan(t.returns); }
+  while (queue.length > 0) {
+    const ref = queue.shift()!;
+    if (have.has(ref)) continue;
+    const cut = ref.indexOf('::');
+    const alias = ref.slice(0, cut);
+    const name = ref.slice(cut + 2);
+    const pin = foreign.get(alias);
+    if (!pin) continue;
+    // Each closure type under the alias: by its public name, else by its local
+    // segment when no other closure type shares it (a producer-qualified
+    // `contracts::currency_code` reads `alias::currency_code`), else by its id.
+    const segment = (id: string): string => (id.includes('::') ? id.slice(id.lastIndexOf('::') + 2) : id);
+    const shared = (id: string): boolean => pin.types.filter((d) => segment(d.id) === segment(id)).length > 1;
+    const local = new Map<string, string>(pin.types.map((d) => [d.id, `${alias}::${(pin.exportedTypes ?? []).find((t) => t.type === d.id)?.id ?? (shared(d.id) ? d.id : segment(d.id))}`]));
+    // A public name of the producer, one of its closure ids, or the spelling a closure type was given under the alias.
+    const defId = (pin.exportedTypes ?? []).find((t) => t.id === name)?.type
+      ?? (pin.types.some((d) => d.id === name) ? name : [...local].find(([, spelled]) => spelled === ref)?.[0]);
+    const def = pin.types.find((d) => d.id === defId);
+    if (!def) continue;
+    local.set(def.id, ref);
+    // Each identifier read whole: a closure id the producer qualified
+    // (`contracts::money`, one of its own member's types) is respelled under the
+    // alias like a bare one — never left in the producer's own spelling, which
+    // would name a project this one may not know and read as a change of every
+    // verb once the same type arrives under another alias.
+    const respell = (text: string | undefined): string | undefined => text?.replace(/[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_][A-Za-z0-9_-]*)*/g, (token) => local.get(token) ?? token);
+    const expanded: SurfaceTypeDef = {
+      ...def,
+      id: ref,
+      fields: def.fields.map((f) => ({ ...f, type: respell(f.type)! })),
+      ...(def.params ? { params: def.params.map((p) => ({ ...p, type: respell(p.type)! })) } : {}),
+      ...(def.returns !== undefined ? { returns: respell(def.returns) } : {}),
+      ...(def.formerly ? { formerly: def.formerly.map((f) => `${alias}::${f}`) } : {}),
+    };
+    types.push(expanded);
+    have.add(ref);
+    for (const f of expanded.fields) scan(f.type);
+    for (const p of expanded.params ?? []) scan(p.type);
+    scan(expanded.returns);
+  }
+  return types.length === snapshot.types.length ? snapshot : { ...snapshot, types };
+}
+
+/**
+ * The version a project declares in its package manifest — package.json's
+ * `version`, else Cargo.toml's or pyproject.toml's `version` — or undefined
+ * when none declares one. Read, never written.
+ */
+function declaredVersion(root: string): string | undefined {
+  const read = (file: string): string | null => {
+    try {
+      return fs.readFileSync(path.join(root, file), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+  const pkg = read('package.json');
+  if (pkg !== null) {
+    try {
+      const version = (JSON.parse(pkg) as { version?: unknown }).version;
+      if (typeof version === 'string' && version.trim()) return version.trim();
+    } catch {
+      // Not JSON: no version from it.
+    }
+  }
+  for (const file of ['Cargo.toml', 'pyproject.toml']) {
+    const text = read(file);
+    const m = text ? /^\s*version\s*=\s*"([^"]+)"/m.exec(text) : null;
+    if (m) return m[1];
+  }
+  return undefined;
+}
+
 export function exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string): SurfaceExportResult {
-  const snapshot = projectOwnSurface(maxAudience);
-  let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot) : undefined;
+  // An OpenAPI document describes the project's own HTTP API: every HTTP
+  // Portal, exported to other wairon projects or not.
+  const snapshot = projectOwnSurface(maxAudience, format === 'openapi');
+  let renderedSet = format === 'openapi' ? toOpenApiSet(snapshot, openApiContext()) : undefined;
+  // No HTTP Portal: OpenAPI does not apply — a file asked for is refused, never written as the native snapshot.
+  if (renderedSet && renderedSet.length === 0 && outPath) throw new OpenApiNotApplicableError(snapshot, maxAudience);
+  if (renderedSet && portalId && !renderedSet.some((s) => s.portalId === portalId)) {
+    // A Portal of this project that the ceiling left out is not "unknown": say why, and how to get it.
+    const own = loadComponentSpecs().find((c) => c.id === portalId && c.componentType === 'Portal');
+    if (own) {
+      throw new Error(own.transport !== 'HTTP'
+        ? `Portal "${portalId}" is a ${own.transport ?? 'transport-less'} Portal: no OpenAPI document describes it (an OpenAPI document describes an HTTP Portal).`
+        : `Portal "${portalId}" is not shared at audience ≥ ${maxAudience}: its export table entry is narrower or missing. Its own service document renders at the project audience — drop --audience (the default for --format openapi is project), or export it in the L0 publicInterfaces at the audience you want.`);
+    }
+  }
   if (renderedSet && portalId) renderedSet = selectPortalSpec(renderedSet, portalId);
   const writtenPaths = outPath ? writeSurfaceFile(outPath, snapshot, renderedSet) : [];
   return exportResult(snapshot, renderedSet, writtenPaths);
 }
 
-export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {
+/** A value with every object's keys in ordinal order, recursively — the one byte sequence a design writes as. */
+function withSortedKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withSortedKeys);
+  if (value && typeof value === 'object') {
+    const src = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(src).sort(compareOrdinal)) if (src[k] !== undefined) out[k] = withSortedKeys(src[k]);
+    return out;
+  }
+  return value;
+}
+
+/**
+ * isurface_transfer_adapter.writeDesignTo — the design export written to the
+ * target path as UTF-8 JSON (sorted object keys, two-space indent, one trailing
+ * newline), creating missing directories and overwriting an existing file, so
+ * the same design writes the same bytes. Fails naming the path. Returns the
+ * path written.
+ */
+export function writeDesignTo(targetPath: string, design: DesignExport): string {
+  const resolved = path.resolve(targetPath);
+  try {
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, `${JSON.stringify(withSortedKeys(design), null, 2)}\n`, 'utf8');
+  } catch (e) {
+    throw new Error(`Cannot write the design export to ${resolved}: ${(e as Error).message}`);
+  }
+  return resolved;
+}
+
+/**
+ * isurface_orchestrator.exportDesign — project the bound project's design
+ * export (design_exporter) and, when an output path is given, write it there.
+ * Answers with the export either way.
+ */
+export function exportDesign(outPath?: string, approval?: DesignApproval): DesignExport {
+  const design = projectDesign(approval);
+  if (outPath) writeDesignTo(outPath, design);
+  return design;
+}
+
+/** Read a foreign surface document as UTF-8 text without interpreting it;
+ *  decoding is the caller's concern. Fails naming the path when it is missing. */
+function readSurfaceDocument(sourcePath: string): string {
   const resolved = path.resolve(sourcePath);
   if (!fs.existsSync(resolved)) {
     throw new Error(`Surface document not found: ${resolved}`);
   }
-  const body = fs.readFileSync(resolved, 'utf8');
+  return fs.readFileSync(resolved, 'utf8');
+}
+
+export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {
+  const resolved = path.resolve(sourcePath);
+  const body = readSurfaceDocument(resolved);
 
   let snapshot: SurfaceSnapshot;
   if (isOpenApiDocument(body)) {
@@ -462,163 +1013,1076 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
     snapshot = fromOpenApi(body, projectName);
     snapshot = { ...snapshot, origin };
   } else {
-    snapshot = SurfaceSnapshotSchema.parse(readYamlFile(resolved));
+    snapshot = SurfaceSnapshotSchema.parse(parseYaml(body, resolved));
     snapshot = { ...snapshot, origin };
   }
-  saveSnapshot(snapshot);
+  surfaceRepository.saveSnapshot(snapshot);
   return snapshot;
 }
 
+// ---------------------------------------------------------------------------
+// Stage-1 family pins (listFamilyPins) — the generated family and sibling
+// snapshots `wairon surface pin` once wrote. Nothing reads them since stage 3;
+// the chaining migration converts the family pin into an external and deletes
+// them all.
+// ---------------------------------------------------------------------------
+
+/** Whose surface a stage-1 family pin holds: the parent's family surface, or one sibling's published surface. */
+export type FamilyPinRole = 'parent' | 'sibling';
+
 /**
- * Project and deliver the outward world into every chained child project's
- * .wai/surfaces/: the family-scoped parent surface AND each SIBLING
- * subsystem's published surface (every subsystem except the child's own
- * mount), so children can validate and consume cross-tree references
- * standalone against contract-grade snapshots. Returns all written paths.
+ * family_pin — one stage-1 family pin a project root still holds in
+ * .wai/surfaces/: its storage key, whether it pins the parent's family surface
+ * or one sibling's, and when it was written.
  */
-export function generateChildSnapshots(rootDir: string = getProjectRoot()): string[] {
-  const topLevel = loadSubsystemSpecs().filter(s => !s.id.includes('::'));
-  const children = topLevel.filter(s => s.projectPath);
-  if (!children.length) return [];
-  const familySnapshot = projectChildSurface();
-  // Each sibling surface is identical for every receiving child — project once.
-  const siblingSnapshots = new Map<string, SurfaceSnapshot>();
-  const siblingSurface = (subsystemId: string): SurfaceSnapshot => {
-    let snap = siblingSnapshots.get(subsystemId);
-    if (!snap) {
-      snap = projectSubsystemSurface(subsystemId);
-      siblingSnapshots.set(subsystemId, snap);
+export interface FamilyPin {
+  /** The snapshot's storage key: the parent's system name, or `<system>::<subsystem>` for a sibling pin. */
+  key: string;
+  role: FamilyPinRole;
+  /** When the pin was written. */
+  generatedAt?: string;
+}
+
+/**
+ * surface_orchestrator.listFamilyPins — the stage-1 family pins the bound root
+ * holds: every generated snapshot, classified by its key. Foreign imports
+ * (exchanged or authored) are never family pins. Reads only the bound root.
+ */
+export function listFamilyPins(): FamilyPin[] {
+  // Step 1: the snapshots the bound root holds.
+  const snapshots = listSnapshots();
+  // Step 2: the generated ones, classified by key.
+  const pins = snapshots
+    .filter((snapshot) => snapshot.origin === 'generated')
+    .map((snapshot): FamilyPin => ({
+      key: snapshot.projectName,
+      role: snapshot.projectName.includes('::') ? 'sibling' : 'parent',
+      ...(snapshot.generatedAt ? { generatedAt: snapshot.generatedAt } : {}),
+    }));
+  // Step 3: in key order.
+  return pins.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+}
+
+// ---------------------------------------------------------------------------
+// Declared externals (surface_orchestrator pinExternals / getExternalsStatus /
+// listExternals) — `wairon externals` and the sdd_pin_externals /
+// sdd_get_externals_status tools. The core binds each declared external to its
+// producer (the surfaces plane never walks the family itself); this plane
+// projects the producer's export table, pins it under .wai/externals/ and
+// records in the lock the digest of every member the consumer uses.
+// ---------------------------------------------------------------------------
+
+/** The code on every comparison that could not be made — never a pass. */
+const CHECK_UNAVAILABLE = 'EXTERNAL_CHECK_UNAVAILABLE';
+
+/** An alias the project does not declare, named to pin: refused before anything is written. */
+export class UnknownExternalAliasError extends Error {
+  constructor(unknown: string[], declared: string[]) {
+    super(`Unknown external alias${unknown.length > 1 ? 'es' : ''} ${unknown.map((a) => `"${a}"`).join(', ')} — this project declares ${declared.length ? declared.map((a) => `"${a}"`).join(', ') : 'no externals'} in .wai/project.yaml.`);
+    this.name = 'UnknownExternalAliasError';
+  }
+}
+
+/** Why a producer was not read: its root lies outside the request's reach. */
+const OUT_OF_REACH = 'its root is outside the request\'s reach';
+
+/** Whether `target` is `dir` or lies under it. */
+function isWithinDir(dir: string, target: string): boolean {
+  const rel = path.relative(path.resolve(dir), path.resolve(target));
+  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+}
+
+/**
+ * Why a producer's root cannot be read, or null when it can. The caller must
+ * gate on reach itself: a root outside the request's reach is never read. A
+ * hosted producer's root was answered by the hosting server's record lookup,
+ * which answers only a record the request may read — that is its reach check.
+ */
+function producerUnreadable(external: ResolvedExternal): string | null {
+  const directory = external.directory;
+  if (!directory) return external.problem ?? 'the producer has no root directory';
+  const reach = getRequestParentReach();
+  // A git producer is a fetched commit, never a root above the family; a
+  // referenced member is a root the declaring project names explicitly (stage
+  // 8) — neither is the family's to read within a ceiling, and neither ever
+  // has a directory on a hosted instance.
+  if (reach && external.sourceKind !== 'hosted' && external.sourceKind !== 'git' && external.role !== 'member') {
+    const bound = getProjectRoot();
+    const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
+    if (!isWithinDir(ceiling, directory)) return OUT_OF_REACH;
+  }
+  if (!fs.existsSync(directory)) return `its root ${directory} does not exist`;
+  return null;
+}
+
+/**
+ * Project the producer's resolved export table at the external's audience
+ * ceiling, the producer's root bound read-only for the projection and the
+ * consumer's binding restored afterwards; the snapshot is stamped with the
+ * audience it was filtered to. A root that holds no project throws.
+ */
+function projectProducer(external: ResolvedExternal): SurfaceSnapshot {
+  const snapshot = runWithProjectRoot(external.directory!, () => {
+    const projected = projectOwnSurface(external.audience);
+    // A spec file of the producer that fails to parse leaves its table short:
+    // what it held reads as gone. Never projected as a producer that removed
+    // names — it is unreadable, naming the file, for the producer to fix.
+    const broken = getLoaderIssues().find((i) => i.code === 'SCHEMA_VALIDATION_ERROR');
+    if (broken) throw new Error(unreadableReason(broken.message));
+    return projected;
+  });
+  return { ...snapshot, audience: external.audience };
+}
+
+/** The prefix every unreadable-producer reason starts with. */
+const PRODUCER_UNREADABLE = 'producer unreadable';
+
+/** `producer unreadable: <file>: <error>`, read off the loader's parse failure. */
+function unreadableReason(message: string): string {
+  const parsed = /^Failed to parse (?:\w+ )?spec(?: "([^"]+)")?: ([\s\S]*)$/.exec(message);
+  if (!parsed) return `${PRODUCER_UNREADABLE}: ${message}`;
+  return `${PRODUCER_UNREADABLE}: ${parsed[1] ?? 'its system spec'}: ${parsed[2]}`;
+}
+
+/** A failed producer read as a reason: an unreadable producer said as such, anything else prefixed. */
+function readFailure(e: unknown): string {
+  const detail = e instanceof Error ? e.message : String(e);
+  return detail.startsWith(PRODUCER_UNREADABLE) ? detail : `the producer could not be read: ${detail}`;
+}
+
+/**
+ * The lock's `used` map for one binding: each used member's digest in the
+ * pinned snapshot; and each used member the snapshot does not carry, as the
+ * reference that reaches it (the first referring spec), so every surface that
+ * answers a pin — the CLI line and the MCP answer alike — names it.
+ */
+function usedDigests(usage: ExportUsage | undefined, snapshot: SurfaceSnapshot, alias: string): { used: Record<string, Record<string, string>>; missing: string[]; uncarried: CrossProjectReference[] } {
+  const used: Record<string, Record<string, string>> = {};
+  const missing: string[] = [];
+  const uncarried: CrossProjectReference[] = [];
+  for (const use of usage?.used ?? []) {
+    const members: Record<string, string> = {};
+    for (const member of use.members) {
+      const digest = memberDigest(snapshot, use.publicName, member);
+      if (digest !== null) {
+        members[member] = digest;
+        continue;
+      }
+      missing.push(`${use.publicName}.${member}`);
+      uncarried.push({
+        specId: use.specs?.[0] ?? '', position: 'uncarried', target: `${alias}::${use.publicName}`,
+        ...(member !== 'type' ? { member } : {}), consumer: usage?.consumer ?? '', producer: alias, authored: `${alias}::${use.publicName}`,
+      });
     }
-    return snap;
+    used[use.publicName] = members;
+  }
+  return { used, missing, uncarried };
+}
+
+/**
+ * What a pin says beside its outcome: the used members it could not carry,
+ * or — when no spec references the external yet — plainly that the pin
+ * records none of this project's uses, and fills on the next pin.
+ */
+function pinDetail(missing: string[], usedNames: number, alias: string, narrower: { name: string; audience: string }[] = [], readAt = 'instance'): { detail?: string } {
+  if (narrower.length) {
+    const rest = missing.filter((m) => !narrower.some((n) => m.startsWith(`${n.name}.`)));
+    const named = narrower.map((n) => `"${n.name}" to \`${n.audience}\``).join(', ');
+    const ranking = (SURFACE_AUDIENCES as readonly string[]).join(' < ');
+    const also = rest.length ? `; used members the snapshot does not carry cannot be pinned: ${rest.join(', ')}` : '';
+    return { detail: `the producer exports ${named} only, and this project reads it at \`${readAt}\` (audiences, narrowest first: ${ranking}) — nothing is gone: widen the export's audience in the producer's L0, or consume it from inside its family${also}` };
+  }
+  if (missing.length) return { detail: `used members the snapshot does not carry cannot be pinned: ${missing.join(', ')}` };
+  if (usedNames === 0) {
+    return { detail: `no spec references "${alias}" yet, so this pin records none of its uses — it fills on the next pin (\`wairon externals pin ${alias}\` / sdd_pin_externals) once a spec writes \`${alias}::<name>\`; until then each new reference reads "used now, but not in the lock"` };
+  }
+  return {};
+}
+
+/**
+ * The used names a producer exports only to an audience narrower than the
+ * one the consumer reads it at, each with that audience — read from the
+ * producer projected at `project`, its widest table.
+ */
+function narrowerExports(external: ResolvedExternal, missing: string[], read: SurfaceSnapshot): { name: string; audience: string }[] {
+  // Only a name the snapshot at the read audience lacks altogether: a name it
+  // holds is missing a member for another reason (a rename, a removal).
+  const held = (name: string): boolean => read.interfaces.some((e) => e.id === name) || (read.exportedTypes ?? []).some((t) => t.id === name);
+  missing = missing.filter((used) => !held(used.slice(0, used.lastIndexOf('.'))));
+  if (missing.length === 0) return [];
+  let wide: SurfaceSnapshot;
+  try {
+    wide = projectProducer({ ...external, audience: 'project' });
+  } catch {
+    return [];
+  }
+  const audienceOf = (name: string): string | undefined => wide.interfaces.find((e) => e.id === name)?.audience ?? (wide.exportedTypes ?? []).find((t) => t.id === name)?.audience;
+  const out = new Map<string, string>();
+  for (const used of missing) {
+    const name = used.slice(0, used.lastIndexOf('.'));
+    const audience = audienceOf(name);
+    if (audience !== undefined) out.set(name, audience);
+  }
+  return [...out].map(([name, audience]) => ({ name, audience }));
+}
+
+/** A pin's detail with what moved since the replaced pin said first. */
+function withMoved(detail: { detail?: string }, moved: string[]): { detail?: string } {
+  if (moved.length === 0) return detail;
+  const said = `moved since the last pin: ${moved.join(', ')}`;
+  return { detail: detail.detail ? `${said}; ${detail.detail}` : said };
+}
+
+/** Pin one resolved binding: the snapshot written when its content moved, and the lock entry. */
+function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: ExternalPin; changed: boolean } {
+  const { external } = binding;
+  const unexported = binding.usage?.unexported ?? [];
+  // Step 8: bind the producer's root, when it can be read.
+  const unreadable = producerUnreadable(external);
+  let snapshot: SurfaceSnapshot;
+  try {
+    if (unreadable) throw new Error(unreadable);
+    // Steps 9-10: project it at the audience ceiling, stamped with that audience.
+    snapshot = projectProducer(external);
+  } catch (e) {
+    return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `${readFailure(e)}; its previous pin stays` }, changed: false };
+  }
+  const digest = contentDigest(snapshot);
+  // Steps 11-13: the snapshot is rewritten only when its content moved.
+  const pinned = externalsRepository.readSnapshot(external.alias);
+  // The removals since the replaced pin, carried forward while they stay absent.
+  if (pinned) snapshot = withRetired(snapshot, pinned);
+  // Rewritten whenever anything the snapshot carries moved — not only its
+  // digest: the rules read facts no digest covers (a library's abi, an
+  // entry's transport and role), and a re-pin is how they are refreshed.
+  const snapshotChanged = !pinned || contentDigest(pinned) !== digest || pinnedContentKey(pinned) !== pinnedContentKey(snapshot);
+  if (snapshotChanged) externalsRepository.saveSnapshot(external.alias, snapshot);
+  // What moved since the replaced pin that no digest reads — a used verb's
+  // route above all: a re-pin never rewrites it without a word.
+  const moved = pinned && snapshotChanged ? carriedFactChanges(pinned, snapshot) : [];
+  // Step 14: the lock entry — `used` maps each used member to its digest.
+  const { used, missing, uncarried } = usedDigests(binding.usage, snapshot, external.alias);
+  // A used name the producer does export — only narrower than this project
+  // reads it — is said so, never as gone.
+  const narrower = missing.length > 0 && external.audience !== 'project' ? narrowerExports(external, missing, snapshot) : [];
+  const entry: ExternalLockEntry = {
+    project: external.project, snapshot: `.wai/externals/${external.alias}.yaml`, digest, used,
+    ...(external.commit !== undefined ? { commit: external.commit } : {}),
+    ...(external.role === 'member' ? { role: 'member' } : {}),
   };
-  const written: string[] = [];
-  for (const child of children) {
-    const childDir = path.resolve(rootDir, child.projectPath!);
-    if (!fs.existsSync(childDir)) continue;
-    written.push(saveSnapshot(familySnapshot, childDir));
-    // Per-sibling delivery: every OTHER subsystem's published surface (the
-    // child's own mount excluded — it does not consume itself).
-    for (const sibling of topLevel) {
-      if (sibling.id === child.id) continue;
-      written.push(saveSnapshot(siblingSurface(sibling.id), childDir));
+  const entryChanged = canonicalize(ownGet(lock.externals, external.alias) ?? null) !== canonicalize(entry);
+  lock.externals[external.alias] = entry;
+  return {
+    pin: {
+      alias: external.alias,
+      outcome: snapshotChanged || entryChanged ? 'pinned' : 'unchanged',
+      project: external.project,
+      snapshot: entry.snapshot,
+      digest,
+      usedNames: Object.keys(used).length,
+      unexported: [...unexported, ...uncarried],
+      ...(withMoved(pinDetail(missing, Object.keys(used).length, external.alias, narrower, external.audience), moved)),
+    },
+    changed: entryChanged,
+  };
+}
+
+/**
+ * surface_orchestrator.pinExternals — pin the bound project's declared
+ * externals (the named aliases, else all) into .wai/externals/<alias>.yaml and
+ * .wai/externals.lock.yaml. An alias the project does not declare is refused
+ * before anything is written; an unresolved or unreachable producer is
+ * reported and leaves its previous pin in place. With no aliases named, pins
+ * for aliases no longer declared are removed.
+ */
+export function pinExternals(aliases?: string[]): ExternalPin[] {
+  // Steps 1-4 (stage 8): a part declares no externals — what it pins is its parent.
+  if (isPart(loadProjectConfig())) return pinParent(aliases);
+  // Step 5: the declared externals, each bound to its producer.
+  const bindings = resolveExternals();
+  // Steps 6-8: the aliases asked for — an undeclared one refused before any write.
+  const declared = bindings.map((b) => b.external.alias);
+  const named = aliases && aliases.length > 0 ? aliases : undefined;
+  const unknown = (named ?? []).filter((a) => !declared.includes(a));
+  // A member composed live (contained, or a `../` sibling) is never pinned: said so, not called unknown.
+  const live = unknown.filter((a) => declaredMembers(loadProjectConfig() ?? {}).some((m) => m.alias === a && !m.problem && (m.storage === 'contained' || m.storage === 'path')));
+  if (live.length > 0 && live.length === unknown.length) {
+    throw new WaironError(`${live.map((a) => `"${a}"`).join(', ')} ${live.length === 1 ? 'is a member' : 'are members'} of this project, read live where ${live.length === 1 ? 'it is' : 'they are'} stored (inside it, or a \`../\` sibling checkout) and composed in the family run like any contained member — a member is never pinned. Pin only an external (\`externals add\`), or a git or hosted member. Nothing was written.`);
+  }
+  if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
+  const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
+  // Step 9: the current lock (none yet reads as empty).
+  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const pins: ExternalPin[] = [];
+  let lockChanged = false;
+  // Steps 6-17: each external to pin.
+  for (const binding of kept) {
+    if (binding.external.sourceKind === 'unresolved') {
+      // Step 16: its previous pin stays.
+      pins.push({ alias: binding.external.alias, outcome: 'unresolved', project: binding.external.project, usedNames: 0, unexported: [], detail: binding.external.problem });
+      continue;
+    }
+    const { pin, changed } = pinBinding(binding, lock);
+    pins.push(pin);
+    lockChanged ||= changed;
+  }
+  // Step 22: with no aliases named, prune the aliases no longer declared.
+  if (!named) lockChanged = prune(lock, declared) || lockChanged;
+  // Steps 23-24: the lock, written only when an entry was added, changed or pruned.
+  if (lockChanged) externalsRepository.saveLock(lock);
+  // Step 25: one outcome per external handled, in declaration order.
+  return pins;
+}
+
+/**
+ * isurface_orchestrator.prune — drop every lock entry whose alias the
+ * project no longer declares, with its snapshot; answers whether the lock
+ * changed. The prune half of a pin with no aliases named.
+ */
+export function prune(lock: ExternalsLock, declared: string[]): boolean {
+  // Step 1: the entries no longer declared.
+  const dropped = Object.keys(lock.externals).filter((alias) => !declared.includes(alias));
+  for (const alias of dropped) delete lock.externals[alias];
+  // Steps 2-3: each one's snapshot goes with it.
+  for (const alias of dropped) externalsRepository.removeSnapshot(alias);
+  // Step 4.
+  return dropped.length > 0;
+}
+
+/**
+ * isurface_orchestrator.pinnedParent — the owner's gate read of a PART's
+ * pinned parent (stage 8): its lock's `parent` entry and the excerpt it
+ * names, from the bound root's own .wai/externals files — never the parent's
+ * live tree. Null when the bound root is not a part.
+ */
+export function pinnedParent(): PinnedParent | null {
+  // Step 1: the bound root's configuration; nothing is bound or climbed.
+  const config = loadProjectConfig();
+  // Steps 2 and 6: not a part, nothing to answer.
+  if (!isPart(config)) return null;
+  const project = config!.partOf!.project;
+  // Step 3: the part's lock and its parent entry.
+  const entry = externalsRepository.readLock()?.parent;
+  // Step 4: the excerpt the entry names.
+  const excerpt = entry ? externalsRepository.readExcerpt(entry.project) : null;
+  // Step 5: the parent with its entry and excerpt — or the problem.
+  const problem = !entry
+    ? `part of "${project}"; validate from the parent — it has never been pinned here`
+    : !excerpt
+      ? `the pinned excerpt of "${entry.project}" (${entry.snapshot}) is missing or unreadable — re-pin with \`wairon externals pin\``
+      : excerpt.project !== project
+        ? `the pinned excerpt is of "${excerpt.project}", but this part's partOf names "${project}" — re-pin with \`wairon externals pin\``
+        : undefined;
+  return {
+    project,
+    ...(entry ? { entry } : {}),
+    ...(excerpt && !problem ? { excerpt } : {}),
+    ...(problem ? { problem } : {}),
+  };
+}
+
+/**
+ * isurface_orchestrator.pinParent — `wairon externals pin` at a PART (stage
+ * 8): take the excerpt of the parent the part's files reference — read with
+ * the parent on disk at PartOf.path — and pin it as the part's
+ * .wai/externals/<parent id>.yaml and its lock's `parent` entry. A named alias
+ * is refused before anything is written; a parent the core cannot read, or
+ * one that does not claim the part, is answered unreachable with the reason,
+ * and the previous pin stays. Never locks.
+ */
+export function pinParent(aliases?: string[]): ExternalPin[] {
+  const project = loadProjectConfig()?.partOf?.project ?? '';
+  // Steps 1-2: a part has no alias to name.
+  if (aliases && aliases.length > 0) throw new UnknownExternalAliasError(aliases, []);
+  // Step 3: the excerpt, read with the parent on disk.
+  let excerpt;
+  try {
+    excerpt = excerptParent();
+  } catch (e) {
+    return [{ alias: project, outcome: 'unreachable', project, usedNames: 0, unexported: [], detail: e instanceof Error ? e.message : String(e) }];
+  }
+  // Step 4: the part's lock (none yet reads as empty).
+  const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
+  const snapshot = `.wai/externals/${excerpt.project}.yaml`;
+  const unchanged = lock.parent?.digest === excerpt.digest && lock.parent.project === excerpt.project
+    && externalsRepository.readExcerpt(excerpt.project) !== null;
+  // Step 5: the excerpt, written when its digest moved.
+  if (!unchanged) externalsRepository.saveExcerpt(excerpt);
+  // Step 6: the lock's parent entry, recorded when it changed.
+  const entry: ExternalLockEntry = { project: excerpt.project, snapshot, digest: excerpt.digest, used: {}, role: 'parent', ...(excerpt.commit ? { commit: excerpt.commit } : {}) };
+  const entryMoved = canonicalize(lock.parent ?? null) !== canonicalize(entry);
+  if (entryMoved) externalsRepository.saveLock({ ...lock, parent: entry });
+  // Step 7: one outcome, the parent's.
+  return [{
+    alias: excerpt.project, outcome: unchanged && !entryMoved ? 'unchanged' : 'pinned', project: excerpt.project,
+    snapshot, digest: excerpt.digest, usedNames: 0, unexported: [],
+  }];
+}
+
+/** Where the live producer's rename trace carries a used name, or null when it does not. */
+interface RenamedUse {
+  publicName: string;
+  member?: string;
+}
+
+/**
+ * A used name gone from the live table, followed through the producer's
+ * rename trace (`formerly` on an entry, a method or an exported type's
+ * definition): the live public name (and member) it was renamed to, or null —
+ * then it was removed.
+ */
+function renamedIn(live: SurfaceSnapshot, publicName: string, member?: string): RenamedUse | null {
+  if (member === undefined || member === 'type') {
+    const entry = live.interfaces.find((e) => e.formerly?.includes(publicName));
+    if (entry && member === undefined) return { publicName: entry.id };
+    const exported = (live.exportedTypes ?? []).find((t) => t.id !== publicName
+      && (live.types.find((d) => d.id === t.type)?.formerly ?? []).includes(publicName));
+    return exported ? { publicName: exported.id, ...(member ? { member } : {}) } : null;
+  }
+  const entry = live.interfaces.find((e) => e.id === publicName) ?? live.interfaces.find((e) => e.formerly?.includes(publicName));
+  if (!entry) return null;
+  if (member.startsWith('capability:')) {
+    const has = entry.dispatch?.some((b) => b.capability === member.slice('capability:'.length));
+    return has && entry.id !== publicName ? { publicName: entry.id, member } : null;
+  }
+  const method = entry.methods.find((m) => m.name === member) ?? entry.methods.find((m) => m.formerly?.includes(member));
+  if (!method || (entry.id === publicName && method.name === member)) return null;
+  return { publicName: entry.id, member: method.name };
+}
+
+/** How a rename reads: `name` or `name.member` (a type keeps its bare name). */
+function renamedName(to: RenamedUse): string {
+  return to.member === undefined || to.member === 'type' ? to.publicName : `${to.publicName}.${to.member}`;
+}
+
+/**
+ * Whether a renamed member still has the signature the lock recorded: the live
+ * table read back under the former names (the entry, method or exported type
+ * renamed back), so only the name — which a digest reads — is set aside.
+ */
+function sameSignatureAfterRename(live: SurfaceSnapshot, from: { publicName: string; member: string }, to: RenamedUse, digest: string): boolean {
+  if (from.member === 'type') {
+    const exported = (live.exportedTypes ?? []).find((t) => t.id === to.publicName);
+    if (!exported) return false;
+    const def = live.types.find((d) => d.id === exported.type);
+    const defId = def && def.id === to.publicName ? from.publicName : exported.type;
+    const back: SurfaceSnapshot = {
+      ...live,
+      exportedTypes: (live.exportedTypes ?? []).map((t) => (t === exported ? { ...t, id: from.publicName, type: defId } : t)),
+      types: live.types.map((d) => (d === def ? { ...d, id: defId } : d)),
+    };
+    return memberDigest(back, from.publicName, 'type') === digest;
+  }
+  const back: SurfaceSnapshot = {
+    ...live,
+    interfaces: live.interfaces.map((e) => (e.id !== to.publicName ? e : {
+      ...e,
+      id: from.publicName,
+      methods: e.methods.map((m) => (m.name === to.member ? { ...m, name: from.member } : m)),
+    })),
+  };
+  return memberDigest(back, from.publicName, from.member) === digest;
+}
+
+/**
+ * The renames that came with a renamed method, read against the pinned
+ * snapshot: each parameter the live method renamed per its trace, and each
+ * field renamed per its trace in a type the live method's closure names.
+ */
+function renamesWithMethod(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string, to: RenamedUse): string[] {
+  if (!pinned || to.member === undefined) return [];
+  const was = pinned.interfaces.find((e) => e.id === publicName)?.methods.find((m) => m.name === member);
+  const now = live.interfaces.find((e) => e.id === to.publicName)?.methods.find((m) => m.name === to.member);
+  if (!was || !now) return [];
+  const out: string[] = [];
+  const before = new Set((was.params ?? []).map((p) => p.name));
+  for (const p of now.params ?? []) {
+    if (before.has(p.name)) continue;
+    const from = (p.previousNames ?? []).find((n) => before.has(n));
+    if (from !== undefined) out.push(`parameter "${from}" renamed to "${p.name}"`);
+  }
+  // The closure of the live method, by id: only renames a consumer of it reads.
+  const byId = new Map(live.types.map((d) => [d.id, d] as const));
+  const seen = new Set<string>();
+  const queue = [...(now.params ?? []).map((p) => p.type), now.returns ?? ''].flatMap((t) => t.match(/[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_-]+)*/g) ?? []);
+  while (queue.length) {
+    const def = byId.get(queue.shift()!);
+    if (!def || seen.has(def.id)) continue;
+    seen.add(def.id);
+    for (const f of def.fields) queue.push(...(f.type.match(/[A-Za-z0-9_][A-Za-z0-9_-]*(?:::[A-Za-z0-9_-]+)*/g) ?? []));
+  }
+  const pinnedDefs = new Map(pinned.types.map((d) => [d.id, d] as const));
+  for (const id of [...seen].sort()) {
+    const def = byId.get(id)!;
+    const old = pinnedDefs.get(id) ?? pinned.types.find((d) => (def.formerly ?? []).includes(d.id));
+    if (!old) continue;
+    const names = new Set(old.fields.map((f) => f.name));
+    for (const f of def.fields) {
+      if (names.has(f.name)) continue;
+      const from = (f.formerly ?? []).find((n) => names.has(n));
+      out.push(from !== undefined ? `field "${id}.${from}" renamed to "${f.name}"` : `field "${id}.${f.name}" added`);
+    }
+    const kept = new Set(def.fields.flatMap((f) => [f.name, ...(f.formerly ?? [])]));
+    for (const f of old.fields) if (!kept.has(f.name)) out.push(`field "${id}.${f.name}" removed`);
+  }
+  return out;
+}
+
+/** A used member gone under its pinned name: renamed when the live rename trace names it, removed otherwise. */
+function goneUse(live: SurfaceSnapshot, publicName: string, member: string | undefined, digest: string | undefined, pinned: SurfaceSnapshot | null = null): ExternalUseStatus {
+  const to = renamedIn(live, publicName, member);
+  const at = { publicName, ...(member !== undefined ? { member } : {}) };
+  if (!to) {
+    // A name the producer still declares but no longer resolves: say where it
+    // went — the rename trace of the source it re-exports from.
+    const broken = (live.unresolvedExports ?? []).find((u) => u.id === publicName);
+    if (!broken) return { ...at, state: 'removed' };
+    return {
+      ...at, state: 'removed',
+      detail: `the producer re-exports it from "${broken.source}", which ${broken.renamedTo ? `renamed it to "${broken.renamedTo}"` : 'no longer exports it'}, so the producer's re-export no longer resolves — ${broken.renamedTo ? `the producer must re-export "${broken.renamedTo}", or depend on "${broken.source}" directly` : 'the producer must fix its re-export'}`,
+    };
+  }
+  const renamedTo = renamedName(to);
+  // What else moved with the rename: each parameter and closure field renamed
+  // per its trace — a digest that reads no parameter name cannot see the first.
+  const moved = member === undefined || member === 'type' ? [] : renamesWithMethod(pinned, live, publicName, member, to);
+  const same = member !== undefined && digest !== undefined && sameSignatureAfterRename(live, { publicName, member }, to, digest);
+  const signature = member === undefined || digest === undefined
+    ? (moved.length ? ` (${moved.join('; ')})` : '')
+    : same
+      ? (moved.length ? ` (${moved.join('; ')}; its types are unchanged)` : ' (its signature is unchanged)')
+      : ` (and its signature changed${moved.length ? `: ${moved.join('; ')}` : ''})`;
+  return { ...at, state: 'renamed', renamedTo, detail: `renamed to "${renamedTo}"${signature} — follow the rename` };
+}
+
+/**
+ * What a changed use's detail says when the pinned snapshot is at hand: the
+ * fields renamed inside its closure, with their new names, per the producer's
+ * rename trace, and each field added to or removed from a closure type the
+ * pin held — by name, so a consumer never reads the producer's files to learn
+ * a new field — and whether those are the whole change. Nothing when no field
+ * moved (the change is then said as a signature change).
+ */
+function changedDetail(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string, digest: string): { detail?: string } {
+  if (!pinned) return {};
+  const { renames, added, removed, fieldsOnly } = fieldChangesSince(pinned, live, publicName, member, digest);
+  const said = [...renames, ...added, ...removed];
+  if (said.length === 0) return {};
+  const follow = renames.length ? ' — follow the rename' : '';
+  return { detail: `${said.join('; ')}${fieldsOnly ? ` (its shape is otherwise unchanged)${follow}` : ' (and its shape changed beyond that)'}` };
+}
+
+/** A wire endpoint as a status line shows it: an HTTP verb and path (with its stated status), another transport's address, or none. */
+function routeOf(endpoint: MethodSignature['endpoint'] | undefined): string {
+  if (!endpoint) return 'none';
+  if (endpoint.transport === 'HTTP') return `${endpoint.method} ${endpoint.path}${endpoint.status !== undefined ? ` (answers ${endpoint.status})` : ''}`;
+  const { transport, ...address } = endpoint as Record<string, unknown>;
+  return `${String(transport)} ${Object.entries(address).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${String(v)}`).join(' ')}`;
+}
+
+/**
+ * How a used contract method's wire endpoint moved since the pin: the route a
+ * client calling over the wire spells, which no digest reads. A consumer of a
+ * wire Portal reaches the verb only by its route, so a route that moved (or
+ * went) breaks it exactly as a renamed verb does. Null when the pinned
+ * snapshot is not at hand, records no endpoint for it, the route is the same,
+ * or the Portal is an InProcess library (called directly: no route to spell).
+ */
+function endpointMove(pinned: SurfaceSnapshot | null, live: SurfaceSnapshot, publicName: string, member: string): { removed: boolean; detail: string } | null {
+  if (!pinned || member === 'type' || member.startsWith('capability:')) return null;
+  const entry = pinned.interfaces.find((e) => e.id === publicName);
+  const liveEntry = live.interfaces.find((e) => e.id === publicName);
+  if ((liveEntry?.transport ?? entry?.transport) === 'InProcess') return null;
+  const was = entry?.methods.find((m) => m.name === member)?.endpoint;
+  if (!was) return null;
+  const now = liveEntry?.methods.find((m) => m.name === member)?.endpoint;
+  if (canonicalize(was) === canonicalize(now ?? null)) return null;
+  return now
+    ? { removed: false, detail: `endpoint moved: ${routeOf(was)} → ${routeOf(now)} — its signature is unchanged, but a client calling it over the wire spells the route, so it must follow` }
+    : { removed: true, detail: `endpoint ${routeOf(was)} removed — the verb is bound to no route any more, so a client calling it over the wire breaks` };
+}
+
+/**
+ * The members a contract used as a whole stands for: each method the pinned
+ * snapshot's entry holds, with its digest there. None when the snapshot is
+ * not at hand or the name is no contract (an exported type is used as `type`).
+ */
+function wholeContractMembers(pinned: SurfaceSnapshot | null, publicName: string): [string, string][] {
+  const entry = pinned?.interfaces.find((e) => e.id === publicName);
+  if (!pinned || !entry) return [];
+  return entry.methods
+    .map((m) => [m.name, memberDigest(pinned, publicName, m.name)] as const)
+    .filter((pair): pair is readonly [string, string] => pair[1] !== null)
+    .map(([member, digest]) => [member, digest]);
+}
+
+/** Compare every used member — the lock's, and the one the references use now — with the live snapshot. */
+function compareUses(entry: ExternalLockEntry | undefined, usage: ExportUsage | undefined, live: SurfaceSnapshot, pinned: SurfaceSnapshot | null = null): ExternalUseStatus[] {
+  const uses: ExternalUseStatus[] = [];
+  const locked = entry?.used ?? {};
+  const liveHas = (name: string): boolean => live.interfaces.some((e) => e.id === name) || (live.exportedTypes ?? []).some((t) => t.id === name);
+  // One member compared with its baseline digest: gone (renamed or removed),
+  // the same signature (its route said beside it when it moved), or changed.
+  const compared = (publicName: string, member: string, digest: string): ExternalUseStatus => {
+    const now = memberDigest(live, publicName, member);
+    if (now === null) return goneUse(live, publicName, member, digest, pinned);
+    // The route a wire client spells moved, or went: a break for it, said
+    // beside the signature verdict (an InProcess library has no route).
+    const route = endpointMove(pinned, live, publicName, member);
+    if (now === digest) {
+      return route === null
+        ? { publicName, member, state: 'unchanged' }
+        : { publicName, member, state: 'changed', detail: route.detail };
+    }
+    const changed = changedDetail(pinned, live, publicName, member, digest);
+    const detail = [changed.detail, route?.detail].filter((d): d is string => !!d).join('; ');
+    return { publicName, member, state: 'changed', ...(detail ? { detail } : {}) };
+  };
+  for (const [publicName, members] of Object.entries(locked)) {
+    if (Object.keys(members).length === 0) {
+      if (!liveHas(publicName)) {
+        uses.push(goneUse(live, publicName, undefined, undefined));
+        continue;
+      }
+      // A contract used as a whole (a bare dependency, no member named): the
+      // code reaching it through that dependency — a binding, a client — may
+      // call any of its methods, so every method the pinned snapshot holds is
+      // compared (external_consumer.narrowedToUses reads such a use the same
+      // way): one renamed, removed or moved is said by name, never folded
+      // into an unchanged contract.
+      const moved = wholeContractMembers(pinned, publicName)
+        .map(([member, digest]) => compared(publicName, member, digest))
+        .filter((u) => u.state !== 'unchanged' || u.detail !== undefined);
+      uses.push(...(moved.length ? moved : [{ publicName, state: 'unchanged' as const }]));
+      continue;
+    }
+    for (const [member, locked] of Object.entries(members)) {
+      // The baseline re-read from the pinned snapshot when it is at hand: a
+      // digest an older release recorded for the same snapshot is no change.
+      uses.push(compared(publicName, member, (pinned ? memberDigest(pinned, publicName, member) : null) ?? locked));
     }
   }
-  return written;
+  // A use the lock does not hold is still compared with the live producer: one
+  // gone from its table is a break the live producer proves, pinned or not.
+  const unlocked = (publicName: string, member?: string): ExternalUseStatus => {
+    const present = member === undefined ? liveHas(publicName) : memberDigest(live, publicName, member) !== null;
+    if (!present) return goneUse(live, publicName, member, undefined);
+    return { publicName, ...(member !== undefined ? { member } : {}), state: 'unlocked', detail: entry === undefined ? 'used, and present in the live producer, but never pinned — pin it (`wairon externals pin`) to record what it is judged against' : 'used now, but not in the lock — re-pin' };
+  };
+  for (const use of usage?.used ?? []) {
+    if (!(use.publicName in locked)) {
+      const each = use.members.map((m) => unlocked(use.publicName, m));
+      const gone = each.filter((u) => u.state !== 'unlocked');
+      // Named member by member, as `wairon lock` names what it refuses; a bare
+      // dependency (or a type's use) by its public name.
+      const named = each.filter((u) => u.member !== 'type');
+      uses.push(...(gone.length ? gone : named.length ? named : [unlocked(use.publicName)]));
+      continue;
+    }
+    for (const member of use.members) {
+      if (!(member in locked[use.publicName])) uses.push(unlocked(use.publicName, member));
+    }
+  }
+  // A reference that bound to no public name: one whose name the live table
+  // no longer holds at all is a break the live producer proves (removed, or
+  // renamed per its trace), pinned or not; one it holds but does not show
+  // this consumer cannot be compared.
+  for (const ref of usage?.unexported ?? []) {
+    const spelled = ref.authored.split('::');
+    const name = spelled.length === 2 ? spelled[1] : spelled.length === 1 ? spelled[0] : undefined;
+    if (name !== undefined && !liveHas(name)) {
+      // A name already answered as renamed or removed — under any member, a
+      // type's `type` included — is answered once.
+      if (uses.some((u) => u.publicName === name && (ref.member === undefined || u.member === undefined || u.member === ref.member))) continue;
+      uses.push(goneUse(live, name, ref.member, undefined));
+      continue;
+    }
+    uses.push({ member: ref.member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: `"${ref.specId}" reaches "${ref.target}", which the producer does not export — nothing to compare` });
+  }
+  return uses;
 }
 
-// ---------------------------------------------------------------------------
-// External-surface discovery (listExternalInterfaces) — the scope-aware
-// catalog of this project's outward world: parent family surface, sibling
-// surfaces, and foreign imports, each with a freshness verdict.
-// ---------------------------------------------------------------------------
-
-/**
- * One row of the external-interface discovery listing: a vendored surface
- * snapshot this project can consume, summarized with its origin, family role,
- * provenance, and a freshness verdict. The full contracts stay in the
- * referenced SurfaceSnapshot — this is the catalog view served to agents
- * (sdd_list_external_interfaces) and the CLI (`wairon surface externals`).
- */
-export interface ExternalSurfaceEntry {
-  /** The snapshot's storage key: the producing project's name, or '<systemName>::<subsystemId>' for a sibling surface. */
-  projectName: string;
-  /** Snapshot origin: 'generated' | 'exchanged' | 'authored'. */
-  origin: SurfaceOrigin;
-  /** Family role from THIS project's standpoint. */
-  sourceKind: 'parent' | 'sibling' | 'foreign';
-  /** ISO-8601 timestamp the snapshot was produced. */
-  generatedAt: string;
-  /** Producing tree's state hash at generation time, when stamped. */
-  stateId?: string;
-  /** Producer-declared version, for authored/exchanged snapshots carrying one. */
-  version?: string;
-  /** 'fresh' | 'stale' (parent tree changed since generation) | 'unverifiable'. */
-  freshness: 'fresh' | 'stale' | 'unverifiable';
-  /** Ids of the interfaces the snapshot exposes — the discovery summary. */
-  interfaceIds: string[];
+/** Every locked used member — or, when none is locked, the external itself — as unavailable. */
+function unavailableUses(entry: ExternalLockEntry | undefined, reason: string): ExternalUseStatus[] {
+  const uses: ExternalUseStatus[] = [];
+  for (const [publicName, members] of Object.entries(entry?.used ?? {})) {
+    const names = Object.keys(members);
+    if (names.length === 0) uses.push({ publicName, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason });
+    for (const member of names) uses.push({ publicName, member, state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason });
+  }
+  return uses.length ? uses : [{ state: 'unavailable', code: CHECK_UNAVAILABLE, detail: reason }];
 }
 
-/**
- * surfaces_core_adapter.computeParentStateId: bind the given parent project
- * root READ-ONLY and compute its current spec-tree state hash through the core
- * subsystem's published portal — the comparison source for freshness-checking
- * vendored parent/sibling snapshots against what the parent tree looks like
- * NOW. Never mutates either root's binding.
- */
-export function computeParentStateId(parentRoot: string): string | null {
-  return computeStateIdAt(parentRoot);
-}
-
-/**
- * Scope-aware discovery of this project's outward world: every vendored
- * surface snapshot as an ExternalSurfaceEntry. sourceKind classification:
- * 'parent' is the generated family surface keyed by the parent system name;
- * 'sibling' is a generated '<systemName>::<subsystemId>' key; 'foreign' is an
- * exchanged/authored import. Freshness compares the vendored StateId against
- * the chaining parent's CURRENT state hash when a chaining parent is
- * reachable; entries are 'unverifiable' when standalone or foreign.
- */
-export function listExternalInterfaces(): ExternalSurfaceEntry[] {
-  const snapshots = listSnapshots();
-  const chainingParent = resolveChainingParent();
-  const parentStateId = chainingParent ? computeParentStateId(chainingParent.parentRoot) : null;
-
-  return snapshots.map(snapshot => {
-    const generated = snapshot.origin === 'generated';
-    const sourceKind: ExternalSurfaceEntry['sourceKind'] = !generated
-      ? 'foreign'
-      : snapshot.projectName.includes('::') ? 'sibling' : 'parent';
-    const freshness: ExternalSurfaceEntry['freshness'] = generated && parentStateId
-      ? (snapshot.stateId === parentStateId ? 'fresh' : 'stale')
-      : 'unverifiable';
+/** The status of one declared external against its live producer. */
+function externalStatus(binding: ExternalBinding, lock: ExternalsLock | null): ExternalStatus {
+  const { external } = binding;
+  const entry = ownGet(lock?.externals, external.alias);
+  // Step 4: its pinned snapshot, if any — and the lock entry's digest and
+  // commit carried as provenance for a reader; neither is compared here.
+  const pinned = entry !== undefined && externalsRepository.readSnapshot(external.alias) !== null;
+  const base = {
+    alias: external.alias, project: external.project, sourceKind: external.sourceKind, pinned,
+    ...(entry !== undefined ? { pinnedDigest: entry.digest } : {}),
+    ...(entry?.commit !== undefined ? { pinnedCommit: entry.commit } : {}),
+  };
+  // Step 5: can the live producer be read?
+  const unreadable = external.sourceKind === 'unresolved'
+    ? (hostedOnly(external) ? external.problem! : `the external does not resolve: ${external.problem}`)
+    : producerUnreadable(external);
+  let live: SurfaceSnapshot | null = null;
+  let reason = unreadable;
+  if (!reason) {
+    try {
+      // Steps 6-7: the producer's live table at the audience ceiling.
+      live = projectProducer(external);
+    } catch (e) {
+      reason = readFailure(e);
+    }
+  }
+  if (!live) {
+    // Step 10: nothing could be compared - never a pass. A producer whose root
+    // lies outside the request's reach, or one the climb could not look for
+    // because the reach stopped it, was never read: it is out of reach.
+    const outOfReach = reason === OUT_OF_REACH || hostedOutOfReach(external) || (!binding.reachable && external.sourceKind !== 'family');
     return {
-      projectName: snapshot.projectName,
-      origin: snapshot.origin,
-      sourceKind,
-      generatedAt: snapshot.generatedAt,
-      ...(snapshot.stateId ? { stateId: snapshot.stateId } : {}),
-      ...(snapshot.version ? { version: snapshot.version } : {}),
-      freshness,
-      interfaceIds: snapshot.interfaces.map(e => e.id),
+      ...base, reachable: false, stale: false, uses: unavailableUses(entry, reason!), detail: reason!,
+      ...(outOfReach ? { outOfReach: true } : {}),
     };
+  }
+  // Step 8: every used member compared at signature level, for every producer
+  // alike — family, path, git, hosted, a referenced project (stage 8).
+  const snapshot = entry !== undefined ? externalsRepository.readSnapshot(external.alias) : null;
+  const uses = compareUses(entry, binding.usage, live, snapshot);
+  // A pinned snapshot that no longer carries what the producer says (an abi,
+  // a transport, a role) is stale even when its digest is not: never ok.
+  const staleFacts = snapshot ? carriedFactChanges(snapshot, live) : [];
+  // Drifted is "the producer moved since the pin": its contract digest, or a
+  // fact the pin carries beside it — one answer with the health it reports.
+  const drifted = entry !== undefined ? contentDigest(live) !== (snapshot ? contentDigest(snapshot) : entry.digest) || staleFacts.length > 0 : undefined;
+  return {
+    ...base,
+    reachable: true,
+    stale: uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed'),
+    ...(drifted !== undefined ? { drifted } : {}),
+    ...(staleFacts.length ? { staleFacts } : {}),
+    uses,
+  };
+}
+
+/** One live member projected at its own root, bound read-only; null when it cannot be projected. */
+function projectedAt(directory: string): SurfaceSnapshot | null {
+  try {
+    return runWithProjectRoot(directory, () => projectOwnSurface('project'));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * surface_orchestrator.memberApprovedSurfaces — each live member of the bound
+ * project projected as its tree stood at the approval it is judged against
+ * (the one the bound project's lock records, else its own last committed
+ * approval), keyed by alias: what a binding into a member is compared with
+ * beside its live export, so a name it dropped since is named. A member with
+ * no such revision is left out. Read-only.
+ */
+export function memberApprovedSurfaces(): Record<string, SurfaceSnapshot> {
+  // Step 1: each live member with its approved revision.
+  const out: Record<string, SurfaceSnapshot> = {};
+  // Steps 2-4: each projected there, at its widest table.
+  for (const member of memberRevisions()) {
+    if (!member.revision) continue;
+    const approved = projectedAt(member.revision.directory);
+    if (approved) out[member.alias] = approved;
+  }
+  // Step 5.
+  return out;
+}
+
+/**
+ * surface_orchestrator.memberStatuses — each live member of the bound project
+ * compared with the approval it is judged against, as an external is with its
+ * pin: the used members' digests in its live projection against its approved
+ * surface's, and drifted when its content or a carried fact moved since. A use
+ * the approval does not hold is the family run's to judge live; a member with
+ * no approved revision is left out. Read-only.
+ */
+export function memberStatuses(): ExternalStatus[] {
+  const out: ExternalStatus[] = [];
+  // Steps 1-2: each live member with its usage and its approved revision.
+  for (const member of memberRevisions()) {
+    if (!member.revision) continue;
+    // Step 3: live, and as approved.
+    const live = projectedAt(member.root);
+    const approved = projectedAt(member.revision.directory);
+    if (!live || !approved) continue;
+    // Step 4: compared as a pin is — the approved surface standing in for the pinned snapshot.
+    const { used } = usedDigests(member.usage, approved, member.alias);
+    const entry: ExternalLockEntry = { project: member.project, snapshot: '', digest: contentDigest(approved), used };
+    const uses = compareUses(entry, undefined, live, approved).filter((u) => u.state !== 'unlocked' && u.state !== 'unavailable');
+    const staleFacts = carriedFactChanges(approved, live);
+    out.push({
+      alias: member.alias,
+      project: member.project,
+      sourceKind: 'family',
+      pinned: false,
+      reachable: true,
+      stale: uses.some((u) => u.state === 'changed' || u.state === 'removed' || u.state === 'renamed'),
+      drifted: contentDigest(live) !== contentDigest(approved) || staleFacts.length > 0,
+      ...(staleFacts.length ? { staleFacts } : {}),
+      uses,
+      detail: `a live member, compared with ${member.revision.label}`,
+    });
+  }
+  // Step 5.
+  return out;
+}
+
+/** A source.hosted external read outside a hosted server: its problem says so, and nothing is wrong with the external. */
+function hostedOnly(external: ResolvedExternal): boolean {
+  return external.hosted !== undefined && external.sourceKind === 'unresolved' && getHostedLookup() === null;
+}
+
+/** A source.hosted external the hosting server's record lookup did not answer: unknown or outside the request's reach. */
+function hostedOutOfReach(external: ResolvedExternal): boolean {
+  return external.hosted !== undefined && external.sourceKind === 'unresolved' && getHostedLookup() !== null;
+}
+
+/**
+ * surface_orchestrator.getExternalsStatus — each declared external's pin
+ * compared with its live producer at signature level (decision 19). What
+ * cannot be compared is EXTERNAL_CHECK_UNAVAILABLE, never a pass. It only
+ * reports: it writes nothing and fails nothing.
+ */
+export function getExternalsStatus(offline?: boolean): ExternalStatus[] {
+  // Step 1: the declared externals, with the references as they are now —
+  // offline, no producer is read over the network.
+  const bindings = resolveExternals(offline);
+  // Step 2: the lock.
+  const lock = externalsRepository.readLock();
+  // Steps 3-12: one status per declared external, in declaration order.
+  return bindings.map((binding) => externalStatus(binding, lock));
+}
+
+/**
+ * surface_orchestrator.listExternals — each declared external with how it
+ * resolves, the audience the consumer sees and the lock's entry when pinned.
+ * No live comparison.
+ */
+export function listExternals(): ExternalListing[] {
+  // Step 1: the declared externals.
+  const bindings = resolveExternals();
+  // Step 2: the lock.
+  const lock = externalsRepository.readLock();
+  // Step 3: one row per declared external, in declaration order.
+  const declared = bindings.map(({ external }): ExternalListing => {
+    const entry = ownGet(lock?.externals, external.alias);
+    return {
+      alias: external.alias,
+      project: external.project,
+      sourceKind: external.sourceKind,
+      ...(external.relation ? { relation: external.relation } : {}),
+      ...(external.directory ? { directory: external.directory } : {}),
+      audience: external.audience,
+      ...(entry ? { lock: entry } : {}),
+      ...(external.problem ? { problem: external.problem } : {}),
+    };
+  });
+  // Then each orphaned pin: a lock entry whose alias is no longer declared.
+  const aliases = new Set(bindings.map((b) => b.external.alias));
+  const orphans = Object.entries(lock?.externals ?? {})
+    .filter(([alias]) => !aliases.has(alias))
+    .map(([alias, entry]): ExternalListing => ({
+      alias, project: entry.project, sourceKind: 'unresolved', audience: 'instance', lock: entry,
+      problem: `pinned but no longer declared — \`wairon externals remove ${alias}\` removes the pin`,
+    }));
+  // Step 4.
+  return [...declared, ...orphans];
+}
+
+/**
+ * surface_orchestrator.listConsumers — the family projects in reach that
+ * consume the bound project, each with the alias and section it declares it
+ * under and the public names its specs use, read through the core. Read-only.
+ */
+export function listConsumers(search?: string[]): ExternalConsumer[] {
+  // Step 1: the family in reach, and every project root in the searched folders.
+  const consumers = listExternalConsumers(search);
+  if (consumers.length === 0) return consumers;
+  // Step 2: the contract each public name holds now.
+  let own: SurfaceSnapshot;
+  try {
+    own = projectOwnSurface('project');
+  } catch {
+    // No surface to read (no L0): the names a consumer writes are all that can be said.
+    return consumers;
+  }
+  const held = new Map(own.interfaces.map((e) => [e.id, new Set(e.methods.map((m) => m.name))] as const));
+  // Step 3: a method a consumer calls on a kept name whose contract no longer holds it broke as a name does.
+  return consumers.map((c) => {
+    const gone = (c.uses ?? []).flatMap((u) => {
+      const methods = held.get(u.publicName);
+      return methods ? u.members.filter((m) => m !== 'type' && !m.startsWith('capability:') && !methods.has(m)).map((m) => `${u.publicName}.${m}`) : [];
+    });
+    if (gone.length === 0) return c;
+    return { ...c, broken: [...new Set([...(c.broken ?? []), ...gone])].sort() };
   });
 }
 
+/** What `wairon surface diff` and sdd_surface_diff answer: the baseline compared against, and every change since. */
+export interface SurfaceDiff {
+  /** The project whose surface was compared. */
+  project: string;
+  /** What the surface was compared with: the last committed approval, a named revision, or a saved snapshot file. */
+  against: string;
+  changes: SurfaceChange[];
+}
+
+/**
+ * surface_orchestrator.diff — the bound project's public-surface
+ * changelog: its export table now (the whole table, every audience) against
+ * the same table at its last committed approval — or at a named git revision,
+ * or in a saved native surface snapshot file — as added, removed, renamed
+ * (traced) and signature-changed names and methods. What a producer writes
+ * release notes from and judges impact by. Read-only.
+ */
+export function diff(against?: string): SurfaceDiff {
+  // Step 1: the surface now — against a revision, the project's own HTTP
+  // Portals with it (its service API, which both sides project alike; a saved
+  // snapshot carries only what the table exported), and the types they name
+  // from other projects expanded from the pins and members of each tree.
+  const saved = against !== undefined && fs.existsSync(against) && fs.statSync(against).isFile();
+  const ownSurface = (): SurfaceSnapshot => withForeignTypes(projectOwnSurface('project', !saved), foreignSurfaces());
+  const current = ownSurface();
+  // Steps 2-4: the baseline — a saved snapshot file, else the tree at the revision.
+  let baseline: SurfaceSnapshot;
+  let label: string;
+  // What the baseline's own table already published nothing through: a saved
+  // snapshot carries no table, so every such entry now reads as new against it.
+  let carriedEmpty = new Set<string>();
+  if (saved) {
+    baseline = savedSnapshot(against!);
+    label = `the saved surface ${path.resolve(against)}`;
+  } else {
+    const revision = approvedRevision(against);
+    // Each live member as the baseline's own lock recorded its approval — a
+    // `../` sibling is no part of the revision's tree, and read live it would
+    // compare a member's change since with nothing, or an unchanged member
+    // with its types unexpanded (round 10: every verb naming one "changed").
+    const members = membersAsRecordedIn(revision.directory);
+    baseline = runWithProjectRoot(revision.directory, () => withForeignTypes(projectOwnSurface('project', true), foreignSurfaces(members)));
+    carriedEmpty = new Set(runWithProjectRoot(revision.directory, () => entriesPublishingNothing()));
+    label = revision.label;
+  }
+  // Step 7: the changes, and every L0 entry now publishing nothing the baseline did not already carry.
+  const changes = surfaceChanges(current, baseline);
+  for (const detail of entriesPublishingNothing()) {
+    if (carriedEmpty.has(detail)) continue;
+    changes.push({ kind: 'added', name: 'L0 export table', detail: `export entry added, but it publishes nothing — it ${detail} (EXPORT_INVALID in \`wairon validate\`)` });
+  }
+  return { project: current.projectId ?? current.projectName, against: label, changes };
+}
+
+/**
+ * Step 6 of diff: each live member of the bound project, by alias, as the
+ * baseline knew it: a member stored inside the bound project's tree as that
+ * tree holds it at the revision (`recordedIn`); a member stored outside it (a
+ * `../` sibling, which the revision's tree does not hold) as the approval
+ * that tree's lock records for it — its own last committed approval when the
+ * lock records none — or live when no revision of it can be read.
+ */
+function membersAsRecordedIn(recordedIn: string): Map<string, SurfaceSnapshot> {
+  const out = new Map<string, SurfaceSnapshot>();
+  const bound = path.resolve(getProjectRoot());
+  for (const member of memberRevisions(recordedIn)) {
+    const inside = path.relative(bound, member.root);
+    const contained = inside !== '' && !inside.startsWith('..') && !path.isAbsolute(inside);
+    const surface = contained
+      ? projectedAt(path.join(recordedIn, inside))
+      : projectedAt(member.revision?.directory ?? member.root);
+    if (surface) out.set(member.alias, surface);
+  }
+  return out;
+}
+
+/**
+ * Step 3 of diff: a saved file read as a native snapshot, or refused in one
+ * sentence — an OpenAPI document, or anything else the native schema does not
+ * read, names what --against takes instead of dumping the schema's errors.
+ */
+function savedSnapshot(file: string): SurfaceSnapshot {
+  const body = fs.readFileSync(file, 'utf8');
+  const shown = path.resolve(file);
+  if (isOpenApiDocument(body)) {
+    throw new Error(`${shown} is an OpenAPI document; --against compares with a native surface snapshot (\`wairon surface export --format native --out <file>\`) or a git revision, never an OpenAPI document. Nothing was compared.`);
+  }
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(body, file);
+  } catch (e) {
+    throw new Error(`${shown} does not parse as YAML or JSON (${e instanceof Error ? e.message.split('\n')[0] : String(e)}); --against takes a native surface snapshot or a git revision. Nothing was compared.`);
+  }
+  const read = SurfaceSnapshotSchema.safeParse(parsed);
+  if (!read.success) {
+    const first = read.error.issues[0];
+    const where = first && first.path.length ? ` (at ${first.path.join('.')}: ${first.message})` : first ? ` (${first.message})` : '';
+    throw new Error(`${shown} is not a native surface snapshot${where}; --against takes one written by \`wairon surface export --format native --out <file>\`, or a git revision. Nothing was compared.`);
+  }
+  return read.data;
+}
+
+/**
+ * The L0 entries of the bound project's export table that publish nothing:
+ * each invalid problem of the resolved table that bound no public name (a
+ * wildcard over a level that exports nothing, a named item gone from its
+ * source), by its detail.
+ */
+function entriesPublishingNothing(): string[] {
+  const table = resolveProjectExports();
+  return table.problems
+    .filter((p) => p.kind === 'invalid' && (p.publicName === undefined || !table.entries.some((e) => e.publicName === p.publicName)))
+    .map((p) => p.detail);
+}
+
 // ---------------------------------------------------------------------------
-// Freshness (SURFACE_STALE) — computable exactly where both sides are visible:
-// validating from the parent, each chained child's stored parent-snapshot can
-// be compared against the parent's CURRENT StateId.
+// Snapshot content identity
 // ---------------------------------------------------------------------------
 
-/** Snapshot content minus provenance — what staleness is actually about. */
+/**
+ * A pinned snapshot's content minus provenance, as the file holds it: read
+ * through the schema and canonicalized, so a snapshot read back from YAML and
+ * a fresh projection of the same producer compare equal.
+ */
+function pinnedContentKey(snapshot: SurfaceSnapshot): string {
+  const { stateId: _s, generatedAt: _g, origin: _o, ...content } = SurfaceSnapshotSchema.parse(JSON.parse(JSON.stringify(snapshot)));
+  // The backing component is named by its local name, wherever inside the
+  // producer it now lives: a move between the producer's own projects is no
+  // change a consumer's pin can see. A pin's retired names are provenance.
+  return canonicalize({ ...content, interfaces: content.interfaces.map(({ retired: _r, ...e }) => ({ ...e, component: lastSegment(e.component) })) });
+}
+
+/**
+ * A new pin's snapshot with each kept entry's `retired` filled: the method
+ * names the replaced pin's entry held (or already listed retired) that the
+ * new entry neither holds nor names in any method's `formerly` — a removal,
+ * never a rename — so binding conformance can name a removed verb a
+ * consumer's binding still declares.
+ */
+function withRetired(snapshot: SurfaceSnapshot, pinned: SurfaceSnapshot): SurfaceSnapshot {
+  return {
+    ...snapshot,
+    interfaces: snapshot.interfaces.map((entry) => {
+      const before = pinned.interfaces.find((e) => e.id === entry.id) ?? pinned.interfaces.find((e) => (entry.formerly ?? []).includes(e.id));
+      if (!before) return entry;
+      const kept = new Set(entry.methods.flatMap((m) => [m.name, ...(m.formerly ?? [])]));
+      const retired = [...new Set([...before.methods.map((m) => m.name), ...(before.retired ?? [])])].filter((n) => !kept.has(n)).sort();
+      return retired.length ? { ...entry, retired } : entry;
+    }),
+  };
+}
+
+/** Snapshot content minus provenance — whether two snapshots say the same thing. */
 function surfaceContentKey(snapshot: SurfaceSnapshot): string {
   const { stateId, generatedAt, origin, ...content } = snapshot;
   return JSON.stringify(content);
-}
-
-export function checkChildSurfaceFreshness(rootDir: string = getProjectRoot()): ValidationIssue[] {
-  const system = loadSystemSpec();
-  if (!system) return [];
-  const children = loadSubsystemSpecs().filter(s => s.projectPath && !s.id.includes('::'));
-  if (!children.length) return [];
-
-  // Compare CONTENT, not tree StateIds: a child editing its own specs shifts
-  // the recursive StateId without changing the parent's exported contracts,
-  // and that must not read as staleness.
-  const current = surfaceContentKey(projectChildSurface());
-  const issues: ValidationIssue[] = [];
-  for (const child of children) {
-    const childDir = path.resolve(rootDir, child.projectPath!);
-    const held = getSnapshot(system.name, childDir);
-    if (!held || held.origin !== 'generated') continue;
-    if (surfaceContentKey(held) !== current) {
-      issues.push({
-        severity: 'warning',
-        code: 'SURFACE_STALE',
-        message: `Chained child "${child.id}" holds a parent surface snapshot whose contracts no longer match the current tree — rerun \`wairon surface generate-children\` so the child validates against the current surface.`,
-        specId: child.id,
-      });
-    }
-  }
-  return issues;
 }

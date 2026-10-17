@@ -1,0 +1,20 @@
+id: custom_exporter
+name: Custom Agent File Exporter
+description: >-
+  Writes an agent's file where the project's own target configuration says, for a tool wairon ships
+  no exporter for. It is the escape hatch that keeps the others honest: a tool wairon has never
+  heard of is a configuration entry, not a code change, so nobody has to fork the generator to be
+  supported.
+subsystem: sdd_core
+componentType: Adapter
+owns: []
+dependsOn: []
+lint:
+  allow:
+    - code: UNUSED_COMPONENT
+      reason: >-
+        Reached polymorphically through `exporter_resolver.getExporter`, same seam as
+        claude_exporter and gemini_exporter.
+status: complete
+createdAt: '2026-09-20T19:45:14.677Z'
+updatedAt: '2026-09-20T19:50:57.116Z'

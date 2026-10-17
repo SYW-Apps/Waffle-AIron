@@ -1,0 +1,17 @@
+kind: enum
+id: planned_export_reason
+name: PlannedExportReason
+description: Why a migration plans an L0 export entry in a producer.
+subsystem: sdd_migrations
+fields: []
+methods: []
+sourcePath: src/migrations/chaining-migration.ts
+values:
+  - name: reference
+    description: References from other projects land on it
+  - name: mount
+    description: Carried from a legacy mount's publicInterfaces
+  - name: positional
+    description: Bare references elsewhere in the family reached it only by position, and now import it
+createdAt: '2026-10-04T23:24:44.057Z'
+updatedAt: '2026-10-04T23:24:44.465Z'

@@ -1,0 +1,24 @@
+kind: enum
+id: external_source_kind
+name: ExternalSourceKind
+description: Where a declared external's producer was found.
+fields: []
+methods: []
+sourcePath: src/models/project-family.ts
+values:
+  - name: family
+    description: In the family the scan read
+  - name: path
+    description: Only through source.path, outside the family
+  - name: git
+    description: >-
+      Through source.git, in the fetch cache (a git source that cannot be fetched stays git with its
+      directory absent and a problem, so its pin is still judged)
+  - name: hosted
+    description: Through source.hosted, on the hosting server
+  - name: unresolved
+    description: >-
+      Not found (a source.hosted read outside a hosted server, or out of the request's reach, is
+      unresolved)
+createdAt: '2026-10-04T23:33:15.416Z'
+updatedAt: '2026-10-04T23:33:15.984Z'

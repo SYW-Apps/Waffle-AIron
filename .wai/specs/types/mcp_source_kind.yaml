@@ -1,0 +1,14 @@
+kind: enum
+id: mcp_source_kind
+name: McpSourceKind
+description: What kind of wairon server an agent's own MCP configuration is attached to.
+fields: []
+methods: []
+sourcePath: src/commands/mcp.ts
+values:
+  - name: local
+    description: A stdio server over this checkout
+  - name: hosted
+    description: An HTTP server on an instance
+createdAt: '2026-10-04T23:33:46.421Z'
+updatedAt: '2026-10-04T23:33:46.860Z'

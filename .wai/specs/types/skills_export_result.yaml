@@ -1,0 +1,23 @@
+kind: value-object
+id: skills_export_result
+name: SkillsExportResult
+description: >-
+  What exporting the built-in SDD skills wrote: the skills directories written to, the number of
+  files, and the target types skipped because they have no skills directory.
+fields:
+  - name: destinations
+    type: list<string>
+    description: Skills directories written to
+    optional: false
+  - name: fileCount
+    type: int
+    description: Total skill files written
+    optional: false
+  - name: skipped
+    type: list<string>
+    description: Target types that have no skills directory, and were skipped
+    optional: false
+methods: []
+sourcePath: src/core/skills.ts
+createdAt: '2026-09-13T23:11:48.552Z'
+updatedAt: '2026-10-04T10:29:16.660Z'

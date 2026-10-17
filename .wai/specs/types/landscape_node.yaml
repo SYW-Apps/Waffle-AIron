@@ -14,8 +14,8 @@ fields:
     description: Display label.
     optional: false
   - name: nodeKind
-    type: string
-    description: 'Node kind: "orgUnit", "project", or "publicInterface".'
+    type: LandscapeNodeKind
+    description: What the node stands for.
     optional: false
   - name: projectId
     type: string
@@ -34,7 +34,7 @@ fields:
     description: Optional lifecycle/status label for filtering and styling.
     optional: true
   - name: actionable
-    type: boolean
+    type: bool
     description: >-
       True when the caller can act on this scope (it is an actionable visible scope). False/absent
       on an ancestor-breadcrumb (context) organization unit included only so the hierarchy stays
@@ -42,5 +42,6 @@ fields:
       are omitted. An instance-admin sees every node actionable.
     optional: true
 methods: []
+sourcePath: src/server/types.ts
 createdAt: '2026-07-08T21:11:32.757Z'
-updatedAt: '2026-07-15T23:27:34.313Z'
+updatedAt: '2026-10-04T23:53:32.501Z'

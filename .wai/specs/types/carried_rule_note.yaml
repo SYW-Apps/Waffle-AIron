@@ -1,0 +1,17 @@
+kind: enum
+id: carried_rule_note
+name: CarriedRuleNote
+description: What became of a carried subsystem setting on the new project.
+subsystem: sdd_host
+fields: []
+methods: []
+sourcePath: src/server/types.ts
+values:
+  - name: carried
+    description: Carried with its value
+  - name: most restrictive wins
+    description: Collapsed with other subsystem settings onto one project rule, the most restrictive winning
+  - name: not carried (can only narrow)
+    description: 'A role binding: a role only grants, so leaving it out can only narrow'
+createdAt: '2026-10-04T23:18:04.596Z'
+updatedAt: '2026-10-04T23:18:04.997Z'

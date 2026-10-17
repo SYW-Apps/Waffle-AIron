@@ -21,16 +21,89 @@ fields:
     description: L2 component realizing this contract
     optional: false
   - name: methods
-    type: object[]
+    type: list<MethodSignature>
     description: >-
-      Method signatures: name, params, returns, guarantees, endpoint, effect (read | write —
-      required on a durable Store's contract methods so the durability round-trip rule can pair
-      external writes with hydration read-backs)
+      Method signatures (see method_signature): name, params, returns, guarantees, endpoint, effect
+      (read | write | lifecycle — required on a durable Store's contract methods so the durability
+      round-trip rule can pair mutations with hydration read-backs, and what the Supervisor and
+      lifecycle-closure doctrine judge calls by), and an optional invokedBy declared-invocation
+      ({kind: runtime | external | sibling-subsystem, caller} — see declared_invocation)
+      acknowledging a real caller outside the modeled narrative graph: unused-detection seeds the
+      method as a reachability entrypoint, with mandatory caller prose (INVOKED_BY_UNDESCRIBED) and
+      a staleness flag when the internal walk reaches the method anyway (INVOKED_BY_REDUNDANT)
     optional: false
   - name: status
-    type: string
-    description: draft | design | complete
+    type: SpecStatus
+    description: How far it is through design (an omitted status is parsed as complete)
+    optional: false
+  - name: lint
+    type: LintConfig
+    description: >-
+      This spec's own acknowledged findings — validator results its author looked at and accepted,
+      each with a reason.
     optional: true
-methods: []
+  - name: ext
+    type: any
+    description: >-
+      Opaque namespaced extension data a pack or tool attaches. Never validated or interpreted by
+      the core, preserved verbatim through load and save.
+    optional: true
+  - name: createdAt
+    type: string
+    description: 'When this spec was first written. Store-managed: the write decides it and no author sets it.'
+    optional: false
+  - name: updatedAt
+    type: string
+    description: When this spec was last written. Store-managed.
+    optional: false
+  - name: previousIds
+    type: list<string>
+    description: >-
+      The rename trace: every id this contract held before, oldest first. Written only by the rename
+      tools (renameComponent moves i<id> with its component), never by an author, and never
+      rewritten or bound as a reference. The design export shows it as `formerly`. Another interface
+      may not take an id listed here (id-retired at write, RENAME_TRACE_CONFLICT on a hand edit);
+      unsetting it releases those ids.
+    optional: true
+  - name: implements
+    type: string
+    description: >-
+      The exported extension point this contract realizes, as alias::name: another project's export
+      entry with role implement (EXTERNAL_NOT_EXPORTED when the name is not exported with that
+      role). Every method of the extension point must be declared here with the same signature
+      (IMPLEMENTS_MISMATCH); the methods count as reached, because the producer calls them
+    optional: true
+methods:
+  - name: genericParameters
+    signature: 'genericParameters(): Set<string>'
+    returns: set<string>
+    description: The generic parameters declared in its name
+    sourcePath: src/models/type-references.ts
+    symbol: interfaceGenericParameters
+  - name: canonicalTypes
+    signature: 'canonicalTypes(): TypeCanonicalization'
+    params: []
+    returns: TypeCanonicalization
+    description: >-
+      This contract with every structured type position read under the grammar
+      (type_expression.parse, as param or returns): each canonicalisable position respelled to its
+      canonical text, every alias position recorded as a respelling, and every position that is not
+      canonical recorded as a located problem and left as written. A method without params keeps its
+      prose signature and only its returns is read; a sourced method states no params or returns and
+      has none to read. Pure.
+    sourcePath: src/models/type-grammar.ts
+    symbol: interfaceCanonicalTypes
+  - name: designView
+    signature: 'designView(): InterfaceSpec'
+    params: []
+    returns: InterfaceSpec
+    description: >-
+      This contract as the approval sees it: its status (authoring readiness, never what the design
+      says) and createdAt/updatedAt left out; every other field stays, the methods, endpoints and
+      findings included. Pure: over the spec's own fields, and a stored (raw) file reads as readily
+      as a loaded spec.
+    sourcePath: src/models/specs.ts
+    symbol: interfaceDesignView
+sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-07-10T18:47:36.202Z'
+updatedAt: '2026-10-06T23:03:31.586Z'

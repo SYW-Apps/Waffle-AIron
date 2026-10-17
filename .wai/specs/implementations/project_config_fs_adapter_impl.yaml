@@ -1,0 +1,65 @@
+id: project_config_fs_adapter_impl
+name: Project Config FS Adapter Implementation
+description: >-
+  File I/O for `.wai/project.yaml` at the bound project root: raw documents in, and every document
+  write an edit of the file's YAML node tree that keeps its comments. Uses the `yaml` package (v2),
+  the comment-preserving document model, which nothing else in the tree uses. It is bound under
+  `technologies` by the tokens that mark the package (the package phrase and its `parseDocument`
+  API), not by its bare name, which is also the file format every spec names.
+contract: iproject_config_fs_adapter
+sourcePath: src/config/project-config.ts
+technologies:
+  - name: yaml
+    matches:
+      - yaml package
+      - parseDocument
+methods:
+  - name: readDocument
+    narrative: []
+    intent: >-
+      Reads `project.yaml` from the bound project's `.wai` directory (or legacy `.wairon`) as raw
+      YAML and returns the parsed document, or null when the file is absent. A malformed document
+      raises the YAML error with the file path; nothing is defaulted or validated here.
+  - name: writeDocument
+    narrative: []
+    intent: >-
+      With no project.yaml yet, serializes the document and writes it fresh, creating the `.wai`
+      directory when missing. Otherwise reads the file's text and parses it into a
+      comment-preserving YAML document with the `yaml` package (v2) — the node tree, not a plain
+      object; the js-yaml parser the reads use drops comments — then reconciles the tree to the
+      given document recursively. A mapping key present on both sides recurses into its value and
+      keeps its node, comments and position. A scalar whose value changed is replaced in place, in
+      its own quoting, keeping its node's comments. A key the document no longer holds is deleted. A
+      key it newly holds is inserted at its place in the schema's field order relative to the keys
+      already present — directly after the nearest preceding schema field the mapping holds, else
+      directly before the nearest following one — so a new `id` lands next to `name`, not at the
+      end; a key with no schema neighbour present (an unknown key, or a record entry such as a new
+      `externals` alias) is appended after the existing keys. A sequence is reconciled by position:
+      equal items keep their nodes, changed items are reconciled in place, surplus items are
+      deleted, new items appended. Each difference is spliced into the source text at its node's
+      range; untouched nodes are never re-serialized, so every line the change does not touch stays
+      byte-identical (re-serializing the whole document would re-fold every folded scalar). The
+      result is parsed again and compared with the given document: a difference is refused with an
+      error naming the project root and nothing is written. Otherwise the text replaces the file,
+      keeping the file's line endings. A plain replacement, not an atomic rename, like every write
+      of this adapter.
+  - name: documentExists
+    narrative: []
+    intent: >-
+      Reports whether the bound project's `project.yaml` exists; an unreadable directory counts as
+      absent.
+  - name: readText
+    narrative: []
+    intent: >-
+      Reads `project.yaml` from the bound project's `.wai` directory (or legacy `.wairon`) as text,
+      byte for byte — comments, quoting and line endings included — or null when the file is absent.
+      Nothing is parsed here.
+  - name: writeText
+    narrative: []
+    intent: >-
+      Writes the given text to `project.yaml` in the bound project's `.wai` directory verbatim,
+      replacing the file. A plain replacement, as every write of this adapter is.
+detail: intent
+status: complete
+createdAt: '2026-09-13T11:21:50.998Z'
+updatedAt: '2026-10-02T00:00:00.203Z'
