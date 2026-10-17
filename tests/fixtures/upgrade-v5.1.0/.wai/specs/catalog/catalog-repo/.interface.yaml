@@ -1,0 +1,26 @@
+id: icatalog-repo
+name: ICatalogRepository
+description: Facade contract for products
+component: catalog-repo
+methods:
+  - name: put
+    description: Store one product
+    signature: 'put(record: string): void'
+    returns: void
+    params:
+      - name: record
+        type: string
+        description: The record
+    effect: write
+  - name: get
+    description: Fetch one product
+    signature: 'get(key: string): string'
+    returns: string
+    params:
+      - name: key
+        type: string
+        description: The key
+    effect: read
+status: complete
+createdAt: '2026-10-17T11:46:26.863Z'
+updatedAt: '2026-10-17T11:46:28.293Z'

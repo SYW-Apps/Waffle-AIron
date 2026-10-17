@@ -1,0 +1,12 @@
+id: catalog-portal
+name: Catalog Portal
+description: HTTP front door for products
+subsystem: catalog
+componentType: Portal
+owns: []
+dependsOn:
+  - catalog-orch
+portalType: HTTP_API
+status: complete
+createdAt: '2026-10-17T11:46:26.843Z'
+updatedAt: '2026-10-17T11:46:28.167Z'

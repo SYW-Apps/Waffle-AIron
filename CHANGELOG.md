@@ -99,6 +99,12 @@ last.
      declared, the exports, externals and `use` imports each reference needs are
      written, deprecated reference forms are rewritten to `alias::name` or a bare
      local id, and the result is pinned. The old family surface pins are deleted.
+     A reference the migration cannot follow (such as `target-unpublished`: the
+     target is not in its subsystem's L1 `publicInterfaces`) is named in the run with
+     its hand fix. What it moves for the rest is written, but nothing is written for
+     that reference, and a finding that blocks the apply writes none of the
+     migration. Fix those by hand (step 7), then re-run `wairon doctor --fix`; the
+     export and `use` import follow once the target is published.
 
    **Members are repaired by the same run.** Every member inside the project root gets
    the per-project repairs, each line marked `[alias]`. A member in a sibling checkout
@@ -134,7 +140,9 @@ last.
      named scalar (`holds`). An inline function type becomes a `signature` type.
    - **Migration findings.** These include `positional-ambiguous` (pick the
      producer), `import-shadowed`, `import-collision` and `target-unpublished`
-     (export the target, or move the reference). A legacy mount that carries
+     (publish the target in its subsystem's L1 `publicInterfaces`, or move the
+     reference; then re-run `wairon doctor --fix`, which writes the export and import
+     it was waiting on). A legacy mount that carries
      `trustedLinks`, `lifecycle`, `profile`, `targetLanguage`, `designDepth` or `ext`
      blocks the migration until that member holds the field itself.
    - **Supervisors.** A Supervisor narrative that calls shared data must call methods
@@ -1388,6 +1396,13 @@ Hosted deployments of v5.1.0 should upgrade. This release hardens:
 - session handling on the local dev server;
 - how integration secrets reach the Git and producer integrations;
 - the local operator's administrative writes.
+
+### Release process
+
+Every release now passes a QA gate before dev is merged into main: a fixed panel of four
+persona seats plus free automated checks, recorded in a short verdict that CI checks on pull
+requests into main (`docs/release-qa.md`). The upgrade from v5.1.0 is also replayed on every pull
+request by an end-to-end test against a project v5.1.0 itself wrote and locked.
 
 ## v5.1.0 (from v5.0.1)
 

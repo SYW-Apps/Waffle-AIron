@@ -1,0 +1,32 @@
+id: icatalog-portal
+name: ICatalogPortal
+description: HTTP surface for products
+component: catalog-portal
+methods:
+  - name: post
+    description: Accept a new product
+    signature: 'post(body: string): string'
+    returns: string
+    params:
+      - name: body
+        type: string
+        description: The body
+    endpoint:
+      transport: HTTP
+      method: POST
+      path: /products
+  - name: fetch
+    description: Return one product
+    signature: 'fetch(key: string): string'
+    returns: string
+    params:
+      - name: key
+        type: string
+        description: The key
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /products/{key}
+status: complete
+createdAt: '2026-10-17T11:46:26.881Z'
+updatedAt: '2026-10-17T11:46:28.280Z'

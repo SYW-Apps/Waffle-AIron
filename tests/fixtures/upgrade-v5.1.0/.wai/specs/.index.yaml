@@ -1,0 +1,11 @@
+schemaVersion: 1.0.0
+name: Shopfront
+vision: 'A small online shop: browse a catalog, place orders, and bill them.'
+boundaries:
+  - Payments are handled by the billing service only
+globalRequirements:
+  - Every order is billed exactly once
+databases: []
+targetLanguage: typescript
+createdAt: '2026-10-17T11:46:26.785Z'
+updatedAt: '2026-10-17T11:46:26.785Z'

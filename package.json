@@ -30,13 +30,15 @@
     "schemas",
     "README.md",
     "docs/*.md",
+    "!docs/release-qa.md",
     "docs/standards/**",
     "docs/design/supervisor-doctrine.md",
     "docs/design/pack-scoping.md",
     "docs/design/connecting-agent-entrypoint.md",
     "docs/design/execution-budgets.md",
     "docs/design/approval-baseline.md",
-    "CONTRIBUTING.md"
+    "CONTRIBUTING.md",
+    "CHANGELOG.md"
   ],
   "workspaces": [
     "sdk"

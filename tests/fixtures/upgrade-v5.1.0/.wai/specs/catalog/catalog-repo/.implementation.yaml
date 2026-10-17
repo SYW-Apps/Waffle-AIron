@@ -1,0 +1,22 @@
+id: catalog-repo-impl
+name: Catalog repo impl
+description: Delegates to the store
+contract: icatalog-repo
+methods:
+  - name: put
+    narrative:
+      - stepNumber: 1
+        description: Hand the record to the store
+        type: call
+        targetComponent: catalog-store
+        targetMethod: save
+  - name: get
+    narrative:
+      - stepNumber: 1
+        description: Ask the store for the record
+        type: call
+        targetComponent: catalog-store
+        targetMethod: load
+status: complete
+createdAt: '2026-10-17T11:46:26.911Z'
+updatedAt: '2026-10-17T11:46:28.397Z'

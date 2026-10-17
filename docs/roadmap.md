@@ -4,7 +4,7 @@
 
 wairon is an AIDD support tool built around Spec-Driven Development. This roadmap
 reflects what is actually shipped in `src/` and what is planned. The
-[CHANGELOG](https://github.com/SYW-Apps/Waffle-AIron/blob/main/CHANGELOG.md) has the per-release detail.
+[CHANGELOG](../CHANGELOG.md) has the per-release detail.
 
 ---
 

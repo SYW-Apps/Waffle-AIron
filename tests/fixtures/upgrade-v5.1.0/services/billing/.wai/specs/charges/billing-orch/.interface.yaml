@@ -1,0 +1,16 @@
+id: ibilling-orch
+name: IBillingOrchestrator
+description: Charge workflow
+component: billing-orch
+methods:
+  - name: charge
+    description: Charge one order
+    signature: 'charge(orderId: string): string'
+    returns: string
+    params:
+      - name: orderId
+        type: string
+        description: The orderId
+status: complete
+createdAt: '2026-10-17T11:46:27.409Z'
+updatedAt: '2026-10-17T11:46:28.363Z'

@@ -1,0 +1,11 @@
+id: orders-store
+name: Orders Store
+description: Holds order records
+subsystem: orders
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+status: complete
+createdAt: '2026-10-17T11:46:27.536Z'
+updatedAt: '2026-10-17T11:46:28.238Z'

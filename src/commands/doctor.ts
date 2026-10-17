@@ -406,7 +406,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       const pending = planned.chaining;
       if (pending && (pendingCount(pending) > 0 || pending.findings.length > 0)) {
         console.log(chalk.bold('Chaining'));
-        line(tally, 'warn', `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}) — see \`wairon doctor --report chaining\`, apply with \`wairon doctor --fix\``);
+        line(tally, 'warn', chainingStatus(pending));
         logger.blank();
       }
     } catch (e) {
@@ -1194,17 +1194,56 @@ async function migrateChaining(options: DoctorOptions, tally: Tally): Promise<vo
     tally.error++;
     return;
   }
-  if (pendingCount(planned.chaining) === 0) return;
-  printChainingPlan(planned.chaining);
+  if (pendingCount(planned.chaining) === 0) {
+    // Nothing to write, yet findings remain: say so, never end silent.
+    if (planned.chaining.findings.length > 0) {
+      printChainingPlan(planned.chaining, false);
+      printHandFixes(planned.chaining, false);
+    }
+    return;
+  }
+  printChainingPlan(planned.chaining, false);
   if (!(await confirmChaining(options))) return;
   // Rehearsed, staged and swapped all-or-nothing.
   const report = migrations.apply(planned);
   if (report.applied) {
     printApplied(report);
+    printHandFixes(planned.chaining, true);
     return;
   }
   printNotApplied(report);
+  printHandFixes(planned.chaining, false);
   tally.error++;
+}
+
+/** The "Chaining" status line: apply is only advised while there is something --fix can write. */
+function chainingStatus(pending: ChainingMigrationPlan): string {
+  const blocking = pending.findings.filter((f) => f.blocking).length;
+  const open = pending.findings.length;
+  const report = 'see `wairon doctor --report chaining`';
+  if (pendingCount(pending) === 0) {
+    return `Chaining: nothing left for --fix to write, ${open} finding(s) need a hand fix first (${chainingTotals(pending)}) — ${report}, fix them, then re-run \`wairon doctor --fix\``;
+  }
+  if (blocking > 0) {
+    return `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}), but ${blocking} blocking finding(s) refuse the apply and need a hand fix first — ${report}, fix them, then run \`wairon doctor --fix\``;
+  }
+  const rest = open > 0 ? `; ${open} finding(s) it will not fix need a hand fix` : '';
+  return `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}) — ${report}, apply with \`wairon doctor --fix\`${rest}`;
+}
+
+/**
+ * The findings only a person can resolve, named one by one with their hand
+ * fix, and what was and was not written for them. `wrote`: the rest of the
+ * migration was applied (a finding blocks the apply only when marked so).
+ */
+function printHandFixes(migration: ChainingMigrationPlan, wrote: boolean): void {
+  if (migration.findings.length === 0) return;
+  console.log(`  ${icon('warn')} ${chalk.bold(`${migration.findings.length} finding(s) need a hand fix`)} — the migration will not decide these for you:`);
+  for (const f of migration.findings) console.log(`      ${f.kind} [${f.project === '' ? 'top root' : f.project}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
+  console.log(wrote
+    ? '      The rest of the migration was written; nothing was written for the items above.'
+    : '      Nothing of the chaining migration was written.');
+  console.log('      Fix them by hand, then re-run `wairon doctor --fix`.');
 }
 
 /** A refused, failed or restored apply: what stopped it and whether the family is as it was. */
@@ -1351,7 +1390,7 @@ function chainingTotals(migration: ChainingMigrationPlan): string {
 }
 
 /** The new dependencies first, then the plan per project, then every rewrite, every finding and the totals. */
-function printChainingPlan(migration: ChainingMigrationPlan): void {
+function printChainingPlan(migration: ChainingMigrationPlan, withFindings = true): void {
   console.log(chalk.bold('Chaining migration'));
   console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
   if (migration.newDependencies.length > 0) {
@@ -1361,7 +1400,7 @@ function printChainingPlan(migration: ChainingMigrationPlan): void {
   if (pendingCount(migration) === 0) console.log('  Nothing to migrate.');
   for (const p of migration.projects) printProjectMigration(p);
   printRewrites(migration);
-  for (const f of migration.findings) {
+  for (const f of withFindings ? migration.findings : []) {
     const where = f.project === '' ? 'top root' : f.project;
     console.log(`  ${icon(f.blocking ? 'error' : 'warn')} ${f.kind} [${where}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
   }

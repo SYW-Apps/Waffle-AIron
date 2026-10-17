@@ -1,0 +1,12 @@
+id: orders-orch
+name: Orders Orchestrator
+description: Runs the order workflows
+subsystem: orders
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - orders-repo
+  - orders-billing-client
+status: complete
+createdAt: '2026-10-17T11:46:27.563Z'
+updatedAt: '2026-10-17T11:46:28.208Z'

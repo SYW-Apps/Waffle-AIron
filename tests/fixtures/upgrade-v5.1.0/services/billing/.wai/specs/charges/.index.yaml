@@ -1,0 +1,13 @@
+id: charges
+name: Charges
+description: Charging workflow
+parentSystem: Billing
+publicInterfaces:
+  - type: REST
+    details: POST /charges
+    component: billing-portal
+    interface: ibilling-portal
+trustedLinks: []
+status: complete
+createdAt: '2026-10-17T11:46:27.384Z'
+updatedAt: '2026-10-17T11:46:28.145Z'
