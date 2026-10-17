@@ -360,7 +360,8 @@ Also: `LoadedExtensions` has the required fields `instructions` and
 | † `TECH_LEAKAGE_IN_CODE` | warning | now also fires for a technology written by its plain name: common packages are known by default (`postgres` covers `pg`) | move the import behind the component that binds the technology |
 | `EXTERNAL_UNPINNED` | error | a declared external was never pinned (the project's gate composed with its externals, and the family root); `wairon lock` refuses until it is | `wairon externals pin` |
 | † `RETURN_TYPE_MISMATCH` | warning | a realizing function (TypeScript or Python) is annotated to return something the contract's `returns` cannot hold | fix the code, or restate the contract (a design change) |
-| † `UNDECLARED_PUBLIC_MEMBER` | warning | a public method or exported function of a realizing file that no contract, `symbol`, `exportedVia`, router or type declares, and nothing in the project uses | declare it, make it private, or remove it |
+| † `UNDECLARED_PUBLIC_MEMBER` | warning | a public method, exported function or exported class of a realizing file that no contract, `symbol`, `exportedVia`, router or type declares, and nothing in the project uses | declare it, make it private, or remove it |
+| † `UNDECLARED_DEPENDENCY` | warning | now also fires when a component imports a Portal that depends on it and calls it: the import runs against the declared edge, and only a Portal mounted onto its host without calling it is forgiven | remove the import, or declare the collaboration |
 | † `UNNARRATED_CALL` | warning | a method narrated at call level calls a contract method of a collaborator its narrative names, with no step for that call | narrate the call, declare it in `calls`, or remove it |
 | † `ROUTES_UNCHECKED` | warning | a Portal's files hold a router or route table that no `router:` names, so its routes are never compared with the design | name the router on the Portal implementation |
 | `REMOVABLE_FORWARDER` | warning | an Orchestrator only passes calls on, and every caller could make the call itself | remove the hop, or keep it with a reasoned `lint.allow` |
@@ -522,13 +523,17 @@ newly fail** on code that passed before:
   contract's `returns` does not describe is reported on that method, naming the
   contract's type and the code's. Before, a changed return type surfaced only on a
   caller whose own port no longer matched (`UNREALIZED_DEPENDENCY` "the declared edge
-  is stale", `CALL_ORIGIN_UNRESOLVED`); those findings now name the drifted method as
-  the likely cause. Not compared: a contract returning void, a function registering
+  is stale", `CALL_ORIGIN_UNRESOLVED`). Those caller findings are no longer reported
+  on their own: they are held under `RETURN_TYPE_MISMATCH`, which says so, and are
+  judged again once the return is fixed. Not compared: a contract returning void, a function registering
   the method's handler, a void handler writing through an injected response handle,
   an unannotated body, and a type the design does not know.
 - **`UNDECLARED_PUBLIC_MEMBER`** (new): a public method of a component's realizing
-  class, or a function its file exports, that no contract declares and nothing in the
-  project uses (no call in its own file, no other file, no test). Before,
+  class, or a function or class its file exports, that no contract declares and
+  nothing in the project uses (no call in its own file, no other file, no test). A
+  class counts as used when its own file names it outside its own body (constructed,
+  extended, annotated with, `instanceof` / `isinstance`, passed on); its own static
+  factory does not count. Before,
   `UNDECLARED_EXPORT` fired only once another component imported the name. Exempt:
   constructors, accessors, fields, static, private, protected, `#private` and
   underscore-prefixed members, `override`, computed names, language protocol and
@@ -554,12 +559,25 @@ newly fail** on code that passed before:
   public method or module function `UNDECLARED_PUBLIC_MEMBER`, and an unnarrated call
   through an annotated collaborator `UNNARRATED_CALL`. Python gains a type dialect;
   briefs give its mapping without the "mapping only" line.
+- **An import that runs against a Portal's call edge is `UNDECLARED_DEPENDENCY`.**
+  The reverse import a declared edge forgives is the mounting shape: a server's file
+  importing the Portal that depends on it, to serve it. That was forgiven for any
+  component the Portal depends on, so an Orchestrator importing the Portal that calls
+  it passed silently in Python and showed in TypeScript only as `UNDECLARED_EXPORT` on
+  the Portal's file. A Portal that calls a component (a narrative call or dispatch
+  step, a declared call or a dispatch-table binding) is now that component's client:
+  its import back is `UNDECLARED_DEPENDENCY` on the importer, naming the edge it
+  inverts, and it no longer realizes the Portal's own edge. `UNDECLARED_EXPORT` now
+  also names the files that took each name, not only the file that publishes it.
 - **What was checked is said.** The code-reading line (`validate`, `sdd_validate_tree`)
   now names, per language, the grade and the checks it ran and did not
   (`python: 4 file(s) at grade pattern with its signature reader, checked methods,
   params, returns (where annotated), public members, imports, calls through declared
   receivers — not checked: routes, data types`); a family run prints it per project,
-  and the closing line repeats it in a few words (`Code checked: …`).
+  and the closing line repeats it in a few words (`Code checked: …`). Routes are read
+  only out of a router a Portal names, so a language whose code realizes an HTTP
+  Portal naming no router says `routes where a router is named` and counts those
+  Portals among what it did not check.
 - **Still not checked**, and said in that line: calls made inside helpers and calls to
   collaborators a narrative never names (the detail dial lets a narrative summarize
   them; a collaborator the design does not list at all is `UNDECLARED_DEPENDENCY`);

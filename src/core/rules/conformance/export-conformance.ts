@@ -143,12 +143,12 @@ export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   judges: 'code',
   description:
-    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real. And the surface no taker reveals: a public method of a component's REALIZING class — a class holding one of its modelled methods — or a function its realizing file exports, that no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or reference in its own file, no name another analyzed file writes, no identifier in a project file the run did not analyze (its tests, a composition root), no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected, #private and underscore-prefixed members, an `override`, a computed name, a language protocol or framework lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read at exact grade, or by a reader that reads class members (Python, where a leading underscore is private).",
+    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real. And the surface no taker reveals: a public method of a component's REALIZING class — a class holding one of its modelled methods — or a function its realizing file exports, that no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or reference in its own file, no name another analyzed file writes, no identifier in a project file the run did not analyze (its tests, a composition root), no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected, #private and underscore-prefixed members, an `override`, a computed name, a language protocol or framework lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read at exact grade, or by a reader that reads class members (Python, where a leading underscore is private). An exported CLASS is judged the same way: a top-level class the realizing file exports beside the classes realizing a component, that no contract or type declares and that nothing uses — its own file naming it nowhere outside its own declaration (constructed, extended, annotated with, tested by instanceof or isinstance, passed on: source_file_facts.classReferences), no other analyzed file naming it, no identifier of a file the run did not analyze, no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The finding names the files that took each name as well as the one publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different fact — who reached across, where this is what crossed.",
   codes: [
     {
       code: 'UNDECLARED_PUBLIC_MEMBER',
       defaultSeverity: 'warning',
-      summary: "A component's realizing class has a public method, or its realizing module an exported function, that no contract of the components it realizes declares and nothing in the project uses — a verb the code added that the design never promised",
+      summary: "A component's realizing class has a public method, or its realizing module an exported function or class, that no contract of the components it realizes declares and nothing in the project uses — a verb the code added that the design never promised",
       carryable: true,
     },
     {
@@ -470,6 +470,24 @@ export const exportConformanceRule: SddRule = {
       if (cls === undefined && starRepublished.has(file)) return true;
       return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(candidate));
     };
+    /**
+     * Whether anything but the class itself uses an exported class: as
+     * usedAnywhere reads a function, except that the class's own methods
+     * naming it (a static factory, a clone) are the class talking about
+     * itself, never a use.
+     */
+    const classUsed = (file: string, facts: SourceFileFacts, cls: string): boolean => {
+      if (outside.has(cls) || starRepublished.has(file)) return true;
+      for (const bodies of Object.values(facts.functionBodies ?? {})) {
+        for (const body of bodies) {
+          if (body.container === cls) continue;
+          if (body.sites.some(site => site.name === cls)) return true;
+        }
+      }
+      if (facts.analysisGrade === 'exact' && facts.anchoredNames.includes(cls)) return true;
+      if ((facts.resolvedCalls ?? []).some(call => call.name === cls && call.enclosingContainer !== cls && call.enclosing !== cls)) return true;
+      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(cls));
+    };
     for (const file of realization.paths) {
       if (TEST_FILE.test(file)) continue;
       const facts = code.factsAt(file);
@@ -497,6 +515,7 @@ export const exportConformanceRule: SddRule = {
       const bodies = facts.functionBodies ?? {};
       const bodiesOf = (name: string): FunctionBodyFact[] => (Object.prototype.hasOwnProperty.call(bodies, name) ? bodies[name] : []);
       const undeclared: string[] = [];
+      const unusedClasses = new Set<string>();
       // The realizing classes, and their public verbs.
       const realizing = new Set<string>();
       for (const name of modelled) for (const body of bodiesOf(name)) if (body.container !== undefined && !body.nested) realizing.add(body.container);
@@ -520,18 +539,32 @@ export const exportConformanceRule: SddRule = {
           if (usedAnywhere(file, facts, name, undefined)) continue;
           undeclared.push(name);
         }
+        // And the classes it exports beside the realizing ones: a class no
+        // contract declares and nothing uses — not named by its own file
+        // outside its own declaration, nor by any other — is surface the same
+        // way an unused exported function is. Judged only where the reader
+        // recorded the file's own class references; silence otherwise.
+        const referenced = facts.classReferences ? new Set(facts.classReferences) : undefined;
+        const classes = facts.classMembers ?? {};
+        for (const name of referenced ? [...new Set(facts.exportedNames)].sort() : []) {
+          if (!Object.prototype.hasOwnProperty.call(classes, name) || realizing.has(name)) continue;
+          if (name.startsWith('_') || declared.has(name) || modelled.has(name)) continue;
+          if (referenced!.has(name) || classUsed(file, facts, name)) continue;
+          undeclared.push(name);
+          unusedClasses.add(name);
+        }
       }
       if (undeclared.length === 0) continue;
       const [owner] = realization.implementationsAt(file).map(impl => impl.id).sort();
       ctx.addIssue(
         'warning',
         'UNDECLARED_PUBLIC_MEMBER',
-        `Source file "${file}" realizes ${components.map(c => `"${c.id}"`).join(', ')} and publishes ${undeclared.length} verb(s) `
-        + `no contract of ${components.length === 1 ? 'it' : 'them'} declares — ${undeclared.map(n => `"${n}"`).join(', ')}. `
+        `Source file "${file}" realizes ${components.map(c => `"${c.id}"`).join(', ')} and publishes ${undeclared.length} ${unusedClasses.size > 0 ? 'name(s)' : 'verb(s)'} `
+        + `no contract of ${components.length === 1 ? 'it' : 'them'} declares — ${undeclared.map(n => `"${n}"${unusedClasses.has(n) ? ' (an exported class)' : ''}`).join(', ')}. `
         + 'Nothing in the project uses them — no call or reference in their own file, no other file naming them, not its tests — '
         + 'so they are no factoring of the realization: each is surface any caller can reach that no brief, review or rule has read, '
-        + 'a verb added in the code alone. Declare it as a contract method (sdd_define_interface, a design change), make it private '
-        + '(a leading underscore in Python), or take it out.',
+        + `${unusedClasses.size > 0 ? 'a verb or a class' : 'a verb'} added in the code alone. Declare it as a contract method (sdd_define_interface, a design change)${unusedClasses.size > 0 ? ' or a type (sdd_add_type)' : ''}, make it private `
+        + `(a leading underscore in Python${unusedClasses.size > 0 ? ', no export in TypeScript' : ''}), or take it out.`,
         owner,
         realization.implementationsAt(file).some(impl => ctx.isImplementationDraft(impl)),
         undefined,
@@ -557,6 +590,9 @@ export const exportConformanceRule: SddRule = {
         for (const member of ownership.ownedMembers) if (ownership.ownerOf(member) === pattern) fence.add(member);
       }
       const crossed: string[] = [];
+      // Who took them, so the finding names the importing files as well as
+      // the one that publishes: the import is half of what crossed.
+      const takersOf = new Set<string>();
 
       // Sorted and deduplicated, so what the register carries is the SET of
       // crossings and not the order the file happened to declare them in.
@@ -566,10 +602,12 @@ export const exportConformanceRule: SddRule = {
         // ---- 6/7/8. a crossing needs a taker, from HERE, sharing no component ----
         const takers = taken?.get(name);
         if (!takers) continue;
-        const crossing = [...takers].some(
+        const crossing = [...takers].filter(
           taker => taker !== file && !realization.componentsAt(taker).some(c => fence.has(c.id)),
         );
-        if (crossing) crossed.push(name);
+        if (crossing.length === 0) continue;
+        crossed.push(name);
+        for (const taker of crossing) takersOf.add(taker);
       }
 
       // ---- 10/12. a file whose surface is all promised or all private ----
@@ -585,7 +623,8 @@ export const exportConformanceRule: SddRule = {
         'UNDECLARED_EXPORT',
         `Source file "${file}" publishes ${crossed.length} name(s) that no contract of the component(s) it realizes `
         + `(${[...owners].sort().map(id => `"${id}"`).join(', ')}) declares, and a file realizing NONE of those `
-        + `components imports each one FROM HERE — ${crossed.map(n => `"${n}"`).join(', ')}. An export only this `
+        + `components imports each one FROM HERE — ${crossed.map(n => `"${n}"`).join(', ')} (imported by `
+        + `${[...takersOf].sort().map(t => `"${t}"`).join(', ')}). An export only this `
         + 'file\'s own components use is the module\'s private factoring and no concern of the design; one another '
         + 'component reaches for is a surface the design never promised. Declare it as a contract method, stop '
         + 'exporting it, or move it to the component that owns the name.',

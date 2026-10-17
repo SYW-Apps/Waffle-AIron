@@ -60,12 +60,12 @@ import * as packImpact from './pack-impact.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ExtensionPack } from './extensions.js';
 import { analyzerDigest, computeGateIdentity, gateParts, type GateConfig } from './rules/gate-identity.js';
-import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity } from './rules/types.js';
+import { BUILTIN_PROFILES, PROJECT_KINDS, judgesCode, type IssueSeverity, type RuleContext } from './rules/types.js';
 import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
 import { approvalSubject } from '../models/lock.js';
 import type { ProjectRelations } from '../models/specs.js';
-import type { CodeModel, SourceFileFacts } from '../models/code-model.js';
+import { pathKey, type CodeModel, type SourceFileFacts } from '../models/code-model.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 /**
@@ -505,7 +505,8 @@ export function validateProject(
 ): ValidationResult {
   const run = runOwnersGate(rulesOrOptions, projectType);
   // Step 53: how the code was read, one line beside the hint.
-  return { ...run.result, codeReading: codeReadingOf(run.codeModel), ...codeCompactOf(run.codeModel) };
+  const unrouted = run.unroutedPortals ?? [];
+  return { ...run.result, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };
 }
 
 /** What the code half CHECKS at each reading, in the order a summary names them. */
@@ -515,15 +516,31 @@ const READING_CHECKS: Record<string, string> = {
   params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls through declared receivers',
 };
 
+/** A Portal binding HTTP endpoints whose implementation names no router, with its exact-grade files (route-coverage's portalsWithoutRouter). */
+export interface UnroutedPortal {
+  portal: string;
+  files: string[];
+}
+
 /**
  * What one language's files were read for: the weakest grade among them and
  * the checks that grade (or the reader that read them) is fuel for, and the
- * ones it is not.
+ * ones it is not. Routes are read only out of a router a Portal names, so a
+ * language whose code realizes a Portal naming none claims routes only where
+ * one is named, and says how many it did not compare.
  */
-function languageReading(files: SourceFileFacts[]): { grade: string; checked: string[]; unchecked: string[]; reader?: string } {
+function languageReading(files: SourceFileFacts[], unrouted: number = 0): { grade: string; checked: string[]; unchecked: string[]; reader?: string; note?: string } {
   const grades = files.map((f) => GRADE_ORDER.indexOf((f.analysisGrade ?? 'generic') as AnalysisGradeLabel));
   const grade = GRADE_ORDER[Math.min(...grades)];
-  if (grade === 'exact') return { grade, checked: CHECKED_AT_EXACT, unchecked: [] };
+  if (grade === 'exact') {
+    if (unrouted === 0) return { grade, checked: CHECKED_AT_EXACT, unchecked: [] };
+    return {
+      grade,
+      checked: CHECKED_AT_EXACT.map((c) => (c === 'routes' ? 'routes where a router is named' : c)),
+      unchecked: [`routes of ${unrouted} HTTP Portal(s) naming no router`],
+      note: 'each judged by the public methods of its realizing class alone',
+    };
+  }
   // Below exact, a reader that read signatures says what it read; every file must have read it for the language to claim it.
   const reads = files.every((f) => (f.reads?.length ?? 0) > 0)
     ? Object.keys(READING_CHECKS).filter((r) => files.every((f) => f.reads?.includes(r as never)))
@@ -531,6 +548,36 @@ function languageReading(files: SourceFileFacts[]): { grade: string; checked: st
   const checked = [grade === 'generic' ? 'methods (by name only)' : 'methods', ...reads.map((r) => READING_CHECKS[r])];
   const unchecked = CHECKED_AT_EXACT.filter((c) => !checked.some((k) => k.startsWith(c.split(' ')[0]))).map((c) => c.replace(/ \(.*\)$/, ''));
   return { grade, checked, unchecked, ...(reads.length > 0 ? { reader: 'its signature reader' } : {}) };
+}
+
+/**
+ * The Portals whose routes no check compared: each binds HTTP endpoints and is
+ * realized in files read at exact grade, while an implementation of it names
+ * no router — route coverage then reads no route of it (ROUTER_UNDECLARED, or
+ * ROUTES_UNCHECKED where its files hold a router). What the code-reading line
+ * owes its reader, so a run never claims routes it did not compare.
+ */
+function portalsWithoutRouter(ctx: RuleContext): UnroutedPortal[] {
+  const code = ctx.codeIndex();
+  const realization = ctx.realizationIndex();
+  const out: UnroutedPortal[] = [];
+  for (const portal of ctx.components) {
+    if (portal.componentType !== 'Portal') continue;
+    if (!ctx.interfaceMethodsOf(portal.id).some((method) => method.endpoint?.transport === 'HTTP')) continue;
+    if (!realization.implementationsOf(portal.id).some((impl) => !impl.router)) continue;
+    const files = realization.filesOf(portal.id).map(pathKey).filter((file) => {
+      const facts = code.factsAt(file);
+      return !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
+    });
+    if (files.length > 0) out.push({ portal: portal.id, files });
+  }
+  return out;
+}
+
+/** How many of the unrouted Portals a language's code realizes: a Portal counts for each language its exact-grade files are read as. */
+function unroutedIn(codeModel: CodeModel, unrouted: readonly UnroutedPortal[], language: string): number {
+  const languageAt = new Map(codeModel.files.map((f) => [pathKey(f.path), f.language ?? 'unknown'] as const));
+  return unrouted.filter((u) => u.files.some((file) => languageAt.get(pathKey(file)) === language)).length;
 }
 
 /**
@@ -542,7 +589,7 @@ function languageReading(files: SourceFileFacts[]): { grade: string; checked: st
  * read whole is one clause, and a language read below exact grade names the
  * checks it did not get.
  */
-export function codeReadingOf(codeModel: CodeModel): string {
+export function codeReadingOf(codeModel: CodeModel, unrouted: readonly UnroutedPortal[] = []): string {
   const grade = weakestGrade(codeModel);
   if (grade === 'none') return 'Code: none read yet — no source file the design names exists (analysis grade none).';
   const analyzed = codeModel.files.filter((f) => f.status === 'analyzed' && f.analysisGrade);
@@ -558,9 +605,10 @@ export function codeReadingOf(codeModel: CodeModel): string {
     byLanguage.set(language, [...(byLanguage.get(language) ?? []), f]);
   }
   const clauses = [...byLanguage].sort(([a], [b]) => a.localeCompare(b)).map(([language, files]) => {
-    const reading = languageReading(files);
+    const reading = languageReading(files, unroutedIn(codeModel, unrouted, language));
     return `${language}: ${files.length} file(s) at grade ${reading.grade}${reading.reader ? ` with ${reading.reader}` : ''}, checked ${reading.checked.join(', ')}`
-      + (reading.unchecked.length > 0 ? ` — not checked: ${reading.unchecked.join(', ')}` : '');
+      + (reading.unchecked.length > 0 ? ` — not checked: ${reading.unchecked.join(', ')}` : '')
+      + (reading.note ? ` (${reading.note})` : '');
   });
   return `${head}. ${clauses.join('; ')}. Never checked at any grade: ${NOT_CHECKED_EVER.join('; ')}.`;
 }
@@ -570,14 +618,14 @@ export function codeReadingOf(codeModel: CodeModel): string {
  * did not get (`typescript exact; python pattern, not checked: routes, data
  * types`). Absent when no code was read.
  */
-export function codeCompactOf(codeModel: CodeModel): { codeCompact?: string } {
+export function codeCompactOf(codeModel: CodeModel, unrouted: readonly UnroutedPortal[] = []): { codeCompact?: string } {
   const analyzed = codeModel.files.filter((f) => f.status === 'analyzed' && f.analysisGrade);
   if (analyzed.length === 0) return {};
   const byLanguage = new Map<string, SourceFileFacts[]>();
   for (const f of analyzed) byLanguage.set(f.language ?? 'unknown', [...(byLanguage.get(f.language ?? 'unknown') ?? []), f]);
   return {
     codeCompact: [...byLanguage].sort(([a], [b]) => a.localeCompare(b)).map(([language, files]) => {
-      const reading = languageReading(files);
+      const reading = languageReading(files, unroutedIn(codeModel, unrouted, language));
       return `${language} ${reading.grade}${reading.unchecked.length > 0 ? ` (not checked: ${reading.unchecked.join(', ')})` : ''}`;
     }).join('; '),
   };
@@ -587,6 +635,8 @@ export function codeCompactOf(codeModel: CodeModel): { codeCompact?: string } {
 interface OwnersGateRun {
   result: ValidationResult;
   codeModel: CodeModel;
+  /** The HTTP Portals whose routes no check compared (no router named), for the code-reading line. */
+  unroutedPortals?: UnroutedPortal[];
   /** The project's own reach model, on a run that asked for it instead of the rules. */
   reach?: ReachModel;
 }
@@ -885,6 +935,7 @@ function runOwnersGate(
         ...(hint ? { hint } : {}),
       },
       codeModel,
+      unroutedPortals: portalsWithoutRouter(ctx),
     };
   } finally {
     statusBearing.forEach((s, i) => { s.status = statusSnapshot[i]; });
@@ -1103,7 +1154,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
   const kept = issues.filter((i) => (!i.specId || !context.ids.has(i.specId)) && !staleOnlyBySkip(i));
   kept.push(issue('notice', 'PART_JUDGED_ALONE', `This part of "${parentId}" was judged alone against its pinned excerpt (${excerpt.digest}); `
     + `${skipped.length > 0 ? `the whole-system rules ${skipped.map((r) => r.name).join(', ')} were skipped` : 'no rule was skipped'}. The full verdict is the parent's: validate from "${parentId}".`));
-  return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept }, codeModel };
+  return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept }, codeModel, unroutedPortals: portalsWithoutRouter(ctx) };
 }
 
 /**

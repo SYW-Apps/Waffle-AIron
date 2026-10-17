@@ -247,7 +247,11 @@ methods:
       file's helpers and stopping at another modelled method, land through what the code DECLARES: a
       bare call on an import binding in that module, a call through a namespace binding in that
       module, `self.<field>` through the class the field is annotated with (or the annotated
-      parameter the constructor assigns it from), an annotated name the same way.
+      parameter the constructor assigns it from), an annotated name the same way. A claim on a
+      component whose own code drifted from its contract's return (RETURN_TYPE_MISMATCH) is not
+      reported as CALL_ORIGIN_UNRESOLVED: a port typed after the contract no longer matches the
+      class, so the call no longer resolves for that reason — the drift's consequence, held under
+      that one finding and judged again once it is fixed.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -428,8 +432,17 @@ methods:
       importing file's package or any folder above it to a module or a package's `__init__.py` — a
       Python import resolves only to a Python module, so the two languages' graphs never cross;
       whether a declared Python edge is realized is not judged. And a declared edge whose target's
-      own code drifted from its contract (RETURN_TYPE_MISMATCH) says so on UNREALIZED_DEPENDENCY: a
-      port typed after the contract no longer matches the class, so the edge only looks stale.
+      own code drifted from its contract (RETURN_TYPE_MISMATCH) is not reported as
+      UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the class, so the
+      edge only looks stale — the drift's consequence, held under that one finding and judged again
+      once it is fixed. The one reverse import a declared edge justifies is a MOUNT: a Portal or
+      Observer that depends on a component of its own subsystem without calling it — no narrative
+      call or dispatch step, declared call or dispatch-table binding of the Portal names it — whose
+      file imports the Portal's to dispatch inward (a server mounting its Portals). A component the
+      Portal calls is its downstream collaborator, so that component importing the Portal back runs
+      against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the importer, the
+      finding naming the edge it inverts — and such a reverse import realizes no edge of a Portal
+      that calls.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -729,7 +742,16 @@ methods:
       lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount,
       ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation
       whose conformance dial is off. Read at exact grade, or by a reader that reads class members
-      (Python, where a leading underscore is private).
+      (Python, where a leading underscore is private). An exported CLASS is judged the same way: a
+      top-level class the realizing file exports beside the classes realizing a component, that no
+      contract or type declares and that nothing uses — its own file naming it nowhere outside its
+      own declaration (constructed, extended, annotated with, tested by instanceof or isinstance,
+      passed on: source_file_facts.classReferences), no other analyzed file naming it, no identifier
+      of a file the run did not analyze, no star re-export publishing the module on — is
+      UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The
+      finding names the files that took each name as well as the one publishing it: an import that
+      no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different
+      fact — who reached across, where this is what crossed.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -753,8 +775,8 @@ methods:
         severity: warning
         summary: >-
           A component's realizing class has a public method, or its realizing module an exported
-          function, that no contract of the components it realizes declares and nothing in the
-          project uses — a verb the code added that the design never promised
+          function or class, that no contract of the components it realizes declares and nothing in
+          the project uses — a verb the code added that the design never promised
   - name: typeShape
     description: >-
       Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
@@ -916,12 +938,14 @@ methods:
       function handed a response handle (`injectedParams`: res, response, reply, ctx, context),
       which writes its result through the handle, an unannotated body, and a type either side does
       not read or the design does not know — never accused. A caller whose port no longer matches
-      the drifted class is told the cause on its own finding (UNREALIZED_DEPENDENCY,
-      CALL_ORIGIN_UNRESOLVED). Python is read without a type checker by the analyzer's signature
-      reader (source_file_facts.reads): its `def` parameter names — compared in the language's
-      snake_case, so the contract's `documentId` is the code's `document_id` — their annotations and
-      return annotations, the receiver (`self`, `cls`) set aside, judged like any other signature;
-      an unannotated Python parameter is never read as opaque.
+      the drifted class is not reported again on its own: its call to the drifted component that no
+      longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows
+      (UNREALIZED_DEPENDENCY) are held under RETURN_TYPE_MISMATCH and judged again once it is fixed.
+      Python is read without a type checker by the analyzer's signature reader
+      (source_file_facts.reads): its `def` parameter names — compared in the language's snake_case,
+      so the contract's `documentId` is the code's `document_id` — their annotations and return
+      annotations, the receiver (`self`, `cls`) set aside, judged like any other signature; an
+      unannotated Python parameter is never read as opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1199,4 +1223,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-17T15:41:12.523Z'
+updatedAt: '2026-10-17T19:56:32.808Z'
