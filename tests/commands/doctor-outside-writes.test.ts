@@ -182,4 +182,39 @@ describe('doctor --fix: writes outside the project root are planned, confirmed a
     // ...and doctor reads the portable registration back as healthy.
     expect(out).toMatch(/Claude \(project \.mcp\.json\): registered/);
   }, 240_000);
+
+  it('--fix also repairs a stale project .gemini/settings.json for an agy target; doctor marks a different build as a warning', async () => {
+    const { home, project } = setup();
+    // Another install of the toolchain, at a build that is not this CLI's.
+    const other = path.join(path.dirname(project), 'other-toolchain');
+    fs.mkdirSync(path.join(other, 'dist', 'cli'), { recursive: true });
+    fs.writeFileSync(path.join(other, 'package.json'), JSON.stringify({ name: '@wairon/cli', version: '1.2.3' }));
+    fs.writeFileSync(path.join(other, 'dist', 'cli', 'index.js'), '');
+    const settings = path.join(project, '.gemini', 'settings.json');
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, JSON.stringify({
+      mcpServers: { wairon: { command: 'node', args: [path.join(other, 'dist', 'cli', 'index.js').split(path.sep).join('/'), 'mcp', 'serve'] } },
+    }, null, 2));
+
+    const plain = await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'doctor'], {
+      cwd: project,
+      env: { ...process.env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), LOCALAPPDATA: path.join(home, 'AppData', 'Local') },
+      timeout: 180_000,
+    }).catch((e: Error & { stdout?: string }) => e) as { stdout?: string };
+    const geminiLine = (plain.stdout ?? '').split(/\r?\n/).find((l) => l.includes('Gemini CLI (project)')) ?? '';
+    expect(geminiLine).toContain('a different build than this CLI');
+    expect(geminiLine).toContain('⚠');
+    expect(geminiLine).not.toContain('✓');
+
+    await runDoctor(project, home, '--yes');
+    const written = JSON.parse(fs.readFileSync(settings, 'utf8')) as { mcpServers: Record<string, unknown> };
+    expect(JSON.stringify(written.mcpServers.wairon)).not.toContain('other-toolchain');
+  }, 240_000);
+
+  it('names the build an up-to-date .mcp.json entry starts', async () => {
+    const { home, project } = setup();
+    await runDoctor(project, home, '--yes');
+    const out = (await runDoctor(project, home, '--yes')).stdout ?? '';
+    expect(out).toMatch(/Claude \(project \.mcp\.json\): registered( \(starts wairon \S+\))?/);
+  }, 240_000);
 });

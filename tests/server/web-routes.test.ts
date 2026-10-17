@@ -1310,11 +1310,26 @@ describe('web portal routes over HTTP (characterization, sdd_host)', () => {
       expect(json(await get('/web/admin/approvals', adminCookie())).requests).toEqual([]);
     });
 
-    it('POST /web/admin/approvals/decide: approved is true ONLY for a literal true (current behaviour)', async () => {
-      const id = seedPendingInit('u-truthy', 'truthy-proj');
-      const r = await post('/web/admin/approvals/decide', { requestId: id, approved: 'yes' }, adminCookie());
-      expect(r.status).toBe(200);
-      expect(json(r).status).toBe('denied');
+    it('POST /web/admin/approvals/decide refuses a malformed body (400 naming the accepted fields) and the request stays pending', async () => {
+      const id = seedPendingInit('u-strict', 'strict-proj');
+      const accepted = /requestId.*approved.*reason/;
+      const bodies: Record<string, unknown>[] = [
+        { requestId: id, approved: 'yes' }, // not a boolean
+        { requestId: id, decision: 'approve' }, // an unknown field in place of `approved`
+        { requestId: id }, // no decision at all
+        { requestId: id, approved: true, reason: 42 }, // reason is not a string
+        { approved: true }, // no request id
+        { requestId: '', approved: true }, // empty request id
+        { requestId: 'no-such-request', approved: true }, // unknown request id
+      ];
+      for (const body of bodies) {
+        const r = await post('/web/admin/approvals/decide', body, adminCookie());
+        expect(r.status, JSON.stringify(body)).toBe(400);
+        expect(json(r).error).toMatch(accepted);
+      }
+      // Nothing was recorded: the request is still pending.
+      const pending = json(await get('/web/admin/approvals', adminCookie())).requests as { id: string; status: string }[];
+      expect(pending.find((q) => q.id === id)?.status).toBe('pending');
     });
 
     it('no session: 401 on each; a viewer session: 403 on each', async () => {

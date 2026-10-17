@@ -1427,7 +1427,9 @@ methods:
     description: >-
       Decide a pending approval request, forwarding to the project lifecycle orchestrator. The
       decider is always the session's own principal, never a value the request supplies, and
-      self-approval is refused where the decision is made.
+      self-approval is refused where the decision is made. The router decodes the decision strictly
+      (requestId, approved as a boolean, reason as text) and refuses a body that does not carry them
+      with a 400 before anything is decided; the request stays pending.
     signature: 'adminDecideApproval(sessionId: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -1597,4 +1599,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-17T16:49:53.084Z'
+updatedAt: '2026-10-17T19:19:54.249Z'

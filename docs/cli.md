@@ -1557,6 +1557,21 @@ Give authors `project:write` and reviewers `approval:decide`; a single
 administrator holds both. `wairon host lock` runs with the master credential,
 which approves on any project.
 
+**Deciding a request.** The web UI's Approvals page and `POST /web/admin/approvals/decide`
+take a JSON body with exactly these fields:
+
+| Field | Type | |
+|-------|------|---|
+| `requestId` | string | required: the id of a pending request |
+| `approved` | boolean | required: `true` approves, `false` denies |
+| `reason` | string | optional |
+
+Anything else is refused with `400` and a message naming these fields, and the request
+stays pending: a body without `approved` (for example `{"decision": "approve"}`), a value that
+is not a boolean, or a missing or unknown `requestId` is never read as a denial. Who
+decided is always the signed-in person, never a field of the body. The admin API's
+`POST /admin/approvals/{id}/decision` takes the same `approved` and `reason`, with the id in the path.
+
 | Command | Description |
 |---------|-------------|
 | `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |

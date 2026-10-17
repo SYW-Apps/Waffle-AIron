@@ -950,6 +950,14 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **`wairon doctor`, assistant registrations:** `doctor --fix` now repairs every assistant registration that
+  `doctor` reports out of date, including a project `.gemini/settings.json` when Antigravity is a
+  target (it used to rewrite only the Claude entry). A registration that starts a different build than
+  this CLI is shown as a warning, never a check mark, and an up-to-date entry now names the build it
+  starts, e.g. `registered (starts wairon 5.1.1)`.
+- **Confirmations with no terminal:** `wairon domains remove` without a terminal now refuses with a
+  failing exit code instead of failing inside the prompt; `wairon lock` and the migration commands
+  already refuse this way, and a test now pins it.
 - **Hosted operator setup:**
   - The shipped docs now explain how to turn on the web UI (the exposure policy's
     `webUiEnabled`), what `requireTls` does, how the built-in administrator signs in
@@ -1520,6 +1528,10 @@ design as one deterministic JSON document (`wairon-design` 1.0,
   more clearly.
 
 ### Security
+
+- **Hosted approval decisions are read strictly:** a decision request whose body lacks the accepted
+  fields, or carries a value of the wrong kind, was recorded as a denial. It is now refused with a
+  message naming the accepted fields, and the request stays pending (`docs/cli.md`, hosted section).
 
 Hosted deployments of v5.1.0 should upgrade. This release hardens:
 
