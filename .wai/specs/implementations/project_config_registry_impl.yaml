@@ -289,13 +289,15 @@ methods:
     narrative: []
     intent: >-
       Reads the configuration through the store (none yet reads as empty, for a fresh part). Refuses
-      to set partOf on a configuration declaring any project field, naming them. When partOf already
-      equals the value (or is absent and the value is null), returns false and writes nothing;
-      otherwise sets or removes it and writes the configuration through the store, creating the file
-      for a fresh part with only its schema version and partOf, returning true.
+      to set partOf on a configuration declaring any project field, asking the store for each
+      project field in turn whether the configuration declares it and naming those it does. When
+      partOf already equals the value (or is absent and the value is null), returns false and writes
+      nothing; otherwise sets or removes it and writes the configuration through the store, creating
+      the file for a fresh part with only its schema version and partOf, returning true.
     calls:
       - project_config_store.read
       - project_config_store.write
+      - project_config_store.declares
   - name: describeProject
     narrative: []
     intent: >-
@@ -320,4 +322,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-07T21:50:10.500Z'
+updatedAt: '2026-10-17T16:25:29.548Z'

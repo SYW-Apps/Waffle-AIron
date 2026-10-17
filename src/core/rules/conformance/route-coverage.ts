@@ -43,10 +43,16 @@ import { closedCallSites } from './call-conformance.js';
 //
 //  5. NEVER SILENTLY OFF. A Portal binding HTTP endpoints whose code is read
 //     at exact grade and whose implementation names no router has its routes
-//     checked against nothing: that is a notice naming `router:`
-//     (ROUTER_UNDECLARED), and a linkage naming a declaration that holds
-//     neither a body nor a table is UNREADABLE_ROUTER — the round-9 trials
-//     found the check switched off by a table moved to another module.
+//     checked against nothing. Where its files hold what reads as a router or
+//     a route table, that is code serving routes no check read — a warning
+//     that fails --ci (ROUTES_UNCHECKED), naming each spelling `router:`
+//     accepts. Where they hold none, the Portal is served method by method
+//     by whatever routes to it: each public method of its realizing class is
+//     then its surface, judged by export-conformance's
+//     UNDECLARED_PUBLIC_MEMBER, and the notice ROUTER_UNDECLARED says where
+//     the routes went. A linkage naming a declaration that holds neither a
+//     body nor a table is UNREADABLE_ROUTER — the round-9 trials found the
+//     check switched off by a table moved to another module.
 //
 //  6. ONE TABLE, ONE ROUTER. Portals naming the same entry in the same files
 //     are one router whatever each linkage writes (`routes` or
@@ -121,7 +127,7 @@ export const routeCoverageRule: SddRule = {
   name: 'route-coverage',
   judges: 'code',
   description:
-    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router (`router`, code linkage) — the table or function the server actually dispatches: an entry its own files export, a class's method as `Class.method` (the class the export, the method's body inside it), an entry or route table another module exports (`<module>#<name>`, or `<module>#Class.method`, a central routes.ts), or a module alone, every route-bearing export of which is read as one router; the routes are read out of that entry and the functions of its file it calls by name. A router several Portals name — the same entry or table in the same file, however each linkage spells it — is read once against them all: a route is declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards (a method comparison with comparisons on the path's split segments), where a prefix the router strips before splitting the path is folded in front; and a route table — a const the router names, one it returns or states in place unnamed, or the table the linkage names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`, a key written as a template literal or a concatenation over constants settling like any other value; an array may spread other tables and an object other objects, `[...ingestRoutes, ...statsRoutes]`, each followed through the type checker to the table it names in any module), read only when every entry settles. A table is written under the ONE prefix its router strips off the path before matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of every entry that does not already state it, so a stripped prefix that is not the Portal's basePath is read as the different URL it is, and the finding names both. Every compared value is a literal or one the code's constants, concatenations and template literals settle — through the type checker, any module's constant and any expression it types as one string literal — and never a guess. A route that states the whole path is read under the Portal's basePath, which the contract's endpoint paths are written beneath; a leading path segment a guard router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. Route coverage is never silently off: a router that yields no route in either idiom, or a linkage naming a declaration that holds neither a function body nor a route table this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose implementation names no router while its code is read at exact grade is said as a notice (ROUTER_UNDECLARED) naming `router:` and what its files hold, each spelled as the linkage accepts it — an exported router or table by its name, a method of an exported class as `Class.method`, an exported entry calling into a router of its file — with what reads as a router or a table but is not exported named apart, to be exported before it can be named — a check that cannot see a router must say so rather than stay quiet. A router naming a route table that a sibling table — one spreading other tables of its module, written in that module or in one importing them, `routes = [...ingestRoutes]` — leaves out, while no table of the code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if the server dispatches the sibling, no route of the named table is served, while coverage reading the named table reads its routes as served. A notice, because which process dispatches which table is never read: a module may serve two aggregates to two servers.",
+    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router (`router`, code linkage) — the table or function the server actually dispatches: an entry its own files export, a class's method as `Class.method` (the class the export, the method's body inside it), an entry or route table another module exports (`<module>#<name>`, or `<module>#Class.method`, a central routes.ts), or a module alone, every route-bearing export of which is read as one router; the routes are read out of that entry and the functions of its file it calls by name. A router several Portals name — the same entry or table in the same file, however each linkage spells it — is read once against them all: a route is declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards (a method comparison with comparisons on the path's split segments), where a prefix the router strips before splitting the path is folded in front; and a route table — a const the router names, one it returns or states in place unnamed, or the table the linkage names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`, a key written as a template literal or a concatenation over constants settling like any other value; an array may spread other tables and an object other objects, `[...ingestRoutes, ...statsRoutes]`, each followed through the type checker to the table it names in any module), read only when every entry settles. A table is written under the ONE prefix its router strips off the path before matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of every entry that does not already state it, so a stripped prefix that is not the Portal's basePath is read as the different URL it is, and the finding names both. Every compared value is a literal or one the code's constants, concatenations and template literals settle — through the type checker, any module's constant and any expression it types as one string literal — and never a guess. A route that states the whole path is read under the Portal's basePath, which the contract's endpoint paths are written beneath; a leading path segment a guard router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. Route coverage is never silently off: a router that yields no route in either idiom, or a linkage naming a declaration that holds neither a function body nor a route table this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose implementation names no router while its code is read at exact grade is said as a notice (ROUTER_UNDECLARED) naming `router:` and what its files hold, each spelled as the linkage accepts it — an exported router or table by its name, a method of an exported class as `Class.method`, an exported entry calling into a router of its file — with what reads as a router or a table but is not exported named apart, to be exported before it can be named — a check that cannot see a router must say so rather than stay quiet. A router naming a route table that a sibling table — one spreading other tables of its module, written in that module or in one importing them, `routes = [...ingestRoutes]` — leaves out, while no table of the code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if the server dispatches the sibling, no route of the named table is served, while coverage reading the named table reads its routes as served. A notice, because which process dispatches which table is never read: a module may serve two aggregates to two servers. A Portal binding HTTP endpoints whose implementation names no router while its files, read at exact grade, hold what reads as a router or a route table is ROUTES_UNCHECKED — a warning that fails --ci, naming each spelling `router:` accepts — since route-bearing code no check read is a hole, not a choice; only where its files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method by method, every public method of its realizing class answering to its contract (export-conformance's UNDECLARED_PUBLIC_MEMBER).",
   codes: [
     {
       code: 'UNDECLARED_ROUTE',
@@ -141,6 +147,12 @@ export const routeCoverageRule: SddRule = {
       code: 'UNREADABLE_ROUTER',
       defaultSeverity: 'warning',
       summary: "A Portal's router entry yields no route this analysis can read, so its routes were not checked against the contract at all",
+      carryable: true,
+    },
+    {
+      code: 'ROUTES_UNCHECKED',
+      defaultSeverity: 'warning',
+      summary: "A Portal binds HTTP endpoints and its files hold what reads as a router or a route table, but its implementation names no router (`router:`) — routes its code serves were checked against nothing",
       carryable: true,
     },
     {
@@ -288,9 +300,13 @@ export const routeCoverageRule: SddRule = {
           const files = realization.filesOf(portal.id).map(pathKey).filter(exactAt);
           if (endpoints.length === 0 || files.length === 0) continue;
           const { nameable, hidden } = candidates(files);
+          // Route-bearing code no check reads is a hole, said as one that
+          // fails --ci; a Portal whose files hold none is served method by
+          // method, which the public-member check reads instead.
+          const routed = nameable.length > 0 || hidden.length > 0;
           ctx.addIssue(
-            'notice',
-            'ROUTER_UNDECLARED',
+            routed ? 'warning' : 'notice',
+            routed ? 'ROUTES_UNCHECKED' : 'ROUTER_UNDECLARED',
             `Portal "${portal.id}" binds ${endpoints.length} HTTP endpoint(s), but its implementation "${impl.id}" names no `
             + 'router (`router:`), so no route its code serves was checked against its contract — not a route the design '
             + 'never promised, not an endpoint no route answers. Name the router in the implementation\'s `router:` (code '
@@ -305,12 +321,14 @@ export const routeCoverageRule: SddRule = {
                 + `${hidden.length === 1 ? 'is' : 'are'} not exported, and \`router:\` names only an export: export ${hidden.length === 1 ? 'it' : 'the one the server dispatches'} to name it.`
               : '')
             + (nameable.length === 0 && hidden.length === 0
-              ? 'Its files hold no function or table that reads as a router — when another module routes this Portal, name that one.'
+              ? 'Its files hold no function or table that reads as a router, so the Portal is read as served method by method: every '
+                + 'public method of its realizing class answers to its contract (UNDECLARED_PUBLIC_MEMBER). When another module routes '
+                + 'this Portal, name that one.'
               : ''),
             impl.id,
             ctx.isComponentDraft(portal.id) || ctx.isImplementationDraft(impl),
             undefined,
-            { at: 'router' },
+            routed ? { at: 'router', covers: [...nameable, ...hidden] } : { at: 'router' },
           );
           continue;
         }

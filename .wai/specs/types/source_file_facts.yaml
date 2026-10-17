@@ -293,6 +293,29 @@ fields:
       one identifier; absent otherwise. EXACT grade only. What tells a route table the server
       dispatches from the parts it dispatches them as
     optional: true
+  - name: functionReturns
+    type: map<string, list<string?>>
+    description: >-
+      The return annotation of each named function-like, one entry per body in the order
+      functionParams keeps its signatures: as written, whitespace-normalized, or null for a body
+      that annotates none. What RETURN_TYPE_MISMATCH compares a contract's returns with. EXACT
+      grade, and the Python reader
+    optional: true
+  - name: classMembers
+    type: map<string, list<ClassMemberFact>>
+    description: >-
+      The members each top-level named class declares, by class name — what tells the public surface
+      of a component's realizing class from its private factoring. EXACT grade, and the Python
+      reader
+    optional: true
+  - name: reads
+    type: list<CodeReading>
+    description: >-
+      What the analysis read in this file beyond declared names, set by a reader that reads a
+      language's signatures without a type checker (the Python reader): the conformance checks its
+      facts are fuel for. Absent for an exact-grade file, which reads everything, and for a plain
+      pattern or generic scan, which reads names alone
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -411,4 +434,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-09T16:54:34.913Z'
+updatedAt: '2026-10-17T15:42:19.125Z'

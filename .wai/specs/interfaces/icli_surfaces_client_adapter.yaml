@@ -9,8 +9,8 @@ methods:
       OpenAPI document.
     signature: >-
       exportSurface(maxAudience: string, format: string, outPath?: string, portalId?: string):
-      SurfaceSnapshot
-    returns: SurfaceSnapshot
+      SurfaceExportResult
+    returns: SurfaceExportResult
     params:
       - name: maxAudience
         type: string
@@ -129,4 +129,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-10T23:14:13.266Z'
-updatedAt: '2026-10-07T10:59:26.884Z'
+updatedAt: '2026-10-17T16:36:32.737Z'

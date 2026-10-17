@@ -826,7 +826,13 @@ methods:
           adapter, for the one-line code reading the result carries beside the hint: the weakest
           grade any analyzed file was read at and, at exact grade, that compiler's version and
           whether it is the project's own or wairon's copy — or that no source file the design names
-          exists yet. Never a finding: it changes no verdict
+          exists yet. Never a finding: it changes no verdict. Then, per language, the grade its
+          files were read at and what that reading checked — methods, params, returns, public
+          members, imports, calls, routes, data types at exact grade; below it, what the file's
+          reader says it read (source_file_facts.reads) — and what it did not, said by name; and the
+          same in a few words for the closing verdict line (validation_result.codeCompact), so a
+          passing run never implies more was checked than was. A family run carries each project's
+          reading on its verdict
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: compilerIdentity
@@ -969,4 +975,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T11:39:12.499Z'
+updatedAt: '2026-10-17T15:43:28.539Z'

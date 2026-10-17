@@ -1,4 +1,4 @@
-import { importBindingOf, pathKey, resolveImport, routerLinkage, type FunctionBodyFact, type SourceFileFacts } from '../../../models/index.js';
+import { defaultConformanceTier, importBindingOf, pathKey, resolveImport, routerLinkage, type ClassMemberFact, type FunctionBodyFact, type SourceFileFacts } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 /** The bodies a file holds under a name, each with the class or object literal it is a member of. */
@@ -111,12 +111,46 @@ function ownBodies(facts: SourceFileFacts, name: string): FunctionBodyFact[] {
 /** The answer for a file whose components promised nothing at all. */
 const NOTHING_PROMISED: ReadonlySet<string> = new Set<string>();
 
+/**
+ * Member names a framework or the language calls on an instance by
+ * convention — lifecycle hooks and protocol methods. A class declares them
+ * because something other than a caller of the design invokes them, so they
+ * are no verb a contract could declare.
+ */
+const IMPOSED_MEMBERS = new Set([
+  // the language's own protocols
+  'toString', 'toJSON', 'valueOf', 'toLocaleString', 'then', 'catch', 'finally', 'inspect', 'dispose', 'asyncDispose',
+  // web components and Lit
+  'connectedCallback', 'disconnectedCallback', 'attributeChangedCallback', 'adoptedCallback', 'render', 'firstUpdated', 'updated', 'willUpdate', 'shouldUpdate',
+  // React class components
+  'componentDidMount', 'componentDidUpdate', 'componentWillUnmount', 'shouldComponentUpdate', 'getSnapshotBeforeUpdate', 'componentDidCatch',
+  // Angular
+  'ngOnInit', 'ngOnDestroy', 'ngOnChanges', 'ngDoCheck', 'ngAfterContentInit', 'ngAfterContentChecked', 'ngAfterViewInit', 'ngAfterViewChecked',
+  // NestJS
+  'onModuleInit', 'onModuleDestroy', 'onApplicationBootstrap', 'onApplicationShutdown', 'beforeApplicationShutdown',
+]);
+
+/** A test file: what a project ships to check its code, never a component's surface. */
+const TEST_FILE = /(?:^|\/)(?:__tests__|tests?|spec)\/|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)test_[^/]*\.py$|_test\.py$|(?:^|\/)conftest\.py$/;
+
+/** Whether a member is surface a contract could declare: public, an instance verb, named, and no convention's. */
+function isPublicVerb(member: ClassMemberFact): boolean {
+  return member.kind === 'method' && member.access === 'public' && !member.static && !member.override && !member.computed
+    && !member.name.startsWith('_') && !IMPOSED_MEMBERS.has(member.name);
+}
+
 export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   judges: 'code',
   description:
-    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real.",
+    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real. And the surface no taker reveals: a public method of a component's REALIZING class — a class holding one of its modelled methods — or a function its realizing file exports, that no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or reference in its own file, no name another analyzed file writes, no identifier in a project file the run did not analyze (its tests, a composition root), no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected, #private and underscore-prefixed members, an `override`, a computed name, a language protocol or framework lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read at exact grade, or by a reader that reads class members (Python, where a leading underscore is private).",
   codes: [
+    {
+      code: 'UNDECLARED_PUBLIC_MEMBER',
+      defaultSeverity: 'warning',
+      summary: "A component's realizing class has a public method, or its realizing module an exported function, that no contract of the components it realizes declares and nothing in the project uses — a verb the code added that the design never promised",
+      carryable: true,
+    },
     {
       code: 'UNDECLARED_EXPORT',
       defaultSeverity: 'warning',
@@ -252,7 +286,10 @@ export const exportConformanceRule: SddRule = {
         return !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
       });
       const exporters = exact.filter(file => publishes(code.factsAt(file)!));
-      for (const file of exporters) promise(file, exported);
+      for (const file of exporters) {
+        promise(file, exported);
+        if (linkage.owner !== undefined) promise(file, linkage.name);
+      }
       if (exporters.length > 0 || exact.length === 0 || exact.length < files.length) continue;
       // What the name IS in those files, where it is there at all: a method
       // of an exported class (named `Class.method`), or a declaration no
@@ -370,6 +407,136 @@ export const exportConformanceRule: SddRule = {
           if (binding?.namespace) take(consumer, writtenIn, binding.from, [site.name]);
         }
       }
+    }
+
+    // ---- 13. the public surface no contract declares, and nothing uses ----
+    // A component's REALIZING class — the class holding one of its modelled
+    // methods — answers to its contracts for every public instance method it
+    // has, and its REALIZING module — one holding a modelled method's body —
+    // for every function it exports. One no contract
+    // declares that something DOES use is the module's own factoring (a
+    // helper the class calls, a facade forwarding to it, a function its tests
+    // or its wiring import) — none of the design's business, the stance step 1
+    // takes — or, taken by another component, the crossing reported above. One
+    // that nothing uses at all is a verb the code added that no design, brief
+    // or caller explains. Used means named anywhere but its own declaration: a
+    // call or a property read in its own file, any name another analyzed file
+    // writes, any identifier of a project file the run did not analyze (its
+    // tests, a composition root) — a reading that may only ever exempt.
+    // Exempt besides: constructors, accessors and fields, static, private,
+    // protected, #private and underscore-prefixed members, an `override`, a
+    // computed name, a language protocol or framework lifecycle hook, a Python
+    // dunder, every name a contract, `symbol`, `exportedVia`, `router` or a
+    // type declares, test files, and an implementation whose conformance dial
+    // is off. Read at exact grade, or by a reader that reads class members.
+    const outside = new Set(ctx.codeModel.outsideNames ?? []);
+    /** The names each analyzed file writes, its own declarations included. */
+    const writtenIn = new Map<string, Set<string>>();
+    const namesWritten = (facts: SourceFileFacts): Set<string> => {
+      const key = pathKey(facts.path);
+      let names = writtenIn.get(key);
+      if (names) return names;
+      names = new Set<string>([...facts.declaredNames, ...facts.anchoredNames]);
+      for (const sites of Object.values(facts.functionCallSites ?? {})) for (const site of sites) names.add(site.name);
+      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) { names.add(local); if (binding.imported) names.add(binding.imported); }
+      for (const binding of facts.reexportBindings ?? []) names.add(binding.local);
+      for (const call of facts.resolvedCalls ?? []) names.add(call.name);
+      writtenIn.set(key, names);
+      return names;
+    };
+    /** The names a file USES of its own: its call sites, property reads and references — never its declarations. */
+    const usedHere = (facts: SourceFileFacts, candidate: string, cls: string | undefined): boolean => {
+      for (const [fn, bodies] of Object.entries(facts.functionBodies ?? {})) {
+        for (const body of bodies) {
+          // The candidate's own body calling itself is no use.
+          if (fn === candidate && body.container === cls) continue;
+          if (body.sites.some(site => site.name === candidate)) return true;
+        }
+      }
+      if (facts.analysisGrade === 'exact' && facts.anchoredNames.includes(candidate)) return true;
+      return (facts.resolvedCalls ?? []).some(call => call.name === candidate && !(call.enclosing === candidate && call.enclosingContainer === cls));
+    };
+    /** The modules a star re-export republishes whole: every export of theirs is published on, a library's surface. */
+    const starRepublished = new Set<string>();
+    for (const facts of ctx.codeModel.files) {
+      for (const binding of facts.reexportBindings ?? []) {
+        if (binding.local !== '*') continue;
+        const target = resolveImport(pathKey(facts.path), binding.from, code.paths, code.packages);
+        if (target) starRepublished.add(target);
+      }
+    }
+    const usedAnywhere = (file: string, facts: SourceFileFacts, candidate: string, cls: string | undefined): boolean => {
+      if (outside.has(candidate) || usedHere(facts, candidate, cls)) return true;
+      if (cls === undefined && starRepublished.has(file)) return true;
+      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(candidate));
+    };
+    for (const file of realization.paths) {
+      if (TEST_FILE.test(file)) continue;
+      const facts = code.factsAt(file);
+      if (!facts || facts.status !== 'analyzed' || !(facts.analysisGrade === 'exact' || facts.reads?.includes('members'))) continue;
+      const components = realization.componentsAt(file).filter(c => !ctx.isInChainedSubproject(c.subsystem));
+      if (components.length === 0) continue;
+      // The modelled methods realized here, by their code names, from implementations whose dial is on.
+      const modelled = new Set<string>();
+      let judged = false;
+      for (const component of components) {
+        for (const impl of realization.implementationsOf(component.id)) {
+          if (!impl.sourcePath && !impl.methods.some(m => m.sourcePath)) continue;
+          const tier = impl.conformance ?? defaultConformanceTier(component);
+          if (tier === 'off') continue;
+          judged = true;
+          for (const m of impl.methods) {
+            if (m.conformance === 'off') continue;
+            modelled.add(m.symbol ?? m.name);
+          }
+        }
+        for (const m of ctx.interfaceMethodsOf(component.id)) modelled.add(m.name);
+      }
+      if (!judged) continue;
+      const declared = promised.get(file) ?? NOTHING_PROMISED;
+      const bodies = facts.functionBodies ?? {};
+      const bodiesOf = (name: string): FunctionBodyFact[] => (Object.prototype.hasOwnProperty.call(bodies, name) ? bodies[name] : []);
+      const undeclared: string[] = [];
+      // The realizing classes, and their public verbs.
+      const realizing = new Set<string>();
+      for (const name of modelled) for (const body of bodiesOf(name)) if (body.container !== undefined && !body.nested) realizing.add(body.container);
+      for (const cls of [...realizing].sort()) {
+        const members = facts.classMembers && Object.prototype.hasOwnProperty.call(facts.classMembers, cls) ? facts.classMembers[cls] : undefined;
+        if (!members) continue;
+        for (const member of members) {
+          if (!isPublicVerb(member) || /^__\w+__$/.test(member.name)) continue;
+          if (declared.has(member.name) || modelled.has(member.name)) continue;
+          if (usedAnywhere(file, facts, member.name, cls)) continue;
+          undeclared.push(`${cls}.${member.name}`);
+        }
+      }
+      // The realizing module — the file holding a modelled method's body, as a
+      // module function or inside its class — and the functions it exports.
+      const realizesHere = [...modelled].some(name => bodiesOf(name).length > 0);
+      if (realizesHere) {
+        for (const name of [...new Set(facts.exportedNames)].sort()) {
+          if (name.startsWith('_') || declared.has(name) || modelled.has(name)) continue;
+          if (!bodiesOf(name).some(body => body.container === undefined && !body.nested)) continue;
+          if (usedAnywhere(file, facts, name, undefined)) continue;
+          undeclared.push(name);
+        }
+      }
+      if (undeclared.length === 0) continue;
+      const [owner] = realization.implementationsAt(file).map(impl => impl.id).sort();
+      ctx.addIssue(
+        'warning',
+        'UNDECLARED_PUBLIC_MEMBER',
+        `Source file "${file}" realizes ${components.map(c => `"${c.id}"`).join(', ')} and publishes ${undeclared.length} verb(s) `
+        + `no contract of ${components.length === 1 ? 'it' : 'them'} declares — ${undeclared.map(n => `"${n}"`).join(', ')}. `
+        + 'Nothing in the project uses them — no call or reference in their own file, no other file naming them, not its tests — '
+        + 'so they are no factoring of the realization: each is surface any caller can reach that no brief, review or rule has read, '
+        + 'a verb added in the code alone. Declare it as a contract method (sdd_define_interface, a design change), make it private '
+        + '(a leading underscore in Python), or take it out.',
+        owner,
+        realization.implementationsAt(file).some(impl => ctx.isImplementationDraft(impl)),
+        undefined,
+        { at: file, covers: undeclared },
+      );
     }
 
     for (const file of realization.paths) {

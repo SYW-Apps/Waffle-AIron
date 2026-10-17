@@ -362,7 +362,13 @@ methods:
           specifier as CROSS_PROJECT_SOURCE_IMPORT (warning; site `<file> -> <specifier>`; units the
           names): code reaching into that project's internals past its surface, naming the data
           component of that project the module realizes when it realizes one, since a write through
-          it is the shortcut past the other project's surface into its held state
+          it is the shortcut past the other project's surface into its held state. Judge Python
+          imports for UNDECLARED_DEPENDENCY over a graph of their own, from the imports the Python
+          reader read (source_file_facts.reads): relative ones from the importing file's package,
+          absolute ones from its folder or any folder above it, to a module or a package's
+          `__init__.py`. And on UNREALIZED_DEPENDENCY, name a drift of the target's own code
+          (RETURN_TYPE_MISMATCH) as the likely cause: a port typed after the contract no longer
+          matches the class
         type: local
     symbol: check
     exportedVia: dependencyConformanceRule
@@ -1546,7 +1552,18 @@ methods:
           Once every method is read, report each language boundary the claims crossed once as
           CALL_ACROSS_LANGUAGE (notice; spec the first implementation crossing it; site the project;
           units the claims), naming the two languages and the binding as what crosses it — never as
-          an unrealized call no code could clear
+          an unrealized call no code could clear. Read the converse for every call too, where the
+          method claims its calls at call level (a narrative at full or calls-only, or declared
+          calls): a call written in the function's OWN body that the checker lands on a contract
+          method of another component — or on a port a claimed target is called through (an
+          interface no class realizes), read as that target's component — of a collaborator the
+          narrative names, that no step and no declared call names and no write finding already
+          says, is UNNARRATED_CALL (warning; site the method; units the targets). A call inside a
+          helper, to a collaborator the narrative never names, or taken as a value is what the
+          detail lets it summarize. In a file read without a checker but with its calls read
+          (Python), the body's call sites, closed over its file's helpers and stopping at another
+          modelled method, land through what the code declares — an import binding, a namespace
+          binding, a field's or a name's annotated class — and are judged the same way
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -1768,7 +1785,18 @@ methods:
       - stepNumber: 9
         description: >-
           Ignore it. Two files realizing the same component are that component's own implementation
-          spread over two files, which the source-path model has always allowed
+          spread over two files, which the source-path model has always allowed. Read the surface no
+          taker reveals: for every file realizing a component (tests aside), at exact grade or by a
+          reader that reads members, each public instance method of a class holding one of the
+          components' modelled methods, and each function the file exports, that no contract,
+          symbol, exportedVia, router or type of the file declares and that nothing in the project
+          uses — no call or reference in its own file but its own body, no name another analyzed
+          file writes, no identifier of an unanalyzed project file (code_model.outsideNames), no
+          star re-export publishing the module — is reported once per file as
+          UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). Exempt:
+          constructors, accessors, fields, static, private, protected, #private,
+          underscore-prefixed, override, computed names, language protocol and framework lifecycle
+          hooks, Python dunders, and an implementation whose conformance dial is off
         type: local
       - stepNumber: 10
         description: Decide whether anything crossed
@@ -2041,7 +2069,19 @@ methods:
           whether it is compared; anything else to its public name's last segment in the code's type
           casing. With no dialect, no annotation, no settled kind and no handle name, say nothing
           about the name — without it a rename cannot be told from a substitution, and a guess about
-          somebody's signature is worse than silence
+          somebody's signature is worse than silence. Judge the RETURN beside the parameters: for
+          every contract method whose `returns` is not void, whose function is not a registrar (a
+          narrative register step) nor a void function handed a response handle, and whose every
+          body under the symbol annotates a return (source_file_facts.functionReturns) — at exact
+          grade, or by a reader that read returns (Python) — read each annotation through the file's
+          dialect past `async` on both sides, a named scalar through what it holds, an enum as a
+          string, a date, datetime or duration as the string, Date or number the code writes it as,
+          a name differing only in case and separators as itself; a type the design does not know,
+          or either side does not read, is never accused. When every body disagrees, report
+          RETURN_TYPE_MISMATCH (warning; site the method; unit returns) naming the method, the
+          contract's type and the code's. The drifts are shared, so a caller's dependency finding
+          names its cause. Read Python signatures the same way through its reader, naming parameters
+          in the language's snake_case: a code `document_id` is the contract's `documentId`
         type: local
       - stepNumber: 8
         description: >-
@@ -2090,7 +2130,12 @@ methods:
           sibling table spreading other tables of its module (source_file_facts.tableSpreads, in
           that module or through an import binding in another) leaves it out, is reported as
           ROUTER_NOT_DISPATCHED (notice; site the router): if the server dispatches the sibling,
-          none of its routes is served, while coverage reading the table itself reads them as served
+          none of its routes is served, while coverage reading the table itself reads them as
+          served. A Portal binding HTTP endpoints that names no router while its exact-grade files
+          hold what reads as a router or a route table is ROUTES_UNCHECKED (warning; site router;
+          units each spelling `router:` accepts) — route-bearing code no check read; only where its
+          files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method
+          by method, its realizing class's public methods judged by UNDECLARED_PUBLIC_MEMBER
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
@@ -2371,4 +2416,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-15T16:03:30.737Z'
+updatedAt: '2026-10-17T15:43:43.635Z'

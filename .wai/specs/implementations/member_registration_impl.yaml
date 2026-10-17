@@ -324,28 +324,23 @@ methods:
         type: loop
         loopKind: forEach
         over: declared members to register, relocate, rename or return
-        endStep: 14
+        endStep: 13
       - stepNumber: 6
-        description: Is it a project rename (another record id held this parent and path)?
-        type: branch
-        condition: the action is rename
-        onFalseStep: 13
-      - stepNumber: 7
         description: >-
-          Refuse the re-key when the new id already has a setting at its own scope or at one of its
-          subsystem scopes (moving the old ones would merge two subjects' access), or when the old
-          or new id is also an organization unit id (the scope remaps are kind-blind and would
-          rewrite the unit's settings too). A refused re-key is recorded for the audit below and
-          goes straight on to registering the new id: the old record stays (disabled with the
-          departed), the new one is registered with only its inheritance, and an operator moves the
-          own-scope settings by hand
+          Is it a project rename (another record id held this parent and path) whose re-key is
+          allowed? The re-key is refused when the new id already has a setting at its own scope or
+          at one of its subsystem scopes (moving the old ones would merge two subjects' access), or
+          when the old or new id is also an organization unit id (the scope remaps are kind-blind
+          and would rewrite the unit's settings too). A refused re-key is recorded for the audit
+          below and goes straight on to registering the new id: the old record stays (disabled with
+          the departed), the new one is registered with only its inheritance, and an operator moves
+          the own-scope settings by hand
         type: branch
         condition: >-
-          the new id holds settings at its own or a subsystem scope, or the old or new id is also a
-          unit id
-        onTrueStep: 13
-        onFalseStep: 8
-      - stepNumber: 8
+          the action is rename, and neither the new id holds settings at its own or a subsystem
+          scope nor is the old or new id also a unit id
+        onFalseStep: 12
+      - stepNumber: 7
         label: rekey
         description: >-
           Move every assignment scoped at the old member's own project scope to the new id (explicit
@@ -356,31 +351,31 @@ methods:
         type: call
         targetComponent: permission_repository
         targetMethod: remapScope
-      - stepNumber: 9
+      - stepNumber: 8
         description: >-
           Move every role binding anchored at the old member's own scope, or at one of its subsystem
           scopes, to the new id
         type: call
         targetComponent: user_repository
         targetMethod: remapUnitReferences
-      - stepNumber: 10
+      - stepNumber: 9
         description: List the API keys whose narrowing names the old id
         type: call
         targetComponent: credential_repository
         targetMethod: list
-      - stepNumber: 11
+      - stepNumber: 10
         description: Rewrite each such key's entry from the old id to the new one
         type: call
         targetComponent: credential_repository
         targetMethod: renarrow
-      - stepNumber: 12
+      - stepNumber: 11
         description: >-
           Delete the old member record (a member record's deletion never touches its directory); its
           children are relocated under the new id as the loop reaches them
         type: call
         targetComponent: project_repository
         targetMethod: remove
-      - stepNumber: 13
+      - stepNumber: 12
         label: return
         description: >-
           When the member returns — the family declares it again as a project after its record was
@@ -390,7 +385,7 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: setStatus
-      - stepNumber: 14
+      - stepNumber: 13
         label: upsert
         description: >-
           Upsert the member record with its id, parent and path — no grant and no placement: it
@@ -398,15 +393,15 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: registerMember
-      - stepNumber: 15
+      - stepNumber: 14
         description: >-
           For every stored member record of the family the family no longer declares as a project
           member — departed, or retired because its member's content is now a part (stage 8: demote)
         type: loop
         loopKind: forEach
         over: departed member records
-        endStep: 16
-      - stepNumber: 16
+        endStep: 15
+      - stepNumber: 15
         description: >-
           Disable it — never delete: its own-scope settings and audit trail stay for an operator and
           for a later promote; a retired record's reason says "part of <parent>", and the part's
@@ -414,7 +409,7 @@ methods:
         type: call
         targetComponent: project_repository
         targetMethod: setStatus
-      - stepNumber: 17
+      - stepNumber: 16
         label: carry
         description: >-
           Carry the subsystem rules that governed the specs of every member registered or returned —
@@ -423,6 +418,13 @@ methods:
         type: call
         targetComponent: member_registration
         targetMethod: carrySubsystemRules
+      - stepNumber: 17
+        description: >-
+          Read every stored permission assignment, the carried rules just written included, as the
+          settings the after-world is built over
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
       - stepNumber: 18
         description: >-
           Build the after-world: parent links added for registered, relocated, returned and renamed
@@ -1014,4 +1016,4 @@ methods:
     symbol: upgradeMembers
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-06T19:59:17.017Z'
+updatedAt: '2026-10-17T16:33:49.849Z'

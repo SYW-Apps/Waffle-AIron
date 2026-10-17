@@ -31,12 +31,12 @@ describe('result<T, E> in TypeScript: T, throwing E', () => {
 });
 
 describe('type_dialect.forLanguage', () => {
-  it('answers the TypeScript dialect for TypeScript and JavaScript files, and none for a language without one', () => {
+  it('answers the TypeScript dialect for TypeScript and JavaScript files, the Python one for Python, and none for a language without one', () => {
     expect(ts.language).toBe('typescript');
     expect(typeDialectFor('javascript')).toBe(ts);
     expect(typeDialectFor('TypeScript')).toBe(ts);
     expect(typeDialectFor('rust')).toBeNull();
-    expect(typeDialectFor('python')).toBeNull();
+    expect(typeDialectFor('python')?.language).toBe('python');
   });
 });
 

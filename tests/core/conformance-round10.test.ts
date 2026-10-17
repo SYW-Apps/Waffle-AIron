@@ -143,10 +143,12 @@ describe('2. a Portal served by a class method (solo-app)', () => {
     expect(byCode(hidden, 'UNREALIZED_EXPORT_HANDLE'), said(hidden)).toHaveLength(1);
   });
 
-  it('ROUTER_UNDECLARED suggests only accepted spellings, and says "export it" for the private table and function', () => {
+  it('ROUTES_UNCHECKED (a router its files hold, named by nothing) suggests only accepted spellings, and says "export it" for the private table and function', () => {
     const issues = run(classRouterTree(undefined));
-    const found = byCode(issues, 'ROUTER_UNDECLARED');
+    const found = byCode(issues, 'ROUTES_UNCHECKED');
     expect(found, said(issues)).toHaveLength(1);
+    expect(found[0].severity).toBe('warning');
+    expect(byCode(issues, 'ROUTER_UNDECLARED')).toEqual([]);
     expect(found[0].message).toContain('HabitPortal.handle (src/habit-portal.ts)');
     expect(found[0].message).toMatch(/ROUTES \(src\/habit-portal\.ts\), matchRoute \(src\/habit-portal\.ts\) read as a router or a route table but are not exported[^.]*export the one the server dispatches/);
     expect(found[0].message).not.toMatch(/accepts it: [^.]*ROUTES/);
@@ -154,7 +156,7 @@ describe('2. a Portal served by a class method (solo-app)', () => {
 
   it('an exported table is suggested by its own name', () => {
     const issues = run(classRouterTree(undefined, { exportRoutes: true }));
-    expect(messages(issues, 'ROUTER_UNDECLARED'), said(issues)).toMatch(/accepts it: .*ROUTES \(src\/habit-portal\.ts\)\./);
+    expect(messages(issues, 'ROUTES_UNCHECKED'), said(issues)).toMatch(/accepts it: .*ROUTES \(src\/habit-portal\.ts\)\./);
   });
 });
 

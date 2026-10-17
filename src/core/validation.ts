@@ -65,7 +65,7 @@ import type { StateId } from './statehash.js';
 import type { AnalysisGradeLabel, CodeAnalysis, ProjectApproval } from '../models/lock.js';
 import { approvalSubject } from '../models/lock.js';
 import type { ProjectRelations } from '../models/specs.js';
-import type { CodeModel } from '../models/code-model.js';
+import type { CodeModel, SourceFileFacts } from '../models/code-model.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 
 /**
@@ -244,6 +244,11 @@ export interface ValidationResult {
    */
   codeReading?: string;
   /**
+   * The same reading in a few words, per language — its grade and what it did
+   * not check — for the closing verdict line: a pass says how much it read.
+   */
+  codeCompact?: string;
+  /**
    * A family run only: the aliases of the bound project's externals the run
    * composed as part of its gate (their producers in reach) — the advisory
    * live comparison skips them, so they get no second word.
@@ -268,6 +273,10 @@ export interface ProjectVerdict {
   errors: number;
   warnings: number;
   notices: number;
+  /** How its own gate read its code (ValidationResult.codeReading). */
+  codeReading?: string;
+  /** The same in a few words (ValidationResult.codeCompact). */
+  codeCompact?: string;
 }
 
 function issue(
@@ -478,23 +487,82 @@ export function validateProject(
 ): ValidationResult {
   const run = runOwnersGate(rulesOrOptions, projectType);
   // Step 53: how the code was read, one line beside the hint.
-  return { ...run.result, codeReading: codeReadingOf(run.codeModel) };
+  return { ...run.result, codeReading: codeReadingOf(run.codeModel), ...codeCompactOf(run.codeModel) };
+}
+
+/** What the code half CHECKS at each reading, in the order a summary names them. */
+const CHECKED_AT_EXACT = ['methods', 'params', 'returns (where annotated)', 'public members', 'imports', 'calls', 'routes', 'data types'];
+const NOT_CHECKED_EVER = ['calls inside helpers and to collaborators a narrative never names (summarized by its detail)'];
+const READING_CHECKS: Record<string, string> = {
+  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls through declared receivers',
+};
+
+/**
+ * What one language's files were read for: the weakest grade among them and
+ * the checks that grade (or the reader that read them) is fuel for, and the
+ * ones it is not.
+ */
+function languageReading(files: SourceFileFacts[]): { grade: string; checked: string[]; unchecked: string[]; reader?: string } {
+  const grades = files.map((f) => GRADE_ORDER.indexOf((f.analysisGrade ?? 'generic') as AnalysisGradeLabel));
+  const grade = GRADE_ORDER[Math.min(...grades)];
+  if (grade === 'exact') return { grade, checked: CHECKED_AT_EXACT, unchecked: [] };
+  // Below exact, a reader that read signatures says what it read; every file must have read it for the language to claim it.
+  const reads = files.every((f) => (f.reads?.length ?? 0) > 0)
+    ? Object.keys(READING_CHECKS).filter((r) => files.every((f) => f.reads?.includes(r as never)))
+    : [];
+  const checked = [grade === 'generic' ? 'methods (by name only)' : 'methods', ...reads.map((r) => READING_CHECKS[r])];
+  const unchecked = CHECKED_AT_EXACT.filter((c) => !checked.some((k) => k.startsWith(c.split(' ')[0]))).map((c) => c.replace(/ \(.*\)$/, ''));
+  return { grade, checked, unchecked, ...(reads.length > 0 ? { reader: 'its signature reader' } : {}) };
 }
 
 /**
- * The one-line code reading of a run: the weakest analysis grade any analyzed
- * file was read at and, when a file was read at exact grade, the compiler that
- * read it — its version, and whether it is the project's own or wairon's copy.
+ * The code reading of a run, one line: the weakest analysis grade any
+ * analyzed file was read at and, when a file was read at exact grade, the
+ * compiler that read it — its version, and whether it is the project's own or
+ * wairon's copy — then, per language, the grade and what was CHECKED, and what
+ * was not. A run that passes says how much it read, never more: one language
+ * read whole is one clause, and a language read below exact grade names the
+ * checks it did not get.
  */
 export function codeReadingOf(codeModel: CodeModel): string {
   const grade = weakestGrade(codeModel);
   if (grade === 'none') return 'Code: none read yet — no source file the design names exists (analysis grade none).';
-  const exact = codeModel.files.some((f) => f.status === 'analyzed' && f.analysisGrade === 'exact');
+  const analyzed = codeModel.files.filter((f) => f.status === 'analyzed' && f.analysisGrade);
+  const exact = analyzed.some((f) => f.analysisGrade === 'exact');
   const compiler = exact ? compilerIdentity(codeModel.projectRoot) : null;
   const by = compiler ? ` with TypeScript ${compiler.version} (${compiler.source === 'project' ? 'the project\'s own' : 'wairon\'s own copy'})` : '';
-  return grade === 'exact'
-    ? `Code read at grade exact${by}.`
-    : `Code read at grade ${grade} (the weakest file's)${exact ? `; its exact-grade files${by}` : ': no type checker reads this language'}.`;
+  const head = grade === 'exact'
+    ? `Code read at grade exact${by}`
+    : `Code read at grade ${grade} (the weakest file's)${exact ? `; its exact-grade files${by}` : ''}`;
+  const byLanguage = new Map<string, SourceFileFacts[]>();
+  for (const f of analyzed) {
+    const language = f.language ?? 'unknown';
+    byLanguage.set(language, [...(byLanguage.get(language) ?? []), f]);
+  }
+  const clauses = [...byLanguage].sort(([a], [b]) => a.localeCompare(b)).map(([language, files]) => {
+    const reading = languageReading(files);
+    return `${language}: ${files.length} file(s) at grade ${reading.grade}${reading.reader ? ` with ${reading.reader}` : ''}, checked ${reading.checked.join(', ')}`
+      + (reading.unchecked.length > 0 ? ` — not checked: ${reading.unchecked.join(', ')}` : '');
+  });
+  return `${head}. ${clauses.join('; ')}. Never checked at any grade: ${NOT_CHECKED_EVER.join('; ')}.`;
+}
+
+/**
+ * The code reading in a few words, per language: its grade, and the checks it
+ * did not get (`typescript exact; python pattern, not checked: routes, data
+ * types`). Absent when no code was read.
+ */
+export function codeCompactOf(codeModel: CodeModel): { codeCompact?: string } {
+  const analyzed = codeModel.files.filter((f) => f.status === 'analyzed' && f.analysisGrade);
+  if (analyzed.length === 0) return {};
+  const byLanguage = new Map<string, SourceFileFacts[]>();
+  for (const f of analyzed) byLanguage.set(f.language ?? 'unknown', [...(byLanguage.get(f.language ?? 'unknown') ?? []), f]);
+  return {
+    codeCompact: [...byLanguage].sort(([a], [b]) => a.localeCompare(b)).map(([language, files]) => {
+      const reading = languageReading(files);
+      return `${language} ${reading.grade}${reading.unchecked.length > 0 ? ` (not checked: ${reading.unchecked.join(', ')})` : ''}`;
+    }).join('; '),
+  };
 }
 
 /** One run of the owner's gate: the verdict, and the code model it judged the code with. */

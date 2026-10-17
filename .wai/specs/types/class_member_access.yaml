@@ -1,0 +1,19 @@
+kind: enum
+id: class_member_access
+name: ClassMemberAccess
+description: Who may reach a class member.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: public
+    description: No modifier, or public
+  - name: protected
+    description: The protected keyword
+  - name: private
+    description: The private keyword, or a Python name with a leading underscore
+  - name: hash
+    description: 'An ECMAScript #name'
+createdAt: '2026-10-17T15:42:07.200Z'
+updatedAt: '2026-10-17T15:42:08.419Z'

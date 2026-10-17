@@ -695,6 +695,65 @@ export interface SourceFileFacts {
    * project's source.
    */
   crossProjectImports?: CrossProjectImportFact[];
+  /**
+   * The return annotation of each named function-like, one entry per BODY in
+   * the order `functionParams` keeps its signatures: the annotation as
+   * written, whitespace-normalized, or null for a body that annotates none.
+   * What RETURN_TYPE_MISMATCH compares a contract's `returns` with, through
+   * the file's dialect. EXACT grade, and the Python reader.
+   */
+  functionReturns?: Record<string, (string | null)[]>;
+  /**
+   * The members each top-level named class declares, by class name (see
+   * ClassMemberFact) — what tells the public surface of a component's
+   * realizing class from its private factoring. EXACT grade, and the Python
+   * reader.
+   */
+  classMembers?: Record<string, ClassMemberFact[]>;
+  /**
+   * What the analysis READ in this file beyond declared names, set by a
+   * reader that reads a language's signatures without a type checker (the
+   * Python reader): the conformance checks its facts are fuel for. Absent for
+   * an exact-grade file — exact reads everything — and for a plain pattern or
+   * generic scan, which reads names alone.
+   */
+  reads?: CodeReading[];
+}
+
+/** What kind of member a class declares (ClassMemberFact.kind). */
+export type ClassMemberKind = 'method' | 'accessor' | 'property' | 'constructor';
+
+/** Who may reach a class member (ClassMemberFact.access). */
+export type ClassMemberAccess = 'public' | 'protected' | 'private' | 'hash';
+
+/** One conformance check a reader's facts are fuel for (SourceFileFacts.reads). */
+export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls';
+
+/**
+ * One member a top-level named class declares, as its public surface reads it:
+ * its name, what kind of member it is, who may reach it, and the modifiers
+ * that say it is no new surface of its own.
+ */
+export interface ClassMemberFact {
+  name: string;
+  /**
+   * `method` (a method declaration, or a property whose initializer is a
+   * function or an arrow), `accessor` (a getter or setter, read as a field),
+   * `property` (any other field) or `constructor`.
+   */
+  kind: ClassMemberKind;
+  /**
+   * `public` (no modifier, or `public`), `protected`, `private` (the
+   * keyword, or a Python name with a leading underscore), or `hash` (an
+   * ECMAScript `#name`).
+   */
+  access: ClassMemberAccess;
+  /** True for a static member. */
+  static?: boolean;
+  /** True for a member marked `override`: it overrides a base class member rather than adding one. */
+  override?: boolean;
+  /** True for a member whose name is computed (`[Symbol.iterator]`): it names no verb. */
+  computed?: boolean;
 }
 
 /**
@@ -814,6 +873,15 @@ export interface CodeModel {
    * checker was loaded.
    */
   reachedImports?: Record<string, ModuleImports>;
+  /**
+   * Every identifier written — comments aside — in a source file of the
+   * project the run did not analyze: its tests, a composition root, scripts.
+   * Dependency, build-output and hidden folders are not read. What tells a
+   * public verb nothing uses from one that code outside the design calls, so
+   * it may only ever EXEMPT a name, never accuse one. Absent when the walk
+   * found no such file.
+   */
+  outsideNames?: string[];
 }
 
 /**
@@ -1080,6 +1148,7 @@ export function resolveImport(
   knownPaths: Set<string>,
   packages?: Readonly<Record<string, string>>,
 ): string | undefined {
+  if (/\.pyi?$/.test(fromFile)) return resolvePythonImport(fromFile, specifier, knownPaths);
   if (!specifier.startsWith('.')) {
     const mapped = ownEntry(packages, specifier);
     return mapped !== undefined && knownPaths.has(mapped) ? mapped : undefined;
@@ -1095,4 +1164,34 @@ export function resolveImport(
     if (knownPaths.has(c)) return c;
   }
   return undefined;
+}
+
+/**
+ * A Python import's module, resolved against the known source paths: a
+ * relative one (`.sibling`, `..pkg.mod`) from the importing file's package,
+ * an absolute one (`pkg.mod`) from the importing file's own folder or any
+ * folder above it — the roots a module search path is set to — as `mod.py` or
+ * a package's `__init__.py`. Undefined for a module no known path is, a
+ * third-party or standard-library one included.
+ */
+function resolvePythonImport(fromFile: string, specifier: string, knownPaths: Set<string>): string | undefined {
+  const dots = /^\.*/.exec(specifier)![0].length;
+  const segments = specifier.slice(dots).split('.').filter(Boolean);
+  const candidatesUnder = (base: string): string[] => {
+    const joined = pathKey(path.posix.normalize(path.posix.join(base, ...segments)));
+    return segments.length === 0 ? [pathKey(path.posix.join(base, '__init__.py'))] : [`${joined}.py`, `${joined}/__init__.py`];
+  };
+  let dir = path.posix.dirname(pathKey(fromFile));
+  if (dots > 0) {
+    for (let up = 1; up < dots; up++) dir = path.posix.dirname(dir);
+    return candidatesUnder(dir).find(c => knownPaths.has(c));
+  }
+  for (;;) {
+    const found = candidatesUnder(dir === '.' ? '' : dir).map(c => c.replace(/^\//, '')).find(c => knownPaths.has(c));
+    if (found) return found;
+    if (dir === '.' || dir === '' || dir === '/') return undefined;
+    const parent = path.posix.dirname(dir);
+    if (parent === dir) return undefined;
+    dir = parent;
+  }
 }

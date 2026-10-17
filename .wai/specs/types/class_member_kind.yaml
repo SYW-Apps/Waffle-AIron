@@ -1,0 +1,19 @@
+kind: enum
+id: class_member_kind
+name: ClassMemberKind
+description: What kind of member a class declares, as its public surface reads it.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: method
+    description: A method declaration, or a property whose initializer is a function or an arrow
+  - name: accessor
+    description: A getter or a setter (a Python @property), read as a field
+  - name: property
+    description: Any other field
+  - name: constructor
+    description: The constructor (Python __init__)
+createdAt: '2026-10-17T15:42:02.666Z'
+updatedAt: '2026-10-17T15:42:03.894Z'

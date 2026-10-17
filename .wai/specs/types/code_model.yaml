@@ -53,6 +53,14 @@ fields:
       canonical path. What lets a rule read an unowned module's imports as its importer's. Absent
       where no type checker was loaded
     optional: true
+  - name: outsideNames
+    type: list<string>
+    description: >-
+      Every identifier written, comments aside, in a source file of the project the run did not
+      analyze — its tests, a composition root, scripts; dependency, build-output and hidden folders
+      are not read. What tells a public verb nothing uses from one code outside the design calls, so
+      it may only ever exempt a name, never accuse one. Absent when the walk found no such file
+    optional: true
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -68,4 +76,4 @@ methods:
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-10-08T08:30:20.935Z'
+updatedAt: '2026-10-17T15:42:21.227Z'

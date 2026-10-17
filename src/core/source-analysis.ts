@@ -8,6 +8,8 @@ import {
   pathKey,
   type CallSiteFact,
   type CallTargetFact,
+  type ClassMemberFact,
+  type CodeReading,
   type CodeModel,
   type CrossProjectImportFact,
   type ExportAliasFact,
@@ -1368,6 +1370,10 @@ interface ExactFacts {
    * tell every body of a name from some of them.
    */
   asyncFunctions: string[];
+  /** The return annotation each body writes, by name, one entry per body (see SourceFileFacts.functionReturns). */
+  functionReturns: Map<string, (string | null)[]>;
+  /** The members of each top-level named class (see SourceFileFacts.classMembers). */
+  classMembers: Map<string, ClassMemberFact[]>;
   /**
    * The values of each enum-like declaration, by declaration name, in
    * declared order: a string-literal union alias, a `z.enum([...])` constant
@@ -1429,6 +1435,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   const routeBodies: { name: string; node: import('typescript').Node }[] = [];
   const paramSites: ParameterSite[] = [];
   const asyncFunctions: string[] = [];
+  const functionReturns = new Map<string, (string | null)[]>();
+  const classMembers = new Map<string, ClassMemberFact[]>();
   const enumValues = new Map<string, string[]>();
   const aliasTypes = new Map<string, string>();
   const mutableBindings = new Set<string>();
@@ -2113,6 +2121,12 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
       // return a Promise. One entry per body, beside the one signature per
       // body above, so a name's bodies are judged on what they all say.
       if (completesLater(node)) asyncFunctions.push(fnName);
+      // The return annotation THIS body writes, as written, one entry per body
+      // beside its signature: what a contract's `returns` is compared with.
+      const annotatedReturn = (node as unknown as import('typescript').SignatureDeclarationBase).type;
+      const returnsHere = functionReturns.get(fnName) ?? [];
+      returnsHere.push(annotatedReturn ? annotatedReturn.getText(sf).replace(/\s+/g, ' ').trim() : null);
+      functionReturns.set(fnName, returnsHere);
       // What THIS body returns, where the code settles it. Same-named bodies
       // that disagree — or one that settles nothing beside one that does —
       // leave the name unsettled, so the fact records nothing for it.
@@ -2158,6 +2172,37 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
         (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword,
       );
       recordDeclaredShape(node.name.text, node.members, extendsOther);
+      // The class's members as its public surface reads them — top-level
+      // named classes only, the ones a component's realization can name.
+      if (node.parent && ts.isSourceFile(node.parent) && !classMembers.has(node.name.text)) {
+        classMembers.set(node.name.text, node.members.flatMap((member): ClassMemberFact[] => {
+          const mods = (member as { modifiers?: readonly import('typescript').ModifierLike[] }).modifiers ?? [];
+          const has = (kind: import('typescript').SyntaxKind): boolean => mods.some(m => m.kind === kind);
+          if (ts.isConstructorDeclaration(member)) return [{ name: 'constructor', kind: 'constructor', access: 'public' }];
+          if (!member.name) return [];
+          const computed = ts.isComputedPropertyName(member.name);
+          const hashed = ts.isPrivateIdentifier(member.name);
+          const name = hashed ? member.name.text : computed ? member.name.getText(sf) : propertyNameText(member.name);
+          if (!name) return [];
+          let kind: ClassMemberFact['kind'];
+          if (ts.isMethodDeclaration(member)) kind = 'method';
+          else if (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)) kind = 'accessor';
+          else if (ts.isPropertyDeclaration(member)) {
+            let init = member.initializer;
+            while (init && (ts.isParenthesizedExpression(init) || ts.isAsExpression(init) || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(init)))) init = init.expression;
+            kind = init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) ? 'method' : 'property';
+          } else return [];
+          const access: ClassMemberFact['access'] = hashed ? 'hash'
+            : has(ts.SyntaxKind.PrivateKeyword) ? 'private'
+              : has(ts.SyntaxKind.ProtectedKeyword) ? 'protected' : 'public';
+          return [{
+            name, kind, access,
+            ...(has(ts.SyntaxKind.StaticKeyword) ? { static: true } : {}),
+            ...(has(ts.SyntaxKind.OverrideKeyword) ? { override: true } : {}),
+            ...(computed ? { computed: true } : {}),
+          }];
+        }));
+      }
       // What the class says it IMPLEMENTS: the names its implements clause
       // writes, each read as a field's declared type is. The step from an
       // interface in a shared contracts file to the class that realizes it.
@@ -2460,7 +2505,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -4099,6 +4144,8 @@ export function buildCodeModel(
             ...(facts.routePrefixes.size > 0 ? { routePrefixes: Object.fromEntries(facts.routePrefixes) } : {}),
             ...(facts.tableSpreads.size > 0 ? { tableSpreads: Object.fromEntries(facts.tableSpreads) } : {}),
             asyncFunctions: [...facts.asyncFunctions],
+            functionReturns: Object.fromEntries(facts.functionReturns),
+            classMembers: Object.fromEntries(facts.classMembers),
             enumValues: Object.fromEntries(facts.enumValues),
             aliasTypes: Object.fromEntries(facts.aliasTypes),
             topLevelMutableBindings: [...facts.mutableBindings],
@@ -4111,6 +4158,17 @@ export function buildCodeModel(
         }
       } else {
         analyzed = analyzeWithPatterns(text, LANGUAGE_PATTERNS[language]);
+      }
+    } else if (language === 'python' && text.length <= PATTERN_ANALYSIS_MAX_BYTES) {
+      // Python: the pattern tables for declared names, and the signature
+      // reader for what a `def` says about itself (python-analysis.ts) — still
+      // pattern grade, with what it read said in `reads`.
+      const base = analyzeWithPatterns(text, LANGUAGE_PATTERNS.python);
+      try {
+        const read = readPython(text);
+        analyzed = { ...base, ...read, imports: [...new Set([...base.imports, ...read.imports])] };
+      } catch {
+        analyzed = base;
       }
     } else if (language && LANGUAGE_PATTERNS[language] && text.length <= PATTERN_ANALYSIS_MAX_BYTES) {
       analyzed = analyzeWithPatterns(text, LANGUAGE_PATTERNS[language]);
@@ -4172,13 +4230,65 @@ export function buildCodeModel(
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
-    const model: CodeModel = { files, projectRoot, rootFiles, packages };
+    const model: CodeModel = { files, projectRoot, rootFiles, packages, ...outsideNamesOf(projectRoot, seen) };
     if (Object.keys(reached).length > 0) model.reachedCalls = reached;
     if (imports.size > 0) model.reachedImports = Object.fromEntries(imports);
     return model;
   }
 
-  return { files, projectRoot, rootFiles, packages };
+  return { files, projectRoot, rootFiles, packages, ...outsideNamesOf(projectRoot, seen) };
+}
+
+/** Folders the outside walk never reads: dependencies, build output, caches, virtual environments. */
+const OUTSIDE_SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '__pycache__', 'venv', 'env', 'site-packages', 'target', 'vendor']);
+/** How many files the outside walk reads at most, and the largest it reads. */
+const OUTSIDE_MAX_FILES = 20000;
+const OUTSIDE_MAX_BYTES = 1_000_000;
+
+/**
+ * The identifiers written in the project's source files the run did not
+ * analyze (CodeModel.outsideNames), comments stripped: a bounded walk of the
+ * project root. Never throws; an unreadable folder or file adds nothing.
+ */
+function outsideNamesOf(projectRoot: string, analyzed: ReadonlySet<string>): { outsideNames?: string[] } {
+  if (!projectRoot) return {};
+  const names = new Set<string>();
+  let read = 0;
+  const descend = (dir: string): void => {
+    if (read >= OUTSIDE_MAX_FILES) return;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (read >= OUTSIDE_MAX_FILES) return;
+      const child = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name.startsWith('.') || OUTSIDE_SKIPPED_DIRS.has(entry.name)) continue;
+        descend(child);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const key = pathKey(path.relative(projectRoot, child));
+      const language = languageOfSourcePath(key);
+      if (!language || analyzed.has(key)) continue;
+      try {
+        if (fs.statSync(child).size > OUTSIDE_MAX_BYTES) continue;
+        const buffer = fs.readFileSync(child);
+        if (looksBinary(buffer)) continue;
+        read++;
+        const patterns = LANGUAGE_PATTERNS[language];
+        const text = patterns ? stripComments(buffer.toString('utf8'), patterns) : buffer.toString('utf8');
+        for (const m of text.matchAll(IDENTIFIER_RE)) names.add(m[0]);
+      } catch {
+        // an unreadable file adds nothing
+      }
+    }
+  };
+  descend(projectRoot);
+  return names.size > 0 ? { outsideNames: [...names].sort() } : {};
 }
 
 // ---------------------------------------------------------------------------
@@ -4506,4 +4616,512 @@ export function findTestsReferencing(
     });
   }
   return found;
+}
+
+// ---------------------------------------------------------------------------
+// The Python signature reader — part of the source analysis adapter.
+//
+// Python is read below exact grade: no type checker is loaded for it, and none
+// is bundled. But what a `def` says about itself is regular enough to read
+// without one: its parameters and their annotations, its return annotation,
+// whether it is `async`, which class it sits in, and the imports of its
+// module. This reader tokenizes the file (strings, comments, brackets and
+// line continuations honoured) and reads exactly those, so the checks that
+// compare a signature, a public surface, an import and a call through an
+// annotated collaborator can judge Python too.
+//
+// What it does NOT read it leaves unset, and the file says what it read
+// (SourceFileFacts.reads), so a check never mistakes silence for a pass:
+// inferred types, dynamic attribute access, routes and data shapes are not
+// read here.
+// ---------------------------------------------------------------------------
+
+/** The checks this reader's facts are fuel for. */
+const PYTHON_READS: CodeReading[] = ['params', 'returns', 'members', 'imports', 'calls'];
+
+type TokenKind = 'name' | 'op' | 'string' | 'number';
+
+interface Token {
+  kind: TokenKind;
+  text: string;
+}
+
+/** One logical line: its indentation and its tokens. */
+interface LogicalLine {
+  indent: number;
+  tokens: Token[];
+}
+
+const NAME_START = /[\p{L}_]/u;
+const NAME_PART = /[\p{L}\p{N}_]/u;
+const MULTI_OPS = ['**=', '//=', '>>=', '<<=', '...', '->', '**', '//', '==', '!=', '<=', '>=', ':=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '@=', '<<', '>>'];
+const STRING_PREFIX = /^[rRbBuUfF]{1,2}$/;
+
+/**
+ * Split a Python source into logical lines of tokens: comments dropped,
+ * strings kept as one token each, newlines inside brackets or after a
+ * backslash joined. Never throws: an unterminated string or bracket ends at
+ * the end of the file.
+ */
+function pythonLogicalLines(text: string): LogicalLine[] {
+  const lines: LogicalLine[] = [];
+  let tokens: Token[] = [];
+  let indent = 0;
+  let atLineStart = true;
+  let depth = 0;
+  let i = 0;
+  const n = text.length;
+  const flush = (): void => {
+    if (tokens.length > 0) lines.push({ indent, tokens });
+    tokens = [];
+    atLineStart = true;
+  };
+  while (i < n) {
+    const c = text[i];
+    if (atLineStart && depth === 0) {
+      // Measure indentation; a blank or comment-only line does not start a logical line.
+      let col = 0;
+      let j = i;
+      while (j < n && (text[j] === ' ' || text[j] === '\t')) { col += text[j] === '\t' ? 8 - (col % 8) : 1; j++; }
+      if (j >= n) break;
+      if (text[j] === '\n' || text[j] === '\r') { i = j + 1; continue; }
+      if (text[j] === '#') { while (j < n && text[j] !== '\n') j++; i = j; continue; }
+      indent = col;
+      atLineStart = false;
+      i = j;
+      continue;
+    }
+    if (c === '\n') {
+      if (depth === 0) flush();
+      i++;
+      continue;
+    }
+    if (c === '\r' || c === ' ' || c === '\t' || c === '\f') { i++; continue; }
+    if (c === '\\' && (text[i + 1] === '\n' || (text[i + 1] === '\r' && text[i + 2] === '\n'))) {
+      i += text[i + 1] === '\r' ? 3 : 2;
+      continue;
+    }
+    if (c === '#') { while (i < n && text[i] !== '\n') i++; continue; }
+    if (c === '"' || c === "'") {
+      i = readString(text, i, '', tokens);
+      continue;
+    }
+    if (NAME_START.test(c)) {
+      let j = i + 1;
+      while (j < n && NAME_PART.test(text[j])) j++;
+      const word = text.slice(i, j);
+      if (STRING_PREFIX.test(word) && (text[j] === '"' || text[j] === "'")) {
+        i = readString(text, j, word, tokens);
+        continue;
+      }
+      tokens.push({ kind: 'name', text: word });
+      i = j;
+      continue;
+    }
+    if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(text[i + 1] ?? ''))) {
+      let j = i + 1;
+      while (j < n && /[\w.]/.test(text[j])) j++;
+      tokens.push({ kind: 'number', text: text.slice(i, j) });
+      i = j;
+      continue;
+    }
+    const op = MULTI_OPS.find(o => text.startsWith(o, i)) ?? c;
+    if (op === '(' || op === '[' || op === '{') depth++;
+    else if ((op === ')' || op === ']' || op === '}') && depth > 0) depth--;
+    tokens.push({ kind: 'op', text: op });
+    i += op.length;
+  }
+  flush();
+  return lines;
+}
+
+/** Read one string literal starting at its opening quote; pushes it as one token and answers the index past it. */
+function readString(text: string, start: number, prefix: string, tokens: Token[]): number {
+  const quote = text[start];
+  const triple = text.startsWith(quote.repeat(3), start);
+  const close = triple ? quote.repeat(3) : quote;
+  let j = start + close.length;
+  while (j < text.length) {
+    if (text[j] === '\\') { j += 2; continue; }
+    if (text.startsWith(close, j)) { j += close.length; break; }
+    if (!triple && text[j] === '\n') break;
+    j++;
+  }
+  tokens.push({ kind: 'string', text: prefix + text.slice(start, Math.min(j, text.length)) });
+  return j;
+}
+
+/** The tokens of a span joined back into readable text, whitespace-normalized: how an annotation is recorded. */
+function spelled(tokens: Token[]): string {
+  let out = '';
+  for (const t of tokens) {
+    const tight = t.kind === 'op' && ['.', '[', ']', '(', ')', ','].includes(t.text);
+    const prevTight = out.endsWith('.') || out.endsWith('[') || out.endsWith('(');
+    if (out && !tight && !prevTight) out += ' ';
+    if (t.text === ',') { out += ', '; continue; }
+    out += t.text;
+  }
+  return out.replace(/\s+/g, ' ').replace(/, $/, '').replace(/\s+([\])])/g, '$1').trim();
+}
+
+/** An annotation as recorded: its spelling, a quoted forward reference unquoted. */
+function annotationText(tokens: Token[]): string | undefined {
+  if (tokens.length === 0) return undefined;
+  if (tokens.length === 1 && tokens[0].kind === 'string') {
+    const inner = tokens[0].text.replace(/^[rRbBuUfF]*("""|'''|"|')/, '').replace(/("""|'''|"|')$/, '').trim();
+    return inner || undefined;
+  }
+  return spelled(tokens);
+}
+
+/** Split a token span at top-level commas. */
+function splitTopLevel(tokens: Token[], separator = ','): Token[][] {
+  const parts: Token[][] = [];
+  let current: Token[] = [];
+  let depth = 0;
+  for (const t of tokens) {
+    if (t.kind === 'op' && (t.text === '(' || t.text === '[' || t.text === '{')) depth++;
+    else if (t.kind === 'op' && (t.text === ')' || t.text === ']' || t.text === '}')) depth--;
+    if (depth === 0 && t.kind === 'op' && t.text === separator) {
+      parts.push(current);
+      current = [];
+      continue;
+    }
+    current.push(t);
+  }
+  if (current.length > 0) parts.push(current);
+  return parts;
+}
+
+/** The index of the bracket closing the one opened at `open`, or -1. */
+function closingIndex(tokens: Token[], open: number): number {
+  let depth = 0;
+  for (let i = open; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.kind !== 'op') continue;
+    if (t.text === '(' || t.text === '[' || t.text === '{') depth++;
+    else if (t.text === ')' || t.text === ']' || t.text === '}') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** The index of the first top-level `:` from `from`, or -1. */
+function topLevelColon(tokens: Token[], from: number): number {
+  let depth = 0;
+  for (let i = from; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.kind !== 'op') continue;
+    if (t.text === '(' || t.text === '[' || t.text === '{') depth++;
+    else if (t.text === ')' || t.text === ']' || t.text === '}') depth--;
+    else if (t.text === ':' && depth === 0) return i;
+  }
+  return -1;
+}
+
+/** What the Python reader adds to a file's pattern facts. */
+interface PythonFacts {
+  functionParams: Record<string, ParameterFact[][]>;
+  functionReturns: Record<string, (string | null)[]>;
+  asyncFunctions: string[];
+  functionBodies: Record<string, FunctionBodyFact[]>;
+  functionCallSites: Record<string, CallSiteFact[]>;
+  classMembers: Record<string, ClassMemberFact[]>;
+  importBindings: Record<string, ImportBindingFact>;
+  fieldTypes: Record<string, string[]>;
+  localTypes: Record<string, string[]>;
+  imports: string[];
+  /** Module-level public functions and classes: no leading underscore, and in `__all__` where the module declares one. */
+  exportedNames: string[];
+  reads: CodeReading[];
+}
+
+/** One block the walk is inside: a class or a function, and where it was opened. */
+interface Block {
+  kind: 'class' | 'def';
+  name: string;
+  indent: number;
+  /** For a def: the body record its call sites go to. */
+  body?: FunctionBodyFact;
+  /** For a def: its parameters' annotations by name, for `self.x = param` field typing. */
+  paramTypes?: Map<string, string>;
+  /** For a def: the class it is a DIRECT member of (a method), when it is one. */
+  methodOf?: string;
+}
+
+/** Words a call-shaped `word(` can be that are no call. */
+const PYTHON_KEYWORDS = new Set(['if', 'elif', 'while', 'for', 'return', 'not', 'and', 'or', 'in', 'is', 'await', 'lambda', 'yield', 'with', 'assert', 'del', 'raise', 'except', 'else', 'async', 'from', 'import', 'as', 'global', 'nonlocal', 'pass', 'break', 'continue', 'try', 'finally', 'match', 'case']);
+
+/** The names a reader treats as a decorator saying "not an instance method". */
+const STATIC_DECORATORS = new Set(['staticmethod', 'classmethod']);
+
+/**
+ * Read a Python file's signatures, class members, imports and the call sites
+ * of each function body. Never throws: what does not parse is left unread.
+ */
+function readPython(text: string): PythonFacts {
+  const lines = pythonLogicalLines(text);
+  const functionParams = new Map<string, ParameterFact[][]>();
+  const functionReturns = new Map<string, (string | null)[]>();
+  const asyncFunctions: string[] = [];
+  const functionBodies = new Map<string, FunctionBodyFact[]>();
+  const classMembers = new Map<string, ClassMemberFact[]>();
+  const importBindings = new Map<string, ImportBindingFact>();
+  const fieldTypes = new Map<string, Set<string>>();
+  const localTypes = new Map<string, Set<string>>();
+  const imports = new Set<string>();
+  const moduleNames: string[] = [];
+  let declaredAll: Set<string> | undefined;
+  const stack: Block[] = [];
+  let decorators: string[] = [];
+
+  const addType = (map: Map<string, Set<string>>, name: string, type: string | undefined): void => {
+    const named = type ? typeHead(type) : undefined;
+    if (!named) return;
+    const set = map.get(name) ?? new Set<string>();
+    set.add(named);
+    map.set(name, set);
+  };
+
+  for (const line of lines) {
+    while (stack.length > 0 && line.indent <= stack[stack.length - 1].indent) stack.pop();
+    const t = line.tokens;
+    const first = t[0];
+    const innermost = stack[stack.length - 1];
+
+    // ---- decorators: remembered for the def or class they decorate ----
+    if (first.kind === 'op' && first.text === '@') {
+      const name = t.slice(1).filter(x => x.kind === 'name' || (x.kind === 'op' && x.text === '.')).map(x => x.text).join('');
+      decorators.push(name.split('(')[0]);
+      continue;
+    }
+
+    // ---- imports (anywhere: a function-local import is still this module's) ----
+    if (first.kind === 'name' && first.text === 'import') {
+      for (const part of splitTopLevel(t.slice(1))) {
+        const asAt = part.findIndex(x => x.kind === 'name' && x.text === 'as');
+        const module = (asAt >= 0 ? part.slice(0, asAt) : part).map(x => x.text).join('');
+        if (!module) continue;
+        imports.add(module);
+        const local = asAt >= 0 ? part[asAt + 1]?.text : module.split('.')[0];
+        if (local) importBindings.set(local, { from: asAt >= 0 ? module : module.split('.')[0], namespace: true });
+      }
+      continue;
+    }
+    if (first.kind === 'name' && first.text === 'from') {
+      const importAt = t.findIndex(x => x.kind === 'name' && x.text === 'import');
+      if (importAt < 0) continue;
+      const module = t.slice(1, importAt).map(x => x.text).join('');
+      if (!module) continue;
+      imports.add(module);
+      const names = t.slice(importAt + 1).filter(x => !(x.kind === 'op' && (x.text === '(' || x.text === ')')));
+      for (const part of splitTopLevel(names)) {
+        const imported = part[0]?.text;
+        if (!imported || imported === '*') continue;
+        const asAt = part.findIndex(x => x.kind === 'name' && x.text === 'as');
+        const local = asAt >= 0 ? part[asAt + 1]?.text ?? imported : imported;
+        if (/^\.+$/.test(module)) {
+          // `from . import sibling`: the name is most often a module of the package.
+          const specifier = `${module}${imported}`;
+          imports.add(specifier);
+          importBindings.set(local, { from: specifier, namespace: true });
+        } else {
+          importBindings.set(local, { from: module, ...(local !== imported ? { imported } : {}) });
+        }
+      }
+      continue;
+    }
+
+    // ---- class ----
+    const isAsync = first.kind === 'name' && first.text === 'async' && t[1]?.text === 'def';
+    const defAt = isAsync ? 1 : 0;
+    if (first.kind === 'name' && first.text === 'class' && t[1]?.kind === 'name') {
+      const name = t[1].text;
+      if (stack.length === 0) {
+        moduleNames.push(name);
+        if (!classMembers.has(name)) classMembers.set(name, []);
+      }
+      stack.push({ kind: 'class', name, indent: line.indent });
+      decorators = [];
+      continue;
+    }
+
+    // ---- def ----
+    if (t[defAt]?.kind === 'name' && t[defAt].text === 'def' && t[defAt + 1]?.kind === 'name') {
+      const name = t[defAt + 1].text;
+      const open = defAt + 2;
+      const close = t[open]?.text === '(' ? closingIndex(t, open) : -1;
+      const methodOf = innermost?.kind === 'class' && stack.length === 1 ? innermost.name : undefined;
+      const inClass = innermost?.kind === 'class';
+      const isStatic = decorators.some(d => STATIC_DECORATORS.has(d));
+      const isStaticMethod = decorators.includes('staticmethod');
+      const isAccessor = decorators.some(d => d === 'property' || /\.(setter|getter|deleter)$/.test(d) || d === 'cached_property' || d === 'functools.cached_property');
+      decorators = [];
+      if (close < 0) continue;
+      // Parameters, the receiver of an instance method (self) or a class method (cls) set aside.
+      let parts = splitTopLevel(t.slice(open + 1, close));
+      if (inClass && !isStaticMethod) parts = parts.slice(1);
+      const paramTypes = new Map<string, string>();
+      const params: ParameterFact[] = [];
+      for (const part of parts) {
+        if (part.length === 1 && part[0].kind === 'op' && (part[0].text === '/' || part[0].text === '*')) continue;
+        let star = 0;
+        let at = 0;
+        if (part[0]?.kind === 'op' && (part[0].text === '*' || part[0].text === '**')) { star = part[0].text.length; at = 1; }
+        const pname = part[at]?.kind === 'name' ? part[at].text : undefined;
+        if (!pname) continue;
+        const rest = part.slice(at + 1);
+        const eq = rest.findIndex(x => x.kind === 'op' && x.text === '=');
+        const annotation = rest[0]?.kind === 'op' && rest[0].text === ':'
+          ? annotationText(rest.slice(1, eq >= 0 ? eq : undefined))
+          : undefined;
+        const fact: ParameterFact = { name: pname, optional: star > 0 || eq >= 0 };
+        if (annotation) {
+          fact.type = annotation;
+          paramTypes.set(pname, annotation);
+          addType(localTypes, pname, annotation);
+        }
+        params.push(fact);
+      }
+      const colon = topLevelColon(t, close + 1);
+      const arrow = t.findIndex((x, i) => i > close && x.kind === 'op' && x.text === '->');
+      const returned = arrow >= 0 && colon > arrow ? annotationText(t.slice(arrow + 1, colon)) ?? null : null;
+      const body: FunctionBodyFact = { sites: [], ...(methodOf !== undefined ? { container: methodOf } : stack.length === 0 ? {} : { nested: true }) };
+      const signatures = functionParams.get(name) ?? [];
+      signatures.push(params);
+      functionParams.set(name, signatures);
+      const returns = functionReturns.get(name) ?? [];
+      returns.push(returned);
+      functionReturns.set(name, returns);
+      if (isAsync) asyncFunctions.push(name);
+      const bodies = functionBodies.get(name) ?? [];
+      bodies.push(body);
+      functionBodies.set(name, bodies);
+      if (methodOf !== undefined) {
+        classMembers.get(methodOf)?.push({
+          name: name === '__init__' ? 'constructor' : name,
+          kind: name === '__init__' ? 'constructor' : isAccessor ? 'accessor' : 'method',
+          access: name.startsWith('_') && !/^__\w+__$/.test(name) ? 'private' : 'public',
+          ...(isStatic ? { static: true } : {}),
+        });
+      }
+      if (stack.length === 0) moduleNames.push(name);
+      const block: Block = { kind: 'def', name, indent: line.indent, body, paramTypes, ...(methodOf !== undefined ? { methodOf } : {}) };
+      stack.push(block);
+      // A one-line body (`def f(self): return self._x.g()`) is read as part of it.
+      if (colon >= 0 && colon < t.length - 1) readStatement(t.slice(colon + 1), block);
+      continue;
+    }
+    decorators = [];
+
+    // ---- module-level `__all__` ----
+    if (stack.length === 0 && first.kind === 'name' && first.text === '__all__') {
+      declaredAll = new Set(t.filter(x => x.kind === 'string').map(x => x.text.replace(/^[rRbBuUfF]*["']+|["']+$/g, '')));
+      continue;
+    }
+
+    // ---- class body: an annotated field (`store: BlobStore`) ----
+    if (innermost?.kind === 'class' && first.kind === 'name' && t[1]?.kind === 'op' && t[1].text === ':') {
+      const eq = t.findIndex(x => x.kind === 'op' && x.text === '=');
+      addType(fieldTypes, first.text, annotationText(t.slice(2, eq >= 0 ? eq : undefined)));
+      continue;
+    }
+
+    // ---- a statement inside a function ----
+    const fn = [...stack].reverse().find(b => b.kind === 'def');
+    if (fn) readStatement(t, fn);
+  }
+
+  // Each body's call sites, unioned per name.
+  const functionCallSites: Record<string, CallSiteFact[]> = {};
+  for (const [name, bodies] of functionBodies) {
+    const seen = new Map<string, CallSiteFact>();
+    for (const body of bodies) for (const site of body.sites) seen.set(JSON.stringify(site), site);
+    functionCallSites[name] = [...seen.values()];
+  }
+  const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
+
+  return {
+    functionParams: Object.fromEntries(functionParams),
+    functionReturns: Object.fromEntries(functionReturns),
+    asyncFunctions,
+    functionBodies: Object.fromEntries(functionBodies),
+    functionCallSites,
+    classMembers: Object.fromEntries(classMembers),
+    importBindings: Object.fromEntries(importBindings),
+    fieldTypes: Object.fromEntries([...fieldTypes].map(([k, v]) => [k, [...v]])),
+    localTypes: Object.fromEntries([...localTypes].map(([k, v]) => [k, [...v]])),
+    imports: [...imports],
+    exportedNames: [...new Set(exportedNames)],
+    reads: PYTHON_READS,
+  };
+
+  /**
+   * One statement of a function body: its call sites, written by shape, and
+   * an instance field it assigns from an annotated parameter
+   * (`self._store = store`, `self._store: BlobStore = store`).
+   */
+  function readStatement(tokens: Token[], fn: Block): void {
+    // `self.<field>[: T] = <param>` inside a method: the field is what the parameter is annotated as.
+    if (fn.methodOf !== undefined && tokens[0]?.text === 'self' && tokens[1]?.text === '.' && tokens[2]?.kind === 'name') {
+      const field = tokens[2].text;
+      const eq = tokens.findIndex(x => x.kind === 'op' && x.text === '=');
+      if (tokens[3]?.kind === 'op' && tokens[3].text === ':') {
+        addType(fieldTypes, field, annotationText(tokens.slice(4, eq >= 0 ? eq : undefined)));
+      }
+      if (eq >= 0 && tokens.length === eq + 2 && tokens[eq + 1].kind === 'name') {
+        addType(fieldTypes, field, fn.paramTypes?.get(tokens[eq + 1].text));
+      }
+    }
+    // Every call: NAME( preceded by a receiver chain of plain names, or nothing.
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i];
+      if (tok.kind !== 'name' || tokens[i + 1]?.text !== '(') continue;
+      const before = tokens[i - 1];
+      if (before?.kind === 'name' && (before.text === 'def' || before.text === 'class')) continue;
+      if (PYTHON_KEYWORDS.has(tok.text) && before?.text !== '.') continue;
+      const chain: string[] = [];
+      let j = i - 1;
+      while (tokens[j]?.text === '.' && tokens[j - 1]?.kind === 'name') {
+        chain.unshift(tokens[j - 1].text);
+        j -= 2;
+      }
+      const name = tok.text;
+      let site: CallSiteFact;
+      if (tokens[j]?.text === '.') {
+        // The receiver ends in a call, an index or a literal (`make().x()`): a value again.
+        site = { name, member: true };
+      } else if (chain.length === 0) {
+        site = { name, member: false };
+      } else if (chain[0] === 'self' && fn.methodOf !== undefined) {
+        site = chain.length === 1 ? { name, member: true, enclosingClass: fn.methodOf }
+          : chain.length === 2 ? { name, member: true, field: chain[1] }
+            : { name, member: true, receiverPath: ['this', ...chain.slice(1)] };
+      } else if (chain.length === 1) {
+        site = { name, member: true, via: chain[0] };
+      } else {
+        site = { name, member: true, receiverPath: chain };
+      }
+      const key = JSON.stringify(site);
+      if (!fn.body!.sites.some(s => JSON.stringify(s) === key)) fn.body!.sites.push(site);
+    }
+  }
+}
+
+/**
+ * The class a type annotation names, read as a field's declared type is: the
+ * plain name, a dotted one's last segment, `Optional[T]` / `T | None` taken
+ * through to T. Undefined for anything else (a generic container, a union of
+ * two types): a guess about a collaborator is worse than none.
+ */
+function typeHead(annotation: string): string | undefined {
+  let text = annotation.trim();
+  const optional = /^(?:typing\.)?Optional\[(.+)\]$/.exec(text);
+  if (optional) text = optional[1].trim();
+  const parts = text.split('|').map(p => p.trim()).filter(p => p !== 'None');
+  if (parts.length !== 1) return undefined;
+  const one = parts[0];
+  return /^[A-Za-z_][\w.]*$/.test(one) ? one.split('.').pop() : undefined;
 }

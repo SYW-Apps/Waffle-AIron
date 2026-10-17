@@ -176,8 +176,8 @@ methods:
       Forwarded to the extension orchestrator.
     signature: >-
       resolveVariantGuidance(component: ComponentSpec, allComponents: list<ComponentSpec>,
-      variantsById: list<VariantDef>): VariantDef
-    returns: VariantDef
+      variantsById: list<VariantDef>): VariantGuidance?
+    returns: VariantGuidance?
     params:
       - name: component
         type: ComponentSpec
@@ -235,4 +235,4 @@ lint:
         no site, so this allow is spec-wide; it is the only untyped parameter on this contract.
 status: complete
 createdAt: '2026-09-25T17:33:10.144Z'
-updatedAt: '2026-10-07T21:49:52.812Z'
+updatedAt: '2026-10-17T16:35:09.083Z'

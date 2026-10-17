@@ -662,10 +662,19 @@ methods:
         error: Forbidden — binding a repository requires project:admin over the project
       - stepNumber: 5
         description: >-
+          When a personal access token was supplied inline, store it as this connection's own
+          credential under the project's scoped git secret key, BEFORE the clone so authentication
+          is available (project:admin over the project authorizes storing it); a connection without
+          a token stores nothing and falls back to the shared git-token
+        type: call
+        targetComponent: secret_repository
+        targetMethod: write
+      - stepNumber: 6
+        description: >-
           Ensure the project record and an empty directory exist (no native provisioning) and bind
           the root
         type: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Resolve the clone's token from the host's own secret repository: the connection's own
           credential ref first, when it has one, so each connection can carry a distinct PAT, else
@@ -673,7 +682,7 @@ methods:
         type: call
         targetComponent: secret_repository
         targetMethod: resolveGit
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Bind the project to its REAL repository (clone the remote onto the isolated working
           branch), handing the git plane the resolved token as an argument; wairon will commit ONLY
@@ -681,7 +690,7 @@ methods:
         type: call
         targetComponent: host_git_adapter
         targetMethod: enable
-      - stepNumber: 8
+      - stepNumber: 9
         description: Return the project record
         type: return
         outcome: project record
@@ -1235,4 +1244,4 @@ methods:
     symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-06T10:11:18.748Z'
+updatedAt: '2026-10-17T16:23:55.424Z'

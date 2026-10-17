@@ -28,11 +28,25 @@ methods:
         targetMethod: visibleScopes
       - stepNumber: 4
         description: >-
+          Reduce those visible scopes to the ids of the organization units the caller actually
+          administers (an instance admin skips this, having every binding already)
+        type: call
+        targetComponent: authorization
+        targetMethod: actionableUnits
+      - stepNumber: 5
+        description: >-
+          Resolve the caller's project:admin value at the instance level, which decides whether the
+          instance-wide binding is theirs
+        type: call
+        targetComponent: authorization
+        targetMethod: authorize
+      - stepNumber: 6
+        description: >-
           Filter to bindings whose scope the caller administers (an instance admin keeps all; a unit
           binding requires its unit among the actionable units; the instance binding requires
           instance-level project:admin)
         type: local
-      - stepNumber: 5
+      - stepNumber: 7
         description: Return the caller's bindings
         type: return
         outcome: scoped bindings
@@ -341,4 +355,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-16T15:40:54.973Z'
-updatedAt: '2026-10-04T19:43:07.786Z'
+updatedAt: '2026-10-17T16:24:49.349Z'

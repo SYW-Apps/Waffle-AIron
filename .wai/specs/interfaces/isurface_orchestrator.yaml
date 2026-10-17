@@ -14,8 +14,8 @@ methods:
       into a combined document.
     signature: >-
       export(maxAudience: string, format: string, outPath?: string, portalId?: string):
-      SurfaceSnapshot
-    returns: SurfaceSnapshot
+      SurfaceExportResult
+    returns: SurfaceExportResult
     params:
       - name: maxAudience
         type: string
@@ -325,4 +325,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-15T16:03:47.267Z'
+updatedAt: '2026-10-17T16:35:49.035Z'

@@ -2162,12 +2162,20 @@ methods:
         targetMethod: readLockState
       - stepNumber: 73
         description: >-
+          Lock, when stale: ask the lock adapter for lock-check's own verdict (without printing) and
+          report it word for word beneath the Lock heading - ok when a release change carried the
+          approval over, otherwise a warning that says what moved
+        type: call
+        targetComponent: cli_lock_adapter
+        targetMethod: checkApproval
+      - stepNumber: 74
+        description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 74
+      - stepNumber: 75
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed on this machine but not applied (only
@@ -2175,12 +2183,12 @@ methods:
           developer's home store is never doctrine, so --fix never selects it into a project), and
           those applied from the machine-wide store
         type: local
-      - stepNumber: 75
+      - stepNumber: 76
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and flag a legacy global Antigravity plugin
         type: local
-      - stepNumber: 76
+      - stepNumber: 77
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -4122,4 +4130,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-16T18:32:52.771Z'
+updatedAt: '2026-10-17T16:24:28.405Z'

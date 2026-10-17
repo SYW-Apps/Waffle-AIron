@@ -92,10 +92,10 @@ describe('r6 (platform top-1): honest code with a port to a dependency not writt
 describe('r6 (solo-app, platform): a Portal\'s unnarrated call through an Orchestrator verb declaring no effect', () => {
   const calling = portalFile({ body: 'this.habits.archive(id);', field: NO_FIELD, head: '' });
 
-  it('the verb\'s own narrative only reads → no UNDECLARED_WRITE_CALL, --ci exits 0', async () => {
+  it('the verb\'s own narrative only reads → no UNDECLARED_WRITE_CALL; the unnarrated read is UNNARRATED_CALL', async () => {
     const r = await sb.run(['validate', '--ci'], habits({ portal: calling, archiveCalls: 'find' }));
     expect(countCode(r.all, 'UNDECLARED_WRITE_CALL'), transcript(r)).toBe(0);
-    expect(r.code, transcript(r)).toBe(0);
+    expect(r.all).toMatch(/\[habit_portal_impl\] \[UNNARRATED_CALL\][^\n]*habit_orchestrator\.archive/);
   });
   it('control — its narrative records a check-in → UNDECLARED_WRITE_CALL as a change of state, --ci exits 1', async () => {
     const r = await sb.run(['validate', '--ci'], habits({ portal: calling, archiveCalls: 'addCheckIn' }));
