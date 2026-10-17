@@ -370,9 +370,12 @@ methods:
       method: POST
       path: /web/projects
   - name: projectLock
-    description: Lock a project; forwards to web_project_orchestrator.lock.
-    signature: 'projectLock(sessionId: string, projectId: string): LockRecord'
-    returns: LockRecord
+    description: >-
+      Lock a project for the signed-in principal; forwards to web_project_orchestrator.lock, which
+      makes the MCP lock tool's decision: approval:decide locks directly, a writer gets a pending
+      approval request, anyone else is refused.
+    signature: 'projectLock(sessionId: string, projectId: string): ProjectActionOutcome'
+    returns: ProjectActionOutcome
     params:
       - name: sessionId
         type: string
@@ -1594,4 +1597,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-06T13:15:06.148Z'
+updatedAt: '2026-10-17T16:49:53.084Z'
