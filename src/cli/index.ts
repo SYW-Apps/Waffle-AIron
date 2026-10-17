@@ -687,7 +687,7 @@ program
   .command('remote <action>')
   .description('hosted instance: push | pull (migrate a spec tree) · attach | detach | status (bind this checkout)')
   .option('--url <url>', 'hosted instance base URL (else WAIRON_REMOTE_URL)')
-  .option('--project <id>', 'hosted project id, optionally qualified as project::subsystem (else WAIRON_REMOTE_PROJECT)')
+  .option('--project <id>', 'hosted project id — a member is a project bound by its own id (else WAIRON_REMOTE_PROJECT); narrow a person to a subsystem with `wairon host permission set --subsystem`, not the id')
   .option('--token <token>', 'bearer credential (else WAIRON_REMOTE_TOKEN) — mint one in the hosted UI under Tokens')
   .option('--unit <id>', 'push: create the destination project first, owned by this organization unit')
   .option('--force', 'replace an authored spec tree at the destination (it is backed up first)')
@@ -718,7 +718,7 @@ program
 
 program
   .command('serve')
-  .description('Run the wairon hosting server: HTTP MCP for many isolated projects + admin API')
+  .description('Run the wairon hosting server: HTTP MCP for many isolated projects + admin API. The web UI is off until enabled; operator setup (web UI, sign-in, SSO): "Hosting" in docs/cli.md')
   .option('--host <host>', 'data-plane bind host (default 0.0.0.0)')
   .option('--port <port>', 'data-plane port (default 8080)')
   .option('--admin-host <host>', 'admin-plane bind host (default 127.0.0.1)')

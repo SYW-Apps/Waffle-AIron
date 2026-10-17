@@ -3,15 +3,15 @@ import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authoriz
 import { listProjectRecords } from './projects.js';
 import { listProjectPlacements } from './organization.js';
 import {
-  lockProject as adminLockProject,
   destroyProject as adminDestroyProject,
 } from './admin.js';
 import { initializeProjectWithProfile } from './policy.js';
-import type { LockRecord } from '../core/lockfile.js';
+import { lockProject as lifecycleLockProject } from './projectlifecycle.js';
 import type {
   GovernedProjectCreation,
   HostConfig,
   HostedProjectRecord,
+  ProjectActionOutcome,
   ProjectInitRequest,
   ProjectProfileSelection,
 } from './types.js';
@@ -107,12 +107,15 @@ export function createProject(
 }
 
 /**
- * Lock a project (validate-as-complete, then write the StateId-scoped lock).
- * Forwards to admin_orchestrator.lockProject passing the sessionId as the
- * credential — project:write permission is enforced there.
+ * Lock a project: the same decision the MCP lock tool makes for the signed-in
+ * principal. Forwards to project_lifecycle_orchestrator.lockProject passing the
+ * sessionId as the credential — approval:decide over the project locks directly
+ * (recorded under the caller's name); a writer gets a pending approval request
+ * someone with approval rights decides; anyone else is refused. The permission
+ * check lives there, so this route cannot bypass it.
  */
-export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): LockRecord {
-  return adminLockProject(cfg, sessionId, projectId); // step 1 (forward)
+export function lockProject(cfg: HostConfig, sessionId: string, projectId: string): ProjectActionOutcome {
+  return lifecycleLockProject(cfg, sessionId, projectId); // step 1 (forward)
 }
 
 /**

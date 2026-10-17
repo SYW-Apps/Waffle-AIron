@@ -79,4 +79,41 @@ describe('cli_runner.runMcpInstall: a hosted install without --token (real CLI)'
       headers: { Authorization: `Bearer ${token}`, 'X-Wairon-Project': 'demo' },
     });
   }, 180_000);
+
+  it('works in an empty folder: a hosted user has no checkout, and only the entry is written', async () => {
+    const home = mkTmp('wairon-mcp-home-');
+    const empty = mkTmp('wairon-mcp-empty-');
+    const url = 'http://127.0.0.1:9';
+
+    const { stdout, stderr } = await execFileP(
+      process.execPath,
+      [TSX_CLI, WAIRON_CLI, 'mcp', 'install', '--hosted', url, '--project', 'kbase', '--token', 'wk_given', '--backend', 'claude'],
+      { cwd: empty, env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 180_000 },
+    );
+
+    // Exactly the registration: no spec tree, no guide, no agent folder.
+    expect(fs.readdirSync(empty)).toEqual(['.mcp.json']);
+    const settings = JSON.parse(fs.readFileSync(path.join(empty, '.mcp.json'), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(settings.mcpServers.wairon).toEqual({
+      type: 'http',
+      url: `${url}/mcp`,
+      headers: { Authorization: 'Bearer wk_given', 'X-Wairon-Project': 'kbase' },
+    });
+    // The file now carries a credential: the install says to keep it out of version control.
+    expect(stdout + stderr).toMatch(/keep it out of version control/);
+  }, 180_000);
+
+  it('a LOCAL install in an empty folder still refuses, naming wairon init', async () => {
+    const home = mkTmp('wairon-mcp-home-');
+    const empty = mkTmp('wairon-mcp-empty-');
+    const run = execFileP(
+      process.execPath,
+      [TSX_CLI, WAIRON_CLI, 'mcp', 'install', '--backend', 'claude'],
+      { cwd: empty, env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 180_000 },
+    );
+    await expect(run).rejects.toMatchObject({ stderr: expect.stringMatching(/wairon init/) });
+    expect(fs.readdirSync(empty)).toEqual([]);
+  }, 180_000);
 });

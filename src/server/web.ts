@@ -38,7 +38,6 @@ import { swaggerUiPage } from './swagger.js';
 import { generateLandscape } from './landscape.js';
 import { sendJson, setSessionCookie, clearSessionCookie } from './httpio.js';
 import type { ValidationIssue } from '../core/validation.js';
-import type { LockRecord } from '../core/lockfile.js';
 import type { TreeExportResult, TreeImportResult } from '../core/treetransfer.js';
 import type { GitBackingStatus, GitPublish } from '../git/index.js';
 import type { ProducerConfig } from '../producers/index.js';
@@ -58,6 +57,7 @@ import type {
   HostedProjectRecord,
   HostedUserRecord,
   HostExposurePolicy,
+  ProjectActionOutcome,
   IdentityProviderConfig,
   InstanceHealthReport,
   InstancePackPolicy,
@@ -2768,8 +2768,11 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function projectAction(path, payload, btn, busyLabel, label) {
     var note = $('plNote'); if (note) { note.className = 'msg'; note.textContent = ''; }
     btn.disabled = true; btn.textContent = busyLabel;
-    postAndParse(path, payload).then(function () {
+    postAndParse(path, payload).then(function (out) {
       loadProjects();
+      if (out && out.status === 'pending-approval' && note) {
+        note.className = 'msg'; note.textContent = 'Approval requested; someone with approval rights decides it.';
+      }
     }).catch(function (e) {
       btn.disabled = false; btn.textContent = label;
       if (note) { note.className = 'msg bad'; note.textContent = projectErr(e); }
@@ -3184,7 +3187,7 @@ function projectCreate(
 }
 
 /** Lock a project; forwards to web_project_orchestrator.lockProject. */
-function projectLock(cfg: HostConfig, sessionId: string, projectId: string): LockRecord {
+function projectLock(cfg: HostConfig, sessionId: string, projectId: string): ProjectActionOutcome {
   return webproject.lockProject(cfg, sessionId, projectId);
 }
 
@@ -3622,7 +3625,7 @@ export async function handleWebRequest(
           ),
         );
       }
-      // POST /web/projects/lock { projectId } — lock (lock:create scope).
+      // POST /web/projects/lock { projectId } — lock (approval:decide over the project) or, for a writer, request it; decided by the lifecycle orchestrator.
       if (req.method === 'POST' && parts.length === 3 && parts[2] === 'lock') {
         return sendJson(res, 200, projectLock(cfg, sessionId, String(body?.projectId ?? '')));
       }

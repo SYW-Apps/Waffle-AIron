@@ -126,8 +126,10 @@ export function Projects() {
   const [placing, setPlacing] = useState<ProjectRecord | null>(null);
 
   async function lock(id: string) {
-    await post('/web/projects/lock', { projectId: id });
-    toast.ok(`Locked ${id}`);
+    const outcome = await post<{ status?: string }>('/web/projects/lock', { projectId: id });
+    toast.ok(outcome?.status === 'pending-approval'
+      ? `Approval requested for ${id}; someone with approval rights decides it`
+      : `Locked ${id}`);
     projects.reload();
   }
   async function destroy(id: string) {

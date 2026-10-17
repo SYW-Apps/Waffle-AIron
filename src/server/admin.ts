@@ -233,8 +233,13 @@ export function listKeys(cfg: HostConfig, credential: string | null, project: st
 
 export function lockProject(cfg: HostConfig, credential: string | null, project: string): LockRecord {
   const principal = requirePrincipal(cfg, credential);
-  if (authorize(cfg.dataDir, principal, 'project:write', 'project', project).value !== 'yes') {
-    throw new AdminAuthError('Forbidden — locking a project requires project:write over it');
+  // A lock is the project's approval: only approval:decide over the project
+  // approves it. A writer requests one through sdd_host_lock_project instead.
+  if (authorize(cfg.dataDir, principal, 'approval:decide', 'project', project).value !== 'yes') {
+    throw new AdminAuthError(
+      'Forbidden — locking a project approves it, which requires approval:decide over it; '
+        + 'a writer requests the lock with sdd_host_lock_project, for someone else to approve',
+    );
   }
   return executeApprovedLock(cfg, project, hostedApprover(principal.subject));
 }
@@ -441,6 +446,9 @@ function lockRecordOf(
     ...(projectId !== null ? { projectId } : {}),
     specs,
     specsReading: 'design',
+    // Each input of the certified identity on its own, exactly as the local
+    // lock records them: what lets a later check name the one that moved.
+    ...(captured.parts ? { gateParts: captured.parts } : {}),
     members: memberPins(members),
     ...(gate.analysis ? { code: withoutCodes(gate.analysis) } : {}),
   };
@@ -756,12 +764,16 @@ export function importProjectTree(
   if (authorize(cfg.dataDir, principal, 'project:admin', 'project', project).value !== 'yes') {
     throw new AdminAuthError("Forbidden — importing a project's spec tree requires project:admin over it");
   }
+  // An archive may carry approval records; only someone who may approve the
+  // project brings one in. Anyone else imports the design unapproved.
+  const mayApprove = authorize(cfg.dataDir, principal, 'approval:decide', 'project', project).value === 'yes';
   const root = boundLifecycleRoot(cfg, project);
   return runWithProjectRoot(root, () =>
     hostCore.importSpecTree(archive, {
       destDir: root,
       replaceExisting: replaceExisting === true,
       refuseExecutableEntries: true,
+      dropApprovals: !mayApprove,
     }),
   );
 }

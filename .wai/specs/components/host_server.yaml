@@ -16,8 +16,9 @@ dependsOn:
   - instance_bootstrap
   - permission_model_migration
   - member_registration
+  - policy_repository
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-10-01T16:59:27.537Z'
+updatedAt: '2026-10-17T14:38:32.976Z'

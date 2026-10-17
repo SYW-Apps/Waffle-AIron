@@ -28,18 +28,21 @@ methods:
       - atomic
   - name: lockProject
     description: >-
-      Execute-primary project lock. Authenticate the caller and resolve their project:write
-      permission over the project's OWN record: yes -> lock directly via the admin plane's
-      pre-authorized executeApprovedLock and return a completed ProjectActionOutcome carrying the
-      lock record; approval -> create a pending project:lock ApprovalRequest and return a
-      pending-approval outcome; no -> Forbidden. A lock signs the whole tree, so it is a whole-tree
-      write: it is decided at the project rung (a subsystem's yes never authorizes one), and it is
-      refused — naming each subsystem and the rung that decided it — when a subsystem rule denies
-      the caller write on any subsystem of the project. With no subsystem settings it is decided
-      exactly as before. Deciding an approval stays approval:decide over the project. Since stage 7
-      a member is a record of its own, so locking a member is locking its record — the subproject
-      qualifier parameter is retired. A pending request recorded with a member qualifier before the
-      upgrade executes, for one release, on the member record the qualifier maps to, never wider.
+      Project lock — the project's approval, so it is decided by approval:decide over the project's
+      OWN record, never by the right to edit it. Authenticate the caller and resolve their
+      approval:decide permission over the project: yes -> lock directly via the admin plane's
+      pre-authorized executeApprovedLock, the caller recorded as the approver, and return a
+      completed ProjectActionOutcome carrying the lock record. Otherwise resolve their project:write
+      permission over the project: a caller who may write it at the project rung (yes or approval —
+      a subsystem's yes never reaches a whole-tree action), or whose approval:decide resolves to
+      approval, creates a pending project:lock ApprovalRequest that someone else holding
+      approval:decide decides, and gets a pending-approval outcome; anyone else -> Forbidden. A lock
+      signs the whole tree, so a request is refused — naming each subsystem and the rung that
+      decided it — when a subsystem rule denies the caller write on any subsystem of the project.
+      Since stage 7 a member is a record of its own, so locking a member is locking its record — the
+      subproject qualifier parameter is retired. A pending request recorded with a member qualifier
+      before the upgrade executes, for one release, on the member record the qualifier maps to,
+      never wider.
     signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
     params:
@@ -139,4 +142,4 @@ methods:
         type: int
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-04T10:32:09.968Z'
+updatedAt: '2026-10-17T14:32:10.877Z'

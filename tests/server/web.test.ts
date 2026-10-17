@@ -1806,7 +1806,7 @@ describe('web project orchestrator (sdd_host)', () => {
   it('lockProject forwards with the session: a viewer is denied (403); a permission-holder passes the gate', () => {
     createProjectRecord(dataDir, 'demo');
     allow(dataDir, 'viewer', 'project:read', 'project', 'demo');
-    expect(() => webproject.lockProject(cfg, session('viewer'), 'demo')).toThrow(AdminAuthError);
+    expect(() => webproject.lockProject(cfg, session('viewer'), 'demo')).toThrow(ForbiddenError);
 
     // The instance admin passes the authorization gate; the lock itself may fail
     // validate-as-complete, but that must NOT be an authorization denial.
@@ -1819,6 +1819,7 @@ describe('web project orchestrator (sdd_host)', () => {
       err = e;
     }
     expect(err).not.toBeInstanceOf(AdminAuthError);
+    expect(err).not.toBeInstanceOf(ForbiddenError);
   }, 20_000);
 
 });
@@ -1928,6 +1929,35 @@ describe('web project routes over HTTP (sdd_host)', () => {
     expect(listProjectRecords(dataDir).some((r) => r.id === 'made-here')).toBe(true);
     expect(listProjectPlacements(dataDir, 'made-here').map((p) => p.unitId)).toEqual([unit.id]);
   }, 20_000);
+
+  it('the Lock route answers a writer with a pending approval request (200), a decider with a completed lock, and a reader with 403', async () => {
+    enableWebUi();
+    const unit = seedUnit(dataDir, 'lock-team');
+    const cookieOf = (userId: string): string => {
+      const s = createWebSession(dataDir, {
+        id: '', subject: { userId, kind: 'human', issuer: 'local' },
+        projects: ['*'], createdAt: '', expiresAt: FUTURE(),
+      });
+      return `wairon_session=${s.id}`;
+    };
+    const lockAs = (cookie: string): Promise<{ status: number; body: string }> =>
+      raw({ method: 'POST', path: '/web/projects/lock', headers: { cookie, 'content-type': 'application/json', 'x-wairon-web': '1' }, body: JSON.stringify({ projectId: 'lockable' }) });
+    webproject.createProject(cfg, adminCookie().slice('wairon_session='.length), 'lockable', unit.id);
+    allow(dataDir, 'route-writer', 'project:write', 'project', 'lockable');
+    allow(dataDir, 'route-decider', 'approval:decide', 'project', 'lockable');
+    allow(dataDir, 'route-reader', 'project:read', 'project', 'lockable');
+
+    const writer = await lockAs(cookieOf('route-writer'));
+    expect(writer.status).toBe(200);
+    expect(JSON.parse(writer.body)).toMatchObject({ status: 'pending-approval', action: 'project:lock' });
+
+    const reader = await lockAs(cookieOf('route-reader'));
+    expect(reader.status).toBe(403);
+
+    const decider = await lockAs(cookieOf('route-decider'));
+    expect(decider.status).toBe(200);
+    expect(JSON.parse(decider.body)).toMatchObject({ status: 'completed', action: 'project:lock' });
+  }, 30_000);
 
   it('a viewer is refused create/lock/destroy over HTTP (403, resolver denial) but can still read the scoped list', async () => {
     enableWebUi();

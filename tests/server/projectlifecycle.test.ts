@@ -380,9 +380,9 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
 
   it('a member lock freezes the member tree through its own record; the PARENT is never locked; the grant is inherited and audit names the member', () => {
     const { parent, child } = seedChainedSubproject('confine-lock', 'billing');
-    // A writer granted on the PARENT only — the member inherits it.
+    // An approver granted on the PARENT only — the member inherits it.
     const writer = mintToken('cw', 'u-cw');
-    allow('u-cw', 'project:write', 'project', 'confine-lock', 'yes');
+    allow('u-cw', 'approval:decide', 'project', 'confine-lock', 'yes');
 
     const outcome = lockProject(cfg, writer, 'billing');
 
@@ -767,8 +767,9 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     seedProject('self-proj');
     const selfTok = mintToken('self-tok', 'u-self');
     allow('u-self', 'project:write', 'project', 'self-proj', 'approval');
-    allow('u-self', 'approval:decide', 'instance', undefined, 'yes');
     const req = lockProject(cfg, selfTok, 'self-proj').approval!;
+    // Granted the decision only after requesting: still never their own request.
+    allow('u-self', 'approval:decide', 'instance', undefined, 'yes');
 
     expect(() => decideRequest(cfg, selfTok, decision(req.id, true))).toThrow(ForbiddenError);
   });

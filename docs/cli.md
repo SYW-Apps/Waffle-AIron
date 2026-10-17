@@ -1374,7 +1374,7 @@ and author specs directly.
 |---------|-------------|
 | `wairon mcp serve` | Start the MCP server (stdio transport) |
 | `wairon mcp install [--global] [--config-dir <path>] [--backend claude\|gemini]` | Register the server. Default: project-local. `--global` uses the home config (respects `CLAUDE_CONFIG_DIR`/`GEMINI_CONFIG_DIR`); `--config-dir` installs into an explicit, validated config dir (requires `--backend`) |
-| `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login` |
+| `wairon mcp install --hosted <url> [--project <id>] [--token <token>]` | Register a **hosted** entry against an instance instead of the local stdio server; the token defaults to the credential stored by `wairon login`. It needs no local project — run it in an empty folder: it writes only the registration (no `.wai/`, no guide), and the AI tool started there gets the hosted project's tools. The file then holds the bearer, so keep it out of version control (or install with `--global`) |
 | `wairon mcp status` | Show whether the server is registered |
 
 A project-local registration (`.mcp.json`, `.gemini/settings.json`) is committed with the
@@ -1470,6 +1470,24 @@ warns when the owner cannot read the project — each naming the grant that fixe
 it. An owner needs no user record — an id with no record acts as a service
 principal.
 
+**Who approves a design.** A hosted lock (`sdd_host_lock_project`, the web UI's
+Lock, `wairon lock` while attached, `POST /admin/projects/{id}/lock`) is the
+project's approval, so it is decided by `approval:decide` over the project, not
+by `project:write`:
+
+- `approval:decide` = `yes` locks directly, recorded as that person's approval.
+- A person who may write the project (`project:write` = `yes` or `approval` at
+  the project — a subsystem grant is not enough) but holds no `approval:decide`
+  `yes` only **requests** the lock: the request is pending until someone else
+  with `approval:decide` decides it (in the web UI under Approvals), and the
+  requester can wait for it with `sdd_host_await_approval`. Nobody decides
+  their own request. `approval:decide` = `approval` requests as well.
+- Anyone else is refused, and nothing is requested.
+
+Give authors `project:write` and reviewers `approval:decide`; a single
+administrator holds both. `wairon host lock` runs with the master credential,
+which approves on any project.
+
 | Command | Description |
 |---------|-------------|
 | `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |
@@ -1500,6 +1518,54 @@ preview as `sdd_host_pack_impact`. The unattended hosted policy writes —
 reconcile, a project type change, and a policy-governed project creation —
 return the impact of every pack they applied in their results.
 
+### Web UI and sign-in
+
+The browser UI (canvas, specs, approvals, administration) is served on the
+**data plane** at `/` with its API under `/web/*` — the same listener and port as
+`/mcp`. It is **off** by default: until it is on, every web path answers 404, and
+the server's startup log says so. Turn it on in the instance exposure policy, the
+JSON file `exposure-policy.json` in the data dir (a partial object; unset flags
+keep their defaults). The server reads it on every request, so no restart is
+needed:
+
+```json
+{ "webUiEnabled": true }
+```
+
+`requireTls` (default `true`) marks the session cookie `Secure`, so browsers send
+it only over HTTPS (and on `localhost`). Serve the UI behind TLS; set it to
+`false` only on a trusted network reached over plain HTTP. Once the UI is on, an
+administrator edits the same policy under Instance → Exposure.
+
+A person signs in one of two ways; the startup log names the ones configured:
+
+- **The built-in administrator.** Set both `WAIRON_ADMIN_USER` and
+  `WAIRON_ADMIN_PASSWORD` in the server's environment; the login page then shows
+  a username and password form (`POST /web/login`). This account is the
+  instance super-administrator, like `WAIRON_ADMIN_TOKEN`, and the only
+  password login: there are no per-user passwords.
+- **Single sign-on (OIDC).** Everyone else signs in through an identity
+  provider. Set `WAIRON_OIDC_ISSUER` (with `WAIRON_OIDC_CLIENT_ID` and
+  `WAIRON_OIDC_CLIENT_SECRET`, or `WAIRON_OIDC_CLIENT_SECRET_REF` naming a secret
+  stored with `wairon host secret set`) and the server registers the provider
+  `default` at every start. Register `<public URL>/web/sso/callback` as the
+  redirect URI at the provider, and list it in `WAIRON_OIDC_ALLOWED_REDIRECT_URIS`
+  so no other is accepted. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
+  label), `WAIRON_OIDC_PROVIDER_TYPE` (default `oidc`),
+  `WAIRON_OIDC_ALLOWED_DOMAINS` (email domains admitted),
+  `WAIRON_OIDC_ADMIN_GROUPS` (group claims bound to the built-in `sso-admin`
+  role: project administration and creation everywhere, never the
+  super-administrator), and `WAIRON_OIDC_AUTHORIZATION_ENDPOINT`,
+  `_TOKEN_ENDPOINT`, `_JWKS_URI`, `_USERINFO_ENDPOINT` to override discovery.
+  List values are comma-separated. More providers can be added in the UI under
+  Sign-in (SSO).
+
+A person who signs in through a provider starts with no permissions: an
+administrator grants them under Users or Permissions, or with
+`wairon host permission set --user <id>` using the id the Users view shows.
+API keys for AI tools stay what `wairon host key mint --owner` mints (or the UI
+under Agents), and act as their owner.
+
 ---
 
 ## Connecting to a hosted instance
@@ -1508,7 +1574,7 @@ return the impact of every pack they applied in their results.
 |---------|-------------|
 | `wairon login <url> [--token <token>] [--project <id>]` | Store a bearer credential for a hosted instance on this machine (`--project` verifies it against that project first; the token defaults to `WAIRON_REMOTE_TOKEN`) |
 | `wairon logout [url]` | Forget a stored credential (local only — it does not revoke it), or list what is stored |
-| `wairon remote push \| pull [--url] [--project] [--token] [--unit <id>] [--force] …` | Migrate a spec tree to or from a hosted project (`--unit` creates the destination project first) |
+| `wairon remote push \| pull [--url] [--project] [--token] [--unit <id>] [--force] …` | Migrate a spec tree to or from a hosted project (`--unit` creates the destination project first). `--project` is a project id; a member is a project of its own and is named by its own id. A key is never narrowed to a subsystem — confine a person to one with `wairon host permission set --project <id> --subsystem <id>` |
 | `wairon remote attach \| detach \| status` | Bind this checkout to a hosted project; while attached, `wairon lock` locks the hosted project |
 
 ## Surfaces, externals and producers

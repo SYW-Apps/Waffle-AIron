@@ -3837,7 +3837,7 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
       errText('This hosted tool is dispatched by the hosting data plane before reaching the MCP server; it is unavailable outside a hosted request.');
 
     reg<Record<string, never>>(server, 'sdd_host_lock_project', {
-      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). Executes directly when your resolved permission is yes and returns the completed outcome; when it is approval, a pending approval request is created instead (await it with sdd_host_await_approval).',
+      description: 'Hosted project lifecycle (execute-primary): LOCK the bound project (validate-as-complete gate + commit-scoped lock record). A lock is the project\'s approval: it executes directly when your approval:decide over the project is yes and returns the completed outcome; when you may write the project but not approve it, a pending approval request is created instead for someone holding approval:decide (await it with sdd_host_await_approval).',
       inputSchema: {},
     }, hostedStub);
     reg<{ id: string; ownerUnitId: string }>(server, 'sdd_host_initialize_project', {

@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import * as fs from 'fs';
+import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
 import { handleWebRequest, startDevSession } from './web.js';
@@ -724,6 +725,40 @@ function warnIfAdminApiModeRetired(cfg: HostConfig): void {
 }
 
 /**
+ * One startup line about the web UI, so an operator never meets a bare 404:
+ * when the exposure policy leaves it off, where to turn it on; when it is on,
+ * how a person signs in (the built-in admin account, the enabled identity
+ * providers), or that no sign-in method is configured yet. The dev server is
+ * always on and signs in by itself, so it is skipped. Reads only; any failure
+ * is swallowed so it never prevents the server from starting.
+ */
+export function noteWebUiPosture(cfg: HostConfig): void {
+  if (cfg.devMode === true) return;
+  try {
+    const guide = 'see "Web UI and sign-in" in docs/cli.md';
+    if (!resolveExposurePolicy(cfg).webUiEnabled) {
+      console.log(
+        `[wairon web UI] off — set "webUiEnabled": true in ${path.join(cfg.dataDir, 'exposure-policy.json')} `
+          + `(or in the admin UI) to serve it at / on the data plane; ${guide}.`,
+      );
+      return;
+    }
+    const methods: string[] = [];
+    if (cfg.builtinAdminUser && cfg.builtinAdminPassword) methods.push('the built-in admin account');
+    const providers = policy.listIdentityProviderRecords(cfg.dataDir).filter((p) => p.enabled).map((p) => p.id);
+    if (providers.length) methods.push(`single sign-on (${providers.join(', ')})`);
+    console.log(
+      methods.length
+        ? `[wairon web UI] on at / on the data plane; sign in with ${methods.join(' or ')}.`
+        : '[wairon web UI] on at / on the data plane, but nobody can sign in yet: set WAIRON_ADMIN_USER and '
+          + `WAIRON_ADMIN_PASSWORD, or configure an identity provider (WAIRON_OIDC_ISSUER …); ${guide}.`,
+    );
+  } catch {
+    /* a diagnostic never stops the server */
+  }
+}
+
+/**
  * Count the hosted families' members that hold no record yet and, when any do,
  * log one line saying how many await `wairon host doctor --fix` (until then
  * they are reached only through the deprecated member-qualified selectors).
@@ -783,6 +818,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   warnIfMembersPending(cfg);
   // A stored exposure policy still naming a retired adminApiMode reads as enabled.
   warnIfAdminApiModeRetired(cfg);
+  // Step 7: say whether the web UI is served and how a person signs in to it.
+  noteWebUiPosture(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));
   const adminServer = http.createServer((req, res) => {

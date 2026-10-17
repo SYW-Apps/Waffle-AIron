@@ -51,9 +51,21 @@ methods:
           API listens is the admin bind address; reads only, and any failure is swallowed
         type: local
       - stepNumber: 7
+        description: >-
+          Outside the dev server, log one line about the web UI so an operator never meets a bare
+          404: when the exposure policy leaves it off, where to turn it on (webUiEnabled in the data
+          dir's exposure-policy.json, or the admin UI) and the operator guide; when it is on, how a
+          person signs in — read the identity providers through the policy repository, and name the
+          built-in admin account (both admin user and password set) and each enabled provider, or
+          say that nobody can sign in yet. Reads only; any failure is swallowed so it never prevents
+          the server from starting
+        type: call
+        targetComponent: policy_repository
+        targetMethod: listIdentityProviders
+      - stepNumber: 8
         description: Bind the data-plane listener and route /mcp, /healthz, /readyz to the host HTTP portal
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Bind the admin-plane listener (separate, loopback-by-default bind); then, when
           adminApiMode is enabled, mount the control-plane routers on it per the resolved exposure
@@ -63,17 +75,17 @@ methods:
           browser admin UI; a surface whose flag is disabled is not mounted and answers
           404/disabled. When adminApiMode is 'disabled', no control-plane router is mounted.
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: Begin accepting connections on both listeners
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Start the periodic backup schedule (git-bound project sweep + container-level backing
           sweep, ticking every 60 seconds), passing the running instance's configuration
         type: call
         targetComponent: backup_schedule
         targetMethod: start
-      - stepNumber: 11
+      - stepNumber: 12
         description: Return the running server handle
         type: return
         outcome: running
@@ -114,4 +126,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-05T00:08:06.057Z'
+updatedAt: '2026-10-17T14:38:35.944Z'

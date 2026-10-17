@@ -34,8 +34,12 @@ fields:
     type: string
     description: The exporting tree's content state, carried from the envelope
     optional: true
+  - name: approvalsDropped
+    type: list<string>
+    description: The roots whose approval record was left out under dropApprovals; absent when none was.
+    optional: true
 methods: []
 componentClass: tree_transfer_orchestrator
 sourcePath: src/core/treetransfer.ts
 createdAt: '2026-08-12T17:23:45.971Z'
-updatedAt: '2026-10-04T10:29:23.710Z'
+updatedAt: '2026-10-17T14:46:52.404Z'

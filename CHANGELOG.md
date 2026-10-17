@@ -421,7 +421,16 @@ rules are split into smaller named rules (40 → 115); a split rule kept its cod
   "no" on a member's own record beats any inherited grant.
 - **Writes are judged per member and per subsystem.** A spec write into a member, or
   a subsystem, that the caller may not write is refused with `SubsystemWriteDenied`,
-  even when the caller may write the parent. A lock needs write on the whole project.
+  even when the caller may write the parent.
+- **A hosted lock is an approval.** It needs `approval:decide` over the project on
+  every surface (MCP, the admin API, the web UI, `wairon lock` while attached). A
+  person who may write the whole project but holds no `approval:decide` now gets a
+  pending approval request for someone else to decide, where they used to lock
+  directly. The web Lock button makes the same decision as the MCP tool: it locks
+  for someone who may approve, and for a writer it creates the request and says
+  "Approval requested; someone with approval rights decides it". The admin API
+  still refuses a caller who may not approve. Grant `approval:decide` to the people
+  who approve designs.
 - **Promote is removed:** `wairon host promote`, `sdd_host_promote_project`, the
   admin and web promote routes, the `project:promote` approval kind and the Promote
   button. Stored `promote:mark-ready` grants still migrate.
@@ -830,6 +839,20 @@ design as one deterministic JSON document (`wairon-design` 1.0,
 
 ### Fixes
 
+- **Hosted operator setup:**
+  - The shipped docs now explain how to turn on the web UI (the exposure policy's
+    `webUiEnabled`), what `requireTls` does, how the built-in administrator signs in
+    (`WAIRON_ADMIN_USER` / `WAIRON_ADMIN_PASSWORD`), how to set up single sign-on
+    (`WAIRON_OIDC_*`), and who may approve a design. `wairon serve` logs one line
+    saying whether the web UI is on and how a person can sign in.
+  - `wairon mcp install --hosted` works in an empty folder. It writes only the
+    registration, with no local spec tree or guide, and warns that the file now
+    holds a credential.
+  - A hosted lock records its gate parts, as a local lock does, so status no longer
+    reports a fresh hosted approval as an old record that needs rewriting.
+  - `wairon remote --help` no longer offers `project::subsystem`: a key is never
+    narrowed to a subsystem. A refused mint names `wairon host permission set
+    --subsystem`, which confines a person to one.
 - **Code↔spec conformance, round-4 trials:**
   - A Portal's calls are resolved by the TypeScript type checker, so no receiver spelling hides a write to a data component any more (element access, destructuring, `.call`, a field of a dependency bag, a type alias, a barrel, `Pick<>`, a factory, `new Store()`, a port interface the Portal declares itself): `PORTAL_WRITE_SHORTCUT_IN_CODE`, plus `UNDECLARED_DEPENDENCY` on the edge.
   - `PORTAL_CALL_UNRESOLVED` is now a **warning** (was a notice): a write-named call through an `any`/`unknown`/untyped receiver fails `--ci` instead of passing.
@@ -1395,7 +1418,9 @@ Hosted deployments of v5.1.0 should upgrade. This release hardens:
 - the sign-in redirect allowlist on every sign-in entry point;
 - session handling on the local dev server;
 - how integration secrets reach the Git and producer integrations;
-- the local operator's administrative writes.
+- the local operator's administrative writes;
+- approval of a hosted design, which now requires the approval capability on every
+  surface.
 
 ### Release process
 

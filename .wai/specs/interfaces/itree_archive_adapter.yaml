@@ -120,6 +120,19 @@ methods:
         type: string
     guarantees:
       - idempotent
+  - name: dropStagedApprovals
+    description: >-
+      Remove the approval record (.wai/lock.json) of every staged root before the staged tree is
+      swapped into place, and answer the roots it was removed from, so the imported design reads as
+      never approved until someone who may approve it locks it.
+    signature: 'dropStagedApprovals(stagingDir: string, roots: list<string>): list<string>'
+    returns: list<string>
+    params:
+      - name: stagingDir
+        type: string
+      - name: roots
+        type: list<string>
+    effect: write
 status: complete
 createdAt: '2026-08-12T17:24:09.167Z'
-updatedAt: '2026-10-04T10:19:43.569Z'
+updatedAt: '2026-10-17T14:47:00.059Z'

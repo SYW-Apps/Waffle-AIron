@@ -72,6 +72,8 @@ export interface RemoteTransferOutcome {
   destDir?: string;
   /** Mounts the export left out — present only when allowPartial let a partial export through. */
   skipped?: { mount: string; projectPath: string; reason: string }[];
+  /** Push only: roots whose approval record the instance left out, because the caller may not approve there. */
+  approvalsDropped?: string[];
 }
 
 // ── remote_orchestrator: the two migration workflows ────────────────────────
@@ -108,6 +110,7 @@ export async function pushTree(
   if (imported.backupPath) result.backupPath = imported.backupPath;
   if (archivePath) result.archivePath = archivePath;
   if (exported.skipped.length > 0) result.skipped = exported.skipped;
+  if (imported.approvalsDropped && imported.approvalsDropped.length > 0) result.approvalsDropped = imported.approvalsDropped;
   return result;
 }
 
@@ -500,6 +503,12 @@ function report(outcome: RemoteTransferOutcome): void {
   }
   if (outcome.backupPath) {
     logger.info(`The replaced tree was backed up to ${chalk.cyan(outcome.backupPath)} — restore it by moving it back.`);
+  }
+  if (outcome.approvalsDropped && outcome.approvalsDropped.length > 0) {
+    logger.warn(
+      `The approval was not carried over (${outcome.approvalsDropped.join(', ')}): approving the hosted project `
+        + 'needs approval:decide there. Someone who holds it locks the project on the instance.',
+    );
   }
   if (outcome.skipped && outcome.skipped.length > 0) {
     logger.warn(
