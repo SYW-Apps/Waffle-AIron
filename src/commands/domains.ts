@@ -225,6 +225,12 @@ export async function runDomainsRemove(id: string): Promise<void> {
     process.exit(1);
   }
 
+  if (!process.stdin.isTTY) {
+    // Not removed, and nobody declined it: a script reading the exit code must not read success.
+    logger.error(`No terminal to confirm removing domain "${id}" — run it in a terminal. Nothing was written.`);
+    process.exit(1);
+  }
+
   const { confirm } = await inquirer.prompt<{ confirm: boolean }>([
     {
       type: 'confirm',
