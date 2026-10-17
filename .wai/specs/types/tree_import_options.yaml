@@ -26,8 +26,14 @@ fields:
     type: string
     description: Project root to import into; defaults to the currently bound project root.
     optional: true
+  - name: dropApprovals
+    type: bool
+    description: >-
+      Leave every approval record (.wai/lock.json) the archive carries out of the imported tree, so
+      the design arrives unapproved — set by a surface whose caller may not approve the destination.
+    optional: true
 methods: []
 componentClass: tree_transfer_orchestrator
 sourcePath: src/core/treetransfer.ts
 createdAt: '2026-08-12T17:23:41.472Z'
-updatedAt: '2026-10-04T10:21:20.574Z'
+updatedAt: '2026-10-17T14:46:49.986Z'

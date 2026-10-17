@@ -310,7 +310,10 @@ function resolveBackends(options: McpInstallOptions): ('claude' | 'gemini')[] {
  * plan and the install it confirms can never disagree.
  */
 function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
-  assertProjectInitialized();
+  // A LOCAL entry serves this checkout's spec tree, so it needs one. A HOSTED
+  // entry serves the instance's tree: a hosted user has no checkout, and the
+  // entry is written here without creating anything else.
+  if (!options.hostedUrl) assertProjectInitialized();
   if (options.configDir && !options.backend) {
     throw new WaironError('--config-dir requires --backend (claude or gemini), since a config dir is agent-specific.');
   }
@@ -475,6 +478,12 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
   // time Claude launches in this project (it shows as "⏸ Pending approval").
   if (target.backend === 'claude' && !target.useGlobal) {
     logger.warn('Claude shows project .mcp.json servers as "⏸ Pending approval" — approve wairon once on next launch (or run `claude` and accept the trust prompt).');
+  }
+
+  // A hosted entry carries the bearer. A project-scoped file is usually
+  // committed, so say plainly that this one must not be.
+  if (target.after['type'] === 'http' && !target.useGlobal) {
+    logger.warn(`${target.path} now holds your hosted credential: keep it out of version control (add it to .gitignore), or install with --global instead.`);
   }
 
   // Antigravity loads MCP from its global mcp_config.json, NOT the project's

@@ -315,10 +315,12 @@ export function initializeProject(
 }
 
 /**
- * EXECUTE-PRIMARY project lock: resolve the caller's project:write permission
- * over the project's OWN record — yes locks directly via the admin plane's
+ * Project lock — the project's approval. A caller whose approval:decide over
+ * the project's OWN record is yes locks directly via the admin plane's
  * pre-authorized executeApprovedLock (completed outcome carrying the lock
- * record), approval creates a pending project:lock request, no forbids. Since
+ * record); a caller who may write the project (or holds approval:decide as
+ * approval) creates a pending project:lock request someone else decides;
+ * anyone else is forbidden. Since
  * stage 7 a member is a record of its own, so locking a member is locking its
  * record: no qualifier exists.
  */
@@ -390,11 +392,16 @@ function lockTargetOf(cfg: HostConfig, req: ApprovalRequest): string {
   return member.projectId;
 }
 
-/** Shared body for the gated lifecycle actions: authenticate → resolve
- *  project:write over the project's own record → switch on the resolved value
- *  (yes executes through the supplied pre-authorized entry, no forbids, approval
- *  creates the pending request), differing only in the kind, wording, and
- *  execution. The APPROVAL path pins the gate identity of the project's tree
+/** Shared body for the gated lifecycle actions. A lock is the project's
+ *  APPROVAL, so it is decided by approval:decide over the project's own
+ *  record, never by the right to edit it:
+ *    approval:decide yes → execute through the supplied pre-authorized entry,
+ *      the caller recorded as the approver;
+ *    otherwise, a caller who may write the project (project:write yes or
+ *      approval at the project rung) or whose approval:decide resolves to
+ *      approval → create the pending request someone else decides;
+ *    anyone else → Forbidden.
+ *  The REQUEST path pins the gate identity of the project's tree
  *  (gateStateId), so the approved execution refuses a tree that moved since;
  *  the record id alone confines it. */
 function lifecycleAction(
@@ -410,49 +417,52 @@ function lifecycleAction(
 ): ProjectActionOutcome {
   const principal = requirePrincipal(cfg, credential);
 
-  // Resolve project:write over the project through permission rules: the
-  // leaf->root walk reaches a project-scoped value, a unit-scoped value for the
-  // subtree it is placed in, or an instance-level default — so a unit admin is
-  // first-class over their subtree and nobody reaches across tenants.
-  const effective = authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId);
-  // Steps 3-5: a lock signs the whole tree, so it is a whole-tree write — the
-  // project rung decides it (a subsystem's yes never authorizes one), and
-  // nobody signs a subsystem they may not change.
-  if (effective.value !== 'no') refuseDeniedSubsystems(cfg, principal, projectId);
-  switch (effective.value) {
-    case 'yes': {
-      // The pre-authorized entries validate existence themselves (Unknown project).
-      const outcome = opts.execute(hostedApprover(principal.subject));
-      tryAppendAudit(
-        cfg,
-        buildAuditEvent(principal, 'lifecycle.completed', 'security', {
-          target: projectId,
-          projectId,
-          metadata: JSON.stringify({ kind: opts.action }),
-        }),
-      );
-      return outcome;
-    }
-    case 'no':
-      throw new ForbiddenError(`caller may not ${opts.noun} this project`);
-    default: {
-      if (!existingProjectRoot(cfg.dataDir, projectId)) {
-        throw new Error(`Unknown project "${projectId}".`);
-      }
-      // Pin the design the request is about: the approved execution refuses a
-      // tree whose gate identity moved after this moment. No qualifier is
-      // recorded — the record id (a member's own) confines the request.
-      const gateStateId = gateIdentity(cfg, projectId);
-      const pending = buildPendingRequest(
-        principal,
-        opts.action,
-        `${opts.verb} project ${projectId}`,
+  // Steps 2-3: resolve approval:decide over the project through permission
+  // rules (the leaf->root walk: project, its unit subtree, the instance
+  // default — so nobody reaches across tenants). Only a yes approves.
+  const decide = authorize(cfg.dataDir, principal, APPROVAL_DECIDE_CAPABILITY, 'project', projectId);
+  if (decide.value === 'yes') {
+    // Steps 4-6: the pre-authorized entries validate existence themselves (Unknown project).
+    const outcome = opts.execute(hostedApprover(principal.subject));
+    tryAppendAudit(
+      cfg,
+      buildAuditEvent(principal, 'lifecycle.completed', 'security', {
+        target: projectId,
         projectId,
-        { gateStateId },
-      );
-      return createPendingOutcome(cfg, principal, pending, opts.action);
-    }
+        metadata: JSON.stringify({ kind: opts.action }),
+      }),
+    );
+    return outcome;
   }
+
+  // Steps 7-9: anyone else may only REQUEST the lock, and only when they may
+  // write the project at its rung (a subsystem's yes never reaches a
+  // whole-tree action) or hold approval:decide as approval.
+  const write = authorize(cfg.dataDir, principal, PROJECT_WRITE_CAPABILITY, 'project', projectId);
+  if (write.value === 'no' && decide.value !== 'approval') {
+    throw new ForbiddenError(
+      `caller may not ${opts.noun} this project: approving it needs approval:decide over the project, `
+        + `and requesting the ${opts.noun} for someone else to approve needs project:write over it`,
+    );
+  }
+  // Steps 10-12: a lock signs the whole tree — nobody requests a signature
+  // over a subsystem they may not change.
+  if (write.value !== 'no') refuseDeniedSubsystems(cfg, principal, projectId);
+  if (!existingProjectRoot(cfg.dataDir, projectId)) {
+    throw new Error(`Unknown project "${projectId}".`);
+  }
+  // Steps 13-16: pin the design the request is about: the approved execution
+  // refuses a tree whose gate identity moved after this moment. No qualifier is
+  // recorded — the record id (a member's own) confines the request.
+  const gateStateId = gateIdentity(cfg, projectId);
+  const pending = buildPendingRequest(
+    principal,
+    opts.action,
+    `${opts.verb} project ${projectId}`,
+    projectId,
+    { gateStateId },
+  );
+  return createPendingOutcome(cfg, principal, pending, opts.action);
 }
 
 /**

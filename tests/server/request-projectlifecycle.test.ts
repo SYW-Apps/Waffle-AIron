@@ -225,8 +225,9 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     expect(listApprovalRequests(dataDir)).toHaveLength(0);
   }, 20_000);
 
-  it('lock with a yes-valued permission EXECUTES on the BOUND project — an argument-supplied project id is ignored', async () => {
+  it('lock by a caller whose approval:decide is yes EXECUTES on the BOUND project — an argument-supplied project id is ignored', async () => {
     const token = agentToken('agent-lock', 'demo', 'u-lock');
+    allow('u-lock', 'approval:decide', 'project', 'demo', 'yes');
 
     // The caller tries to name a different project in the arguments; it must be ignored.
     const res = await post(call('sdd_host_lock_project', { projectId: 'some-other-project' }), token);
@@ -239,6 +240,21 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     expect(outcome.action).toBe('project:lock');
     expect(outcome.summary).toContain('Locked project "demo"'); // bound project, NOT 'some-other-project'
     expect(listApprovalRequests(dataDir)).toHaveLength(0);
+  }, 20_000);
+
+  it('lock by a writer without approval:decide creates the pending request and never locks', async () => {
+    const token = agentToken('agent-writer', 'demo', 'u-writer');
+    allow('u-writer', 'approval:decide', 'project', 'demo', 'no');
+
+    const res = await post(call('sdd_host_lock_project'), token);
+    const jsonBody = (await res.json()) as RpcResponse;
+
+    expect(jsonBody.result?.isError).toBeFalsy();
+    const outcome = JSON.parse(toolText(jsonBody)) as ProjectActionOutcome;
+    expect(outcome.status).toBe('pending-approval');
+    expect(outcome.approval?.kind).toBe('project:lock');
+    expect(outcome.lock).toBeUndefined();
+    expect(listApprovalRequests(dataDir)).toHaveLength(1);
   }, 20_000);
 
   it('lock with an approval-valued permission creates the pending request instead', async () => {

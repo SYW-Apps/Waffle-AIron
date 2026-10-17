@@ -25,11 +25,12 @@ methods:
     description: >-
       Register (or self-heal) the wairon MCP server entry for the selected AI backends: a LOCAL
       stdio entry pinned to this project by default, or a HOSTED http entry naming an instance,
-      project and bearer when those are supplied. Only the `wairon` entry is written; every other
-      server and key in the file is preserved. A file it replaces OUTSIDE the project root (a user
-      or machine-wide configuration) is first copied beside itself as
-      <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the previous value can
-      always be restored.
+      project and bearer when those are supplied. A local entry needs an initialized project; a
+      hosted one needs none — it works in an empty folder and writes only the entry. Only the
+      `wairon` entry is written; every other server and key in the file is preserved. A file it
+      replaces OUTSIDE the project root (a user or machine-wide configuration) is first copied
+      beside itself as <file>.wairon-backup-<timestamp>, and the backup's path is printed, so the
+      previous value can always be restored.
     signature: 'installMcpServer(options?: mcp_install_options): void'
     returns: void
     params:
@@ -87,4 +88,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-08-12T18:42:15.287Z'
-updatedAt: '2026-10-04T10:18:36.273Z'
+updatedAt: '2026-10-17T14:35:31.509Z'
