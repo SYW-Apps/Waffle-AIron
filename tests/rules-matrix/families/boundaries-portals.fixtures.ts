@@ -65,7 +65,7 @@ export default [
   defineRuleFixture({
     code: 'MISSING_PORTAL_TRANSPORT',
     expectFire: false,
-    reason: 'A stored file still spelling the retired portalType HTTP_API is read as transport HTTP for one release, so it declares its transport.',
+    reason: 'A stored file still spelling the retired portalType HTTP_API is read as transport HTTP until the next major release, so it declares its transport.',
     scenario:
       'The patient booking portal was written before the reachability model and still declares portalType HTTP_API.',
     tree: {

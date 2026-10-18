@@ -64,7 +64,7 @@ describe('the one location grammar (member_declaration.source)', () => {
     expect(parseMemberSource('hosted:').problem).toMatch(/names no hosted record/);
   });
 
-  it('reads the long form — source, as, ref, dir — and the deprecated `path` for one release, flagged', () => {
+  it('reads the long form — source, as, ref, dir — and the deprecated `path` until the next major release, flagged', () => {
     const members = declaredMembers(config({
       members: {
         scheduling: 'services/scheduling',

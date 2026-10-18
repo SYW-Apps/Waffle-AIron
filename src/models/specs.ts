@@ -137,7 +137,7 @@ export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
  * gRPC, GraphQL, MessageBus, Custom) cross a network, take scoped entries and
  * produce flows; local ones (CLI, NamedPipe, IPC, JSONRPC) stay on one host;
  * InProcess is a library call that binds no endpoint. The retired portalType
- * spelling HTTP_API is read as HTTP for one release (readRetiredReachForms).
+ * spelling HTTP_API is read as HTTP until the next major release (readRetiredReachForms).
  */
 export const TransportSchema = z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']);
 export type Transport = z.infer<typeof TransportSchema>;
@@ -216,13 +216,13 @@ export type ExportRole = z.infer<typeof ExportRoleSchema>;
  * (callers outside the design reach a Portal verb over its transport) or
  * `runtime` (the process's own runtime: a composition root, scheduler, signal
  * or framework callback). The retired kinds `external` and `sibling-subsystem`
- * are read compatibly for one release (readRetiredReachForms) and never
+ * are read compatibly until the next major release (readRetiredReachForms) and never
  * authored.
  */
 export const InvocationKindSchema = z.enum(['entry', 'runtime']);
 export type InvocationKind = z.infer<typeof InvocationKindSchema>;
 
-/** The invokedBy kinds the reachability model retired, read compatibly for one release. */
+/** The invokedBy kinds the reachability model retired, read compatibly until the next major release. */
 export const RETIRED_INVOCATION_KINDS: ReadonlySet<string> = new Set(['external', 'sibling-subsystem']);
 
 /**
@@ -274,7 +274,7 @@ export const SystemPublicInterfaceSchema = z.object({
   as: z.string().optional(),
   /**
    * LEGACY, no longer authored: the export kind is derived from the backing
-   * Portal's transport (transportExportKind). Read compatibly for one release
+   * Portal's transport (transportExportKind). Read compatibly until the next major release
    * and recorded as a retired reach fact; doctor --fix drops or reports it.
    */
   type: z.string().optional(),
@@ -336,7 +336,7 @@ export type SystemSpec = z.infer<typeof SystemSpecSchema>;
 export const PublicInterfaceSchema = z.object({
   /**
    * LEGACY, no longer authored: derived from the backing Portal's transport
-   * (transportExportKind). Read compatibly for one release and recorded as a
+   * (transportExportKind). Read compatibly until the next major release and recorded as a
    * retired reach fact.
    */
   type: PublicInterfaceTypeSchema.optional(),
@@ -761,7 +761,7 @@ export const ComponentSpecSchema = z.object({
   /**
    * On a Portal (and expected on every Portal): how callers reach its verbs
    * (see TransportSchema). Replaces the retired portalType, which the loader
-   * reads compatibly for one release (HTTP_API as HTTP). Which process serves
+   * reads compatibly until the next major release (HTTP_API as HTTP). Which process serves
    * which Portal is implementation: there are no listener mounts. On an
    * Adapter, optional: the transport it calls its target Portal over —
    * inferred from the target when absent, and ADAPTER_TRANSPORT_MISMATCH when
@@ -2190,7 +2190,7 @@ export function componentEntryFor(
 }
 
 // ---------------------------------------------------------------------------
-// Retired reachability forms — read compatibly for one release
+// Retired reachability forms — read compatibly until the next major release
 // ---------------------------------------------------------------------------
 
 /**

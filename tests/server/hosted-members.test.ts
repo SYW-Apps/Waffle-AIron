@@ -54,7 +54,7 @@ import type {
 //
 // Properties: member-is-a-project, member-inherits-parent, member-no-wins,
 // no-widening (over the RBAC matrix), audit-names-the-member; the upgrade is
-// plan-first and idempotent; qualified tokens stay compatible for one release;
+// plan-first and idempotent; qualified tokens stay compatible until the next major release;
 // placing a member refuses; the server warns at boot about members awaiting the
 // upgrade; a crashed family migration is rolled back on the next bind.
 // ---------------------------------------------------------------------------
@@ -333,7 +333,7 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
 
 // ── tokens ──────────────────────────────────────────────────────────────────
 
-describe('qualified token compatibility (one release)', () => {
+describe('qualified token compatibility (until the next major release)', () => {
   it('an un-upgraded data dir binds no qualified member; after the upgrade a qualifier maps to the member record, never wider', () => {
     const q = { tokenId: 't', role: 'editor' as const, projects: ['platform::billing'], authenticated: true };
     expect(resolveProjectBinding(dataDir, q)).toBeNull();
@@ -349,7 +349,7 @@ describe('qualified token compatibility (one release)', () => {
   });
 });
 
-describe('a pre-upgrade member-qualified lock request (one release)', () => {
+describe('a pre-upgrade member-qualified lock request (until the next major release)', () => {
   /** An approved project:lock request recorded before stage 7, with a member-qualifier payload. */
   const pending = (subproject: string) => {
     const req = createApprovalRequest(dataDir, {

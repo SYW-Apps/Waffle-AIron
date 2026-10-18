@@ -164,8 +164,8 @@ methods:
         outcome: this project's outputs generated
       - stepNumber: 16
         description: >-
-          --family: list this project's direct members (declared in `members`, or for one release
-          legacy mounts)
+          --family: list this project's direct members (declared in `members`, or, until the next
+          major release, legacy mounts)
         type: call
         targetComponent: cli_core_adapter
         targetMethod: listDirectChainedSubprojects
@@ -4187,4 +4187,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-17T16:49:37.002Z'
+updatedAt: '2026-10-18T00:37:22.751Z'

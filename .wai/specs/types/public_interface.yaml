@@ -15,8 +15,8 @@ fields:
     type: PublicInterfaceType
     description: >-
       LEGACY, no longer authored: an entry's export kind is derived from its backing Portal's
-      transport (transport.exportKind). Read compatibly for one release; doctor --fix drops a value
-      that agrees with the derived one and reports one that does not
+      transport (transport.exportKind). Read compatibly until the next major release; doctor --fix
+      drops a value that agrees with the derived one and reports one that does not
     optional: true
   - name: details
     type: string
@@ -77,4 +77,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-06T12:54:25.654Z'
+updatedAt: '2026-10-18T00:38:06.562Z'

@@ -15,12 +15,12 @@ fields:
   - name: foreignBuiltins
     type: list<string>
     description: >-
-      DEPRECATED, accepted and ignored for one release: the foreign-builtin check it fed
-      (LANGUAGE_FOREIGN_BUILTIN) is retired, because contracts are written in the neutral type
+      DEPRECATED, accepted and ignored until the next major release: the foreign-builtin check it
+      fed (LANGUAGE_FOREIGN_BUILTIN) is retired, because contracts are written in the neutral type
       grammar and a language is chosen at L4. A pack still declaring it is told so by the extension
-      loader (a deprecation notice); the field is removed in the release after.
+      loader (a deprecation notice); the field is removed in the next major release.
     optional: true
 methods: []
 sourcePath: src/core/extensions.ts
 createdAt: '2026-07-14T18:56:30.920Z'
-updatedAt: '2026-10-03T23:40:29.906Z'
+updatedAt: '2026-10-18T00:37:55.471Z'

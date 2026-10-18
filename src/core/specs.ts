@@ -778,7 +778,7 @@ function memberDeclarationsAt(dir: string): MemberDeclarationRead[] {
 
 /**
  * Walk UP from a project root to find a PARENT wairon project that declares it
- * as a member — a `members` entry of its configuration or, for one release, a
+ * as a member — a `members` entry of its configuration or, until the next major release, a
  * legacy L1 subsystem whose `projectPath` resolves to this exact root. Returns
  * the parent root with the alias and form, or null when this is a top-level
  * root.
@@ -5923,7 +5923,7 @@ export class SpecWorkspace {
   /**
    * ispec_index.retiredReachFacts — what the current scan met in the forms the
    * reachability model retired, with what the stored spec held there. The
-   * loader reads them compatibly for one release, so the stored value would
+   * loader reads them compatibly until the next major release, so the stored value would
    * otherwise be gone by the time the migration asks. Read from the cached
    * scan, rescanning first when the tree changed.
    */

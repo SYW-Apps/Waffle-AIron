@@ -45,8 +45,8 @@ fields:
     type: string
     description: >-
       LEGACY, no longer authored: the export kind is derived from the backing Portal's transport
-      (transport.exportKind). Read compatibly for one release; doctor --fix drops a value that
-      agrees with the derived one and reports one that does not
+      (transport.exportKind). Read compatibly until the next major release; doctor --fix drops a
+      value that agrees with the derived one and reports one that does not
     optional: true
   - name: details
     type: string
@@ -103,4 +103,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-10-06T12:54:28.782Z'
+updatedAt: '2026-10-18T00:38:10.933Z'

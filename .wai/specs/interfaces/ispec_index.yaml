@@ -200,8 +200,9 @@ methods:
       What the current scan met in the forms the reachability model retired: each Portal's
       portalType and listener mounts, each invokedBy of a retired kind, each authored export type
       and each in-process Custom endpoint, with what the stored spec held there. The loader reads
-      them compatibly for one release, so the stored value would otherwise be gone by the time the
-      migration asks. Read from the cached scan, rescanning first when the tree changed.
+      them compatibly until the next major release, so the stored value would otherwise be gone by
+      the time the migration asks. Read from the cached scan, rescanning first when the tree
+      changed.
     signature: 'retiredReachFacts(): list<RetiredReachFact>'
     returns: list<RetiredReachFact>
     params: []
@@ -225,4 +226,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-09T18:34:57.420Z'
+updatedAt: '2026-10-18T00:37:08.841Z'

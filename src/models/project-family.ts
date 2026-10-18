@@ -13,7 +13,7 @@ import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 // only through its L0 exports, and only as a dependency it declared — a member
 // it declares, or an external it names in project.yaml. A cross-project
 // reference is `alias::name` (stage 3); the leading `::`, `super::` and
-// member-path forms still bind for one release. These are the shapes the
+// member-path forms still bind until the next major release. These are the shapes the
 // project family index answers with, and the pure lookups every consumer of
 // the graph asks it. Nothing here does I/O, and nothing here judges.
 // ---------------------------------------------------------------------------
@@ -462,7 +462,7 @@ function walkMemberPath(
  * Read a reference from the project `from` the way the scan binds one, without
  * position: an id without `::` is local; `alias::name` goes through `from`'s
  * alias table; a first segment naming one of `from`'s own subsystems qualifies
- * a local item; the deprecated forms still bind for one release — a leading
+ * a local item; the deprecated forms still bind until the next major release — a leading
  * `::` is a member path from the bound root, each `super::` climbs one
  * containing project and reads the rest there, and a first segment `from` does
  * not declare is a member path from the bound root, else a family project id.

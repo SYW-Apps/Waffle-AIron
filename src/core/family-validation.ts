@@ -1189,7 +1189,7 @@ function unloadablePacks(): string[] {
 
 /**
  * Steps 8-9: how the parent's lock pinned a member — its `members` entry, else
- * (format 1, for one release) its `children` entry.
+ * (format 1, until the next major release) its `children` entry.
  */
 function pinOf(parent: LockRecord | null, alias: string, subject: string | undefined): PinState {
   if (!parent) return 'unpinned';

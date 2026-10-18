@@ -22,10 +22,10 @@ methods:
       REQUIRED and non-empty: a missing or empty list is rejected, and '*' is written to mean the
       owner's full reach. Each entry is a hosted record id or '*' — a member is named by its own
       record id since stage 7. A member-qualified entry ('projectId::alias', one alias per hop) is
-      DEPRECATED: for one release it is accepted and stored as the member's record id (mapped
-      through the project repository's binding resolution; an alias that declares no member, or a
-      member no record holds, is rejected with guidance, never stored broken), and the answer says
-      so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. Look up the
+      DEPRECATED: until the next major release it is accepted and stored as the member's record id
+      (mapped through the project repository's binding resolution; an alias that declares no member,
+      or a member no record holds, is rejected with guidance, never stored broken), and the answer
+      says so: MintedToken.mapped carries '<qualified entry> -> <record id>' for each. Look up the
       owner's user record: a deactivated owner is rejected so a fresh token cannot revive revoked
       access, and an owner id with no user record is a service principal, allowed by design and
       given a synthesized service subject. The token carries no grants and permission rules gate per
@@ -309,4 +309,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-04T23:41:17.317Z'
+updatedAt: '2026-10-18T00:36:32.468Z'

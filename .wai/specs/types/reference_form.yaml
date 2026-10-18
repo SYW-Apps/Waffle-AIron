@@ -3,7 +3,7 @@ id: reference_form
 name: ReferenceForm
 description: >-
   How an authored cross-project reference is spelled. leading, super and path are deprecated and
-  still bind for one release.
+  still bind until the next major release.
 subsystem: sdd_core
 fields: []
 methods: []
@@ -26,4 +26,4 @@ values:
       A first segment the referring project does not declare, read the stage-2 way as a member path
       from the bound root (deprecated)
 createdAt: '2026-10-04T23:11:14.940Z'
-updatedAt: '2026-10-04T23:11:15.348Z'
+updatedAt: '2026-10-18T00:38:07.676Z'

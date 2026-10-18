@@ -17,17 +17,18 @@ methods:
       there is no cascade into members (stage 5). `--family` walks the members explicitly,
       generating each member's own layer in its own root (bootstrapping a member that is not yet
       runnable, non-destructively); without it nothing below the project is written. `--no-recurse`
-      is accepted for one release as the default it now is. Agent-file materialization is OPT-IN via
-      rules.materializeAgentFiles (default off): when ON, generates per-subsystem owner/architect
-      files rendered through the SAME live brief composition (so file, tool, and resource surfaces
-      are one text) and prunes stale managed files against the FULL resolved topology; when OFF (the
-      default), the desired state is ZERO agent files — any leftover wairon:managed agent files are
-      removed once, and only guides and skills are (re)injected. Hand-authored files and
-      .wai/agents/ guidance files are never touched either way. Generate writes nothing outside the
-      project root unless asked: a target whose output directory resolves outside it is named and
-      skipped, both write and prune, until `--global` is given — and then every file there it
-      replaces or prunes is first backed up beside itself. The derived context documents are kept
-      current whenever the project keeps a context directory, exactly as `doctor --fix` keeps them.
+      is accepted until the next major release as the default it now is. Agent-file materialization
+      is OPT-IN via rules.materializeAgentFiles (default off): when ON, generates per-subsystem
+      owner/architect files rendered through the SAME live brief composition (so file, tool, and
+      resource surfaces are one text) and prunes stale managed files against the FULL resolved
+      topology; when OFF (the default), the desired state is ZERO agent files — any leftover
+      wairon:managed agent files are removed once, and only guides and skills are (re)injected.
+      Hand-authored files and .wai/agents/ guidance files are never touched either way. Generate
+      writes nothing outside the project root unless asked: a target whose output directory resolves
+      outside it is named and skipped, both write and prune, until `--global` is given — and then
+      every file there it replaces or prunes is first backed up beside itself. The derived context
+      documents are kept current whenever the project keeps a context directory, exactly as `doctor
+      --fix` keeps them.
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
       dryRun?: boolean; family?: boolean; global?: boolean }): Promise<void>
@@ -957,4 +958,4 @@ methods:
         description: '--dry-run, --search <dir...> and --no-pin-symbol'
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T08:26:37.487Z'
+updatedAt: '2026-10-18T00:36:11.083Z'

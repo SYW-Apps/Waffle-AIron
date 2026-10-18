@@ -2080,7 +2080,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // schema refuses one without them at the write. The export kind is derived
   // from the backing Portal's transport; `type` is legacy.
   const publicInterfaceItemInput = z.object({
-    type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']).optional().describe('LEGACY, no longer authored: the export kind is derived from the backing Portal\'s transport. Accepted for one release and carried as written; doctor --fix drops it'),
+    type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']).optional().describe('LEGACY, no longer authored: the export kind is derived from the backing Portal\'s transport. Accepted until the next major release and carried as written; doctor --fix drops it'),
     role: z.enum(['call', 'implement']).optional().describe('What consumers do with the entry: call it (the default) or implement it — an extension point (a trait, callback or webhook contract) whose realization consumers supply; an Adapter may back an implement entry'),
     details: z.string().optional().describe('Consumer-facing description of an own item (required on an own component item); a re-export inherits its target\'s'),
     component: z.string().optional().describe('For an own item, the L2 component that realizes it (this subsystem\'s published surface); for a re-export, the component re-exported from `from`'),
@@ -2840,7 +2840,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
           method: z.string().describe('The NAME of the interface method to bind (not the HTTP verb)'),
-          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. The retired spelling HTTP_API is still read as HTTP for one release; any other transport is refused, naming the Portal\'s'),
+          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. The retired spelling HTTP_API is still read as HTTP until the next major release; any other transport is refused, naming the Portal\'s'),
           httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
           path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
           status: z.number().int().min(200).max(399).optional().describe('HTTP: the success status the operation answers with when it is not the verb\'s convention — 202 Accepted, a 3xx redirect, a 201 for a workflow verb that files something. The OpenAPI export uses it; omitted, the export answers 204 for a method returning nothing, 201 for a POST that creates, else 200'),

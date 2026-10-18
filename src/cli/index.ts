@@ -132,7 +132,7 @@ program
   .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
   .option('--root', 'only generate root-level agents')
   .option('--family', 'also generate each member\'s own layer in its own root (generate never cascades otherwise)')
-  .option('--no-recurse', 'accepted for one release: generating only this project\'s layer is now the default')
+  .option('--no-recurse', 'accepted until the next major release: generating only this project\'s layer is now the default')
   .option('--no-prune', 'do not remove wairon-managed agent files that are no longer in the topology')
   .option('--dry-run', 'preview what would be generated without writing files')
   .option('--global', 'also write (and prune) a target whose output directory resolves outside the project root, backing up each file replaced there')
@@ -144,7 +144,7 @@ program
       domains: opts.domains,
       root: opts.root,
       // --family walks the members explicitly; --no-recurse is the default now
-      // and is accepted for one release. commander maps --no-prune to opts.prune === false.
+      // and is accepted until the next major release. commander maps --no-prune to opts.prune === false.
       family: opts.family === true,
       prune: opts.prune,
       dryRun: opts.dryRun,
@@ -168,7 +168,7 @@ program
   .description('Record human approval of the design: validate the spec tree as complete, write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
-  .option('--no-recursive', 'accepted for one release and ignored: a lock approves this project only; each member locks at its own root')
+  .option('--no-recursive', 'accepted until the next major release and ignored: a lock approves this project only; each member locks at its own root')
   .option('--all', 'list every changed spec in the summary instead of summarizing a long list')
   .action(async (opts) => {
     await lockCommand(opts);

@@ -54,7 +54,7 @@ import type {
 // record of its own: it is bound by its own id, its permissions resolve over
 // its own chain (its scope, its parents', its family root's units), and audit
 // names it. A deprecated member-qualified selector ('projectId::alias') still
-// resolves, for one release, to the member's record; the family root it named
+// resolves, until the next major release, to the member's record; the family root it named
 // is recorded as the event's composition.
 // ---------------------------------------------------------------------------
 

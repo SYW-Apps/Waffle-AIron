@@ -378,9 +378,9 @@ methods:
         description: >-
           Resolve the authorized binding through the project repository: the bound hosted RECORD (a
           member is a record of its own, bound by its own id), its root, its family root id, and —
-          for one release — the deprecated member qualifier that resolved it; a narrowing entry
-          naming a project covers its members (projects nest like units); cross-project access
-          rejected
+          until the next major release — the deprecated member qualifier that resolved it; a
+          narrowing entry naming a project covers its members (projects nest like units);
+          cross-project access rejected
         type: call
         targetComponent: project_repository
         targetMethod: resolveBinding
@@ -655,4 +655,4 @@ lint:
         rule_registry.registerBuiltinRules.
 status: complete
 createdAt: '2026-07-04T12:54:20.000Z'
-updatedAt: '2026-10-17T16:25:07.091Z'
+updatedAt: '2026-10-18T00:37:31.483Z'

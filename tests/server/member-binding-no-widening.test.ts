@@ -16,7 +16,7 @@ import type { Principal } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
 // Stage 3: a hosted token qualifier keeps its text, and each hop is read as a
-// member alias — looked up in project.yaml `members` or, for one release, a
+// member alias — looked up in project.yaml `members` or, until the next major release, a
 // legacy L1 mount. Stage 7: each member is a hosted record of its own, and a
 // (deprecated) qualifier maps to that record. A qualifier therefore binds the
 // SAME record after the project moves its mounts into `members`, and nothing

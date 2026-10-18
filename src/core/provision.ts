@@ -214,7 +214,7 @@ export function ensureProjectInitialized(fallbackName: string, id?: string, visi
 // Members (stage 3)
 //
 // A member is a project the bound project contains: declared in its
-// project.yaml `members` (or, for one release, by a legacy L1 subsystem that
+// project.yaml `members` (or, until the next major release, by a legacy L1 subsystem that
 // carries projectPath). It is never a subsystem of its parent and carries no
 // content there. These writers keep the two halves — the declaration and the
 // member project — in step, and never write the L1 mount form.
@@ -235,7 +235,7 @@ interface MemberAt {
 
 /**
  * The members a root declares: its `members` entries first (read through that
- * root's binding), then — for one release — each legacy L1 mount of its own
+ * root's binding), then — until the next major release — each legacy L1 mount of its own
  * spec tree whose alias `members` does not hold. A declaration with a problem,
  * or a mount whose alias `externals` also declares, is not followed.
  */
@@ -302,7 +302,7 @@ function walkMembers(projectRoot: string, onMember: (memberDir: string, alias: s
 
 /**
  * core_orchestrator.listDirectChainedSubprojects — the DIRECT members of a
- * project, one level deep: its `members` entries and, for one release, its
+ * project, one level deep: its `members` entries and, until the next major release, its
  * legacy L1 mounts, each resolved inside the project root as the member's
  * directory, alias and form. An absolute or escaping path is skipped. Used by
  * layered `wairon generate` to cascade one level at a time.

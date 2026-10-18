@@ -420,9 +420,10 @@ methods:
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry on the
           request's record id (a request recorded with a member qualifier before the upgrade is
-          mapped, for one release, to that member's record, never wider) with the request's
-          gateStateId as the expected identity (so an approval never certifies a design other than
-          the one requested; a request without one executes against the tree as it stands).
+          mapped, until the next major release, to that member's record, never wider) with the
+          request's gateStateId as the expected identity (so an approval never certifies a design
+          other than the one requested; a request without one executes against the tree as it
+          stands).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -577,9 +578,9 @@ methods:
       - stepNumber: 15
         description: >-
           project:lock — execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a pre-upgrade qualifier mapped to its member record for one release)
-          with the request's gateStateId as the expected identity (the retry path must confine and
-          pin exactly as the auto-execute path does).
+          request's record id (a pre-upgrade qualifier mapped to its member record until the next
+          major release) with the request's gateStateId as the expected identity (the retry path
+          must confine and pin exactly as the auto-execute path does).
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -703,4 +704,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-17T16:25:44.818Z'
+updatedAt: '2026-10-18T00:37:38.351Z'
