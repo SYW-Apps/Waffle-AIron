@@ -7,6 +7,7 @@
  * retired in stage 3) is never written.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -99,7 +100,7 @@ describe('wairon member add|move|internalize', () => {
     await expect(runMemberAdd('billing', 'services/billing')).rejects.toThrow(/Not inside an initialized wairon project/);
   });
 
-  it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
+  v5it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
     const root = parentProject();
     const output = captureOutput();
     await runMemberAdd('billing', 'services/billing', { project: true });

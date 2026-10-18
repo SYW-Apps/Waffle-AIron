@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -56,23 +57,23 @@ function buildParent(rootDir: string): void {
     boundaries: [],
     globalRequirements: [],
     publicInterfaces: [
-      { id: 'gateway', name: 'Gateway API', subsystem: 'core-sub', component: 'gateway-portal', type: 'REST', details: 'main api', audience: 'external' },
-      { id: 'family-ops', name: 'Family Ops', subsystem: 'core-sub', component: 'family-portal', type: 'Custom', details: 'family-internal ops', audience: 'project' },
+      { as: 'gateway', name: 'Gateway API', from: 'core-sub', component: 'gateway-portal', details: 'main api', audience: 'external' },
+      { as: 'family-ops', name: 'Family Ops', from: 'core-sub', component: 'family-portal', details: 'family-internal ops', audience: 'project' },
     ],
     createdAt: now,
     updatedAt: now,
   });
   saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
-      { type: 'REST', details: 'api', component: 'gateway-portal' },
-      { type: 'Custom', details: 'family', component: 'family-portal' },
+      { details: 'api', component: 'gateway-portal' },
+      { details: 'family', component: 'family-portal' },
     ],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
-    componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['core-orch'],
+    componentType: 'Portal', transport: 'HTTP', dependsOn: ['core-orch'],
     dispatch: [{ capability: 'spec.get', component: 'core-orch', method: 'getRecord' }],
   } as Partial<ComponentSpec>));
-  saveComponentSpec(component('family-portal', 'core-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+  saveComponentSpec(component('family-portal', 'core-sub', { componentType: 'Portal', transport: 'Custom' } as Partial<ComponentSpec>));
   saveComponentSpec(component('core-orch', 'core-sub'));
   saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
     {
@@ -443,7 +444,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     return childDir;
   }
 
-  it('a covered super:: call validates silently; a missing method is SURFACE_REF_NOT_EXPOSED', () => {
+  v5it('a covered super:: call validates silently; a missing method is SURFACE_REF_NOT_EXPOSED', () => {
     const childDir = buildFamily();
 
     // Standalone child context.
@@ -478,7 +479,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(notExposed[0].severity).toBe('error');
   });
 
-  it('a non-Adapter crossing the project boundary is still a FULL-STRENGTH boundary violation', () => {
+  v5it('a non-Adapter crossing the project boundary is still a FULL-STRENGTH boundary violation', () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     saveComponentSpec(component('rogue-orch', 'transpiler', {
@@ -496,7 +497,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(res.valid).toBe(false);
   });
 
-  it("a cross-tree ref nothing covers is unavailable in the child's own gate — never resolved through the parent, never a pass", () => {
+  v5it("a cross-tree ref nothing covers is unavailable in the child's own gate — never resolved through the parent, never a pass", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     saveComponentSpec(component('mystery-adapter', 'transpiler', {
@@ -513,7 +514,7 @@ describe('standalone-child validation against pinned parent snapshots', () => {
     expect(res.issues.map(i => i.code)).not.toContain('INVALID_DEPENDENCY_REFERENCE');
   });
 
-  it("a chained child's source paths are its own: a file missing from its root is reported against that root", () => {
+  v5it("a chained child's source paths are its own: a file missing from its root is reported against that root", () => {
     const childDir = buildFamily();
     setProjectRoot(childDir);
     // A complete implementation whose sourcePath resolves nowhere in the child
@@ -637,7 +638,7 @@ describe('cross-tree references are matched by the provider they name', () => {
     return res.issues.filter((i) => i.code === code).map((i) => `${i.severity} @${i.specId}`).sort();
   }
 
-  it('a super:: reference two providers answer with different contracts is SURFACE_REF_AMBIGUOUS, judged against neither', () => {
+  v5it('a super:: reference two providers answer with different contracts is SURFACE_REF_AMBIGUOUS, judged against neither', () => {
     const res = verdict(cloneWithoutParent(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir));
 
     // The dependency, the call and the dispatch each report it.
@@ -657,14 +658,14 @@ describe('cross-tree references are matched by the provider they name', () => {
     expect(res.valid).toBe(false);
   });
 
-  it("from the parent root the child's references are the child's own gate's — the parent reports none of them", () => {
+  v5it("from the parent root the child's references are the child's own gate's — the parent reports none of them", () => {
     const res = verdict(family('super::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).root);
 
     expect(findings(res, 'SURFACE_REF_AMBIGUOUS')).toEqual([]);
     expect(findings(res, 'SURFACE_REF_NOT_EXPOSED')).toEqual([]);
   });
 
-  it('a reference that names its provider is judged against that provider alone', () => {
+  v5it('a reference that names its provider is judged against that provider alone', () => {
     // billing never exposed purgeInvoice, and archive — which does — is not consulted.
     const billing = verdict(cloneWithoutParent(
       family('super::billing::invoice-portal', 'purgeInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
@@ -684,7 +685,7 @@ describe('cross-tree references are matched by the provider they name', () => {
     expect(archiveGaps[0].message).toMatch(/invoice\.void.*"root-system::archive"/s);
   });
 
-  it("a provider that does not expose the name never borrows another provider's contract", () => {
+  v5it("a provider that does not expose the name never borrows another provider's contract", () => {
     // ledger publishes no invoice-portal; billing and archive do, and neither stands in for it.
     const res = verdict(cloneWithoutParent(
       family('super::ledger::invoice-portal', 'fetchInvoice', [BILLING, ARCHIVE, LEDGER]).kidDir,
@@ -696,7 +697,7 @@ describe('cross-tree references are matched by the provider they name', () => {
     expect(codes).not.toContain('SURFACE_REF_NOT_EXPOSED');
   });
 
-  it('providers exposing the name with the same contract leave nothing ambiguous', () => {
+  v5it('providers exposing the name with the same contract leave nothing ambiguous', () => {
     const sameAsBilling = pin('root-system::archive', BILLING.interfaces);
     const res = verdict(cloneWithoutParent(
       family('super::invoice-portal', 'purgeInvoice', [BILLING, sameAsBilling]).kidDir,
@@ -735,7 +736,7 @@ describe('stage-1 family pins + computeStateIdAt', () => {
     return childDir;
   }
 
-  it('lists the generated pins a root holds, parent and sibling, never a foreign import', () => {
+  v5it('lists the generated pins a root holds, parent and sibling, never a foreign import', () => {
     const childDir = buildChainedWorld();
     setProjectRoot(childDir);
     expect(listFamilyPins().map((pin) => [pin.key, pin.role])).toEqual([
@@ -747,7 +748,7 @@ describe('stage-1 family pins + computeStateIdAt', () => {
     expect(listFamilyPins()).toEqual([]);
   });
 
-  it('computeStateIdAt returns the hash, restores the previous binding, and is null for a non-project root', () => {
+  v5it('computeStateIdAt returns the hash, restores the previous binding, and is null for a non-project root', () => {
     const childDir = buildChainedWorld();
 
     // Bind the CHILD; hash the PARENT.
@@ -793,8 +794,8 @@ describe('surface projection over the resolved export table', () => {
     });
     saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
-        { type: 'REST', details: 'api', component: 'gateway-portal' },
-        { type: 'Custom', details: 'family', component: 'family-portal' },
+        { details: 'api', component: 'gateway-portal' },
+        { details: 'family', component: 'family-portal' },
         { typeDef: 'ledger-entry' },
       ],
     }));
@@ -836,7 +837,7 @@ describe('surface projection over the resolved export table', () => {
   it('drops an entry the resolver cannot bind, and reports it through validate as an error (stage 4)', () => {
     buildExporting();
     const system = loadSystemSpec()!;
-    saveSystemSpec({ ...system, publicInterfaces: [...(system.publicInterfaces ?? []), { id: 'ghost-api', type: 'REST', details: 'nothing behind it' }] });
+    saveSystemSpec({ ...system, publicInterfaces: [...(system.publicInterfaces ?? []), { as: 'ghost-api', details: 'nothing behind it' }] });
     invalidateSpecCache();
     setProjectRoot(rootDir);
     expect(projectOwnSurface('project').interfaces.some((e) => e.id === 'ghost-api')).toBe(false);

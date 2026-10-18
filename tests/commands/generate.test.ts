@@ -5,6 +5,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { resolveExpectedOutputPaths } from '../../src/exporters/generate.js';
 import { WAIRON_MANAGED_BANNER } from '../../src/exporters/base.js';
@@ -317,8 +318,8 @@ describe('cli_runner.runGenerate: --family generates each member layer in its ow
     writeProjectYaml(rootDir, 'gen-system', { materializeAgentFiles: true });
     setProjectRoot(rootDir);
     saveSystemSpec(systemSpec('gen-system'));
-    saveSpec('subsystem', { ...subsystem('fresh'), projectPath: 'fresh' });
-    saveSpec('subsystem', { ...subsystem('ready'), projectPath: 'ready' });
+    projectConfigRepositoryAt(rootDir).declareMember('fresh', { source: 'fresh' });
+    projectConfigRepositoryAt(rootDir).declareMember('ready', { source: 'ready' });
     // 'fresh': an empty folder — no configuration and no L0 yet.
     fs.mkdirSync(freshDir, { recursive: true });
     // 'ready': its own configuration (agent files on), its own L0 and one subsystem.
@@ -341,28 +342,20 @@ describe('cli_runner.runGenerate: --family generates each member layer in its ow
     expect(fs.existsSync(path.join(readyDir, '.claude'))).toBe(false);
   }, 180_000);
 
-  it('--family bootstraps and generates a fresh member, and generates an initialized member from its own tree', async () => {
+  it('--family generates an initialized member from its own tree, and leaves a part (an empty folder) to its parent', async () => {
     const { freshDir, readyDir } = buildFamily();
     const { stdout } = await runCli(rootDir, '--family');
 
     const agentsDir = (dir: string) => path.join(dir, '.claude', 'agents');
-    expect(stdout).toContain('Member "fresh"');
+    // A member whose folder holds no project is a part of this one: its layer is this project's own.
+    expect(stdout).not.toContain('Member "fresh"');
     expect(stdout).toContain('Member "ready"');
 
-    // Parent layer: its architect and one delegate per child — never a child's internals.
+    // Parent layer: its architect and one delegate per project member — never a member's internals.
     expect(fs.existsSync(path.join(agentsDir(rootDir), 'system-architect.md'))).toBe(true);
-    expect(fs.existsSync(path.join(agentsDir(rootDir), 'fresh-owner.md'))).toBe(true);
     expect(fs.existsSync(path.join(agentsDir(rootDir), 'ready-owner.md'))).toBe(true);
     expect(fs.existsSync(path.join(agentsDir(rootDir), 'inner-owner.md'))).toBe(false);
-
-    // Fresh child: bootstrapped in place (default configuration, an L0 named after
-    // its subsystem), then its layer generated in its own root — skills and guide
-    // there, and no agent files, since its default configuration keeps them off.
-    expect(fs.existsSync(path.join(freshDir, '.wai', 'project.yaml'))).toBe(true);
-    expect(fs.readFileSync(path.join(freshDir, '.wai', 'specs', '.index.yaml'), 'utf8')).toMatch(/^name: ['"]?fresh['"]?\s*$/m);
-    expect(fs.existsSync(path.join(freshDir, '.claude', 'skills', 'sdd-architect', 'SKILL.md'))).toBe(true);
-    expect(fs.existsSync(path.join(freshDir, '.claude', 'CLAUDE.md'))).toBe(true);
-    expect(fs.existsSync(path.join(agentsDir(freshDir), 'system-architect.md'))).toBe(false);
+    expect(fs.readdirSync(freshDir)).toEqual([]);
 
     // Initialized child: its own layer, resolved from its own tree.
     expect(fs.existsSync(path.join(agentsDir(readyDir), 'system-architect.md'))).toBe(true);

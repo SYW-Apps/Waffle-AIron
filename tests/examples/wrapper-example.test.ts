@@ -78,7 +78,7 @@ name: Admin Portal
 description: Maintenance console that edits Google Sheets rows directly.
 subsystem: scenario-hub
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn: [routing-orchestrator]
 ${stamp}
 `);

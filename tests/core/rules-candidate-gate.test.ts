@@ -192,7 +192,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
   it('still reports MISSING_ENDPOINT — the tree half survived the split', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
-    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nstatus: complete\nportalType: HTTP_API');
+    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nstatus: complete\ntransport: HTTP');
     writeSpec('interface', 'iapi', [
       'schemaVersion: 1.0.0',
       'id: iapi',
@@ -271,7 +271,7 @@ describe('authoring: updateSpecGated', () => {
     setProjectRoot(tempDir);
     // Legal as a Portal. Demoting it to an Adapter strands basePath — and the
     // delta alone never says so; only the merged spec does.
-    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\nbasePath: /api');
+    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP\nbasePath: /api');
     invalidateSpecCache();
 
     expect(() => updateSpecGated('component', 'api', { componentType: 'Adapter' }))

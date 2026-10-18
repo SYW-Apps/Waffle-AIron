@@ -69,13 +69,13 @@ function buildChainedWorld(rootDir: string): string {
     boundaries: [],
     globalRequirements: [],
     publicInterfaces: [
-      { id: 'gateway', name: 'Gateway API', subsystem: 'core-sub', component: 'gateway-portal', type: 'REST', details: 'main api', audience: 'external' },
+      { as: 'gateway', name: 'Gateway API', from: 'core-sub', component: 'gateway-portal', details: 'main api', audience: 'external' },
     ],
     createdAt: now,
     updatedAt: now,
   });
   saveSpec('subsystem', subsystem('core-sub', {
-    publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
+    publicInterfaces: [{ details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
     componentType: 'Portal', transport: 'HTTP',

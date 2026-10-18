@@ -5,7 +5,7 @@ import * as path from 'path';
 import { setProjectRoot, listFilesRecursive } from '../../src/utils/fs.js';
 import { invalidateSpecCache, workspaceFor } from '../../src/core/specs.js';
 import { renameMethod } from '../../src/core/provision.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -137,7 +137,7 @@ function books(): string {
     { name: 'audit', steps: [{ type: 'local' }] },
   ]));
   write('components/books_portal.yaml', comp('books_portal', 'books', 'Portal', {
-    portalType: 'Custom', dependsOn: ['ledger', 'books_orch'],
+    transport: 'Custom', dependsOn: ['ledger', 'books_orch'],
     dispatch: [
       { capability: 'ledger.post', component: 'ledger', method: 'post' },
       { capability: 'ledger.close', component: 'ledger', method: 'close' },
@@ -172,7 +172,7 @@ function books(): string {
   setProjectRoot(root);
   invalidateSpecCache();
 
-  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeMemberProject(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
   ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));

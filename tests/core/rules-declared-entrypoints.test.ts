@@ -105,7 +105,7 @@ const RETURN = (n: number) =>
 function registerChainFixture(proj: ReturnType<typeof createTempProject>, opts: { portal: boolean }) {
   proj.subsystem('sub-a');
   if (opts.portal) {
-    proj.component('api-portal', 'Portal', 'portalType: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [sched-orch]');
+    proj.component('api-portal', 'Portal', 'transport: Custom\ninvokedBy: {kind: entry, caller: Clients outside the design call it over its transport}\ndependsOn: [sched-orch]');
     proj.contract('api-portal', { boot: [] });
     proj.impl('api-portal', ['methods:', '  - name: boot', '    narrative:', CALL(1, 'sched-orch', 'start'), RETURN(2)].join('\n'));
   }

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -193,7 +194,7 @@ describe('stage 8 — kind from content, and parts read into their parent', () =
     expect(loadComponentSpec('appointment-planner')?.dependsOn).toEqual(['patient-registry']);
   });
 
-  it('reads a member whose content declares an id, holds an L0 or carries a lock as a project, exactly as before', () => {
+  v5it('reads a member whose content declares an id, holds an L0 or carries a lock as a project, exactly as before', () => {
     const f = buildReferenceFamily();
     cleanups.push(() => f.cleanup());
     bind(f.top);
@@ -461,7 +462,7 @@ describe('property: existing-members-unchanged', () => {
       .map((i) => `${i.severity} ${i.code} @${i.specId ?? '-'}`).sort();
   }
 
-  it('the reference family and a stage-7-style family validate identically before and after the path → source rewrite', () => {
+  v5it('the reference family and a stage-7-style family validate identically before and after the path → source rewrite', () => {
     for (const build of [buildReferenceFamily, buildContractFamily]) {
       const f = build();
       cleanups.push(() => f.cleanup());

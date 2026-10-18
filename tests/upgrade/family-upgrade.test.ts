@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as upgrade from '../../src/upgrade/index.js';
 import { read } from '../../src/upgrade/adapters/stamp.js';
-import { setProjectRoot } from '../../src/utils/fs.js';
+import { runInV5Reading, setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, saveComponentSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
@@ -69,8 +69,12 @@ function system(name: string): void {
   saveSystemSpec({ schemaVersion: '1.0.0', name, vision: 'v', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
 }
 
-/** A v5 family: the top mounts child `kid` through an L1 subsystem carrying projectPath. */
+/** A v5 family: the top mounts child `kid` through an L1 subsystem carrying projectPath (written in the v5 reading). */
 function v5Family(): { root: string; kid: string } {
+  return runInV5Reading(writeV5Family);
+}
+
+function writeV5Family(): { root: string; kid: string } {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-upg-fam-')));
   roots.push(root);
   projectYaml(root);

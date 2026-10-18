@@ -30,7 +30,7 @@ const SYSTEM = {
 const INVOICE_PORTAL = {
   id: 'invoice-api-portal',
   componentType: 'Portal',
-  portalType: 'HTTP_API',
+  transport: 'HTTP',
   subsystem: 'billing',
   description: 'Inbound REST surface for invoice retrieval and submission.',
 };
@@ -71,7 +71,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.' }],
+          publicInterfaces: [{ details: 'Invoice REST API for partner systems.' }],
         },
       ],
       components: [INVOICE_PORTAL],
@@ -90,7 +90,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
+          publicInterfaces: [{ details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
         },
       ],
       components: [INVOICE_PORTAL],
@@ -114,7 +114,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
+          publicInterfaces: [{ details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
         },
       ],
       components: [INVOICE_ORCH],
@@ -132,7 +132,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
+          publicInterfaces: [{ details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
         },
       ],
       components: [INVOICE_PORTAL, INVOICE_ORCH],
@@ -157,11 +157,11 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'Custom', details: 'Visit schedule feed for invoicing.', component: 'schedule-portal' }],
+          publicInterfaces: [{ details: 'Visit schedule feed for invoicing.', component: 'schedule-portal' }],
         },
       ],
       components: [
-        { id: 'schedule-portal', componentType: 'Portal', portalType: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
+        { id: 'schedule-portal', componentType: 'Portal', transport: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
         INVOICE_PORTAL,
       ],
       interfaces: [INVOICE_API_INTERFACE],
@@ -179,16 +179,16 @@ export default [
         {
           id: 'scheduling',
           description: 'Appointment booking and slot management.',
-          publicInterfaces: [{ type: 'Custom', details: 'Visit schedule feed for sibling subsystems.', component: 'schedule-portal' }],
+          publicInterfaces: [{ details: 'Visit schedule feed for sibling subsystems.', component: 'schedule-portal' }],
         },
         {
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
+          publicInterfaces: [{ details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
         },
       ],
       components: [
-        { id: 'schedule-portal', componentType: 'Portal', portalType: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
+        { id: 'schedule-portal', componentType: 'Portal', transport: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
         INVOICE_PORTAL,
       ],
       interfaces: [INVOICE_API_INTERFACE],
@@ -212,7 +212,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'iretired_invoice_api' },
+            { details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'iretired_invoice_api' },
           ],
         },
       ],
@@ -239,12 +239,12 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'ischedule_feed' },
+            { details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'ischedule_feed' },
           ],
         },
       ],
       components: [
-        { id: 'schedule-portal', componentType: 'Portal', portalType: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
+        { id: 'schedule-portal', componentType: 'Portal', transport: 'Custom', subsystem: 'scheduling', description: 'Inbound scheduling surface.' },
         INVOICE_PORTAL,
       ],
       interfaces: [
@@ -270,7 +270,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'REST', details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'iinvoice_api' },
+            { details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal', interface: 'iinvoice_api' },
           ],
         },
       ],
@@ -297,7 +297,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'REST', details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claim'] },
+            { details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claim'] },
           ],
         },
       ],
@@ -319,7 +319,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'REST', details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claims'] },
+            { details: 'Invoice REST API for the claims pipeline.', component: 'invoice-api-portal', consumers: ['claims'] },
           ],
         },
       ],

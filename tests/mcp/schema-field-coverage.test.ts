@@ -325,7 +325,7 @@ describe('MCP write-tool schema field coverage', () => {
       kind: 'system', id: 'system',
       delta: {
         databases: [{ id: 'maindb', name: 'Main', engine: 'postgresql' }],
-        publicInterfaces: [{ id: 'pub1', name: 'Public API', type: 'REST', details: 'the gateway', audience: 'external' }],
+        publicInterfaces: [{ id: 'pub1', name: 'Public API', details: 'the gateway', audience: 'external' }],
         diagram: { lineStyle: 'taxi', defaultView: 'architecture' },
       },
     });

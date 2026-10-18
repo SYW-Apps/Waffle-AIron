@@ -71,11 +71,11 @@ function buildTree(): void {
   setProjectRoot(rootDir);
   saveSystemSpec({
     schemaVersion: '1.0.0', name: 'sig-system', vision: 'signature consumers', boundaries: [], globalRequirements: [],
-    publicInterfaces: [{ id: 'events', name: 'Events API', subsystem: 'core', component: 'events-portal', type: 'REST', details: 'events', audience: 'external' }],
+    publicInterfaces: [{ as: 'events', name: 'Events API', from: 'core', component: 'events-portal', details: 'events', audience: 'external' }],
     createdAt: now, updatedAt: now,
   });
-  saveSpec('subsystem', subsystem('core', { publicInterfaces: [{ type: 'REST', details: 'events', component: 'events-portal' }] }));
-  saveComponentSpec(component('events-portal', { componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['events-orch'] } as Partial<ComponentSpec>));
+  saveSpec('subsystem', subsystem('core', { publicInterfaces: [{ details: 'events', component: 'events-portal' }] }));
+  saveComponentSpec(component('events-portal', { componentType: 'Portal', transport: 'HTTP', dependsOn: ['events-orch'] } as Partial<ComponentSpec>));
   saveComponentSpec(component('events-orch'));
   saveInterfaceSpec({
     id: 'ievents-orch', name: 'ievents-orch', description: 'd', component: 'events-orch', status: 'complete', createdAt: now, updatedAt: now,

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { INVISIBLE_CHARACTERS, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 import { fieldTypeRefs, methodTypeRefs, signatureTypeRefs, typeMatchesRef } from './type-references.js';
+import { readsV5Forms } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Common Identifier Schema
@@ -137,7 +138,7 @@ export type DiagramConfig = z.infer<typeof DiagramConfigSchema>;
  * gRPC, GraphQL, MessageBus, Custom) cross a network, take scoped entries and
  * produce flows; local ones (CLI, NamedPipe, IPC, JSONRPC) stay on one host;
  * InProcess is a library call that binds no endpoint. The retired portalType
- * spelling HTTP_API is read as HTTP until the next major release (readRetiredReachForms).
+ * spelling HTTP_API is read as HTTP only in the v5 reading (readRetiredReachForms).
  */
 export const TransportSchema = z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']);
 export type Transport = z.infer<typeof TransportSchema>;
@@ -216,13 +217,12 @@ export type ExportRole = z.infer<typeof ExportRoleSchema>;
  * (callers outside the design reach a Portal verb over its transport) or
  * `runtime` (the process's own runtime: a composition root, scheduler, signal
  * or framework callback). The retired kinds `external` and `sibling-subsystem`
- * are read compatibly until the next major release (readRetiredReachForms) and never
- * authored.
+ * are read only in the v5 reading (readRetiredReachForms) and never authored.
  */
 export const InvocationKindSchema = z.enum(['entry', 'runtime']);
 export type InvocationKind = z.infer<typeof InvocationKindSchema>;
 
-/** The invokedBy kinds the reachability model retired, read compatibly until the next major release. */
+/** The invokedBy kinds the reachability model retired, read only in the v5 reading. */
 export const RETIRED_INVOCATION_KINDS: ReadonlySet<string> = new Set(['external', 'sibling-subsystem']);
 
 /**
@@ -273,9 +273,10 @@ export const SystemPublicInterfaceSchema = z.object({
   /** The public name: defaults to `id`, then `interface`, then `component` or `typeDef`. */
   as: z.string().optional(),
   /**
-   * LEGACY, no longer authored: the export kind is derived from the backing
-   * Portal's transport (transportExportKind). Read compatibly until the next major release
-   * and recorded as a retired reach fact; doctor --fix drops or reports it.
+   * A wairon 5 form, no longer authored: the export kind is derived from the
+   * backing Portal's transport (transportExportKind). Read only in the v5
+   * reading and recorded as a retired reach fact there; the loader refuses it
+   * anywhere else (v5FormsIn).
    */
   type: z.string().optional(),
   details: z.string().optional(),
@@ -335,9 +336,9 @@ export type SystemSpec = z.infer<typeof SystemSpecSchema>;
  */
 export const PublicInterfaceSchema = z.object({
   /**
-   * LEGACY, no longer authored: derived from the backing Portal's transport
-   * (transportExportKind). Read compatibly until the next major release and recorded as a
-   * retired reach fact.
+   * A wairon 5 form, no longer authored: derived from the backing Portal's
+   * transport (transportExportKind). Read only in the v5 reading and recorded
+   * as a retired reach fact there; the loader refuses it anywhere else.
    */
   type: PublicInterfaceTypeSchema.optional(),
   /** Consumer-facing description of an own item; a re-export inherits its target's. */
@@ -495,7 +496,7 @@ export const SubsystemSpecSchema = z.object({
    * may register more. Unknown names get UNKNOWN_PROFILE.
    */
   profile: z.string().optional(),
-  projectPath: z.string().optional(), // Relative path to external project root for subsystem chaining
+  projectPath: z.string().optional(), // A wairon 5 form (a legacy L1 mount): read only in the v5 reading, refused by the loader anywhere else (v5FormsIn)
   /** Optional override of the system-level targetLanguage for this subsystem. */
   targetLanguage: z.string().optional(),
   /** Explicitly sanctioned tight couplings with peer subsystems (see TrustedLinkSchema). */
@@ -546,8 +547,9 @@ export const ComponentTypeSchema = z.enum([
   'Repository',
   'FeatureComponent', // Logic Hook + View Presenter pattern
   'RouterComponent',  // Switch/routing component pattern
-  // Retired stereotypes: still parsed so a tree using them loads and the
-  // rules can report them, never authored new
+  // Retired stereotypes: parsed so the v5 reading can load a tree using them
+  // and `wairon upgrade` retire them; anywhere else the loader refuses one
+  // (v5FormsIn). Never authored new.
   'Specialist', // logic is an Orchestrator with a dependencyClass
   'Gateway',    // a gateway is a Portal with the gateway variant
 ]);
@@ -556,7 +558,7 @@ export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 /** Component types that are patterns (own member blocks) rather than building blocks. */
 export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'FeatureComponent', 'RouterComponent']);
 
-/** Retired component types: a tree still loads them until `wairon upgrade` migrates it. */
+/** Retired component types: only the v5 reading loads them, until `wairon upgrade` migrates the tree. */
 export const RETIRED_STEREOTYPES: ReadonlySet<ComponentType> = new Set(['Specialist', 'Gateway']);
 
 /**
@@ -761,7 +763,7 @@ export const ComponentSpecSchema = z.object({
   /**
    * On a Portal (and expected on every Portal): how callers reach its verbs
    * (see TransportSchema). Replaces the retired portalType, which the loader
-   * reads compatibly until the next major release (HTTP_API as HTTP). Which process serves
+   * reads only in the v5 reading (HTTP_API as HTTP). Which process serves
    * which Portal is implementation: there are no listener mounts. On an
    * Adapter, optional: the transport it calls its target Portal over —
    * inferred from the target when absent, and ADAPTER_TRANSPORT_MISMATCH when
@@ -858,7 +860,7 @@ export function isPattern(component: Pick<ComponentSpec, 'componentType'>): bool
 /**
  * component_spec.isLogic — whether the component's methods are flowcharts of
  * the system's logic: an Orchestrator, Supervisor or Actor, or a Specialist
- * until it is retired.
+ * until it is retired (a type only the v5 reading loads).
  */
 export function isLogic(component: Pick<ComponentSpec, 'componentType'>): boolean {
   const componentType = component.componentType;
@@ -876,8 +878,9 @@ export function holdsState(component: Pick<ComponentSpec, 'componentType'>): boo
 
 /**
  * component_spec.isRetired — whether the component's type is a retired
- * stereotype (Specialist or Gateway). The rules that judge a stereotype's shape
- * skip it, and retired-stereotypes reports it once, until it is migrated.
+ * stereotype (Specialist or Gateway): a form only the v5 reading loads, which
+ * `wairon upgrade` retires. No rule judges one: outside the v5 reading the
+ * loader refuses it before any rule runs.
  */
 export function isRetired(component: Pick<ComponentSpec, 'componentType'>): boolean {
   return RETIRED_STEREOTYPES.has(component.componentType);
@@ -2099,7 +2102,7 @@ export function typeDesignView<T extends object>(type: T): T {
  */
 export function componentDesignView<T extends object>(component: T): T {
   const view = withoutFields(component, outOfApproval('component')) as Record<string, unknown>;
-  if ('mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.retiredMount.linkage));
+  if (readsV5Forms() && 'mounts' in view) view.mounts = eachOf(view.mounts, (m) => withoutFields(m, DESIGN_VIEW_FIELDS.retiredMount.linkage));
   return view as T;
 }
 
@@ -2154,7 +2157,7 @@ export function asSchemaReads(kind: keyof typeof SCHEMA_OF_KIND, doc: Record<str
   const parsed = SCHEMA_OF_KIND[kind].safeParse(doc);
   if (!parsed.success) return doc;
   const kept = withoutUnknownKeys(doc, parsed.data) as Record<string, unknown>;
-  if (kind === 'component' && 'mounts' in doc) kept.mounts = doc.mounts;
+  if (readsV5Forms() && kind === 'component' && 'mounts' in doc) kept.mounts = doc.mounts;
   return kept;
 }
 
@@ -2190,7 +2193,7 @@ export function componentEntryFor(
 }
 
 // ---------------------------------------------------------------------------
-// Retired reachability forms — read compatibly until the next major release
+// Retired reachability forms — read only in the v5 reading
 // ---------------------------------------------------------------------------
 
 /**
@@ -2271,6 +2274,8 @@ export function readRetiredReachForms(
   doc: Record<string, unknown>,
   isPortalContract?: boolean,
 ): RetiredReachFact[] {
+  // Step 1: a retired form is read only in the v5 reading; everywhere else the loader has refused it.
+  if (!readsV5Forms()) return [];
   const facts: RetiredReachFact[] = [];
   const specId = holder === 'system' ? 'system' : String(doc.id ?? '');
   if (holder === 'component') {
@@ -2338,7 +2343,7 @@ export interface RetiredMount {
  * them. Answers the parsed spec.
  */
 export function attachRetiredMounts<T extends object>(parsed: T, doc: Record<string, unknown>): T {
-  if (Array.isArray(doc.mounts)) (parsed as Record<string, unknown>).mounts = doc.mounts;
+  if (readsV5Forms() && Array.isArray(doc.mounts)) (parsed as Record<string, unknown>).mounts = doc.mounts;
   return parsed;
 }
 
@@ -2349,6 +2354,7 @@ export function attachRetiredMounts<T extends object>(parsed: T, doc: Record<str
  * a listener.
  */
 export function retiredMountsOf(component: object): { declared: boolean; mounts: RetiredMount[] } {
+  if (!readsV5Forms()) return { declared: false, mounts: [] };
   const raw = (component as Record<string, unknown>).mounts;
   if (!Array.isArray(raw)) return { declared: raw !== undefined, mounts: [] };
   const mounts: RetiredMount[] = [];
@@ -2385,7 +2391,7 @@ export function carryRetiredReachForms(
   stored: Record<string, unknown> | null | undefined,
   out: Record<string, unknown>,
 ): void {
-  if (!isRecord(stored)) return;
+  if (!readsV5Forms() || !isRecord(stored)) return;
   if (holder === 'component') {
     if ('mounts' in stored && !('mounts' in out) && out.componentType === 'Portal') out.mounts = stored.mounts;
     return;
@@ -2405,6 +2411,59 @@ export function carryRetiredReachForms(
       method.invokedBy = { ...now, kind: before.kind };
     }
   }
+}
+
+/** The kinds of stored document that can hold a wairon 5 form (v5FormsIn). */
+export type V5FormHolder = 'system' | 'subsystem' | 'component' | 'interface';
+
+/** The component types wairon 5 had and wairon 6 does not, with what replaces each. */
+const RETIRED_COMPONENT_TYPES: Readonly<Record<string, string>> = {
+  Specialist: 'an Orchestrator with a `dependencyClass` (pure, read, or none for a workflow)',
+  Gateway: 'a Portal with `variant: gateway`',
+};
+
+/**
+ * The wairon 5 forms one stored spec document holds, each as a sentence that
+ * names the form and what wairon 6 reads instead. The core reads only the
+ * running major's forms: the v5 forms are read in the v5 reading `wairon
+ * upgrade` binds, and anywhere else the loader refuses a document holding one
+ * with these sentences. Pure over the document, and independent of the
+ * reading: the caller decides whether a form found is refused.
+ *
+ * An L0 entry's legacy `id` and `subsystem` are not named: the L0 still reads
+ * them as `as` and `from`; only the authored export `type` is fenced.
+ */
+export function v5FormsIn(holder: V5FormHolder, doc: Record<string, unknown>): string[] {
+  const found: string[] = [];
+  if (holder === 'component') {
+    if ('portalType' in doc) found.push('`portalType` is a wairon 5 form; wairon 6 reads `transport`');
+    if ('mounts' in doc) {
+      found.push('`mounts` (a listener\'s mounts) is a wairon 5 form; wairon 6 reads the Portal\'s `invokedBy` entry and the implementation\'s `router`');
+    }
+    const type = doc.componentType;
+    if (typeof type === 'string' && Object.prototype.hasOwnProperty.call(RETIRED_COMPONENT_TYPES, type)) {
+      found.push(`\`componentType: ${type}\` is a wairon 5 form; wairon 6 reads ${RETIRED_COMPONENT_TYPES[type]}`);
+    }
+    return found;
+  }
+  if (holder === 'interface') {
+    const kinds = new Set<string>();
+    for (const method of Array.isArray(doc.methods) ? doc.methods : []) {
+      const invokedBy = isRecord(method) ? method.invokedBy : undefined;
+      if (isRecord(invokedBy) && typeof invokedBy.kind === 'string' && RETIRED_INVOCATION_KINDS.has(invokedBy.kind)) kinds.add(invokedBy.kind);
+    }
+    if (kinds.has('external')) found.push('`invokedBy: { kind: external }` is a wairon 5 form; wairon 6 reads `kind: entry` on a Portal\'s verb (or `kind: runtime`)');
+    if (kinds.has('sibling-subsystem')) found.push('`invokedBy: { kind: sibling-subsystem }` is a wairon 5 form; wairon 6 models the caller with a `call` step (or reads `kind: runtime`)');
+    return found;
+  }
+  if (holder === 'subsystem' && typeof doc.projectPath === 'string' && doc.projectPath.trim() !== '') {
+    found.push('`projectPath` (a legacy L1 mount) is a wairon 5 form; wairon 6 declares the member under `members` in .wai/project.yaml');
+  }
+  const entries = Array.isArray(doc.publicInterfaces) ? doc.publicInterfaces : [];
+  if (entries.some((entry) => isRecord(entry) && entry.type !== undefined)) {
+    found.push('an export entry\'s `type` is a wairon 5 form; wairon 6 derives the export kind from the backing Portal\'s transport');
+  }
+  return found;
 }
 
 // ---------------------------------------------------------------------------

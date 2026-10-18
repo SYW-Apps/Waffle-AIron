@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -17,7 +18,7 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -64,7 +65,7 @@ function books(): string {
   saveInterfaceSpec(intf('iledger', 'ledger', ['post', 'close']));
   saveImplementationSpec(impl('ledger_impl', 'iledger', ['post', 'close']));
   saveComponentSpec(comp('books_orch', 'books', 'Orchestrator', { dependsOn: ['ledger'] }));
-  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeMemberProject(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
   ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
@@ -145,7 +146,7 @@ describe('sdd_rename_method', () => {
     expect(loadImplementationSpec('ledger_impl')?.methods[0].symbol).toBeUndefined();
   });
 
-  it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
+  v5it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
     root = books();
     client = await connect(createMcpServer());
 

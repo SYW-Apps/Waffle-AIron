@@ -58,7 +58,7 @@ import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
 import * as gitSource from './adapters/git-source.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
-import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile, readsV5Forms } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
@@ -214,7 +214,7 @@ export function ensureProjectInitialized(fallbackName: string, id?: string, visi
 // Members (stage 3)
 //
 // A member is a project the bound project contains: declared in its
-// project.yaml `members` (or, until the next major release, by a legacy L1 subsystem that
+// project.yaml `members` (or, in the v5 reading only, by a legacy L1 subsystem that
 // carries projectPath). It is never a subsystem of its parent and carries no
 // content there. These writers keep the two halves — the declaration and the
 // member project — in step, and never write the L1 mount form.
@@ -235,7 +235,7 @@ interface MemberAt {
 
 /**
  * The members a root declares: its `members` entries first (read through that
- * root's binding), then — until the next major release — each legacy L1 mount of its own
+ * root's binding), then — in the v5 reading only — each legacy L1 mount of its own
  * spec tree whose alias `members` does not hold. A declaration with a problem,
  * or a mount whose alias `externals` also declares, is not followed.
  */
@@ -255,8 +255,9 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
     if (member.problem || member.path === undefined || isPartDirectory(path.resolve(dir, member.path))) continue;
     out.push({ alias: member.alias, path: member.path, form: 'members' });
   }
+  // A legacy L1 mount (a subsystem carrying projectPath) is a wairon 5 form, read only in the v5 reading.
   const specsDir = aiPathsAt(dir).specsDir();
-  if (!fs.existsSync(specsDir)) return out;
+  if (!readsV5Forms() || !fs.existsSync(specsDir)) return out;
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     let raw: unknown;
     try {
@@ -302,7 +303,7 @@ function walkMembers(projectRoot: string, onMember: (memberDir: string, alias: s
 
 /**
  * core_orchestrator.listDirectChainedSubprojects — the DIRECT members of a
- * project, one level deep: its `members` entries and, until the next major release, its
+ * project, one level deep: its `members` entries and, in the v5 reading only, its
  * legacy L1 mounts, each resolved inside the project root as the member's
  * directory, alias and form. An absolute or escaping path is skipped. Used by
  * layered `wairon generate` to cascade one level at a time.
@@ -2587,7 +2588,7 @@ function carryDeclarations(scan: InternalizeScan, result: InternalizeResult): vo
     if (m.problem || m.path === undefined) continue;
     const relPath = toPosixPath(path.relative(root, path.resolve(scan.memberDir, m.path)));
     projectConfigRepository.declareMember(m.alias, {
-      path: relPath,
+      source: relPath,
       ...(m.description !== undefined ? { description: m.description } : {}),
       ...(m.use.length > 0 ? { use: m.use } : {}),
     });
@@ -5331,7 +5332,7 @@ export function moveMountToMembers(alias: string): boolean {
   }
   // Step 4: declare the member — refused there when the alias holds a different one.
   projectConfigRepository.declareMember(alias, {
-    path: mount.projectPath!,
+    source: mount.projectPath!,
     ...(mount.description ? { description: mount.description } : {}),
   });
   // Step 5: delete the L1 mount document, so the member is declared in one place.

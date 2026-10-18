@@ -151,7 +151,7 @@ describe('a dry run is an account, never a write', () => {
     // portalType on an Orchestrator is refused by the candidate gate. A dry run
     // that answered "2 changes would be made" here would be an account of a
     // write that could never happen.
-    expect(() => updateSpecGated('component', 'flow_comp', { portalType: 'HTTP_API' }, true))
+    expect(() => updateSpecGated('component', 'flow_comp', { transport: 'HTTP' }, true))
       .toThrow(/UNEXPECTED_PORTAL_FIELD|portalType/);
     expect(fs.readFileSync(file).equals(before)).toBe(true);
   });

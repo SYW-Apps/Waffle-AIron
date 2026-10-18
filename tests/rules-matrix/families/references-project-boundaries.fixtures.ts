@@ -61,8 +61,6 @@ interface FleetOptions {
   dispatchExternals?: Record<string, unknown>;
   /** The route planner's dependency on billing's invoice portal, as written. */
   plannerDependsOn?: string;
-  /** Declare both members in the root's project.yaml `members` instead of legacy L1 mounts. */
-  membersForm?: boolean;
   /** Billing's externals, and what its invoice portal depends on. */
   billingExternals?: Record<string, unknown>;
   invoiceDependsOn?: string[];
@@ -86,11 +84,11 @@ function billingFiles(o: FleetOptions): Record<string, string> {
     }),
     [`${base}/specs/subsystems/billing.yaml`]: dump({
       id: 'billing', name: 'Billing', description: 'Invoicing for delivered routes.', parentSystem: 'BillingService',
-      publicInterfaces: [{ component: 'invoice-portal', type: 'REST', details: 'Issue an invoice for a delivered route.' }],
+      publicInterfaces: [{ component: 'invoice-portal', details: 'Issue an invoice for a delivered route.' }],
     }),
     [`${base}/specs/components/invoice-portal.yaml`]: dump({
       id: 'invoice-portal', name: 'Invoice Portal', description: 'REST surface that issues invoices for delivered routes.',
-      subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: o.invoiceDependsOn ?? [],
+      subsystem: 'billing', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: o.invoiceDependsOn ?? [],
     }),
     [`${base}/specs/interfaces/iinvoice-portal.yaml`]: dump({
       id: 'iinvoice-portal', name: 'Invoice Portal Interface', description: 'Issue invoices.', component: 'invoice-portal',
@@ -111,7 +109,7 @@ function dispatchFiles(o: FleetOptions): Record<string, string> {
     [`${base}/specs/components/route-planner.yaml`]: dump({
       id: 'route-planner', name: 'Route Planner', description: 'Plans delivery routes and bills each one once delivered.',
       subsystem: 'dispatch', componentType: 'Orchestrator', owns: [],
-      dependsOn: [o.plannerDependsOn ?? 'super::billing::invoice-portal'],
+      dependsOn: [o.plannerDependsOn ?? 'billing::invoicing'],
     }),
     ...(o.dispatchPin ? {
       [`${base}/externals.lock.yaml`]: yaml.dump({ externals: { billing: { project: 'billing', snapshot: '.wai/externals/billing.yaml', digest: 'sha256:pinned', used: {} } } }),
@@ -136,15 +134,11 @@ function fleet(o: FleetOptions = {}): FixtureTree {
     },
     subsystems: [
       { id: 'operations', description: 'The operations console dispatchers work in.', ...(o.trustedLinks ? { trustedLinks: o.trustedLinks } : {}) },
-      ...(o.membersForm ? [] : [
-        { id: 'billing', description: 'Chained billing member.', projectPath: 'packages/billing' },
-        { id: 'dispatch', description: 'Chained dispatch member.', projectPath: 'packages/dispatch' },
-      ]),
       { id: 'fleet-registry', description: 'The registry of vehicles and drivers.' },
     ],
     components: [
       {
-        id: 'ops-console', subsystem: 'operations', componentType: 'Portal', portalType: 'HTTP_API', description: 'REST surface of the operations console.',
+        id: 'ops-console', subsystem: 'operations', componentType: 'Portal', transport: 'HTTP', description: 'REST surface of the operations console.',
         ...(o.consoleDependsOn ? { dependsOn: o.consoleDependsOn } : {}),
       },
     ],
@@ -153,7 +147,7 @@ function fleet(o: FleetOptions = {}): FixtureTree {
       '.wai/project.yaml': projectYaml(
         o.root ?? { id: 'fleetworks', name: 'FleetWorks' },
         o.rootExternals,
-        o.membersForm ? { billing: 'packages/billing', dispatch: 'packages/dispatch' } : undefined,
+        { billing: 'packages/billing', dispatch: 'packages/dispatch' },
       ),
       ...billingFiles(o),
       ...dispatchFiles(o),
@@ -162,7 +156,7 @@ function fleet(o: FleetOptions = {}): FixtureTree {
 }
 
 /** Billing exports its invoice portal to the family, at audience project. */
-const BILLING_EXPORTS = [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project', type: 'REST' }];
+const BILLING_EXPORTS = [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project' }];
 
 export default [
   // -------------------------------------------------------------------------
@@ -266,14 +260,14 @@ export default [
     anchoredTo: 'FleetWorks',
     expectFire: true,
     scenario: 'The FleetWorks root re-exports billing\'s "invoicing" at audience external, although billing exports it only to its family (audience project) — a re-export that widens reach.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, rootExports: [{ from: 'billing', component: 'invoicing', audience: 'external', type: 'REST' }] }),
+    tree: fleet({ billingExports: BILLING_EXPORTS, rootExports: [{ from: 'billing', component: 'invoicing', audience: 'external' }] }),
   }),
   defineRuleFixture({
     code: 'EXPORT_WIDENS_AUDIENCE',
     expectFire: false,
     reason: 'The root re-exports "invoicing" at the audience billing exports it at, so reach is not widened.',
     scenario: 'The FleetWorks root re-exports billing\'s "invoicing" at audience project, the audience billing exports it at.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, rootExports: [{ from: 'billing', component: 'invoicing', audience: 'project', type: 'REST' }] }),
+    tree: fleet({ billingExports: BILLING_EXPORTS, rootExports: [{ from: 'billing', component: 'invoicing', audience: 'project' }] }),
   }),
 
   // -------------------------------------------------------------------------

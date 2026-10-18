@@ -1,4 +1,5 @@
 import { computeGateStateId } from '../../src/core/validation.js';
+import { runInV5Reading } from '../../src/utils/fs.js';
 import { reexpress, writeLockRecord, type LockRecord } from '../../src/core/index.js';
 
 // ---------------------------------------------------------------------------
@@ -9,10 +10,15 @@ import { reexpress, writeLockRecord, type LockRecord } from '../../src/core/inde
 // exercise the carry itself call this instead.
 // ---------------------------------------------------------------------------
 
-/** Carry the bound project's earlier-reading lock record into the design reading; null when there is nothing to carry. */
+/**
+ * Carry the bound project's earlier-reading lock record into the design reading; null when there is nothing to carry.
+ * The record is a wairon 5 form, so the carry runs in the v5 reading, as the upgrade step runs it.
+ */
 export function reexpressLock(): LockRecord | null {
-  const carried = reexpress(computeGateStateId());
-  if (!carried) return null;
-  writeLockRecord(carried);
-  return carried;
+  return runInV5Reading(() => {
+    const carried = reexpress(computeGateStateId());
+    if (!carried) return null;
+    writeLockRecord(carried);
+    return carried;
+  });
 }

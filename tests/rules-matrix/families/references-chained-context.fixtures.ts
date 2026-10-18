@@ -152,25 +152,7 @@ export default [
   // The child's own gate: a deprecated form naming no alias is unavailable,
   // with the parent loadable or not — the same verdict either way.
   // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'EXTERNAL_CHECK_UNAVAILABLE',
-    severity: 'warning',
-    anchoredTo: 'telemetry-forwarder',
-    expectFire: true,
-    scenario:
-      'A chained edge-telemetry subproject depends on super::telemetry-hub while its loadable FleetWorks parent is on disk; its own gate never walks up, and the deprecated form names no alias, so there is nothing to judge the dependency against.',
-    tree: chainedChildTree(),
-  }),
 
-  defineRuleFixture({
-    code: 'EXTERNAL_CHECK_UNAVAILABLE',
-    severity: 'warning',
-    anchoredTo: 'telemetry_forwarder_impl',
-    expectFire: true,
-    scenario:
-      'The same edge-telemetry subproject below a parent whose own spec tree cannot be loaded calls streamTelemetry on super::telemetry-hub — the same unavailable verdict as with a healthy parent, neither softened nor hardened by where it lies.',
-    tree: unloadableParentTree(),
-  }),
 
   defineRuleFixture({
     code: 'INVALID_TARGET_COMPONENT_REFERENCE',

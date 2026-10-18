@@ -49,7 +49,7 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
 
     // The authenticated portal being called.
     saveComponentSpec({
-      id: 'ext-portal', name: 'Ext', description: 'd', subsystem: 'sub', componentType: 'Portal', portalType: 'HTTP_API',
+      id: 'ext-portal', name: 'Ext', description: 'd', subsystem: 'sub', componentType: 'Portal', transport: 'HTTP',
       ...(portalScheme === 'none' ? {} : { auth: { scheme: portalScheme } }),
       owns: [], dependsOn: [], createdAt: now, updatedAt: now,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,11 +97,11 @@ describe('PORTAL_AUTH_UNMET — cross-call auth conformance', () => {
     saveSpec('subsystem', { id: 'sub', name: 'Sub', description: 'd', parentSystem: 'Sys', publicInterfaces: [], trustedLinks: [], createdAt: now, updatedAt: now } as any);
     sources.forEach((_, i) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      saveComponentSpec({ id: `svc${i}-portal`, name: `Svc${i}`, description: 'd', subsystem: 'sub', componentType: 'Portal', portalType: 'HTTP_API', auth: { scheme: 'apiKey', in: 'header', name: 'X-Svc-Key' }, owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+      saveComponentSpec({ id: `svc${i}-portal`, name: `Svc${i}`, description: 'd', subsystem: 'sub', componentType: 'Portal', transport: 'HTTP', auth: { scheme: 'apiKey', in: 'header', name: 'X-Svc-Key' }, owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
       saveInterfaceSpec({ id: `isvc${i}-portal`, name: `ISvc${i}`, description: 'd', component: `svc${i}-portal`, methods: [{ name: 'op', description: 'op', signature: 'op(): void', returns: 'void' }], createdAt: now, updatedAt: now });
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    saveComponentSpec({ id: 'gateway', name: 'Gateway', subsystem: 'sub', description: 'd', componentType: 'Portal', portalType: 'Custom', variant: 'gateway', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
+    saveComponentSpec({ id: 'gateway', name: 'Gateway', subsystem: 'sub', description: 'd', componentType: 'Portal', transport: 'Custom', variant: 'gateway', owns: [], dependsOn: [], createdAt: now, updatedAt: now } as any);
     saveInterfaceSpec({ id: 'igateway', name: 'IGateway', description: 'd', component: 'gateway', methods: [{ name: 'route', description: 'route', signature: 'route(): void', returns: 'void' }], createdAt: now, updatedAt: now });
     saveImplementationSpec({
       id: 'gateway_impl', name: 'GatewayImpl', description: 'd', contract: 'igateway',

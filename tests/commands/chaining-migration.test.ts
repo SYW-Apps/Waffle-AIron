@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';

@@ -291,7 +291,7 @@ describe('Query: a Repository member for computed reads over its Store', () => {
   it('a Portal or an Observer reaching a Query is ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
-    proj.component('pharmacy-api-portal', 'pharmacy', 'Portal', 'portalType: Custom\ndependsOn: [refill-due-query]');
+    proj.component('pharmacy-api-portal', 'pharmacy', 'Portal', 'transport: Custom\ndependsOn: [refill-due-query]');
     proj.component('refill-event-observer', 'pharmacy', 'Observer', 'dependsOn: [refill-due-query]');
     proj.component('refill-due-query', 'pharmacy', 'Query');
     const found = byCode(proj.validate(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP');
@@ -306,32 +306,12 @@ describe('one finding per edge', () => {
     proj.component('dose-plan-store', 'pharmacy', 'Store', 'durability: ram-projection\ndependsOn: [pharmacy-api-portal]');
     proj.component('dose-arbiter', 'pharmacy', 'Orchestrator', 'dependencyClass: pure\ndependsOn: [refill-event-observer]');
     proj.component('dispensing-supervisor', 'pharmacy', 'Supervisor', 'dependsOn: [pharmacy-api-portal]');
-    proj.component('pharmacy-api-portal', 'pharmacy', 'Portal', 'portalType: Custom');
+    proj.component('pharmacy-api-portal', 'pharmacy', 'Portal', 'transport: Custom');
     proj.component('refill-event-observer', 'pharmacy', 'Observer');
     const issues = proj.validate();
     for (const consumer of ['dose-plan-store', 'dose-arbiter', 'dispensing-supervisor']) {
       expect(on(issues, consumer, SHAPE_CODES)).toEqual(['ARCHITECTURE_VIOLATION_PORTAL_DEP']);
     }
-  });
-
-  it('no shape rule judges a retired component or its edges', () => {
-    const proj = createTempProject();
-    proj.subsystem('claims');
-    proj.component('claims-scoring-specialist', 'claims', 'Specialist', 'dependsOn: [claims-store, claims-portal]');
-    proj.component('claims-store', 'claims', 'Store', 'durability: ram-projection\ndependsOn: [claims-scoring-specialist]');
-    proj.component('claims-portal', 'claims', 'Portal', 'portalType: Custom');
-    proj.component('claims-gateway', 'claims', 'Gateway', 'owns: [claims-intake-workflow]');
-    proj.component('claims-intake-workflow', 'claims', 'Orchestrator');
-    proj.component('claims-review-workflow', 'claims', 'Orchestrator', 'dependsOn: [claims-gateway, claims-intake-workflow]');
-    const issues = proj.validate();
-
-    for (const retired of ['claims-scoring-specialist', 'claims-gateway']) {
-      expect(on(issues, retired, SHAPE_CODES)).toEqual([]);
-    }
-    // Edges INTO a retired component are skipped too, and a retired Gateway
-    // records no ownership, so its "member" stays reachable.
-    expect(on(issues, 'claims-store', SHAPE_CODES)).toEqual([]);
-    expect(on(issues, 'claims-review-workflow', SHAPE_CODES)).toEqual([]);
   });
 });
 
@@ -340,7 +320,7 @@ describe('facade-forwarding: only a Repository facade is judged', () => {
     const proj = createTempProject();
     proj.subsystem('partners');
     proj.component('partner-gateway', 'partners', 'Gateway', 'owns: [partner-portal]');
-    proj.component('partner-portal', 'partners', 'Portal', 'portalType: Custom');
+    proj.component('partner-portal', 'partners', 'Portal', 'transport: Custom');
     proj.spec('interface', 'ipartner-gateway', [
       'schemaVersion: 1.0.0', 'id: ipartner-gateway', 'name: IPartnerGateway', 'description: contract', 'component: partner-gateway',
       'methods:',

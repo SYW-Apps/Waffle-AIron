@@ -24,6 +24,7 @@ import {
 // export_index projects the tables the Spec Index's scan resolved — the one
 // sanctioned case of an Index over another Index of the same Repository.
 import { listProjectRoots, loadComponentSpecs, loadImplementationSpecs } from './specs.js';
+import { readsV5Forms } from '../utils/fs.js';
 // ...and over the Project Family Index of the same Repository, for the
 // the references the scan bound, counted into each consumer's usage (never in
 // a cycle: the family index depends on the Spec Index alone).
@@ -66,8 +67,9 @@ const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
 
 /**
  * The export kind an own component entry is shown as: derived from its backing
- * Portal's transport (transport.exportKind). An authored kind is read only as
- * the legacy value, where no transport derives one.
+ * Portal's transport (transport.exportKind). An authored kind is a wairon 5
+ * form, read as the legacy value in the v5 reading only, where no transport
+ * derives one.
  */
 function exportKindOf(comp: ComponentSpec, authored: string | undefined, role?: string): string | undefined {
   // A library is called in-process: shown as InProcess, never as the
@@ -373,7 +375,7 @@ function bindOwn(world: ExportWorld, sub: SubsystemSpec, pi: PublicInterface, pr
     component: comp.id,
     ...(narrowed ? { interface: narrowed } : {}),
     componentType: comp.componentType,
-    ...(exportKindOf(comp, pi.type, pi.role) ? { type: exportKindOf(comp, pi.type, pi.role)! } : {}),
+    ...(exportKindOf(comp, legacyType(pi), pi.role) ? { type: exportKindOf(comp, legacyType(pi), pi.role)! } : {}),
     ...(pi.details !== undefined ? { details: pi.details } : {}),
     ...(pi.role ? { role: pi.role } : {}),
     via: [],
@@ -412,7 +414,7 @@ function subsystemCandidates(
       // authored kind is read only where none is derived (the legacy value).
       const entry = {
         ...bound,
-        ...(pi.type && !bound.type ? { type: pi.type } : {}),
+        ...(legacyType(pi) && !bound.type ? { type: legacyType(pi) } : {}),
         ...(pi.details !== undefined ? { details: pi.details } : {}),
         ...(pi.role ? { role: pi.role } : {}),
       };
@@ -585,7 +587,12 @@ export interface ExportSources {
   audienceOf: Map<string, string>;
 }
 
-/** Where an L0 entry re-exports from: `from`, `subsystem`, else its item's owner; `own` for a project-level type. */
+/** An export entry's wairon 5 authored `type`, read in the v5 reading only; the kind is otherwise derived from the backing Portal's transport. */
+function legacyType(entry: { type?: string }): string | undefined {
+  return readsV5Forms() ? entry.type : undefined;
+}
+
+/** Where an L0 entry re-exports from: `from` (or the legacy `subsystem`), else its item's owner; `own` for a project-level type. */
 function sourceOf(world: ExportWorld, e: SystemPublicInterface): string | 'own' | undefined {
   if (e.from ?? e.subsystem) return e.from ?? e.subsystem;
   if (e.component) return world.components.get(e.component)?.subsystem;
@@ -609,7 +616,7 @@ function withEntryMetadata(entry: ResolvedExport, e: SystemPublicInterface): Res
     ...(e.name ? { name: e.name } : {}),
     // The export kind is derived from the backing Portal's transport; an
     // authored L0 kind is read only where none is derived (the legacy value).
-    ...(e.type && !entry.type ? { type: e.type } : {}),
+    ...(legacyType(e) && !entry.type ? { type: legacyType(e) } : {}),
     ...(e.role ? { role: e.role } : {}),
     ...(e.details !== undefined ? { details: e.details } : {}),
     ...(e.authPolicy ? { authPolicy: e.authPolicy } : {}),

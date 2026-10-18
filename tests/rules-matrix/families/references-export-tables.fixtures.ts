@@ -35,14 +35,14 @@ const STOREFRONT = { id: 'storefront', description: 'The facade partner shops in
 const CARRIER_RATE_PORTAL = {
   id: 'carrier-rate-portal',
   componentType: 'Portal',
-  portalType: 'HTTP_API',
+  transport: 'HTTP',
   subsystem: 'carriers',
   description: 'REST surface answering the live rate of every contracted carrier.',
 };
 const QUOTE_PORTAL = {
   id: 'quote-portal',
   componentType: 'Portal',
-  portalType: 'HTTP_API',
+  transport: 'HTTP',
   subsystem: 'pricing',
   description: 'REST surface answering a price quote for one parcel.',
 };
@@ -56,13 +56,13 @@ const QUOTE_CALCULATOR = {
 const SURCHARGE_PORTAL = {
   id: 'surcharge-portal',
   componentType: 'Portal',
-  portalType: 'HTTP_API',
+  transport: 'HTTP',
   subsystem: 'surcharges',
   description: 'REST surface answering the fuel and remote-area surcharges.',
 };
 
-const RATES = { type: 'REST', details: 'Live carrier rates.', component: 'carrier-rate-portal', as: 'rates' };
-const QUOTES = { type: 'REST', details: 'Parcel price quotes.', component: 'quote-portal' };
+const RATES = { details: 'Live carrier rates.', component: 'carrier-rate-portal', as: 'rates' };
+const QUOTES = { details: 'Parcel price quotes.', component: 'quote-portal' };
 
 export default [
   // -------------------------------------------------------------------------
@@ -209,7 +209,7 @@ export default [
     scenario:
       'The project exports a "partner-api" entry at L0 that names neither a source subsystem nor a component to take one from.',
     tree: {
-      system: { ...SYSTEM, publicInterfaces: [{ id: 'partner-api', name: 'Partner API', type: 'REST', details: 'Everything a partner shop calls.' }] },
+      system: { ...SYSTEM, publicInterfaces: [{ id: 'partner-api', name: 'Partner API', details: 'Everything a partner shop calls.' }] },
       subsystems: [{ ...PRICING, publicInterfaces: [QUOTES] }],
       components: [QUOTE_PORTAL],
     },
@@ -256,7 +256,7 @@ export default [
     tree: {
       system: SYSTEM,
       subsystems: [
-        { ...PRICING, publicInterfaces: [{ type: 'Custom', details: 'In-process quote arithmetic.', component: 'quote-calculator' }] },
+        { ...PRICING, publicInterfaces: [{ details: 'In-process quote arithmetic.', component: 'quote-calculator' }] },
         { ...STOREFRONT, publicInterfaces: [{ from: 'pricing', component: 'quote-calculator' }] },
       ],
       components: [QUOTE_CALCULATOR],

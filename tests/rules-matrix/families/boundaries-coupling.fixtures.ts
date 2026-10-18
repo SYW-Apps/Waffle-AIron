@@ -33,7 +33,7 @@ const MUTUAL_COMPONENTS = [
   {
     id: 'schedule-portal',
     componentType: 'Portal',
-    portalType: 'Custom',
+    transport: 'Custom',
     subsystem: 'scheduling',
     description: 'Inbound scheduling surface published to sibling subsystems.',
   },
@@ -47,7 +47,7 @@ const MUTUAL_COMPONENTS = [
   {
     id: 'invoice-portal',
     componentType: 'Portal',
-    portalType: 'Custom',
+    transport: 'Custom',
     subsystem: 'billing',
     description: 'Inbound invoicing surface published to sibling subsystems.',
   },
@@ -60,8 +60,8 @@ const MUTUAL_COMPONENTS = [
   },
 ];
 
-const SCHEDULING_SUB = { id: 'scheduling', description: 'Appointment booking and slot management.', publicInterfaces: [{ type: 'Custom', details: 'Scheduling surface for sibling subsystems.', component: 'schedule-portal' }] };
-const BILLING_SUB = { id: 'billing', description: 'Invoicing and payment collection for booked visits.', publicInterfaces: [{ type: 'Custom', details: 'Invoice surface for sibling subsystems.', component: 'invoice-portal' }] };
+const SCHEDULING_SUB = { id: 'scheduling', description: 'Appointment booking and slot management.', publicInterfaces: [{ details: 'Scheduling surface for sibling subsystems.', component: 'schedule-portal' }] };
+const BILLING_SUB = { id: 'billing', description: 'Invoicing and payment collection for booked visits.', publicInterfaces: [{ details: 'Invoice surface for sibling subsystems.', component: 'invoice-portal' }] };
 
 /** N existing collaborator components for the god-component fan-out trees. */
 const INTAKE_COLLABORATORS: FixtureSpecInput[] = [
@@ -140,7 +140,7 @@ const INTAKE_SUB = { id: 'patient-intake', description: 'Patient intake, eligibi
 const KIOSK_COMPONENT = {
   id: 'checkin-kiosk-portal',
   componentType: 'Portal',
-  portalType: 'HTTP_API',
+  transport: 'HTTP',
   subsystem: 'patient-intake',
   description: 'The waiting-room check-in kiosk: hands each command a patient taps to the intake step that owns it.',
   dependsOn: INTAKE_STEPS.map(s => s.id),

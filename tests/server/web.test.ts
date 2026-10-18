@@ -476,7 +476,7 @@ describe('web graph orchestrator (sdd_host)', () => {
         name: 'Billing',
         description: 'billing',
         parentSystem: 'GraphSys',
-        publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+        publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
         createdAt: now,
         updatedAt: now,
       });
@@ -493,7 +493,7 @@ describe('web graph orchestrator (sdd_host)', () => {
         ...over,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'] }) as any);
+      saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-orchestrator'] }) as any);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator', componentType: 'Orchestrator' }) as any);
       saveInterfaceSpec({

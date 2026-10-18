@@ -129,7 +129,7 @@ name: billing-portal
 description: Renders MySQL rows directly for billing
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API`);
+transport: HTTP`);
     proj.activate();
     try {
       const issues = techIssues(validateProject());
@@ -250,7 +250,7 @@ name: billing-portal
 description: Renders MySQL rows directly for billing
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 lint:
   allow:
     - code: TECH_LEAKAGE
@@ -282,7 +282,7 @@ name: c-portal
 description: c everywhere c c
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API`);
+transport: HTTP`);
     proj.activate();
     try {
       expect(techIssues(validateProject())).toHaveLength(0);

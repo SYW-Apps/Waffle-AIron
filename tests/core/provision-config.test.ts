@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -124,7 +125,7 @@ describe('provisioning through the project config Repository', () => {
     expect(projectConfigRepositoryAt(root).load()?.name).toBe('tree-name');
   });
 
-  it('backfill creates a missing child configuration and leaves an existing one alone', () => {
+  v5it('backfill creates a missing child configuration and leaves an existing one alone', () => {
     const root = tempRoot();
     setProjectRoot(root);
     saveL0('root-system');
@@ -265,7 +266,7 @@ describe('provisioning writes the project id', () => {
     expect(projectConfigRepositoryAt(path.join(root, 'packages', 'core')).load()?.id).toBe('core');
   });
 
-  it("backfill identifies a member by its alias (here a legacy mount's subsystem id)", () => {
+  v5it("backfill identifies a member by its alias (here a legacy mount's subsystem id)", () => {
     const root = tempRoot();
     setProjectRoot(root);
     saveL0('root-system');

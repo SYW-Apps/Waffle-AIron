@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -77,7 +78,7 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     };
   }
 
-  it('binds each qualifier to the same root whether the member is a legacy mount or a `members` entry', () => {
+  v5it('binds each qualifier to the same root whether the member is a legacy mount or a `members` entry', () => {
     const before = bindings();
     expect(before.narrowedToBilling).toEqual({ rootPath: path.resolve(billingDir), projectId: 'billing', familyRootId: 'demo', via: 'demo::billing' });
     expect(before.narrowedToPayments).toMatchObject({ projectId: 'payments', familyRootId: 'demo' });
@@ -101,7 +102,7 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     expect(bindings()).toEqual(before);
   });
 
-  it('validates the same narrowing entries at mint time in either form, and refuses an internal subsystem', () => {
+  v5it('validates the same narrowing entries at mint time in either form, and refuses an internal subsystem', () => {
     const entries = ['demo', 'demo::billing', 'demo::billing::payments', 'demo::other'];
     const stored = ['demo', 'billing', 'payments', 'other'];
     expect(entries.map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(stored);

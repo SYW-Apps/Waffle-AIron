@@ -23,11 +23,6 @@ export const subsystemBoundaryDepsRule: SddRule = {
   ],
   check(ctx) {
     for (const edge of ctx.dependencyEdges().all) {
-      // An edge with a retired end (a Specialist or Gateway) is judged by no
-      // boundary rule: retired-stereotypes reports the retired component once,
-      // and its migration decides what the edge becomes. A reference that
-      // resolved NOTHING is never marked retired, so it is still judged here.
-      if (edge.retired) continue;
       const comp = edge.from;
 
       switch (edge.reach) {

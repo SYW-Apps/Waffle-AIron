@@ -4,6 +4,7 @@ import { CustomTargetSchema } from './agent.js';
 import { ExecutionConfigSchema } from './execution.js';
 import { isNewerVersion } from '../utils/version.js';
 import { ownGet } from '../utils/own.js';
+import { readsV5Forms } from '../utils/fs.js';
 import { identifierProblem, MAX_IDENTIFIER_LENGTH } from './identifiers.js';
 
 // ---------------------------------------------------------------------------
@@ -576,7 +577,8 @@ export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
  * dir?, use?, description? }` is only for what the shorthand cannot say. WHAT
  * a member is follows from its content (stage 8): an id, an L0 or a lock make
  * it a project, anything else a part; `as` only asserts it. The pre-stage-8
- * long-form `path` is read until the next major release as `source`.
+ * long-form `path` is a wairon 5 form: the v5 reading reads it as `source`,
+ * anywhere else the declaration is refused (declaredMembers).
  * Plain strings throughout: a malformed source is REPORTED, never unreadable.
  */
 export const MemberDeclarationSchema = z.object({
@@ -722,7 +724,7 @@ export const ProjectConfigSchema = z.object({
    * `alias::name` through its L0 exports; anything else is a PART, whose
    * subsystems are this project's own. Together with `externals` it is this
    * project's alias table. The legacy L1 `projectPath` mount and the long-form
-   * `path` key still load until the next major release.
+   * `path` key are wairon 5 forms, read only in the v5 reading.
    */
   members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
 
@@ -1446,10 +1448,10 @@ export function memberDeclarationOf(value: string | MemberDeclaration): MemberDe
   return typeof value === 'string' ? { source: value } : value;
 }
 
-/** The one location a `members` value names — its `source`, else the deprecated `path` — as written. */
+/** The one location a `members` value names — its `source`, else (in the v5 reading only) the deprecated `path` — as written. */
 export function memberLocationOf(value: string | MemberDeclaration): string | undefined {
   const declaration = memberDeclarationOf(value);
-  return declaration.source ?? declaration.path;
+  return declaration.source ?? (readsV5Forms() ? declaration.path : undefined);
 }
 
 /**
@@ -1468,7 +1470,7 @@ export function containedPathOf(value: string | MemberDeclaration): string | und
 /**
  * project_config.declaredMembers — the configuration's `members`, one
  * DeclaredMember per alias in declaration order: the source string (the
- * shorthand, the long form's `source`, or, until the next major release, the deprecated
+ * shorthand, the long form's `source`, or, in the v5 reading only, the deprecated
  * `path`, flagged) parsed into its object form and storage, the asserted `as`,
  * the description and `use` copied as written. A malformed alias, a missing or
  * unparseable source, a git source without its commit, a bad `as`, a hosted
@@ -1479,7 +1481,10 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
   return Object.entries(config.members ?? {}).map(([alias, value]) => {
     const declaration = memberDeclarationOf(value) ?? {};
     const source = typeof declaration.source === 'string' ? declaration.source : undefined;
-    const deprecated = typeof declaration.path === 'string' ? declaration.path : undefined;
+    const v5 = readsV5Forms();
+    const deprecated = v5 && typeof declaration.path === 'string' ? declaration.path : undefined;
+    // Step 1: the long-form `path` is a wairon 5 form, refused anywhere but the v5 reading.
+    const refusedPath = !v5 && declaration.path !== undefined;
     const parsed = parseMemberSource(source ?? deprecated ?? '');
     // The git-only long-form fields join the parsed source.
     if (parsed.storage === 'git') {
@@ -1490,7 +1495,9 @@ export function declaredMembers(config: Partial<Pick<ProjectConfig, 'members' | 
     const as = declaration.as;
     const problem = !EXTERNAL_ALIAS_RE.test(alias)
       ? `the member ${aliasGrammarProblem(alias).replace(/^the /, '')}`
-      : source !== undefined && deprecated !== undefined
+      : refusedPath
+        ? `the member "${alias}" uses \`path\`, a wairon 5 form; wairon 6 reads \`source\` — \`wairon upgrade\` rewrites a tree wairon 5 wrote`
+        : source !== undefined && deprecated !== undefined
         ? `the member "${alias}" names both \`source\` and the deprecated \`path\` — keep \`source\``
         : source === undefined && deprecated === undefined
           ? `the member "${alias}" declares no source`

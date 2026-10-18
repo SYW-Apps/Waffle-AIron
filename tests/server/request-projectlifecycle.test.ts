@@ -19,7 +19,7 @@ import { setAssignment } from '../../src/server/permissions.js';
 import { createUnit } from '../../src/server/organization.js';
 import * as packs from '../../src/server/packs.js';
 import { setPackPolicyRecord } from '../../src/server/policy.js';
-import { mintUserToken, allow as grant, seedChainedMount } from './helpers.js';
+import { mintUserToken, allow as grant, seedChainedMember } from './helpers.js';
 import type {
   ApiKeyRecord,
   Capability,
@@ -432,7 +432,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
     // demo (provisioned, lockable) ── billing (chained subproject, also lockable)
     demoRoot = createProjectRecord(dataDir, 'demo').rootPath;
     runWithProjectRoot(demoRoot, () => hostCore.provisionProject('demo'));
-    childRoot = seedChainedMount(demoRoot, 'billing', 'packages/billing');
+    childRoot = seedChainedMember(demoRoot, 'billing', 'packages/billing');
     runWithProjectRoot(childRoot, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
     // Stage 7: billing becomes a hosted record of its own.

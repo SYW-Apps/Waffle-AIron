@@ -75,11 +75,11 @@ function shop(): string {
   } as any);
   saveSpec('subsystem', sub('shop', {
     publicInterfaces: [
-      { type: 'Custom', details: 'the cart', component: 'cart', interface: 'icart' },
+      { details: 'the cart', component: 'cart', interface: 'icart' },
       { typeDef: 'order', details: 'an order' },
     ] as any,
   }));
-  saveComponentSpec(comp('cart', 'Portal', { portalType: 'Custom', dependsOn: ['pricing'] }));
+  saveComponentSpec(comp('cart', 'Portal', { transport: 'Custom', dependsOn: ['pricing'] }));
   saveInterfaceSpec(intf('icart', 'cart', [
     { name: 'add', description: 'd', params: [{ name: 'order', type: 'Order' }], returns: 'list<Order>?' },
     { name: 'total', description: 'd', signature: 'total(): Order', returns: 'Order' },

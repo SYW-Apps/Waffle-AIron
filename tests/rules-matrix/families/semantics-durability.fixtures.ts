@@ -580,7 +580,7 @@ export default [
         {
           id: 'stock-ops-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Operations portal offering ledger admin capabilities.',
           dependsOn: ['stock-ledger-repository'],
           dispatch: [
@@ -678,7 +678,7 @@ export default [
         {
           id: 'stock-ops-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Operations portal offering ledger admin capabilities.',
           dependsOn: ['stock-ledger-repository'],
           dispatch: [

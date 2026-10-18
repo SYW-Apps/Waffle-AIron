@@ -117,15 +117,15 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
     lockedAt = lockRecord(dir).lockedAt as string;
   });
 
-  it('lock-check and lock-check --strict agree: stale, and the cause is the gate, not the design', async () => {
+  it('lock-check and lock-check --strict agree: a format-2 record is a wairon 5 record, refused by name with the way forward', async () => {
+    // wairon 6 reads no earlier lock format outside the upgrade: the record is not judged, and the
+    // refusal names its format, who wrote it and the command that carries it over.
     for (const args of [['lock-check'], ['lock-check', '--strict']]) {
       const r = await sb.run(args, dir);
       expectExit(r, 1);
-      expect(r.all).toContain('taken by wairon 5.1.1-dev.102');
-      expect(r.all).toContain('no own spec file changed since it was taken — not even its code linkage — so what moved is the gate it was judged under');
-      expect(r.all).toContain('`wairon upgrade` first carries this format-2 record into the design reading');
-      // The round-2 wording blamed the tree.
-      expect(r.all).not.toContain('the design, or only code linkage');
+      expect(r.all).toContain('it is lock record format 2, written by wairon 5 (wairon 6 reads format 3)');
+      expect(r.all).toContain('Run `wairon upgrade`');
+      expect(r.all).not.toContain('delete it and run');
     }
   });
 
@@ -184,15 +184,25 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
 
     const r = await sb.run(['lock-check'], edited);
     expectExit(r, 1);
-    expect(r.all).toContain('is a format-2 lock taken before code linkage');
-    expect(r.all).toContain('1 own spec file(s) changed since the approval');
-    expect(r.all).not.toContain('what moved is the gate it was judged under');
+    expect(r.all).toContain('it is lock record format 2, written by wairon 5');
 
-    // Even the upgrade does not carry a record over an edited spec: it would approve what the approver never saw.
+    // Even the upgrade does not carry the approval over an edited spec: it would approve what the approver never saw.
+    // The record is kept on record in the current format, certifying the identity it always certified — so it
+    // reads stale — and one `wairon lock` approves the edited design again.
     unstamp(edited);
     const fix = await sb.run(['upgrade', '--yes'], edited);
+    expectExit(fix, 0);
     expect(fix.all).not.toContain('re-express the approval');
-    expect(lockRecord(edited).format).toBe(2);
+    const kept = lockRecord(edited);
+    expect(kept.format).toBe(3);
+    expect(kept.specs).toBeUndefined();
+    expect(kept.reexpressed).toMatchObject({ fromReading: 'content', by: 'wairon upgrade' });
+    expect(kept.stateId).toEqual({ algorithm: 'sha256+content+doctrine+inputs+members', digest: 'b959e8c1e21a0425c548748f5c25bbe0b0eea2dd8ec19b222bbf514f97fe6c29' });
+    const stale = await sb.run(['lock-check'], edited);
+    expectExit(stale, 1);
+    expect(stale.all).not.toContain('The design in this tree is the approved design');
+    expectExit(await sb.run(['lock', '--yes'], edited), 0);
+    expectExit(await sb.run(['lock-check'], edited), 0);
   });
 });
 

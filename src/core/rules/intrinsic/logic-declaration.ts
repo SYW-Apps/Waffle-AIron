@@ -1,5 +1,4 @@
 import { SddRule } from '../types.js';
-import { isRetired } from '../../../models/index.js';
 
 /**
  * The INTRINSIC half of the dependency-class family: whether the declaration
@@ -26,7 +25,7 @@ export const logicDeclarationRule: SddRule = {
 
       // A retired component is skipped: the upgrade moves it, and
       // its migration sets the class.
-      if (comp.dependencyClass && comp.componentType !== 'Orchestrator' && !isRetired(comp)) {
+      if (comp.dependencyClass && comp.componentType !== 'Orchestrator') {
         ctx.addIssue(
           'error',
           'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import { saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
-import { ensureProjectInitialized } from '../../src/core/provision.js';
+import { createMember, ensureProjectInitialized } from '../../src/core/provision.js';
 import { aiPathsAt } from '../../src/config/paths.js';
 import { ensureDir, getProjectRoot, runWithProjectRoot } from '../../src/utils/fs.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
@@ -26,5 +26,18 @@ export function writeLegacyMount(subsystem: SubsystemSpec, projectName: string):
     ensureDir(aiPathsAt(childDir).specsDir());
     ensureProjectInitialized(projectName, subsystem.id.split('::').pop()!);
   });
+  invalidateSpecCache();
+}
+
+/**
+ * The member counterpart of writeLegacyMount: declare `subsystem.id` as a
+ * member PROJECT of the bound project, at `subsystem.projectPath`, and scaffold
+ * the child project there — what a wairon 6 tree holds where a wairon 5 tree
+ * held a legacy L1 mount. For the tests that need a chained child project and
+ * are not about the mount form.
+ */
+export function writeMemberProject(subsystem: SubsystemSpec, _projectName: string): void {
+  const projectPath = subsystem.projectPath!.split(path.sep).join('/');
+  createMember(subsystem.id, projectPath, subsystem.description || undefined, 'project');
   invalidateSpecCache();
 }

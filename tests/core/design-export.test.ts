@@ -91,7 +91,7 @@ function buildTree(root: string): void {
       boundaries: ['No payments', { name: 'tax', description: 'computed elsewhere' }],
       globalRequirements: ['Every invoice balances', { description: 'Audit every write' }],
       publicInterfaces: [
-        { id: 'billing-api', name: 'Billing API', subsystem: 'billing', component: 'billing-portal', type: 'REST', details: 'the api', audience: 'external' },
+        { as: 'billing-api', name: 'Billing API', from: 'billing', component: 'billing-portal', details: 'the api', audience: 'external' },
       ],
       databases: [],
       targetLanguage: 'typescript',
@@ -99,7 +99,7 @@ function buildTree(root: string): void {
       updatedAt: now,
     });
     saveSpec('subsystem', subsystem('billing', {
-      publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+      publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
       lifecycle: [{ phase: 'init', component: 'billing-orch', method: 'compute' }],
       trustedLinks: [{ subsystem: 'ledger', reason: 'shared books' }],
       ext: { acme: { tier: 'gold' } },

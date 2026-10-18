@@ -27,6 +27,7 @@ import {
 import type { ResolvedExportTable } from '../../models/exports.js';
 import { createHash } from 'crypto';
 import { canonicalize } from '../../utils/canonical-json.js';
+import { readsV5Forms } from '../../utils/fs.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -525,8 +526,8 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       // project-boundaries' single finding (or no finding at all).
       return importOf(ref, 'type').outcome !== 'none';
     }
-    // The project's own id used as a prefix is its own name (a deprecated form).
-    if (ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
+    // The project's own id used as a prefix is its own name (a wairon 5 form, read only in the v5 reading).
+    if (readsV5Forms() && ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
     // A `::` reference the scan recorded as leaving the project is project-boundaries' to judge.
     if (ref.includes('::') && authoredTypeRefs.has(ref)) return true;
     // The dotted form names a subsystem's type: a first segment that is an
@@ -643,7 +644,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (foreign.kind === 'ambiguous') {
           return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
         }
-        if (r.form === 'leading' || r.form === 'super') return unavailable(`the deprecated form "${r.authored}" names no alias of this project, so there is nothing to judge it against — run \`wairon upgrade\``);
+        if (r.form === 'leading' || r.form === 'super' || r.form === 'path') {
+          return {
+            ...base, outcome: 'forbidden', canonicalTarget: r.authored,
+            reason: `"${r.authored}" is a wairon 5 reference form (a leading \`::\`, \`super::\` or member path); wairon 6 reads \`local_id\` and \`alias::name\` — \`wairon upgrade\` rewrites a tree wairon 5 wrote`,
+          };
+        }
         return {
           ...base, outcome: 'forbidden', canonicalTarget: r.authored,
           reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers`,

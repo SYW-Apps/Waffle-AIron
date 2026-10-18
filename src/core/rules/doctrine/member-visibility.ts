@@ -1,5 +1,5 @@
 import { SddRule, type OwnershipIndex, type RuleContext } from '../types.js';
-import { isRetired, type ComponentSpec } from '../../../models/index.js';
+import { type ComponentSpec } from '../../../models/index.js';
 import type { EdgeFinding } from './stereotype-terms.js';
 
 /**
@@ -27,7 +27,6 @@ export const memberVisibilityRule: SddRule = {
   check(ctx) {
     const ownership = ctx.ownershipIndex();
     for (const comp of ctx.components) {
-      if (isRetired(comp)) continue;
       for (const depId of comp.dependsOn) {
         const finding = visibilityEdgeFinding(ctx, ownership, comp, depId);
         if (!finding) continue;

@@ -36,7 +36,7 @@ function createDraftProject() {
   // Portal HTTP_API whose interface method has NO endpoint: a warning while draft,
   // a hard error once complete — the exact case `wairon lock` must catch.
   fs.writeFileSync(path.join(specsDir, 'components', 'comp-a.yaml'),
-    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\ndependsOn: []\nstatus: draft\n${META}\n`);
+    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP\ndependsOn: []\nstatus: draft\n${META}\n`);
   fs.writeFileSync(path.join(specsDir, 'interfaces', 'icomp-a.yaml'),
     `schemaVersion: 1.0.0\nid: icomp-a\nname: ICompA\ndescription: Interface A\ncomponent: comp-a\nstatus: draft\nmethods:\n  - name: callApi\n    description: Api method\n    signature: "callApi(): Promise<void>"\n    returns: "Promise<void>"\n${META}\n`);
 

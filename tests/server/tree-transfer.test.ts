@@ -9,6 +9,7 @@ import { routeData } from '../../src/server/http.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+
 import { assembleArchive } from '../../sdk/src/archive.js';
 import { allow, mintUserToken, createPlacedProject, seedChainedMount, seedSubsystem } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
@@ -331,7 +332,10 @@ describe('hosted spec-tree transfer', () => {
     const root = seedTree('demo', 'Demo');
     // 'ghost' declares a mount whose directory was never created — a chained
     // root the export cannot follow.
-    seedSubsystem(root, 'ghost', 'packages/missing');
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), [
+      'schemaVersion: 1.0.0', 'name: Demo', 'members:', '  ghost: packages/missing',
+      "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", '',
+    ].join('\n'));
     invalidateSpecCache();
     allow(dataDir, 'u-owner', 'project:read', 'project', 'demo');
     const token = mintUserToken(dataDir, { id: 'k-owner', userId: 'u-owner', projects: ['demo'] });

@@ -108,14 +108,14 @@ function bookingTree(endpoints: BookingEndpoint[], bookingModule: string, router
       {
         id: 'clinic-listener',
         componentType: 'Portal',
-        portalType: 'HTTP_API',
+        transport: 'HTTP',
         subsystem: 'clinic',
         description: 'The clinic host\'s public HTTP listener; routes each request to the portal that owns its path.',
       },
       {
         id: 'booking-portal',
         componentType: 'Portal',
-        portalType: 'HTTP_API',
+        transport: 'HTTP',
         subsystem: 'clinic',
         description: 'Lets patients book and review their clinic visits.',
       },

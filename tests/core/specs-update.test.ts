@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -275,7 +276,7 @@ describe('granular specification updates via updateSpec', () => {
       description: 'Portal component',
       subsystem: 'billing',
       componentType: 'Portal',
-      portalType: 'HTTP_API',
+      transport: 'HTTP',
       dependsOn: [],
       owns: [],
       status: 'complete',
@@ -644,7 +645,7 @@ describe('array deltas upsert by identity and honour delete markers', () => {
     expect(loadSubsystemSpec('billing')!.trustedLinks).toEqual([]);
   });
 
-  it('retired listener mounts: a delta naming them is refused, and an unrelated update keeps them on the file', () => {
+  v5it('retired listener mounts: a delta naming them is refused, and an unrelated update keeps them on the file', () => {
     // Mounts are a retired form (the reachability model): no longer typed, so
     // no delta can author them, but read and carried until doctor --fix
     // rewrites them — never dropped by a write that did not decide to.

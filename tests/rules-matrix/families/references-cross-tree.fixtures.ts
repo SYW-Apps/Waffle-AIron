@@ -122,21 +122,6 @@ export default [
   // -------------------------------------------------------------------------
   // EXTERNAL_CHECK_UNAVAILABLE — explicit relative form (super::)
   // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'EXTERNAL_CHECK_UNAVAILABLE',
-    severity: 'warning',
-    anchoredTo: 'telemetry_forwarder_impl',
-    expectFire: true,
-    scenario:
-      'A chained telemetry subproject opened standalone calls super::telemetry-hub in the parent tree, and no vendored surface snapshot covers the reference.',
-    tree: telemetryTree({
-      stepNumber: 1,
-      type: 'call',
-      description: 'Stream the enriched batch to the family telemetry hub.',
-      targetComponent: 'super::telemetry-hub',
-      targetMethod: 'streamTelemetry',
-    }),
-  }),
 
   // -------------------------------------------------------------------------
   // EXTERNAL_UNDECLARED — qualified foreign-namespace form

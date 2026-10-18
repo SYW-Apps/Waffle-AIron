@@ -122,6 +122,8 @@ const REPORTED_UNMODELLED = [
 const DECLARED_TYPES = [
   'ComponentRename',
   'ForeignFieldRepair',
+  'GatewayMerge',
+  'GatewayRetirement',
   'GenerateOptions',
   'GenerateSummary',
   'InstalledPack',

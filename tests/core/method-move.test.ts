@@ -196,7 +196,7 @@ function books(rules: Record<string, unknown> = {}): string {
 
   // The callers: a Portal's dispatch table and an Orchestrator's narrative.
   write('components/books_portal.yaml', comp('books_portal', 'books', 'Portal', {
-    portalType: 'Custom', dependsOn: ['intake', 'books_orch'],
+    transport: 'Custom', dependsOn: ['intake', 'books_orch'],
     dispatch: [
       { capability: 'intake.post', component: 'intake', method: 'post' },
       { capability: 'intake.close', component: 'intake', method: 'close' },

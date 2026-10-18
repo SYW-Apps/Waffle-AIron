@@ -281,7 +281,7 @@ export function deskTree(code: DispatchCode, python: boolean, opts: { server?: b
 function trackingPortalTree(router: string | null): FixtureTree {
   return {
     subsystems: [{ id: 'parcel-tracking', description: 'Lets recipients follow where their parcel is.' }],
-    components: [{ id: 'tracking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Answers recipients\' parcel-tracking requests over HTTP.' }],
+    components: [{ id: 'tracking-portal', componentType: 'Portal', transport: 'HTTP', description: 'Answers recipients\' parcel-tracking requests over HTTP.' }],
     interfaces: [{
       id: 'itracking_portal',
       component: 'tracking-portal',

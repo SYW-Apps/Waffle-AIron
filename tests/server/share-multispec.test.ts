@@ -68,20 +68,20 @@ function buildTwoPortals(root: string): void {
       boundaries: [],
       globalRequirements: [],
       publicInterfaces: [
-        { id: 'public-api', name: 'Public API', subsystem: 'core-sub', component: 'public-portal', type: 'REST', details: 'public', audience: 'external' },
-        { id: 'internal-api', name: 'Internal API', subsystem: 'core-sub', component: 'internal-portal', type: 'REST', details: 'peer-to-peer', audience: 'external' },
+        { as: 'public-api', name: 'Public API', from: 'core-sub', component: 'public-portal', details: 'public', audience: 'external' },
+        { as: 'internal-api', name: 'Internal API', from: 'core-sub', component: 'internal-portal', details: 'peer-to-peer', audience: 'external' },
       ],
       createdAt: now,
       updatedAt: now,
     });
     saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
-        { type: 'REST', details: 'public', component: 'public-portal' },
-        { type: 'REST', details: 'peer-to-peer', component: 'internal-portal' },
+        { details: 'public', component: 'public-portal' },
+        { details: 'peer-to-peer', component: 'internal-portal' },
       ],
     }));
-    saveComponentSpec(component('public-portal', 'core-sub', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>));
-    saveComponentSpec(component('internal-portal', 'core-sub', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('public-portal', 'core-sub', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('internal-portal', 'core-sub', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>));
     saveInterfaceSpec(iface('ipublic-portal', 'public-portal', [
       {
         name: 'getThing', description: 'reads a thing', signature: 'getThing(): string', returns: 'string',

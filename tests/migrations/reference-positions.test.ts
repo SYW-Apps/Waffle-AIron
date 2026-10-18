@@ -254,7 +254,7 @@ describe('every reference position is recorded by the scan and respelled by the 
     put(specs(root, 'zz-sub', '.index.yaml'), SubsystemSpecSchema.parse({
       id: 'zz-sub', name: 'zz-sub', description: 'd', parentSystem: 'Zz', status: 'complete', createdAt: STAMP, updatedAt: STAMP,
       publicInterfaces: [
-        { type: 'Custom', details: 'd', component: m('publicInterfaces.component', 'subsystem'), interface: m('publicInterfaces.interface', 'subsystem'), consumers: [m('publicInterfaces.consumers', 'subsystem')] },
+        { details: 'd', component: m('publicInterfaces.component', 'subsystem'), interface: m('publicInterfaces.interface', 'subsystem'), consumers: [m('publicInterfaces.consumers', 'subsystem')] },
         { from: m('publicInterfaces.from', 'subsystem'), typeDef: m('publicInterfaces.typeDef', 'subsystem') },
       ],
       lifecycle: [{ phase: 'init', component: m('lifecycle.component', 'subsystem'), method: 'start' }],

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -103,7 +104,7 @@ async function lock(dir: string): Promise<void> {
 }
 
 describe('the family run — what it carries', () => {
-  it('property: one-judge — a member\'s findings in the family run are its own gate\'s, verbatim', () => {
+  v5it('property: one-judge — a member\'s findings in the family run are its own gate\'s, verbatim', () => {
     const f = referenceFamily();
     const run = familyAt(f.top);
     expect(run.projects!.map((p) => p.key)).toEqual(['', 'core', 'transpiler', 'shared']);
@@ -125,7 +126,7 @@ describe('the family run — what it carries', () => {
     expect(run.issues.filter((i) => i.project === '').map(line).sort()).toEqual(expect.arrayContaining(rootOwn.issues.map(line)));
   });
 
-  it('property: unrelated-failure-changes-nothing — breaking one member leaves every other member\'s verdict as it was', () => {
+  v5it('property: unrelated-failure-changes-nothing — breaking one member leaves every other member\'s verdict as it was', () => {
     const f = referenceFamily();
     const before = familyAt(f.top);
     // shared grows an error of its own: a component depending on nothing that exists.
@@ -135,7 +136,7 @@ describe('the family run — what it carries', () => {
       'status: complete', "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''].join('\n'));
     fs.writeFileSync(path.join(f.shared, '.wai', 'specs', 'glossary', 'glossary-portal', '.index.yaml'), [
       'id: glossary-portal', 'name: glossary-portal', 'description: The glossary portal', 'subsystem: glossary', 'componentType: Portal',
-      'portalType: Custom', 'owns: []', 'dependsOn:', '  - vanished-term-index', 'status: complete',
+      'transport: Custom', 'owns: []', 'dependsOn:', '  - vanished-term-index', 'status: complete',
       "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''].join('\n'));
     const after = familyAt(f.top);
     expect(after.issues.some((i) => i.project === 'shared' && i.code === 'INVALID_DEPENDENCY_REFERENCE')).toBe(true);
@@ -236,7 +237,7 @@ describe('family codes — fire and control', () => {
     expect(family(familyAt(f.top), 'PROJECT_ID_COLLISION').map((i) => i.severity)).toEqual(['error']);
   });
 
-  it('PROJECT_DEPENDENCY_CYCLE fires on each project of a loop; quiet on a one-way dependency', () => {
+  v5it('PROJECT_DEPENDENCY_CYCLE fires on each project of a loop; quiet on a one-way dependency', () => {
     expect(family(familyAt(contractFamily().top), 'PROJECT_DEPENDENCY_CYCLE')).toEqual([]);
     const f = referenceFamily();
     const loops = family(familyAt(f.top), 'PROJECT_DEPENDENCY_CYCLE');
