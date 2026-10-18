@@ -587,7 +587,7 @@ export function applyRestatement(
     return refused(restatement, replacedExisting,
       `Refusing to write ${restatement.kind} "${String(candidate.id)}": ${unsigned.map((n) => `"${n}"`).join(', ')} `
       + `${unsigned.length === 1 ? 'states' : 'state'} neither params${restatement.kind === 'interface' ? ', a signatureFrom' : ''} nor a prose signature, `
-      + 'so nothing says what the method takes. Nothing was written.');
+      + 'so nothing says what the method takes. A method that takes nothing states `params: []`. Nothing was written.');
   }
   // Every type position read under the grammar: an alias is respelled and
   // reported, a position with no canonical spelling refused with its replacement.

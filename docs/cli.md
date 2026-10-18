@@ -138,6 +138,10 @@ warnings as errors (notices are printed and counted, never fatal).
   counts it among what was not checked (`not checked: routes of 1 HTTP Portal(s)
   naming no router`); such a Portal is judged by its realizing class's public
   methods alone.
+- What it never checks is behaviour: the reading compares the code's structure and
+  linkage with the design (which methods, signatures, imports, calls and routes exist),
+  not what a method computes. A business rule deleted from a method body that keeps
+  its signature and its calls passes; tests catch that, the gate does not.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -1530,6 +1534,7 @@ Every project lives in an **organization unit**, and access is a grid of
 project on a new instance:
 
 ```sh
+wairon host doctor --fix                                          # once per data dir: seed the instance identity, apply migrations
 wairon host unit create --slug acme                               # a root unit (business_entity)
 wairon host project create --id shop --unit acme
 wairon host permission set --user alice --capability project:read  --project shop

@@ -429,7 +429,7 @@ export function planMcpInstall(options: McpInstallOptions): McpConfigWrite[] {
 
 export function runMcpInstall(options: McpInstallOptions = {}): void {
   for (const target of resolveInstallTargets(options)) {
-    const agentLabel = target.backend === 'gemini' ? 'Antigravity' : 'Claude';
+    const agentLabel = backendLabel(target);
     // Self-heal: if an entry already exists but points somewhere else (e.g. a
     // stale path from a moved repo or an earlier machine), rewrite it instead of
     // skipping. Skipping is exactly how a broken `command`/`args` path survives
@@ -462,6 +462,15 @@ function writeInstallTarget(target: InstallTarget): void {
 }
 
 /** Step 12: where it wrote, what the entry points at, and what the agent must do to pick it up. */
+/**
+ * Who reads the file an install wrote: Antigravity loads only the global
+ * mcp_config.json, and the project .gemini/settings.json is the Gemini CLI's.
+ */
+function backendLabel(target: InstallTarget): string {
+  if (target.backend === 'claude') return 'Claude';
+  return target.useGlobal ? 'Antigravity' : 'Gemini CLI';
+}
+
 function reportInstalled(target: InstallTarget, agentLabel: string): void {
   const wasStale = target.before !== undefined;
   logger.success(`wairon MCP server ${wasStale ? 'updated (was stale)' : 'registered'} for ${agentLabel} in ${chalk.cyan(target.path)}.`);
@@ -471,7 +480,7 @@ function reportInstalled(target: InstallTarget, agentLabel: string): void {
   logger.info('AI tools using this config get the wairon MCP server: the sdd_* spec-authoring, validation, member and');
   logger.info('rename tools, plus live agent briefs (sdd_get_agent_brief). The full list is in docs/cli.md ("MCP tools"), shipped with the package (node_modules/@wairon/cli/docs/cli.md) and at https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/cli.md');
   logger.blank();
-  const restartApp = target.backend === 'gemini' ? 'Antigravity CLI (agy)' : 'claude';
+  const restartApp = target.backend === 'claude' ? 'claude' : target.useGlobal ? 'Antigravity CLI (agy)' : 'Gemini CLI';
   logger.info(`Restart ${chalk.bold(restartApp)} (or reload MCP servers) to activate.`);
 
   // A project-scoped .mcp.json server needs a one-time trust approval the next

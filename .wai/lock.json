@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "c5795e281aa21746efcc2083847d92bfddf9cce10a4137f8e0d4da0c0a81d9fc"
+    "digest": "9cac83775e51bb392440f389f1c0d73c5e21be73a0087e524f5c1d9d2fd89cc2"
   },
-  "lockedAt": "2026-10-18T00:54:19.718Z",
+  "lockedAt": "2026-10-18T01:39:17.501Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -552,7 +552,7 @@
     ".wai/specs/implementations/project_relation_repository_impl.yaml": "89a19c148cf9c5f0373aa579bdcb75c26aaa804279044e9afbf1d05452971dff",
     ".wai/specs/implementations/project_relation_store_impl.yaml": "449579923f6c8bc12fe76773ac45c6cd4c7209af259b9145939d20df91e2024e",
     ".wai/specs/implementations/project_repository_impl.yaml": "c6d5a56e27bbb3301ebc76d50ca3427af1975d13b36eaab2718e80894e886d89",
-    ".wai/specs/implementations/project_status_impl.yaml": "580425cd1306b2a2bfc9bcbaf2a38770f1ffe24bcbf28ecdd9605988ec1c8612",
+    ".wai/specs/implementations/project_status_impl.yaml": "d6c2bcb834ee903cb4ee00d64297d7c6cc0de9724a891f5e7e1d5c45f20295d2",
     ".wai/specs/implementations/project_store_impl.yaml": "14d43fb41273170a2c2156b74bc1b213332499a2f6b68ea87ef9286ba40b4c18",
     ".wai/specs/implementations/project_write_registry_impl.yaml": "addd12773fc8528c9164d40dafbbf8e05ac7eb56eead63dc19a9cd62b0bc2e8e",
     ".wai/specs/implementations/public_surface_index_impl.yaml": "9c485547e69c99923c024d2def1744d7e74738efbcc99baae72128fc382d3ba6",
@@ -1656,7 +1656,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "19bbb59dc0b3aac83711974cef6c8372653be68ed00dcf52be5823feffcc6d92",
+    "design": "340c0fce2da9a235936208b7e36b4acaa738cacf1196acd1a76cd238df305b45",
     "release": "2d5140aaa1e90689979465a650329967e0faf8c2650fc92494c43aee41784d77",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",

@@ -14,6 +14,22 @@ member-qualified hosted selectors, a pack's `foreignBuiltins`, `--no-recurse` an
 `--no-recursive`) therefore keep working through 6.x. Nothing changes in behaviour; the
 messages, help texts and generated guides now say "until the next major release".
 
+### Small fixes from the v6.0.0 QA panel
+
+- `wairon mcp install` and `doctor --fix` name the Gemini CLI for the project
+  `.gemini/settings.json`, and Antigravity only for its global `mcp_config.json`.
+- `wairon doctor` no longer closes with "Most issues clear with `wairon generate`" when
+  the warnings left are ones `generate` does not clear; each warning names its own fix.
+- `wairon status` explains a completeness below 100% in one line: 20% a component's spec,
+  +30% a contract, +30% an implementation, +20% once the source files it names exist.
+- `wairon host key list` shows each key's owner (or that it has none and so no
+  permissions), its label, expiry and revocation; the legacy role shows only where set.
+- A contract method stating no parameters is refused with the fix (`params: []`), and
+  `INTENT_FLOOR` says what counts as thin (under 40 characters, or only the method's name).
+- Docs: the code reading checks structure and linkage, never behaviour (a dropped business
+  rule is caught by tests, not the gate), and the hosted walkthrough starts with
+  `wairon host doctor --fix`.
+
 ## v6.0.0 (from v5.1.0)
 
 **Breaking: a major release.**

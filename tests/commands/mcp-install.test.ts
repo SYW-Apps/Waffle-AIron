@@ -116,4 +116,22 @@ describe('cli_runner.runMcpInstall: a hosted install without --token (real CLI)'
     await expect(run).rejects.toMatchObject({ stderr: expect.stringMatching(/wairon init/) });
     expect(fs.readdirSync(empty)).toEqual([]);
   }, 180_000);
+
+  it('names the Gemini CLI, not Antigravity, for the project .gemini/settings.json', async () => {
+    // Antigravity reads only its global mcp_config.json; telling the user the
+    // project file was written "for Antigravity" sent them to the wrong tool.
+    const home = mkTmp('wairon-mcp-home-');
+    const project = mkTmp('wairon-mcp-gemini-');
+    const env = { ...process.env, HOME: home, USERPROFILE: home };
+    await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '-y'], { cwd: project, env, timeout: 180_000 });
+    const { stdout } = await execFileP(
+      process.execPath,
+      [TSX_CLI, WAIRON_CLI, 'mcp', 'install', '--backend', 'gemini'],
+      { cwd: project, env, timeout: 180_000 },
+    );
+    expect(fs.existsSync(path.join(project, '.gemini', 'settings.json'))).toBe(true);
+    expect(stdout).toMatch(/for Gemini CLI in .*settings\.json/);
+    expect(stdout).not.toMatch(/for Antigravity in/);
+    expect(stdout).toMatch(/Restart .*Gemini CLI/);
+  }, 360_000);
 });
