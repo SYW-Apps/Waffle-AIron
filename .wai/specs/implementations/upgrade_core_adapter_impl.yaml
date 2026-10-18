@@ -62,6 +62,13 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: computeGateStateId
+  - name: retireGateways
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: retireGateways
 status: draft
 createdAt: '2026-10-18T14:14:23.627Z'
-updatedAt: '2026-10-18T14:14:25.015Z'
+updatedAt: '2026-10-18T19:11:09.105Z'

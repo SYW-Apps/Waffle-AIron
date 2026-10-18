@@ -106,8 +106,9 @@ methods:
         endStep: 14
       - stepNumber: 11
         description: >-
-          Bind the project's rehearsal root; the step run is the one whose from is the project's
-          major (today only 5 to 6 is kept)
+          Bind the project's rehearsal root in the v5 reading: the one binding under which the core
+          reads the forms a step's major wrote (everywhere else such a form is refused). The step
+          run is the one whose from is the project's major (today only 5 to 6 is kept)
         type: local
       - stepNumber: 12
         description: Plan the v5 to v6 step for the project
@@ -246,4 +247,4 @@ methods:
         outcome: list<ReleaseNote>
 status: draft
 createdAt: '2026-10-18T14:14:37.637Z'
-updatedAt: '2026-10-18T14:16:14.612Z'
+updatedAt: '2026-10-18T19:11:32.320Z'

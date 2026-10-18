@@ -237,12 +237,12 @@ methods:
       is the same whichever root asked (status-agrees). Per member also: its composition subject
       (its record's stateId), whether its staleness is only the stage-5 identity upgrade, and how
       its parent's lock pinned it (matches | moved | unpinned, read from the parent's record
-      `members`, or its legacy `children` until the next major release). Each PART of a selected
-      project is answered too (stage 8), as a part: approved exactly when its declaring project is
-      (its approval is that project's), with its content digest and the commit it was read at — what
-      a lock records as the part's MemberPin. A declared member with no project on disk is `never`.
-      Reads each project's own tree once and writes nothing; the caller must gate on reach itself
-      before it asks about a family.
+      `members`, or its legacy `children` in the v5 reading `wairon upgrade` binds). Each PART of a
+      selected project is answered too (stage 8), as a part: approved exactly when its declaring
+      project is (its approval is that project's), with its content digest and the commit it was
+      read at — what a lock records as the part's MemberPin. A declared member with no project on
+      disk is `never`. Reads each project's own tree once and writes nothing; the caller must gate
+      on reach itself before it asks about a family.
     signature: 'approvals(depth?: int): list<ProjectApproval>'
     returns: list<ProjectApproval>
     params:
@@ -435,4 +435,4 @@ methods:
         description: Its gate identity as computed now, with its parts
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-18T00:36:23.971Z'
+updatedAt: '2026-10-18T19:08:35.599Z'

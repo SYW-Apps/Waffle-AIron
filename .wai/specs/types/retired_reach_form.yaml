@@ -3,7 +3,8 @@ id: retired_reach_form
 name: RetiredReachForm
 description: >-
   A form the reachability model retired, as the scan met it in a stored spec. The loader reads each
-  one compatibly until the next major release, and the reachability migration rewrites it.
+  one compatibly in the v5 reading `wairon upgrade` binds, and the reachability migration rewrites
+  it.
 subsystem: sdd_core
 fields: []
 methods: []
@@ -30,4 +31,4 @@ values:
       PUBLIC_INTERFACE_EVENT_MISTYPED, MISSING_PORTAL_TYPE). The scan does not record it; the
       reachability migration reads the allows itself and names its rewrites with this form
 createdAt: '2026-10-06T13:06:37.170Z'
-updatedAt: '2026-10-18T00:38:08.751Z'
+updatedAt: '2026-10-18T19:09:09.188Z'

@@ -927,7 +927,6 @@ methods:
     sourcePath: src/core/rules/wiring/entry-declarations.ts
     narrative:
       - stepNumber: 1
-        label: declarations
         description: >-
           For each invokedBy declaration in scope: each Portal component's own, and each contract
           method's on an interface whose component resolves
@@ -936,43 +935,32 @@ methods:
         over: >-
           every invokedBy declaration decl in scope, with the component comp it belongs to and the
           spec it is written on
-        endStep: 8
+        endStep: 6
       - stepNumber: 2
-        description: A retired kind is read as entry on a Portal, runtime elsewhere
-        type: branch
-        condition: decl.kind is external or sibling-subsystem
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Report INVOKED_BY_RETIRED_KIND (warning) on the spec, naming the kind it is read as, which
-          doctor --fix writes
-        type: local
-      - stepNumber: 4
         description: An entry belongs to a Portal verb
         type: branch
         condition: decl is (read as) kind entry and comp is not a Portal
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 4
+      - stepNumber: 3
         description: >-
           Report ENTRY_ON_NON_PORTAL (error) on the spec, sited at the method: a runtime hook
           declares kind runtime, and an outside caller of a non-Portal is a design that needs a
           Portal
         type: jump
         toStep: 1
-      - stepNumber: 6
+      - stepNumber: 4
         description: A scope describes network callers only
         type: branch
         condition: >-
           decl.scope is present and (decl is a runtime declaration or comp.transport.kind() is not
           network)
         onFalseStep: 1
-      - stepNumber: 7
+      - stepNumber: 5
         description: >-
           Report ENTRY_SCOPE_NOT_NETWORK (warning) on the spec, sited at the method, naming the
           transport
         type: local
-      - stepNumber: 8
-        label: declarationsEnd
+      - stepNumber: 6
         description: Continue with the next declaration
         type: local
     symbol: check
@@ -1041,4 +1029,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-07T06:21:54.559Z'
+updatedAt: '2026-10-18T19:03:05.647Z'

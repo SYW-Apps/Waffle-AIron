@@ -73,11 +73,11 @@ methods:
       - stepNumber: 4
         description: >-
           At an ancestor holding a wairon project, read its member declarations — its
-          configuration's `members` (through that ancestor's per-root binding) and, until the next
-          major release, its subsystem specs carrying projectPath — and record the first whose path
-          resolves EXACTLY to the bound root and stays within the ancestor's own root (parent root,
-          alias, form; a `members` entry wins over a legacy mount under the same alias), skipping
-          malformed files soft
+          configuration's `members` (through that ancestor's per-root binding) and, in the v5
+          reading `wairon upgrade` binds, its subsystem specs carrying projectPath — and record the
+          first whose path resolves EXACTLY to the bound root and stays within the ancestor's own
+          root (parent root, alias, form; a `members` entry wins over a legacy mount under the same
+          alias), skipping malformed files soft
         type: local
       - stepNumber: 5
         description: A declaring parent was recorded
@@ -146,4 +146,4 @@ methods:
       absent.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-18T00:37:41.326Z'
+updatedAt: '2026-10-18T19:08:57.393Z'

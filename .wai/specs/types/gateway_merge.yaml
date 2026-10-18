@@ -1,0 +1,32 @@
+kind: value-object
+id: gateway_merge
+name: GatewayMerge
+description: One Gateway merged into the Portal it owned.
+subsystem: sdd_core
+fields:
+  - name: gateway
+    type: string
+    description: The Gateway id, deleted by the merge.
+    optional: false
+  - name: portal
+    type: string
+    description: The Portal it owned, now the front door with the gateway variant.
+    optional: false
+  - name: members
+    type: list<string>
+    description: The Gateway's other owned members, now the Portal's dependencies.
+    optional: false
+  - name: consumers
+    type: list<string>
+    description: The components whose dependency on the Gateway now names the Portal.
+    optional: false
+  - name: exports
+    type: list<string>
+    description: >-
+      The specs (an L1 subsystem, the L0) whose export entry named the Gateway and now names the
+      Portal.
+    optional: false
+methods: []
+sourcePath: src/core/stereotype-migration.ts
+createdAt: '2026-10-18T19:10:55.365Z'
+updatedAt: '2026-10-18T19:10:56.110Z'

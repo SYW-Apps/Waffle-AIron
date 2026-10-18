@@ -197,11 +197,9 @@ methods:
       The sdd_set_endpoints workflow: verify the L3 contract exists, read the Portal it belongs to,
       build one wire endpoint per named method from that transport's own address fields and check it
       against the endpoint schema, then persist the contract with the bindings attached. The
-      transport may be written in either vocabulary — the endpoint's (HTTP, gRPC, …) or the Portal's
-      portalType (HTTP_API is HTTP) — and is stored in the endpoint's. A transport the Portal's
-      portalType does not carry is refused, naming the transport that portalType implies; so is a
-      method the contract does not declare, or an endpoint the schema rejects — each before anything
-      is saved.
+      transport is the Portal's own; another is refused, naming the Portal's — and so is a method
+      the contract does not declare, or an endpoint the schema rejects — each before anything is
+      saved.
     signature: >-
       setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool, search?:
       list<string>): SpecChangeReport
@@ -560,4 +558,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-15T16:03:23.142Z'
+updatedAt: '2026-10-18T19:09:39.679Z'

@@ -127,8 +127,8 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       Forward to the core portal: the direct members of a project root, one level deep — its
-      `members` entries and, until the next major release, its legacy L1 mounts — each as its
-      directory, alias and form.
+      `members` entries and, in the v5 reading `wairon upgrade` binds, its legacy L1 mounts — each
+      as its directory, alias and form.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -432,32 +432,11 @@ methods:
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
     params: []
-  - name: resolveChainingParent
-    description: >-
-      Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
-      root and mounting subsystem id), or null for a top root and when the bound request may not
-      read above its root.
-    signature: 'resolveChainingParent(): ChainingParentRef?'
-    returns: ChainingParentRef?
-    params: []
   - name: projectFamily
     description: 'Forward to spec_tree_portal.projectFamily: the project graph of the bound root''s scan.'
     signature: 'projectFamily(): ProjectFamily'
     returns: ProjectFamily
     params: []
-    guarantees:
-      - idempotent
-  - name: resolveProjectExports
-    description: >-
-      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table, the
-      bound root's or a member's.
-    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
-    returns: ResolvedExportTable
-    params:
-      - name: project
-        type: string
-        description: The namespace of a member project; omitted for the bound root
-        optional: true
     guarantees:
       - idempotent
   - name: createMember
@@ -489,13 +468,6 @@ methods:
         type: bool
         description: Answer the plan and write nothing (`--report`)
         optional: true
-  - name: loadTypeSpecs
-    description: >-
-      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
-      members' included (keyed by project id)
-    signature: 'loadTypeSpecs(): list<TypeSpec>'
-    returns: list<TypeSpec>
-    params: []
   - name: advanceMember
     description: >-
       Forward to spec_maintenance_portal.advanceMember: move a git member's pinned commit (`wairon
@@ -647,4 +619,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T14:21:44.842Z'
+updatedAt: '2026-10-18T19:08:28.962Z'

@@ -45,6 +45,14 @@ methods:
   - name: findChainingSubprojectsMissingConfig
     description: The chained subprojects under a root that have specs but no project.yaml.
     signatureFrom: spec_maintenance_portal.findChainingSubprojectsMissingConfig
+  - name: retireGateways
+    description: Merge each retired Gateway into the Portal it owned (with apply false, the plan only).
+    signature: 'retireGateways(apply: bool): GatewayRetirement'
+    returns: GatewayRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
 status: draft
 createdAt: '2026-10-18T13:06:25.595Z'
-updatedAt: '2026-10-18T14:13:41.433Z'
+updatedAt: '2026-10-18T19:12:19.128Z'

@@ -396,9 +396,9 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
-      through that root's binding) and, until the next major release, its legacy L1 mounts, each
-      resolved inside the project root, as the member's directory, alias and form. An absolute or
-      escaping path is skipped.
+      through that root's binding) and, in the v5 reading `wairon upgrade` binds, its legacy L1
+      mounts, each resolved inside the project root, as the member's directory, alias and form. An
+      absolute or escaping path is skipped.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -1537,6 +1537,22 @@ methods:
         type: string
         description: The copy's root, as rehearsalCopy answered it
     effect: write
+  - name: retireGateways
+    description: >-
+      Plan, and with apply write, the migration off the retired Gateway stereotype (a v5 form, read
+      only in the v5 reading `wairon upgrade` binds). A Gateway that owns exactly one Portal, and
+      whose own methods no narrative of another spec calls, is merged into that Portal: the Portal
+      takes the gateway variant; the Gateway's other owned members become the Portal's dependencies;
+      every component that depended on the Gateway depends on the Portal; every L1 or L0 export
+      naming the Gateway names the Portal; and the Gateway's spec, contract and implementation are
+      deleted. Any other Gateway is refused, naming why and the hand steps. Without apply nothing is
+      written.
+    signature: 'retireGateways(apply: bool): GatewayRetirement'
+    returns: GatewayRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T00:36:15.406Z'
+updatedAt: '2026-10-18T19:11:00.653Z'

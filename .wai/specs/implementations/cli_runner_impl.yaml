@@ -164,8 +164,8 @@ methods:
         outcome: this project's outputs generated
       - stepNumber: 16
         description: >-
-          --family: list this project's direct members (declared in `members`, or, until the next
-          major release, legacy mounts)
+          --family: list this project's direct members (declared in `members`, or, in the v5 reading
+          `wairon upgrade` binds, legacy mounts)
         type: call
         targetComponent: cli_core_adapter
         targetMethod: listDirectChainedSubprojects
@@ -804,51 +804,6 @@ methods:
           `wairon externals list|status|pin` instead
         type: throw
         error: UnknownSurfaceActionError
-  - name: runPacks
-    narrative:
-      - stepNumber: 1
-        description: Dispatch on the action
-        type: switch
-        'on': action
-        cases:
-          - value: add
-            step: 2
-          - value: list
-            step: 4
-          - value: remove
-            step: 6
-        defaultStep: 8
-      - stepNumber: 2
-        description: Vendor and register a pack via the packs adapter
-        type: call
-        targetComponent: cli_packs_adapter
-        targetMethod: addPack
-      - stepNumber: 3
-        description: Return after add
-        type: return
-        outcome: added
-      - stepNumber: 4
-        description: List the loaded packs via the packs adapter
-        type: call
-        targetComponent: cli_packs_adapter
-        targetMethod: listPacks
-      - stepNumber: 5
-        description: Return after list
-        type: return
-        outcome: listed
-      - stepNumber: 6
-        description: Remove a vendored pack via the packs adapter
-        type: call
-        targetComponent: cli_packs_adapter
-        targetMethod: removePack
-      - stepNumber: 7
-        description: Return after remove
-        type: return
-        outcome: removed
-      - stepNumber: 8
-        description: Return on unknown action
-        type: return
-        outcome: unknown action
   - name: runRules
     narrative:
       - stepNumber: 1
@@ -1603,47 +1558,11 @@ methods:
     sourcePath: src/commands/doctor.ts
     narrative:
       - stepNumber: 1
-        description: With --report, print one section's plan and nothing else
-        type: branch
-        condition: '--report was given'
-        onFalseStep: 6
-      - stepNumber: 2
-        description: 'Only a lone `--report composed-validation` is a report: it is the one section left'
-        type: branch
-        condition: the flags are anything but a lone --report composed-validation
-        onTrueStep: 3
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Refuse the flags, naming them: --report prints and writes nothing, so it never combines
-          with --fix, and composed-validation is its one section
-        type: throw
-        error: DoctorOptionsError
-      - stepNumber: 4
-        description: >-
-          Explain what composed validation changed in each project's verdict: today's as-complete
-          owner's gates against the totals and validator version their locks recorded, and every new
-          finding with its reason (escalated, pinned, positional — the last with what the family's
-          top matched and the rewrite)
-        type: call
-        targetComponent: verdict_changes
-        targetMethod: explain
-      - stepNumber: 5
-        description: >-
-          Print it per project — the lock's totals beside today's when the lock predates composed
-          validation, then the entries grouped by code with their reasons and rewrites, then how
-          many findings it could not attribute and, after that count, every positional candidate no
-          tie-break rule decides (ambiguous, with each candidate, or matching nothing) — and say
-          plainly that the lock records totals only, so this is not a per-code diff. Nothing is
-          written
-        type: return
-        outcome: composed-validation report printed
-      - stepNumber: 6
         description: With --fix, apply the repairs before the report, so the report shows the repaired state
         type: branch
         condition: '--fix was given'
-        onFalseStep: 41
-      - stepNumber: 7
+        onFalseStep: 36
+      - stepNumber: 2
         description: >-
           First, resolve any family migration a crash left unfinished under this root — roll back
           each transaction whose coordinator never committed, clean up each that did — before any
@@ -1652,49 +1571,49 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: recover
-      - stepNumber: 8
+      - stepNumber: 3
         description: 'Read the configuration: the fixes need an initialized project whose configuration is valid'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 9
+      - stepNumber: 4
         description: Skip the fixes otherwise, warning when the configuration is invalid; the report flags both
         type: branch
         condition: the project is initialized and its configuration is valid
-        onFalseStep: 41
-      - stepNumber: 10
+        onFalseStep: 36
+      - stepNumber: 5
         description: Read where the tree stands against the running major
         type: call
         targetComponent: cli_upgrade_adapter
         targetMethod: standing
-      - stepNumber: 11
+      - stepNumber: 6
         description: >-
           Skip the fixes for a tree another major wrote: an older one names `wairon upgrade`, a
           newer one the release to install; the report flags it
         type: branch
         condition: the tree is not current
-        onTrueStep: 41
-        onFalseStep: 12
-      - stepNumber: 12
+        onTrueStep: 36
+        onFalseStep: 7
+      - stepNumber: 7
         description: >-
           Rebuild the derived context documents through the core adapter, each written only if it
           changed
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 13
+      - stepNumber: 8
         description: Re-export the SDD skills for the active targets
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 14
+      - stepNumber: 9
         description: >-
           Re-inject the local AI guides for the active targets through the core adapter, recording
           which files were written so the report can name them
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 15
+      - stepNumber: 10
         description: >-
           Repair the narrative steps carrying a field their own type cannot have, with apply true:
           each foreign field is dropped and nothing else about the step changes; print what was
@@ -1702,7 +1621,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 16
+      - stepNumber: 11
         description: >-
           Regenerate the stored signatures with apply true: every stored text its params contradict
           is rewritten derived, and every restatement equal to its method's signature source is
@@ -1711,7 +1630,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 17
+      - stepNumber: 12
         description: >-
           Rewrite the stored type spellings with apply true: every type position that is an alias is
           re-saved in its canonical spelling, and the derived signature texts follow; print what was
@@ -1721,7 +1640,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairTypeSpellings
-      - stepNumber: 18
+      - stepNumber: 13
         description: >-
           Members: read the project graph the bound root's tree forms now and take every member
           project below the bound root with its directory. The per-project repairs above wrote the
@@ -1729,56 +1648,56 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectFamily
-      - stepNumber: 19
+      - stepNumber: 14
         description: For each member project below the bound root
         type: loop
         loopKind: forEach
         over: the member projects below the bound root, nearest first
-        endStep: 31
-      - stepNumber: 20
+        endStep: 26
+      - stepNumber: 15
         description: Does the member lie inside the bound root?
         type: branch
         condition: the member's directory lies inside the bound root
-        onFalseStep: 30
-      - stepNumber: 21
+        onFalseStep: 25
+      - stepNumber: 16
         description: Bound to the member's root, drop the foreign narrative-step fields of its own specs
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 22
+      - stepNumber: 17
         description: Bound to the member's root, regenerate its stored signatures
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 23
+      - stepNumber: 18
         description: >-
           Bound to the member's root, rewrite its stored type spellings, printing its int and enum
           proposals and the positions needing an author, none of which is written
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairTypeSpellings
-      - stepNumber: 24
+      - stepNumber: 19
         description: >-
           Bound to the member's root, rebuild its derived context documents, so an assistant opened
           in the member's own folder reads current ones
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 25
+      - stepNumber: 20
         description: >-
           Bound to the member's root, re-export the SDD skills for its active targets (a part has no
           surfaces of its own: its parent's serve it, and this member step is skipped for one)
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: exportSddSkills
-      - stepNumber: 26
+      - stepNumber: 21
         description: >-
           Bound to the member's root, re-inject its local AI guides for its active targets, printed
           under the member's alias
         type: call
         targetComponent: cli_core_adapter
         targetMethod: reinjectLocalGuides
-      - stepNumber: 27
+      - stepNumber: 22
         description: >-
           Bound to the member's root, plan the Claude registration in the member's own project
           .mcp.json; a plan that would write outside the member's project is not applied from here
@@ -1787,7 +1706,7 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: planInstall
-      - stepNumber: 28
+      - stepNumber: 23
         description: >-
           Register or repair the member's project .mcp.json when its entry is missing or differs,
           printed under the member's alias, so an assistant opened in the member's folder has the
@@ -1795,19 +1714,19 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 29
+      - stepNumber: 24
         description: Done with this member
         type: jump
-        toStep: 31
-      - stepNumber: 30
+        toStep: 26
+      - stepNumber: 25
         description: >-
           A member outside the bound root (a sibling checkout) is not written from here: name it
           with the command to run in its own directory — `wairon doctor --fix` there
         type: local
-      - stepNumber: 31
+      - stepNumber: 26
         description: On to the next member
         type: local
-      - stepNumber: 32
+      - stepNumber: 27
         description: >-
           Rebuild the bound project's derived context documents once more, last: they describe the
           tree as it stands NOW, and the first rebuild ran before the spec repairs and the members'
@@ -1815,7 +1734,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: syncContextFiles
-      - stepNumber: 33
+      - stepNumber: 28
         description: >-
           Plan the MCP registration for each active backend without writing anything — Claude in the
           project's .mcp.json; Gemini in the project's settings, or, for an Antigravity target, the
@@ -1824,26 +1743,26 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: planInstall
-      - stepNumber: 34
+      - stepNumber: 29
         description: >-
           Register or repair every backend whose planned writes stay inside the project root (or are
           already up to date); a write inside the project needs no further consent, as before
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 35
+      - stepNumber: 30
         description: >-
           For a Gemini or Antigravity target, look for the legacy global Antigravity plugin, whose
           name collides with the MCP server
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: findLegacyPlugin
-      - stepNumber: 36
+      - stepNumber: 31
         description: Anything to write outside the project root?
         type: branch
         condition: a planned MCP write outside the project root is pending, or the legacy plugin is present
-        onFalseStep: 41
-      - stepNumber: 37
+        onFalseStep: 36
+      - stepNumber: 32
         description: >-
           Print every write outside the project root as its own plan — for each MCP configuration
           the file, the wairon entry it holds and the one it would get (a large entry summarised, a
@@ -1852,12 +1771,12 @@ methods:
           run with neither skips every one of these writes and says so, naming `wairon doctor --fix
           --yes --global`. Nothing outside the project has been touched up to here
         type: local
-      - stepNumber: 38
+      - stepNumber: 33
         description: Only confirmed writes outside the project root are made
         type: branch
         condition: '--yes was given together with --global, or the person said yes at the terminal'
-        onFalseStep: 41
-      - stepNumber: 39
+        onFalseStep: 36
+      - stepNumber: 34
         description: >-
           Apply each confirmed MCP registration outside the project root through the install, which
           first copies the file it replaces beside itself as <file>.wairon-backup-<timestamp> and
@@ -1865,31 +1784,31 @@ methods:
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: installMcpServer
-      - stepNumber: 40
+      - stepNumber: 35
         description: Move a present legacy plugin aside instead of deleting it, and print where it went
         type: call
         targetComponent: cli_mcp_adapter
         targetMethod: retireLegacyPlugin
-      - stepNumber: 41
+      - stepNumber: 36
         description: 'Project: is this an initialized wairon project?'
         type: call
         targetComponent: cli_core_adapter
         targetMethod: projectConfigExists
-      - stepNumber: 42
+      - stepNumber: 37
         description: Stop at a folder that is not a wairon project
         type: branch
         condition: the project is not initialized
-        onFalseStep: 44
-      - stepNumber: 43
+        onFalseStep: 39
+      - stepNumber: 38
         description: Report it, naming `wairon init`, print the summary and exit non-zero
         type: return
         outcome: not a wairon project
-      - stepNumber: 44
+      - stepNumber: 39
         description: Report whether the configuration is valid, and read its active targets
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 45
+      - stepNumber: 40
         description: >-
           Major: report where the tree stands — current; older, naming `wairon upgrade` (an error:
           the fixes and the commands wait for it); newer or out of the window, naming the release to
@@ -1897,7 +1816,7 @@ methods:
         type: call
         targetComponent: cli_upgrade_adapter
         targetMethod: standing
-      - stepNumber: 46
+      - stepNumber: 41
         description: >-
           Transactions: report each unfinished family migration under this root — its verb, its
           owners and its coordinator's phase — as an error pointing at `wairon doctor --fix`; silent
@@ -1905,7 +1824,7 @@ methods:
         type: call
         targetComponent: cli_migration_adapter
         targetMethod: recover
-      - stepNumber: 47
+      - stepNumber: 42
         description: >-
           Write lock: report a .wai/.spec-write.lock that is present — the process it names and
           whether that process is live, gone, or cannot be read from the file, how old it is, and
@@ -1914,10 +1833,10 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: inspectLock
-      - stepNumber: 48
+      - stepNumber: 43
         description: Report whether the system spec is present
         type: local
-      - stepNumber: 49
+      - stepNumber: 44
         description: >-
           Spec tree: with a system spec and a valid configuration, run the family gate — the bound
           project's own gate and every member's — and report its error, warning and notice counts,
@@ -1926,7 +1845,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: validateFamily
-      - stepNumber: 50
+      - stepNumber: 45
         description: >-
           Narrative steps: plan the foreign-field repair with apply false and report each step
           carrying a field its own type cannot have — the implementation, the method, the step and
@@ -1934,7 +1853,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairForeignStepFields
-      - stepNumber: 51
+      - stepNumber: 46
         description: >-
           Signatures: plan the signature repair with apply false and report each interface or type
           whose stored signature text its params contradict, and each method restating its source's
@@ -1943,7 +1862,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairSignatures
-      - stepNumber: 52
+      - stepNumber: 47
         description: >-
           Type spellings: plan the type-spelling repair with apply false and report each interface
           or type holding a type position that is an alias of its canonical spelling, pointing at
@@ -1954,19 +1873,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: repairTypeSpellings
-      - stepNumber: 53
+      - stepNumber: 48
         description: >-
           Members: for each member project below the bound root, bound to its root, plan the same
           repairs with apply false and report them under its alias
         type: local
-      - stepNumber: 54
+      - stepNumber: 49
         description: >-
           Ask where the derived context documents live, so the staleness check reports on the
           generated pair and never on the two a person wrote
         type: call
         targetComponent: cli_core_adapter
         targetMethod: derivedDocPaths
-      - stepNumber: 55
+      - stepNumber: 50
         description: >-
           Generated files and skills: read the version each one was stamped with and compare it
           against the running build, so a file written by an older wairon is reported as stale
@@ -1974,7 +1893,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readStampVersion
-      - stepNumber: 56
+      - stepNumber: 51
         description: >-
           Ask which derived context documents a regenerate would change in CONTENT (the project
           context they embed, the domain map): each is reported `stale — its content differs from
@@ -1983,19 +1902,19 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: staleDerivedDocs
-      - stepNumber: 57
+      - stepNumber: 52
         description: >-
           Skills: for each active target, compare the installed SDD skills with what an export would
           write now, reporting the missing and stale ones
         type: call
         targetComponent: cli_skills_adapter
         targetMethod: checkSkillFreshness
-      - stepNumber: 58
+      - stepNumber: 53
         description: 'Lock: compute the gate identity as it stands now'
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: computeGateStateId
-      - stepNumber: 59
+      - stepNumber: 54
         description: >-
           Resolve the lock against that identity: a locked lock reports when and by whom it was
           approved (lock_record.approvalStamp), warning when it predates per-spec approval; a stale
@@ -2007,7 +1926,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: readLockState
-      - stepNumber: 60
+      - stepNumber: 55
         description: >-
           Lock, when stale: ask the lock adapter for lock-check's own verdict (without printing) and
           report it word for word beneath the Lock heading - ok when a release change carried the
@@ -2015,14 +1934,14 @@ methods:
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: checkApproval
-      - stepNumber: 61
+      - stepNumber: 56
         description: >-
           Extension packs: diagnose the project's pack situation — unresolved selections, installed
           packs not applied, packs applied from the machine-wide store
         type: call
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
-      - stepNumber: 62
+      - stepNumber: 57
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed on this machine but not applied (only
@@ -2030,7 +1949,7 @@ methods:
           developer's home store is never doctrine, so --fix never selects it into a project), and
           those applied from the machine-wide store
         type: local
-      - stepNumber: 63
+      - stepNumber: 58
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and which build it would start against the running CLI — `wairon --version` for a bare
@@ -2039,7 +1958,7 @@ methods:
           when a project entry names an absolute path of one machine; flag a legacy global
           Antigravity plugin
         type: local
-      - stepNumber: 64
+      - stepNumber: 59
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -4185,4 +4104,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T18:05:34.686Z'
+updatedAt: '2026-10-18T19:08:52.054Z'

@@ -97,16 +97,36 @@ methods:
         description: Plan each retype as a design change
         type: local
       - stepNumber: 17
+        description: Plan merging each Gateway into the Portal it owned, without writing
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireGateways
+      - stepNumber: 18
+        description: Can every Gateway be merged?
+        type: branch
+        condition: a Gateway is refused
+        onFalseStep: 20
+      - stepNumber: 19
+        description: >-
+          Refuse the step, naming each Gateway that cannot be merged, why, and the hand steps to
+          take in its spec files before upgrading again
+        type: throw
+        error: 'StepRefused: each Gateway that cannot be merged, with why and the hand steps'
+      - stepNumber: 20
+        label: gateways
+        description: Plan each merge as a design change
+        type: local
+      - stepNumber: 21
         description: Plan moving onto the reachability model, without writing
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 18
+      - stepNumber: 22
         description: >-
           Plan each of its rewrites as a design change, and report what it will not fix, with the
           decision to make
         type: local
-      - stepNumber: 19
+      - stepNumber: 23
         description: Answer the step plan
         type: return
         outcome: StepPlan
@@ -199,11 +219,16 @@ methods:
         targetComponent: upgrade_core_adapter
         targetMethod: retireSpecialists
       - stepNumber: 17
+        description: Merge each Gateway into the Portal it owned
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireGateways
+      - stepNumber: 18
         description: Move the tree onto the reachability model
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 18
+      - stepNumber: 19
         description: Written
         type: return
         outcome: void
@@ -221,4 +246,4 @@ methods:
         outcome: list<string>
 status: draft
 createdAt: '2026-10-18T14:14:32.869Z'
-updatedAt: '2026-10-18T14:16:12.248Z'
+updatedAt: '2026-10-18T19:11:31.055Z'
