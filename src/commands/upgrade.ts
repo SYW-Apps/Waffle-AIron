@@ -2,6 +2,8 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { lastSeenVersion, setLastSeenVersion } from '../config/userconfig.js';
+import * as fs from 'fs';
+import * as path from 'path';
 import { getProjectRootOverride, resolveProjectBinding } from '../utils/fs.js';
 import { isSilent, logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
@@ -56,6 +58,11 @@ function isInteractive(): boolean {
 /** The bound project's root: an explicit override, else the binding rule from the cwd. */
 function boundRoot(): string | null {
   return getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root ?? null;
+}
+
+/** Whether the root holds a project.yaml (under .wai, or the legacy .wairon) for a stamp to be read from. */
+function holdsConfig(root: string): boolean {
+  return ['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')));
 }
 
 /** Whether the plan only stamps: no step rewrites or reports anything. */
@@ -176,14 +183,16 @@ export function runWhatsNew(version?: string): void {
 /**
  * Stop a project command on a tree another major wrote. Exempt: upgrade,
  * whatsnew, doctor, init, help and version, and every command that acts on no
- * project; and any folder no project binds.
+ * project; any folder no project binds; and a bound project whose
+ * project.yaml is missing — the command reports that in its own words, and
+ * `wairon upgrade` could not help.
  */
 export async function guardStanding(commandPath: string): Promise<void> {
   // Steps 1-2: an exempt command, or no bound project, runs as it is.
   const first = commandPath.split(' ')[0];
   if (['upgrade', 'whatsnew', 'doctor', 'init', 'help', 'version'].includes(first) || actsOnNoProject(commandPath)) return;
   const root = boundRoot();
-  if (!root) return;
+  if (!root || !holdsConfig(root)) return;
   // Step 3: where the bound tree stands.
   const where = standing(root);
   // Steps 4-6: current runs; newer and out of window are refused with the release to install.

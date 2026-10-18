@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as yaml from 'js-yaml';
 import type { FixtureTree } from '../rules-matrix/harness';
 import { createTrialSandbox, countCode, transcript, writeFile, type TrialSandbox } from './trials-helpers';
@@ -30,6 +31,7 @@ const method = (name: string, effect?: string): Record<string, unknown> => ({
 
 const PROJECT_YAML = yaml.dump({
   schemaVersion: '1.0.0',
+  waironMajor: WAIRON_MAJOR,
   id: 'habitly',
   name: 'habitly',
   targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],

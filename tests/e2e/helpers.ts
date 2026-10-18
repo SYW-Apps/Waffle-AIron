@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -46,6 +47,7 @@ function writeProjectSkeleton(dir: string, name: string): void {
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), [
     "schemaVersion: '1.0.0'",
+    `waironMajor: ${WAIRON_MAJOR}`,
     `name: ${name}`,
     'targets:',
     '  - type: claude',

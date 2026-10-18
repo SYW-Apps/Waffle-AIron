@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -86,6 +87,13 @@ function downgradeToFormat2(dir: string): void {
   writeFile(dir, '.wai/lock.json', JSON.stringify(record, null, 2));
 }
 
+/** A dev.102 project is a major-5 project: it carries no stamp (`wairon upgrade` is what re-expresses its lock). */
+function unstamp(dir: string): void {
+  const config = yaml.load(readFile(dir, '.wai/project.yaml')) as Record<string, unknown>;
+  delete config.waironMajor;
+  writeFile(dir, '.wai/project.yaml', yaml.dump(config, { noRefs: true, lineWidth: 200 }));
+}
+
 let sb: TrialSandbox;
 
 beforeAll(() => { sb = createTrialSandbox('tinkerer'); });
@@ -115,29 +123,38 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
       expectExit(r, 1);
       expect(r.all).toContain('taken by wairon 5.1.1-dev.102');
       expect(r.all).toContain('no own spec file changed since it was taken — not even its code linkage — so what moved is the gate it was judged under');
-      expect(r.all).toContain('`wairon doctor --fix` first carries this format-2 record into the design reading');
+      expect(r.all).toContain('`wairon upgrade` first carries this format-2 record into the design reading');
       // The round-2 wording blamed the tree.
       expect(r.all).not.toContain('the design, or only code linkage');
     }
   });
 
-  it('doctor names the stale lock; doctor --fix re-expresses it as format 3, keeping the approval the approver\'s', async () => {
+  it("upgrade re-expresses it as format 3, keeping the approval the approver's", async () => {
+    // The project is a major-5 project: the guard refuses commands, doctor names the major
+    // and the upgrade, and the read-only plan names the re-expression and writes nothing.
+    unstamp(dir);
+    const refused = await sb.run(['lock-check'], dir);
+    expectExit(refused, 1);
+    expect(refused.all).toContain('run `wairon upgrade`');
     const report = await sb.run(['doctor'], dir);
-    expectExit(report, 0);
-    expect(report.all).toMatch(/Lock\s+⚠ stale — The approval on record/);
-    expect(lockRecord(dir).format).toBe(2); // plain doctor writes nothing
+    expect(report.all).toContain('written by wairon 5 (unstamped)');
+    expect(report.all).toContain('wairon upgrade');
+    const plan = await sb.run(['upgrade', '--report'], dir);
+    expectExit(plan, 0);
+    expect(plan.all).toContain('lock.json: re-express the approval in the current reading (who approved it, and when, are kept)');
+    expect(plan.all).toContain('Nothing was written.');
+    expect(lockRecord(dir).format).toBe(2); // the plan writes nothing
 
-    const fix = await sb.run(['doctor', '--fix', '--yes'], dir);
+    const fix = await sb.run(['upgrade', '--yes'], dir);
     expectExit(fix, 0);
-    expect(fix.all).toContain(`Re-expressed the approval of ${lockedAt}`);
-    expect(fix.all).toContain('in the design reading (lock format 3): no spec file moved since it was taken');
-    expect(fix.all).toContain('It still reads stale because the gate it was judged under moved');
+    expect(fix.all).toContain('is now on major 6');
 
     const record = lockRecord(dir);
     expect(record.format).toBe(3);
     expect(record.specsReading).toBe('design');
     expect(record.lockedAt).toBe(lockedAt);
-    expect(record.reexpressed).toMatchObject({ fromAlgorithm: 'sha256+content+doctrine+inputs+members', fromReading: 'content', by: 'wairon doctor --fix' });
+    expect(record.reexpressed).toMatchObject({ fromAlgorithm: 'sha256+content+doctrine+inputs+members', fromReading: 'content', by: 'wairon upgrade' });
+    expect(readFile(dir, '.wai/project.yaml')).toMatch(/^waironMajor: 6$/m);
   });
 
   it('after the carry: still stale (the gate moved), and one lock names that cause and clears it for both checks', async () => {
@@ -171,9 +188,10 @@ describe('tinkerer: upgrading a lock taken by an older wairon (format 2)', () =>
     expect(r.all).toContain('1 own spec file(s) changed since the approval');
     expect(r.all).not.toContain('what moved is the gate it was judged under');
 
-    const fix = await sb.run(['doctor', '--fix', '--yes'], edited);
-    expectExit(fix, 0);
-    expect(fix.all).not.toContain('Re-expressed the approval');
+    // Even the upgrade does not carry a record over an edited spec: it would approve what the approver never saw.
+    unstamp(edited);
+    const fix = await sb.run(['upgrade', '--yes'], edited);
+    expect(fix.all).not.toContain('re-express the approval');
     expect(lockRecord(edited).format).toBe(2);
   });
 });
@@ -449,7 +467,7 @@ describe('tinkerer: the CI gate fails closed where the docs say it must', () => 
     // r1 MAJOR M9 (FIXED in r2): at the parent `validate --ci` failed on
     // MEMBER_UNAPPROVED while `lock-check --strict` said "approved".
     const projectYaml = (id: string, extra: Record<string, unknown> = {}): string => yaml.dump({
-      schemaVersion: '1.0.0', id, name: id, targets: [], createdAt: TS, updatedAt: TS, ...extra,
+      schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id, name: id, targets: [], createdAt: TS, updatedAt: TS, ...extra,
     });
     const dir = sb.materialize('ci-family-never', {
       ...linkshort(),

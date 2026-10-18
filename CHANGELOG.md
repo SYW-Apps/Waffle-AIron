@@ -2,17 +2,38 @@
 
 ## Unreleased
 
-### Deprecated forms stay until the next major release
+### Major upgrades: `wairon upgrade`
 
-A deprecated form used to be promised for "one release", which would have made the first
-bug-fix release after a major one a major release too. The window is now the release line:
-a form deprecated in 6.x keeps loading, is reported, and is rewritten by `wairon doctor --fix`
-for every 6.x release, and only a major release removes it. Minor and patch releases never
-remove a deprecated form. The forms deprecated in v6.0.0 (a leading `::`, `super::`, member
-paths, an L1 `projectPath`, a member's long-form `path`, the retired reach forms, the
-member-qualified hosted selectors, a pack's `foreignBuiltins`, `--no-recurse` and
-`--no-recursive`) therefore keep working through 6.x. Nothing changes in behaviour; the
-messages, help texts and generated guides now say "until the next major release".
+wairon now keeps compatibility out of its core: each release reads only its own major's
+forms, and a tree another major wrote is moved forward once, by an upgrade step per major,
+run in order. Every `.wai/project.yaml` records the major that wrote it (`waironMajor`,
+written when a project is created).
+
+- `wairon upgrade` brings a project and every member below it to the running major, all
+  or nothing: it prints the plan (`--report` stops there), asks, and applies it
+  (`--yes` for scripts). It names each project whose design moved: run `wairon lock`
+  there. It never locks. From 5 to 6 it does what `wairon doctor --fix` did for a v5
+  tree: the old lock formats, legacy spec file names, a legacy `.wairon` folder,
+  chained subprojects without a configuration, legacy L1 mounts into `members` with
+  their references rewritten to `alias::name`, Specialists retyped, and the
+  reachability model.
+- Before a project command runs, wairon checks which major wrote the tree. A tree made by
+  6.0.0 carries no stamp but needs no rewrite: it is stamped on the spot. Any other older
+  tree is offered the upgrade on a terminal and refused in CI, naming `wairon upgrade`.
+  A tree a newer wairon wrote is refused, naming the release to install. The MCP server
+  refuses every tool on a tree another major wrote, until the human runs
+  `wairon upgrade`.
+- `wairon whatsnew [version]` prints a release's highlights, and the first command after
+  an update shows the highlights of every release since the one you last saw, once.
+- `wairon doctor` reports the major the tree was written by, and no longer carries the
+  v5 repairs or the `--report chaining` and `--report reachability` sections.
+- **Hosted:** the server upgrades its data directory when it starts: it copies the
+  directory whole beside itself, applies the permission model, upgrades every hosted
+  project's tree, registers the member records, and records the major in
+  `<dataDir>/version.json`. Any failure stops the start, naming the backup to restore.
+  `wairon host doctor` is removed: everything it did now happens at start.
+- The "until the next major release" promise for deprecated forms is withdrawn: forms
+  are not kept alongside the current ones, `wairon upgrade` rewrites them.
 
 ### Small fixes from the v6.0.0 QA panel
 
@@ -27,8 +48,7 @@ messages, help texts and generated guides now say "until the next major release"
 - A contract method stating no parameters is refused with the fix (`params: []`), and
   `INTENT_FLOOR` says what counts as thin (under 40 characters, or only the method's name).
 - Docs: the code reading checks structure and linkage, never behaviour (a dropped business
-  rule is caught by tests, not the gate), and the hosted walkthrough starts with
-  `wairon host doctor --fix`.
+  rule is caught by tests, not the gate).
 
 ## v6.0.0 (from v5.1.0)
 
@@ -66,6 +86,11 @@ Who is affected:
   and 99 exports are gone.
 
 ### Upgrading from v5.1.0
+
+> **From v6.1.0 on**, steps 2, 3 and 5 are done for you: run `wairon upgrade` at the top
+> of the family (`--report` for the plan), and a hosted server upgrades its data directory
+> and every hosted tree when it starts. `wairon host doctor` and `doctor --report chaining`
+> no longer exist. The rest of these steps still apply.
 
 Follow these in order. Every `doctor --fix` rewrite moves the gate identity, so lock
 last.

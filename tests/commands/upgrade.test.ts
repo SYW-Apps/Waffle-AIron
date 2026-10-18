@@ -35,7 +35,10 @@ vi.mock('inquirer', () => ({ default: { prompt } }));
 
 import { runUpgrade, runWhatsNew, guardStanding, announceRelease, CHANGELOG_URL } from '../../src/commands/upgrade.js';
 
-const ROOT = path.join(os.tmpdir(), 'wairon-upgrade-test-project');
+/** A bound project with a project.yaml, so the guard reads its standing (through the mocked adapter). */
+const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-upgrade-test-project-'));
+fs.mkdirSync(path.join(ROOT, '.wai'), { recursive: true });
+fs.writeFileSync(path.join(ROOT, '.wai', 'project.yaml'), 'id: demo\nname: Demo\n');
 
 const standingOf = (state: TreeStanding['state'], over: Partial<TreeStanding> = {}): TreeStanding => ({
   root: ROOT, writtenMajor: state === 'older' ? 5 : 6, stamped: state !== 'older', runningMajor: 6, state, ...over,
@@ -225,6 +228,19 @@ describe('cli_runner.guardStanding', () => {
     } finally {
       process.chdir(cwd);
       fs.rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('lets a command report a missing project.yaml itself, never sending it to `wairon upgrade`', async () => {
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-noconfig-'));
+    fs.mkdirSync(path.join(bare, '.wai', 'specs'), { recursive: true });
+    setProjectRoot(bare);
+    try {
+      await guardStanding('lock-check');
+      expect(adapter.standing).not.toHaveBeenCalled();
+    } finally {
+      setProjectRoot(null);
+      fs.rmSync(bare, { recursive: true, force: true });
     }
   });
 

@@ -4014,9 +4014,13 @@ methods:
       - stepNumber: 1
         description: >-
           Is the command guarded? upgrade, whatsnew, doctor, init, help and version, and every
-          command that acts on no project, are not
+          command that acts on no project, are not; nor is a folder no project binds, or a bound
+          project whose project.yaml is missing — the command reports that in its own words, and
+          `wairon upgrade` could not help
         type: branch
-        condition: the command is not guarded, or no project binds the folder
+        condition: >-
+          the command is not guarded, no project binds the folder, or the bound project holds no
+          project.yaml
         onFalseStep: 3
       - stepNumber: 2
         description: Let it run
@@ -4181,4 +4185,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T14:28:39.304Z'
+updatedAt: '2026-10-18T18:05:34.686Z'
