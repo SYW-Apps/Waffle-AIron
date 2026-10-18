@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+  # A release by hand: pick the bump instead of relying on `[major]` /
+  # `[minor]` in a merge message (a default merge message means patch).
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump for the next stable release
+        type: choice
+        options: [patch, minor, major]
+        default: patch
 
 # Only one auto-tag run at a time. If a second push lands while one is
 # already running, queue it rather than cancelling — we want every push
@@ -23,6 +32,16 @@ jobs:
       contents: write
 
     steps:
+      # A run by hand releases main only: started on another branch, the
+      # checkout and the rebase below would tag that branch's unmerged commits.
+      - name: Refuse a manual run off main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Auto Tag releases main only; this run was started on $REF. Start it on main."
+          exit 1
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -44,8 +63,11 @@ jobs:
         id: bump
         env:
           MSG: ${{ github.event.head_commit.message }}
+          INPUT_BUMP: ${{ inputs.bump }}
         run: |
-          if echo "$MSG" | grep -q '\[major\]'; then
+          if [ -n "$INPUT_BUMP" ]; then
+            echo "bump=$INPUT_BUMP" >> "$GITHUB_OUTPUT"
+          elif echo "$MSG" | grep -q '\[major\]'; then
             echo "bump=major" >> "$GITHUB_OUTPUT"
           elif echo "$MSG" | grep -q '\[minor\]'; then
             echo "bump=minor" >> "$GITHUB_OUTPUT"
@@ -86,5 +108,7 @@ jobs:
           git add src/config/defaults.ts
           git commit -m "chore: release ${{ steps.version.outputs.tag }}" || echo "defaults.ts already current"
           git tag ${{ steps.version.outputs.tag }}
-          git push origin main
+          # Only the tag is pushed: main takes changes through pull requests
+          # alone, and versions come from tags, so the version stamp lives on
+          # the tagged commit (which release.yml builds), not on main.
           git push origin ${{ steps.version.outputs.tag }}

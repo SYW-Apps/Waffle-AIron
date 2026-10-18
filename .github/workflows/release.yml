@@ -240,7 +240,8 @@ jobs:
           # make the wait honest: a budget measured in minutes, and
           # --prefer-online, which forces a staleness check so a cached 404
           # packument from an earlier attempt is not what the next one reads.
-          ATTEMPTS=30
+          # 30 minutes: a dev publish on 2026-10-17 took about 14 minutes to appear.
+          ATTEMPTS=90
           for i in $(seq 1 "${ATTEMPTS}"); do
             if npm install -g --prefer-online "@wairon/cli@${VERSION}"; then
               echo "installed on attempt ${i}"
@@ -251,7 +252,7 @@ jobs:
               sleep 20
             fi
           done
-          echo "::error::@wairon/cli@${VERSION} not installable from the registry after ${ATTEMPTS} attempts (10 minutes)"
+          echo "::error::@wairon/cli@${VERSION} not installable from the registry after ${ATTEMPTS} attempts (30 minutes)"
           exit 1
 
       - name: Binary reports the published version
