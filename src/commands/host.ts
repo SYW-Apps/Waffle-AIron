@@ -855,7 +855,18 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         if (!list.length) {
           logger.info('No keys.');
         } else {
-          for (const r of list) logger.info(`  ${r.id}  ${(r.role ?? 'editor').padEnd(6)} ${r.projects.join(',')}`);
+          // A key acts as its owner, so the owner leads; the legacy role is display-only and
+          // shown only where one was set (it used to default to "editor" for owner-bound keys).
+          for (const r of list) {
+            const owner = r.ownerSubject ? `owner ${r.ownerSubject.userId}` : 'no owner (zero permissions)';
+            const extras = [
+              r.role ? `legacy role ${r.role}` : '',
+              r.label ? `label "${r.label}"` : '',
+              r.expiresAt ? `expires ${r.expiresAt}` : '',
+              r.revokedAt ? `revoked ${r.revokedAt}` : '',
+            ].filter(Boolean);
+            logger.info(`  ${r.id}  ${owner}  projects ${r.projects.join(',')}${extras.length ? `  ${extras.join('  ')}` : ''}`);
+          }
         }
         break;
       }

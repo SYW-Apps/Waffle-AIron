@@ -369,6 +369,11 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   output += system
     ? `${mark.layer('system', '● System:')} ${mark.emphasis(system.name)} ${mark.score(systemScore, `(${systemScore}% Complete)`)}\n`
     : partLine;
+  // Below 100% the reader is told what the number counts, so nobody guesses
+  // at the missing part: a component with no code yet stops at 80%.
+  if (system && systemScore < 100) {
+    output += `${mark.structure('  Completeness per component: 20% its spec, +30% a contract, +30% an implementation, +20% once the source files it names exist.')}\n`;
+  }
 
   // Step 7: the project graph — each member the tree reaches prints as a
   // project holding its own subsystems, never as a subsystem of its parent.

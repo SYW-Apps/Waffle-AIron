@@ -66,7 +66,9 @@ describe('status: members print as projects', () => {
     bind(family.transpiler);
     const report = getStatusReport({});
     expect(report.text).not.toContain('[Project]');
-    expect(report.text.split('\n')[1]).toBe('└── [Subsystem] lowering (20%)');
+    // Line 1 is the completeness legend a system below 100% carries; the tree follows it.
+    expect(report.text.split('\n')[1]).toMatch(/^ {2}Completeness per component:/);
+    expect(report.text.split('\n')[2]).toBe('└── [Subsystem] lowering (20%)');
   });
 
   it('the MCP status line lists every member the root declares, legacy mounts included', () => {

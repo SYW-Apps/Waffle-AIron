@@ -1623,7 +1623,9 @@ function printSummary(tally: Tally): void {
     if (tally.warn > 0) parts.push(chalk.yellow(`${tally.warn} warning(s)`));
     console.log(`${chalk.bold('Summary:')} ${parts.join(', ')}.`);
     if (tally.warn > 0 && tally.error === 0) {
-      logger.info('Most issues clear with `wairon generate` (and `wairon mcp install` for MCP).');
+      // Each warning line names its own remedy; a generic one (`wairon generate`) misled when
+      // only, say, conformance warnings were left.
+      logger.info('Each warning above names how to clear it.');
     }
   }
   logger.blank();

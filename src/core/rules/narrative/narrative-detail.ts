@@ -65,7 +65,7 @@ export const narrativeDetailRule: SddRule = {
             'INTENT_FLOOR',
             `Method "${implMethod.name}" in implementation "${impl.id}" has no narrative (detail: ${eff.level}`
             + (eff.explicit ? ', declared explicitly)' : `, stereotype default for ${component?.componentType ?? 'component'})`)
-            + ' and its behavioral prose is missing or placeholder-thin. Provide an "intent" on the L4 method (or a substantive L3 description) stating what it does and how it fails — or write a narrative.',
+            + ' and its behavioral prose is missing or placeholder-thin (under 40 characters, or only the method\'s name). Provide an "intent" on the L4 method (or a substantive L3 description) stating what it does and how it fails — or write a narrative.',
             impl.id,
             isDraftCtx,
           );
