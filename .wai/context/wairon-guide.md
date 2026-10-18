@@ -1,7 +1,7 @@
 <!-- wairon-version: 5.1.1-dev.126 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
-# Domain Map (13 domains)
+# Domain Map (14 domains)
 
 | ID | Source | Name |
 |----|--------|------|
@@ -17,6 +17,7 @@
 | `sdd_sdk` | subsystem `sdd_sdk` | SDK / Pack Authoring & Archive |
 | `sdd_skills` | subsystem `sdd_skills` | SDD Skills Exporter |
 | `sdd_surfaces` | subsystem `sdd_surfaces` | SDD Public Surface Exchange |
+| `sdd_upgrade` | subsystem `sdd_upgrade` | SDD Major Upgrades |
 | `sdd_validator` | subsystem `sdd_validator` | SDD Architectural Validator |
 
 ---
