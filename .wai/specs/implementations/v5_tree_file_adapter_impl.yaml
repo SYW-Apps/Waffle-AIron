@@ -27,6 +27,15 @@ methods:
     narrative: []
     detail: intent
     intent: Rename the file; a target that already exists refuses with both paths.
+  - name: keepStaleRecord
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the root's lock.json (in .wai, else .wairon). None, or one in the current format, answers
+      null. Otherwise drop its per-spec digests, its children and the reading they were taken in,
+      keep who approved it (a bare approver string becomes a legacy approver), when, and the
+      identity it certified, and answer it in the current format with reexpressed naming the
+      algorithm it came from and wairon upgrade.
 status: draft
 createdAt: '2026-10-18T14:14:18.933Z'
-updatedAt: '2026-10-18T14:14:20.401Z'
+updatedAt: '2026-10-18T21:55:53.843Z'

@@ -40,6 +40,18 @@ methods:
       - name: root
         type: string
     effect: io
+  - name: keepStaleRecord
+    description: >-
+      A lock record of an older format that nothing proves unchanged, kept on record in the current
+      format: who approved it, when, and the identity it certified are unchanged, so it reads stale;
+      its per-spec digests, of another reading, are dropped; reexpressed says what it was. Null when
+      the root holds no record, or one already in the current format.
+    signature: 'keepStaleRecord(root: string): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: root
+        type: string
+    effect: io
 status: draft
 createdAt: '2026-10-18T14:11:28.255Z'
-updatedAt: '2026-10-18T14:13:46.770Z'
+updatedAt: '2026-10-18T21:55:52.432Z'

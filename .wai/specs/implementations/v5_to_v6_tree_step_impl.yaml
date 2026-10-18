@@ -49,84 +49,97 @@ methods:
           design change)
         type: local
       - stepNumber: 7
+        description: >-
+          When none comes back, read an older record nothing proves unchanged, kept on record in the
+          current format
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: keepStaleRecord
+      - stepNumber: 8
+        description: >-
+          When one comes back, plan keeping it: it reads stale until `wairon lock` approves the
+          design again, so the upgraded project never holds an approval nothing can read (not a
+          design change)
+        type: local
+      - stepNumber: 9
         description: List the spec files stored under a legacy name
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 8
+      - stepNumber: 10
         description: Plan each rename (not a design change)
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: List the chained subprojects with specs but no project.yaml
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: findChainingSubprojectsMissingConfig
-      - stepNumber: 10
+      - stepNumber: 12
         description: Plan each project.yaml to write (not a design change)
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Plan the chaining migration from the root, without a rehearsal: legacy mounts into
           members, the retired reference forms to alias::name, the exports and pins it needs
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: plan
-      - stepNumber: 12
+      - stepNumber: 14
         description: Is the chaining migration blocked?
         type: branch
         condition: the chaining plan is refused
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 16
+      - stepNumber: 15
         description: >-
           Refuse the step, naming why the chaining migration is blocked and what the author must
           decide first
         type: throw
         error: 'StepRefused: the chaining migration''s reason'
-      - stepNumber: 14
+      - stepNumber: 16
         label: chaining
         description: >-
           Plan each of its rewrites as a design change, per spec, and report each of its findings
           for an author
         type: local
-      - stepNumber: 15
+      - stepNumber: 17
         description: Plan retiring the Specialists, without writing
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 16
+      - stepNumber: 18
         description: Plan each retype as a design change
         type: local
-      - stepNumber: 17
+      - stepNumber: 19
         description: Plan merging each Gateway into the Portal it owned, without writing
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: retireGateways
-      - stepNumber: 18
+      - stepNumber: 20
         description: Can every Gateway be merged?
         type: branch
         condition: a Gateway is refused
-        onFalseStep: 20
-      - stepNumber: 19
+        onFalseStep: 22
+      - stepNumber: 21
         description: >-
           Refuse the step, naming each Gateway that cannot be merged, why, and the hand steps to
           take in its spec files before upgrading again
         type: throw
         error: 'StepRefused: each Gateway that cannot be merged, with why and the hand steps'
-      - stepNumber: 20
+      - stepNumber: 22
         label: gateways
         description: Plan each merge as a design change
         type: local
-      - stepNumber: 21
+      - stepNumber: 23
         description: Plan moving onto the reachability model, without writing
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 22
+      - stepNumber: 24
         description: >-
           Plan each of its rewrites as a design change, and report what it will not fix, with the
           decision to make
         type: local
-      - stepNumber: 23
+      - stepNumber: 25
         description: Answer the step plan
         type: return
         outcome: StepPlan
@@ -154,81 +167,93 @@ methods:
         targetComponent: upgrade_core_adapter
         targetMethod: reexpressApproval
       - stepNumber: 5
-        description: Was the record re-expressed?
+        description: Was none re-expressed?
         type: branch
-        condition: a record came back
+        condition: no record came back
         onFalseStep: 7
       - stepNumber: 6
+        description: >-
+          Keep an older record nothing proves unchanged on record in the current format, reading
+          stale
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: keepStaleRecord
+      - stepNumber: 7
+        description: Is there a record to write?
+        type: branch
+        condition: a record is in hand
+        onFalseStep: 9
+      - stepNumber: 8
         description: Write it back
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: writeLockRecord
-      - stepNumber: 7
+      - stepNumber: 9
         label: files
         description: List the spec files stored under a legacy name
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: findLegacySpecFiles
-      - stepNumber: 8
+      - stepNumber: 10
         description: For each legacy spec file
         type: loop
         loopKind: forEach
         over: the legacy spec files
-        endStep: 9
-      - stepNumber: 9
+        endStep: 11
+      - stepNumber: 11
         label: renamed
         description: Rename it to the name the current layout expects
         type: call
         targetComponent: v5_tree_file_adapter
         targetMethod: renameSpecFile
-      - stepNumber: 10
+      - stepNumber: 12
         description: Write the project.yaml each chained subproject with specs lacks
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: backfillChainedSubprojectConfigs
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Plan the chaining migration from the bound root, rehearsed: its own transaction copies and
           commits within the upgrade's rehearsal, never the live family
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: plan
-      - stepNumber: 12
+      - stepNumber: 14
         description: Does it change anything?
         type: branch
         condition: the chaining plan has changes
-        onFalseStep: 16
-      - stepNumber: 13
+        onFalseStep: 18
+      - stepNumber: 15
         description: Apply it
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: apply
-      - stepNumber: 14
+      - stepNumber: 16
         description: Did it commit?
         type: branch
         condition: the chaining migration did not commit
-        onFalseStep: 16
-      - stepNumber: 15
+        onFalseStep: 18
+      - stepNumber: 17
         description: Refuse the step with the chaining migration's failure
         type: throw
         error: 'StepRefused: the chaining migration''s failure'
-      - stepNumber: 16
+      - stepNumber: 18
         label: specialists
         description: 'Retire the Specialists: each becomes an Orchestrator, its variants rebased'
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: retireSpecialists
-      - stepNumber: 17
+      - stepNumber: 19
         description: Merge each Gateway into the Portal it owned
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: retireGateways
-      - stepNumber: 18
+      - stepNumber: 20
         description: Move the tree onto the reachability model
         type: call
         targetComponent: upgrade_core_adapter
         targetMethod: migrateReachability
-      - stepNumber: 19
+      - stepNumber: 21
         description: Written
         type: return
         outcome: void
@@ -246,4 +271,4 @@ methods:
         outcome: list<string>
 status: draft
 createdAt: '2026-10-18T14:14:32.869Z'
-updatedAt: '2026-10-18T19:11:31.055Z'
+updatedAt: '2026-10-18T21:55:59.457Z'
