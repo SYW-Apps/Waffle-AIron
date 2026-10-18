@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
 import { getProjectRoot } from '../utils/fs.js';
-import { DEFAULT_TARGET_DIRS } from './defaults.js';
+import { DEFAULT_TARGET_DIRS, WAIRON_MAJOR } from './defaults.js';
 import * as gitSource from '../core/adapters/git-source.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { readFileOrNull, writeFile } from '../utils/fs.js';
@@ -979,7 +979,8 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       if (store.exists()) {
         throw new WaironError(`A project configuration already exists at ${root}; creating one never overwrites it.`);
       }
-      save(config);
+      // The major that wrote these files, unless the caller names one.
+      save(config.waironMajor === undefined ? { ...config, waironMajor: WAIRON_MAJOR } : config);
     },
     // The four pack writes read the change through project_config.withPack —
     // the same reading a pack impact's dry run measures, so the report and the

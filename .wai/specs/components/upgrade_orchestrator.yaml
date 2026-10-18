@@ -13,10 +13,9 @@ owns: []
 dependsOn:
   - upgrade_chain
   - v5_to_v6_tree_step
-  - upgrade_core_adapter
   - upgrade_migration_adapter
   - installed_release_adapter
   - project_stamp_adapter
 status: complete
 createdAt: '2026-10-18T13:02:33.103Z'
-updatedAt: '2026-10-18T14:34:45.098Z'
+updatedAt: '2026-10-18T15:21:24.607Z'
