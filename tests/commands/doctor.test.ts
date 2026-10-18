@@ -13,6 +13,7 @@ import {
   invalidateSpecCache,
 } from '../../src/core/specs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
 import * as subsystemAdapter from '../../src/commands/adapters/core.js';
@@ -21,9 +22,9 @@ import { computeGateStateId } from '../../src/core/validation.js';
 
 // ---------------------------------------------------------------------------
 // `wairon doctor` (cli_runner_impl.runDoctor) — the report phase's Project
-// check, Stereotypes section and Lock section route through the CLI core
-// adapter (cli_core_adapter: projectConfigExists, retireSpecialists,
-// readLockState) and the CLI validator adapter (cli_validator_adapter:
+// check, Major check and Lock section route through the CLI core
+// adapter (cli_core_adapter: projectConfigExists, readLockState)
+// and the upgrade adapter (cli_upgrade_adapter: standing) and the CLI validator adapter (cli_validator_adapter:
 // validateProject, computeGateStateId), not a direct core import.
 //
 // The report phase is exercised in-process (mocking the two adapter modules
@@ -39,7 +40,6 @@ vi.mock('../../src/commands/adapters/core.js', async (importOriginal) => {
   return {
     ...actual,
     projectConfigExists: vi.fn(actual.projectConfigExists),
-    retireSpecialists: vi.fn(actual.retireSpecialists),
     readLockState: vi.fn(actual.readLockState),
   };
 });
@@ -71,7 +71,7 @@ const comp = (id: string, componentType: string, over: Record<string, unknown> =
   id, name: id, description: `${id} component`, subsystem: 'calc', componentType,
   owns: [], dependsOn: [], status: 'draft', createdAt: now, updatedAt: now, ...over,
 } as ComponentSpec);
-const specialist = (id: string, dependsOn: string[]): ComponentSpec => comp(id, 'Specialist', { dependsOn });
+const orchestrator = (id: string, dependsOn: string[]): ComponentSpec => comp(id, 'Orchestrator', { dependsOn });
 
 /** Every file under a directory, by relative path, with its content. */
 function snapshot(dir: string): Record<string, string> {
@@ -88,15 +88,14 @@ function snapshot(dir: string): Record<string, string> {
 }
 
 /**
- * A minimal draft project: one Store and two Specialists — 'leaf' (no
- * dependencies, so it classifies pure) and 'stamp' (depends on the Store,
- * which fits neither pure nor read logic, so it classifies as a workflow) —
- * enough for the Stereotypes section to have something to plan.
+ * A minimal draft project: one Store and two Orchestrators — 'leaf' (no
+ * dependencies) and 'stamp' (depends on the Store) — stamped with the running
+ * major unless `stamped` is false (a tree a v5 wairon wrote carries no stamp).
  */
-function buildProject(rootDir: string): void {
+function buildProject(rootDir: string, stamped = true): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(rootDir, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'doctor-sys', projectType: 'backend',
+    schemaVersion: '1.0.0', ...(stamped ? { waironMajor: WAIRON_MAJOR } : {}), name: 'doctor-sys', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
   });
@@ -107,8 +106,8 @@ function buildProject(rootDir: string): void {
   });
   saveSpec('subsystem', sub('calc'));
   saveComponentSpec(comp('ledger', 'Store', { durability: 'durable' }));
-  saveComponentSpec(specialist('leaf', []));
-  saveComponentSpec(specialist('stamp', ['ledger']));
+  saveComponentSpec(orchestrator('leaf', []));
+  saveComponentSpec(orchestrator('stamp', ['ledger']));
   invalidateSpecCache();
   setProjectRoot(rootDir);
 }
@@ -120,10 +119,8 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
 
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    // A tree still carrying a Specialist reports STEREOTYPE_RETIRED as a
-    // conformance ERROR (that's exactly the fixture below), so runDoctor's
-    // final process.exit(1) is expected — stub it out rather than let it
-    // tear down the test worker, and assert on it where it matters.
+    // runDoctor exits non-zero on any error it reports: stub process.exit out
+    // rather than let it tear down the test worker, and assert on it where it matters.
     vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
     packsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-packs-'));
     process.env.WAIRON_PACKS_DIR = packsDir;
@@ -143,7 +140,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
   const printed = (spy: ReturnType<typeof vi.spyOn>): string =>
     spy.mock.calls.map((c) => String(c[0])).join('\n');
 
-  it('dry run: lists each Specialist under Stereotypes with its class and reason, and writes no file', async () => {
+  it('dry run: reports the Major check ok, no retired-form section, writes no file', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-report-'));
     buildProject(rootDir);
     process.chdir(rootDir);
@@ -153,23 +150,42 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     await runDoctor({});
     const out = printed(logSpy);
 
-    expect(out).toContain('Stereotypes');
-    expect(out).toMatch(/leaf: Specialist → Orchestrator \(pure\)/);
-    expect(out).toContain('no dependencies');
-    expect(out).toMatch(/stamp: Specialist → Orchestrator \(workflow\)/);
-    expect(out).toContain('ledger');
-    expect(out).toContain('wairon doctor --fix');
+    expect(out).toMatch(/Major: written by wairon \d+, the running major/);
+    // The v5 repairs and their report sections moved to `wairon upgrade`.
+    expect(out).not.toContain('Stereotypes');
+    expect(out).not.toContain('Reachability');
+    expect(out).not.toContain('Chaining');
+    expect(out).not.toContain('legacy spec filename');
 
     // A dry run changes nothing on disk.
     invalidateSpecCache();
     expect(snapshot(path.join(rootDir, '.wai'))).toEqual(before);
-    expect(loadComponentSpec('leaf')?.componentType).toBe('Specialist');
-    expect(loadComponentSpec('stamp')?.componentType).toBe('Specialist');
 
     // Routed through the CLI core and validator adapters, not a direct core import.
     expect(vi.mocked(subsystemAdapter.projectConfigExists)).toHaveBeenCalled();
-    expect(vi.mocked(subsystemAdapter.retireSpecialists)).toHaveBeenCalledWith(false);
     expect(vi.mocked(validateAdapter.validateFamily)).toHaveBeenCalled();
+  });
+
+  it('the Major check names `wairon upgrade` as an error for a tree no stamp marks, and exits non-zero', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-older-'));
+    buildProject(rootDir, false);
+    process.chdir(rootDir);
+
+    const logSpy = vi.spyOn(console, 'log');
+    const exitSpy = vi.spyOn(process, 'exit');
+    await runDoctor({});
+    const out = printed(logSpy);
+    expect(out).toMatch(/Major: written by wairon \d+ \(unstamped\), the running major is \d+ — run `wairon upgrade`/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it('--report knows composed-validation only: chaining and reachability are refused, and it never combines with --fix', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-report-flags-'));
+    buildProject(rootDir);
+    process.chdir(rootDir);
+    await expect(runDoctor({ report: 'chaining' })).rejects.toThrow(/composed-validation/);
+    await expect(runDoctor({ report: 'reachability' })).rejects.toThrow(/composed-validation/);
+    await expect(runDoctor({ report: 'composed-validation', fix: true })).rejects.toThrow(/never combines with --fix/);
   });
 
   it('the Project check reports "not a wairon project" through the CLI core adapter, for a folder with no configuration', async () => {
@@ -223,7 +239,7 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
   });
 });
 
-describe('cli_runner_impl.runDoctor --fix (real CLI): retires Specialists after the filename migration', () => {
+describe('cli_runner_impl.runDoctor --fix (real CLI): waits for `wairon upgrade` on a tree another major wrote', () => {
   let rootDir: string;
 
   afterEach(() => {
@@ -232,32 +248,34 @@ describe('cli_runner_impl.runDoctor --fix (real CLI): retires Specialists after 
     try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  // A tree still carrying a Specialist reports STEREOTYPE_RETIRED as a
-  // conformance error, so plain `doctor` (no --fix) exits non-zero — expected
-  // here, since retiring them is exactly what's under test. Resolve either way.
+  // An unstamped tree reports a Major error, so plain `doctor` exits non-zero —
+  // expected here. Resolve either way.
   const runCli = (cwd: string, ...args: string[]) =>
     execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'doctor', ...args], { cwd, timeout: 180_000 })
       .catch((e: Error & { stdout?: string; stderr?: string }) => e);
 
-  it('--fix retypes every Specialist to Orchestrator, and the report then says none are left', async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-fix-'));
+  it('--fix is skipped with a warning naming `wairon upgrade`, and writes nothing', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-fix-older-'));
+    buildProject(rootDir, false);
+    setProjectRoot(null);
+    const before = snapshot(path.join(rootDir, '.wai'));
+
+    const fixed = await runCli(rootDir, '--fix');
+    expect(fixed.stdout + (fixed.stderr ?? '')).toContain('--fix skipped');
+    expect(fixed.stdout + (fixed.stderr ?? '')).toContain('wairon upgrade');
+    expect(snapshot(path.join(rootDir, '.wai'))).toEqual(before);
+  }, 180_000);
+
+  it('--fix on a current tree runs the repairs it still owns and leaves the Orchestrators as they are', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-fix-current-'));
     buildProject(rootDir);
     setProjectRoot(null);
 
-    const before = await runCli(rootDir);
-    expect(before.stdout).toContain('Stereotypes');
-    expect(before.stdout).toMatch(/leaf: Specialist → Orchestrator \(pure\)/);
-
     const fixed = await runCli(rootDir, '--fix');
-    expect(fixed.stdout).toContain('Retired 2 Specialist(s) to Orchestrator.');
-
+    expect(fixed.stdout).toContain('Regenerated context files');
+    expect(fixed.stdout).not.toContain('Specialist');
     setProjectRoot(rootDir);
     invalidateSpecCache();
     expect(loadComponentSpec('leaf')?.componentType).toBe('Orchestrator');
-    expect(loadComponentSpec('stamp')?.componentType).toBe('Orchestrator');
-    setProjectRoot(null);
-
-    const after = await runCli(rootDir);
-    expect(after.stdout).not.toContain('Stereotypes');
   }, 180_000);
 });

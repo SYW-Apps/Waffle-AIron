@@ -20,6 +20,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache, loadComponentSpec, loadInterfaceSpec, loadSubsystemSpec } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const now = new Date().toISOString();
 let roots: string[] = [];
@@ -42,7 +43,7 @@ async function bound(opts: { testRoots?: string[] } = {}): Promise<{ root: strin
   roots.push(root);
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'seam-tools', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'seam-tools', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: opts.testRoots ? { conformance: { testRoots: opts.testRoots } } : {}, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);

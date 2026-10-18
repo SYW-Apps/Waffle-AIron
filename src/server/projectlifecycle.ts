@@ -386,7 +386,7 @@ function lockTargetOf(cfg: HostConfig, req: ApprovalRequest): string {
   if (!member) {
     throw new Error(
       `Approved ${req.kind} request "${req.id}" names member "${parsed.subproject}" of "${projectId}", which holds no ` +
-        'hosted record — refusing to execute rather than widen to the whole project; run `wairon host doctor --fix`.',
+        'hosted record — refusing to execute rather than widen to the whole project; restart the server so it upgrades the data directory.',
     );
   }
   return member.projectId;

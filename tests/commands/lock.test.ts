@@ -24,6 +24,7 @@ import { runLock } from '../../src/commands/lock.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
 import { computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon lock` — two seams:
@@ -69,7 +70,7 @@ const iface = (id: string, comp: string, methods: InterfaceSpec['methods']): Int
  */
 function buildLockableProject(rootDir: string, withEndpoint = true): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     name: 'lockable-system',
     projectType: 'backend',

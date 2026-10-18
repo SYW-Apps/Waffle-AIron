@@ -18,6 +18,7 @@ import {
   NarrativeStepSchema,
   PublicInterfaceSchema,
 } from '../../src/models/specs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Schema-field COVERAGE: no canonical field may be unreachable or losable.
@@ -159,7 +160,7 @@ describe('MCP write-tool schema field coverage', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-cov-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-coverage',
       'targets:',
       '  - type: claude',

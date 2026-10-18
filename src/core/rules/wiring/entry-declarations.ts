@@ -14,7 +14,7 @@ export const entryDeclarationsRule: SddRule = {
   name: 'entry-declarations',
   judges: 'design',
   description:
-    "Holds every invokedBy declaration, on a contract method or on a Portal component, to the shape the reachability model gives it. An entry belongs to a Portal verb: a caller outside the design reaches it over the Portal's transport, so kind entry on anything but a Portal is reported. A scope describes where network callers come from, so a scope on a local or in-process verb, or on a runtime declaration, is reported. The kinds retired with the reachability model (external, sibling-subsystem) are read compatibly until the next major release and reported with the kind they are read as, which doctor --fix writes. A prose check of the declaration itself: it neither walks the graph nor reads the family.",
+    "Holds every invokedBy declaration, on a contract method or on a Portal component, to the shape the reachability model gives it. An entry belongs to a Portal verb: a caller outside the design reaches it over the Portal's transport, so kind entry on anything but a Portal is reported. A scope describes where network callers come from, so a scope on a local or in-process verb, or on a runtime declaration, is reported. The kinds retired with the reachability model (external, sibling-subsystem) are read compatibly until the next major release and reported with the kind they are read as, which `wairon upgrade` writes. A prose check of the declaration itself: it neither walks the graph nor reads the family.",
   codes: [
     { code: 'ENTRY_ON_NON_PORTAL', defaultSeverity: 'error', summary: 'An entry (invokedBy kind entry) declared on a method of a component that is not a Portal; a runtime hook declares kind runtime' },
     { code: 'ENTRY_SCOPE_NOT_NETWORK', defaultSeverity: 'warning', summary: 'A scope on an entry whose Portal\'s transport crosses no network (local or in-process), or on a runtime declaration' },
@@ -39,7 +39,7 @@ export const entryDeclarationsRule: SddRule = {
         ctx.addIssue(
           'warning',
           'INVOKED_BY_RETIRED_KIND',
-          `Method "${at}" on "${comp.id}" declares invokedBy kind "${stored}", which the reachability model retired; it is read as "${decl.kind}" until the next major release. Run \`wairon doctor --fix\` to write it${stored === 'sibling-subsystem' ? ' — and model the sibling\'s call instead: its caller is in this tree' : ''}.`,
+          `Method "${at}" on "${comp.id}" declares invokedBy kind "${stored}", which the reachability model retired; it is read as "${decl.kind}" until the next major release. Run \`wairon upgrade\` to write it${stored === 'sibling-subsystem' ? ' — and model the sibling\'s call instead: its caller is in this tree' : ''}.`,
           specId,
           draft,
           undefined,

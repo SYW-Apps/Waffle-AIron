@@ -358,7 +358,7 @@ describe('standalone child: cross-tree refs are judged by the owner alone (stage
     const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
     expect(unavailable.map(i => i.specId).sort()).toEqual(['transpiler-impl', 'transpiler-orch']);
     expect(unavailable.every(i => i.severity === 'warning' && i.resolution?.outcome === 'unavailable')).toBe(true);
-    expect(unavailable.map(i => i.message).join('\n')).toMatch(/doctor --fix/);
+    expect(unavailable.map(i => i.message).join('\n')).toMatch(/wairon upgrade/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });

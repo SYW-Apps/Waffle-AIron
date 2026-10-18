@@ -12,6 +12,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import type { ComponentSpec, SystemSpec } from '../../src/models/index.js';
 import type { RulesConfig } from '../../src/models/project.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // The `notice` severity (stage 2a-1).
@@ -53,7 +54,7 @@ function makeProject(f: Fixture = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-notice-'));
   const wai = path.join(dir, '.wai');
   fs.mkdirSync(wai);
-  fs.writeFileSync(path.join(wai, 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(wai, 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     // Declared, as every project init writes today — so the one notice these
     // tests count is the one they set up, not PROJECT_ID_DEFAULTED.

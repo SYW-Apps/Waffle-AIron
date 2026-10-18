@@ -643,7 +643,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (foreign.kind === 'ambiguous') {
           return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
         }
-        if (r.form === 'leading' || r.form === 'super') return unavailable(`the deprecated form "${r.authored}" names no alias of this project, so there is nothing to judge it against — run \`wairon doctor --fix\``);
+        if (r.form === 'leading' || r.form === 'super') return unavailable(`the deprecated form "${r.authored}" names no alias of this project, so there is nothing to judge it against — run \`wairon upgrade\``);
         return {
           ...base, outcome: 'forbidden', canonicalTarget: r.authored,
           reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers`,
@@ -687,7 +687,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (foreign.kind === 'ambiguous') {
           return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
         }
-        return unavailable(`the deprecated form "${r.authored}" reaches above this project, and no alias of it names its target — run \`wairon doctor --fix\``);
+        return unavailable(`the deprecated form "${r.authored}" reaches above this project, and no alias of it names its target — run \`wairon upgrade\``);
       }
       default:
         return null;

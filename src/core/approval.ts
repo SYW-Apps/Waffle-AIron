@@ -407,7 +407,7 @@ export function settledSpecPaths(root: string = getProjectRoot()): Set<string> |
 }
 
 /** The command a re-expression names as its author: never a person. */
-export const REEXPRESSED_BY = 'wairon doctor --fix';
+export const REEXPRESSED_BY = 'wairon upgrade';
 
 /**
  * approval_comparison.reexpress — the record on file carried into the current
@@ -543,7 +543,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       };
     }
     // A format-2 lock that still holds: read in its original reading, and
-    // carried into the design reading by `wairon doctor --fix` without a review.
+    // carried into the design reading by `wairon upgrade` without a review.
     const own = (approvals ?? []).find((a) => a.key === '');
     const carry = isContentReadingRecord(approval) && own?.state === 'approved' ? `\n${REEXPRESS_HINT}` : '';
     if (diffSize(diff) === 0) {
@@ -652,7 +652,7 @@ export function isContentReadingRecord(record: LockRecord): boolean {
 
 /** The hint beside a format-2 lock that still holds. */
 export const REEXPRESS_HINT =
-  'This approval predates lock format 3 and is read in its original reading; `wairon doctor --fix` carries it '
+  'This approval predates lock format 3 and is read in its original reading; `wairon upgrade` carries it '
   + 'into the design reading without a review (the approval stays the approver\'s), after which adding or moving '
   + 'a sourcePath never drifts it.';
 

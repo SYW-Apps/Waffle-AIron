@@ -17,7 +17,8 @@ import { currentSpecDigests, diffAgainstApproval, reexpress } from '../../src/co
 import { readLockRecord, writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import { computeGateStateId } from '../../src/core/validation.js';
 import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
-import { checkApproval, reexpressLock, runLock } from '../../src/commands/lock.js';
+import { checkApproval, runLock } from '../../src/commands/lock.js';
+import { reexpressLock } from '../helpers/reexpress-lock.js';
 import { canonicalize } from '../../src/utils/canonical-json.js';
 import { parseYaml } from '../../src/utils/yaml.js';
 import {
@@ -162,7 +163,7 @@ describe('status is readiness, never design', () => {
     expect(asRecorded.algorithm).toBe('sha256-design');
   });
 
-  it('doctor --fix carries an earlier-reading lock into the current reading without a review', () => {
+  it('the upgrade carries an earlier-reading lock into the current reading without a review', () => {
     root = project();
     const before = writeEarlierFormat3(root);
     resave(root, { status: 'complete' });
@@ -205,7 +206,7 @@ describe('an older lock over an untouched tree whose gate moved', () => {
     expect(check.message).not.toContain('the design, or only code linkage');
   });
 
-  it('doctor --fix re-expresses its reading to format 3 and keeps the claim as certified', () => {
+  it('the upgrade re-expresses its reading to format 3 and keeps the claim as certified', () => {
     root = project();
     const before = writeFormat2UnderOtherGate();
     expect(reexpress(computeGateStateId())).not.toBeNull();

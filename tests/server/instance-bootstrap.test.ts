@@ -7,6 +7,8 @@ import { getOrganizationUnit, listProjectPlacements } from '../../src/server/org
 import { registerProjectRecord } from '../../src/server/projects.js';
 import { migratePermissionModel } from '../../src/server/migration.js';
 import { bootstrapInstance, DEV_UNIT_ID } from '../../src/server/instance-bootstrap.js';
+import { readVersion, writeVersion } from '../../src/server/upgrade.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -94,5 +96,19 @@ describe('instance bootstrap (sdd_host)', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
+  });
+  it('records the running major on a first boot, and never moves it on a later one', () => {
+    bootstrapInstance(cfg);
+    expect(readVersion(dataDir)).toBe(WAIRON_MAJOR);
+    writeVersion(dataDir, 5);
+    bootstrapInstance(cfg);
+    expect(readVersion(dataDir)).toBe(5);
+  });
+
+  it('records no version for a data directory an earlier boot seeded', () => {
+    bootstrapInstance(cfg);
+    fs.rmSync(path.join(dataDir, 'version.json'));
+    bootstrapInstance(cfg);
+    expect(readVersion(dataDir)).toBeNull();
   });
 });

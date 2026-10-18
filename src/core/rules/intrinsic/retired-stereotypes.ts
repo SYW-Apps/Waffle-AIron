@@ -14,7 +14,7 @@ export const retiredStereotypesRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    'A component typed with a retired stereotype is an error until it is migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass its dependencies give it, which `wairon doctor --fix` applies. A Gateway becomes the Portal it owns, with the gateway variant: its other members are depended on rather than owned, its consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for the author. Intrinsic to one component: no tree required.',
+    'A component typed with a retired stereotype is an error until it is migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass its dependencies give it, which `wairon upgrade` applies. A Gateway becomes the Portal it owns, with the gateway variant: its other members are depended on rather than owned, its consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for the author. Intrinsic to one component: no tree required.',
   codes: [
     { code: 'STEREOTYPE_RETIRED', defaultSeverity: 'error', summary: 'Component typed with a retired stereotype: a Specialist is an Orchestrator with a dependencyClass, a Gateway is a Portal with the gateway variant' },
   ],
@@ -27,7 +27,7 @@ export const retiredStereotypesRule: SddRule = {
         ctx.addIssue(
           'error',
           'STEREOTYPE_RETIRED',
-          `Component "${comp.id}" is typed Specialist, a retired stereotype: it is logic, an Orchestrator with the dependencyClass its dependencies give it. Run \`wairon doctor --fix\` to retype it (the doctor names the class), or set componentType: Orchestrator and its dependencyClass yourself.`,
+          `Component "${comp.id}" is typed Specialist, a retired stereotype: it is logic, an Orchestrator with the dependencyClass its dependencies give it. Run \`wairon upgrade\` to retype it (the upgrade names the class), or set componentType: Orchestrator and its dependencyClass yourself.`,
           comp.id,
           isDraftCtx,
         );

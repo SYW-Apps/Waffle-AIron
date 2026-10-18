@@ -136,10 +136,11 @@ record-level tools, approval page and lock requests.
   it touched.
 - **Refused.** Placing a member in a unit (it takes its units from its family
   root), and renaming a family root's id.
-- **Upgrading a data dir.** `wairon host doctor` plans the member records and
-  `--fix` applies them, all or nothing; it writes no grant, so nobody's reach
-  changes. A crashed transaction under the data directory is rolled back at
-  boot and by `host doctor --fix`.
+- **Upgrading a data dir.** The hosted data directory upgrades itself at start:
+  a backup is copied beside it first, the member records are planned and applied
+  all or nothing (no grant is written, so nobody's reach changes), and a failure
+  stops the start naming the backup. A crashed transaction under the data
+  directory is rolled back at boot.
 
 ---
 
@@ -324,9 +325,9 @@ needs no project selector.
 - The owner (`alice`) needs no user record first: an id without one acts as a
   service principal. People who sign in through SSO get their user record on
   first login; assign their permissions to that user id.
-- A new instance needs no `wairon host doctor --fix`: the server seeds its
-  identity at first start. Run `host doctor` (a dry run) after upgrading an
-  existing data dir, and `--fix` when it lists a migration.
+- A new instance needs no setup step: the server seeds its identity at first
+  start, and an existing data dir upgrades itself at start (a backup is copied
+  beside it; a failure stops the start naming the backup).
 
 ### 5.2 Dockerfile / compose
 
@@ -392,7 +393,7 @@ Two equivalent paths to the same control-plane logic:
 - **CLI over `docker exec` / SSH** (recommended — no admin port exposed):
   `wairon host unit create`, `wairon host project create|list|destroy`,
   `wairon host permission set|list|remove`, `wairon host key mint|list|revoke`,
-  `wairon host lock`, `wairon host doctor [--fix]`, and `host packs`, `git`,
+  `wairon host lock`, and `host packs`, `git`,
   `producer`, `secret`, `demo` (see the [CLI reference](../cli.md#wairon-host--control-plane)).
   Reads `WAIRON_ADMIN_TOKEN` and `WAIRON_DATA_DIR` from the container env.
 - **HTTP admin API** — the same operations under `/admin/*`, bound to

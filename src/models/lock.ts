@@ -111,7 +111,7 @@ export interface LockReexpression {
   fromAlgorithm: string;
   /** The per-spec digest reading the record carried before. */
   fromReading: SpecDigestReading;
-  /** The command that re-expressed it (e.g. `wairon doctor --fix`), never a person. */
+  /** The command that re-expressed it (e.g. `wairon upgrade`), never a person. */
   by: string;
 }
 

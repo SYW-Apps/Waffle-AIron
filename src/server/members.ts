@@ -62,8 +62,8 @@ import type {
 // own scope, its parents', its family root's units) and the most specific
 // setting wins.
 //
-// (1) The stage-7 upgrade of a data dir (`wairon host doctor`, applied with
-// --fix): plan registers every declared member, members of members included,
+// (1) The stage-7 upgrade of a data dir (run by the server's start-up
+// upgrade): plan registers every declared member, members of members included,
 // rewrites member-qualified API key entries to record ids, and proves before
 // writing that nobody's reach changes. Its writes are made by the ordinary
 // repositories wired to a rehearsal copy of the data root, and apply commits
@@ -80,8 +80,7 @@ import type {
 // registers, relocates, re-keys or disables member records, lists and audits
 // the reach those changes altered, and publishes ONE family commit.
 // (3) recoverData rolls back what a crash left under the data directory itself
-// — a crashed upgrade, or a detach or adopt it coordinated — before serving
-// and from `wairon host doctor`.
+// — a crashed upgrade, or a detach or adopt it coordinated — before serving.
 //
 // It holds no state: a plan is a value its caller holds between plan and apply.
 // ---------------------------------------------------------------------------
@@ -92,7 +91,7 @@ const UPGRADE_AREAS = ['projects.json', 'auth/credentials.json'];
 /** The journal verb of the upgrade's transaction. */
 const UPGRADE_VERB = 'member-upgrade';
 
-/** The operator behind `wairon host doctor --fix`: authority is access to the data directory. */
+/** The operator behind the data directory upgrade: authority is access to the data directory. */
 const OPERATOR: PrincipalSubject = { userId: 'operator:host-doctor', kind: 'service', issuer: 'local' };
 
 /** The stage-7 upgrade, planned and not yet applied. */
@@ -312,17 +311,6 @@ function audit(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, fields: Partial
   } catch (e) {
     console.error(`[sdd_host] audit append failed for ${event.action}: ${e instanceof Error ? e.message : String(e)}`);
   }
-}
-
-// ── pending ─────────────────────────────────────────────────────────────────
-
-/** imember_registration.pending — how many declared members hold no record yet. Reads only. */
-export function pending(dataDir: string): number {
-  // Steps 1-4.
-  return listProjectRecords(dataDir)
-    .filter((r) => !r.parentProjectId)
-    .flatMap((r) => planMemberRecords(dataDir, r.id))
-    .filter((m) => m.action === 'register').length;
 }
 
 // ── recover ─────────────────────────────────────────────────────────────────
@@ -804,7 +792,7 @@ function isolatedRoot(dataDir: string, id: string): string {
 /** Step 3: why the member cannot be detached to the new root, or null. */
 function detachUnfit(dataDir: string, family: HostedProjectRecord[], member: PlannedMemberRecord | undefined, newRoot: string, alias: string): MigrationPlan['refusals'][number] | null {
   if (!member) return { code: 'not-a-member', project: '', detail: `the bound project declares no readable member "${alias}"` };
-  if (member.action === 'register') return { code: 'not-a-member', project: '', detail: `the member "${alias}" holds no hosted record yet — run \`wairon host doctor --fix\` first` };
+  if (member.action === 'register') return { code: 'not-a-member', project: '', detail: `the member "${alias}" holds no hosted record yet — restart the server so it upgrades the data directory` };
   const held = listProjectRecords(dataDir).some((r) => r.rootPath && path.resolve(r.rootPath) === path.resolve(newRoot));
   if (held || occupied(newRoot)) return { code: 'relocation-target-exists', project: '', detail: `the member's new root ${newRoot} is already held by a record or a non-empty directory` };
   return family.length === 0 ? { code: 'not-a-member', project: '', detail: 'the bound project belongs to no hosted family' } : null;

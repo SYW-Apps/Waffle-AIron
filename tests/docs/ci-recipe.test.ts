@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { spawnSync, execFileSync } from 'node:child_process';
 import * as yaml from 'js-yaml';
 import { setProjectRoot } from '../../src/utils/fs.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 import {
   saveSystemSpec, saveSpec, saveComponentSpec, saveInterfaceSpec, saveImplementationSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
@@ -74,7 +75,7 @@ function git(cwd: string, ...args: string[]): void {
 function buildOrigin(root: string): void {
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   fs.mkdirSync(path.join(root, 'src'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0', id: 'ci-fixture', name: 'ci-fixture', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,

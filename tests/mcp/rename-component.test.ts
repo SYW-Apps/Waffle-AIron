@@ -19,6 +19,7 @@ import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // sdd_rename_component (mcp_portal → mcp_orchestrator → mcp_core_adapter →
@@ -47,7 +48,7 @@ function books(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-rename-'));
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'books', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'books', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);

@@ -26,7 +26,7 @@ import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { seedChainedMount, seedSubsystem } from './helpers.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';

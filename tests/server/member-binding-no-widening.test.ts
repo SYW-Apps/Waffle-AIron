@@ -11,7 +11,7 @@ import { moveMountToMembers } from '../../src/core/provision.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runWithProjectRoot } from '../../src/utils/fs.js';
 import { seedSubsystem, seedChainedMount } from './helpers.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import type { Principal } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------

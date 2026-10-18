@@ -318,8 +318,9 @@ methods:
       anything but a Portal is reported. A scope describes where network callers come from, so a
       scope on a local or in-process verb, or on a runtime declaration, is reported. The kinds
       retired with the reachability model (external, sibling-subsystem) are read compatibly until
-      the next major release and reported with the kind they are read as, which doctor --fix writes.
-      A prose check of the declaration itself: it neither walks the graph nor reads the family.
+      the next major release and reported with the kind they are read as, which `wairon upgrade`
+      writes. A prose check of the declaration itself: it neither walks the graph nor reads the
+      family.
     signature: 'entryDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -396,4 +397,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-18T00:37:17.759Z'
+updatedAt: '2026-10-18T16:10:27.846Z'

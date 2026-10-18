@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createProjectRecord } from '../../src/server/projects.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // A hosted fixture family for stage 7: one family root registered as a hosted
@@ -23,7 +24,7 @@ export function writeProject(root: string, id: string, members: Record<string, s
     : [];
   fs.writeFileSync(
     path.join(root, '.wai', 'project.yaml'),
-    ['schemaVersion: 1.0.0', `id: ${id}`, `name: ${id}`, 'targets: []', ...memberLines, `createdAt: ${STAMP}`, `updatedAt: ${STAMP}`, ''].join('\n'),
+    ['schemaVersion: 1.0.0', `waironMajor: ${WAIRON_MAJOR}`, `id: ${id}`, `name: ${id}`, 'targets: []', ...memberLines, `createdAt: ${STAMP}`, `updatedAt: ${STAMP}`, ''].join('\n'),
   );
   fs.writeFileSync(
     path.join(root, '.wai', 'specs', '.index.yaml'),

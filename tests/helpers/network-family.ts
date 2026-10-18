@@ -14,6 +14,7 @@
  */
 import * as yaml from 'js-yaml';
 import { BASE_FIXTURE_RULES, type FixtureTree } from '../rules-matrix/harness.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const TS = '2026-01-01T00:00:00.000Z';
 
@@ -21,7 +22,7 @@ const dump = (spec: Record<string, unknown>): string =>
   yaml.dump({ schemaVersion: '1.0.0', createdAt: TS, updatedAt: TS, ...spec }, { noRefs: true, lineWidth: 200 });
 
 function projectYaml(name: string, extra: Record<string, unknown> = {}): string {
-  return dump({ name, targets: [], rules: BASE_FIXTURE_RULES, extensions: { packs: [], useGlobalPacks: false }, ...extra });
+  return dump({ waironMajor: WAIRON_MAJOR, name, targets: [], rules: BASE_FIXTURE_RULES, extensions: { packs: [], useGlobalPacks: false }, ...extra });
 }
 
 /** One member project's files under its directory: L0, one subsystem, components, contracts, implementations. */

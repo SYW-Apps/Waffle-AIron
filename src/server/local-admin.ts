@@ -61,10 +61,6 @@ export { seedDefaultProvider } from './identity-provider-bootstrap.js';
 // Organization units (landscape_orchestrator).
 export { upsertUnit } from './landscape.js';
 
-// The permission-model rollout migration behind `wairon host doctor`
-// (permission_model_migration).
-export { migratePermissionModel } from './migration.js';
-
 // Starting the hosting server's listeners (host_server).
 export { startHostServer } from './http.js';
 
@@ -74,14 +70,3 @@ export { existingProjectRoot } from './projects.js';
 // The admin plane's authorization refusal, and the refusal of a lock whose tree
 // does not validate as-complete.
 export { AdminAuthError, LockValidationError } from './errors.js';
-
-// Every hosted project's migration onto the reachability model, behind
-// `wairon host doctor` (hosted_spec_upgrade).
-export { migrateReachability } from './spec-upgrade.js';
-export type { HostedReachMigration } from './spec-upgrade.js';
-
-// The stage-7 member upgrade behind `wairon host doctor` (member_registration).
-export type { MemberUpgradeReport, MemberUpgradePlan } from './members.js';
-
-// imember_registration.upgrade, republished under the portal's name.
-export { upgradeMembers as upgradeMemberRecords } from './members.js';

@@ -224,10 +224,10 @@ function planHolder(plan: MigrationPlan, family: ProjectFamily, h: Holder, oldId
   const after = follows ? newId : h.alias;
   if (follows) {
     // A deprecated member path read from the top root passes through the top's alias: no parsed
-    // position spells it in a form the writer can respell — `wairon doctor --fix` rewrites it first.
+    // position spells it in a form the writer can respell — `wairon upgrade` rewrites it first.
     if (h.node.namespace === '') {
       for (const ref of family.authoredReferences.filter((r) => r.form === 'path' && r.authored.split('::')[0] === h.alias)) {
-        refuse(plan, 'reference-unwritable', family.owners.get(ref.specId) ?? '', `${ref.specId} (${ref.position}) writes "${ref.authored}", a deprecated member path through "${h.alias}" — run \`wairon doctor --fix\` from the top project first, which rewrites it as \`alias::name\``);
+        refuse(plan, 'reference-unwritable', family.owners.get(ref.specId) ?? '', `${ref.specId} (${ref.position}) writes "${ref.authored}", a deprecated member path through "${h.alias}" — run \`wairon upgrade\` from the top project first, which rewrites it as \`alias::name\``);
       }
     }
     respellThrough(plan, family, h.node.namespace, h.alias, after);

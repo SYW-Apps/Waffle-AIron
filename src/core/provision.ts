@@ -767,7 +767,7 @@ export function moveMember(alias: string, newPath: string): void {
     if (carried.length > 0) {
       throw new WaironError(
         `Refusing to move the member "${alias}": its legacy L1 mount carries ${carried.join(', ')}, which a move cannot carry `
-        + 'and never drops. Run `wairon doctor --fix` — its chaining migration carries them into the member plan-first — then move it.',
+        + 'and never drops. Run `wairon upgrade` — its chaining migration carries them into the member plan-first — then move it.',
       );
     }
     // Steps 7-8.
@@ -1183,7 +1183,7 @@ function promoteRefusals(family: ProjectFamily, insideFiles: string[], outsideFi
   // A `super::` one level deeper would climb somewhere else: one whose target cannot be named from here refuses.
   const climbs = climbsOf(family, crossing.insideIds, parentId);
   if (climbs.refused.length > 0) {
-    out.push(`${climbs.refused.map((r) => `"${r}"`).join(', ')} climb${climbs.refused.length === 1 ? 's' : ''} above this project, where the target cannot be named from here. Run \`wairon doctor --fix\` from the top project first, which rewrites them as \`alias::name\``);
+    out.push(`${climbs.refused.map((r) => `"${r}"`).join(', ')} climb${climbs.refused.length === 1 ? 's' : ''} above this project, where the target cannot be named from here. Run \`wairon upgrade\` from the top project first, which rewrites them as \`alias::name\``);
   }
   return [...new Set(out)];
 }
@@ -1346,7 +1346,7 @@ export function promoteMember(alias: string, id?: string): PromoteResult {
         try {
           normalizeSpecReferences(spec.kind, spec.id);
         } catch {
-          // A deprecated form it cannot spell from its own root stays as written: `doctor --fix` rewrites it.
+          // A deprecated form it cannot spell from its own root stays as written: `wairon upgrade` rewrites it.
         }
       }
     });

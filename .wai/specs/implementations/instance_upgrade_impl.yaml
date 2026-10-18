@@ -125,9 +125,11 @@ methods:
         targetComponent: project_repository
         targetMethod: isRetiredPart
       - stepNumber: 4
-        description: 'A retired part holds no tree of its own: its parent''s upgrade covers its folder'
+        description: >-
+          A retired part holds no tree of its own (its parent's upgrade covers its folder), and a
+          root with no project.yaml holds no tree yet: neither is upgraded
         type: branch
-        condition: the record is a retired part
+        condition: the record is a retired part, or its root holds no project.yaml
         onFalseStep: 6
       - stepNumber: 5
         description: Skip it
@@ -186,4 +188,4 @@ previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-10-18T14:32:18.412Z'
+updatedAt: '2026-10-18T15:47:55.378Z'

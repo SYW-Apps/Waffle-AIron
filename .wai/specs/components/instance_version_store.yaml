@@ -15,7 +15,8 @@ lint:
     - code: UNOWNED_STORE
       reason: >-
         Simple keyed state, no lookups beyond the key: one integer in one file, read and written
-        whole by its one workflow-layer consumer, instance_upgrade.
+        whole by two workflow-layer consumers — instance_bootstrap records it on a first boot,
+        instance_upgrade reads and moves it.
 status: complete
 createdAt: '2026-10-18T14:27:33.137Z'
-updatedAt: '2026-10-18T14:34:24.056Z'
+updatedAt: '2026-10-18T15:47:54.440Z'

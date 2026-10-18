@@ -8,6 +8,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import { WAIRON_MANAGED_BANNER } from '../../src/exporters/base.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon generate` (cli_runner.runGenerate), two gates:
@@ -39,7 +40,7 @@ const subsystem = (id: string): SubsystemSpec => ({
 
 function buildProject(rootDir: string, targets: unknown[], rules: Record<string, unknown> = {}): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0', name: 'reach-system', projectType: 'backend', targets, rules,
     extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
   }));

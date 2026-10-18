@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon doctor --fix` and writes OUTSIDE the project root (friction F85).
@@ -45,7 +46,7 @@ describe('doctor --fix: writes outside the project root are planned, confirmed a
     const project = path.join(base, 'project');
     fs.mkdirSync(home, { recursive: true });
     fs.mkdirSync(path.join(project, '.wai', 'specs'), { recursive: true });
-    fs.writeFileSync(path.join(project, '.wai', 'project.yaml'), JSON.stringify({
+    fs.writeFileSync(path.join(project, '.wai', 'project.yaml'), stampedProjectYaml({
       schemaVersion: '1.0.0',
       name: 'outside-writes',
       targets: [

@@ -193,7 +193,7 @@ function attachEdits(plan: MigrationPlan, family: ProjectFamily, bound: string, 
   if (attached && attached.id === undefined && id !== undefined) {
     edit(plan, key, 'id', `id: ${id} (declared${approved !== undefined ? ', the id its lock approved' : ''})`, { root: dir, call: 'setId', args: [id] });
   }
-  if (!attached) plan.notes.push(`${dir} has no project.yaml of its own — \`wairon doctor --fix\` writes one declaring "${alias}" as its id`);
+  if (!attached) plan.notes.push(`${dir} has no project.yaml of its own — \`wairon upgrade\` writes one declaring "${alias}" as its id`);
   const relPath = posix(path.relative(familyNode(family, bound)!.directory, dir));
   const declaration = { path: relPath, ...(plan.request.description !== undefined ? { description: plan.request.description } : {}) };
   edit(plan, bound, 'member', `members: ${alias} → ${relPath} (an existing project, kept as it is)`, { root: familyNode(family, bound)!.directory, call: 'declareMember', args: [alias, declaration] });
@@ -250,7 +250,7 @@ export function planDetach(family: ProjectFamily, bound: string, request: Migrat
     .filter((e) => e.sourceKind === 'family' && e.producer === member.namespace && !(n.namespace === bound && e.alias === alias))
     .map((e) => ({ node: n, alias: e.alias }))));
   const outward = member.externals.filter((e) => e.sourceKind === 'family' && e.producer !== undefined && !leaving(e.producer));
-  if (member.mountForm === 'mount') refuse(plan, 'not-a-member', bound, `${label(bound)} declares "${alias}" in the legacy L1 mount form — run \`wairon doctor --fix\` first, which moves it into \`members\``);
+  if (member.mountForm === 'mount') refuse(plan, 'not-a-member', bound, `${label(bound)} declares "${alias}" in the legacy L1 mount form — run \`wairon upgrade\` first, which moves it into \`members\``);
   if (!plan.whole) refuse(plan, 'family-partial', '', 'the family\'s top is out of this request\'s reach, and a consumer of the member could live there — run from the top project');
   const narrow = familyOnlyUses(family, member, table);
   if (!plan.request.widen) refuseNarrow(plan, member, narrow);

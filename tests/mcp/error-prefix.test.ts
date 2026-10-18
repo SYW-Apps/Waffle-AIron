@@ -18,6 +18,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 type ToolResult = { isError?: boolean; content?: { type: string; text?: string }[] };
 
@@ -64,7 +65,7 @@ describe('a refusal carries one Error: prefix on every write tool', () => {
     fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
     const now = new Date().toISOString();
     writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-      schemaVersion: '1.0.0', name: 'prefix', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+      schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'prefix', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
       rules: {}, createdAt: now, updatedAt: now,
     });
     setProjectRoot(root);

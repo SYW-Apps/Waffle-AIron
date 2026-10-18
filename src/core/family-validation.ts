@@ -735,7 +735,7 @@ function problemFindings(family: ProjectFamily, config: ProjectConfig | null): (
         project));
     } else if (problem.kind === 'defaulted') {
       out.push(finding(config, 'PROJECT_ID_DEFAULTED',
-        `The member project keyed "${project}" declares no id in its .wai/project.yaml: ${problem.detail}. Declare \`id: ${problem.id}\` there — its alias, the name the family already knows it by (\`doctor --fix\` writes it).`,
+        `The member project keyed "${project}" declares no id in its .wai/project.yaml: ${problem.detail}. Declare \`id: ${problem.id}\` there — its alias, the name the family already knows it by (\`wairon upgrade\` writes it).`,
         project));
     } else if (problem.kind === 'no-id') {
       out.push(finding(config, 'PROJECT_ID_AMBIGUOUS',

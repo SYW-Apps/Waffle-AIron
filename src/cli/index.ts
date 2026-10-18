@@ -39,6 +39,7 @@ import { runUpdate, cleanStaleBinary } from '../commands/update.js';
 import { runDomainsList, runDomainsScan, runDomainsAdd, runDomainsRemove } from '../commands/domains.js';
 import { runSkillsList, runSkillsInstall } from '../commands/skills.js';
 import { runDoctor } from '../commands/doctor.js';
+import { runUpgrade, runWhatsNew, guardStanding, announceRelease } from '../commands/upgrade.js';
 import { runDiagram } from '../commands/diagram.js';
 import {
   runServe,
@@ -47,7 +48,6 @@ import {
   runHostDemo,
   runHostUnit,
   runHostPermission,
-  runHostDoctor,
   runHostKey,
   runHostLock,
   runHostGit,
@@ -92,7 +92,7 @@ program
   .version(WAIRON_VERSION, '-v, --version')
   .option('--verbose', 'enable verbose output')
   .option('--silent', 'suppress all output except errors')
-  .hook('preAction', (thisCommand, actionCommand) => {
+  .hook('preAction', async (thisCommand, actionCommand) => {
     const opts = thisCommand.opts();
     if (opts.verbose) setLogLevel('verbose');
     else if (opts.silent) setLogLevel('silent');
@@ -101,6 +101,10 @@ program
     const names: string[] = [];
     for (let c: Command | null = actionCommand; c && c.parent; c = c.parent) names.unshift(c.name());
     announceBinding(names.join(' '));
+    // Refuse (or offer to upgrade) a tree another wairon major wrote, then show the
+    // release notes once per new version on a terminal.
+    await guardStanding(names.join(' '));
+    announceRelease();
   });
 
 // ---------------------------------------------------------------------------
@@ -210,13 +214,34 @@ program
 
 program
   .command('doctor')
-  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and the chaining migration still pending')
-  .option('--fix', 'regenerate stale in-project guides/context/skills, register the MCP server, then apply the chaining migration once confirmed')
-  .option('--report <section>', "print one section's report and nothing else, writing nothing (chaining | composed-validation | reachability); never combines with --fix")
-  .option('-y, --yes', "answer the chaining migration's confirmation (for a non-interactive --fix); a write outside the project root also needs --global")
+  .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and a tree written by another wairon major (`wairon upgrade` moves it)')
+  .option('--fix', 'finish unfinished transactions, regenerate stale in-project guides/context/skills, repair signatures, type spellings and foreign step fields, register the MCP server')
+  .option('--report <section>', "print one section's report and nothing else, writing nothing (composed-validation); never combines with --fix")
+  .option('-y, --yes', "answer the confirmation of a write outside the project root (with --global) on a non-interactive --fix")
   .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {
     await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes, global: opts.global === true });
+  });
+
+// ---------------------------------------------------------------------------
+// upgrade / whatsnew
+// ---------------------------------------------------------------------------
+
+program
+  .command('upgrade')
+  .description('Move a project (and its members) written by an older wairon major to this one: plan, confirm, apply all or nothing')
+  .option('--report', 'print the plan and write nothing')
+  .option('-y, --yes', 'apply without asking (for a non-interactive run)')
+  .action(async (opts) => {
+    await runUpgrade({ report: opts.report === true, yes: opts.yes === true });
+  });
+
+program
+  .command('whatsnew')
+  .argument('[version]')
+  .description('Show the curated release notes of a version (default: the running one) and the link to the full changelog')
+  .action((version?: string) => {
+    runWhatsNew(version);
   });
 
 // ---------------------------------------------------------------------------
@@ -788,15 +813,6 @@ hostCmd
   .option('--data-dir <path>', 'data root')
   .action(async (action: string, opts) => {
     await runHostUnit(action, { slug: opts.slug, name: opts.name, kind: opts.kind, parent: opts.parent, dataDir: opts.dataDir });
-  });
-
-hostCmd
-  .command('doctor')
-  .description('migrate a hosted data dir to the permission model (grants → assignments, owners, unit ids, placements); dry-run without --fix')
-  .option('--fix', 'apply the migration (REQUIRED at rollout — legacy users/tokens otherwise resolve to zero permissions)')
-  .option('--data-dir <path>', 'data root')
-  .action(async (opts) => {
-    await runHostDoctor({ fix: opts.fix, dataDir: opts.dataDir });
   });
 
 hostCmd

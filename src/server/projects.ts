@@ -526,7 +526,7 @@ function resolveQualifiedMember(dataDir: string, qualifier: string): HostedProje
     const next = records.find((r) => r.parentProjectId === current.id && r.memberPath === hop.path);
     if (!next) {
       throw new Error(
-        `member "${hop.alias}" of "${current.id}" holds no hosted record yet — run \`wairon host doctor --fix\` to register the family's members`,
+        `member "${hop.alias}" of "${current.id}" holds no hosted record yet — restart the server so it upgrades the data directory and registers the family's members`,
       );
     }
     current = next;

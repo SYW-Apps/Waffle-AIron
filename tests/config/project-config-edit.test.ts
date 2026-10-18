@@ -79,7 +79,7 @@ describe('F82 — a registry save keeps this repository\'s project.yaml comments
     expect(textOf(root)).toBe(after);
   });
 
-  it('setId on the real file without its id: the id lands between schemaVersion and name, nothing else moves', () => {
+  it('setId on the real file without its id: the id lands back right after schemaVersion, nothing else moves', () => {
     const original = realConfig();
     const withoutId = original.replace(/^id: .*\r\n/m, '');
     expect(withoutId).not.toBe(original);
@@ -88,7 +88,7 @@ describe('F82 — a registry save keeps this repository\'s project.yaml comments
     expect(projectConfigRepositoryAt(root).setId('waffle-airon')).toBe(true);
 
     const after = textOf(root);
-    expect(after.split('\r\n').slice(0, 3)).toEqual(['schemaVersion: 1.0.0', 'id: waffle-airon', 'name: Waffle-AIron']);
+    expect(after.split('\r\n').slice(0, 3)).toEqual(original.split('\r\n').slice(0, 3));
     expect(isLineSubsequence(withoutId, after)).toBe(true);
     expect(groupComments(after)).toEqual(groupComments(original));
     expect(bareLf(after)).toBe(0);

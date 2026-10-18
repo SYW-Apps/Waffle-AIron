@@ -105,6 +105,14 @@ describe('project_stamp_adapter', () => {
     expect(file(root, '.wairon')).toBe('id: a\nwaironMajor: 6\n');
     expect(fs.existsSync(path.join(root, '.wai'))).toBe(false);
   });
+
+  it('reads and stamps a file written as one flow-style mapping, rewriting it as a block mapping', () => {
+    const root = project('{"id":"a","name":"A","waironMajor":5}\n');
+    expect(read(root)).toBe(5);
+    write(root, 6);
+    expect(read(root)).toBe(6);
+    expect(file(root)).toBe('id: a\nname: A\nwaironMajor: 6\n');
+  });
 });
 
 describe('installed_release_adapter and releaseNotes', () => {

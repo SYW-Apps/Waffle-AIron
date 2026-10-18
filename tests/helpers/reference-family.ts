@@ -10,6 +10,7 @@ import {
   SystemSpecSchema,
   TypeSpecSchema,
 } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The reference family: Waffler's shape in miniature, on disk, for stage 3's
@@ -51,6 +52,7 @@ function projectYaml(dir: string, lines: string[]): void {
   fs.mkdirSync(path.join(dir, '.wai'), { recursive: true });
   const body = [
     'schemaVersion: 1.0.0',
+    `waironMajor: ${WAIRON_MAJOR}`,
     ...lines,
     'targets: []',
     `createdAt: '${STAMP}'`,

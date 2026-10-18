@@ -23,7 +23,7 @@ import { AdminAuthError } from '../../src/server/errors.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
 import { seedChainedMount } from './helpers.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as memberRegistration from '../../src/server/members.js';
 import type { HostConfig } from '../../src/server/types.js';
 import type { ApproverIdentity } from '../../src/models/lock.js';

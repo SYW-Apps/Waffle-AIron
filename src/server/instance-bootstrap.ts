@@ -1,6 +1,8 @@
-import { ensureInstanceIdentity } from './instance.js';
+import { ensureInstanceIdentity, getInstanceIdentity } from './instance.js';
 import { createUnit, getOrganizationUnit, listProjectPlacements, placeProject } from './organization.js';
 import { listProjectRecords } from './projects.js';
+import { writeVersion } from './upgrade.js';
+import { WAIRON_MAJOR } from '../config/defaults.js';
 import type { HostConfig, PrincipalSubject } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -20,7 +22,10 @@ export const DEV_UNIT_ID = 'local';
  * BEFORE the listeners bind (idempotent):
  *   1. Seed-or-load the persisted instance identity: the first boot generates
  *      the boot-reserved built-in subject UUIDs into <dataDir>/instance.json;
- *      every later boot loads them unchanged.
+ *      every later boot loads them unchanged. A first boot also records the
+ *      running major in <dataDir>/version.json: a data directory this release
+ *      creates is current, so its first start takes no backup and runs no
+ *      upgrade step.
  *   2. Under devMode, ensure the synthetic local development organization unit
  *      exists so dev projects can always be placed.
  *   3. Under devMode, place every project the data dir holds in no unit into
@@ -28,7 +33,10 @@ export const DEV_UNIT_ID = 'local';
  *      instance awaiting the permission-model migration.
  */
 export function bootstrapInstance(config: HostConfig): void {
+  // Steps 1-4: seed-or-load the identity; a first boot records the running major.
+  const firstBoot = getInstanceIdentity(config.dataDir) === null;
   ensureInstanceIdentity(config.dataDir);
+  if (firstBoot) writeVersion(config.dataDir, WAIRON_MAJOR);
   if (!config.devMode) return;
   const system: PrincipalSubject = { userId: 'system', kind: 'service', issuer: 'local' };
   if (!getOrganizationUnit(config.dataDir, DEV_UNIT_ID)) {
@@ -42,7 +50,7 @@ export function bootstrapInstance(config: HostConfig): void {
       createdBy: system,
     });
   }
-  // Steps 6-9: the dev project (registered at the working directory before the
+  // Steps 9-12: the dev project (registered at the working directory before the
   // server boots) placed in the dev unit — a placed project is never placed twice.
   const placed = new Set(listProjectPlacements(config.dataDir).map((p) => p.projectId));
   for (const record of listProjectRecords(config.dataDir)) {

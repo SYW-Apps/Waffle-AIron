@@ -11,6 +11,7 @@ import { WAIRON_MANAGED_BANNER } from '../../src/exporters/base.js';
 import type { AgentRecord } from '../../src/models/agent.js';
 import type { ProjectConfig } from '../../src/models/project.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon generate` — a RECONCILER. Agent-file materialization is opt-in via
@@ -38,7 +39,7 @@ const subsystem = (id: string): SubsystemSpec => ({
  *  .claude/agents/. */
 function buildTwoDomainProject(rootDir: string, rules: Record<string, unknown> = {}): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     name: 'gen-system',
     projectType: 'backend',
@@ -285,7 +286,7 @@ describe('cli_runner.runGenerate: --family generates each member layer in its ow
 
   const writeProjectYaml = (dir: string, name: string, rules: Record<string, unknown>) => {
     fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+    fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), stampedProjectYaml({
       schemaVersion: '1.0.0',
       name,
       projectType: 'backend',

@@ -6,7 +6,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { listProjectRecords, listFamilyRecords, resolveProjectBinding } from '../../src/server/projects.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
+import { writeVersion } from '../../src/server/upgrade.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as memberRegistration from '../../src/server/members.js';
 import { authorize } from '../../src/server/authorization.js';
 import { listAssignments } from '../../src/server/permissions.js';
@@ -44,7 +46,7 @@ import type { HostConfig, HostedUserRecord, Principal, RoleBinding } from '../..
 // detach-then-adopt-is-identity (hosted), source.hosted resolution (in reach,
 // out of reach, off-host), reconcile after a family-shape tool (register,
 // re-key with no widening), hosted-and-family-agree, the root-rename refusal,
-// crash recovery under the data directory (at boot and in host doctor), and the
+// crash recovery under the data directory (at boot and by the data directory upgrade), and the
 // UI routes (member crumbs, the family canvas links, relation health).
 // ---------------------------------------------------------------------------
 
@@ -505,6 +507,8 @@ describe('a crashed transaction under the data directory is recovered', () => {
 
   it('at boot, before serving: rolled back and audited', () => {
     const { before, id } = crashedUpgrade();
+    // A current data directory: the start recovers the crash and upgrades nothing else.
+    writeVersion(dataDir, WAIRON_MAJOR);
     const handle = startHostServer({ ...cfg, port: 0, adminPort: 0 });
     handle.close();
     expect(fs.readFileSync(path.join(dataDir, 'projects.json'), 'utf8')).toBe(before);
@@ -512,7 +516,7 @@ describe('a crashed transaction under the data directory is recovered', () => {
     expect(queryAuditEvents(dataDir, { action: 'migration.recovered' }).find((e) => e.target === id)).toMatchObject({ outcome: 'success' });
   });
 
-  it('by host doctor: reported on a dry run, rolled back with --fix before the upgrade applies', () => {
+  it('by the member upgrade: reported on a dry run, rolled back when applied, before the upgrade applies', () => {
     const { id } = crashedUpgrade();
     const dry = upgradeMemberRecords({ dataDir }, false);
     expect(dry.recovered).toEqual([expect.objectContaining({ id, action: 'pending' })]);

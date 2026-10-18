@@ -114,21 +114,17 @@ describe('stage 3 — the position migration over the reference family', () => {
     expect(planned.findings).toEqual([]);
   });
 
-  it('property: migration-is-plan-first — plan, --report and an unconfirmed --fix write nothing', async () => {
+  it('property: migration-is-plan-first — a plan and doctor\'s remaining report write nothing, and --fix does not carry the migration', async () => {
     const f = fresh();
     const before = dirHash(f.top);
     at(f.top, () => plan());
     expect(dirHash(f.top)).toEqual(before);
     at(f.core, () => undefined);
-    await runDoctor({ report: 'chaining' });
-    const printed = vi.mocked(console.log).mock.calls.map((c) => String(c[0])).join('\n');
-    expect(printed).toContain('member: shared: shared — moved from its legacy L1 mount, its description carried');
-    expect(printed).toMatch(/Rewrites.* \(4\)/);
-    expect(printed).toContain('transpiler (3):');
-    expect(printed).toContain('Nothing was written.');
+    await runDoctor({ report: 'composed-validation' });
+    expect(vi.mocked(console.log).mock.calls.some((c) => String(c[0]).includes('Nothing was written.'))).toBe(true);
     expect(dirHash(f.top)).toEqual(before);
-    const unconfirmed = await doctorCli(f.top, '--fix');
-    expect(unconfirmed.stdout).toContain('Chaining migration skipped: no terminal to confirm it');
+    // The migration moved to `wairon upgrade`: --fix finds nothing of it to carry.
+    await doctorCli(f.top, '--fix', '--yes');
     // Every file of the family — specs, configurations, pins — as it was.
     const after = dirHash(f.top);
     const touched = Object.keys(after).filter((k) => after[k] !== before[k] && /[\\/]\.wai[\\/](specs|project\.yaml|externals|surfaces)/.test(k));
@@ -244,12 +240,12 @@ describe('stage 3 — the wave-B follow-ups', () => {
     for (const dir of made.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('follow-up (a): member move refuses a legacy mount carrying fields beyond its path and description, pointing at doctor --fix', () => {
+  it('follow-up (a): member move refuses a legacy mount carrying fields beyond its path and description, pointing at wairon upgrade', () => {
     family = buildReferenceFamily();
     const f = family;
     const before = dirHash(f.top);
     // shared's mount carries a publicInterfaces entry: a move would drop it.
-    expect(() => at(f.top, () => moveMember('shared', 'vocabulary'))).toThrow(/carries publicInterfaces.*`wairon doctor --fix`/s);
+    expect(() => at(f.top, () => moveMember('shared', 'vocabulary'))).toThrow(/carries publicInterfaces.*`wairon upgrade`/s);
     expect(dirHash(f.top)).toEqual(before);
     // Once the migration carried it, the member moves.
     at(f.top, () => apply(plan()));

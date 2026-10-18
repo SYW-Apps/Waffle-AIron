@@ -12,7 +12,7 @@ import { lockProject, decideRequest, executeApprovedRequest } from '../../src/se
 import * as hostCore from '../../src/server/adapters/core.js';
 import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
 import { registerProjectRecord } from '../../src/server/projects.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
 import { decideApprovalRequest, getApprovalRequestById } from '../../src/server/approvals.js';

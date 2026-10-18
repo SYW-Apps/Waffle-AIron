@@ -16,6 +16,8 @@ import {
 } from '../../src/core/specs.js';
 import { createMcpServer, statusFamilyContext } from '../../src/mcp/server.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import * as yaml from 'js-yaml';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The member bind-time announcement (mcp_server createMcpServer step 7) and the
@@ -44,8 +46,8 @@ const iface = (id: string, comp: string, methods: InterfaceSpec['methods']): Int
 /** A project.yaml, written as JSON (a YAML subset). */
 function writeConfig(dir: string, config: Record<string, unknown>): void {
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
-    schemaVersion: '1.0.0',
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR,
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {},
