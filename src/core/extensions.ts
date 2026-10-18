@@ -89,12 +89,12 @@ export type ProfileDef = z.infer<typeof ProfileDefSchema>;
  * pack can gate constructs for its platform (warning severity: "possible but
  * not clean" is guidance, not prohibition).
  *
- * `foreignBuiltins` is DEPRECATED, accepted and ignored for one release: the
+ * `foreignBuiltins` is DEPRECATED, accepted and ignored until the next major release: the
  * foreign-builtin check it fed is retired, because contracts are written in
  * the neutral type grammar and a language is chosen at L4. It is still read so
  * a pack declaring it loads, and the loader merges the language without it and
  * records a deprecation (LoadedExtensions.deprecations) the pack-deprecations
- * rule reports. Removed in the release after.
+ * rule reports. Removed in the next major release.
  */
 export const LanguagePackDefSchema = z.object({
   unsupportedFlow: z.record(z.string()).default({}),

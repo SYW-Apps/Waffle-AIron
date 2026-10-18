@@ -11,8 +11,8 @@ description: >-
   beside the claim, with the analyzer that produced them. A lock writes nothing below its own
   project: a member's approval is that member's own lock. Written with sorted keys, so a re-lock
   diffs one line per spec actually re-approved rather than a rewritten blob. Versioned by `format`:
-  a record with no format is format 1 and still reads (its `children` pins included, for one
-  release); every record written from stage 5 on is format 2 and never carries `children`.
+  a record with no format is format 1 and still reads (its `children` pins included, until the next
+  major release); every record written from stage 5 on is format 2 and never carries `children`.
 subsystem: sdd_core
 fields:
   - name: stateId
@@ -71,9 +71,9 @@ fields:
     type: map<string, string>
     description: >-
       LEGACY (format 1): chained child mount id → that child's approved StateId, copied from the
-      child's record without checking that record still matched the child's tree. Read for one
-      release as the member pins (a child's StateId and a member's subject share one rendering),
-      never written from stage 5 on; `members` replaces it.
+      child's record without checking that record still matched the child's tree. Read until the
+      next major release as the member pins (a child's StateId and a member's subject share one
+      rendering), never written from stage 5 on; `members` replaces it.
     optional: true
   - name: projectId
     type: string
@@ -265,4 +265,4 @@ invariants:
       coexist with a fresh one.
 sourcePath: src/core/lockfile.ts
 createdAt: '2026-07-04T12:44:18.588Z'
-updatedAt: '2026-10-15T16:03:38.302Z'
+updatedAt: '2026-10-18T00:37:57.670Z'

@@ -18,10 +18,10 @@ fields:
   - name: path
     type: string
     description: >-
-      DEPRECATED (stage 8): the pre-stage-8 long-form key for a contained member's root. Read for
-      one release as `source` and reported (DEPRECATED_MOUNT_FORM, notice); `doctor --fix` rewrites
-      it to `source` (or the shorthand). Never written. An entry naming both `path` and `source` is
-      a declaration problem.
+      DEPRECATED (stage 8): the pre-stage-8 long-form key for a contained member's root. Read until
+      the next major release as `source` and reported (DEPRECATED_MOUNT_FORM, notice); `doctor
+      --fix` rewrites it to `source` (or the shorthand). Never written. An entry naming both `path`
+      and `source` is a declaration problem.
     optional: true
   - name: description
     type: string
@@ -74,4 +74,4 @@ fields:
 methods: []
 sourcePath: src/models/project.ts
 createdAt: '2026-09-27T10:32:30.244Z'
-updatedAt: '2026-10-04T10:20:28.041Z'
+updatedAt: '2026-10-18T00:37:58.875Z'

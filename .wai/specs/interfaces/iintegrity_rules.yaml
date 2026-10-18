@@ -300,18 +300,18 @@ methods:
     description: >-
       Rule reference-forms. A cross-project reference is `alias::name` (or a bare name a `use`
       imports): the alias is one of the referring project's members or externals, the name a public
-      name of that project's L0 table. The older forms still bind for one release and are reported
-      (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the
-      text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading
-      `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the
-      containing projects — a place in one family, not a name; a member path (`desktop::shell`
-      written inside desktop, `app_core::engine::x` written inside engine), a first segment the
-      referring project does not declare, read from the bound root; and a self-prefix — the
-      referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel`
-      inside registry), which `wairon doctor --fix` rewrites to the bare local id. Wairon's own
-      writer emits none of them. A form with no rewrite (its target is out of reach) is reported
-      with the reason. It reads the project graph's authored references, which the scan records
-      before binding erases the form.
+      name of that project's L0 table. The older forms still bind until the next major release and
+      are reported (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as
+      written and the text to write instead (the scan's rewrite: a bare local id, or
+      `alias::publicName`): a leading `::`, which escapes to the root of whatever checkout loads it;
+      `super::`, which climbs the containing projects — a place in one family, not a name; a member
+      path (`desktop::shell` written inside desktop, `app_core::engine::x` written inside engine), a
+      first segment the referring project does not declare, read from the bound root; and a
+      self-prefix — the referring project's own id as the first segment, with `::` or `.`
+      (`registry.advisory-channel` inside registry), which `wairon doctor --fix` rewrites to the
+      bare local id. Wairon's own writer emits none of them. A form with no rewrite (its target is
+      out of reach) is reported with the reason. It reads the project graph's authored references,
+      which the scan records before binding erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -396,26 +396,26 @@ methods:
   - name: memberDeclarations
     description: >-
       Rule member-declarations. A project declares its members in project.yaml `members`, each by
-      one source in one grammar. A deprecated declaration form loads for one release and is reported
-      (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying projectPath — naming the
-      mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
-      --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
-      reported as ignored; and the deprecated long-form `path` key, naming the `source` (or
-      shorthand) `doctor --fix` rewrites it to. It also judges what each member of the bound project
-      IS against what is declared or written about it, from the scan's problems at the bound root (a
-      member's own members are that member's gate's): what a member is follows from its content — an
-      id, an L0 or a lock make it a project, anything else a part — and every contradiction is ONE
-      finding, MEMBER_KIND_MISMATCH (error), naming the alias and the contradiction: an asserted
-      `as` the content contradicts; a part whose configuration declares project fields (members,
-      externals, rules, extensions, composition, targets) without the id that would make it a
-      project (add the id, or move them to the parent); a non-contained part with no PartOf, or one
-      naming another project (opened alone it could not say what it belongs to); a contained member
-      declaring PartOf; a `use` on a member whose content is a part (its names are already this
-      project's own). A part whose files could not be read — its directory absent, or its git commit
-      not cached and not fetchable (offline, refused, unknown) — is PART_UNAVAILABLE (error): the
-      project's own subsystems are missing, so its verdict cannot be a pass. The member findings
-      name no spec: members live in configuration. It reads the project graph's nodes, their legacy
-      mounts, the bound root's declared members and its problems.
+      one source in one grammar. A deprecated declaration form loads until the next major release
+      and is reported (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying
+      projectPath — naming the mount, its path, the `members` entry that replaces it, and every
+      field it carries that `doctor --fix` will move into the member (or stop on); a mount whose
+      alias `members` also declares is reported as ignored; and the deprecated long-form `path` key,
+      naming the `source` (or shorthand) `doctor --fix` rewrites it to. It also judges what each
+      member of the bound project IS against what is declared or written about it, from the scan's
+      problems at the bound root (a member's own members are that member's gate's): what a member is
+      follows from its content — an id, an L0 or a lock make it a project, anything else a part —
+      and every contradiction is ONE finding, MEMBER_KIND_MISMATCH (error), naming the alias and the
+      contradiction: an asserted `as` the content contradicts; a part whose configuration declares
+      project fields (members, externals, rules, extensions, composition, targets) without the id
+      that would make it a project (add the id, or move them to the parent); a non-contained part
+      with no PartOf, or one naming another project (opened alone it could not say what it belongs
+      to); a contained member declaring PartOf; a `use` on a member whose content is a part (its
+      names are already this project's own). A part whose files could not be read — its directory
+      absent, or its git commit not cached and not fetchable (offline, refused, unknown) — is
+      PART_UNAVAILABLE (error): the project's own subsystems are missing, so its verdict cannot be a
+      pass. The member findings name no spec: members live in configuration. It reads the project
+      graph's nodes, their legacy mounts, the bound root's declared members and its problems.
     signature: 'memberDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -685,4 +685,4 @@ methods:
           identifier
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-08T18:55:08.682Z'
+updatedAt: '2026-10-18T00:36:36.691Z'

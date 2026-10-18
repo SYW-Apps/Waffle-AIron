@@ -261,7 +261,7 @@ describe('identity orchestrator (sdd_host)', () => {
   //
   // Since stage 7 a member is a hosted record named by its own id. A
   // member-qualified entry ('projectId::alias', nested members one alias per
-  // hop) is accepted for one release and STORED as the member's record id; an
+  // hop) is accepted until the next major release and STORED as the member's record id; an
   // alias that declares no member, an internal subsystem, or a member no record
   // holds is rejected with guidance, never stored broken.
 

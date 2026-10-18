@@ -5,8 +5,8 @@
  *  - PACK_FIELD_DEPRECATED (notice): a loaded pack still declaring a field
  *    wairon has deprecated — today a language's foreignBuiltins, whose
  *    foreign-builtin check is retired because contracts are written in the
- *    neutral type grammar — is told so. The field is accepted and ignored for
- *    one release, so the pack still loads; a notice never fails the gate.
+ *    neutral type grammar — is told so. The field is accepted and ignored until
+ *    the next major release, so the pack still loads; a notice never fails the gate.
  *
  * The control is the same pack without the field: its language table still
  * gates narrative flow (unsupportedFlow), which is not deprecated.

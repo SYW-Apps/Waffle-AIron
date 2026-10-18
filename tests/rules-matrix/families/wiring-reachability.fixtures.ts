@@ -9,7 +9,7 @@
  *    ENTRY_ON_NON_PORTAL (an entry belongs to a Portal verb),
  *    ENTRY_SCOPE_NOT_NETWORK (a scope only means something on a network
  *    transport), INVOKED_BY_RETIRED_KIND (external / sibling-subsystem, read
- *    compatibly for one release).
+ *    compatibly until the next major release).
  *  - network-boundaries (src/core/rules/wiring/network-boundaries.ts), over a
  *    project that declares `network` in its project.yaml: GATEWAY_BYPASSED
  *    (only a gateway Portal is entered from outside the network),
@@ -289,7 +289,7 @@ export default [
     anchoredTo: 'isettlement_orchestrator',
     expectFire: true,
     scenario:
-      'The settlement orchestrator still declares invokedBy kind external from before the reachability model, which reads it as runtime for one release.',
+      'The settlement orchestrator still declares invokedBy kind external from before the reachability model, which reads it as runtime until the next major release.',
     tree: {
       system: SYSTEM,
       subsystems: [ORDERS_SUB],

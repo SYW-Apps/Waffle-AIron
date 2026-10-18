@@ -289,7 +289,7 @@ describe('hosted spec-tree transfer', () => {
     expect(fs.readdirSync(targetRoot).filter((e) => e.startsWith('.wai-staging-'))).toEqual([]);
   });
 
-  it('exports a member by its own record: the member tree, through a qualified token too (one release)', async () => {
+  it('exports a member by its own record: the member tree, through a qualified token too (until the next major release)', async () => {
     createPlacedProject(cfg, MASTER, 'parent');
     const root = seedTree('parent', 'Parent System');
     const childDir = seedChainedMount(root, 'billing', 'packages/billing');

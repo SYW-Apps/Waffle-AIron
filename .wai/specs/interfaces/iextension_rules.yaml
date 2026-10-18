@@ -226,8 +226,8 @@ methods:
       Rule pack-deprecations. A loaded pack still declaring a field wairon has deprecated
       (ctx.ext.deprecations — today a language's foreignBuiltins, whose foreign-builtin check is
       retired because contracts are written in the neutral type grammar) is told so: the field is
-      accepted and ignored for one release and removed in the release after. A notice: it never
-      fails the gate.
+      accepted and ignored, and removed in the next major release. A notice: it never fails the
+      gate.
     signature: 'packDeprecations(ctx: RuleContext): void'
     returns: void
     params:
@@ -237,7 +237,9 @@ methods:
     findings:
       - code: PACK_FIELD_DEPRECATED
         severity: notice
-        summary: A loaded pack declares a deprecated field, accepted and ignored for one release
+        summary: >-
+          A loaded pack declares a deprecated field, accepted and ignored until the next major
+          release
 status: complete
 createdAt: '2026-09-14T06:07:43.654Z'
-updatedAt: '2026-10-03T22:10:51.442Z'
+updatedAt: '2026-10-18T00:39:12.319Z'

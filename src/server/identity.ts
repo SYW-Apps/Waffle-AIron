@@ -309,7 +309,7 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * deactivated owner (deactivation must stay revoked), and unknown projects in
  * the narrowing — a member-qualified entry ('projectId::alias', one member
  * alias per hop) is validated at mint time: each alias must declare a member of
- * the project it is looked up in, in project.yaml `members` or for one release
+ * the project it is looked up in, in project.yaml `members` or until the next major release
  * a legacy L1 mount (an unknown alias, or an internal subsystem, is rejected
  * with guidance, never stored broken). Persists only the hashed record with owner/narrowing
  * metadata and appends a redacted audit event. Returns the plaintext token
@@ -329,7 +329,7 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
   // The token's project NARROWING (never a grant): which records it may name,
   // each covering its members. The list is required; ['*'] = the owner's full
   // accessible set, still resolved live. A member-qualified entry ('projectId::alias') is
-  // DEPRECATED: for one release it is accepted and STORED as the member's
+  // DEPRECATED: until the next major release it is accepted and STORED as the member's
   // record id; an unknown project, an alias that declares no member, or a
   // member no record holds is rejected with guidance, never stored broken.
   assertNarrowingGiven(request);
@@ -432,7 +432,7 @@ export function mintSelfToken(
   const principal = requirePrincipal(cfg, credential);
 
   // The record the token names: a project id as it is, or — a deprecated
-  // member-qualified id, for one release — the member's own record id. An
+  // member-qualified id, until the next major release — the member's own record id. An
   // unknown project or member is rejected with guidance, never stored broken.
   const recordId = assertMintableNarrowingEntry(cfg.dataDir, projectId);
 

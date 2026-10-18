@@ -30,7 +30,7 @@ import type {
 // covers that project and every member below it.
 //
 // A member-QUALIFIED selector or narrowing entry ('projectId::alias', one
-// alias per hop) is DEPRECATED: for one release it is mapped to the member's
+// alias per hop) is DEPRECATED: until the next major release it is mapped to the member's
 // record by walking the aliases each root declares, never to a root no record
 // holds and never wider than the member.
 // ---------------------------------------------------------------------------
@@ -424,7 +424,7 @@ function rawConfigAt(root: string): Record<string, unknown> | null {
 
 /**
  * Every member a root declares, read the way the spec loader reads them: its
- * project.yaml `members` first and, for one release, each legacy L1 mount of
+ * project.yaml `members` first and, until the next major release, each legacy L1 mount of
  * its own spec tree (a subsystem carrying a projectPath) not already a member.
  */
 function memberDeclarationsOn(root: string): MemberDeclaration[] {
@@ -505,7 +505,7 @@ function walkMemberAliases(
 }
 
 /**
- * DEPRECATED for one release: the member RECORD a member-qualified selector
+ * DEPRECATED until the next major release: the member RECORD a member-qualified selector
  * names — the aliases walked from the family root's root, each hop mapped to
  * the record whose parentProjectId and memberPath name that directory. Throws
  * with guidance for a family root no active record holds, an alias that
@@ -686,7 +686,7 @@ export function assertMintableNarrowingEntry(dataDir: string, entry: string): st
 
 /** The resolved binding of one authorized data-plane request: the bound
  *  record, its root, its family root, and the deprecated qualifier that
- *  resolved it (for one release). */
+ *  resolved it (until the next major release). */
 export interface ProjectBinding {
   rootPath: string;
   projectId: string;

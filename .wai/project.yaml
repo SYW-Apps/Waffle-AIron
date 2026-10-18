@@ -232,7 +232,7 @@ rules:
           components that still build and read that form: member registration formats and matches
           members' qualifiers with it, and the request orchestrator reads the top project id off the
           qualifier a deprecated selector carried. The finding is right - a name crossing a boundary no contract
-          promised - and the form resolves for one release only. It is retired together with the
+          promised - and the form resolves only until the next major release. It is retired together with the
           deprecated `projectId::alias` qualifier form: removing the form removes both call sites and
           the constant, so modelling the separator now (a qualifier value object, or contract methods
           on the project repository) would design a surface whose only purpose is to be deleted.

@@ -18,8 +18,9 @@ fields:
     description: >-
       The wire protocol: HTTP, gRPC, GraphQL, MessageBus, NamedPipe, IPC, CLI, JSONRPC or Custom. It
       must be the Portal's own transport; another is refused, naming that one. The retired
-      portalType spelling HTTP_API is still read as HTTP for one release. An InProcess Portal binds
-      no endpoints: its verbs are the contract methods themselves, and a binding for one is refused.
+      portalType spelling HTTP_API is still read as HTTP until the next major release. An InProcess
+      Portal binds no endpoints: its verbs are the contract methods themselves, and a binding for
+      one is refused.
     optional: false
   - name: httpMethod
     type: string
@@ -99,4 +100,4 @@ lint:
         sdd_set_endpoints registration in src/mcp/server.ts, so there is no symbol a sourcePath
         could bind.
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-09T00:18:23.689Z'
+updatedAt: '2026-10-18T00:37:53.215Z'

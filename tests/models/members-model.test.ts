@@ -18,7 +18,7 @@ describe('project_config.declaredMembers', () => {
       },
     }))).toEqual([
       { alias: 'billing', path: 'services/billing', use: [], source: { path: 'services/billing' }, storage: 'contained', deprecatedPath: false },
-      // The pre-stage-8 long-form `path` is read as the source for one release, flagged.
+      // The pre-stage-8 long-form `path` is read as the source until the next major release, flagged.
       { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record', use: [], source: { path: 'services/ledger' }, storage: 'contained', deprecatedPath: true },
     ]);
   });

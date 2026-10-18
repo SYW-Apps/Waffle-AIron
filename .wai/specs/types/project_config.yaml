@@ -98,7 +98,7 @@ fields:
       Together with `externals` it is this project's alias table, and one alias names one member or
       external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `doctor
       --fix` through the registry (which rewrites the deprecated long-form `path`); the L1
-      `projectPath` form still loads for one release (DEPRECATED_MOUNT_FORM).
+      `projectPath` form still loads until the next major release (DEPRECATED_MOUNT_FORM).
     optional: true
   - name: composition
     type: CompositionConfig
@@ -226,12 +226,12 @@ methods:
     returns: list<DeclaredMember>
     description: >-
       The configuration's `members`, one DeclaredMember per alias in declaration order: the source
-      string (the shorthand, the long form's `source`, or for one release the deprecated `path`,
-      flagged) parsed into its object form and storage, the asserted `as`, the description and `use`
-      copied as written; an alias outside [a-z0-9-_]+, a missing or unparseable source, a git source
-      without its commit, a bad `as`, a hosted source asserted to be a part, an alias `externals`
-      also declares, or a malformed `use` entry is recorded as the entry's problem rather than
-      dropped. Empty when nothing is declared.
+      string (the shorthand, the long form's `source`, or, until the next major release, the
+      deprecated `path`, flagged) parsed into its object form and storage, the asserted `as`, the
+      description and `use` copied as written; an alias outside [a-z0-9-_]+, a missing or
+      unparseable source, a git source without its commit, a bad `as`, a hosted source asserted to
+      be a part, an alias `externals` also declares, or a malformed `use` entry is recorded as the
+      entry's problem rather than dropped. Empty when nothing is declared.
   - name: withPack
     signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
     returns: ProjectConfig
@@ -259,4 +259,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-07T21:44:04.175Z'
+updatedAt: '2026-10-18T00:38:04.572Z'

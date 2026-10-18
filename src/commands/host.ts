@@ -115,7 +115,7 @@ function resolveHostConfig(options: HostOptions): HostConfig {
  * Policy values that no longer exist, each with the value it now reads as. Each
  * stood for no behaviour of its own: full-redacted persisted exactly what
  * redacted did, and an advisory quota policy never blocked anything. They are
- * accepted for one release with a warning naming the replacement.
+ * accepted until the next major release with a warning naming the replacement.
  */
 const DEPRECATED_POLICY_VALUES: Record<string, Record<string, string>> = {
   metadataMode: { 'full-redacted': 'redacted' },

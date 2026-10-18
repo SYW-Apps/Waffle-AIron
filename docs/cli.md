@@ -459,7 +459,7 @@ component).
 member's agents by reference (`delegatesTo: <alias>::<agentId>`) instead of
 copying them, and a brief for `<alias>::<agent>` composes at the member's own
 root. `--family` also generates each member's own layer, in its own root.
-(`--no-recurse` is accepted for one release; not cascading is now the default.)
+(`--no-recurse` is accepted until the next major release; not cascading is now the default.)
 
 ### `wairon lock [-y, --yes] [--subsystem <id>]`
 Review and approve the design. Validates the spec tree **as if complete** (full
@@ -870,6 +870,11 @@ any repair touches a spec (see `wairon lock`), keeping who approved it and when.
 A format-2 record over a tree no file of which moved is carried into the design
 reading even when the gate it was judged under moved; doctor then says the cause
 (the gate, not the design) and that one `wairon lock` re-approves it.
+
+**How long a deprecated form lasts.** A form, field or flag deprecated during a release line
+keeps working, and is reported, for the rest of that line: only a major release removes one,
+and a minor or patch release never does. `--fix` rewrites the deprecated spec and configuration
+forms; run it any time before the next major upgrade.
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
@@ -1385,7 +1390,7 @@ requirement nothing installed satisfies. Scaffolding is an unattended pack write
 so it shows no impact report; run `wairon pack impact <name>` at the member's
 root to see one.
 
-**Deprecated forms.** For one release wairon still reads, and reports: a leading
+**Deprecated forms.** Until the next major release wairon still reads, and reports: a leading
 `::` (`::shared::money`), `super::` (`super::sibling`), a member path
 (`billing::invoice::invoice_portal`) and an L1 subsystem carrying
 `projectPath` (`DEPRECATED_MOUNT_FORM`), and a member's long-form `path` key

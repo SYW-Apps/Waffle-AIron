@@ -289,13 +289,13 @@ methods:
         description: >-
           Read the root's member declarations: project_config.declaredMembers() — each with its one
           source parsed (contained path, `../` sibling path, git at a commit, hosted record), the
-          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, for one
-          release, every top-level L1 subsystem of the root carrying projectPath — a legacy mount,
-          recorded with every field as written on the member it declares and never loaded as a
-          subsystem, since a mount carries no content. A `members` entry and a legacy mount under
-          one alias are one member, the `members` entry winning; an alias declared both as a member
-          and as an external is an alias-conflict problem; a declaration with a problem is recorded
-          and not followed
+          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, until
+          the next major release, every top-level L1 subsystem of the root carrying projectPath — a
+          legacy mount, recorded with every field as written on the member it declares and never
+          loaded as a subsystem, since a mount carries no content. A `members` entry and a legacy
+          mount under one alias are one member, the `members` entry winning; an alias declared both
+          as a member and as an external is an alias-conflict problem; a declaration with a problem
+          is recorded and not followed
         type: local
       - stepNumber: 4
         description: >-
@@ -685,4 +685,4 @@ methods:
     symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-09T18:35:09.915Z'
+updatedAt: '2026-10-18T00:37:43.505Z'

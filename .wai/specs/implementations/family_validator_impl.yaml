@@ -617,10 +617,10 @@ methods:
       - stepNumber: 15
         description: >-
           Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
-          1, for one release) its `children` entry; matches when that equals the member's subject,
-          moved when it differs (including a member pinned before and never approved now), unpinned
-          when the parent has no record or names no pin for the alias. The root's own entry carries
-          no pin
+          1, until the next major release) its `children` entry; matches when that equals the
+          member's subject, moved when it differs (including a member pinned before and never
+          approved now), unpinned when the parent has no record or names no pin for the alias. The
+          root's own entry carries no pin
         type: local
       - stepNumber: 16
         description: Return the entries, root first
@@ -1163,4 +1163,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-15T16:03:43.665Z'
+updatedAt: '2026-10-18T00:37:29.397Z'

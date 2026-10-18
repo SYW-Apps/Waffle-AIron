@@ -30,7 +30,7 @@ fields:
     type: string
     description: >-
       DEPRECATED (stage 3): the legacy L1 mount form. A subsystem carrying it is not a subsystem at
-      all but a member declaration of its project, read by the scan for one release
+      all but a member declaration of its project, read by the scan until the next major release
       (DEPRECATED_MOUNT_FORM), never loaded as a subsystem and never given content; `doctor --fix`
       moves it to project.yaml `members`. MUST be a relative path that resolves strictly within the
       owning project's root; absolute paths and ../-escaping paths are rejected so a member is
@@ -104,4 +104,4 @@ methods:
     symbol: subsystemDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-07T18:29:36.630Z'
+updatedAt: '2026-10-18T00:38:09.838Z'

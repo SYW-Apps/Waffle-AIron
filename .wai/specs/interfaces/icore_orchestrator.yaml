@@ -396,9 +396,9 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
-      through that root's binding) and, for one release, its legacy L1 mounts, each resolved inside
-      the project root, as the member's directory, alias and form. An absolute or escaping path is
-      skipped.
+      through that root's binding) and, until the next major release, its legacy L1 mounts, each
+      resolved inside the project root, as the member's directory, alias and form. An absolute or
+      escaping path is skipped.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -1539,4 +1539,4 @@ methods:
     effect: write
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-17T16:35:03.436Z'
+updatedAt: '2026-10-18T00:36:15.406Z'

@@ -77,8 +77,8 @@ export interface LockRecord {
   specs?: Record<string, string>;
   /**
    * LEGACY (format 1): chained child mount id → that child's approved StateId,
-   * copied without checking the child's lock still matched its tree. Read for
-   * one release as the member pins; never written from stage 5 on.
+   * copied without checking the child's lock still matched its tree. Read until
+   * the next major release as the member pins; never written from stage 5 on.
    */
   children?: Record<string, string>;
   /**

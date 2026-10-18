@@ -517,7 +517,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
   };
 
   // Since stage 7 a member is a record of its own: a credential bound to the
-  // member — by its id, or for one release by the deprecated qualifier — reaches
+  // member — by its id, or, until the next major release, by the deprecated qualifier — reaches
   // the member's OWN record-level tools (the documented widening within the
   // member only), and never acts on its parent's record.
 

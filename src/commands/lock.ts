@@ -62,7 +62,7 @@ export interface LockOptions {
   /** Limit lock scope to a specific subsystem. */
   subsystem?: string;
   /**
-   * Accepted for one release and ignored for what is written: a lock approves
+   * Accepted until the next major release and ignored for what is written: a lock approves
    * this project only and never writes below it. Each member locks at its own
    * root.
    */

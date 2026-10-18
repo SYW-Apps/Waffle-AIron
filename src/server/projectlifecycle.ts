@@ -357,7 +357,7 @@ function codeBesideClaim(lock: LockRecord): string {
 }
 
 /** The payload type a project:lock request recorded before stage 7 when its
- *  requester was bound to a member through a qualifier. Read for one release. */
+ *  requester was bound to a member through a qualifier. Read until the next major release. */
 const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
 
 /** An unnarrowed lookup principal: resolves a pre-authorized request's qualifier to its record, nothing else. */
@@ -365,7 +365,7 @@ const RECORD_LOOKUP: Principal = { tokenId: 'approval-lookup', role: 'editor', p
 
 /**
  * The record a project:lock request executes on: its own projectId, or — for a
- * request recorded with a member qualifier before the upgrade (one release) —
+ * request recorded with a member qualifier before the upgrade (until the next major release) —
  * the member record the qualifier maps to, never wider. A qualifier payload
  * that does not parse, or names a member no record holds, refuses: falling
  * back to the whole project would widen the scope the requester was confined to.
@@ -650,7 +650,7 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
     }
     case 'project:lock': {
       // The request's record id — a pre-upgrade member qualifier mapped to its
-      // member record for one release, never wider.
+      // member record until the next major release, never wider.
       const target = lockTargetOf(cfg, req);
       // The request's gateStateId is the expected identity: an approval never
       // certifies a design other than the one requested (a request without one,

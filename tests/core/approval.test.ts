@@ -279,7 +279,7 @@ describe('the approval', () => {
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 
-  it('still READS a format-1 record\'s `children` (one release)', () => {
+  it('still READS a format-1 record\'s `children` (until the next major release)', () => {
     root = project();
     const legacy = approveAt(root);
     fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, children: { billing: 'sha256:abc123' } }, null, 2));

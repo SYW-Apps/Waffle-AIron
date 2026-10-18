@@ -315,7 +315,7 @@ Semantics worth knowing:
   type grammar (see [the architecture standard](standards/architecture.md#6-entities-and-types)), so there is no
   per-language builtin vocabulary left to declare. A pack that still declares
   it loads, ignores the field and gets a `PACK_FIELD_DEPRECATED` notice; the
-  field is removed in the next release.
+  field is removed in the next major release.
 
 ## Pack-provided AI-agent skills
 

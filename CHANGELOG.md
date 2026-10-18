@@ -1,8 +1,22 @@
 # Changelog
 
-## Unreleased — v6.0.0 (from v5.1.0)
+## Unreleased
 
-**Breaking: merge dev → main with `[major]` in the merge commit message → v6.0.0.**
+### Deprecated forms stay until the next major release
+
+A deprecated form used to be promised for "one release", which would have made the first
+bug-fix release after a major one a major release too. The window is now the release line:
+a form deprecated in 6.x keeps loading, is reported, and is rewritten by `wairon doctor --fix`
+for every 6.x release, and only a major release removes it. Minor and patch releases never
+remove a deprecated form. The forms deprecated in v6.0.0 (a leading `::`, `super::`, member
+paths, an L1 `projectPath`, a member's long-form `path`, the retired reach forms, the
+member-qualified hosted selectors, a pack's `foreignBuiltins`, `--no-recurse` and
+`--no-recursive`) therefore keep working through 6.x. Nothing changes in behaviour; the
+messages, help texts and generated guides now say "until the next major release".
+
+## v6.0.0 (from v5.1.0)
+
+**Breaking: a major release.**
 
 v6 makes a wairon project a set of **projects that name each other**. A project has
 an id, its levels export like a module, and another project is reached only as

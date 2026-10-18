@@ -33,8 +33,8 @@ fields:
   - name: form
     type: ReferenceForm
     description: >-
-      How the reference is spelled. leading, super and path are deprecated and still bind for one
-      release.
+      How the reference is spelled. leading, super and path are deprecated and still bind until the
+      next major release.
     optional: false
   - name: binding
     type: ReferenceBinding
@@ -79,4 +79,4 @@ fields:
 methods: []
 sourcePath: src/models/project-family.ts
 createdAt: '2026-09-26T17:39:34.152Z'
-updatedAt: '2026-10-04T23:38:48.990Z'
+updatedAt: '2026-10-18T00:37:49.859Z'
