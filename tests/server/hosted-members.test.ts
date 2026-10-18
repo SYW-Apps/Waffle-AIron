@@ -14,7 +14,7 @@ import {
   registerMemberRecord,
   removeProjectRecord,
 } from '../../src/server/projects.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as memberRegistration from '../../src/server/members.js';
 import { authorize } from '../../src/server/authorization.js';
 import { setAssignment } from '../../src/server/permissions.js';
@@ -28,7 +28,6 @@ import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { listCredentials } from '../../src/server/credentials.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { handleMcpRequest } from '../../src/server/request.js';
-import { warnIfMembersPending } from '../../src/server/http.js';
 import { migratePermissionModel } from '../../src/server/migration.js';
 import { executeApprovedLock } from '../../src/server/admin.js';
 import { executeApprovedRequest } from '../../src/server/projectlifecycle.js';
@@ -284,10 +283,8 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(dry.plan.narrowings).toEqual([expect.objectContaining({ keyId: 'k-q', before: ['platform::billing::payments'], after: ['payments'] })]);
     expect(dry.plan.changes.map((c) => c.path).sort()).toEqual(['auth/credentials.json', 'projects.json']);
     expect(stores()).toEqual(before);
-    expect(memberRegistration.pending(dataDir)).toBe(3);
 
     upgrade();
-    expect(memberRegistration.pending(dataDir)).toBe(0);
     expect(listCredentials(dataDir, '*').find((k) => k.id === 'k-q')!.projects).toEqual(['payments']);
 
     const after = stores();
@@ -402,20 +399,6 @@ describe('placing a member refuses: a member takes its units from its family roo
     const projectsFinding = report.findings.find((f) => f.area === 'projects');
     expect(projectsFinding?.detail).toMatch(/1 project\(s\) are placed in no organization unit: platform /);
     expect(listProjectPlacements(dataDir).map((p) => p.projectId)).toEqual(['platform']);
-  });
-});
-
-// ── boot warning ────────────────────────────────────────────────────────────
-
-describe('boot: members awaiting the upgrade', () => {
-  it('logs how many members await `host doctor --fix`, and nothing once they are records', () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    warnIfMembersPending(cfg);
-    expect(log.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/3 member\(s\) of hosted families hold no project record yet and await `wairon host doctor --fix`/);
-    log.mockClear();
-    upgrade();
-    warnIfMembersPending(cfg);
-    expect(log).not.toHaveBeenCalled();
   });
 });
 

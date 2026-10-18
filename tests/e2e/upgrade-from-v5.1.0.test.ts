@@ -114,20 +114,25 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     const mount = fs.readFileSync(path.join(dir, '.wai', 'specs', 'billing', '.index.yaml'), 'utf8');
     expect(mount).toContain('projectPath: services/billing');
     expect(fs.existsSync(path.join(dir, '.wai', 'project.yaml'))).toBe(true);
-    // CHANGELOG "Every project": every lock reads stale once.
-    const check = await run(['lock-check']);
-    expect(check.code, transcript(check)).toBe(1);
-    expect(check.all).toContain('earlier gate identity');
+    // The project carries no stamp: it reads as major 5, so the standing guard refuses
+    // every project command in CI and names the way forward. Nothing is written.
+    const before = snapshot(dir);
+    for (const args of [['lock-check'], ['validate', '--ci'], ['status']]) {
+      const refused = await run(args);
+      expect(refused.code, transcript(refused)).toBe(1);
+      expect(refused.all).toContain('written by an older wairon major');
+      expect(refused.all).toContain('wairon upgrade');
+    }
+    expect(snapshot(dir)).toEqual(before);
+    expect(fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8')).not.toContain('waironMajor');
   });
 
   it('the CHANGELOG still lists the steps this test replays, in order', () => {
     const steps = changelogSteps();
     const has = (n: number, needle: string): void =>
       expect(steps.get(n) ?? '', `CHANGELOG step ${n} must mention ${needle}`).toContain(needle);
-    has(3, '`wairon doctor`');
-    has(3, 'wairon doctor --report chaining');
-    has(3, 'wairon doctor --report composed-validation');
-    has(5, '`wairon doctor --fix`');
+    // Steps 3 and 5 still name `doctor --fix` and `doctor --report chaining`: CHANGELOG.md
+    // has not been rewritten for `wairon upgrade` yet, so only the steps that survive are pinned.
     has(8, '`wairon validate --ci`');
     has(9, '`wairon lock`');
     expect(steps.get(8) ?? '').toContain('Declare the entries');
@@ -135,21 +140,36 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
 
   it('step 3: the plan is read-only and names the member migration', async () => {
     const before = snapshot(dir);
-    const plan = await run(['doctor']);
-    const chaining = await run(['doctor', '--report', 'chaining']);
+    const plan = await run(['upgrade', '--report']);
+    ok(plan);
+    expect(plan.all).toContain('written by major 5 (unstamped)');
+    expect(plan.all).toContain('members: billing (moved from its legacy mount)');
+    expect(plan.all).toContain('Nothing was written.');
+    // doctor on the un-upgraded tree names the major and the way forward; it writes nothing.
+    const doctor = await run(['doctor']);
+    expect(doctor.all).toContain('wairon upgrade');
     const composed = await run(['doctor', '--report', 'composed-validation']);
-    expect(plan.all).toContain('wairon doctor --fix');
-    ok(chaining);
-    expect(chaining.all).toContain('member: billing');
     ok(composed);
     expect(snapshot(dir)).toEqual(before);
   });
 
-  it('step 5: doctor --fix --yes migrates the mount into a member and rewrites the reachability model', async () => {
+  it('step 5: upgrade --yes migrates the mount into a member and rewrites the reachability model', async () => {
+    const up = await run(['upgrade', '--yes']);
+    ok(up);
+    expect(up.all).toContain('is now on major 6');
+    expect(up.all).toContain('members: billing (moved from its legacy mount)');
+    // Both roots are stamped with the major that rewrote them.
+    for (const root of [dir, billing]) {
+      expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toMatch(/^waironMajor: 6$/m);
+    }
+    // The guard now lets commands through; a second upgrade has nothing to do.
+    const again = await run(['upgrade', '--yes']);
+    ok(again);
+    expect(again.all).not.toContain('is now on major');
+
+    // doctor --fix still owns the agent surfaces (the member's folder included).
     const fix = await run(['doctor', '--fix', '--yes']);
     ok(fix);
-    expect(fix.all).toContain('Applied the chaining migration');
-    expect(fix.all).toContain('Migrated onto the reachability model');
 
     // The chained form is now a member of the project.
     const project = yaml.load(fs.readFileSync(path.join(dir, '.wai', 'project.yaml'), 'utf8')) as {
@@ -258,51 +278,47 @@ describe('e2e upgrade: a chained child that does not publish its Portal at L1', 
   let sandbox: TrialSandbox;
   let dir: string;
   const run = (args: string[], cwd = dir): Promise<CliResult> => sandbox.run(args, cwd);
+  const ok = (r: CliResult): void => expect(r.code, transcript(r)).toBe(0);
   const childIndex = (): string => path.join(dir, 'services', 'billing', '.wai', 'specs', 'charges', '.index.yaml');
-  let published = '';
 
   beforeAll(() => {
     sandbox = createTrialSandbox('upgrade-v510-unpublished');
     dir = sandbox.project('shop');
     copyFixture(FIXTURE, dir);
-    published = fs.readFileSync(childIndex(), 'utf8');
+    const published = fs.readFileSync(childIndex(), 'utf8');
     const stripped = published.replace(/publicInterfaces:\n(?:[ \t]+.*\n)+/, 'publicInterfaces: []\n');
     expect(stripped).not.toEqual(published);
     fs.writeFileSync(childIndex(), stripped);
   });
   afterAll(async () => { await sandbox?.cleanup(); });
 
-  it('doctor --fix names the finding and its hand fix, and the status line stops advising --fix', async () => {
-    const fix = await run(['doctor', '--fix', '--yes']);
-    // The references the finding covers still fail validation, so doctor ends on an error.
-    expect(fix.code, transcript(fix)).toBe(1);
-    expect(fix.all).toContain('need a hand fix');
-    expect(fix.all).toContain('target-unpublished [billing]');
-    expect(fix.all).toContain('publish it at L1 first');
-    expect(fix.all).toContain('nothing was written for the items above');
-    expect(fix.all).toContain('re-run `wairon doctor --fix`');
+  it('upgrade names the finding and its hand fix, and stamps the tree it could rewrite', async () => {
+    const up = await run(['upgrade', '--yes']);
+    ok(up);
+    expect(up.all).toContain('target-unpublished [billing]');
+    expect(up.all).toContain('publish it at L1 first');
+    expect(up.all).toContain('is now on major 6');
 
     // The reference the finding covers is unresolved: no L0 export was written for it.
-    expect(fs.existsSync(path.join(dir, 'services', 'billing', '.wai', 'specs', '.index.yaml'))).toBe(true);
     const l0 = fs.readFileSync(path.join(dir, 'services', 'billing', '.wai', 'specs', '.index.yaml'), 'utf8');
     expect(l0).not.toContain('billing-portal');
 
+    // It stays visible where the human works: validation fails on the unexported reference.
+    const validate = await run(['validate', '--ci']);
+    expect(validate.code, transcript(validate)).toBe(1);
+    expect(validate.all).toContain('EXTERNAL_NOT_EXPORTED');
     const status = await run(['doctor']);
-    const line = status.all.split('\n').find((l) => l.includes('Chaining:')) ?? '';
-    expect(line, transcript(status)).toContain('need a hand fix');
-    expect(line).not.toContain('apply with `wairon doctor --fix`');
+    expect(status.all).toContain('written by wairon 6, the running major');
   });
 
-  it('after the Portal is published, a re-run applies the rest', async () => {
-    fs.writeFileSync(childIndex(), published);
-    const fix = await run(['doctor', '--fix', '--yes']);
-    expect(fix.code, transcript(fix)).toBe(0);
-    expect(fix.all).toContain('Applied the chaining migration');
-    expect(fix.all).not.toContain('need a hand fix');
-    expect(fs.readFileSync(path.join(dir, 'services', 'billing', '.wai', 'specs', '.index.yaml'), 'utf8')).toContain('billing-portal');
-    const status = await run(['doctor']);
-    expect(status.all).not.toContain('Chaining:');
-    const validate = await run(['validate', '--ci']);
+  it('with the Portal published, the upgrade writes the export and the family validates without errors', async () => {
+    const clean = sandbox.project('shop-published');
+    copyFixture(FIXTURE, clean);
+    const up = await run(['upgrade', '--yes'], clean);
+    ok(up);
+    expect(up.all).not.toContain('target-unpublished');
+    expect(fs.readFileSync(path.join(clean, 'services', 'billing', '.wai', 'specs', '.index.yaml'), 'utf8')).toContain('billing-portal');
+    const validate = await run(['validate', '--ci'], clean);
     expect(findings(validate.all).errors, transcript(validate)).toEqual([]);
   });
 });

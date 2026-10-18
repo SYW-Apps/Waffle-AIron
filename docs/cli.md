@@ -535,17 +535,17 @@ it is left out of the design view: promoting a spec to `complete` after the lock
 never reopens it. A format-3 record taken while the view still carried `status`
 keeps passing when nothing but a status moved — it is judged in the reading it
 was taken in, each spec's approved status recovered from its digest — and
-`wairon doctor --fix` carries it into the current reading without a review.
+`wairon upgrade` carries it into the current reading without a review.
 
 A **format-2** record (written before code linkage left the approval) still passes
-`lock-check` while nothing it covered moved. `wairon doctor --fix` re-expresses it
-as format 3 in place — before any other repair touches a spec — keeping
+`lock-check` while nothing it covered moved. `wairon upgrade` re-expresses it
+as format 3 in place — before any other step touches a spec — keeping
 `lockedAt`, `lockedBy`, the results and the member pins, and recording
 `reexpressed: { at, fromAlgorithm, fromReading, by }`. When no spec file moved
 but the record still does not match, what moved is the **gate** it was judged
 under — the design rules of a newer wairon release, the project's rule tuning,
 `composition`, the network declaration, consumed contracts or a member's
-approval — never your design: `doctor --fix` still carries the record into the
+approval — never your design: `wairon upgrade` still carries the record into the
 design reading (its claim stays as certified), and the record is then judged as
 any record from before gate parts is when the release changed (below). A format-2 record whose specs moved reads stale
 once; one `wairon lock` clears it for good.
@@ -821,17 +821,25 @@ making a failing job stop a merge is a branch-protection / ruleset setting on
 your repository ("Require status checks to pass" → add this job). No workflow
 can declare that for itself.
 
-### `wairon doctor [--fix] [-y, --yes] [--global] [--report <section>]`
+### `wairon doctor [--fix] [-y, --yes] [--global] [--report composed-validation]`
 Health check: flags stale generated guides/skills, an unregistered MCP server,
-spec-tree issues and the member/reference migration still pending. `--fix`
-regenerates stale in-project guides/context/skills, registers the MCP server and
-applies the spec repairs, then the member migration once confirmed (`--yes`
-answers that confirmation in a script). A write outside the project root (a
-machine-wide MCP config) also needs `--global`; each file it replaces is backed
-up beside itself. `--report <section>` prints one section's report and writes
-nothing: `chaining` (the member/reference migration plan) or
-`composed-validation` (what the family run changes about each member's
-findings) or `reachability` (the reachability migration's plan); it never
+unfinished family-migration transactions, spec-tree issues and a tree written by
+another wairon major. The **Major** check reads the tree's `waironMajor` stamp
+against the running wairon: current passes, an older tree is an error naming
+`wairon upgrade` (the fixes and the commands wait for it), and a newer or
+out-of-window tree names the release to install.
+
+`--fix` finishes unfinished transactions, regenerates stale in-project
+guides/context/skills, repairs narrative steps carrying a field their type cannot
+have, regenerates stored signatures, rewrites type spellings, and registers the MCP
+server. It is skipped, with a warning naming `wairon upgrade`, for a tree whose
+standing is not current. It no longer migrates anything between majors: renaming
+legacy spec files, re-expressing the lock, retiring Specialists, the reachability
+model and the chaining migration are steps of `wairon upgrade`. A write outside the
+project root (a machine-wide MCP config) also needs `--global` (`--yes` answers its
+confirmation in a script); each file it replaces is backed up beside itself.
+`--report composed-validation` prints what the family run changes about each
+member's findings and writes nothing; it is the one report section, and never
 combines with `--fix`.
 
 In a family, `--fix` runs the same per-project repairs in every member project inside the
@@ -852,33 +860,36 @@ literal union, a union mixing in a primitive, a `number` with no proposal) is
 listed with its replacement for an author. Plain `wairon doctor` prints the same
 plan without writing it.
 
-**The reachability migration.** `--fix` also moves the tree onto the
-reachability model: `portalType` becomes `transport` (`HTTP_API` → `HTTP`, a
-`Custom` Portal that binds no wire address → `InProcess`), a listener's `mounts`
-become a Portal-level entry on each mounted Portal and its implementation's
-`router` (the mount's `via`), `invokedBy: external` becomes `entry` on a Portal
-verb and `runtime` elsewhere, an authored export `type` that agrees with the derived kind is dropped,
-in-process `Custom` endpoint addresses are removed, and allows of retired codes
-are dropped or renamed. It never invents design: a Portal that was neither a
-listener nor mounted gets no entry, and a `sibling-subsystem` caller, an export
-type that disagrees, an endpoint outside every old prefix and a router already
-set otherwise are listed for an author. Plain `wairon doctor` prints the plan;
-`--report reachability` lists every rewrite and every form left for an author.
-The design changes, so one `wairon lock` follows. After it, declare the entries
-the migration cannot know — a CLI, a stdio tool surface (`JSONRPC`), a library
-(`InProcess`) — and model a caller or remove each verb still reported unreached.
-
-`--fix` also re-expresses an earlier lock record — format 2, or format 3 taken
-while `status` was still in the approval — in the current reading, first, before
-any repair touches a spec (see `wairon lock`), keeping who approved it and when.
-A format-2 record over a tree no file of which moved is carried into the design
-reading even when the gate it was judged under moved; doctor then says the cause
-(the gate, not the design) and that one `wairon lock` re-approves it.
-
 **How long a deprecated form lasts.** A form, field or flag deprecated during a release line
 keeps working, and is reported, for the rest of that line: only a major release removes one,
 and a minor or patch release never does. `--fix` rewrites the deprecated spec and configuration
 forms; run it any time before the next major upgrade.
+
+### `wairon upgrade [--report] [-y, --yes]`
+Moves a project (and every member below it) written by an older wairon major to the
+running one. Every project's `.wai/project.yaml` carries a `waironMajor` stamp; a tree
+with none was written by the oldest major the release can still read. The command plans
+the whole family on a private copy first, prints each project's standing, every rewrite
+per project and spec with the ones that change the approved design marked, what only an
+author can decide, and a short account of what the new major changes, then applies the
+plan all or nothing. A plan that only moves the stamp needs no confirmation; any other
+asks (`--yes` answers it in a script; a non-interactive run without `--yes` writes
+nothing and says so). `--report` prints the plan and writes nothing. A failure leaves
+every file as it was. Each project whose approved design moved is named with the
+`wairon lock` to run at its root; the upgrade never locks. A tree this release cannot
+upgrade (a newer major, or one older than the oldest kept step) is refused, naming the
+release to install.
+
+Every command that acts on a project checks the tree's standing first: a tree an older
+major wrote is offered the upgrade on a terminal (a stamp-only upgrade is applied without
+asking) and otherwise refused naming `wairon upgrade`; `upgrade`, `whatsnew`, `doctor`,
+`init`, help/version and the commands that act on no project are exempt.
+
+### `wairon whatsnew [version]`
+Prints the curated release notes of a version (the running one by default) and the link
+to the full changelog. On a terminal, the first command run after an update prints the
+notes since the version last seen on the machine (recorded in `~/.wairon/config.json`),
+newest first, once; it stays silent under `--silent`, `CI` and any non-interactive run.
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
@@ -1398,8 +1409,8 @@ root to see one.
 `::` (`::shared::money`), `super::` (`super::sibling`), a member path
 (`billing::invoice::invoice_portal`) and an L1 subsystem carrying
 `projectPath` (`DEPRECATED_MOUNT_FORM`), and a member's long-form `path` key
-(`{ path: services/x }`; the one location key is `source`). `wairon doctor
---fix` rewrites them to `members`, the one location key and `alias::name`.
+(`{ path: services/x }`; the one location key is `source`). `wairon upgrade`
+rewrites them to `members`, the one location key and `alias::name`.
 
 ---
 
@@ -1534,7 +1545,6 @@ Every project lives in an **organization unit**, and access is a grid of
 project on a new instance:
 
 ```sh
-wairon host doctor --fix                                          # once per data dir: seed the instance identity, apply migrations
 wairon host unit create --slug acme                               # a root unit (business_entity)
 wairon host project create --id shop --unit acme
 wairon host permission set --user alice --capability project:read  --project shop
@@ -1592,7 +1602,6 @@ decided is always the signed-in person, never a field of the body. The admin API
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
 | `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
-| `wairon host doctor [--fix]` | Inspect the data dir and, with `--fix`, migrate it: roll back a transaction a crash left unfinished there, apply the permission-model migration, migrate every hosted project's spec tree onto the reachability model (each rewritten project is audited as `migration.reachability` and owes one re-lock by its approvers; the server never does this on its own when it binds a project, because the rewrite moves the approved design and a read-only request must not write), then register every hosted family's members as records of their own (no grant written — access is inherited through the parent chain — and every member-qualified key entry rewritten to a record id), all or nothing, audited |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 3) against the hosted project |

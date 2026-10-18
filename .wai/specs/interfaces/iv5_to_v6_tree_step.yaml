@@ -1,0 +1,48 @@
+id: iv5_to_v6_tree_step
+name: v5 to v6 Tree Step Contract
+description: >-
+  One step of the chain: v5 forms to v6 forms, for one project at a time, planned and written onto a
+  rehearsal root the orchestrator binds.
+component: v5_to_v6_tree_step
+methods:
+  - name: familyRoots
+    description: >-
+      The project roots of the family under a root as v5 declared it — its own members and its
+      legacy L1 mounts, read with the step's own reader — the top first.
+    signature: 'familyRoots(root: string): list<string>'
+    returns: list<string>
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: plan
+    description: >-
+      What moving the project at the bound root from v5 to v6 rewrites, and what it leaves for an
+      author, without writing anything.
+    signature: 'plan(root: string): StepPlan'
+    returns: StepPlan
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: write
+    description: >-
+      Write a step plan onto the bound root (a rehearsal copy, never a live tree): each rewrite the
+      plan names, in plan order.
+    signature: 'write(plan: StepPlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: StepPlan
+    effect: write
+  - name: whatChanged
+    description: >-
+      The short, user-facing account of what moving to v6 changes for a project: a few lines, most
+      important first.
+    signature: 'whatChanged(): list<string>'
+    returns: list<string>
+    params: []
+    effect: none
+status: draft
+createdAt: '2026-10-18T13:06:29.720Z'
+updatedAt: '2026-10-18T13:06:32.235Z'

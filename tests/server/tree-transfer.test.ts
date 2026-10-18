@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';

@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // What a tool answers WITH, as data rather than as a sentence.
@@ -72,7 +73,7 @@ describe('the tools answer with data, and still with the same sentence', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-structured-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: structured-results',
       'targets:',
       '  - type: claude',

@@ -12,6 +12,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { createScopedServer } from '../../src/server/adapters/mcp.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import * as yaml from 'js-yaml';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Dynamic agent briefs over MCP:
@@ -32,8 +34,8 @@ function createTempProject() {
 
   const waiDir = path.join(tempDir, '.wai');
   fs.mkdirSync(waiDir);
-  fs.writeFileSync(path.join(waiDir, 'project.yaml'), JSON.stringify({
-    schemaVersion: '1.0.0',
+  fs.writeFileSync(path.join(waiDir, 'project.yaml'), yaml.dump({
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR,
     name: 'brief-mcp-project',
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],

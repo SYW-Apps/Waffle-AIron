@@ -9,6 +9,8 @@ import { createMcpServer } from '../../src/mcp/server.js';
 import { createScopedServer } from '../../src/server/adapters/mcp.js';
 import { resolveVariantGuidance, composeVariantGuidance, type VariantDef } from '../../src/core/variants.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import * as yaml from 'js-yaml';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // FR 7.4 — skills as MCP PROMPTS, and FR 7.5 — variant guidance over MCP.
@@ -58,8 +60,8 @@ function fixtureProject(componentIds: string[] = ['flow'], variant?: string): st
     fs.mkdirSync(path.join(specs, d), { recursive: true });
   }
   const stamp = "createdAt: '2026-07-03T10:00:00Z'\nupdatedAt: '2026-07-03T10:00:00Z'";
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
-    schemaVersion: '1.0.0', name: 'p', projectType: 'backend',
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'p', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
     extensions: { useGlobalPacks: false, packs: [] },
     createdAt: '2026-07-03T10:00:00Z', updatedAt: '2026-07-03T10:00:00Z',

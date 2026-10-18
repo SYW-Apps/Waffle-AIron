@@ -20,7 +20,6 @@ import {
   loadTypeSpecs,
   readLockState,
   readLockRecord,
-  reexpress,
   loadProjectConfig,
   projectFamily,
   type LockRecord,
@@ -273,7 +272,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
             : '');
       // A format-2 record that still holds passes, with the one-time carry.
       const carry = record!.specsReading !== 'design'
-        ? ' This approval predates lock format 3 and still holds in its original reading; `wairon doctor --fix` '
+        ? ' This approval predates lock format 3 and still holds in its original reading; `wairon upgrade` '
           + 're-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it.'
         : '';
       return {
@@ -663,7 +662,7 @@ function upgradedCheck(record: LockRecord): ApprovalCheck {
       approved: false,
       message: `The approval on record (${approvalStamp(record)}, taken by wairon `
         + `${record.validatorVersion}) no longer matches, but ${GATE_MOVED}, and commit the updated .wai/lock.json.`
-        + (record.format === 2 ? ' (`wairon doctor --fix` first carries this format-2 record into the design reading, so code linkage never drifts it again.)' : ''),
+        + (record.format === 2 ? ' (`wairon upgrade` first carries this format-2 record into the design reading, so code linkage never drifts it again.)' : ''),
     };
   }
   if (record.format === 2) {
@@ -1359,29 +1358,6 @@ function memberProjectOf(scope: string): ProjectApproval | null {
   if (at <= 0) return null;
   const alias = scope.slice(0, at);
   return familyApprovals(1).find((a) => a.parent === '' && a.as !== 'part' && (a.alias ?? a.key) === alias) ?? null;
-}
-
-/**
- * cli_lock_adapter.reexpressApproval — carry a format-2 lock record into the
- * design reading without a review, when that is provable: compute the gate
- * identity (which carries the record's own identity recomputed as asRecorded),
- * ask for the carried record, and write it when there is one. The approval
- * stays the human's (lockedAt, lockedBy unchanged); the record gains
- * `reexpressed`. Writes this project's .wai/lock.json only. Null when there was
- * nothing to carry or nothing proves the design unchanged — the caller then
- * points at one `wairon lock`.
- */
-export function reexpressLock(): LockRecord | null {
-  // Step 1: the gate identity as it stands, with asRecorded for a format-2 record.
-  const gate = computeGateStateId();
-  // Step 2: the carried record, null unless the record's own identity still holds.
-  const carried = reexpress(gate);
-  // Step 3: nothing to write.
-  if (!carried) return null;
-  // Step 4: the only file this writes.
-  writeLockRecord(carried);
-  // Step 5: the written record.
-  return carried;
 }
 
 /** Each direct member's alias → a project member's {as: project, project, subject, state} or a part's {as: part, contentDigest, commit, state} as it stands now. */

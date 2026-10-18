@@ -500,7 +500,7 @@ describe("externalize/internalize keep the moved subtree's outgoing references",
     // cannot be named from here (wairon never writes `super::`), so nothing moves.
     setProjectRoot(parDir);
     invalidateSpecCache();
-    expect(() => externalizeSubsystem('billing', 'packages/billing', 'project')).toThrow(/climb.*above this project.*doctor --fix/);
+    expect(() => externalizeSubsystem('billing', 'packages/billing', 'project')).toThrow(/climb.*above this project.*wairon upgrade/);
     expect(fs.existsSync(path.join(parDir, 'packages', 'billing'))).toBe(false);
     expect(stored(parDir, 'billing/billing_adapter/.index.yaml').dependsOn).toEqual(['super::top_portal']);
   });

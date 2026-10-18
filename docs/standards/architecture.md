@@ -61,7 +61,7 @@ The labels L0–L5 walk down containment first, then refinement:
 - `.implementation.yaml` (L4+L5) — `sourcePath`, the **concurrency variant**, and the **per-method narrative** (L5 steps).
 
 Different agents own different refinement files: the **architect** owns
-`.index.yaml` + `.interface.yaml`; the **implementer** owns `.implementation.yaml`. (Legacy undotted names — `system.yaml`, `subsystem.yaml`, `component.yaml`, `interface.yaml`, `implementation.yaml` — still load; `wairon doctor --fix` migrates them.)
+`.index.yaml` + `.interface.yaml`; the **implementer** owns `.implementation.yaml`. (Legacy undotted names — `system.yaml`, `subsystem.yaml`, `component.yaml`, `interface.yaml`, `implementation.yaml` — still load; `wairon upgrade` migrates them.)
 
 ---
 
@@ -625,7 +625,7 @@ stereotype's shape skip it, so it reports once.
 
 | Retired | Becomes | Migration |
 |---|---|---|
-| `Specialist` | an Orchestrator with the `dependencyClass` its dependencies give it | `wairon doctor --fix` retypes it with that class, and rebases each Specialist-based variant onto Orchestrator |
+| `Specialist` | an Orchestrator with the `dependencyClass` its dependencies give it | `wairon upgrade` retypes it with that class, and rebases each Specialist-based variant onto Orchestrator |
 | `Gateway` | the Portal it owned, with the `gateway` variant | by hand: (1) the owned Portal becomes the front door, with `variant: gateway`; (2) the Gateway's other members become that Portal's dependencies; (3) its consumers depend on the Portal; (4) delete the Gateway spec — `sdd_rename_component` can then give the Portal the Gateway's id |
 
 **Router vs Portal vs Facade:** a **Router** selects a destination from *dynamic

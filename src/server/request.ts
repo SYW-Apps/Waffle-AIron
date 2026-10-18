@@ -916,7 +916,7 @@ function relocationResult(verb: 'detach' | 'adopt', report: MemberDetachment | M
   };
   const text = JSON.stringify(view, null, 2);
   if (plan.refusals.length > 0) return { content: [{ type: 'text', text: `the hosted ${verb} is refused; nothing was written.\n${text}` }], isError: true };
-  if (apply && !report.applied) return { content: [{ type: 'text', text: `the hosted ${verb} failed and ${report.outcome?.restored ? 'everything was restored exactly as before' : 'some files could not be restored: an operator must run `wairon host doctor --fix`'}.\n${text}` }], isError: true };
+  if (apply && !report.applied) return { content: [{ type: 'text', text: `the hosted ${verb} failed and ${report.outcome?.restored ? 'everything was restored exactly as before' : 'some files could not be restored: an operator must restart the server so it rolls the unfinished migration back'}.\n${text}` }], isError: true };
   return { content: [{ type: 'text', text }] };
 }
 

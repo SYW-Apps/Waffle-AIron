@@ -1,0 +1,50 @@
+id: iupgrade_core_adapter
+name: Upgrade Core Adapter Contract
+description: >-
+  The sdd_core rewrites the v5 to v6 step reaches until their bodies move into it, each bound to the
+  root the caller bound. Every method forwards.
+component: upgrade_core_adapter
+methods:
+  - name: retireSpecialists
+    description: >-
+      Retype each Specialist as an Orchestrator and rebase its variants (with apply false, the plan
+      only).
+    signatureFrom: spec_maintenance_portal.retireSpecialists
+  - name: migrateReachability
+    description: Move the tree onto the reachability model.
+    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
+    returns: ReachabilityMigrationPlan
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
+  - name: findLegacySpecFiles
+    description: The spec files still under their pre-dotted names.
+    signatureFrom: spec_maintenance_portal.findLegacySpecFiles
+  - name: backfillChainedSubprojectConfigs
+    description: Write the project.yaml a chained subproject lacks.
+    signatureFrom: spec_maintenance_portal.backfillChainedSubprojectConfigs
+  - name: reexpressApproval
+    description: >-
+      Re-express a lock record of an older format in the current reading, keeping who approved it
+      and when.
+    signature: 'reexpressApproval(gate: StateId): LockRecord?'
+    returns: LockRecord?
+    params:
+      - name: gate
+        type: StateId
+        description: >-
+          The gate identity as it stands now, carrying asRecorded when the record on disk is a
+          format-2 one
+  - name: computeGateStateId
+    description: The gate identity the bound tree is judged under now.
+    signatureFrom: validator_portal.computeGateStateId
+  - name: writeLockRecord
+    description: Write a re-expressed lock record back.
+    signatureFrom: approval_portal.writeLockRecord
+  - name: findChainingSubprojectsMissingConfig
+    description: The chained subprojects under a root that have specs but no project.yaml.
+    signatureFrom: spec_maintenance_portal.findChainingSubprojectsMissingConfig
+status: draft
+createdAt: '2026-10-18T13:06:25.595Z'
+updatedAt: '2026-10-18T14:13:41.433Z'

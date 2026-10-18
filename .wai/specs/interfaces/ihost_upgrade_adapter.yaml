@@ -1,0 +1,17 @@
+id: ihost_upgrade_adapter
+name: Host Upgrade Client Adapter Contract
+description: The upgrade verbs the hosted start uses, each forwarding to upgrade_portal.
+component: host_upgrade_adapter
+methods:
+  - name: standing
+    description: Where a hosted tree stands.
+    signatureFrom: upgrade_portal.standing
+  - name: plan
+    description: The plan that brings it to the running major.
+    signatureFrom: upgrade_portal.plan
+  - name: apply
+    description: Apply the plan all or nothing.
+    signatureFrom: upgrade_portal.apply
+status: draft
+createdAt: '2026-10-18T14:28:06.289Z'
+updatedAt: '2026-10-18T14:28:09.933Z'

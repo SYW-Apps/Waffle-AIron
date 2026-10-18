@@ -1,0 +1,29 @@
+id: iinstance_upgrade
+name: Data Dir Upgrade Contract
+description: The hosting data directory brought to the running major at start.
+component: instance_upgrade
+methods:
+  - name: run
+    description: >-
+      Bring the data directory and every hosted tree to the running major, or refuse to start,
+      naming why and, once one was taken, the backup.
+    signature: 'run(): InstanceUpgradeReport'
+    returns: InstanceUpgradeReport
+    params: []
+    effect: write
+  - name: upgradeTrees
+    description: >-
+      Bring every hosted project tree an older major wrote to the running major, each family through
+      its top, each all or nothing; a refused or failed one is answered with why and the pass goes
+      on to the next.
+    signature: 'upgradeTrees(): list<HostedTreeUpgrade>'
+    returns: list<HostedTreeUpgrade>
+    params: []
+    effect: write
+    previousNames:
+      - ihosted_spec_upgrade.upgradeTrees
+previousIds:
+  - idata_dir_upgrade
+status: draft
+createdAt: '2026-10-18T14:29:24.116Z'
+updatedAt: '2026-10-18T14:31:30.079Z'

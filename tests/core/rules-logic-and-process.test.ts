@@ -426,7 +426,7 @@ describe('logic-declaration: a dependencyClass is an Orchestrator property', () 
 });
 
 describe('retired-stereotypes: STEREOTYPE_RETIRED', () => {
-  it('a Specialist is told it is an Orchestrator, retyped by wairon doctor --fix', () => {
+  it('a Specialist is told it is an Orchestrator, retyped by wairon upgrade', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('interaction-specialist', 'pharmacy', 'Specialist');
@@ -435,7 +435,7 @@ describe('retired-stereotypes: STEREOTYPE_RETIRED', () => {
     expect(found[0].severity).toBe('error');
     expect(found[0].message).toContain('typed Specialist');
     expect(found[0].message).toContain('an Orchestrator with the dependencyClass');
-    expect(found[0].message).toContain('wairon doctor --fix');
+    expect(found[0].message).toContain('wairon upgrade');
   });
 
   it('a Gateway is given its manual migration to a Portal with the gateway variant', () => {

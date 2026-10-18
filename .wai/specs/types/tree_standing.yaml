@@ -1,0 +1,40 @@
+kind: value-object
+id: tree_standing
+name: TreeStanding
+description: >-
+  One project tree's standing against the running major, read from its stamp alone (nothing is
+  planned to answer it).
+subsystem: sdd_upgrade
+fields:
+  - name: root
+    type: string
+    description: The project root, absolute.
+    optional: false
+  - name: writtenMajor
+    type: int
+    description: >-
+      The major the tree's stamp names; for an unstamped tree, the oldest major the kept steps start
+      from.
+    optional: false
+  - name: stamped
+    type: bool
+    description: Whether the tree carries a stamp; an unstamped tree is read as the oldest major in the window.
+    optional: false
+  - name: runningMajor
+    type: int
+    description: The major of the running wairon.
+    optional: false
+  - name: state
+    type: TreeStandingState
+    description: current, older, newer or out_of_window.
+    optional: false
+  - name: advice
+    type: string
+    description: >-
+      For older: the command that upgrades it; for newer and out_of_window: the release to install,
+      in one sentence.
+    optional: true
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:03:58.068Z'
+updatedAt: '2026-10-18T13:03:59.063Z'

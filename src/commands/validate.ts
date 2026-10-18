@@ -300,7 +300,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // --- Legacy spec filenames check ---
   const legacySpecs = findLegacySpecFiles();
   if (legacySpecs.length > 0) {
-    logger.warn(`Warning: ${legacySpecs.length} legacy spec filename(s) detected (e.g., component.yaml). These are deprecated. Please run \`wairon doctor --fix\` to migrate them to the new unified .index.yaml schema.`);
+    logger.warn(`Warning: ${legacySpecs.length} legacy spec filename(s) detected (e.g., component.yaml). These are deprecated. Please run \`wairon upgrade\` to migrate them to the new unified .index.yaml schema.`);
     logger.blank();
   }
 

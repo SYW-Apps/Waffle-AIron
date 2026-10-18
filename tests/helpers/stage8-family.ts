@@ -12,6 +12,7 @@ import {
   SystemSpecSchema,
   TypeSpecSchema,
 } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Stage 8, wave B fixtures: a producer project (ledger) and a consumer (shop)
@@ -78,7 +79,7 @@ export const specs = (dir: string, ...parts: string[]): string => path.join(dir,
 /** A project configuration written as YAML. */
 export function projectYaml(dir: string, fields: Record<string, unknown>): void {
   fs.mkdirSync(path.join(dir, '.wai'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({ schemaVersion: '1.0.0', targets: [], createdAt: STAMP, updatedAt: STAMP, ...fields }));
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({ schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, targets: [], createdAt: STAMP, updatedAt: STAMP, ...fields }));
 }
 
 export function system(dir: string, name: string, publicInterfaces: Record<string, unknown>[] = []): void {

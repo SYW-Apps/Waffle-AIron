@@ -12,10 +12,7 @@ import * as errors from '../../src/server/errors.js';
 import * as identity from '../../src/server/identity.js';
 import * as identityProviderBootstrap from '../../src/server/identity-provider-bootstrap.js';
 import * as landscape from '../../src/server/landscape.js';
-import * as migration from '../../src/server/migration.js';
 import * as http from '../../src/server/http.js';
-import * as members from '../../src/server/members.js';
-import * as specUpgrade from '../../src/server/spec-upgrade.js';
 import { listIdentityProviderRecords } from '../../src/server/policy.js';
 import type { HostConfig } from '../../src/server/types.js';
 import { listSecretKeys, resolveSecret } from '../../src/utils/secrets.js';
@@ -39,10 +36,7 @@ const OWNERS: Record<string, Record<string, unknown>> = {
   identity,
   identityProviderBootstrap,
   landscape,
-  migration,
   http,
-  members,
-  specUpgrade,
 };
 
 const PORTAL_SOURCES: Record<string, string> = {
@@ -84,14 +78,11 @@ const PORTAL_SOURCES: Record<string, string> = {
   mintToken: 'identity',
   seedDefaultProvider: 'identityProviderBootstrap',
   upsertUnit: 'landscape',
-  migratePermissionModel: 'migration',
   startHostServer: 'http',
-  migrateReachability: 'specUpgrade',
 };
 
 /** Names the portal publishes under its own contract name: portal name -> [owner, owner's name]. */
 const RENAMED: Record<string, [string, string]> = {
-  upgradeMemberRecords: ['members', 'upgradeMembers'],
 };
 
 

@@ -28,6 +28,8 @@ export interface UserConfig {
    * via npm, the bin entries in package.json are always registered.
    */
   disabledAliases?: string[];
+  /** The wairon version whose release notes were last shown on this machine. */
+  lastSeenVersion?: string;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.wairon');
@@ -72,5 +74,18 @@ export function getDisabledAliases(): string[] {
 export function setDisabledAliases(names: string[]): void {
   const config = loadUserConfig();
   config.disabledAliases = names;
+  saveUserConfig(config);
+}
+
+/** The version whose release notes were last shown here, or null when none was. */
+export function lastSeenVersion(): string | null {
+  const seen = loadUserConfig().lastSeenVersion;
+  return typeof seen === 'string' && seen.length > 0 ? seen : null;
+}
+
+/** Record the version whose release notes were just shown, leaving every other setting untouched. */
+export function setLastSeenVersion(version: string): void {
+  const config = loadUserConfig();
+  config.lastSeenVersion = version;
   saveUserConfig(config);
 }

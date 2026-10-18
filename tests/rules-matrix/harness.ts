@@ -24,6 +24,7 @@ import { validateProject } from '../../src/core/validation.js';
 import type { ValidationIssue, ValidationResult } from '../../src/core/validation.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import type { RulesConfig } from '../../src/models/project.js';
 
 // ---------------------------------------------------------------------------
@@ -312,6 +313,7 @@ export function materializeFixtureProject(root: string, tree: FixtureTree): void
   const mergedRules = { ...BASE_FIXTURE_RULES, ...(tree.rules ?? {}) };
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
     schemaVersion: '1.0.0',
+    waironMajor: WAIRON_MAJOR,
     name: 'rule-matrix-fixture',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: mergedRules,

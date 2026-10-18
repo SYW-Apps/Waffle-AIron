@@ -343,25 +343,19 @@ methods:
         type: string
   - name: runDoctor
     description: >-
-      `wairon doctor`: a health check of the project (initialization and configuration, unfinished
-      family-migration transactions, spec conformance by its owner's gate, the chaining migration
-      still pending, generated guides and skills, the lock, MCP registration). With --fix it first
-      resolves every unfinished family-migration transaction under the root — rolling back each one
-      whose coordinator never committed, cleaning up each one that did — then applies the repairs it
-      can — regenerating stale guides, context and skills, registering the MCP server, retiring
-      Specialists into Orchestrators, migrating onto the reachability model — and then the chaining
-      migration, which it prints and applies only after confirmation (--yes answers it for a
-      non-interactive run; without either nothing of it is written). A repair that would write
-      OUTSIDE the project root — a machine-wide MCP configuration such as Antigravity's global
-      mcp_config.json, the legacy global plugin — is listed in its own plan with the file and the
-      old and new value, and needs its own confirmation: --yes covers it only together with
-      --global, a terminal asks, and a run with neither skips it and says so; a replaced file is
-      kept beside itself as <file>.wairon-backup-<timestamp>. With --report chaining it prints the
-      chaining plan per project; with --report composed-validation it prints what stage 4 changed in
-      each project's verdict (today's gate against the totals its lock recorded, and every new
-      finding with its reason); with --report reachability it prints the bound project's
-      reachability migration plan, each rewrite by its retired form and what it will not fix — each
-      report changes nothing and never combines with --fix.
+      `wairon doctor`: a health check of the project (initialization and configuration, the major
+      the tree was written by, unfinished family-migration transactions, spec conformance by its
+      owner's gate, generated guides and skills, the lock, MCP registration). With --fix it first
+      resolves every unfinished family-migration transaction under the root, then — on a tree the
+      running major wrote — applies the repairs it can: regenerating stale guides, context and
+      skills, repairing foreign narrative-step fields, stored signatures and type spellings, and
+      registering the MCP server, for the project and each member below it. A tree another major
+      wrote is not repaired: `wairon upgrade` moves it. A repair that would write OUTSIDE the
+      project root — a machine-wide MCP configuration such as Antigravity's global mcp_config.json,
+      the legacy global plugin — is listed in its own plan and written only once confirmed (--yes
+      with --global for a non-interactive run), each replaced file backed up beside itself. --report
+      composed-validation explains what composed validation changed in each project's verdict and
+      writes nothing.
     signature: 'runDoctor(options?: DoctorOptions): async void'
     returns: async void
     params:
@@ -580,14 +574,6 @@ methods:
     signature: >-
       runHostUnit(action: string, options: { slug?: string; name?: string; kind?: string; parent?:
       string; dataDir?: string }): Promise<void>
-    returns: async void
-  - name: runHostDoctor
-    description: >-
-      Inspect the hosted data dir for pre-permission-model shapes and for hosted families whose
-      members are not yet records, and with --fix migrate both (`wairon host doctor`): the
-      permission-model migration first, then the stage-7 member upgrade (records registered,
-      member-qualified key entries rewritten, nobody's reach changed), all or nothing.
-    signature: 'runHostDoctor(options: { fix?: boolean; dataDir?: string }): Promise<void>'
     returns: async void
   - name: runExternals
     description: >-
@@ -956,6 +942,66 @@ methods:
       - name: options
         type: MethodRenameOptions
         description: '--dry-run, --search <dir...> and --no-pin-symbol'
+  - name: runUpgrade
+    description: >-
+      `wairon upgrade [--report] [--yes]`: bring the bound project's family to the running major.
+      Prints the plan — each project's standing, every rewrite per project and spec with the design
+      changes marked, what only an author can decide, and the short account of what the new major
+      changes — then, confirmed (--yes for a non-interactive run), applies it all or nothing and
+      names the projects that owe `wairon lock`. A plan that only stamps (a tree already in the
+      running major's forms) is applied without asking. --report prints the plan and writes nothing.
+      It never locks.
+    signature: 'runUpgrade(options: UpgradeCommandOptions): async void'
+    returns: async void
+    params:
+      - name: options
+        type: UpgradeCommandOptions
+        description: The parsed flags
+  - name: runWhatsNew
+    description: >-
+      `wairon whatsnew [version]`: print the curated release notes of a version — the running one
+      when none is named — with the link to the full changelog.
+    signature: 'runWhatsNew(version?: string): void'
+    returns: void
+    params:
+      - name: version
+        type: string
+        description: The version whose notes to print; the running one when omitted
+        optional: true
+  - name: guardStanding
+    description: >-
+      Before a command that acts on a project runs: refuse it on a tree a newer major or a major
+      outside the window wrote, naming the release to install; on an older tree, apply a stamp-only
+      plan silently, and otherwise ask an interactive terminal to upgrade now and refuse a
+      non-interactive run (CI, a pipe), naming `wairon upgrade`. upgrade, whatsnew, doctor, init and
+      the commands that act on no project are never guarded, and neither is a bound project whose
+      project.yaml is missing: the command reports that itself.
+    signature: 'guardStanding(commandPath: string): async void'
+    returns: async void
+    params:
+      - name: commandPath
+        type: string
+        description: The command as typed, its subcommands space-separated
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The commander program's preAction hook in src/cli/index.ts (cli_portal), after
+        announceBinding and before the command's action — a hook the framework calls, not an action
+        endpoint.
+  - name: announceRelease
+    description: >-
+      Once per new version on this machine: on an interactive terminal, print the curated notes of
+      every release since the version last seen (the running one's alone when none is recorded),
+      then record the running version. Silent under --silent, on a non-interactive run and when the
+      version is the one last seen.
+    signature: 'announceRelease(): void'
+    returns: void
+    params: []
+    invokedBy:
+      kind: runtime
+      caller: >-
+        The commander program's preAction hook in src/cli/index.ts (cli_portal), before every
+        command's action — a hook the framework calls, not an action endpoint.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T00:36:11.083Z'
+updatedAt: '2026-10-18T18:05:43.702Z'

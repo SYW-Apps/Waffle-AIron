@@ -9,6 +9,7 @@
 
 import * as path from 'path';
 import { isSilent, logger } from '../utils/logger.js';
+import { actsOnNoProject } from '../commands/upgrade.js';
 import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../utils/errors.js';
 // The runner imports each command adapter module DIRECTLY (not through the
 // commands barrel) so the physical import graph mirrors the declared
@@ -241,14 +242,11 @@ export async function statusCommand(options: { subsystem?: string; recursive?: b
 // repository root unless an ancestor declares the crossing as a member.
 // ---------------------------------------------------------------------------
 
-/** Commands (first word, or the whole path) that act on no project, or announce their own binding. */
-const ANNOUNCE_SILENT = new Set(['init', 'host', 'remote', 'login', 'logout', 'serve', 'dev', 'update', 'aliases', 'help', 'mcp serve']);
-
 /** cli_runner.announceBinding — print `project <id> at <root>` to stderr before a command that acts on a project. */
 export function announceBinding(commandPath: string): void {
   // Step 1: a command that acts on no project says nothing.
   const first = commandPath.split(' ')[0];
-  if (ANNOUNCE_SILENT.has(first) || ANNOUNCE_SILENT.has(commandPath)) return;
+  if (actsOnNoProject(commandPath)) return;
   // Steps 3-5: the bound root; none bound, the command reports it itself.
   const root = getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root;
   if (!root) return;

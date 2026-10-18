@@ -27,7 +27,6 @@ export {
   listDirectChainedSubprojects,
   defaultPackSelections,
   readLockState,
-  retireSpecialists,
   // `wairon type rename-field` (spec_maintenance_portal renameField).
   renameField,
   // `wairon method rename-param` (spec_maintenance_portal renameParam).
@@ -37,7 +36,6 @@ export {
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,
-  migrateReachability,
   renderDiagram,
   generateAll,
   resolveExpectedOutputPaths,
@@ -60,11 +58,8 @@ export {
   staleDerivedDocs,
   getStatusReport,
   approvalVerdict,
-  findLegacySpecFiles,
   // `wairon doctor`: the bound tree's write lock as its file stands.
   inspectLock,
-  findChainingSubprojectsMissingConfig,
-  backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
   // The upgrade report's reads (the chaining migration and its writes moved to
   // sdd_migrations in stage 6, behind migration_core_adapter).

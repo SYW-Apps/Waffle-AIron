@@ -16,6 +16,7 @@ import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.
 import { apply } from '../helpers/chaining-transaction.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { runLock } from '../../src/commands/lock.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Stage 2c — the chaining migration, run against a REAL family on disk: a
@@ -59,7 +60,7 @@ function write(root: string, rel: string, text: string): void {
 
 /** A project.yaml with no id (a defaulted identity) unless one is given; no targets, so doctor --fix touches nothing else. */
 function projectYaml(name: string, id?: string): string {
-  return dump({ ...(id ? { id } : {}), name, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false } });
+  return dump({ waironMajor: WAIRON_MAJOR, ...(id ? { id } : {}), name, targets: [], rules: {}, extensions: { packs: [], useGlobalPacks: false } });
 }
 
 interface Family { root: string; billing: string; dispatch: string }
@@ -194,26 +195,19 @@ describe('stage 2c — the chaining migration', () => {
     expect(blocked(fromRoot)).toBe(false);
   });
 
-  it('property: migration-is-plan-first — plan, --report and an unconfirmed --fix write nothing of it', async () => {
+  it('property: migration-is-plan-first — a plan writes nothing, and doctor no longer carries the migration', async () => {
     const f = family();
     const before = chainingState(f.root);
     at(f.dispatch, () => plan());
     expect(chainingState(f.root)).toEqual(before);
-    at(f.dispatch, () => undefined);
-    await runDoctor({ report: 'chaining' });
-    expect(vi.mocked(console.log).mock.calls.some((c) => String(c[0]).includes('Nothing was written.'))).toBe(true);
+    // The migration moved to `wairon upgrade`: doctor's one report section is composed-validation,
+    // so the `chaining` section is refused, alone or with --fix, and writes nothing.
+    await expect(runDoctor({ report: 'chaining' })).rejects.toThrow(DoctorOptionsError);
+    await expect(runDoctor({ report: 'composed-validation', fix: true })).rejects.toThrow(DoctorOptionsError);
     expect(chainingState(f.root)).toEqual(before);
-    // --report never combines with --fix, and chaining is its one section.
-    await expect(runDoctor({ report: 'chaining', fix: true })).rejects.toThrow(DoctorOptionsError);
-    await expect(runDoctor({ report: 'ids' })).rejects.toThrow(DoctorOptionsError);
-    expect(chainingState(f.root)).toEqual(before);
-    // No terminal to confirm and no --yes: every other fix runs, the migration does not.
-    const unconfirmed = await doctorCli(f.root, '--fix');
-    expect(unconfirmed.stdout).toContain('Chaining migration skipped: no terminal to confirm it');
-    expect(chainingState(f.root)).toEqual(before);
-    const refused = await doctorCli(f.root, '--report', 'chaining', '--fix');
-    expect(refused.code).not.toBe(0);
-    expect(refused.stdout + refused.stderr).toMatch(/never combines with --fix/);
+    // --fix on a tree this release did not stamp is skipped, and the chaining migration is not among its repairs.
+    const unconfirmed = await doctorCli(f.root, '--fix', '--yes');
+    expect(unconfirmed.stdout).not.toContain('chaining migration');
     expect(chainingState(f.root)).toEqual(before);
   }, 240_000);
 
@@ -362,20 +356,4 @@ describe('stage 2c — the chaining migration', () => {
     expect(fs.existsSync(path.join(f.billing, '.wai', 'externals', 'fleetworks.yaml'))).toBe(true);
     expect(isEmpty(at(f.root, () => plan()))).toBe(true);
   });
-
-  it('doctor: a plain run counts what is pending; --fix --yes applies it, and the run after is clean', async () => {
-    const f = family();
-    const plain = await doctorCli(f.dispatch);
-    expect(plain.stdout).toMatch(/Chaining: 14 pending \(3 id\(s\), 0 L0\(s\) to create, 2 L0 entries, 2 external\(s\), 0 import\(s\), 2 pin\(s\), 2 mount\(s\) to move, 3 rewrite\(s\), 0 family pin\(s\) to delete, 0 dropped key\(s\), 2 new dependencies, 0 finding\(s\)\)/);
-    const fixed = await doctorCli(f.dispatch, '--fix', '--yes');
-    expect(fixed.stdout).toContain('Applied the chaining migration: 13 file(s) written.');
-    // Stage 6: the re-lock list names each changed owner that CARRIES a lock —
-    // no project of this family was ever locked, so there is no approval to stale.
-    expect(fixed.stdout).not.toContain('Re-lock each with `wairon lock`');
-    // The transaction left nothing behind in any owner.
-    for (const dir of [f.root, f.billing, f.dispatch]) expect(fs.existsSync(path.join(dir, '.wai', 'transactions'))).toBe(false);
-    // The report that follows the fixes plans again, and finds nothing left.
-    expect(fixed.stdout).not.toMatch(/Chaining: \d+ pending/);
-    expect(isEmpty(at(f.root, () => plan()))).toBe(true);
-  }, 240_000);
 });

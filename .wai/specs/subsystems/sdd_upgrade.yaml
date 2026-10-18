@@ -1,0 +1,35 @@
+id: sdd_upgrade
+name: SDD Major Upgrades
+description: >-
+  Moves a project tree from the wairon major that wrote it to the running major, one major at a
+  time, and says what changed. The rest of the codebase reads only the running major's forms: every
+  older form is handled here and nowhere else. Each project stamps the major that wrote it
+  (`waironMajor` in its project.yaml); an unstamped tree is read as the oldest major still in the
+  window. A chain of per-major steps (v5 to v6 first) runs in order — a tree two majors behind runs
+  both steps — and each step is self-contained: it reads the old forms with its own readers and
+  never with the current core's types, so a later change to the core cannot break an old step. A
+  tree newer than the running wairon, or older than the window of steps kept, is refused with the
+  release to install. A plan comes first and the apply writes every project of the family or none,
+  through sdd_migrations' staged transaction; the upgrade never locks — it names the projects whose
+  design moved and owe a re-lock. It also serves the curated release notes the CLI shows after an
+  upgrade. It is its own subsystem so that the old forms live in one place behind one door: the CLI
+  (`wairon upgrade`, the startup check), the MCP server (the refusal on an older tree) and the
+  hosted server (each hosted project at start) call it, and it calls sdd_core for the configuration
+  stamp and the tree, and sdd_migrations for the transaction. A hosted data directory is not a tree:
+  sdd_host migrates its own data with the same stamp-and-chain model.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - details: >-
+      In-process major upgrades of a project tree: where a tree stands against the running major,
+      the plan that brings it up to date, the upgrade applied all or nothing, and the curated
+      release notes between two versions.
+    component: upgrade_portal
+    interface: iupgrade_portal
+    consumers:
+      - sdd_cli
+      - sdd_mcp
+      - sdd_host
+trustedLinks: []
+status: complete
+createdAt: '2026-10-18T13:01:30.942Z'
+updatedAt: '2026-10-18T14:34:02.679Z'

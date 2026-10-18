@@ -1,0 +1,249 @@
+id: upgrade_orchestrator_impl
+name: Upgrade Orchestrator Implementation
+description: >-
+  src/upgrade/orchestrator.ts. Every step is written onto one rehearsal of the family and the stamps
+  with them, so the commit moves the family to the running major all or nothing. A tree that is
+  already in the running major's forms but was never stamped (made by 6.0.0) plans no rewrite: its
+  upgrade only stamps it.
+contract: iupgrade_orchestrator
+sourcePath: src/upgrade/orchestrator.ts
+methods:
+  - name: standing
+    narrative:
+      - stepNumber: 1
+        description: Read the project's stamp
+        type: call
+        targetComponent: project_stamp_adapter
+        targetMethod: read
+      - stepNumber: 2
+        description: Read the oldest major the kept steps start from
+        type: call
+        targetComponent: upgrade_chain
+        targetMethod: oldestKept
+      - stepNumber: 3
+        description: Read the installed version
+        type: call
+        targetComponent: installed_release_adapter
+        targetMethod: version
+      - stepNumber: 4
+        description: >-
+          The running major is the version's major; the written major is the stamp, or the oldest
+          kept major for an unstamped tree
+        type: local
+      - stepNumber: 5
+        description: Ask the chain for the steps between them
+        type: call
+        targetComponent: upgrade_chain
+        targetMethod: between
+      - stepNumber: 6
+        description: >-
+          Answer the standing, advising `wairon upgrade` for an older tree and the chain's advice
+          otherwise
+        type: return
+        outcome: TreeStanding
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: >-
+          List the family under the root with the oldest kept step's reader, which reads every form
+          a kept major writes
+        type: call
+        targetComponent: v5_to_v6_tree_step
+        targetMethod: familyRoots
+      - stepNumber: 2
+        description: For each project of the family
+        type: loop
+        loopKind: forEach
+        over: the family roots
+        endStep: 3
+      - stepNumber: 3
+        label: stood
+        description: Read where it stands
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: standing
+      - stepNumber: 4
+        description: Is a project newer than the running major, or out of the window?
+        type: branch
+        condition: a standing is newer or out_of_window
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Answer the plan refused, naming the project and the release to install; nothing is
+          rehearsed
+        type: return
+        outcome: refused plan
+      - stepNumber: 6
+        label: any
+        description: Is any project older?
+        type: branch
+        condition: no standing is older
+        onFalseStep: 8
+      - stepNumber: 7
+        description: 'Answer the plan with no steps: the family is current'
+        type: return
+        outcome: empty plan
+      - stepNumber: 8
+        label: rehearse
+        description: 'Rehearse the family: a private copy of every project''s .wai and legacy .wairon folders'
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: rehearse
+      - stepNumber: 9
+        description: Run the steps on the copy; a step's refusal ends the region
+        type: try
+        endStep: 15
+        catches:
+          - error: StepRefused
+            step: 21
+      - stepNumber: 10
+        description: >-
+          For each kept step the oldest project runs, oldest first, and within it each older project
+          that runs it, the top first
+        type: loop
+        loopKind: forEach
+        over: the steps, then the projects running each
+        endStep: 14
+      - stepNumber: 11
+        description: >-
+          Bind the project's rehearsal root; the step run is the one whose from is the project's
+          major (today only 5 to 6 is kept)
+        type: local
+      - stepNumber: 12
+        description: Plan the v5 to v6 step for the project
+        type: call
+        targetComponent: v5_to_v6_tree_step
+        targetMethod: plan
+      - stepNumber: 13
+        description: Write it onto the rehearsal root
+        type: call
+        targetComponent: v5_to_v6_tree_step
+        targetMethod: write
+      - stepNumber: 14
+        label: recorded
+        description: Record the step plan under the project's live root
+        type: local
+      - stepNumber: 15
+        label: written
+        description: Every step is on the copy; restore the caller's binding
+        type: local
+      - stepNumber: 16
+        description: For each older project
+        type: loop
+        loopKind: forEach
+        over: the older projects
+        endStep: 17
+      - stepNumber: 17
+        label: stamped
+        description: >-
+          Stamp its rehearsal copy with the running major, so the commit carries the stamps with the
+          rewrites
+        type: call
+        targetComponent: project_stamp_adapter
+        targetMethod: write
+      - stepNumber: 18
+        description: 'Diff the copy against the live family: the plan''s file changes'
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: diff
+      - stepNumber: 19
+        description: Take the user-facing summary of the step the plan runs
+        type: call
+        targetComponent: v5_to_v6_tree_step
+        targetMethod: whatChanged
+      - stepNumber: 20
+        description: Answer the plan
+        type: return
+        outcome: UpgradePlan
+      - stepNumber: 21
+        label: refused
+        description: Restore the caller's binding and drop the rehearsal
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: drop
+      - stepNumber: 22
+        description: Answer the plan refused, naming the project, the step and why; nothing is written
+        type: return
+        outcome: refused plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Is the plan refused?
+        type: branch
+        condition: the plan carries a refusal
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer not committed, with the refusal as the failure
+        type: return
+        outcome: not committed
+      - stepNumber: 3
+        label: current
+        description: Is there anything to commit?
+        type: branch
+        condition: the plan has no rehearsal
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Answer committed with nothing stamped: the family is current'
+        type: return
+        outcome: committed
+      - stepNumber: 5
+        label: commit
+        description: Commit the changes all or nothing, under the verb upgrade
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: commit
+      - stepNumber: 6
+        description: Did it commit?
+        type: branch
+        condition: the transaction did not commit
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Answer not committed with the transaction's failure; every file is as before
+        type: return
+        outcome: not committed
+      - stepNumber: 8
+        label: report
+        description: >-
+          Name every older project as stamped, and each one whose steps changed its design as owing
+          a re-lock
+        type: local
+      - stepNumber: 9
+        description: Answer the report
+        type: return
+        outcome: TreeUpgradeReport
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Does the plan hold a rehearsal?
+        type: branch
+        condition: the plan has a rehearsal
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Drop it
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: drop
+      - stepNumber: 3
+        label: done
+        description: Dropped
+        type: return
+        outcome: void
+  - name: releaseNotes
+    narrative:
+      - stepNumber: 1
+        description: Read the bundled release notes
+        type: call
+        targetComponent: installed_release_adapter
+        targetMethod: notes
+      - stepNumber: 2
+        description: >-
+          Keep the notes after the lower version up to and including the upper one, newest first;
+          with no lower version, the upper one's alone
+        type: local
+      - stepNumber: 3
+        description: Answer them
+        type: return
+        outcome: list<ReleaseNote>
+status: draft
+createdAt: '2026-10-18T14:14:37.637Z'
+updatedAt: '2026-10-18T14:16:14.612Z'

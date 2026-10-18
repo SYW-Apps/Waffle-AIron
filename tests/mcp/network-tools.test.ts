@@ -6,6 +6,7 @@ import { execFileSync } from 'child_process';
 import * as yaml from 'js-yaml';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The network declaration as a tool, not a hand edit (round-2 trials: the
@@ -35,7 +36,7 @@ describe('sdd_set_network and the Adapter transport inference', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-network-tools-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: network-tools',
       'targets: []',
       `createdAt: '${now}'`,
@@ -93,7 +94,7 @@ describe('wairon network declare | undeclare', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-network-declare-'));
     try {
       fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-      fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), ["schemaVersion: '1.0.0'", 'name: declare-cli', 'targets: []', `createdAt: '${now}'`, `updatedAt: '${now}'`].join('\n'));
+      fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), ["schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`, 'name: declare-cli', 'targets: []', `createdAt: '${now}'`, `updatedAt: '${now}'`].join('\n'));
       const run = (...args: string[]): string => execFileSync(process.execPath, [TSX_CLI, WAIRON_CLI, ...args], { cwd: dir, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
       expect(run('network', 'declare', '--description', 'The shop cluster')).toMatch(/Declared this project's network/);
       expect(networkOf(dir)).toEqual({ description: 'The shop cluster' });

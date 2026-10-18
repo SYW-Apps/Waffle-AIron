@@ -7,20 +7,20 @@ fields:
   - name: fix
     type: bool
     description: >-
-      Apply the repairs before the report: today's fixed steps, then the chaining migration once
-      confirmed.
+      Apply the repairs before the report. A tree another major wrote is not repaired: `wairon
+      upgrade` moves it first.
     optional: true
   - name: report
     type: string
     description: >-
-      Print one section's plan and nothing else, writing nothing. `chaining` is the one section; it
-      never combines with --fix.
+      Print one section's plan and nothing else, writing nothing. `composed-validation` is the one
+      section; it never combines with --fix.
     optional: true
   - name: 'yes'
     type: bool
     description: >-
-      Answer the chaining migration's confirmation for a non-interactive run. It does NOT answer a
-      write outside the project root — that takes --global as well.
+      Answer the confirmation of the writes outside the project root, together with --global, for a
+      non-interactive run.
     optional: true
   - name: global
     type: bool
@@ -33,4 +33,4 @@ fields:
 methods: []
 sourcePath: src/commands/doctor.ts
 createdAt: '2026-09-26T21:12:12.389Z'
-updatedAt: '2026-10-04T10:20:03.557Z'
+updatedAt: '2026-10-18T14:20:37.733Z'

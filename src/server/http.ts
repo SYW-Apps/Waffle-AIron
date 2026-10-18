@@ -19,7 +19,7 @@ import * as policyPortal from './policy-portal.js';
 import * as landscapePortal from './landscape-portal.js';
 import * as operationsPortal from './operations-portal.js';
 import { AdminAuthError, LockValidationError, UnauthenticatedError, ForbiddenError } from './errors.js';
-import { migratePermissionModel } from './migration.js';
+import * as instanceUpgrade from './upgrade.js';
 import type { ApprovalDecision, DisplayRole, HostConfig, HostExposurePolicy } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -664,51 +664,6 @@ export interface HostServerHandle {
 export { bootstrapInstance as init };
 
 /**
- * Warn, at startup, when the data dir still holds pre-permission-model shapes.
- *
- * `wairon host doctor --fix` is operator-invoked and never automatic, so an
- * instance can upgrade and keep serving unmigrated records. The consequences are
- * severe and previously silent: legacy users and API tokens resolve to ZERO
- * permissions, projects placed in no unit are invisible to every unit-scoped
- * grant, and units written before slugs existed took the organizations page down
- * with `undefined.localeCompare` — a minified TypeError that named neither the
- * cause nor the remedy. An operator should not have to reverse-engineer a stack
- * trace to discover a migration is pending.
- *
- * The migration's DRY RUN is reused as the detector rather than re-implementing
- * the checks: it is already the authority on which shapes are stale, and a second
- * implementation would drift from it. Dry-run mode only reports — it writes
- * nothing, so this never mutates data on startup.
- *
- * Diagnostics must never prevent a server from starting, so every failure here is
- * swallowed: a broken check is not a reason to refuse connections.
- */
-export function warnIfDataDirUnmigrated(cfg: HostConfig): void {
-  try {
-    const report = migratePermissionModel(cfg.dataDir, false);
-    if (report.findings.length === 0) return;
-
-    console.error(
-      `[wairon migrate] ${report.findings.length} legacy data shape(s) found in ${cfg.dataDir} — `
-      + 'this instance has NOT been migrated to the permission model. Legacy users and tokens '
-      + 'resolve to zero permissions until you run: wairon host doctor --fix '
-      + '(run it without --fix first for a dry run).',
-    );
-    // Cap the per-finding detail: a large unmigrated instance can report many, and
-    // burying the remedy under hundreds of lines defeats the point of saying it.
-    const shown = report.findings.slice(0, 10);
-    for (const finding of shown) {
-      console.error(`[wairon migrate]   ${finding.area}: ${finding.detail}`);
-    }
-    if (report.findings.length > shown.length) {
-      console.error(`[wairon migrate]   … and ${report.findings.length - shown.length} more (see \`wairon host doctor\`).`);
-    }
-  } catch (err) {
-    console.error(`[wairon migrate] migration check skipped: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-/**
  * Log one line when the exposure policy names an adminApiMode that no longer
  * exists (local_only, private_network, public): it reads as enabled, since each
  * only ever meant "served" and where the admin API listens is adminHost. Reads
@@ -758,26 +713,6 @@ export function noteWebUiPosture(cfg: HostConfig): void {
   }
 }
 
-/**
- * Count the hosted families' members that hold no record yet and, when any do,
- * log one line saying how many await `wairon host doctor --fix` (until then
- * they are reached only through the deprecated member-qualified selectors).
- * Reads only; any failure is swallowed so it never prevents the server from
- * starting.
- */
-export function warnIfMembersPending(cfg: HostConfig): void {
-  try {
-    const count = memberRegistration.pending(cfg.dataDir);
-    if (count === 0) return;
-    console.error(
-      `[wairon members] ${count} member(s) of hosted families hold no project record yet and await `
-      + '`wairon host doctor --fix` (run it without --fix first for the plan).',
-    );
-  } catch (err) {
-    console.error(`[wairon members] member check skipped: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
 /** The literal placeholder shipped in .env.example — never a real credential. */
 export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
@@ -809,13 +744,13 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // identity (and, under devMode, the synthetic local development unit).
   bootstrapInstance(cfg);
 
-  warnIfDataDirUnmigrated(cfg);
   // Step 4: before serving, roll back what a crash left unfinished under the
   // data directory (a crashed member upgrade, a hosted detach or adopt) —
   // audited and logged; a failure never prevents the server from starting.
   memberRegistration.recoverData(cfg, true);
-  // Step 5: members that hold no record yet await `wairon host doctor --fix`.
-  warnIfMembersPending(cfg);
+  // Step 5: bring the data directory and every hosted tree to the running major. Any
+  // throw stops the start; its message names the backup once one was taken.
+  instanceUpgrade.run(cfg);
   // A stored exposure policy still naming a retired adminApiMode reads as enabled.
   warnIfAdminApiModeRetired(cfg);
   // Step 7: say whether the web UI is served and how a person signs in to it.

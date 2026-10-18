@@ -1,0 +1,22 @@
+id: iinstance_backup_adapter
+name: Data Dir Backup Adapter Contract
+description: A whole copy of the data directory.
+component: instance_backup_adapter
+methods:
+  - name: copy
+    description: >-
+      Copy the data directory whole to a sibling folder named for the two majors and the time, and
+      answer its path.
+    signature: 'copy(fromMajor: int, toMajor: int): string'
+    returns: string
+    params:
+      - name: fromMajor
+        type: int
+      - name: toMajor
+        type: int
+    effect: io
+previousIds:
+  - idata_dir_backup_adapter
+status: draft
+createdAt: '2026-10-18T14:27:53.220Z'
+updatedAt: '2026-10-18T14:31:14.092Z'

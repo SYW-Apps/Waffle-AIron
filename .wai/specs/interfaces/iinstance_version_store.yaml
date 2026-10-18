@@ -1,0 +1,27 @@
+id: iinstance_version_store
+name: Data Dir Version Store Contract
+description: The data directory's major.
+component: instance_version_store
+methods:
+  - name: read
+    description: The recorded major, or nothing when none is recorded.
+    signature: 'read(): int?'
+    returns: int?
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: write
+    description: Record the major, replacing the file whole.
+    signature: 'write(major: int): void'
+    returns: void
+    params:
+      - name: major
+        type: int
+        description: The major now written
+    effect: write
+previousIds:
+  - idata_dir_version_store
+status: draft
+createdAt: '2026-10-18T14:27:40.195Z'
+updatedAt: '2026-10-18T14:31:05.734Z'

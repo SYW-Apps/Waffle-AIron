@@ -1,0 +1,191 @@
+id: instance_upgrade_impl
+name: Data Dir Upgrade Implementation
+description: >-
+  src/server/upgrade.ts. The trees are upgraded before the member records are registered, because a
+  v5 tree declares its members only once its legacy mounts have moved into members.
+contract: iinstance_upgrade
+sourcePath: src/server/upgrade.ts
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: Read the major that wrote the data directory
+        type: call
+        targetComponent: instance_version_store
+        targetMethod: read
+      - stepNumber: 2
+        description: >-
+          The running major is this build's; a data directory with no version recorded is read as 5,
+          the oldest major this release upgrades
+        type: local
+      - stepNumber: 3
+        description: Written by a newer major?
+        type: branch
+        condition: the recorded major is above the running one
+        onFalseStep: 5
+      - stepNumber: 4
+        description: 'Refuse to start: a newer wairon wrote this data directory — install it'
+        type: throw
+        error: StartRefused
+      - stepNumber: 5
+        label: window
+        description: Older than the oldest step kept?
+        type: branch
+        condition: the recorded major is below 5
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Refuse to start: install the last release of the next major first, start it once, then
+          this one
+        type: throw
+        error: StartRefused
+      - stepNumber: 7
+        label: older
+        description: Is the data directory older than the running major?
+        type: branch
+        condition: the recorded major is below the running one
+        onFalseStep: 10
+      - stepNumber: 8
+        description: Copy it whole first
+        type: call
+        targetComponent: instance_backup_adapter
+        targetMethod: copy
+      - stepNumber: 9
+        description: Run the permission-model step with apply; a failure stops the start, naming the backup
+        type: call
+        targetComponent: permission_model_migration
+        targetMethod: run
+      - stepNumber: 10
+        label: trees
+        description: >-
+          Bring every hosted tree an older major wrote to the running major — run even on a current
+          data directory, so a tree restored or imported from an older major is upgraded too
+        type: call
+        targetComponent: instance_upgrade
+        targetMethod: upgradeTrees
+      - stepNumber: 11
+        description: Was any tree refused or failed?
+        type: branch
+        condition: a hosted tree was not upgraded
+        onFalseStep: 13
+      - stepNumber: 12
+        description: >-
+          Stop the start, naming each project and why, and the backup when one was taken; each tree
+          already upgraded stays upgraded, its family committed whole
+        type: throw
+        error: StartAborted
+      - stepNumber: 13
+        label: members
+        description: Was the data directory older?
+        type: branch
+        condition: the recorded major is below the running one
+        onFalseStep: 18
+      - stepNumber: 14
+        description: Register the member records the upgraded trees declare, all or nothing
+        type: call
+        targetComponent: member_registration
+        targetMethod: upgrade
+      - stepNumber: 15
+        description: Was it applied?
+        type: branch
+        condition: the member upgrade was blocked or did not commit
+        onFalseStep: 17
+      - stepNumber: 16
+        description: Stop the start, naming why and the backup
+        type: throw
+        error: StartAborted
+      - stepNumber: 17
+        label: stamp
+        description: Record the running major
+        type: call
+        targetComponent: instance_version_store
+        targetMethod: write
+      - stepNumber: 18
+        label: done
+        description: Answer the report
+        type: return
+        outcome: DataDirUpgradeReport
+  - name: upgradeTrees
+    sourcePath: src/server/upgrade.ts
+    narrative:
+      - stepNumber: 1
+        description: Read every hosted project record
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 2
+        description: For every record with a root, family tops before their members, each root once
+        type: loop
+        loopKind: forEach
+        over: the records with a root
+        endStep: 14
+      - stepNumber: 3
+        description: Is it a part retired into its parent?
+        type: call
+        targetComponent: project_repository
+        targetMethod: isRetiredPart
+      - stepNumber: 4
+        description: >-
+          A retired part holds no tree of its own (its parent's upgrade covers its folder), and a
+          root with no project.yaml holds no tree yet: neither is upgraded
+        type: branch
+        condition: the record is a retired part, or its root holds no project.yaml
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Skip it
+        type: jump
+        toStep: 14
+      - stepNumber: 6
+        label: stand
+        description: Read where its tree stands (a member its top already upgraded reads current)
+        type: call
+        targetComponent: host_upgrade_adapter
+        targetMethod: standing
+      - stepNumber: 7
+        description: Is it older?
+        type: branch
+        condition: the tree is older
+        onFalseStep: 14
+      - stepNumber: 8
+        description: Plan its family's upgrade with the record's root bound
+        type: call
+        targetComponent: host_upgrade_adapter
+        targetMethod: plan
+      - stepNumber: 9
+        description: Apply it all or nothing (a refused plan answers its refusal and writes nothing)
+        type: call
+        targetComponent: host_upgrade_adapter
+        targetMethod: apply
+      - stepNumber: 10
+        description: Did it commit?
+        type: branch
+        condition: the upgrade committed
+        onFalseStep: 13
+      - stepNumber: 11
+        description: >-
+          Audit it as migration.upgrade under the operator, with the projects stamped and the
+          projects that owe a re-lock
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 12
+        description: Upgraded
+        type: jump
+        toStep: 14
+      - stepNumber: 13
+        label: failed
+        description: Record the refusal or the failure for the project; every file of its family is as before
+        type: local
+      - stepNumber: 14
+        label: next
+        description: On to the next record
+        type: local
+      - stepNumber: 15
+        description: Answer every tree upgraded or refused
+        type: return
+        outcome: list<HostedTreeUpgrade>
+previousIds:
+  - data_dir_upgrade_impl
+status: draft
+createdAt: '2026-10-18T14:29:29.842Z'
+updatedAt: '2026-10-18T15:47:55.378Z'

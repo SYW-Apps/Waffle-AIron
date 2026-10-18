@@ -62,6 +62,22 @@ methods:
         type: list<string>
         description: The alias names to keep disabled
     effect: write
+  - name: lastSeenVersion
+    description: The version whose release notes this person last saw; nothing when none is recorded.
+    signature: 'lastSeenVersion(): string?'
+    returns: string?
+    params: []
+    guarantees:
+      - idempotent
+  - name: setLastSeenVersion
+    description: Record the version whose release notes were shown, leaving every other setting as it stands.
+    signature: 'setLastSeenVersion(version: string): void'
+    returns: void
+    params:
+      - name: version
+        type: string
+        description: The running version
+    effect: write
 status: complete
 createdAt: '2026-09-22T21:18:02.040Z'
-updatedAt: '2026-10-04T10:19:44.571Z'
+updatedAt: '2026-10-18T14:21:00.057Z'

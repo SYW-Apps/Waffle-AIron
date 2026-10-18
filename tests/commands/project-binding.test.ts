@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import { resolveProjectBinding, setProjectRoot } from '../../src/utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The binding rule (WaiPaths): which project a folder binds to. The walk never
@@ -47,7 +48,7 @@ function tempDir(): string {
 function project(dir: string, members?: Record<string, unknown>): string {
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.wai', 'specs', '.index.yaml'), 'name: x\n');
-  if (members) writeYamlFile(path.join(dir, '.wai', 'project.yaml'), { schemaVersion: '1.0.0', name: path.basename(dir), members });
+  if (members) writeYamlFile(path.join(dir, '.wai', 'project.yaml'), { schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: path.basename(dir), members });
   return dir;
 }
 
@@ -109,7 +110,7 @@ function initializedParent(dir: string): string {
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
   const now = new Date().toISOString();
   writeYamlFile(path.join(dir, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', id: 'parent', name: 'parent', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id: 'parent', name: 'parent', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,
   });
   writeYamlFile(path.join(dir, '.wai', 'specs', '.index.yaml'), {

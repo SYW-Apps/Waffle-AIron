@@ -76,7 +76,7 @@ methods:
     description: >-
       Rule retired-stereotypes. A component typed with a retired stereotype is an error until it is
       migrated (STEREOTYPE_RETIRED). A Specialist becomes an Orchestrator with the dependencyClass
-      its dependencies give it, which `wairon doctor --fix` applies. A Gateway becomes the Portal it
+      its dependencies give it, which `wairon upgrade` applies. A Gateway becomes the Portal it
       owns, with the gateway variant: its other members are depended on rather than owned, its
       consumers depend on that Portal, and the Gateway spec is deleted, steps the finding lists for
       the author. Intrinsic to one component: no tree required.
@@ -94,4 +94,4 @@ methods:
           dependencyClass, a Gateway is a Portal with the gateway variant
 status: complete
 createdAt: '2026-09-14T06:06:25.571Z'
-updatedAt: '2026-10-18T00:36:41.556Z'
+updatedAt: '2026-10-18T16:10:23.479Z'

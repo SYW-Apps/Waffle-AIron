@@ -11,6 +11,7 @@ import { runStatus } from '../../src/commands/status.js';
 import { runExternals } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The trial scenario end to end at the command surfaces: a producer renames a
@@ -60,7 +61,7 @@ describe('live drift at the command surfaces', () => {
     // A consumer whose own gate is otherwise clean: one enabled target, and the
     // miniature's unrelated findings (an untyped number, an unreached adapter) off.
     fs.writeFileSync(path.join(p.billing, '.wai', 'project.yaml'), [
-      'schemaVersion: 1.0.0', 'id: billing', 'name: Billing',
+      'schemaVersion: 1.0.0', `waironMajor: ${WAIRON_MAJOR}`, 'id: billing', 'name: Billing',
       'externals:', '  ledger:', '    source:', '      path: ../ledger',
       'rules:', '  sddRuleSeverity:', '    TYPE_NOT_NEUTRAL: "off"', '    UNUSED_COMPONENT: "off"',
       'targets:', '  - type: claude', '    outputDir: .claude/agents', '    enabled: true',

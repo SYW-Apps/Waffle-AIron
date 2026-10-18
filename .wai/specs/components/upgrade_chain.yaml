@@ -1,0 +1,15 @@
+id: upgrade_chain
+name: Upgrade Chain
+description: >-
+  The ordered steps that take a tree from the major that wrote it to the running major, computed
+  from the two majors over the fixed table of steps this release keeps: none when they are equal,
+  each kept step in order when the tree is older, and a refusal naming the release to install when
+  the tree is newer than the running wairon or older than the oldest step kept.
+subsystem: sdd_upgrade
+componentType: Orchestrator
+owns: []
+dependsOn: []
+dependencyClass: pure
+status: complete
+createdAt: '2026-10-18T13:02:18.951Z'
+updatedAt: '2026-10-18T14:34:34.630Z'

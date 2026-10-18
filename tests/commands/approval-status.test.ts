@@ -9,6 +9,7 @@ import {
   saveSystemSpec, saveSpec, saveComponentSpec, invalidateSpecCache,
 } from '../../src/core/specs.js';
 import type { SubsystemSpec, ComponentSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // lock → status, end to end through the real CLI.
@@ -30,7 +31,7 @@ const now = '2026-09-11T10:00:00Z';
 
 function buildProject(root: string): void {
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0', name: 'approve-sys', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,

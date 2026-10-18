@@ -7,6 +7,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // mcp_core_adapter's getProjectConfig and sdd_validate_tree tools — stage
@@ -60,7 +61,7 @@ describe('getProjectConfig (mcp_core_adapter)', () => {
     fs.mkdirSync(path.join(tempDir, '.wai', 'specs'), { recursive: true });
     const now = new Date().toISOString();
     fs.writeFileSync(path.join(tempDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: getcfg-ok',
       'targets:',
       '  - type: claude',

@@ -20,7 +20,8 @@ import type {
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Permission-model rollout migration (`wairon host doctor --fix`).
+// Permission-model rollout migration (run by the data directory upgrade when the
+// server starts).
 //
 // A hosted data dir written by a PRE-permission-model wairon carries shapes the
 // current server no longer produces — and in two cases actively breaks on:

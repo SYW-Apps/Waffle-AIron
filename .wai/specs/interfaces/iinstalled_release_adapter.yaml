@@ -1,0 +1,26 @@
+id: iinstalled_release_adapter
+name: Installed Release Adapter Contract
+description: The installed wairon package's version and its bundled release notes.
+component: installed_release_adapter
+methods:
+  - name: notes
+    description: >-
+      Every bundled release note, newest version first; a missing or unreadable notes folder answers
+      none.
+    signature: 'notes(): list<ReleaseNote>'
+    returns: list<ReleaseNote>
+    params: []
+    effect: io
+    previousNames:
+      - iinstalled_release_adapter.list
+  - name: version
+    description: The installed package's version, e.g. 6.1.0.
+    signature: 'version(): string'
+    returns: string
+    params: []
+    effect: io
+previousIds:
+  - irelease_notes_adapter
+status: draft
+createdAt: '2026-10-18T13:06:17.377Z'
+updatedAt: '2026-10-18T14:11:21.703Z'

@@ -1,0 +1,26 @@
+kind: value-object
+id: upgrade_change
+name: UpgradeChange
+description: 'One rewrite a step plans in one project: what it changes, where, and whether it moves the design.'
+subsystem: sdd_upgrade
+fields:
+  - name: spec
+    type: string
+    description: >-
+      The spec it touches, when it touches one; absent for configuration, lock and file-name
+      changes.
+    optional: true
+  - name: description
+    type: string
+    description: 'The rewrite in one line: the old form and the form it becomes.'
+    optional: false
+  - name: design
+    type: bool
+    description: >-
+      Whether it changes the approved design (a spec's content), so the project owes a re-lock;
+      false for stamps, file names and lock re-expression.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:06.739Z'
+updatedAt: '2026-10-18T13:04:07.624Z'

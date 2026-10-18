@@ -5,6 +5,7 @@ import * as path from 'path';
 import { readYamlFile } from '../../src/utils/yaml.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // End-to-end MCP integration: spawn the REAL stdio server (via tsx, so no
@@ -37,7 +38,7 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-e2e-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-e2e',
       'targets:',
       '  - type: claude',
@@ -202,7 +203,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-mig-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-mig',
       'targets:',
       '  - type: claude',

@@ -15,6 +15,7 @@ import { apply } from '../helpers/chaining-transaction.js';
 import { runDoctor } from '../../src/commands/doctor.js';
 import { explain } from '../../src/commands/verdict-changes.js';
 import { buildImportFamily, type ImportFamily } from '../helpers/reference-family.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Stage 4, wave C — the positional migration: the `use` imports, the exports
@@ -165,7 +166,7 @@ describe('stage 4 — the positional migration', () => {
   it('a producer the plan\'s own crossings declare is a declared producer for the positional step', () => {
     const f = fresh();
     // app declares nothing, but its `shared::host-record` makes the plan declare shared; so `WafflerError` is shared's.
-    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', 'id: app', 'name: App', 'targets: []',
+    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', `waironMajor: ${WAIRON_MAJOR}`, 'id: app', 'name: App', 'targets: []',
       `createdAt: '${STAMP}'`, `updatedAt: '${STAMP}'`, ''].join('\n'));
     const planned = at(f.top, () => plan());
     const app = planned.projects.find((p) => p.project === 'app')!;
@@ -178,7 +179,7 @@ describe('stage 4 — the positional migration', () => {
   it('a member that declares no id: its alias used as a prefix is its own id after the fix, so the first plan rewrites it', () => {
     const f = fresh();
     // app answers to "app-screens" until the migration declares the alias its parent gives it, "app".
-    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', 'name: App Screens', 'externals:', '  shared: {}', 'targets: []',
+    fs.writeFileSync(path.join(f.app, '.wai', 'project.yaml'), ['schemaVersion: 1.0.0', `waironMajor: ${WAIRON_MAJOR}`, 'name: App Screens', 'externals:', '  shared: {}', 'targets: []',
       `createdAt: '${STAMP}'`, `updatedAt: '${STAMP}'`, ''].join('\n'));
     typeFile(f.app, 'panel', [{ name: 'state', type: 'app.screen-state' }]);
     const planned = at(f.top, () => plan());
@@ -268,16 +269,12 @@ describe('stage 4 — the positional migration', () => {
     const f = fresh();
     const before = dirHash(f.top);
     at(f.top, () => plan());
-    await runDoctor({ report: 'chaining' });
     await runDoctor({ report: 'composed-validation' });
     const printed = vi.mocked(console.log).mock.calls.map((c) => String(c[0])).join('\n');
-    expect(printed).toContain('app now depends on ui (1 reference)');
-    expect(printed).toContain('use: ui: [banner-style]');
-    expect(printed).toContain('positional-ambiguous');
     expect(printed).toContain('Positional matches no rule decides');
     expect(dirHash(f.top)).toEqual(before);
-    const unconfirmed = await doctorCli(f.top, '--fix');
-    expect(unconfirmed.stdout).toContain('Chaining migration skipped: no terminal to confirm it');
+    // The migration moved to `wairon upgrade`: --fix finds nothing of it to carry.
+    await doctorCli(f.top, '--fix', '--yes');
     const after = dirHash(f.top);
     const touched = Object.keys(after).filter((k) => after[k] !== before[k] && /[\\/]?\.wai[\\/](specs|project\.yaml|externals|surfaces)/.test(k));
     expect(touched).toEqual([]);

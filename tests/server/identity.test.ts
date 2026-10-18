@@ -288,12 +288,12 @@ describe('identity orchestrator (sdd_host)', () => {
       expect(minted.mapped).toEqual(['proj-a::billing -> billing', 'proj-a::billing::payments -> payments']);
     });
 
-    it('mintToken rejects a qualified entry whose member holds no record yet, pointing at host doctor', () => {
+    it('mintToken rejects a qualified entry whose member holds no record yet, pointing at the data directory upgrade', () => {
       const projRoot = createProjectRecord(dataDir, 'proj-b').rootPath;
       seedChainedMount(projRoot, 'ledger', 'packages/ledger');
       expect(() =>
         identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-b::ledger'] }),
-      ).toThrow(/holds no hosted record yet.*host doctor --fix/);
+      ).toThrow(/holds no hosted record yet.*upgrades the data directory/);
     });
 
     it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {

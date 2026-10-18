@@ -9,6 +9,7 @@ import { assessBuildFreshness, createMcpServer, markStale, schemaFingerprint } f
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache, loadSubsystemSpec } from '../../src/core/specs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Stale-server guard: a long-running MCP server whose build changed on disk
@@ -146,7 +147,7 @@ async function serverStandingFor(stamp: BuildStamp): Promise<{ call: Call; root:
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   const now = new Date().toISOString();
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'stale', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'stale', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);

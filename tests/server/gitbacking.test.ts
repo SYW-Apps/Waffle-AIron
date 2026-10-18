@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { buildHostedFamily } from './hosted-family.js';
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';

@@ -76,6 +76,7 @@ import {
   readProjectSystem,
   publishedUsesOf,
 } from './adapters/core.js';
+import { standing as treeStanding } from './adapters/upgrade.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
@@ -1551,6 +1552,32 @@ function underTreeLock(handler: () => CallToolResult): CallToolResult {
   }
 }
 
+/**
+ * mcp_server.create step 4: the standing guard. The refusal for a tool call
+ * whose bound tree was not written by the running wairon major, or null when it
+ * may run. Judged per call, on the root the call is bound to (a hosted call
+ * binds its project per request), from the tree's stamp alone. A call with no
+ * bound project, or a bound root without a project.yaml, is not refused here:
+ * the tools report those themselves. The assistant never runs the upgrade.
+ */
+function standingRefusal(name: string): string | null {
+  let root: string;
+  try {
+    root = getProjectRoot();
+  } catch {
+    return null;
+  }
+  const hasConfig = ['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')));
+  if (!hasConfig) return null;
+  const tree = treeStanding(root);
+  if (tree.state === 'current') return null;
+  if (tree.state === 'older') {
+    return `${name} refused — the project at ${root} was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor}). `
+      + 'Ask the human to run `wairon upgrade` there; the assistant never runs it. Nothing was read or written.';
+  }
+  return `${name} refused — the project at ${root} cannot be served by this wairon (major ${tree.runningMajor}; the tree was written by major ${tree.writtenMajor}). ${tree.advice ?? ''}`.trim();
+}
+
 function reg<Args extends Record<string, unknown>>(
   server: McpServer,
   name: string,
@@ -1574,6 +1601,10 @@ function reg<Args extends Record<string, unknown>>(
   cb: (args: Args) => CallToolResult,
 ): void {
   const guarded = (args: Args): CallToolResult => {
+    // The standing guard. A tree an older major wrote must be upgraded by the
+    // human first: the tool runs nothing and answers why.
+    const refusal = standingRefusal(name);
+    if (refusal !== null) return errText(refusal);
     // The build-freshness guard. A spec write through a server whose schemas
     // differ from the build on disk is refused before it runs — the handler
     // never sees the arguments, so nothing can be written. Every other answer

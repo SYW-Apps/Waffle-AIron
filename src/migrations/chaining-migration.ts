@@ -325,7 +325,7 @@ function decideId(ctx: Planning, node: ProjectNode, approved: string | undefined
 function absentProject(ctx: Planning, node: ProjectNode): void {
   const finding: ChainingMigrationFinding = {
     kind: 'project-absent', project: node.namespace, blocking: false,
-    detail: `${label(node.namespace)} (${node.directory}) has no readable project.yaml — \`wairon doctor --fix\` writes one for a chained child first`,
+    detail: `${label(node.namespace)} (${node.directory}) has no readable project.yaml — \`wairon upgrade\` writes one for a chained child first`,
   };
   ctx.findings.push(finding);
   ctx.absent.set(node.namespace, finding);

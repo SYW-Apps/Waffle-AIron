@@ -1,0 +1,34 @@
+kind: value-object
+id: tree_upgrade_report
+name: TreeUpgradeReport
+description: What applying an upgrade plan came to.
+subsystem: sdd_upgrade
+fields:
+  - name: plan
+    type: UpgradePlan
+    description: The plan that was applied.
+    optional: false
+  - name: committed
+    type: bool
+    description: >-
+      True when every project was rewritten and stamped; false when the transaction failed or was
+      refused, every file then as before.
+    optional: false
+  - name: failure
+    type: string
+    description: What stopped it, from the transaction.
+    optional: true
+  - name: stamped
+    type: list<string>
+    description: The project roots now stamped with the running major.
+    optional: false
+  - name: relock
+    type: list<string>
+    description: >-
+      The project roots whose approved design moved: each owes `wairon lock` by its approver, at its
+      own root.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:31.640Z'
+updatedAt: '2026-10-18T13:04:32.460Z'

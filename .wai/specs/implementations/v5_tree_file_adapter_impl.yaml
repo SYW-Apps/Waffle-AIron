@@ -1,0 +1,32 @@
+id: v5_tree_file_adapter_impl
+name: v5 Tree File Adapter Implementation
+description: >-
+  src/upgrade/steps/v5-to-v6/files.ts: the v5 step's raw file access, inside the step's own folder
+  so the whole step is removed as one.
+contract: iv5_tree_file_adapter
+sourcePath: src/upgrade/steps/v5-to-v6/files.ts
+methods:
+  - name: familyRoots
+    narrative: []
+    detail: intent
+    intent: >-
+      From the root, read project.yaml members (a key to a path, or the long form's source) and
+      every L1 subsystem file whose projectPath names a folder, resolve each against the root that
+      declares it, and follow each found project the same way, once each. Answers the roots, the top
+      first; a path that does not exist or holds no .wai or .wairon folder is left out. A git source
+      is left out: it is not checked out here.
+  - name: holdsLegacyFolder
+    narrative: []
+    detail: intent
+    intent: True when the root holds a .wairon folder and no .wai folder.
+  - name: moveLegacyFolder
+    narrative: []
+    detail: intent
+    intent: Rename the root's .wairon folder to .wai when no .wai folder exists; otherwise do nothing.
+  - name: renameSpecFile
+    narrative: []
+    detail: intent
+    intent: Rename the file; a target that already exists refuses with both paths.
+status: draft
+createdAt: '2026-10-18T14:14:18.933Z'
+updatedAt: '2026-10-18T14:14:20.401Z'

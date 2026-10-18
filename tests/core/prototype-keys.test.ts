@@ -9,6 +9,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { ownGet, ownHas, dict } from '../../src/utils/own.js';
 import { computeLayout } from '../../src/core/canvas-layout.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // Ids and names that are JavaScript prototype property names (tinkerer-r5
@@ -48,7 +49,7 @@ function clean(r: { ok: boolean; text: string }, label: string): void {
 beforeAll(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-proto-keys-'));
   fs.mkdirSync(path.join(dir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0', id: 'protolab', name: 'protolab', targets: [], rules: {}, createdAt: now, updatedAt: now,
   }));
   setProjectRoot(dir);

@@ -308,10 +308,10 @@ methods:
       path (`desktop::shell` written inside desktop, `app_core::engine::x` written inside engine), a
       first segment the referring project does not declare, read from the bound root; and a
       self-prefix — the referring project's own id as the first segment, with `::` or `.`
-      (`registry.advisory-channel` inside registry), which `wairon doctor --fix` rewrites to the
-      bare local id. Wairon's own writer emits none of them. A form with no rewrite (its target is
-      out of reach) is reported with the reason. It reads the project graph's authored references,
-      which the scan records before binding erases the form.
+      (`registry.advisory-channel` inside registry), which `wairon upgrade` rewrites to the bare
+      local id. Wairon's own writer emits none of them. A form with no rewrite (its target is out of
+      reach) is reported with the reason. It reads the project graph's authored references, which
+      the scan records before binding erases the form.
     signature: 'referenceForms(ctx: RuleContext): void'
     returns: void
     params:
@@ -399,9 +399,9 @@ methods:
       one source in one grammar. A deprecated declaration form loads until the next major release
       and is reported (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying
       projectPath — naming the mount, its path, the `members` entry that replaces it, and every
-      field it carries that `doctor --fix` will move into the member (or stop on); a mount whose
+      field it carries that `wairon upgrade` will move into the member (or stop on); a mount whose
       alias `members` also declares is reported as ignored; and the deprecated long-form `path` key,
-      naming the `source` (or shorthand) `doctor --fix` rewrites it to. It also judges what each
+      naming the `source` (or shorthand) `wairon upgrade` rewrites it to. It also judges what each
       member of the bound project IS against what is declared or written about it, from the scan's
       problems at the bound root (a member's own members are that member's gate's): what a member is
       follows from its content — an id, an L0 or a lock make it a project, anything else a part —
@@ -427,7 +427,8 @@ methods:
         severity: notice
         summary: >-
           A member declared in a deprecated form — an L1 subsystem carrying projectPath, or the
-          long-form `path` key — which doctor --fix rewrites to a `members` entry with one `source`.
+          long-form `path` key — which `wairon upgrade` rewrites to a `members` entry with one
+          `source`.
       - code: MEMBER_KIND_MISMATCH
         severity: error
         summary: >-
@@ -685,4 +686,4 @@ methods:
           identifier
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-18T00:36:36.691Z'
+updatedAt: '2026-10-18T16:10:18.695Z'

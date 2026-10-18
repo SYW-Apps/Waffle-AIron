@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // End-to-end MCP schema round-trip: the tool input schemas in src/mcp/server.ts
@@ -44,7 +45,7 @@ describe('MCP stdio server integration (newer input-surface round-trip)', () => 
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-rt-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-roundtrip',
       'targets:',
       '  - type: claude',

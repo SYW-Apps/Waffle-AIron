@@ -7,6 +7,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+import * as yaml from 'js-yaml';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // mcp_portal.advertiseHostedTools.
@@ -56,8 +58,8 @@ const now = '2026-09-20T10:00:00Z';
 function project(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-hosted-ads-'));
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
-    schemaVersion: '1.0.0', name: 'hosted-ads', projectType: 'backend',
+  fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), yaml.dump({
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'hosted-ads', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,
   }));

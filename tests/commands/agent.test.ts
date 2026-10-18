@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon agent <action> <id>` — the CLI window into the live delegation
@@ -23,7 +24,7 @@ const now = new Date().toISOString();
 
 function buildProject(rootDir: string): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     name: 'agent-system',
     projectType: 'backend',

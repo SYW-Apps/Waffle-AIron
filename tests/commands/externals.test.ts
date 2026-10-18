@@ -9,6 +9,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runExternals, UnknownExternalsActionError } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // `wairon externals` and the sdd_pin_externals / sdd_get_externals_status
@@ -31,7 +32,7 @@ function write(root: string, rel: string, text: string): void {
 function family(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-cli-'));
   const project = (id: string, name: string, externals?: Record<string, unknown>): string => dump({
-    id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
+    waironMajor: WAIRON_MAJOR, id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
     extensions: { packs: [], useGlobalPacks: false }, ...(externals ? { externals } : {}),
   });
   write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { bill: { project: 'billing' }, ledger: {} }));

@@ -15,6 +15,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache, loadSubsystemSpec } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const now = new Date().toISOString();
 let roots: string[] = [];
@@ -28,7 +29,7 @@ async function bound(): Promise<(name: string, args: Record<string, unknown>) =>
   roots.push(root);
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'pi-consumers', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'pi-consumers', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);

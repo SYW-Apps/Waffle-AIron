@@ -24,7 +24,7 @@ function unknownInvariantMessage(where: string, ref: string, types: Parameters<t
     const bare = `${parts.typeRef.slice(qualifier + 2)}.${parts.invariantId}`;
     if (resolveInvariantRef(bare, types, aliases)) {
       const prefix = parts.typeRef.slice(0, qualifier);
-      return `${where} asserts invariant "${ref}", whose qualifier "${prefix}::" names no project this one reaches the type through — the invariant is declared here, so write "${bare}" (a project's own alias, written from inside it, is not a qualifier it reads as its own; \`wairon doctor --fix\` rewrites it in a migrated family).`;
+      return `${where} asserts invariant "${ref}", whose qualifier "${prefix}::" names no project this one reaches the type through — the invariant is declared here, so write "${bare}" (a project's own alias, written from inside it, is not a qualifier it reads as its own; \`wairon upgrade\` rewrites it in a migrated family).`;
     }
   }
   return `${where} asserts invariant "${ref}", but no entity declares it (expected "<type-id>.<invariant-id>" naming a declared entry in that entity's invariants).`;

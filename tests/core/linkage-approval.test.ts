@@ -24,7 +24,8 @@ import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
 
 /** The gate algorithm every format-2 lock was taken under (full content, code linkage in). */
 const CONTENT_GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
-import { checkApproval, reexpressLock, runLock } from '../../src/commands/lock.js';
+import { checkApproval, runLock } from '../../src/commands/lock.js';
+import { reexpressLock } from '../helpers/reexpress-lock.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -249,11 +250,11 @@ describe('a format-2 lock after the upgrade', () => {
     expect(readLockState(computeGateStateId()).state).toBe('locked');
     const check = checkApproval(true);
     expect(check.approved, check.message).toBe(true);
-    expect(check.message).toContain('wairon doctor --fix');
+    expect(check.message).toContain('wairon upgrade');
     expect(approvalVerdict().text).toContain('no spec has changed since');
   });
 
-  it('doctor --fix re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
+  it('the upgrade re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
     root = project();
     const before = writeFormat2(root);
     const carried = reexpressLock()!;
@@ -266,7 +267,7 @@ describe('a format-2 lock after the upgrade', () => {
     expect(written.lockedBy).toEqual(before.lockedBy);
     expect(written.lockedAt).toBe(before.lockedAt);
     expect(written.validatorVersion).toBe(before.validatorVersion);
-    expect(written.reexpressed).toMatchObject({ fromAlgorithm: CONTENT_GATE_ALGORITHM, fromReading: 'content', by: 'wairon doctor --fix' });
+    expect(written.reexpressed).toMatchObject({ fromAlgorithm: CONTENT_GATE_ALGORITHM, fromReading: 'content', by: 'wairon upgrade' });
     expect(readLockState(computeGateStateId()).state).toBe('locked');
     // Idempotent: nothing more to carry.
     expect(reexpressLock()).toBeNull();

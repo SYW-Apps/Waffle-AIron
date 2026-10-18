@@ -1,0 +1,29 @@
+id: iupgrade_chain
+name: Upgrade Chain Contract
+description: >-
+  The pure arithmetic over the kept steps: which steps take a tree from one major to another, and
+  the oldest major the kept steps start from.
+component: upgrade_chain
+methods:
+  - name: between
+    description: >-
+      The steps from the major that wrote a tree to the running major, oldest first; the state says
+      why there are none (current, newer, out_of_window), with the release to install for the last
+      two.
+    signature: 'between(writtenMajor: int, runningMajor: int): UpgradeChainAnswer'
+    returns: UpgradeChainAnswer
+    params:
+      - name: writtenMajor
+        type: int
+      - name: runningMajor
+        type: int
+    effect: none
+  - name: oldestKept
+    description: 'The oldest major a kept step reads: the major an unstamped tree is read as.'
+    signature: 'oldestKept(): int'
+    returns: int
+    params: []
+    effect: none
+status: draft
+createdAt: '2026-10-18T13:06:09.048Z'
+updatedAt: '2026-10-18T13:06:11.548Z'

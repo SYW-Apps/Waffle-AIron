@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as memberRegistration from '../../src/server/members.js';
 import { existingProjectRoot, resolveProjectBinding } from '../../src/server/projects.js';
 import { placeProject } from '../../src/server/organization.js';

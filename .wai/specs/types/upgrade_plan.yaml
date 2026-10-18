@@ -1,0 +1,52 @@
+kind: value-object
+id: upgrade_plan
+name: UpgradePlan
+description: >-
+  What upgrading a family to the running major would do, planned without writing anything: each
+  project's standing and every step's plan.
+subsystem: sdd_upgrade
+fields:
+  - name: familyRoot
+    type: string
+    description: The top root the plan was made from, absolute.
+    optional: false
+  - name: runningMajor
+    type: int
+    description: The major the family is brought to.
+    optional: false
+  - name: standings
+    type: list<TreeStanding>
+    description: Each project of the family, the top first.
+    optional: false
+  - name: steps
+    type: list<StepPlan>
+    description: Every step's plan for every older project, oldest step first.
+    optional: false
+  - name: whatChanged
+    type: list<string>
+    description: >-
+      The user-facing summary of the steps it runs: each step's own short account of what the new
+      major changes.
+    optional: false
+  - name: refusal
+    type: string
+    description: >-
+      Why the family cannot be upgraded by this release (a project newer than it, or out of the
+      window); nothing is applied then.
+    optional: true
+  - name: rehearsal
+    type: Rehearsal
+    description: >-
+      The private copy of the family the steps were written onto; its difference from the live trees
+      is the plan's file changes. Absent when nothing is older or the plan is refused.
+    optional: true
+  - name: changes
+    type: list<FileChange>
+    description: >-
+      Every file the upgrade replaces, creates or deletes, per project, as the rehearsal's
+      difference found it.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:12.298Z'
+updatedAt: '2026-10-18T13:06:07.204Z'

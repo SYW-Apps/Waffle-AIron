@@ -681,6 +681,14 @@ export const ProjectConfigSchema = z.object({
   id: z.string().optional(),
 
   /**
+   * The wairon major this project's files were written by (sdd_upgrade). Set when
+   * the configuration is created and moved only by `wairon upgrade`, which reads
+   * it to decide which steps a tree needs; none reads as the oldest major the
+   * running release upgrades.
+   */
+  waironMajor: z.number().int().optional(),
+
+  /**
    * The ids this project answered to before, oldest first, each appended by
    * the rename migration (`wairon project rename`) and never removed or
    * reordered by a writer. A lock that approved one of them reads as renamed

@@ -162,8 +162,8 @@ function subtreeIds(units: OrganizationUnitRecord[], rootId: string): Set<string
  * Fill in a `slug` for a unit persisted before slugs existed.
  *
  * `OrganizationUnitRecord.slug` is REQUIRED by the contract, but records written
- * by a pre-slug wairon have none, and an instance that upgraded without running
- * `wairon host doctor --fix` still holds them. Serving those records verbatim
+ * by a pre-slug wairon have none, and an instance whose data directory
+ * has not been upgraded yet still holds them. Serving those records verbatim
  * broke the organizations page with an unreadable minified TypeError
  * (`undefined.localeCompare`) — a data-shape problem surfacing as a UI crash,
  * which tells an operator nothing about the actual remedy.
@@ -174,7 +174,7 @@ function subtreeIds(units: OrganizationUnitRecord[], rootId: string): Set<string
  * agreement rather than drifting apart.
  *
  * This is a READ-path shim, not a substitute for the migration: grants, tokens,
- * and qualified ids still need `host doctor --fix` (legacy subjects otherwise
+ * and qualified ids still need the data directory upgrade (legacy subjects otherwise
  * resolve to zero permissions). It only guarantees that a required field is never
  * absent, so a missing migration presents as missing permissions — a symptom that
  * names its cause — instead of a crashed page.

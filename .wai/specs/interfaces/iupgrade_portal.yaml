@@ -1,0 +1,50 @@
+id: iupgrade_portal
+name: Upgrade Portal Contract
+description: In-process major upgrades of a project tree. Every verb forwards to the upgrade orchestrator.
+component: upgrade_portal
+methods:
+  - name: standing
+    description: Where a project tree stands against the running major.
+    signature: 'standing(root: string): TreeStanding'
+    returns: TreeStanding
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: plan
+    description: The plan that brings a family to the running major, written nowhere live.
+    signature: 'plan(root: string): UpgradePlan'
+    returns: UpgradePlan
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: apply
+    description: Apply a plan all or nothing.
+    signature: 'apply(plan: UpgradePlan): TreeUpgradeReport'
+    returns: TreeUpgradeReport
+    params:
+      - name: plan
+        type: UpgradePlan
+    effect: write
+  - name: discard
+    description: Drop a plan that will not be applied.
+    signature: 'discard(plan: UpgradePlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: UpgradePlan
+    effect: write
+  - name: releaseNotes
+    description: The curated release notes between two versions.
+    signature: 'releaseNotes(after: string?, upTo: string): list<ReleaseNote>'
+    returns: list<ReleaseNote>
+    params:
+      - name: after
+        type: string?
+      - name: upTo
+        type: string
+    effect: read
+status: draft
+createdAt: '2026-10-18T13:06:38.105Z'
+updatedAt: '2026-10-18T14:22:39.753Z'

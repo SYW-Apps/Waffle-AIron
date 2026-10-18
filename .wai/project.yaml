@@ -1,5 +1,6 @@
 schemaVersion: 1.0.0
 id: waffle-airon
+waironMajor: 6
 name: Waffle-AIron
 extensions:
   # wairon's own doctrine is wairon's own — nothing from a developer's global
