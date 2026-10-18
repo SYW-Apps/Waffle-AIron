@@ -6,12 +6,6 @@
  * Rules pinned here:
  *  - project-boundaries (src/core/rules/doctrine/project-boundaries.ts):
  *    EXTERNAL_UNDECLARED, EXTERNAL_NOT_EXPORTED, TRUSTED_LINK_CROSSES_PROJECT.
- *  - reference-forms (src/core/rules/integrity/reference-forms.ts):
- *    DEPRECATED_REFERENCE_FORM — a leading `::`, `super::` or a member path
- *    (stage 3); `alias::name` is the one canonical form.
- *  - member-declarations (src/core/rules/integrity/member-declarations.ts):
- *    DEPRECATED_MOUNT_FORM — a member declared as an L1 subsystem carrying
- *    projectPath instead of a project.yaml `members` entry.
  *  - external-declarations (src/core/rules/integrity/external-declarations.ts):
  *    EXTERNAL_UNRESOLVED.
  *  - export-tables (EXPORT_WIDENS_AUDIENCE): an L0 re-export of a member's
@@ -234,52 +228,6 @@ export default [
     reason: 'The fleet registry is a subsystem of the root project itself, so the trusted link stays inside one project.',
     scenario: 'The root\'s operations subsystem declares a trusted link to the fleet registry, another subsystem of the same project.',
     tree: fleet({ trustedLinks: [{ subsystem: 'fleet-registry', reason: 'console reads the vehicle list on every frame' }] }),
-  }),
-
-  // -------------------------------------------------------------------------
-  // DEPRECATED_REFERENCE_FORM
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'DEPRECATED_REFERENCE_FORM',
-    severity: 'notice',
-    anchoredTo: 'route-planner',
-    expectFire: true,
-    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `::billing::invoice-portal` — a leading `::` that names the portal by its place in whichever checkout loads it.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: '::billing::invoice-portal', fromDispatch: true }),
-  }),
-  defineRuleFixture({
-    code: 'DEPRECATED_REFERENCE_FORM',
-    severity: 'notice',
-    anchoredTo: 'route-planner',
-    expectFire: true,
-    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `super::billing::invoice-portal` — a climb to the parent and a member path from there, a place in one family rather than a name.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, fromDispatch: true }),
-  }),
-  defineRuleFixture({
-    code: 'DEPRECATED_REFERENCE_FORM',
-    expectFire: false,
-    reason: '`alias::name` is the canonical cross-project form: billing is the alias dispatch declares, invoicing the public name billing exports.',
-    scenario: 'The dispatch member\'s route planner names billing\'s invoice portal as `billing::invoicing`, through the external it declares.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing', fromDispatch: true, dispatchPin: true }),
-  }),
-
-  // -------------------------------------------------------------------------
-  // DEPRECATED_MOUNT_FORM
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'DEPRECATED_MOUNT_FORM',
-    severity: 'notice',
-    anchoredTo: 'billing',
-    expectFire: true,
-    scenario: 'FleetWorks declares its billing member as the L1 subsystem `billing` carrying `projectPath: packages/billing` — a subsystem that is really a member declaration.',
-    tree: fleet({ billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} } }),
-  }),
-  defineRuleFixture({
-    code: 'DEPRECATED_MOUNT_FORM',
-    expectFire: false,
-    reason: 'Both members are declared in the root\'s project.yaml `members`; no L1 subsystem carries a projectPath.',
-    scenario: 'FleetWorks declares `members: { billing: packages/billing, dispatch: packages/dispatch }` and has no mount subsystems.',
-    tree: fleet({ membersForm: true, billingExports: BILLING_EXPORTS, dispatchExternals: { billing: {} }, plannerDependsOn: 'billing::invoicing' }),
   }),
 
   // -------------------------------------------------------------------------

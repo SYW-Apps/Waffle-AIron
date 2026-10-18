@@ -27,7 +27,7 @@ export const patternContainmentRule: SddRule = {
   ],
   check(ctx) {
     // 1. Repository containment, member by member: a retired member is skipped
-    //    (its STEREOTYPE_RETIRED is its one finding), a live member's mistake
+    //    (the upgrade moves it), a live member's mistake
     //    still reports. A retired Repository is skipped entirely, as
     //    everywhere in this family.
     for (const comp of ctx.components) {
@@ -43,7 +43,7 @@ export const patternContainmentRule: SddRule = {
     // 2. The counting patterns. A FeatureComponent or RouterComponent owning a
     //    retired member is not judged for containment until that member is
     //    migrated: its member counts change with the migration, and the
-    //    member's STEREOTYPE_RETIRED is the one finding.
+    //    member is moved by the upgrade.
     for (const comp of ctx.components) {
       if (comp.componentType !== 'FeatureComponent' && comp.componentType !== 'RouterComponent') continue;
       if (isRetired(comp)) continue;

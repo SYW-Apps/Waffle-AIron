@@ -23,7 +23,6 @@ import { pinExternals } from '../../src/core/surfaces.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.js';
 import { apply } from '../helpers/chaining-transaction.js';
-import { runDoctor } from '../../src/commands/doctor.js';
 import { buildReferenceFamily, type ReferenceFamily } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
@@ -119,10 +118,6 @@ describe('stage 3 — the position migration over the reference family', () => {
     const before = dirHash(f.top);
     at(f.top, () => plan());
     expect(dirHash(f.top)).toEqual(before);
-    at(f.core, () => undefined);
-    await runDoctor({ report: 'composed-validation' });
-    expect(vi.mocked(console.log).mock.calls.some((c) => String(c[0]).includes('Nothing was written.'))).toBe(true);
-    expect(dirHash(f.top)).toEqual(before);
     // The migration moved to `wairon upgrade`: --fix finds nothing of it to carry.
     await doctorCli(f.top, '--fix', '--yes');
     // Every file of the family — specs, configurations, pins — as it was.
@@ -133,11 +128,6 @@ describe('stage 3 — the position migration over the reference family', () => {
 
   it('after apply: no deprecated form, no mount form, and the migrated references are declared and exported', () => {
     const f = fresh();
-    const before = at(f.top, () => validateProject());
-    // Each project's own gate reports its own forms (stage 4): the top one, transpiler three.
-    expect(codes(before, 'DEPRECATED_REFERENCE_FORM')).toHaveLength(1);
-    expect(codes(at(f.transpiler, () => validateProject()), 'DEPRECATED_REFERENCE_FORM')).toHaveLength(3);
-    expect(codes(before, 'DEPRECATED_MOUNT_FORM')).toEqual(['DEPRECATED_MOUNT_FORM @shared']);
     const report = at(f.top, () => apply(plan()));
     expect(rel(f.top, report.written)).toEqual([
       'core/transpiler/.wai/project.yaml',
@@ -156,7 +146,7 @@ describe('stage 3 — the position migration over the reference family', () => {
     ]);
     for (const root of [f.top, f.core, f.transpiler, f.shared]) {
       const after = at(root, () => validateProject());
-      expect(codes(after, 'DEPRECATED_REFERENCE_FORM', 'DEPRECATED_MOUNT_FORM', 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNRESOLVED')).toEqual([]);
+      expect(codes(after, 'EXTERNAL_UNDECLARED', 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNRESOLVED')).toEqual([]);
     }
     // The member entry carries the mount's description; no L1 document is left.
     const members = (yaml.load(fs.readFileSync(path.join(f.top, '.wai', 'project.yaml'), 'utf8')) as { members: unknown }).members;
@@ -414,7 +404,7 @@ describe('stage 3 — the chaining migration steps it gained', () => {
     expect(libL0.status).toBeUndefined();
     expect(libL0.publicInterfaces).toEqual([{ from: 'core', component: 'lib-portal', type: 'RPC', details: 'The library surface', audience: 'project' }]);
     const after = at(f.root, () => validateProject());
-    expect(codes(after, 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNDECLARED', 'EXPORT_INVALID', 'DEPRECATED_MOUNT_FORM')).toEqual([]);
+    expect(codes(after, 'EXTERNAL_NOT_EXPORTED', 'EXTERNAL_UNDECLARED', 'EXPORT_INVALID')).toEqual([]);
     expect(isEmpty(at(f.app, () => plan()))).toBe(true);
   });
 

@@ -24,8 +24,8 @@ export const logicDeclarationRule: SddRule = {
     for (const comp of ctx.components) {
       const isDraftCtx = ctx.isComponentDraft(comp.id);
 
-      // A retired component is skipped: a Specialist's STEREOTYPE_RETIRED is its
-      // one finding, and its migration sets the class.
+      // A retired component is skipped: the upgrade moves it, and
+      // its migration sets the class.
       if (comp.dependencyClass && comp.componentType !== 'Orchestrator' && !isRetired(comp)) {
         ctx.addIssue(
           'error',

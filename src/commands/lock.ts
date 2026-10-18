@@ -60,12 +60,6 @@ export interface LockOptions {
   yes?: boolean;
   /** Limit lock scope to a specific subsystem. */
   subsystem?: string;
-  /**
-   * Accepted until the next major release and ignored for what is written: a lock approves
-   * this project only and never writes below it. Each member locks at its own
-   * root.
-   */
-  recursive?: boolean;
   /** List every changed spec in the summary instead of summarizing a long list. */
   all?: boolean;
 }

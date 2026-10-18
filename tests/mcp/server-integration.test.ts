@@ -93,7 +93,7 @@ describe('MCP stdio server integration (sdd_* pipeline)', () => {
         id: 'billing',
         name: 'Billing',
         description: 'Billing bounded context',
-        publicInterfaces: [{ type: 'REST', details: '/api/v1/billing', component: 'billing-portal' }],
+        publicInterfaces: [{ details: '/api/v1/billing', component: 'billing-portal' }],
       },
     }));
 
@@ -227,7 +227,7 @@ describe('MCP stdio server integration (subsystem migration tools)', () => {
     unwrapText(await client.callTool({ name: 'sdd_initialize_system', arguments: { name: 'MigSystem', vision: 'migration e2e' } }));
     unwrapText(await client.callTool({ name: 'sdd_add_subsystem', arguments: {
       id: 'core', name: 'Core', description: 'the core',
-      publicInterfaces: [{ type: 'REST', details: '/api/core', component: 'core-portal' }],
+      publicInterfaces: [{ details: '/api/core', component: 'core-portal' }],
     } }));
     unwrapText(await client.callTool({ name: 'sdd_add_component', arguments: {
       id: 'core-portal', name: 'Core Portal', description: 'front door',

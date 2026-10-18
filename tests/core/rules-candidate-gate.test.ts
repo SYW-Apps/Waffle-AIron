@@ -123,7 +123,7 @@ describe('rule scope declarations', () => {
   it('only rules that declare scope "spec" reach the candidate path', () => {
     registerBuiltinRules();
     const names = specScopedRules().map(r => r.name).sort();
-    expect(names).toEqual(['durability-declaration', 'logic-declaration', 'portal-fields', 'retired-stereotypes']);
+    expect(names).toEqual(['durability-declaration', 'logic-declaration', 'portal-fields']);
   });
 
   it('the spec-scoped subset emits exactly the intrinsic codes', () => {
@@ -135,7 +135,6 @@ describe('rule scope declarations', () => {
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',
       'MISSING_PORTAL_TRANSPORT',
-      'STEREOTYPE_RETIRED',
       'UNEXPECTED_PORTAL_FIELD',
     ]);
   });

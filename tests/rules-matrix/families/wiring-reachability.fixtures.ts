@@ -8,8 +8,7 @@
  *  - entry-declarations (src/core/rules/wiring/entry-declarations.ts):
  *    ENTRY_ON_NON_PORTAL (an entry belongs to a Portal verb),
  *    ENTRY_SCOPE_NOT_NETWORK (a scope only means something on a network
- *    transport), INVOKED_BY_RETIRED_KIND (external / sibling-subsystem, read
- *    compatibly until the next major release).
+ *    transport).
  *  - network-boundaries (src/core/rules/wiring/network-boundaries.ts), over a
  *    project that declares `network` in its project.yaml: GATEWAY_BYPASSED
  *    (only a gateway Portal is entered from outside the network),
@@ -278,44 +277,6 @@ export default [
     reason: 'An HTTP Portal is entered over the network, so saying its callers come from inside the network means something.',
     scenario: 'The internal settlement API declares a network-scoped entry: only sibling services inside the order network call it over HTTP.',
     tree: storefront({ portals: [{ id: 'settlement-api', verb: 'settle', path: '/settle', entry: { kind: 'entry', scope: 'network', caller: SIBLINGS } }] }),
-  }),
-
-  // -------------------------------------------------------------------------
-  // INVOKED_BY_RETIRED_KIND
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'INVOKED_BY_RETIRED_KIND',
-    severity: 'warning',
-    anchoredTo: 'isettlement_orchestrator',
-    expectFire: true,
-    scenario:
-      'The settlement orchestrator still declares invokedBy kind external from before the reachability model, which reads it as runtime until the next major release.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [ORDERS_SUB],
-      components: [{ id: 'settlement-orchestrator', description: 'Settles the day\'s captured payments.' }],
-      interfaces: [{
-        id: 'isettlement_orchestrator',
-        component: 'settlement-orchestrator',
-        methods: [{ name: 'settleDay', description: 'Settle the day\'s payments.', invokedBy: { kind: 'external', caller: 'The process\'s nightly scheduler at 02:00.' } }],
-      }],
-    },
-  }),
-  defineRuleFixture({
-    code: 'INVOKED_BY_RETIRED_KIND',
-    expectFire: false,
-    reason: 'runtime is one of the two kinds the reachability model keeps, so nothing is read compatibly.',
-    scenario: 'The settlement orchestrator declares invokedBy kind runtime for its nightly scheduler.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [ORDERS_SUB],
-      components: [{ id: 'settlement-orchestrator', description: 'Settles the day\'s captured payments.' }],
-      interfaces: [{
-        id: 'isettlement_orchestrator',
-        component: 'settlement-orchestrator',
-        methods: [{ name: 'settleDay', description: 'Settle the day\'s payments.', invokedBy: { kind: 'runtime', caller: 'The process\'s nightly scheduler at 02:00.' } }],
-      }],
-    },
   }),
 
   // -------------------------------------------------------------------------

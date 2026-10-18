@@ -547,7 +547,7 @@ export const ComponentTypeSchema = z.enum([
   'FeatureComponent', // Logic Hook + View Presenter pattern
   'RouterComponent',  // Switch/routing component pattern
   // Retired stereotypes: still parsed so a tree using them loads and the
-  // rules can report them (STEREOTYPE_RETIRED), never authored new
+  // rules can report them, never authored new
   'Specialist', // logic is an Orchestrator with a dependencyClass
   'Gateway',    // a gateway is a Portal with the gateway variant
 ]);
@@ -556,7 +556,7 @@ export type ComponentType = z.infer<typeof ComponentTypeSchema>;
 /** Component types that are patterns (own member blocks) rather than building blocks. */
 export const PATTERN_TYPES: ReadonlySet<ComponentType> = new Set(['Repository', 'FeatureComponent', 'RouterComponent']);
 
-/** Retired component types: a tree still loads them, and STEREOTYPE_RETIRED reports each until it is migrated. */
+/** Retired component types: a tree still loads them until `wairon upgrade` migrates it. */
 export const RETIRED_STEREOTYPES: ReadonlySet<ComponentType> = new Set(['Specialist', 'Gateway']);
 
 /**
@@ -2364,7 +2364,7 @@ export function retiredMountsOf(component: object): { declared: boolean; mounts:
  * The kind a retired invokedBy kind is read as: `external` is an entry on a
  * Portal's contract and a runtime hook elsewhere; `sibling-subsystem` is a
  * runtime hook (its caller is in the same tree, so the call should be
- * modelled — INVOKED_BY_RETIRED_KIND says so).
+ * modelled).
  */
 export function retiredInvocationReadAs(kind: string, isPortalContract: boolean): InvocationKind {
   return kind === 'external' && isPortalContract ? 'entry' : 'runtime';

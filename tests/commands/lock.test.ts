@@ -299,7 +299,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
 
     // A parent lock used to push (children × subsystems) snapshots into every
     // child's working tree, on the parent's schedule. It pushes nothing now.
-    const { stdout } = await runCli(rootDir, '--no-recursive');
+    const { stdout } = await runCli(rootDir);
     expect(stdout).not.toContain('delivered surface(s)');
     expect(fs.existsSync(surfacesDir)).toBe(false);
     const record = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
@@ -318,7 +318,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
     });
 
     // …and a later parent lock leaves the pin exactly as the child committed it.
-    const second = await runCli(rootDir, '--no-recursive');
+    const second = await runCli(rootDir);
     expect(second.stdout).not.toContain('delivered surface(s)');
     for (const { p, bytes, mtime } of pinned) {
       expect(fs.readFileSync(p, 'utf8')).toBe(bytes);

@@ -13,8 +13,9 @@ import type { ComponentSpec } from '../../src/models/index.js';
 //  - a Supervisor reaches data only through workflows, and a live Actor is
 //    reached through a Supervisor that supervises it;
 //  - a Query is a Repository member for computed reads over its Store;
-//  - Specialist and Gateway are retired: each retired component reports
-//    STEREOTYPE_RETIRED once, and no shape rule judges it or its edges.
+//  - Specialist and Gateway are not stereotypes in v6: a tree an older major
+//    wrote that still holds one is skipped by every shape rule, until
+//    `wairon upgrade` moves it.
 // ---------------------------------------------------------------------------
 
 interface Issue { code: string; specId?: string; message: string; severity: string }
@@ -313,7 +314,7 @@ describe('one finding per edge', () => {
     }
   });
 
-  it('a retired component reports STEREOTYPE_RETIRED once, and no shape rule judges it or its edges', () => {
+  it('no shape rule judges a retired component or its edges', () => {
     const proj = createTempProject();
     proj.subsystem('claims');
     proj.component('claims-scoring-specialist', 'claims', 'Specialist', 'dependsOn: [claims-store, claims-portal]');
@@ -324,7 +325,6 @@ describe('one finding per edge', () => {
     proj.component('claims-review-workflow', 'claims', 'Orchestrator', 'dependsOn: [claims-gateway, claims-intake-workflow]');
     const issues = proj.validate();
 
-    expect(byCode(issues, 'STEREOTYPE_RETIRED').map(i => i.specId).sort()).toEqual(['claims-gateway', 'claims-scoring-specialist']);
     for (const retired of ['claims-scoring-specialist', 'claims-gateway']) {
       expect(on(issues, retired, SHAPE_CODES)).toEqual([]);
     }
@@ -336,7 +336,7 @@ describe('one finding per edge', () => {
 });
 
 describe('facade-forwarding: only a Repository facade is judged', () => {
-  it('a retired Gateway\'s facade method is not judged for forwarding; STEREOTYPE_RETIRED is its one finding', () => {
+  it('a retired Gateway\'s facade method is not judged for forwarding', () => {
     const proj = createTempProject();
     proj.subsystem('partners');
     proj.component('partner-gateway', 'partners', 'Gateway', 'owns: [partner-portal]');
@@ -359,7 +359,6 @@ describe('facade-forwarding: only a Repository facade is judged', () => {
     ].join('\n'));
     const issues = proj.validate();
     expect(byCode(issues, 'FACADE_FORWARDING')).toEqual([]);
-    expect(byCode(issues, 'STEREOTYPE_RETIRED').map(i => i.specId)).toEqual(['partner-gateway']);
   });
 });
 
@@ -415,48 +414,12 @@ describe('logic-declaration: a dependencyClass is an Orchestrator property', () 
     expect(byCode(proj.validate(), 'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR')).toEqual([]);
   });
 
-  it('a retired Specialist declaring a class reports only STEREOTYPE_RETIRED', () => {
+  it('a retired Specialist declaring a class is not judged by this rule', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('interaction-specialist', 'pharmacy', 'Specialist', 'dependencyClass: pure');
     const issues = proj.validate();
     expect(byCode(issues, 'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR')).toEqual([]);
-    expect(byCode(issues, 'STEREOTYPE_RETIRED').map(i => i.specId)).toEqual(['interaction-specialist']);
-  });
-});
-
-describe('retired-stereotypes: STEREOTYPE_RETIRED', () => {
-  it('a Specialist is told it is an Orchestrator, retyped by wairon upgrade', () => {
-    const proj = createTempProject();
-    proj.subsystem('pharmacy');
-    proj.component('interaction-specialist', 'pharmacy', 'Specialist');
-    const found = byCode(proj.validate(), 'STEREOTYPE_RETIRED');
-    expect(found.map(i => i.specId)).toEqual(['interaction-specialist']);
-    expect(found[0].severity).toBe('error');
-    expect(found[0].message).toContain('typed Specialist');
-    expect(found[0].message).toContain('an Orchestrator with the dependencyClass');
-    expect(found[0].message).toContain('wairon upgrade');
-  });
-
-  it('a Gateway is given its manual migration to a Portal with the gateway variant', () => {
-    const proj = createTempProject();
-    proj.subsystem('partners');
-    proj.component('partner-gateway', 'partners', 'Gateway', 'owns: [partner-portal]');
-    proj.component('partner-portal', 'partners', 'Portal', 'portalType: Custom');
-    const found = byCode(proj.validate(), 'STEREOTYPE_RETIRED');
-    expect(found.map(i => i.specId)).toEqual(['partner-gateway']);
-    expect(found[0].message).toContain('typed Gateway');
-    expect(found[0].message).toContain('gateway variant');
-    expect(found[0].message).toContain('delete the Gateway spec');
-    expect(found[0].message).toContain('sdd_rename_component');
-  });
-
-  it('live stereotypes are silent', () => {
-    const proj = createTempProject();
-    proj.subsystem('pharmacy');
-    proj.component('dose-arbiter', 'pharmacy', 'Orchestrator', 'dependencyClass: pure');
-    proj.component('pharmacy-api-portal', 'pharmacy', 'Portal', 'portalType: Custom\nvariant: gateway');
-    expect(byCode(proj.validate(), 'STEREOTYPE_RETIRED')).toEqual([]);
   });
 });
 
@@ -470,10 +433,5 @@ describe('the write boundary refuses what the intrinsic rules report', () => {
   it('refuses a dependencyClass on a non-Orchestrator', () => {
     const verdict = validateComponentCandidate(candidate('Store', { durability: 'ram-projection', dependencyClass: 'read' }));
     expect(verdict.errors.map(e => e.code)).toEqual(['DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR']);
-  });
-
-  it('refuses a retired stereotype', () => {
-    const verdict = validateComponentCandidate(candidate('Specialist'));
-    expect(verdict.errors.map(e => e.code)).toEqual(['STEREOTYPE_RETIRED']);
   });
 });

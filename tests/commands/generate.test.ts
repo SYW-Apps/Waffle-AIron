@@ -339,9 +339,6 @@ describe('cli_runner.runGenerate: --family generates each member layer in its ow
     expect(fs.existsSync(path.join(rootDir, '.claude', 'agents', 'system-architect.md'))).toBe(true);
     expect(fs.readdirSync(freshDir)).toEqual([]);
     expect(fs.existsSync(path.join(readyDir, '.claude'))).toBe(false);
-    // --no-recurse is accepted until the next major release, as the default it now is.
-    await runCli(rootDir, '--no-recurse');
-    expect(fs.readdirSync(freshDir)).toEqual([]);
   }, 180_000);
 
   it('--family bootstraps and generates a fresh member, and generates an initialized member from its own tree', async () => {

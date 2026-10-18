@@ -59,7 +59,7 @@ afterEach(async () => {
   invalidateSpecCache();
 });
 
-const restricted = { type: 'Custom', details: 'raw invoice writes', component: 'invoice_portal', consumers: ['claims'] };
+const restricted = { details: 'raw invoice writes', component: 'invoice_portal', consumers: ['claims'] };
 
 describe('public_interface.consumers round-trips through the MCP doors', () => {
   it('sdd_add_subsystem stores the consumers an entry states', async () => {
@@ -94,7 +94,7 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
     const call = await bound();
     await call('sdd_add_subsystem', {
       id: 'billing', name: 'Billing', description: 'invoicing',
-      publicInterfaces: [{ type: 'Custom', details: 'raw invoice writes', component: 'invoice_portal' }],
+      publicInterfaces: [{ details: 'raw invoice writes', component: 'invoice_portal' }],
     });
     const result = await call('sdd_update_spec', {
       kind: 'subsystem', id: 'billing',
@@ -106,7 +106,7 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
 });
 
 describe('re-export entries round-trip through sdd_set_public_interfaces', () => {
-  const own = { type: 'REST', details: 'invoice API', component: 'invoice_portal' };
+  const own = { details: 'invoice API', component: 'invoice_portal' };
   const reexport = { from: 'claims', component: 'claim_portal', as: 'claims-api' };
   const wildcard = { from: 'claims' };
 

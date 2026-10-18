@@ -576,7 +576,7 @@ export type ExternalDeclaration = z.infer<typeof ExternalDeclarationSchema>;
  * dir?, use?, description? }` is only for what the shorthand cannot say. WHAT
  * a member is follows from its content (stage 8): an id, an L0 or a lock make
  * it a project, anything else a part; `as` only asserts it. The pre-stage-8
- * long-form `path` is read until the next major release as `source` (DEPRECATED_MOUNT_FORM).
+ * long-form `path` is read until the next major release as `source`.
  * Plain strings throughout: a malformed source is REPORTED, never unreadable.
  */
 export const MemberDeclarationSchema = z.object({
@@ -722,7 +722,7 @@ export const ProjectConfigSchema = z.object({
    * `alias::name` through its L0 exports; anything else is a PART, whose
    * subsystems are this project's own. Together with `externals` it is this
    * project's alias table. The legacy L1 `projectPath` mount and the long-form
-   * `path` key still load until the next major release (DEPRECATED_MOUNT_FORM).
+   * `path` key still load until the next major release.
    */
   members: z.record(z.union([z.string(), MemberDeclarationSchema])).optional(),
 

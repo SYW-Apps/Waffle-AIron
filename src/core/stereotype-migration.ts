@@ -12,7 +12,7 @@ import type { ComponentSpec, DependencyClass } from '../models/index.js';
 // unset — a workflow — when a dependency fits neither. A Specialist's class can
 // hang on another Specialist's, so classes are decided in passes over the
 // dependency graph, and what a cycle leaves undecided is settled last.
-// Gateways are not migrated here: STEREOTYPE_RETIRED gives their manual steps.
+// Gateways are not migrated here: the upgrade gives their manual steps.
 // ---------------------------------------------------------------------------
 
 /** One retired Specialist and the Orchestrator it becomes (specialist_retype). */

@@ -1049,7 +1049,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [], deprecations: extensions.deprecations ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),

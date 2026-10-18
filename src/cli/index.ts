@@ -16,7 +16,6 @@ import {
   runRules,
   runPatterns,
   runVariants,
-  runPacks,
   runPack,
   runAgent,
   mcpInstallCommand,
@@ -136,7 +135,6 @@ program
   .option('--domains <ids>', 'limit to a comma-separated list of domain ids')
   .option('--root', 'only generate root-level agents')
   .option('--family', 'also generate each member\'s own layer in its own root (generate never cascades otherwise)')
-  .option('--no-recurse', 'accepted until the next major release: generating only this project\'s layer is now the default')
   .option('--no-prune', 'do not remove wairon-managed agent files that are no longer in the topology')
   .option('--dry-run', 'preview what would be generated without writing files')
   .option('--global', 'also write (and prune) a target whose output directory resolves outside the project root, backing up each file replaced there')
@@ -147,8 +145,7 @@ program
       domain: opts.domain,
       domains: opts.domains,
       root: opts.root,
-      // --family walks the members explicitly; --no-recurse is the default now
-      // and is accepted until the next major release. commander maps --no-prune to opts.prune === false.
+      // --family walks the members explicitly. commander maps --no-prune to opts.prune === false.
       family: opts.family === true,
       prune: opts.prune,
       dryRun: opts.dryRun,
@@ -172,7 +169,6 @@ program
   .description('Record human approval of the design: validate the spec tree as complete, write the approval to .wai/lock.json (one digest per spec; spec files are not rewritten), and refresh this project\'s generated outputs — only if the design validates. Commit .wai/lock.json; `wairon lock-check` gates on it. In an attached checkout, locks the hosted project instead.')
   .option('-y, --yes', 'skip the confirmation prompt (for scripts / CI)')
   .option('--subsystem <id>', 'only lock specs in the specified subsystem')
-  .option('--no-recursive', 'accepted until the next major release and ignored: a lock approves this project only; each member locks at its own root')
   .option('--all', 'list every changed spec in the summary instead of summarizing a long list')
   .action(async (opts) => {
     await lockCommand(opts);
@@ -216,11 +212,10 @@ program
   .command('doctor')
   .description('Health check: flags stale generated guides/skills, an unregistered MCP server, spec-tree issues and a tree written by another wairon major (`wairon upgrade` moves it)')
   .option('--fix', 'finish unfinished transactions, regenerate stale in-project guides/context/skills, repair signatures, type spellings and foreign step fields, register the MCP server')
-  .option('--report <section>', "print one section's report and nothing else, writing nothing (composed-validation); never combines with --fix")
   .option('-y, --yes', "answer the confirmation of a write outside the project root (with --global) on a non-interactive --fix")
   .option('--global', 'consent to the --fix writes outside the project root (a machine-wide MCP config, the legacy global plugin); with --yes it answers their confirmation, and each replaced file is backed up beside itself')
   .action(async (opts) => {
-    await runDoctor({ fix: opts.fix, report: opts.report, yes: opts.yes, global: opts.global === true });
+    await runDoctor({ fix: opts.fix, yes: opts.yes, global: opts.global === true });
   });
 
 // ---------------------------------------------------------------------------
@@ -399,43 +394,6 @@ packCmd
   .option('-y, --yes', 'remove without showing the impact report')
   .action(async (name: string, opts) => {
     await runPack('remove', name, { global: opts.global, yes: opts.yes });
-  });
-
-// ---------------------------------------------------------------------------
-// packs — DEPRECATED alias of `wairon pack` (add | list | remove). Kept working;
-// each subcommand prints a one-line deprecation notice then delegates.
-// ---------------------------------------------------------------------------
-
-const packsCmd = program
-  .command('packs')
-  .description('[deprecated] alias of `wairon pack` — extension packs: profiles, language tables, and conformance rules');
-
-packsCmd
-  .command('list')
-  .alias('ls')
-  .description('List global and project extension packs with what they provide')
-  .action(async () => {
-    logger.warn('`wairon packs` is deprecated — use `wairon pack list`.');
-    await runPacks('list');
-  });
-
-packsCmd
-  .command('add <source>')
-  .description('Vendor a pack into the project (.wai/packs/ + project.yaml), or install machine-wide with --global')
-  .option('-g, --global', 'install into the global packs folder (WAIRON_PACKS_DIR or ~/.wairon/packs)')
-  .action(async (source, opts) => {
-    logger.warn('`wairon packs` is deprecated — use `wairon pack add`.');
-    await runPacks('add', source, { global: opts.global });
-  });
-
-packsCmd
-  .command('remove <name>')
-  .alias('rm')
-  .description('Deregister a pack by name (deletes vendored files under .wai/packs); --global removes a machine-wide pack')
-  .option('-g, --global', 'remove from the global packs folder')
-  .action(async (name, opts) => {
-    logger.warn('`wairon packs` is deprecated — use `wairon pack remove`.');
-    await runPacks('remove', name, { global: opts.global });
   });
 
 // ---------------------------------------------------------------------------

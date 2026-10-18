@@ -2697,7 +2697,8 @@ function publicInterfaceKey(o: Record<string, unknown>): string | null {
   }
   const component = str(o.component);
   if (component) return str(o.interface) ? `${component}.${String(o.interface)}` : component;
-  if (typeof o.type === 'string' && typeof o.details === 'string') return `${o.type} ${o.details}`;
+  // Not yet bound: the details (the export kind is derived from the Portal's transport and no longer authored; an entry that still carries one keeps it in its identity).
+  if (typeof o.details === 'string') return typeof o.type === 'string' ? `${o.type} ${o.details}` : o.details;
   return null;
 }
 

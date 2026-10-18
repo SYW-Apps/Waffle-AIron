@@ -93,18 +93,6 @@ export class BundleNotFoundError extends WaironError {
 }
 
 /**
- * Thrown by `wairon doctor` for flags that do not combine: `--report` prints a
- * plan and writes nothing, so it never goes with `--fix`, and `chaining` is the
- * one section it knows.
- */
-export class DoctorOptionsError extends WaironError {
-  constructor(detail: string) {
-    super(`wairon doctor: ${detail}`);
-    this.name = 'DoctorOptionsError';
-  }
-}
-
-/**
  * Thrown by the `wairon network` commands for a missing input: a policy needs
  * the team's bindings file, a check needs an observed-flow export.
  */

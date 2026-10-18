@@ -454,11 +454,10 @@ describe('property: part-alone-judges-against-pin', () => {
 });
 
 describe('property: existing-members-unchanged', () => {
-  /** A family's verdict at its top, the deprecated-form notices of the one migration left out. */
+  /** A family's verdict at its top. */
   function familyVerdict(top: string): string[] {
     bind(top);
     return validateFamily({}).issues
-      .filter((i) => !(i.code === 'DEPRECATED_MOUNT_FORM' && i.message.includes('long-form `path`')))
       .map((i) => `${i.severity} ${i.code} @${i.specId ?? '-'}`).sort();
   }
 
@@ -473,8 +472,6 @@ describe('property: existing-members-unchanged', () => {
       const longForm = Object.fromEntries(Object.entries(config.members).map(([alias, value]) => [alias, { path: value, description: `The ${alias} member` }]));
       fs.writeFileSync(configFile, yaml.dump({ ...config, members: longForm }));
       bind(f.top);
-      const before = validateFamily({});
-      expect(before.issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM' && i.message.includes('long-form `path`'))).toHaveLength(Object.keys(longForm).length);
       expect(familyVerdict(f.top)).toEqual(original);
       expect(projectFamilyGraph().problems.filter((p) => p.kind === 'kind-mismatch' || p.kind === 'part-unavailable')).toEqual([]);
       // doctor --fix: the one stage-8 step.
@@ -493,8 +490,6 @@ describe('property: existing-members-unchanged', () => {
       bind(twin.top);
       apply(plan());
       expect(familyVerdict(f.top)).toEqual(familyVerdict(twin.top));
-      bind(f.top);
-      expect(validateFamily({}).issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM' && i.message.includes('long-form `path`'))).toEqual([]);
     }
   }, 60_000); // ~10 full family validations: heavy under a loaded full-suite run
 });

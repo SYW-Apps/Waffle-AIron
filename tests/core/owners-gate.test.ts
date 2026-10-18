@@ -89,7 +89,7 @@ describe('the owner\'s gate — location', () => {
     const before = verdict(validateAt(f.transpiler));
     // The parent's doctrine switches off exactly the codes the member reports.
     const lenient = ['id: waffly', 'name: Waffly', 'members:', '  core: core', 'rules:', '  sddRuleSeverity:',
-      '    EXTERNAL_CHECK_UNAVAILABLE: "off"', '    DEPRECATED_REFERENCE_FORM: "off"', '    INVALID_DEPENDENCY_REFERENCE: "off"',
+      '    EXTERNAL_CHECK_UNAVAILABLE: "off"', '    UNUSED_COMPONENT: "off"', '    INVALID_DEPENDENCY_REFERENCE: "off"',
       'targets: []', "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''];
     fs.writeFileSync(path.join(f.top, '.wai', 'project.yaml'), lenient.join('\n'));
     expect(verdict(validateAt(f.transpiler))).toEqual(before);
@@ -100,17 +100,17 @@ describe('the owner\'s gate — location', () => {
 
   it('same-config-both-roots: the member\'s own configuration governs it however the request binds it', () => {
     const f = referenceFamily();
-    // The member raises a notice to an error in its own project.yaml.
+    // The member raises a warning to an error in its own project.yaml.
     const config = projectConfigRepositoryAt(f.transpiler).load()!;
     fs.writeFileSync(path.join(f.transpiler, '.wai', 'project.yaml'), [
-      'schemaVersion: 1.0.0', 'id: transpiler', `name: ${config.name}`, 'rules:', '  sddRuleSeverity:', '    DEPRECATED_REFERENCE_FORM: error',
+      'schemaVersion: 1.0.0', 'id: transpiler', `name: ${config.name}`, 'rules:', '  sddRuleSeverity:', '    EXTERNAL_CHECK_UNAVAILABLE: error',
       'targets: []', "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''].join('\n'));
     // The caller supplies the bound project's own rules (as the CLI and MCP do).
     const rules = projectConfigRepositoryAt(f.transpiler).load()!.rules;
     bind(f.transpiler);
     const own = validateProject({ rules });
-    expect(codes(own, 'DEPRECATED_REFERENCE_FORM').length).toBeGreaterThan(0);
-    expect(codes(own, 'DEPRECATED_REFERENCE_FORM').every((l) => l.startsWith('error '))).toBe(true);
+    expect(codes(own, 'EXTERNAL_CHECK_UNAVAILABLE').length).toBeGreaterThan(0);
+    expect(codes(own, 'EXTERNAL_CHECK_UNAVAILABLE').every((l) => l.startsWith('error '))).toBe(true);
     // A request bound to the member through a credential for the whole family: the same verdict.
     invalidateSpecCache();
     let viaFamily: ValidationResult | undefined;

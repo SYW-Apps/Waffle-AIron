@@ -79,7 +79,7 @@ describe('demo-project seeder', () => {
     );
   });
 
-  it('seeds a tree with no retired stereotypes and no dependency-class violations', () => {
+  it('seeds a tree with no dependency-class violations', () => {
     const proj = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-demo-seed-'));
     cleanups.push(proj);
     fs.mkdirSync(path.join(proj, '.wai', 'specs'), { recursive: true });
@@ -87,7 +87,6 @@ describe('demo-project seeder', () => {
       seedDemoTree();
       return validateProject();
     });
-    expect(result.issues.filter((i) => i.code === 'STEREOTYPE_RETIRED')).toEqual([]);
     expect(result.issues.filter((i) => i.code === 'DEPENDENCY_CLASS_VIOLATION')).toEqual([]);
   });
 

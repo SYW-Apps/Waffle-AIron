@@ -61,7 +61,7 @@ The labels L0–L5 walk down containment first, then refinement:
 - `.implementation.yaml` (L4+L5) — `sourcePath`, the **concurrency variant**, and the **per-method narrative** (L5 steps).
 
 Different agents own different refinement files: the **architect** owns
-`.index.yaml` + `.interface.yaml`; the **implementer** owns `.implementation.yaml`. (Legacy undotted names — `system.yaml`, `subsystem.yaml`, `component.yaml`, `interface.yaml`, `implementation.yaml` — still load; `wairon upgrade` migrates them.)
+`.index.yaml` + `.interface.yaml`; the **implementer** owns `.implementation.yaml`. (A tree written by an older wairon major, with undotted names such as `system.yaml`, is moved by `wairon upgrade`.)
 
 ---
 
@@ -556,8 +556,8 @@ Repository whose Store it reads (`UNOWNED_QUERY`).
 > on (`GATEWAY_BYPASSED`; §9, *Networks and gateways*).
 
 The variant carries the implementation guidance (§8). The Gateway *pattern*
-(`Portal + ingress Orchestrator + interceptor Specialists`) is retired
-(`STEREOTYPE_RETIRED`); §8 lists its migration.
+(`Portal + ingress Orchestrator + interceptor Specialists`) is not a v6
+stereotype; §8 lists how `wairon upgrade` moves it.
 
 ### The facade rule (mechanically enforced: `FACADE_FORWARDING`)
 A pattern's facade does **pure 1:1 forwarding with no logic**: **every facade
@@ -619,9 +619,8 @@ can express.
 
 ### Retired stereotypes
 
-`Specialist` and `Gateway` are retired. A component typed with either is
-`STEREOTYPE_RETIRED` (error) until it is migrated; meanwhile the rules that judge a
-stereotype's shape skip it, so it reports once.
+`Specialist` and `Gateway` are not stereotypes in v6. A tree written by an older
+wairon major that still types a component with either is moved by `wairon upgrade`.
 
 | Retired | Becomes | Migration |
 |---|---|---|
@@ -1071,7 +1070,7 @@ tell apart components that share a noun, and it matches the block:
     of blocks a system needs, while upholding the same discipline at any scale.
 14. A gateway is a Portal with the `gateway` variant. Variants load built-in →
     global → project and carry guidance, not rules. `Specialist` and `Gateway` are
-    retired (`STEREOTYPE_RETIRED`) until migrated.
+    not stereotypes in v6 (`wairon upgrade` moves an older tree).
 15. Every Portal verb is reached: by a modelled caller, or as a declared entry
     (`invokedBy: { kind: entry }`) whose callers are outside the design — never an
     entry invented to silence a finding. A Portal states one `transport`; entries

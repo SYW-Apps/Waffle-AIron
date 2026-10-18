@@ -179,14 +179,14 @@ async function runLock(options: LockOptions): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** cli_runner.runLock — hosted when attached, else the local approval. */
-export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
+export async function lockCommand(opts: { yes?: boolean; subsystem?: string; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const outcome = await lockAttached(target);
     logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
     return;
   }
-  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive, all: opts.all });
+  await runLock({ yes: opts.yes, subsystem: opts.subsystem, all: opts.all });
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */
@@ -313,11 +313,6 @@ export function runPatterns(): void {
 }
 export function runVariants(): void {
   listVariants();
-}
-export async function runPacks(action: string, arg?: string, options: PackCommandOptions = {}): Promise<void> {
-  if (action === 'add') await addPack(arg!, options.global);
-  else if (action === 'list') listPacks();
-  else if (action === 'remove') await removePack(arg!, options.global);
 }
 export async function runPack(
   action: string,
