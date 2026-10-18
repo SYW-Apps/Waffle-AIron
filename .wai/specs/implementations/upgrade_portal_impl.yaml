@@ -1,0 +1,44 @@
+id: upgrade_portal_impl
+name: Upgrade Portal Implementation
+description: 'src/upgrade/index.ts: the subsystem''s barrel, each export one forward to the upgrade orchestrator.'
+contract: iupgrade_portal
+sourcePath: src/upgrade/index.ts
+methods:
+  - name: standing
+    narrative:
+      - stepNumber: 1
+        description: Route to the upgrade workflow
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: standing
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Route to the upgrade workflow
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Route to the upgrade workflow
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: apply
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Route to the upgrade workflow
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: discard
+  - name: releaseNotes
+    narrative:
+      - stepNumber: 1
+        description: Route to the upgrade workflow
+        type: call
+        targetComponent: upgrade_orchestrator
+        targetMethod: releaseNotes
+status: draft
+createdAt: '2026-10-18T14:14:00.429Z'
+updatedAt: '2026-10-18T14:14:01.953Z'

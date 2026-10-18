@@ -1,0 +1,14 @@
+id: mcp_upgrade_adapter
+name: MCP Upgrade Client Adapter
+description: >-
+  Local client adapter in sdd_mcp for the hop into sdd_upgrade: the standing guard asks it where the
+  bound tree stands before every tool runs. In-process import seam (src/mcp/adapters/upgrade.ts).
+subsystem: sdd_mcp
+componentType: Adapter
+owns: []
+dependsOn:
+  - upgrade_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T14:23:38.399Z'
+updatedAt: '2026-10-18T14:34:27.775Z'

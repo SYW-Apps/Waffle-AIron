@@ -17,8 +17,9 @@ methods:
     narrative: []
     intent: >-
       Refuses with an error naming the project root when a configuration already exists; otherwise
-      validates the configuration against the schema and writes it through the store as given,
-      inventing no `id`. It never overwrites an existing configuration.
+      sets waironMajor to the running major when the configuration names none, validates it against
+      the schema and writes it through the store, inventing no `id`. It never overwrites an existing
+      configuration.
     calls:
       - project_config_store.exists
       - project_config_store.write
@@ -322,4 +323,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-09-13T11:19:22.659Z'
-updatedAt: '2026-10-17T16:25:29.548Z'
+updatedAt: '2026-10-18T14:33:22.771Z'

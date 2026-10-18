@@ -1,0 +1,26 @@
+kind: value-object
+id: step_plan
+name: StepPlan
+description: One step's plan for one project of the family.
+subsystem: sdd_upgrade
+fields:
+  - name: step
+    type: UpgradeStep
+    description: The step that planned it.
+    optional: false
+  - name: project
+    type: string
+    description: The project root, absolute.
+    optional: false
+  - name: changes
+    type: list<UpgradeChange>
+    description: Every rewrite it will write, in spec order.
+    optional: false
+  - name: reported
+    type: list<string>
+    description: What it will not rewrite because only an author can decide it, each with the decision to make.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:09.589Z'
+updatedAt: '2026-10-18T13:04:10.508Z'

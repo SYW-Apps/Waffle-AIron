@@ -1,0 +1,30 @@
+id: host_upgrade_adapter_impl
+name: Host Upgrade Client Adapter Implementation
+description: 'src/server/adapters/upgrade.ts: in-process import of the sdd_upgrade barrel.'
+contract: ihost_upgrade_adapter
+sourcePath: src/server/adapters/upgrade.ts
+methods:
+  - name: standing
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: standing
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: apply
+status: draft
+createdAt: '2026-10-18T14:28:12.222Z'
+updatedAt: '2026-10-18T14:28:13.363Z'

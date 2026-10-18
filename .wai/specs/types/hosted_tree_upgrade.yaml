@@ -1,0 +1,26 @@
+kind: value-object
+id: hosted_tree_upgrade
+name: HostedTreeUpgrade
+description: One hosted project's tree brought to the running major at start.
+subsystem: sdd_host
+fields:
+  - name: project
+    type: string
+    description: The hosted project id.
+    optional: false
+  - name: root
+    type: string
+    description: Its root, absolute.
+    optional: false
+  - name: report
+    type: TreeUpgradeReport
+    description: What the upgrade came to, when it was planned.
+    optional: true
+  - name: failure
+    type: string
+    description: 'Why it was not upgraded: the plan''s refusal or the transaction''s failure.'
+    optional: true
+methods: []
+sourcePath: src/server/upgrade.ts
+createdAt: '2026-10-18T14:27:16.139Z'
+updatedAt: '2026-10-18T14:32:30.201Z'

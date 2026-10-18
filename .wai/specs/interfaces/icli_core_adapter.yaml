@@ -154,16 +154,6 @@ methods:
       - name: current
         type: StateId
         description: The gate identity as it stands now
-  - name: retireSpecialists
-    description: >-
-      Forward to core_portal.retireSpecialists: plan, and with apply write, the migration off the
-      retired Specialist stereotype
-    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
-    returns: SpecialistRetirement
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: repairForeignStepFields
     description: >-
       Forward to core_portal.repairForeignStepFields: plan, and with apply write, the removal of
@@ -437,31 +427,6 @@ methods:
         optional: true
     guarantees:
       - idempotent
-  - name: findLegacySpecFiles
-    description: >-
-      Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
-      as stored under a legacy name
-    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
-    returns: list<LegacySpecFile>
-    params: []
-  - name: findChainingSubprojectsMissingConfig
-    description: >-
-      Forward to spec_maintenance_portal.findChainingSubprojectsMissingConfig: the chained
-      subprojects `wairon doctor` reports as unrunnable standalone
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
-  - name: backfillChainedSubprojectConfigs
-    description: >-
-      Forward to spec_maintenance_portal.backfillChainedSubprojectConfigs: the `wairon doctor --fix`
-      repair
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
   - name: diagnoseProjectPacks
     description: 'Forward to extension_portal.diagnoseProjectPacks: the pack situation `wairon doctor` reports'
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
@@ -575,16 +540,6 @@ methods:
       - name: apply
         type: bool
         description: Write the rewrite; false plans without writing
-  - name: migrateReachability
-    description: >-
-      Forward to spec_maintenance_portal.migrateReachability: plan, and with apply write, the bound
-      project's migration onto the reachability model.
-    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
-    returns: ReachabilityMigrationPlan
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: setNetwork
     description: >-
       Declare or remove the project's network for `wairon network declare|undeclare`. Forwarded to
@@ -692,4 +647,4 @@ methods:
     params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T00:36:06.721Z'
+updatedAt: '2026-10-18T14:21:44.842Z'

@@ -1,0 +1,23 @@
+id: icli_upgrade_adapter
+name: CLI Upgrade Client Adapter Contract
+description: The upgrade verbs the terminal uses, each forwarding to upgrade_portal.
+component: cli_upgrade_adapter
+methods:
+  - name: standing
+    description: Where a project tree stands against the running major.
+    signatureFrom: upgrade_portal.standing
+  - name: plan
+    description: The plan that brings a family to the running major.
+    signatureFrom: upgrade_portal.plan
+  - name: apply
+    description: Apply a plan all or nothing.
+    signatureFrom: upgrade_portal.apply
+  - name: discard
+    description: Drop a plan that will not be applied.
+    signatureFrom: upgrade_portal.discard
+  - name: releaseNotes
+    description: The curated release notes between two versions.
+    signatureFrom: upgrade_portal.releaseNotes
+status: draft
+createdAt: '2026-10-18T14:20:44.832Z'
+updatedAt: '2026-10-18T14:20:48.968Z'

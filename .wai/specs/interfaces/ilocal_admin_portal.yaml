@@ -372,15 +372,6 @@ methods:
     signature: 'seedDefaultProvider(): IdentityProviderConfig?'
     returns: IdentityProviderConfig?
     params: []
-  - name: migratePermissionModel
-    description: >-
-      Report, and with apply rewrite, the data dir's pre-permission-model shapes (`wairon host
-      doctor [--fix]`); a dry run writes nothing.
-    signature: 'migratePermissionModel(apply: bool): MigrationReport'
-    returns: MigrationReport
-    params:
-      - name: apply
-        type: bool
   - name: startHostServer
     description: >-
       Start the hosting server's data-plane and admin-plane listeners for this configuration (the
@@ -425,21 +416,6 @@ methods:
         type: string
     guarantees:
       - idempotent
-  - name: upgradeMembers
-    description: >-
-      Plan, and with apply commit, the stage-7 member upgrade of the data dir (`wairon host doctor
-      [--fix]`, after the permission-model migration): first every transaction a crash left
-      unfinished under the data directory — resolved and audited with apply, reported without it;
-      then every hosted family's members registered as records (no grants: they inherit through
-      their parent chain), every member-qualified API key entry rewritten to a record id, the proof
-      that nobody's reach changes checked before writing, all or nothing. A dry run reports the full
-      plan — the unfinished transactions, members, the reach proof, rewritten keys, refusals — and
-      writes nothing; a blocked plan is never applied.
-    signature: 'upgradeMembers(apply: bool): MemberUpgradeReport'
-    returns: MemberUpgradeReport
-    params:
-      - name: apply
-        type: bool
   - name: explain
     description: >-
       Explain a user's effective permission for a capability at a scope — the value, its source and
@@ -459,11 +435,6 @@ methods:
         type: ScopeKind
       - name: scopeId
         type: string
-  - name: migrateReachability
-    description: >-
-      Plan, and with apply write, every hosted project's migration onto the reachability model
-      (`wairon host doctor [--fix]`); a dry run writes nothing.
-    signatureFrom: hosted_spec_upgrade.migrateReachability
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-10-06T19:54:48.800Z'
+updatedAt: '2026-10-18T14:29:03.508Z'

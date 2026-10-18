@@ -1,0 +1,22 @@
+kind: value-object
+id: upgrade_chain_answer
+name: UpgradeChainAnswer
+description: The steps between two majors, or why there are none to take.
+subsystem: sdd_upgrade
+fields:
+  - name: state
+    type: TreeStandingState
+    description: current, older, newer or out_of_window, judged from the two majors and the kept steps.
+    optional: false
+  - name: steps
+    type: list<UpgradeStep>
+    description: The steps to run, oldest first; empty unless the state is older.
+    optional: false
+  - name: advice
+    type: string
+    description: 'For newer and out_of_window: the release to install.'
+    optional: true
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:03.888Z'
+updatedAt: '2026-10-18T13:04:04.812Z'

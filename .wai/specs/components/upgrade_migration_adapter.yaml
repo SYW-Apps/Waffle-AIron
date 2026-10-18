@@ -1,0 +1,14 @@
+id: upgrade_migration_adapter
+name: Upgrade Migration Adapter
+description: >-
+  The client adapter to sdd_migrations: rehearses, stages and commits an upgrade as one family
+  transaction (or drops it), and reaches the chaining migration while it still lives there.
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn:
+  - migration_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T13:02:27.549Z'
+updatedAt: '2026-10-18T14:34:41.646Z'

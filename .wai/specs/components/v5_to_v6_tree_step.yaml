@@ -1,0 +1,20 @@
+id: v5_to_v6_tree_step
+name: v5 to v6 Tree Step
+description: >-
+  The step that moves one project tree from v5 forms to v6 forms: the reachability forms
+  (portalType, listener mounts, the retired invokedBy kinds, authored export types), the retired
+  Specialist and Gateway stereotypes, legacy L1 mounts and the reference forms they carried (a
+  leading ::, super::, member paths) to members and alias::name, a member's long-form path, lock
+  records of format 1 and 2, legacy spec file names and a .wairon folder. It plans first and writes
+  only inside the transaction the orchestrator opens. It reads the old forms with its own readers;
+  until those move here it reaches the existing rewrites through the client adapters.
+subsystem: sdd_upgrade
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - upgrade_core_adapter
+  - upgrade_migration_adapter
+  - v5_tree_file_adapter
+status: complete
+createdAt: '2026-10-18T13:02:30.302Z'
+updatedAt: '2026-10-18T14:34:51.903Z'

@@ -1,0 +1,15 @@
+id: cli_upgrade_adapter
+name: CLI Upgrade Client Adapter
+description: >-
+  Local client adapter in sdd_cli for the hop into sdd_upgrade: `wairon upgrade`, the standing check
+  before every command, `wairon whatsnew` and the release notes shown once after an upgrade, and
+  doctor's major check. In-process import seam.
+subsystem: sdd_cli
+componentType: Adapter
+owns: []
+dependsOn:
+  - upgrade_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T14:20:40.512Z'
+updatedAt: '2026-10-18T14:34:06.196Z'

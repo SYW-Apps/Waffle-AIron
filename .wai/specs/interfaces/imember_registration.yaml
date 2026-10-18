@@ -57,13 +57,6 @@ methods:
         type: MemberUpgradePlan
     guarantees:
       - idempotent
-  - name: pending
-    description: >-
-      How many members the hosted families declare on disk that hold no record yet — the count the
-      server logs at boot as awaiting `wairon host doctor --fix`. Reads only; plans nothing.
-    signature: 'pending(): int'
-    returns: int
-    params: []
   - name: recover
     description: >-
       Before any tool reads or writes a bound family: roll back every family migration a crash left
@@ -294,4 +287,4 @@ methods:
         type: bool
 status: complete
 createdAt: '2026-10-01T16:31:57.562Z'
-updatedAt: '2026-10-06T19:59:09.403Z'
+updatedAt: '2026-10-18T14:30:51.686Z'

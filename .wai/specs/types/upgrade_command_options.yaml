@@ -1,0 +1,18 @@
+kind: value-object
+id: upgrade_command_options
+name: UpgradeCommandOptions
+description: The flags of `wairon upgrade`.
+subsystem: sdd_cli
+fields:
+  - name: report
+    type: bool
+    description: Print the plan and write nothing.
+    optional: true
+  - name: 'yes'
+    type: bool
+    description: Answer the confirmation for a non-interactive run.
+    optional: true
+methods: []
+sourcePath: src/commands/upgrade.ts
+createdAt: '2026-10-18T14:20:33.238Z'
+updatedAt: '2026-10-18T14:20:34.683Z'

@@ -159,6 +159,14 @@ fields:
       outputs; part of the gate identity, because it changes family-run verdicts. Written by hand.
       Absent in a part's configuration
     optional: true
+  - name: waironMajor
+    type: int
+    description: >-
+      The wairon major this project's files were written by. Set when the configuration is created
+      and moved only by `wairon upgrade`, which reads it to decide which steps a tree needs; a
+      project with none was made before it existed and is read as the oldest major the running
+      release upgrades.
+    optional: true
 methods:
   - name: declaredPackNames
     signature: 'declaredPackNames(): string[]'
@@ -259,4 +267,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-18T00:38:04.572Z'
+updatedAt: '2026-10-18T14:33:21.489Z'

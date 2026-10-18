@@ -1,0 +1,15 @@
+id: upgrade_portal
+name: Upgrade Portal
+description: >-
+  The one door to major upgrades of a project tree, called in-process by the CLI (`wairon upgrade`,
+  the startup check, `wairon whatsnew`), the MCP server (the refusal on an older tree) and the
+  hosted server (each hosted project at start). Every verb forwards to the upgrade orchestrator.
+subsystem: sdd_upgrade
+componentType: Portal
+owns: []
+dependsOn:
+  - upgrade_orchestrator
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T13:02:16.156Z'
+updatedAt: '2026-10-18T14:34:48.435Z'

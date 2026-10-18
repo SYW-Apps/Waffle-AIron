@@ -347,16 +347,6 @@ methods:
         targetComponent: cli_runner
         targetMethod: runHostUnit
     symbol: unit <action>
-  - name: hostDoctor
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Dispatch `wairon host doctor` with its parsed arguments and flags to
-          cli_runner.runHostDoctor.
-        type: call
-        targetComponent: cli_runner
-        targetMethod: runHostDoctor
-    symbol: doctor
   - name: hostPermission
     narrative:
       - stepNumber: 1
@@ -698,6 +688,20 @@ methods:
         targetComponent: cli_runner
         targetMethod: runMethodRename
     symbol: rename <component> <method> <new-name>
+  - name: upgrade
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon upgrade` with its parsed flags to cli_runner.runUpgrade.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runUpgrade
+  - name: whatsnew
+    narrative:
+      - stepNumber: 1
+        description: Dispatch `wairon whatsnew` with its version argument to cli_runner.runWhatsNew.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runWhatsNew
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-07T18:41:52.316Z'
+updatedAt: '2026-10-18T14:28:31.034Z'

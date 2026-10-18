@@ -1,0 +1,28 @@
+id: iupgrade_migration_adapter
+name: Upgrade Migration Adapter Contract
+description: >-
+  The family transaction an upgrade is planned and applied through, and the chaining migration while
+  it still lives in sdd_migrations. Every method forwards to migration_portal.
+component: upgrade_migration_adapter
+methods:
+  - name: rehearse
+    description: A private copy of the family's trees for the steps to write onto.
+    signatureFrom: migration_portal.rehearse
+  - name: diff
+    description: 'The rehearsal''s difference from the live trees: the upgrade''s file changes.'
+    signatureFrom: migration_portal.diff
+  - name: commit
+    description: Swap the planned changes in, all or nothing, with backups and journals.
+    signatureFrom: migration_portal.commit
+  - name: drop
+    description: Discard a rehearsal that will not be committed.
+    signatureFrom: migration_portal.drop
+  - name: plan
+    description: Plan the chaining migration (verb chaining) of the bound root.
+    signatureFrom: migration_portal.plan
+  - name: apply
+    description: Apply a planned chaining migration to the bound root.
+    signatureFrom: migration_portal.apply
+status: draft
+createdAt: '2026-10-18T13:06:21.470Z'
+updatedAt: '2026-10-18T13:06:23.909Z'

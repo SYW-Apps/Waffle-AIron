@@ -1,0 +1,18 @@
+kind: value-object
+id: upgrade_step
+name: UpgradeStep
+description: 'One kept step of the chain: it moves a tree from one major to the next.'
+subsystem: sdd_upgrade
+fields:
+  - name: from
+    type: int
+    description: The major it reads.
+    optional: false
+  - name: to
+    type: int
+    description: The major it writes (from + 1).
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:01.044Z'
+updatedAt: '2026-10-18T13:04:01.930Z'

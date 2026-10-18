@@ -1,0 +1,21 @@
+kind: enum
+id: tree_standing_state
+name: TreeStandingState
+description: Where a project tree stands against the running wairon major.
+subsystem: sdd_upgrade
+fields: []
+methods: []
+sourcePath: src/upgrade/types.ts
+values:
+  - name: current
+    description: 'Written by the running major: nothing to do.'
+  - name: older
+    description: 'Written by an older major the kept steps reach: an upgrade brings it up to date.'
+  - name: newer
+    description: 'Written by a newer major than the running wairon: install that release.'
+  - name: out_of_window
+    description: >-
+      Written by a major older than the oldest step this release keeps: install the last release of
+      the next major first.
+createdAt: '2026-10-18T13:03:54.502Z'
+updatedAt: '2026-10-18T13:03:55.584Z'

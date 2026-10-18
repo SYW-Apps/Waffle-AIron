@@ -1,0 +1,64 @@
+id: upgrade_chain_impl
+name: Upgrade Chain Implementation
+description: >-
+  src/upgrade/chain.ts: the fixed table of steps this release keeps — today one, 5 to 6 — and the
+  arithmetic over it. The table is contiguous and ends at the running major; a test holds it to
+  that.
+contract: iupgrade_chain
+sourcePath: src/upgrade/chain.ts
+methods:
+  - name: between
+    narrative:
+      - stepNumber: 1
+        description: Is the tree written by the running major?
+        type: branch
+        condition: writtenMajor equals runningMajor
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer current, with no steps
+        type: return
+        outcome: current
+      - stepNumber: 3
+        label: newer
+        description: Is the tree written by a newer major than the running wairon?
+        type: branch
+        condition: writtenMajor is greater than runningMajor
+        onFalseStep: 5
+      - stepNumber: 4
+        description: Answer newer, advising to install a wairon of the tree's major
+        type: return
+        outcome: newer
+      - stepNumber: 5
+        label: window
+        description: Is the tree older than the oldest step kept?
+        type: branch
+        condition: writtenMajor is below the first kept step's from
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Answer out_of_window, advising to install the last release of the major after the tree's,
+          run `wairon upgrade` there, then come back to this one
+        type: return
+        outcome: out_of_window
+      - stepNumber: 7
+        label: steps
+        description: Take the kept steps from the tree's major up to the running major, oldest first
+        type: local
+      - stepNumber: 8
+        description: Answer older with those steps
+        type: return
+        outcome: older
+  - name: oldestKept
+    narrative:
+      - stepNumber: 1
+        description: Take the from of the first kept step
+        type: local
+      - stepNumber: 2
+        description: >-
+          Answer it: the oldest major this release still upgrades, and the major an unstamped tree
+          is read as
+        type: return
+        outcome: int
+status: draft
+createdAt: '2026-10-18T14:14:04.984Z'
+updatedAt: '2026-10-18T14:16:09.933Z'

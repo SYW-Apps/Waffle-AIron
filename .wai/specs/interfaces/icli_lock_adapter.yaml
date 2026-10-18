@@ -78,18 +78,6 @@ methods:
           Whether the absence of an approval is itself a refusal. False (the default) passes an
           unlocked or spec-tree-less repository with a notice.
         optional: false
-  - name: reexpressApproval
-    description: >-
-      Carry a format-2 lock record into the design reading without a review, when that is provable:
-      compute the gate identity (which carries the record's own identity recomputed as asRecorded),
-      ask approval_comparison.reexpress for the carried record, and write it when there is one. The
-      approval stays the human's (lockedAt, lockedBy unchanged); the record gains `reexpressed`.
-      Returns the written record, or null when there was nothing to carry or nothing proves the
-      design unchanged — then the caller says so and points at one `wairon lock`. The write behind
-      `wairon doctor --fix`'s approval step; it writes this project's .wai/lock.json only.
-    signature: 'reexpressApproval(): LockRecord?'
-    returns: LockRecord?
-    params: []
   - name: holdsNoDesign
     description: >-
       Whether there is nothing to approve: the tree holds the L0 and nothing below it — no
@@ -174,4 +162,4 @@ methods:
         description: The direct members' approval entries
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-09T16:44:13.339Z'
+updatedAt: '2026-10-18T14:21:52.925Z'

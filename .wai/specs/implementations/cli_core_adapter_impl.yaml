@@ -105,13 +105,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: readLockState
-  - name: retireSpecialists
-    narrative:
-      - stepNumber: 1
-        description: Forward the Specialist retirement, planned or applied, to the core portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: retireSpecialists
   - name: repairForeignStepFields
     narrative:
       - stepNumber: 1
@@ -259,27 +252,6 @@ methods:
         type: call
         targetComponent: approval_portal
         targetMethod: approvalVerdict
-  - name: findLegacySpecFiles
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: findLegacySpecFiles
-  - name: findChainingSubprojectsMissingConfig
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: findChainingSubprojectsMissingConfig
-  - name: backfillChainedSubprojectConfigs
-    narrative:
-      - stepNumber: 1
-        description: Forward to the spec maintenance portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: backfillChainedSubprojectConfigs
   - name: diagnoseProjectPacks
     narrative:
       - stepNumber: 1
@@ -343,13 +315,6 @@ methods:
         type: call
         targetComponent: spec_maintenance_portal
         targetMethod: repairTypeSpellings
-  - name: migrateReachability
-    narrative:
-      - stepNumber: 1
-        description: Forward the reachability migration, planned or applied, to the core portal
-        type: call
-        targetComponent: spec_maintenance_portal
-        targetMethod: migrateReachability
   - name: setNetwork
     narrative:
       - stepNumber: 1
@@ -401,4 +366,4 @@ methods:
         targetMethod: inspectLock
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T16:55:52.751Z'
+updatedAt: '2026-10-18T14:21:35.699Z'

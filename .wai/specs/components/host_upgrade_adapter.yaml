@@ -1,0 +1,15 @@
+id: host_upgrade_adapter
+name: Host Upgrade Client Adapter
+description: >-
+  Local client adapter in sdd_host for the hop into sdd_upgrade: at start, each hosted project tree
+  an older major wrote is planned and upgraded through it. In-process import seam
+  (src/server/adapters/upgrade.ts).
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn:
+  - upgrade_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T14:28:02.726Z'
+updatedAt: '2026-10-18T14:34:09.880Z'

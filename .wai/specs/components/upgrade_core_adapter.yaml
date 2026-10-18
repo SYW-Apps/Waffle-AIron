@@ -1,0 +1,19 @@
+id: upgrade_core_adapter
+name: Upgrade Core Adapter
+description: >-
+  The client adapter to sdd_core and sdd_validator: reaches the spec, maintenance and approval
+  rewrites the v5 to v6 step needs until their bodies move into it, and the gate identity a lock
+  re-expression is judged under.
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn:
+  - spec_tree_portal
+  - spec_maintenance_portal
+  - project_config_portal
+  - approval_portal
+  - validator_portal
+transport: InProcess
+status: complete
+createdAt: '2026-10-18T13:02:24.736Z'
+updatedAt: '2026-10-18T14:34:38.164Z'

@@ -1,0 +1,45 @@
+id: iv5_tree_file_adapter
+name: v5 Tree File Adapter Contract
+description: Raw file reads and moves over a v5 project tree.
+component: v5_tree_file_adapter
+methods:
+  - name: familyRoots
+    description: >-
+      The project roots of the family under a root as v5 declared it: its project.yaml members
+      (short and long form) and every L1 subsystem file carrying projectPath, followed recursively,
+      the top first, each once. A path that does not exist is left out.
+    signature: 'familyRoots(root: string): list<string>'
+    returns: list<string>
+    params:
+      - name: root
+        type: string
+    effect: io
+  - name: moveLegacyFolder
+    description: Move the root's .wairon folder to .wai; a root holding a .wai folder already is left as it is.
+    signature: 'moveLegacyFolder(root: string): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+    effect: io
+  - name: renameSpecFile
+    description: Rename one spec file to the name the current layout expects.
+    signature: 'renameSpecFile(from: string, to: string): void'
+    returns: void
+    params:
+      - name: from
+        type: string
+      - name: to
+        type: string
+    effect: io
+  - name: holdsLegacyFolder
+    description: Whether the root holds a .wairon folder and no .wai folder.
+    signature: 'holdsLegacyFolder(root: string): bool'
+    returns: bool
+    params:
+      - name: root
+        type: string
+    effect: io
+status: draft
+createdAt: '2026-10-18T14:11:28.255Z'
+updatedAt: '2026-10-18T14:13:46.770Z'

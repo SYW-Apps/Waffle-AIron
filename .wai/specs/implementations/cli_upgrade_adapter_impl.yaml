@@ -1,0 +1,44 @@
+id: cli_upgrade_adapter_impl
+name: CLI Upgrade Client Adapter Implementation
+description: 'src/cli/adapters/upgrade.ts: in-process import of the sdd_upgrade barrel.'
+contract: icli_upgrade_adapter
+sourcePath: src/cli/adapters/upgrade.ts
+methods:
+  - name: standing
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: standing
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: apply
+  - name: discard
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: discard
+  - name: releaseNotes
+    narrative:
+      - stepNumber: 1
+        description: Forward to the upgrade portal
+        type: call
+        targetComponent: upgrade_portal
+        targetMethod: releaseNotes
+status: draft
+createdAt: '2026-10-18T14:20:51.422Z'
+updatedAt: '2026-10-18T14:20:52.532Z'

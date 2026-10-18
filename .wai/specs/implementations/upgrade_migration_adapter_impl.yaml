@@ -1,0 +1,51 @@
+id: upgrade_migration_adapter_impl
+name: Upgrade Migration Adapter Implementation
+description: 'src/upgrade/adapters/migrations.ts: in-process import of the sdd_migrations barrel.'
+contract: iupgrade_migration_adapter
+sourcePath: src/upgrade/adapters/migrations.ts
+methods:
+  - name: rehearse
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: rehearse
+  - name: diff
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: diff
+  - name: commit
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: commit
+  - name: drop
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: drop
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: plan
+  - name: apply
+    narrative:
+      - stepNumber: 1
+        description: Forward to the migration portal
+        type: call
+        targetComponent: migration_portal
+        targetMethod: apply
+status: draft
+createdAt: '2026-10-18T14:14:28.452Z'
+updatedAt: '2026-10-18T14:14:29.968Z'

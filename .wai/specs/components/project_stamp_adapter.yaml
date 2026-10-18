@@ -1,0 +1,13 @@
+id: project_stamp_adapter
+name: Project Stamp Adapter
+description: >-
+  Reads and writes the one line of a project's project.yaml that says which wairon major wrote it
+  (`waironMajor`), on the raw file, so any major's configuration can be read and stamped — including
+  one the running core no longer loads. It changes nothing else in the file.
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-18T13:06:03.178Z'
+updatedAt: '2026-10-18T14:34:31.198Z'
