@@ -1643,7 +1643,11 @@ A person signs in one of two ways; the startup log names the ones configured:
   stored with `wairon host secret set`) and the server registers the provider
   `default` at every start. Register `<public URL>/web/sso/callback` as the
   redirect URI at the provider, and list it in `WAIRON_OIDC_ALLOWED_REDIRECT_URIS`
-  so no other is accepted. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
+  (required: a provider with no allowed redirect addresses signs nobody in, and
+  no other address is accepted; the login page shows it as not set up yet, the
+  Sign-in (SSO) view and the startup log warn about it). A provider added in
+  the UI names the same list under Allowed redirect URIs, usually the one
+  address `<public URL>/web/sso/callback`. Optional: `WAIRON_OIDC_DISPLAY_NAME` (the button
   label), `WAIRON_OIDC_PROVIDER_TYPE` (default `oidc`),
   `WAIRON_OIDC_ALLOWED_DOMAINS` (email domains admitted),
   `WAIRON_OIDC_ADMIN_GROUPS` (group claims bound to the built-in `sso-admin`
