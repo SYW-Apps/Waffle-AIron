@@ -323,8 +323,6 @@ export function resolveTypeRef(
     }
     if (shadow) result.shadowedBy = shadow.id;
   }
-
-
   return result;
 }
 
