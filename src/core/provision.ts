@@ -92,6 +92,7 @@ import {
   type SpecRef,
   parseDeclaredCall,
   transportKind,
+  l0ExportName,
   type Transport,
 } from '../models/index.js';
 import { ownGet } from '../utils/own.js';
@@ -1899,7 +1900,7 @@ function exportReExported(inside: RawSpec[], memberDir: string, alias: string, r
       if (type === undefined && !component) continue;
       const field: 'component' | 'typeDef' = type ? 'typeDef' : 'component';
       const item = type ? type.id : component!.id;
-      const publicName = e.as ?? (e.id as string | undefined) ?? (interfaceId ?? item);
+      const publicName = l0ExportName(e) ?? (interfaceId ?? item);
       if (type?.subsystem) exportTypeFromSubsystem(type.subsystem, type.id);
       // An entry the member already holds for the item keeps its public name, widened to the parent's audience.
       const held = own.find((x) => x[field] === item && (interfaceId === undefined || x.interface === undefined || x.interface === interfaceId));
@@ -1908,7 +1909,7 @@ function exportReExported(inside: RawSpec[], memberDir: string, alias: string, r
           held.audience = audience;
           changed = true;
         }
-        const name = (held.as ?? (held.id as string | undefined) ?? (held.interface ?? item)) as string;
+        const name = (l0ExportName(held) ?? (held.interface ?? item)) as string;
         result.exported.push(`${alias} L0: ${item} as ${name} at ${held.audience} (re-exported by the parent)`);
         repointed.set(e, { name, field, item });
         continue;
@@ -3819,7 +3820,7 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
   const references = [
     ...exportsMoving.map((e) => `${from}: L1 export ${e.as ?? e.interface ?? e.component} → moved to ${target}`),
     ...lifecycleMoving.map((e) => `${from}: lifecycle entrypoint ${e.component} → moved to ${target}`),
-    ...repointed.map((e) => `system: L0 export ${e.as ?? e.id ?? e.interface ?? e.component} from ${from} → ${target}`),
+    ...repointed.map((e) => `system: L0 export ${l0ExportName(e) ?? e.interface ?? e.component} from ${from} → ${target}`),
     ...added.map((e) => `system: L0 export ${e.as ?? e.component} added from ${target} (the whole-subsystem re-export of ${from} no longer reaches it)`),
   ];
   return { ...report, files: [...new Set(files)], references };
@@ -3951,7 +3952,7 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   // Step 21: the references, then the export tables — L1 entries moved,
   // dropped or added, L0 entries re-pointed — each file keeping its stamp.
   rewriteAll(true);
-  const exportName = (e: any): string => String(e.as ?? e.id ?? bare);
+  const exportName = (e: any): string => String(l0ExportName(e) ?? bare);
   if (fromDoc && fromFile && exportsMoving.length > 0) {
     fromDoc.publicInterfaces = l1Entries(fromDoc).filter((e) => !exportsMoving.includes(e));
     writeYamlFile(fromFile, fromDoc);

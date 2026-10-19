@@ -6,7 +6,8 @@ import { execFileSync, spawnSync } from 'child_process';
 
 // The release QA gate's CI check (qa/scripts/check-verdict.mjs), run against a
 // throwaway git repository: a verdict clears a pull request only when it passed,
-// its RC is an ancestor of HEAD, and no shipped file moved after the RC.
+// its release ships notes, its RC is an ancestor of HEAD, and no shipped file
+// moved after the RC.
 
 const SCRIPT = path.resolve(__dirname, '..', '..', 'qa', 'scripts', 'check-verdict.mjs');
 
@@ -40,6 +41,7 @@ describe('qa/scripts/check-verdict.mjs', () => {
     git('config', 'core.autocrlf', 'false');
     write('src/a.ts', 'export const a = 1;\n');
     write('package.json', '{}\n');
+    write('release-notes/6.0.0.md', '# wairon 6.0.0\n\n- a highlight\n');
     rc = commit('rc');
     main = git('rev-parse', '--abbrev-ref', 'HEAD');
   });
@@ -66,6 +68,23 @@ describe('qa/scripts/check-verdict.mjs', () => {
     expect(r.out).toContain('not PASS');
     verdict(rc);
     commit('pass again');
+  });
+
+  it('fails when the release ships no notes, or notes without a highlight, and passes once they are written after the RC', () => {
+    fs.rmSync(path.join(repo, 'release-notes/6.0.0.md'));
+    commit('notes gone');
+    const missing = check();
+    expect(missing.code).toBe(1);
+    expect(missing.out).toContain('6.0.0.md is missing');
+    write('release-notes/6.0.0.md', '# wairon 6.0.0\n\nNo list here.\n');
+    commit('notes without a highlight');
+    const empty = check();
+    expect(empty.code).toBe(1);
+    expect(empty.out).toContain('holds no highlight');
+    write('release-notes/6.0.0.md', '# wairon 6.0.0\n\n* a highlight\n');
+    commit('notes written');
+    const r = check();
+    expect(r.code, r.out).toBe(0);
   });
 
   it('fails when the RC is not an ancestor of head', () => {

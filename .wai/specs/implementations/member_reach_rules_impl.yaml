@@ -57,11 +57,11 @@ methods:
   - name: narrowing
     narrative:
       - stepNumber: 1
-        description: Does any entry carry '::' (a member qualifier)?
+        description: Is the key revoked, or does no entry carry '::' (a member qualifier)?
         type: branch
-        condition: an entry of the narrowing is member-qualified
-        onTrueStep: 3
-        onFalseStep: 2
+        condition: the key is revoked, or no entry of the narrowing is member-qualified
+        onTrueStep: 2
+        onFalseStep: 3
       - stepNumber: 2
         description: 'Nothing to rewrite: a project entry covers its members through the chain'
         type: return
@@ -69,13 +69,13 @@ methods:
       - stepNumber: 3
         description: >-
           Replace each qualified entry by the record id of the member whose qualifier equals it,
-          keep every other entry, collapse duplicates keeping first order
+          drop a qualified entry that equals none, keep every other entry, collapse duplicates
+          keeping first order
         type: local
       - stepNumber: 4
         description: >-
-          State the widening: record-level tools (status, approval, lock requests, packs, policy,
-          producers, commit, landscape discovery) now act on the member's own record — within the
-          member only
+          State that nothing widens: a qualified entry already bound the member's own record, so the
+          rewrite spells the same reach in record ids; flag the key as revoked when no entry is left
         type: local
       - stepNumber: 5
         description: Return the planned rewrite
@@ -111,4 +111,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-01T16:56:34.586Z'
-updatedAt: '2026-10-03T14:20:15.296Z'
+updatedAt: '2026-10-19T06:11:59.128Z'

@@ -16,11 +16,9 @@ import type { HostedUserRecord, UnitIdRemap } from './types.js';
 // reads to the index and writes to the registry, with no logic of their own.
 // ---------------------------------------------------------------------------
 
-/** Lifecycle statuses a hosted user may hold. The status axis is canonically
- *  `active` | `inactive` (per hosted_user_record); the legacy `suspended` /
- *  `deactivated` / `disabled` values are still accepted and all mean inactive
+/** Lifecycle statuses a hosted user may hold. The status axis is `active` | `inactive` (per hosted_user_record), and nothing else is stored or accepted
  *  (any non-`active` status revokes access and blocks sign-in). */
-const VALID_STATUSES = ['active', 'inactive', 'suspended', 'deactivated', 'disabled'];
+const VALID_STATUSES = ['active', 'inactive'];
 
 function storePath(dataDir: string): string {
   return path.join(dataDir, 'users.json');

@@ -625,7 +625,7 @@ wairon major that still types a component with either is moved by `wairon upgrad
 | Retired | Becomes | Migration |
 |---|---|---|
 | `Specialist` | an Orchestrator with the `dependencyClass` its dependencies give it | `wairon upgrade` retypes it with that class, and rebases each Specialist-based variant onto Orchestrator |
-| `Gateway` | the Portal it owned, with the `gateway` variant | by hand: (1) the owned Portal becomes the front door, with `variant: gateway`; (2) the Gateway's other members become that Portal's dependencies; (3) its consumers depend on the Portal; (4) delete the Gateway spec — `sdd_rename_component` can then give the Portal the Gateway's id |
+| `Gateway` | the Portal it owned, with the `gateway` variant | `wairon upgrade` merges it: the owned Portal becomes the front door with `variant: gateway`, the Gateway's other members become that Portal's dependencies, its consumers and exports name the Portal, and the Gateway spec is removed. A Gateway it cannot merge (for example one that owns no Portal or several, a Portal that already has another variant, a Gateway owned by another component) refuses the upgrade, naming the hand steps |
 
 **Router vs Portal vs Facade:** a **Router** selects a destination from *dynamic
 input values*; a **Portal** is the *transport* boundary that *uses* a Router/Index

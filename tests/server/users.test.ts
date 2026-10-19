@@ -64,9 +64,9 @@ describe('user repository (sdd_host)', () => {
 
     const updated = upsertUser(
       dataDir,
-      mkUser({ id: 'u-1', status: 'suspended', subject: subject({ displayName: 'Ada Lovelace' }) }),
+      mkUser({ id: 'u-1', status: 'inactive', subject: subject({ displayName: 'Ada Lovelace' }) }),
     );
-    expect(updated.status).toBe('suspended');
+    expect(updated.status).toBe('inactive');
     expect(updated.subject.displayName).toBe('Ada Lovelace');
 
     const reloaded = getUserById(dataDir, 'u-1');
@@ -83,7 +83,7 @@ describe('user repository (sdd_host)', () => {
 
     const updated = upsertUser(
       dataDir,
-      mkUser({ id: 'u-1', status: 'deactivated', createdAt: '1999-12-31T00:00:00.000Z' }),
+      mkUser({ id: 'u-1', status: 'inactive', createdAt: '1999-12-31T00:00:00.000Z' }),
     );
     expect(updated.createdAt).toBe(inserted.createdAt);
     expect(getUserById(dataDir, 'u-1')?.createdAt).toBe(inserted.createdAt);
@@ -95,11 +95,19 @@ describe('user repository (sdd_host)', () => {
     const roleBindings: RoleBinding[] = [{ roleId: 'sso-admin' }];
     upsertUser(dataDir, mkUser({ id: 'u-1', roleBindings, subject: subject({ email: 'a@b.co' }) }));
 
-    const suspended = setUserStatus(dataDir, 'u-1', 'suspended');
-    expect(suspended.status).toBe('suspended');
-    expect(suspended.roleBindings).toEqual(roleBindings);
-    expect(suspended.subject.email).toBe('a@b.co');
-    expect(getUserById(dataDir, 'u-1')?.status).toBe('suspended');
+    const inactive = setUserStatus(dataDir, 'u-1', 'inactive');
+    expect(inactive.status).toBe('inactive');
+    expect(inactive.roleBindings).toEqual(roleBindings);
+    expect(inactive.subject.email).toBe('a@b.co');
+    expect(getUserById(dataDir, 'u-1')?.status).toBe('inactive');
+  });
+
+  it('refuses the retired statuses, naming the two there are, and changes nothing', () => {
+    upsertUser(dataDir, mkUser({ id: 'u-1' }));
+    for (const retired of ['suspended', 'deactivated', 'disabled', 'deleted']) {
+      expect(() => setUserStatus(dataDir, 'u-1', retired)).toThrow(/allowed: active, inactive/);
+    }
+    expect(getUserById(dataDir, 'u-1')?.status).toBe('active');
   });
 
   it('rejects setStatus on an unknown id', () => {
@@ -166,7 +174,7 @@ describe('user repository (sdd_host)', () => {
     upsertUser(dataDir, mkUser({ id: 'u-c', status: 'active' }));
     upsertUser(dataDir, mkUser({ id: 'u-a', status: 'active' }));
     upsertUser(dataDir, mkUser({ id: 'u-d', status: 'active' }));
-    upsertUser(dataDir, mkUser({ id: 'u-b', status: 'suspended' }));
+    upsertUser(dataDir, mkUser({ id: 'u-b', status: 'inactive' }));
     setAssignment(dataDir, {
       id: '', subjectKind: 'user', subjectId: 'u-a', scopeKind: 'project', scopeId: 'proj-x',
       capability: 'project:read', value: 'yes', createdAt: '',

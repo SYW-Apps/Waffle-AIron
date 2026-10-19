@@ -281,7 +281,7 @@ describe('the approval', () => {
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 
-  v5it('still READS a format-1 record\'s `children` (until the next major release)', () => {
+  v5it('still READS a format-1 record\'s `children` (in the v5 reading)', () => {
     root = project();
     const legacy = approveAt(root);
     fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, format: undefined, specsReading: undefined, children: { billing: 'sha256:abc123' } }, null, 2));

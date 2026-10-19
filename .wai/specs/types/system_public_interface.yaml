@@ -2,8 +2,8 @@ kind: value-object
 id: system_public_interface
 name: SystemPublicInterface
 description: >-
-  One entry of the project's L0 export table — the only thing another project may consume, like a
-  crate root's `pub use` or an `index.js` re-export. An entry is one of: an OWN item — `{ typeDef:
+  One entry of the project's L0 export table - the only thing another project may consume, like a
+  crate root's `pub use` or an `index.js` re-export. An entry is one of: an OWN item - `{ typeDef:
   host-var-values }` with no `from`, a project-level type (a type owned by no subsystem), the
   crate-root `pub struct`; a one-to-one re-export of a component (optionally narrowed to one
   interface) or a type from a source, optionally renamed with `as`; or, with neither `component` nor
@@ -11,13 +11,16 @@ description: >-
   subsystems, or a member or declared external by its alias. There is no project-level type
   wildcard: each exported type is one entry, so a type becomes public contract only by being named.
   The export resolver follows each entry to its canonical target once per scan; explicit entries
-  shadow a name a wildcard brings in. A legacy entry `{ subsystem, component, id }` reads as `{
-  from: subsystem, component, as: id }`, and a component or subsystem-owned type without a source
-  infers it from its owner, so existing trees keep their published names.
+  shadow a name a wildcard brings in. A component or subsystem-owned type without a `from` infers
+  its source from its owner. The wairon 5 names `id` (for `as`) and `subsystem` (for `from`) are
+  read only in the v5 reading `wairon upgrade` binds, which rewrites them; the loader refuses them
+  anywhere else.
 fields:
   - name: id
     type: string
-    description: Legacy public name, read as `as` when `as` is absent.
+    description: >-
+      A wairon 5 form, no longer authored: the public name, now `as`. Read only in the v5 reading
+      `wairon upgrade` binds, which rewrites it to `as`; the loader refuses it anywhere else.
     optional: true
   - name: name
     type: string
@@ -26,8 +29,9 @@ fields:
   - name: subsystem
     type: string
     description: >-
-      Legacy source subsystem, read as `from` when `from` is absent; when both are absent the source
-      is inferred from the component's (or type's) owner.
+      A wairon 5 form, no longer authored: the source subsystem, now `from`. Read only in the v5
+      reading `wairon upgrade` binds, which rewrites it to `from`; the loader refuses it anywhere
+      else.
     optional: true
   - name: component
     type: string
@@ -37,9 +41,7 @@ fields:
     optional: true
   - name: interface
     type: string
-    description: >-
-      The L3 interface the export narrows to; the default public name when neither `as` nor `id` is
-      set.
+    description: The L3 interface the export narrows to; the default public name when `as` is not set.
     optional: true
   - name: type
     type: string
@@ -79,8 +81,8 @@ fields:
     type: string
     description: >-
       The source the entry re-exports from: a subsystem of this project, or a member or declared
-      external by its alias. Absent for an own project-level type, and for a legacy entry whose
-      source is inferred.
+      external by its alias. Absent for an own project-level type, and for an entry whose source is
+      inferred from its component's (or type's) owner.
     optional: true
   - name: typeDef
     type: string
@@ -92,9 +94,8 @@ fields:
   - name: as
     type: string
     description: >-
-      The public name consumers use. Defaults to `id`, then `interface`, then `component` or
-      `typeDef`, so an entry without it keeps today's name. Must fit [a-z0-9-_]+ (else
-      EXPORT_INVALID).
+      The public name consumers use. Defaults to `interface`, then `component` or `typeDef`. Must
+      fit [a-z0-9-_]+ (else EXPORT_INVALID).
     optional: true
   - name: role
     type: ExportRole
@@ -103,4 +104,4 @@ fields:
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-08T21:10:42.862Z'
-updatedAt: '2026-10-18T19:09:10.717Z'
+updatedAt: '2026-10-19T06:12:31.970Z'

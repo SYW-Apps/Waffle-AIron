@@ -97,10 +97,9 @@ methods:
         type: any
   - name: resolveContainedProjectPath
     description: >-
-      Resolve a member's path WITHIN the given root — a project.yaml `members` entry's path or,
-      until the next major release, a legacy L1 mount's projectPath — forwarded to the spec tree
-      portal's containment check: absolute and escaping paths refused. The hosted member-resolution
-      seam: the project repository never touches core modules directly.
+      Resolve a member's path WITHIN the given root - a project.yaml `members` entry's path -
+      forwarded to the spec tree portal's containment check: absolute and escaping paths refused.
+      The hosted member-resolution seam: the project repository never touches core modules directly.
     signature: 'resolveContainedProjectPath(projectRoot: string, projectPath: string): string'
     returns: string
     params:
@@ -294,4 +293,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-18T14:29:43.420Z'
+updatedAt: '2026-10-19T06:11:20.639Z'

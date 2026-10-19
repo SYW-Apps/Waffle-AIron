@@ -87,10 +87,10 @@ methods:
         endStep: 11
       - stepNumber: 5
         description: >-
-          Read the entry the way it was meant: its name `as ?? id` (a public name outside
-          [a-z0-9-_]+ is an invalid problem), and its source — `from ?? subsystem`, else, for a
-          `typeDef` naming a type the project owns at project level (no subsystem), none (an own
-          item), else the owner of the component or type
+          Read the entry the way it was meant: its name `as` (a public name outside [a-z0-9-_]+ is
+          an invalid problem), and its source - `from`, else, for a `typeDef` naming a type the
+          project owns at project level (no subsystem), none (an own item), else the owner of the
+          component or type
         type: local
       - stepNumber: 6
         description: Follow the source by its kind
@@ -169,4 +169,4 @@ methods:
     symbol: resolveProjectTable
 status: complete
 createdAt: '2026-09-27T10:34:37.874Z'
-updatedAt: '2026-10-08T08:28:13.079Z'
+updatedAt: '2026-10-19T06:12:36.025Z'

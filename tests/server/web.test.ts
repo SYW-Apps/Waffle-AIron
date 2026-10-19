@@ -251,7 +251,7 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     const f1 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await completeSignIn(cfg, f1.state, 'code-1', f1.nonce);
 
-    setUserStatus(dataDir, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
+    setUserStatus(dataDir, `sso:${PROVIDER_ID}:ext-1`, 'inactive');
 
     const f2 = started(await startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb'));
     await expect(completeSignIn(cfg, f2.state, 'code-2', f2.nonce)).rejects.toThrow(ForbiddenError);
@@ -1491,7 +1491,7 @@ describe('web admin orchestrator (sdd_host)', () => {
 
     // An admin deactivates the OWNER. Because the token is OWNED by that user,
     // setUserStatus's revokeAllForOwner sweep catches it — the defect this closes.
-    identity.setUserStatus(cfg, adminSession(), 'u-agent', 'suspended');
+    identity.setUserStatus(cfg, adminSession(), 'u-agent', 'inactive');
     expect(authenticate(dataDir, token).authenticated).toBe(false);
   });
 });

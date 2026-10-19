@@ -4,11 +4,12 @@ name: MemberUpgradePlan
 description: >-
   The stage-7 upgrade of a hosted data dir, planned and not yet applied: every member the hosted
   families declare on disk (members of members included) with the record it gets, the reach proof
-  (today's reach over the family root vs the new chain over the member's own record — equal by
-  construction, checked before writing), and every API key whose member-QUALIFIED entries are
-  rewritten to record ids. It writes NO grants and NO placements: a member's reach comes through its
-  project chain. Its writes (member records, key narrowings) were made into a rehearsal copy of the
-  host stores; changes lists the file-level difference the apply would swap in, all or nothing.
+  (today's reach over the family root vs the new chain over the member's own record - equal by
+  construction, checked before writing), every API key whose member-QUALIFIED entries are rewritten
+  to record ids (or revoked when none maps). It writes NO grants and NO placements: a member's reach
+  comes through its project chain. Its writes (member records, key narrowings) were made into a
+  rehearsal copy of the host stores; changes lists the file-level difference the apply would swap
+  in, all or nothing.
 subsystem: sdd_host
 fields:
   - name: members
@@ -24,7 +25,9 @@ fields:
     optional: false
   - name: narrowings
     type: list<PlannedNarrowing>
-    description: Every API key with a member-qualified entry, rewritten to the member's record id
+    description: >-
+      Every non-revoked API key with a member-qualified entry, rewritten to the member's record id
+      (an entry naming no member dropped; the key revoked when none is left)
     optional: false
   - name: refusals
     type: list<MigrationFinding>
@@ -44,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/server/members.ts
 createdAt: '2026-10-01T16:27:23.715Z'
-updatedAt: '2026-10-07T06:28:27.509Z'
+updatedAt: '2026-10-19T06:16:14.479Z'

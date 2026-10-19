@@ -22,7 +22,7 @@ import * as admin from '../../src/server/admin.js';
 import { AdminAuthError } from '../../src/server/errors.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { resolveSecret } from '../../src/utils/secrets.js';
-import { seedChainedMount } from './helpers.js';
+import { seedChainedMember } from './helpers.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as memberRegistration from '../../src/server/members.js';
 import type { HostConfig } from '../../src/server/types.js';
@@ -302,7 +302,7 @@ describe('git-backed projects (sdd_git)', () => {
 
     // A member inside the bound repo, itself a provisioned (lockable) project,
     // registered as a hosted record by the stage-7 upgrade.
-    const child = seedChainedMount(root, 'billing', 'packages/billing');
+    const child = seedChainedMember(root, 'billing', 'packages/billing');
     runWithProjectRoot(child, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
     expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
@@ -340,9 +340,9 @@ describe('git-backed projects (sdd_git)', () => {
   it('family-commit-covers-members: one commit, every member pathspec, nothing else swept', { timeout: 30_000 }, () => {
     admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
     const root = projectRoot();
-    const billing = seedChainedMount(root, 'billing', 'packages/billing');
+    const billing = seedChainedMember(root, 'billing', 'packages/billing');
     runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
-    const docs = seedChainedMount(root, 'docs', 'packages/docs');
+    const docs = seedChainedMember(root, 'docs', 'packages/docs');
     runWithProjectRoot(docs, () => hostCore.provisionProject('docs'));
     invalidateSpecCache();
     expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
@@ -383,7 +383,7 @@ describe('git-backed projects (sdd_git)', () => {
   it('reconcile publishes one family commit over every touched project', { timeout: 30_000 }, () => {
     admin.enableGit(cfg, ADMIN, 'demo', remote, 'main');
     const root = projectRoot();
-    const billing = seedChainedMount(root, 'billing', 'packages/billing');
+    const billing = seedChainedMember(root, 'billing', 'packages/billing');
     runWithProjectRoot(billing, () => hostCore.provisionProject('billing'));
     invalidateSpecCache();
     expect(upgradeMemberRecords({ dataDir }, true).applied).toBe(true);
@@ -391,7 +391,7 @@ describe('git-backed projects (sdd_git)', () => {
     git(['-c', 'user.email=s@x', '-c', 'user.name=seed', 'commit', '-qm', 'scaffold'], root);
 
     // The family-shape change on disk: a new member declared and scaffolded, an untouched member edited, team code beside it.
-    const tools = seedChainedMount(root, 'tools', 'packages/tools');
+    const tools = seedChainedMember(root, 'tools', 'packages/tools');
     runWithProjectRoot(tools, () => hostCore.provisionProject('tools'));
     fs.writeFileSync(path.join(billing, '.wai', 'note.yaml'), 'note: not part of this change\n');
     fs.mkdirSync(path.join(root, 'src'), { recursive: true });

@@ -69,8 +69,8 @@ methods:
       - stepNumber: 6
         description: >-
           Admit the project the key is narrowed to through the project repository: a project no
-          hosted record holds (or a member-qualified entry naming no member) refuses the mint before
-          anything is generated, so a key is never minted for a project that does not exist
+          hosted record holds (or a member-qualified entry) refuses the mint before anything is
+          generated, so a key is never minted for a project that does not exist
         type: call
         targetComponent: project_repository
         targetMethod: admitNarrowing
@@ -1255,4 +1255,4 @@ methods:
     symbol: hostedApprover
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-17T16:23:55.424Z'
+updatedAt: '2026-10-19T06:11:23.410Z'

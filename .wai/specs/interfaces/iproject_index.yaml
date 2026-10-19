@@ -8,9 +8,8 @@ methods:
   - name: resolveRoot
     description: >-
       Resolve the root path of the authorized hosted record, honoring the optional selector only
-      within the principal's authorized set (record ids, '*', or a deprecated member qualifier
-      mapped to its member's record); reject cross-project access (null — no existence leak). Only
-      an active record resolves.
+      within the principal's authorized set (record ids and '*'); reject cross-project access (null
+      - no existence leak). Only an active record resolves.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
     returns: string?
   - name: list
@@ -26,15 +25,11 @@ methods:
       core adapter's containment guard) and its family root id. Since stage 7 a member is a record,
       named by its own id. Coverage follows the project chain, as permissions do: an entry covers a
       target iff it is '*', equal to it, or names a project the target descends from through
-      parentProjectId (a token for a family root reaches its members). DEPRECATED until the next
-      major release: a member-qualified selector or entry ('projectId::alias', one alias per hop) is
-      first mapped to the member's record id by walking the aliases each root declares (project.yaml
-      `members`, or a legacy L1 mount) and matching the record whose parentProjectId and memberPath
-      name that directory; the binding then carries the qualifier in via. An alias that declares no
-      member, or a directory no record holds, resolves to null — never the family root. A member
-      record whose memberPath no longer holds a project with the record's id is null (reconcile
-      relocates it). Only an active record resolves; anything else is null with no existence leak.
-      resolveRoot is this binding's rootPath projection.
+      parentProjectId (a token for a family root reaches its members). A member-qualified selector
+      or entry ('projectId::alias') names no record and resolves to null. A member record whose
+      memberPath no longer holds a project with the record's id is null (reconcile relocates it).
+      Only an active record resolves; anything else is null with no existence leak. resolveRoot is
+      this binding's rootPath projection.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
     returns: ProjectBinding?
   - name: existingRoot
@@ -65,17 +60,17 @@ methods:
       The PROJECT members the family rooted at a record declares ON DISK and CONTAINS, members of
       members included: from the record's root, each project.yaml `members` entry with a contained
       source whose content makes it a project (stage 8: its tree declares an id, holds an L0 or
-      carries a lock — every pre-stage-8 member is project-shaped, so an existing family registers
-      exactly as before) and, until the next major release, each legacy L1 mount, followed through
-      the containment guard, with the member's own project id read from its project.yaml. Each is
-      answered as the record it should hold (id, parentProjectId = the declaring project's id,
-      memberPath as declared), with the pre-stage-7 qualifier that bound it and the action against
-      the stored records (register, relocate, rename, return — a record disabled as departed or
-      retired whose project member is declared again, retire — a record whose member's content is
-      now a part). Not answered (stage 8): a PART, which is part of its declaring project's record
-      and never a record of its own; and a `hosted:` project member, which is its own top-level
-      record, related to the declarer but not contained by it, so it gets no parentProjectId and
-      inherits no access through it. Records only, read from disk; nothing written.
+      carries a lock - every pre-stage-8 member is project-shaped, so an existing family registers
+      exactly as before), followed through the containment guard, with the member's own project id
+      read from its project.yaml. Each is answered as the record it should hold (id, parentProjectId
+      = the declaring project's id, memberPath as declared), with the member-qualified selector that
+      bound it before stage 7 and the action against the stored records (register, relocate, rename,
+      return - a record disabled as departed or retired whose project member is declared again,
+      retire - a record whose member's content is now a part). Not answered (stage 8): a PART, which
+      is part of its declaring project's record and never a record of its own; and a `hosted:`
+      project member, which is its own top-level record, related to the declarer but not contained
+      by it, so it gets no parentProjectId and inherits no access through it. Records only, read
+      from disk; nothing written.
     signature: 'declaredMembers(id: string): list<PlannedMemberRecord>'
     returns: list<PlannedMemberRecord>
     params:
@@ -136,9 +131,8 @@ methods:
   - name: admitNarrowing
     description: >-
       Validate one projects-narrowing entry at mint time and answer what is stored: '*' and a record
-      id as they are, a deprecated member-qualified entry mapped to the member's record id by
-      walking the aliases each root declares. An unknown project, an alias that declares no member,
-      an internal subsystem, or a member no record holds is refused with guidance.
+      id as they are. A member-qualified entry ('projectId::alias') is refused, naming the member's
+      record id as the form to use; so is an unknown project.
     signature: 'admitNarrowing(entry: string): string'
     returns: string
     params:
@@ -147,4 +141,4 @@ methods:
         description: One entry of a mint request's projects narrowing.
 status: complete
 createdAt: '2026-07-19T09:00:02.404Z'
-updatedAt: '2026-10-18T00:36:49.956Z'
+updatedAt: '2026-10-19T06:11:12.902Z'

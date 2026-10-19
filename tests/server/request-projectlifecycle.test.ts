@@ -405,7 +405,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
   let demoRoot: string;
   let childRoot: string;
   let unitId: string;
-  /** Narrowed to demo::billing (the confined credential). */
+  /** Narrowed to the member record billing (the confined credential). */
   let qualTok: string;
   /** Narrowed to plain demo — SAME owner, SAME grants (the control). */
   let plainTok: string;
@@ -449,13 +449,13 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
     }
     grant(dataDir, 'u-full', 'project:create', 'unit', unitId);
     grant(dataDir, 'u-full', 'approval:decide', 'instance', undefined);
-    qualTok = mintUserToken(dataDir, { id: 'tok-qual', userId: 'u-full', projects: ['demo::billing'] });
+    qualTok = mintUserToken(dataDir, { id: 'tok-qual', userId: 'u-full', projects: ['billing'] });
     plainTok = mintUserToken(dataDir, { id: 'tok-plain', userId: 'u-full', projects: ['demo'] });
 
     // A real pending project:lock request, plus the REQUESTER's own two narrowings
     // (only the original requester may await, so the control needs its token).
     grant(dataDir, 'u-req', 'project:write', 'project', 'demo', 'approval');
-    requesterQualTok = mintUserToken(dataDir, { id: 'tok-req-qual', userId: 'u-req', projects: ['demo::billing'] });
+    requesterQualTok = mintUserToken(dataDir, { id: 'tok-req-qual', userId: 'u-req', projects: ['billing'] });
     requesterPlainTok = mintUserToken(dataDir, { id: 'tok-req-plain', userId: 'u-req', projects: ['demo'] });
     seededRequestId = lockProject(cfg, requesterPlainTok, 'demo').approval!.id;
 
@@ -500,7 +500,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
   const text = (r: RpcResponse): string => r.result?.content?.[0]?.text ?? '';
 
   /** One tools/call as `token`; single-entry narrowings need no selector, so the
-   *  qualified token binds demo::billing and the plain token binds demo. */
+   *  member token binds billing and the plain token binds demo. */
   const send = async (token: string, tool: string, args: Record<string, unknown> = {}): Promise<RpcResponse> => {
     const res = await fetch(`http://127.0.0.1:${port}/mcp`, {
       method: 'POST',
@@ -517,7 +517,7 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
   };
 
   // Since stage 7 a member is a record of its own: a credential bound to the
-  // member — by its id, or, until the next major release, by the deprecated qualifier — reaches
+  // member by its record id reaches
   // the member's OWN record-level tools (the documented widening within the
   // member only), and never acts on its parent's record.
 
@@ -543,11 +543,12 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
     expect(packs.listProjectPacks(cfg, MASTER, 'demo').map((p) => p.name)).not.toContain('policy-doctrine');
   }, 20_000);
 
-  it('a member-bound call is audited naming the member, with the family root a qualifier named as composition', async () => {
+  it('a member-bound call is audited naming the member record', async () => {
     await send(qualTok, 'sdd_host_commit_project', { message: 'member commit' });
     const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ target: 'sdd_host_commit_project', projectId: 'billing', composition: 'demo', tokenId: 'tok-qual' });
+    expect(events[0]).toMatchObject({ target: 'sdd_host_commit_project', projectId: 'billing', tokenId: 'tok-qual' });
+    expect(events[0].composition).toBeUndefined();
   }, 20_000);
 
   it('lock on a member-bound credential freezes the MEMBER tree and leaves the PARENT unlocked', async () => {
@@ -565,6 +566,25 @@ describe('handleMcpRequest member-bound credential (end-to-end, stage 7)', () =>
     expect(outcome.lock?.stateId.digest).toBe(childLock.stateId.digest);
     // DID NOT HAPPEN: the PARENT tree was never locked.
     expect(fs.existsSync(path.join(demoRoot, '.wai', 'lock.json'))).toBe(false);
+  }, 20_000);
+
+  it('a member-qualified selector is refused 400 and a leftover qualified entry binds nothing (403)', async () => {
+    const leftover = mintUserToken(dataDir, { id: 'tok-left', userId: 'u-full', projects: ['demo::billing'] });
+    const viaEntry = await fetch('http://127.0.0.1:' + port + '/mcp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: 'Bearer ' + leftover },
+      body: JSON.stringify(call('sdd_host_pack_list', {})),
+    });
+    await viaEntry.text();
+    expect(viaEntry.status).toBe(403);
+    const viaSelector = await fetch('http://127.0.0.1:' + port + '/mcp?project=demo::billing', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: 'Bearer ' + plainTok },
+      body: JSON.stringify(call('sdd_host_pack_list', {})),
+    });
+    await viaSelector.text();
+    expect(viaSelector.status).toBe(400);
+    expect(fs.existsSync(path.join(childRoot, '.wai', 'lock.json'))).toBe(false);
   }, 20_000);
 
   it('lock WITHOUT a qualifier still locks the project itself (no regression)', async () => {

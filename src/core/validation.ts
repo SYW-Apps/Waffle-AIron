@@ -897,7 +897,7 @@ function runOwnersGate(
       ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
       // The bound project's own network, for network-boundaries.
       ...(boundConfig?.network ? { network: boundConfig.network } : {}),
-      // The retired reachability forms the scan read compatibly, for entry-declarations.
+      // The retired reachability forms the scan met in the v5 reading, for entry-declarations.
       retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,
       codeModel,
@@ -1003,7 +1003,7 @@ function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
       if (parsed.success) out.system = parsed.data;
     } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
     else if ('componentType' in doc) {
-      // Retired reachability forms read compatibly, as the loader reads them.
+      // Retired reachability forms read in the v5 reading, as the loader reads them.
       readRetiredReachForms('component', doc);
       const parsed = ComponentSpecSchema.safeParse(doc);
       take(out.components, parsed.success ? { success: true, data: attachRetiredMounts(parsed.data, doc) } : parsed);

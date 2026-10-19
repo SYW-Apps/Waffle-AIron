@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { resolveProjectTable, resolveSubsystemTables } from '../../src/core/exports.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec, SystemSpec, TypeSpec } from '../../src/models/index.js';
 import type { ResolvedExportTable } from '../../src/models/exports.js';
@@ -156,16 +157,30 @@ describe('export index: the project table', () => {
   const project = (entries: unknown[], types: TypeSpec[] = TYPES, sources = NO_SOURCES) =>
     resolveProjectTable(system(entries), SUBSYSTEMS, COMPONENTS, INTERFACES, types, tables(SUBSYSTEMS), sources);
 
-  it('reads a legacy L0 entry as a re-export and keeps its published name: id, then interface, then component', () => {
+  it('reads an L0 entry as a re-export and names it: as, then interface, then component', () => {
     const t = project([
-      { id: 'payments-api', subsystem: 'payments', component: 'payment_portal', audience: 'external' },
-      { subsystem: 'shipping', component: 'shipping_portal', interface: 'ishipping' },
+      { as: 'payments-api', from: 'payments', component: 'payment_portal', audience: 'external' },
+      { from: 'shipping', component: 'shipping_portal', interface: 'ishipping' },
       { component: 'payment_portal' },
     ]);
     const names = t.entries.map((e) => e.publicName).sort();
     expect(names).toEqual(['ishipping', 'payment_portal', 'payments-api']);
     expect(t.entries.find((e) => e.publicName === 'payments-api')).toMatchObject({ audience: 'external', type: 'REST', details: 'Payments API' });
     expect(t.entries.find((e) => e.publicName === 'payment_portal')?.audience).toBe('instance'); // the default
+  });
+
+  v5it('reads the wairon 5 names of an L0 entry (id as as, subsystem as from) in the v5 reading only', () => {
+    const t = project([
+      { id: 'payments-api', subsystem: 'payments', component: 'payment_portal', audience: 'external' },
+      { subsystem: 'shipping', component: 'shipping_portal', interface: 'ishipping' },
+    ]);
+    expect(t.entries.map((e) => e.publicName).sort()).toEqual(['ishipping', 'payments-api']);
+  });
+
+  it('does not read the wairon 5 names of an L0 entry outside the v5 reading', () => {
+    const t = project([{ id: 'payments-api', subsystem: 'payments', component: 'payment_portal' }]);
+    // `id` names nothing and `subsystem` is no source here: the entry is named by its component and bound by its owner.
+    expect(t.entries.map((e) => e.publicName)).toEqual(['payment_portal']);
   });
 
   it('narrows to an interface the source exports its component under, and infers the source from an interface alone', () => {

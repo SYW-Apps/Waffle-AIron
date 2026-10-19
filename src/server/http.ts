@@ -386,13 +386,15 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
 /** Read the optional persisted exposure override through the policy repository
  *  (a partial policy is fine); absent/malformed yields undefined so the
  *  compatible default stands — the gate never fails a request over it. */
+/**
+ * The stored exposure policy, or undefined when none was ever configured. A file
+ * that cannot be read or holds a value the running major does not read fails
+ * loudly: falling back to the default posture would silently ignore the
+ * operator's policy.
+ */
 function readExposurePolicyFile(dataDir: string): Partial<HostExposurePolicy> | undefined {
-  try {
-    const stored: unknown = policy.getExposurePolicyRecord(dataDir);
-    return stored && typeof stored === 'object' ? (stored as Partial<HostExposurePolicy>) : undefined;
-  } catch {
-    return undefined;
-  }
+  const stored: unknown = policy.getExposurePolicyRecord(dataDir);
+  return stored && typeof stored === 'object' ? (stored as Partial<HostExposurePolicy>) : undefined;
 }
 
 /** Resolve the effective exposure policy: an explicit HostConfig.exposurePolicy
@@ -664,22 +666,6 @@ export interface HostServerHandle {
 export { bootstrapInstance as init };
 
 /**
- * Log one line when the exposure policy names an adminApiMode that no longer
- * exists (local_only, private_network, public): it reads as enabled, since each
- * only ever meant "served" and where the admin API listens is adminHost. Reads
- * only; a failure never prevents the server from starting.
- */
-function warnIfAdminApiModeRetired(cfg: HostConfig): void {
-  try {
-    const stored = (cfg.exposurePolicy ?? readExposurePolicyFile(cfg.dataDir))?.adminApiMode as string | undefined;
-    if (stored === undefined || stored === 'disabled' || stored === 'enabled') return;
-    console.error(`[wairon exposure] adminApiMode "${stored}" is deprecated and reads as "enabled" — set "enabled" (or "disabled"); where the admin API listens is --admin-host.`);
-  } catch {
-    /* a diagnostic never stops the server */
-  }
-}
-
-/**
  * One startup line about the web UI, so an operator never meets a bare 404:
  * when the exposure policy leaves it off, where to turn it on; when it is on,
  * how a person signs in (the built-in admin account, the enabled identity
@@ -751,9 +737,7 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   // Step 5: bring the data directory and every hosted tree to the running major. Any
   // throw stops the start; its message names the backup once one was taken.
   instanceUpgrade.run(cfg);
-  // A stored exposure policy still naming a retired adminApiMode reads as enabled.
-  warnIfAdminApiModeRetired(cfg);
-  // Step 7: say whether the web UI is served and how a person signs in to it.
+  // Step 6: say whether the web UI is served and how a person signs in to it.
   noteWebUiPosture(cfg);
 
   const dataServer = http.createServer((req, res) => routeData(cfg, req, res));

@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -8,21 +7,17 @@ import {
   resolveProjectBinding,
   assertMintableNarrowingEntry,
 } from '../../src/server/projects.js';
-import { moveMountToMembers } from '../../src/core/provision.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { runWithProjectRoot } from '../../src/utils/fs.js';
-import { seedSubsystem, seedChainedMount } from './helpers.js';
+import { seedSubsystem, seedChainedMember } from './helpers.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import type { Principal } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
-// Stage 3: a hosted token qualifier keeps its text, and each hop is read as a
-// member alias — looked up in project.yaml `members` or, until the next major release, a
-// legacy L1 mount. Stage 7: each member is a hosted record of its own, and a
-// (deprecated) qualifier maps to that record. A qualifier therefore binds the
-// SAME record after the project moves its mounts into `members`, and nothing
-// widens: an internal subsystem is still no root, and a qualified principal
-// still binds neither its family root nor a sibling.
+// Stage 7: each member is a hosted record of its own, bound by its own id. A
+// member-qualified entry or selector ('projectId::alias') names no record and
+// binds nothing, so a principal can never be widened through one: an internal
+// subsystem is still no root, and a member-narrowed principal still binds
+// neither its family root nor a sibling.
 // ---------------------------------------------------------------------------
 
 const principalWith = (projects: string[]): Principal => ({ tokenId: 'tok-x', role: 'editor', projects, authenticated: true });
@@ -34,7 +29,7 @@ function initialize(root: string, id: string): void {
   fs.writeFileSync(path.join(root, '.wai', 'specs', '.index.yaml'), `schemaVersion: 1.0.0\nname: ${id}\nvision: v\nboundaries: []\nglobalRequirements: []\ncreatedAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n`);
 }
 
-describe('hosted member qualifiers: the same root before and after the mounts move, nothing widened', () => {
+describe('hosted members: bound by record id, a qualifier binds nothing, nothing widened', () => {
   let dataDir: string;
   let demoRoot: string;
   let billingDir: string;
@@ -43,14 +38,14 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-member-bind-'));
     demoRoot = createProjectRecord(dataDir, 'demo').rootPath;
     initialize(demoRoot, 'demo');
-    // demo ── billing (legacy mount) ── payments (legacy mount inside billing)
-    //     ├── other   (legacy mount, a sibling)
-    //     └── plain   (an internal subsystem — never a root)
-    billingDir = seedChainedMount(demoRoot, 'billing', 'packages/billing');
+    // demo -- billing (member) -- payments (member inside billing)
+    //     |-- other   (member, a sibling)
+    //     `-- plain   (an internal subsystem - never a root)
+    billingDir = seedChainedMember(demoRoot, 'billing', 'packages/billing');
     initialize(billingDir, 'billing');
-    const paymentsDir = seedChainedMount(billingDir, 'payments', 'sub/payments');
+    const paymentsDir = seedChainedMember(billingDir, 'payments', 'sub/payments');
     initialize(paymentsDir, 'payments');
-    const otherDir = seedChainedMount(demoRoot, 'other', 'packages/other');
+    const otherDir = seedChainedMember(demoRoot, 'other', 'packages/other');
     initialize(otherDir, 'other');
     seedSubsystem(demoRoot, 'plain');
     invalidateSpecCache();
@@ -63,56 +58,32 @@ describe('hosted member qualifiers: the same root before and after the mounts mo
     try { fs.rmSync(dataDir, { recursive: true, force: true }); } catch { /* windows file locks */ }
   });
 
-  /** Every binding the fixture's tokens and selectors produce. */
-  function bindings(): Record<string, unknown> {
-    return {
-      narrowedToBilling: resolveProjectBinding(dataDir, principalWith(['demo::billing'])),
-      narrowedToPayments: resolveProjectBinding(dataDir, principalWith(['demo::billing::payments'])),
-      selectorFromTop: resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::billing::payments'),
-      wildcardSelector: resolveProjectBinding(dataDir, principalWith(['*']), 'demo::other'),
-      // What must stay refused.
-      internalSubsystem: resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::plain'),
-      widenToTop: resolveProjectBinding(dataDir, principalWith(['demo::billing']), 'demo'),
-      widenToSibling: resolveProjectBinding(dataDir, principalWith(['demo::billing']), 'demo::other'),
-      unknownAlias: resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::ghost'),
-    };
-  }
-
-  v5it('binds each qualifier to the same root whether the member is a legacy mount or a `members` entry', () => {
-    const before = bindings();
-    expect(before.narrowedToBilling).toEqual({ rootPath: path.resolve(billingDir), projectId: 'billing', familyRootId: 'demo', via: 'demo::billing' });
-    expect(before.narrowedToPayments).toMatchObject({ projectId: 'payments', familyRootId: 'demo' });
-    expect(before.wildcardSelector).toMatchObject({ projectId: 'other', familyRootId: 'demo' });
-    expect(before.internalSubsystem).toBeNull();
-    expect(before.widenToTop).toBeNull();
-    expect(before.widenToSibling).toBeNull();
-    expect(before.unknownAlias).toBeNull();
-
-    // The chaining migration's member move, hop by hop: each legacy mount
-    // becomes a `members` entry and its L1 document goes.
-    runWithProjectRoot(demoRoot, () => {
-      expect(moveMountToMembers('billing')).toBe(true);
-      expect(moveMountToMembers('other')).toBe(true);
-    });
-    runWithProjectRoot(billingDir, () => expect(moveMountToMembers('payments')).toBe(true));
-    invalidateSpecCache();
-    expect(fs.readFileSync(path.join(demoRoot, '.wai', 'project.yaml'), 'utf8')).toMatch(/members:/);
-    expect(fs.existsSync(path.join(demoRoot, '.wai', 'specs', 'subsystems', 'billing.yaml'))).toBe(false);
-
-    expect(bindings()).toEqual(before);
+  it('binds each member by its record id and covers the members below it, never its parent or a sibling', () => {
+    expect(resolveProjectBinding(dataDir, principalWith(['billing']))).toEqual({ rootPath: path.resolve(billingDir), projectId: 'billing', familyRootId: 'demo' });
+    expect(resolveProjectBinding(dataDir, principalWith(['payments']))).toMatchObject({ projectId: 'payments', familyRootId: 'demo' });
+    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'payments')).toMatchObject({ projectId: 'payments' });
+    expect(resolveProjectBinding(dataDir, principalWith(['*']), 'other')).toMatchObject({ projectId: 'other', familyRootId: 'demo' });
+    expect(resolveProjectBinding(dataDir, principalWith(['billing']), 'payments')).toMatchObject({ projectId: 'payments' });
+    expect(resolveProjectBinding(dataDir, principalWith(['billing']), 'demo')).toBeNull();
+    expect(resolveProjectBinding(dataDir, principalWith(['billing']), 'other')).toBeNull();
+    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'plain')).toBeNull();
   });
 
-  v5it('validates the same narrowing entries at mint time in either form, and refuses an internal subsystem', () => {
-    const entries = ['demo', 'demo::billing', 'demo::billing::payments', 'demo::other'];
-    const stored = ['demo', 'billing', 'payments', 'other'];
-    expect(entries.map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(stored);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
+  it('a member-qualified selector or entry resolves to nothing, whichever it names', () => {
+    for (const qualified of ['demo::billing', 'demo::billing::payments', 'demo::other', 'demo::plain', 'demo::ghost']) {
+      expect(resolveProjectBinding(dataDir, principalWith(['demo']), qualified)).toBeNull();
+      expect(resolveProjectBinding(dataDir, principalWith(['*']), qualified)).toBeNull();
+      expect(resolveProjectBinding(dataDir, principalWith([qualified]))).toBeNull();
+      expect(resolveProjectBinding(dataDir, principalWith([qualified]), 'billing')).toBeNull();
+    }
+  });
 
-    runWithProjectRoot(demoRoot, () => { moveMountToMembers('billing'); moveMountToMembers('other'); });
-    runWithProjectRoot(billingDir, () => moveMountToMembers('payments'));
-    invalidateSpecCache();
-
-    expect(entries.map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(stored);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
+  it('validates narrowing entries at mint time: a project or member record id passes, a qualified entry is refused naming the record id form', () => {
+    expect(['demo', 'billing', 'payments', 'other', '*'].map((e) => assertMintableNarrowingEntry(dataDir, e))).toEqual(['demo', 'billing', 'payments', 'other', '*']);
+    for (const qualified of ['demo::billing', 'demo::billing::payments', 'demo::plain']) {
+      expect(() => assertMintableNarrowingEntry(dataDir, qualified)).toThrow(/name it by its project record id/);
+    }
+    expect(() => assertMintableNarrowingEntry(dataDir, 'ghost')).toThrow(/unknown project "ghost"/);
+    expect(() => assertMintableNarrowingEntry(dataDir, 'Not A Project')).toThrow(/invalid project narrowing entry/);
   });
 });

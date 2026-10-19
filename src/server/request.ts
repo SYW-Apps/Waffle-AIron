@@ -11,7 +11,6 @@ import {
   existingProjectRoot,
   listFamilyRecords,
   isRetiredPart,
-  SUBPROJECT_SEPARATOR,
 } from './projects.js';
 import type { ProjectBinding } from './projects.js';
 import { recoverUnfinishedMigrations } from './members.js';
@@ -53,9 +52,8 @@ import type {
 // bound project's .wai/ tree with no other changes. Since stage 7 a member is a
 // record of its own: it is bound by its own id, its permissions resolve over
 // its own chain (its scope, its parents', its family root's units), and audit
-// names it. A deprecated member-qualified selector ('projectId::alias') still
-// resolves, until the next major release, to the member's record; the family root it named
-// is recorded as the event's composition.
+// names it. A member-qualified selector ('projectId::alias') names no record and
+// is answered 400 before any lookup.
 // ---------------------------------------------------------------------------
 
 import { bearerToken, sendJson } from './httpio.js';
@@ -115,18 +113,16 @@ export function deriveMcpOutcome(response: unknown): 'success' | 'failed' {
  * synthesized service actor so the (required) actor is always present.
  *
  * The event names the bound record as `projectId` — the member's own id when
- * a member was bound. When a deprecated member qualifier resolved the binding
- * (via), the family root it named is recorded as `composition`.
+ * a member was bound.
  */
 export function auditToolCall(
   cfg: HostConfig,
   principal: Principal,
-  binding: Pick<ProjectBinding, 'projectId' | 'via'>,
+  binding: Pick<ProjectBinding, 'projectId'>,
   body: unknown,
   outcome: AuditOutcome,
 ): void {
   const projectId = binding.projectId;
-  const composition = binding.via?.split(SUBPROJECT_SEPARATOR)[0];
   const target = mcpToolTarget(body);
   if (!target) return; // no dispatchable tool/method → nothing to audit
   const actor: PrincipalSubject = principal.subject ?? {
@@ -145,7 +141,6 @@ export function auditToolCall(
     tokenId: principal.tokenId,
     projectId,
     target,
-    ...(composition ? { composition } : {}),
   };
   try {
     appendAuditEvent(cfg.dataDir, event, effectiveAuditPolicy(cfg));
@@ -694,10 +689,16 @@ export async function handleMcpRequest(
     };
   }
 
-  // Step 6: resolve the authorized binding to a hosted RECORD — a member is a
-  // record of its own; a deprecated member qualifier maps to its member record
-  // (via), never wider; a narrowing entry naming a project covers its members.
-  const binding = resolveProjectBinding(cfg.dataDir, principal, projectSelector(req));
+  // Steps 6-8: a member-qualified selector ('projectId::alias') names no record: refuse it
+  // before any lookup, so nothing leaks.
+  const selector = projectSelector(req);
+  if (selector && selector.includes('::')) {
+    sendJson(res, 400, { error: 'a member is a record of its own - name it by its project record id' });
+    return;
+  }
+  // Step 9: resolve the authorized binding to a hosted RECORD — a member is a
+  // record of its own; a narrowing entry naming a project covers its members.
+  const binding = resolveProjectBinding(cfg.dataDir, principal, selector);
   if (!binding) {
     sendJson(res, 403, { error: 'project not authorized, unknown, or not specified' });
     return;
@@ -1024,7 +1025,7 @@ function familyReachOf(
 function hostedRecordLookup(cfg: HostConfig, principal: Principal): HostedRecordLookup {
   return (recordId: string): string | null => {
     const bound = resolveProjectBinding(cfg.dataDir, principal, recordId);
-    if (!bound || recordId.includes(SUBPROJECT_SEPARATOR)) return null;
+    if (!bound) return null;
     return authorize(cfg.dataDir, principal, 'project:read', 'project', bound.projectId).value === 'yes' ? bound.rootPath : null;
   };
 }

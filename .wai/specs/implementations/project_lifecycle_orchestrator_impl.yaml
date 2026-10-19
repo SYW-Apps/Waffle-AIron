@@ -418,12 +418,12 @@ methods:
             step: 16
       - stepNumber: 14
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a request recorded with a member qualifier before the upgrade is
-          mapped, until the next major release, to that member's record, never wider) with the
-          request's gateStateId as the expected identity (so an approval never certifies a design
-          other than the one requested; a request without one executes against the tree as it
-          stands).
+          project:lock - execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a member's own record for a member lock) with the request's
+          gateStateId as the expected identity (so an approval never certifies a design other than
+          the one requested; a request without one executes against the tree as it stands). A lock
+          request carrying a payload (the member-qualifier scope an older major recorded, which the
+          instance upgrade closes) is refused, never executed on the record it names.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -577,10 +577,10 @@ methods:
             step: 17
       - stepNumber: 15
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a pre-upgrade qualifier mapped to its member record until the next
-          major release) with the request's gateStateId as the expected identity (the retry path
-          must confine and pin exactly as the auto-execute path does).
+          project:lock - execute through the admin plane's pre-authorized lock entry on the
+          request's record id with the request's gateStateId as the expected identity (the retry
+          path must confine and pin exactly as the auto-execute path does). A lock request carrying
+          a payload is refused, as on the auto-execute path.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -704,4 +704,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-18T00:37:38.351Z'
+updatedAt: '2026-10-19T06:14:12.448Z'

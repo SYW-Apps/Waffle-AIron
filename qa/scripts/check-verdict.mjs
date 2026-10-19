@@ -4,12 +4,15 @@
 //   node qa/scripts/check-verdict.mjs [--dir qa/verdicts] [--head HEAD]
 //
 // Run in a git checkout of the pull request's HEAD with full history. Passes when
-// at least one verdict file in --dir satisfies all three:
+// at least one verdict file in --dir satisfies all four:
 //   1. its front matter says `result: PASS`;
-//   2. its `rc` commit is an ancestor of --head;
-//   3. nothing that changes the shipped product moved between `rc` and --head.
-// Lock records, docs, CHANGELOG, qa/ and regenerated .wai/ context may change after
-// the RC; a change below a SHIPPED path means the QA has to run again.
+//   2. the release it names ships its notes: release-notes/<version>.md, with at
+//      least one highlight (a `- ` or `* ` line), which `wairon whatsnew` shows;
+//   3. its `rc` commit is an ancestor of --head;
+//   4. nothing that changes the shipped product moved between `rc` and --head.
+// Lock records, docs, CHANGELOG, the release notes, qa/ and regenerated .wai/
+// context may change after the RC; a change below a SHIPPED path means the QA has
+// to run again.
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -24,6 +27,7 @@ const VERSION_FILE = 'src/config/defaults.ts';
 const argv = process.argv.slice(2);
 const opt = (name, dflt) => (argv.includes(`--${name}`) ? argv[argv.indexOf(`--${name}`) + 1] : dflt);
 const dir = opt('dir', 'qa/verdicts');
+const notesDir = opt('notes', 'release-notes');
 const head = opt('head', 'HEAD');
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -57,10 +61,21 @@ function shippedChanges(rc) {
   return [...moved];
 }
 
+/** Why the release's notes do not ship, or null when they do. */
+function releaseNotesProblem(version) {
+  if (!/^\d+\.\d+\.\d+/.test(version ?? '')) return 'version is missing or not a release version';
+  const file = path.join(notesDir, `${version}.md`);
+  if (!fs.existsSync(file)) return `${file} is missing: every release ships its notes (see docs/release-qa.md)`;
+  if (!/^\s*[-*]\s+\S/m.test(fs.readFileSync(file, 'utf8'))) return `${file} holds no highlight (a "- " line)`;
+  return null;
+}
+
 /** Why this verdict does not clear the PR, or null when it does. */
 function problem(file) {
   const v = frontMatter(fs.readFileSync(file, 'utf8'));
   if (v.result !== 'PASS') return `result is "${v.result ?? 'missing'}", not PASS`;
+  const notesProblem = releaseNotesProblem(v.version);
+  if (notesProblem) return notesProblem;
   if (!/^[0-9a-f]{40}$/.test(v.rc ?? '')) return 'rc is not a full 40-character commit sha';
   if (!gitOk('cat-file', '-e', `${v.rc}^{commit}`)) return `rc ${v.rc} is not in this checkout (fetch full history)`;
   if (!gitOk('merge-base', '--is-ancestor', v.rc, head)) return `rc ${v.rc} is not an ancestor of ${head}`;

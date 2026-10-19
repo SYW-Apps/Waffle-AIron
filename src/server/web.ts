@@ -1944,8 +1944,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   function userForm(el, user) {
     var box = $('uForm'); var creating = !user; var subj = (user && user.subject) || {};
     var statusSel = opt('active', 'active', (user ? user.status : 'active') === 'active')
-      + opt('suspended', 'suspended', !!user && user.status === 'suspended')
-      + opt('deactivated', 'deactivated', !!user && user.status === 'deactivated');
+      + opt('inactive', 'inactive', !!user && user.status === 'inactive');
     var kindSel = opt('human', 'human', (subj.kind || 'human') === 'human') + opt('service', 'service', subj.kind === 'service');
     var html = '<div class="formcard"><h3>' + (creating ? 'New user' : 'Edit user') + '</h3>';
     html += '<div class="frow">'
@@ -1982,10 +1981,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
   }
   function statusForm(el, user) {
     var box = $('uForm');
-    var sel = opt('active', 'active', user.status === 'active') + opt('suspended', 'suspended', user.status === 'suspended') + opt('deactivated', 'deactivated', user.status === 'deactivated');
+    var sel = opt('active', 'active', user.status === 'active') + opt('inactive', 'inactive', user.status === 'inactive');
     var html = '<div class="formcard"><h3>Set status — ' + esc(user.subject && user.subject.userId) + '</h3>';
     html += '<div class="frow">' + fcol('Status', '<select id="sStatus">' + sel + '</select>') + '</div>';
-    html += '<div class="note">Suspending or deactivating a user revokes all of their MCP tokens and web sessions.</div>';
+    html += '<div class="note">Making a user inactive revokes all of their MCP tokens and web sessions.</div>';
     html += '<div class="rowbtns"><button class="btn-primary" style="width:auto" id="sSave">Apply</button> <button class="mini" id="sCancel">Cancel</button> <span class="msg" id="sMsg"></span></div></div>';
     box.innerHTML = html;
     $('sCancel').addEventListener('click', function () { box.innerHTML = ''; });

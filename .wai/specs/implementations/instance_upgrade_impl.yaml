@@ -44,7 +44,7 @@ methods:
         description: Is the data directory older than the running major?
         type: branch
         condition: the recorded major is below the running one
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 8
         description: Copy it whole first
         type: call
@@ -56,6 +56,13 @@ methods:
         targetComponent: permission_model_migration
         targetMethod: run
       - stepNumber: 10
+        description: >-
+          Rewrite the retired values the data directory stores, with apply; a failure stops the
+          start, naming the backup
+        type: call
+        targetComponent: retired_value_migration
+        targetMethod: run
+      - stepNumber: 11
         label: trees
         description: >-
           Bring every hosted tree an older major wrote to the running major — run even on a current
@@ -63,44 +70,44 @@ methods:
         type: call
         targetComponent: instance_upgrade
         targetMethod: upgradeTrees
-      - stepNumber: 11
+      - stepNumber: 12
         description: Was any tree refused or failed?
         type: branch
         condition: a hosted tree was not upgraded
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 14
+      - stepNumber: 13
         description: >-
           Stop the start, naming each project and why, and the backup when one was taken; each tree
           already upgraded stays upgraded, its family committed whole
         type: throw
         error: StartAborted
-      - stepNumber: 13
+      - stepNumber: 14
         label: members
         description: Was the data directory older?
         type: branch
         condition: the recorded major is below the running one
-        onFalseStep: 18
-      - stepNumber: 14
+        onFalseStep: 19
+      - stepNumber: 15
         description: Register the member records the upgraded trees declare, all or nothing
         type: call
         targetComponent: member_registration
         targetMethod: upgrade
-      - stepNumber: 15
+      - stepNumber: 16
         description: Was it applied?
         type: branch
         condition: the member upgrade was blocked or did not commit
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 18
+      - stepNumber: 17
         description: Stop the start, naming why and the backup
         type: throw
         error: StartAborted
-      - stepNumber: 17
+      - stepNumber: 18
         label: stamp
         description: Record the running major
         type: call
         targetComponent: instance_version_store
         targetMethod: write
-      - stepNumber: 18
+      - stepNumber: 19
         label: done
         description: Answer the report
         type: return
@@ -188,4 +195,4 @@ previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-10-18T15:47:55.378Z'
+updatedAt: '2026-10-19T06:17:44.146Z'

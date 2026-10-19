@@ -42,7 +42,7 @@ import type { PackArchiveInfo, PackExtractionLimits } from '@wairon/sdk';
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
 const PACK_EXT_RE = /\.(ya?ml|cjs|js)$/i;
 
-/** One extensions.packs registration: a legacy path reference or a by-name selection. */
+/** One extensions.packs registration: a path reference (as `pack add` writes it) or a by-name selection. */
 type PackRegistration = string | PackSelection;
 
 /** Guard the pack name so it can never traverse out of the packs directory. */

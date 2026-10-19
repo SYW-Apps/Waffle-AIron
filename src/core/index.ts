@@ -119,7 +119,7 @@ export {
   // recorded — a passthrough read of the spec repository (spec_loader).
   typeSpellingFacts,
   // spec_tree_portal retiredReachFacts: the retired reachability forms the
-  // scan read compatibly — a passthrough read of the spec repository.
+  // scan met in the v5 reading — a passthrough read of the spec repository.
   retiredReachFacts,
   // spec_tree_portal lockTree / unlockTree: the bound tree's
   // cross-process write lock, taken around every spec-write tool; and

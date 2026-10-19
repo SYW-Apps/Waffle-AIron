@@ -22,10 +22,13 @@ methods:
     returns: list<IdentityProviderConfig>
     params: []
   - name: getExposurePolicy
-    description: Return the persisted instance exposure policy, or null when none has ever been configured.
+    description: >-
+      Return the persisted instance exposure policy, or null when none has ever been configured. A
+      stored adminApiMode other than enabled or disabled fails the read, naming the file and the
+      value.
     signature: 'getExposurePolicy(): HostExposurePolicy?'
     returns: HostExposurePolicy?
     params: []
 status: complete
 createdAt: '2026-07-09T20:46:22.136Z'
-updatedAt: '2026-10-04T10:19:15.355Z'
+updatedAt: '2026-10-19T06:12:17.969Z'

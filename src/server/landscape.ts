@@ -89,8 +89,8 @@ import { isTypeVocabulary, methodTypeRefs } from '../models/index.js';
 // request orchestrator's MCP dispatch reach the same logic.
 // ---------------------------------------------------------------------------
 
-/** Landscape/unit administration maps onto project:admin; control-plane reads
- *  onto project:read (the legacy landscape:manage / landscape:read permissions). */
+/** Landscape/unit administration needs project:admin; control-plane reads
+ *  need project:read. */
 const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 const PROJECT_READ_CAPABILITY = 'project:read';
 const PROJECT_WRITE_CAPABILITY = 'project:write';

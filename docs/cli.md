@@ -1514,14 +1514,14 @@ events, redacted metadata) — e.g. `{"retentionDays":30,"includeReadEvents":tru
 Its fields are `enabled` and `includeReadEvents` (booleans), `retentionDays` and
 `securityRetentionDays` (non-negative numbers), `minimumLevel` (`debug`, `info`,
 `warning`, `error` or `security`) and `metadataMode` (`none` or `redacted`; the
-retired `full-redacted` still loads as `redacted`, with a deprecation warning); an unknown field, a wrong type or invalid JSON stops the server at
+retired `full-redacted` is refused, naming `redacted`); an unknown field, a retired value, a wrong type or invalid JSON stops the server at
 startup with a message naming the variable. `WAIRON_QUOTA_POLICY` (optional) sets the
 advisory quota policy the same way, as a JSON object of overrides laid over the
 disabled default (`enabled: false`, mode `observe`, no limits) — e.g.
 `{"enabled":true,"mode":"warn","maxProjectsPerUser":20}`. Its fields are `enabled`
 (boolean), `mode` (`observe` or `warn`, the label an exceeded limit is reported
-with; quotas never block or throttle yet, so the retired `block` loads as `observe`,
-with a deprecation warning) and the non-negative integer
+with; quotas never block or throttle yet, so the retired `block` is refused, naming `observe`)
+and the non-negative integer
 limits `maxProjectsPerUser`, `maxMcpRequestsPerMinute`, `maxProjectBytes` and
 `maxAuditEventsPerDay`; it is refused at startup exactly as the audit policy is.
 

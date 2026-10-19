@@ -63,7 +63,7 @@ describe('reference family: the loader without position', () => {
     expect(dependsOnOf('engine-portal')).toEqual(['transpiler::lowering-portal']);
   });
 
-  it('binds the deprecated forms until the next major release, each with its rewrite', () => {
+  it('binds the deprecated forms in the v5 reading, each with its rewrite', () => {
     family = buildReferenceFamily();
     bind(family.top);
     // leading `::` from the top, through the member alias.

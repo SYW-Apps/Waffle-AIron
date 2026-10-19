@@ -257,10 +257,18 @@ export type SurfaceAudience = z.infer<typeof SurfaceAudienceSchema>;
  * un-schema'd); the surface projector applies defaults where sensible.
  */
 export const SystemPublicInterfaceSchema = z.object({
-  /** Legacy public name, read as `as` when `as` is absent. */
+  /**
+   * A wairon 5 form, no longer authored: the public name, now `as`. Read only in
+   * the v5 reading and rewritten by the reachability migration; the loader
+   * refuses it anywhere else (v5FormsIn).
+   */
   id: z.string().optional(),
   name: z.string().optional(),
-  /** Legacy source subsystem, read as `from` when `from` is absent. */
+  /**
+   * A wairon 5 form, no longer authored: the source subsystem, now `from`. Read
+   * only in the v5 reading and rewritten by the reachability migration; the
+   * loader refuses it anywhere else (v5FormsIn).
+   */
   subsystem: z.string().optional(),
   /** The component re-exported one to one; without it and without `typeDef`, a wildcard. */
   component: z.string().optional(),
@@ -270,7 +278,7 @@ export const SystemPublicInterfaceSchema = z.object({
   from: z.string().optional(),
   /** A type exported as is, giving it a public name. */
   typeDef: z.string().optional(),
-  /** The public name: defaults to `id`, then `interface`, then `component` or `typeDef`. */
+  /** The public name: defaults to `interface`, then `component` or `typeDef`. */
   as: z.string().optional(),
   /**
    * A wairon 5 form, no longer authored: the export kind is derived from the
@@ -2149,7 +2157,7 @@ const SCHEMA_OF_KIND = {
  * identity, which digests the loaded specs, never sees it — and the per-spec
  * approval digests, which read the stored file, must not either, or `status`
  * and `lock-check` disagree over an edit that changed no design. A component's
- * retired `mounts` stays (it is read compatibly, and its design view keeps
+ * retired `mounts` stays (it is read in the v5 reading, and its design view keeps
  * it). Nothing is added — no schema default — so a document holding only known
  * keys comes back as it is. A document its schema refuses comes back as it is.
  */
@@ -2202,7 +2210,7 @@ export function componentEntryFor(
  * scan: the reachability migration reads the allows itself and names its
  * rewrites with it.
  */
-export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'in-process-endpoint', 'retired-allow']);
+export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'export-name', 'in-process-endpoint', 'retired-allow']);
 export type RetiredReachForm = z.infer<typeof RetiredReachFormSchema>;
 
 /**
@@ -2416,6 +2424,23 @@ export function carryRetiredReachForms(
 /** The kinds of stored document that can hold a wairon 5 form (v5FormsIn). */
 export type V5FormHolder = 'system' | 'subsystem' | 'component' | 'interface';
 
+/**
+ * An L0 export entry's public name: `as`. The wairon 5 `id` is read as `as` in
+ * the v5 reading only (the reading `wairon upgrade` binds, which rewrites it);
+ * the loader refuses it anywhere else.
+ */
+export function l0ExportName(entry: { as?: string; id?: string }): string | undefined {
+  return entry.as ?? (readsV5Forms() ? entry.id : undefined);
+}
+
+/**
+ * An L0 export entry's source subsystem: `from`. The wairon 5 `subsystem` is read
+ * as `from` in the v5 reading only, as l0ExportName reads `id`.
+ */
+export function l0ExportFrom(entry: { from?: string; subsystem?: string }): string | undefined {
+  return entry.from ?? (readsV5Forms() ? entry.subsystem : undefined);
+}
+
 /** The component types wairon 5 had and wairon 6 does not, with what replaces each. */
 const RETIRED_COMPONENT_TYPES: Readonly<Record<string, string>> = {
   Specialist: 'an Orchestrator with a `dependencyClass` (pure, read, or none for a workflow)',
@@ -2429,9 +2454,6 @@ const RETIRED_COMPONENT_TYPES: Readonly<Record<string, string>> = {
  * upgrade` binds, and anywhere else the loader refuses a document holding one
  * with these sentences. Pure over the document, and independent of the
  * reading: the caller decides whether a form found is refused.
- *
- * An L0 entry's legacy `id` and `subsystem` are not named: the L0 still reads
- * them as `as` and `from`; only the authored export `type` is fenced.
  */
 export function v5FormsIn(holder: V5FormHolder, doc: Record<string, unknown>): string[] {
   const found: string[] = [];
@@ -2462,6 +2484,14 @@ export function v5FormsIn(holder: V5FormHolder, doc: Record<string, unknown>): s
   const entries = Array.isArray(doc.publicInterfaces) ? doc.publicInterfaces : [];
   if (entries.some((entry) => isRecord(entry) && entry.type !== undefined)) {
     found.push('an export entry\'s `type` is a wairon 5 form; wairon 6 derives the export kind from the backing Portal\'s transport');
+  }
+  if (holder === 'system') {
+    if (entries.some((entry) => isRecord(entry) && entry.id !== undefined)) {
+      found.push('an L0 export entry\'s `id` is a wairon 5 form; wairon 6 reads `as`');
+    }
+    if (entries.some((entry) => isRecord(entry) && entry.subsystem !== undefined)) {
+      found.push('an L0 export entry\'s `subsystem` is a wairon 5 form; wairon 6 reads `from`');
+    }
   }
   return found;
 }

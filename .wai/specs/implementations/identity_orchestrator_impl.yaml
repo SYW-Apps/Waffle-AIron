@@ -768,8 +768,8 @@ methods:
       - stepNumber: 7
         description: >-
           Validate each narrowing entry through the project repository (a hosted record id or '*');
-          a deprecated member-qualified entry is stored as the member's record id and the mapping
-          kept for the answer; an unknown project or unheld member is refused
+          a member-qualified entry, an unknown project or an id no record holds is refused, naming
+          the member's record id as the form to use
         type: call
         targetComponent: project_repository
         targetMethod: admitNarrowing
@@ -829,9 +829,7 @@ methods:
         description: Record the audit append failure as a server diagnostic and continue
         type: local
       - stepNumber: 17
-        description: >-
-          Return the plaintext token (shown exactly once) with the mapping of every deprecated
-          member-qualified entry to the record id it was stored as
+        description: Return the plaintext token (shown exactly once)
         type: return
         outcome: plaintext token returned once
     detail: full
@@ -1102,4 +1100,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-03T17:58:56.809Z'
+updatedAt: '2026-10-19T06:11:22.029Z'

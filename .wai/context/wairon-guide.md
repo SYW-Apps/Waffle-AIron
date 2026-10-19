@@ -1,4 +1,4 @@
-<!-- wairon-version: 6.0.1-dev.2 -->
+<!-- wairon-version: 6.0.1-dev.3 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
 # Domain Map (14 domains)
