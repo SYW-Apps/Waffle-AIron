@@ -144,6 +144,13 @@ import { dict, ownGet } from '../utils/own.js';
 // delegate to the workspace of the current project root.
 // ---------------------------------------------------------------------------
 
+/** duplicate_type_spec — the second half of a duplicate type id: its `subsystem::id` address, its file and the parsed type. */
+export interface DuplicateTypeSpec {
+  id: string;
+  file: string;
+  spec: TypeSpec;
+}
+
 /** spec_index — the bound tree as one scan read it: every spec by kind, and the file each is stored in. */
 export interface SpecIndex {
   subsystems: SubsystemSpec[];
@@ -160,6 +167,13 @@ export interface SpecIndex {
     type: Record<string, string>;
     group: Record<string, string>;
   };
+  /**
+   * The second halves of duplicate type ids, keyed by `subsystem::id`, each to its
+   * absolute file path: a second TYPE whose subsystem differs from the kept one's.
+   * They stay out of every model list (no lint, no resolution) and are reached by
+   * their qualified id.
+   */
+  duplicates: Record<string, string>;
   /** What the scan's signature resolution recorded: each signatureFrom it met and how it resolved, and each stored text its params contradict. */
   signatures: SignatureFacts;
   /**
@@ -386,19 +400,6 @@ function unknownKeysIn(raw: unknown, parsed: unknown, at: string, out: string[])
   }
 }
 
-/**
- * The second declaration of a type id whose subsystem differs from the kept
- * one's, per index: `subsystem::id` to its file. It stays out of every model
- * list (the tree has no single reading) yet loadTypeSpec reaches it by that
- * address.
- */
-const duplicateTypeFiles = new WeakMap<SpecIndex, Record<string, string>>();
-function duplicateTypesOf(index: SpecIndex): Record<string, string> {
-  let held = duplicateTypeFiles.get(index);
-  if (!held) { held = dict<string>(); duplicateTypeFiles.set(index, held); }
-  return held;
-}
-
 function emptyIndex(): SpecIndex {
   return {
     subsystems: [],
@@ -416,6 +417,7 @@ function emptyIndex(): SpecIndex {
       type: dict<string>(),
       group: dict<string>(),
     },
+    duplicates: dict<string>(),
     signatures: { sources: [], staleTexts: [] },
     typeSpellings: emptyTypeSpellingFacts(),
     retiredReach: [],
@@ -3386,7 +3388,7 @@ export class SpecWorkspace {
       index.types.push(...raw.index.types);
       index.groups.push(...raw.index.groups);
       for (const kind of Object.keys(index.paths) as (keyof SpecIndex['paths'])[]) Object.assign(index.paths[kind], raw.index.paths[kind]);
-      Object.assign(duplicateTypesOf(index), duplicateTypesOf(raw.index));
+      Object.assign(index.duplicates, raw.index.duplicates);
       index.retiredReach.push(...raw.index.retiredReach.map((fact) => ({ ...fact, specId: keyIn(raw.record.namespace, fact.specId) })));
     }
     // The retired reachability forms that need the whole family to read:
@@ -3816,7 +3818,7 @@ export class SpecWorkspace {
         const keptSubsystem = kind === 'type' ? (list.find((s) => s.id === spec.id) as { subsystem?: string } | undefined)?.subsystem : undefined;
         const otherSubsystem = kind === 'type' ? (spec as { subsystem?: string }).subsystem : undefined;
         const split = keptSubsystem !== undefined && otherSubsystem !== undefined && keptSubsystem !== otherSubsystem;
-        if (split) duplicateTypesOf(index)[`${otherSubsystem}::${spec.id}`] = file;
+        if (split) index.duplicates[`${otherSubsystem}::${spec.id}`] = file;
         raw.record.problems.push({
           kind: 'duplicate-spec',
           id: keyIn(key, spec.id),
@@ -4025,7 +4027,7 @@ export class SpecWorkspace {
       ...index.implementations, ...index.types, ...index.groups,
     ].map((s) => s.id);
     raw.record.problems.forEach((p) => { if (p.kind === 'duplicate-spec' && p.id && !p.id.includes('::') && key) p.id = keyIn(key, p.id); });
-    if (key) duplicateTypeFiles.set(index, dict(Object.entries(duplicateTypesOf(index)).map(([id, file]) => [keyIn(key, id), file] as const)));
+    if (key) index.duplicates = dict(Object.entries(index.duplicates).map(([id, file]) => [keyIn(key, id), file] as const));
     raw.record.system = keyedSystem(raw.rawSystem, key, raw.localSubsystems);
     // Step 11: each part's spec keys — the root's own keys whose files the part holds.
     for (const part of raw.record.parts) {
@@ -5488,9 +5490,9 @@ export class SpecWorkspace {
   }
 
   /** The second half of every duplicate type id the scan recorded (the model lists leave them out), with its file. */
-  loadDuplicateTypeSpecs(): { id: string; file: string; spec: TypeSpec }[] {
-    const out: { id: string; file: string; spec: TypeSpec }[] = [];
-    for (const [id, file] of Object.entries(duplicateTypesOf(this.scanAll()))) {
+  loadDuplicateTypeSpecs(): DuplicateTypeSpec[] {
+    const out: DuplicateTypeSpec[] = [];
+    for (const [id, file] of Object.entries(this.scanAll().duplicates)) {
       const doc = storedDocument(file);
       if (doc) out.push({ id, file, spec: TypeSpecSchema.parse(doc) as TypeSpec });
     }
@@ -5508,7 +5510,7 @@ export class SpecWorkspace {
       if (scan.subsystems.some((s) => s.id === subsystem)) {
         const kept = types.find((t) => t.id === local && t.subsystem === subsystem);
         if (kept) return kept;
-        const file = duplicateTypesOf(scan)[id];
+        const file = scan.duplicates[id];
         if (file !== undefined && !types.some((t) => t.id === id)) {
           const doc = storedDocument(file);
           if (doc) return TypeSpecSchema.parse(doc) as TypeSpec;
@@ -8665,7 +8667,7 @@ export function loadTypeSpec(id: string): TypeSpec | null {
 }
 
 /** The second half of every duplicate type id (two subsystems declaring one id), with its file. */
-export function loadDuplicateTypeSpecs(): { id: string; file: string; spec: TypeSpec }[] {
+export function loadDuplicateTypeSpecs(): DuplicateTypeSpec[] {
   return current().loadDuplicateTypeSpecs();
 }
 

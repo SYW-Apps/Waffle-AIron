@@ -263,8 +263,26 @@ export interface TypeRefResolution {
   /** The ids (qualified form) of every type the reference matches. */
   candidates: string[];
   outcome: TypeRefOutcome;
-  /** A type of the referrer's own subsystem, named like the ref, that the binding passed over. */
+  /** Another type named like the ref that sits at least as close to the referrer as the bound one. */
   shadowedBy?: string;
+}
+
+/** type_ref_site — one place a written type reference sits in the bound tree, and how it resolves from there. */
+export interface TypeRefSite {
+  /** The id of the spec that writes the reference. */
+  spec: string;
+  /** The spec's file, relative to the project root. */
+  file: string;
+  /** Where in the spec the token is written (`method <name> param <param>`, `field <name>`, `export entry <as>`, ...). */
+  position: string;
+  /** The type reference as written there. */
+  token: string;
+  /** The id, in qualified form, of the type the token resolves to; for an ambiguous site, its first candidate. */
+  boundTo: string;
+  /** Present for a shadowed site: the type that carries the token's name and sits at least as close. */
+  shadowedBy?: string;
+  /** Present for an ambiguous site: every type the token matches. */
+  candidates?: string[];
 }
 
 /**
@@ -287,12 +305,26 @@ export function resolveTypeRef(
   if (pool.length > 1) return { candidates: ids, outcome: 'ambiguous' };
   const hit = pool[0];
   const result: TypeRefResolution = { type: hit.id, candidates: ids, outcome: 'resolved' };
-  if (from !== undefined && hit.subsystem !== from) {
+  // Shadowing: another non-candidate type carrying the reference's name that sits at
+  // least as close to the referrer (near: its subsystem; middle: none; far: another).
+  // A reference that already says which type it means is never shadowed.
+  if (!ref.includes('::') && ref !== hit.id) {
     const segments = ref.split(/::|\./).filter(Boolean);
     const key = nameKey(segments[segments.length - 1] ?? '');
-    const shadow = types.find((t) => t.subsystem === from && !candidates.includes(t) && key !== '' && nameKey(t.name.split('<')[0]) === key);
+    const closeness = (t: Pick<TypeSpec, 'subsystem'>): number =>
+      from !== undefined && t.subsystem === from ? 0 : t.subsystem === undefined ? 1 : 2;
+    const bound = closeness(hit);
+    let shadow: (typeof types)[number] | undefined;
+    if (key !== '') {
+      for (const t of types) {
+        if (candidates.includes(t) || nameKey(t.name.split('<')[0]) !== key || closeness(t) > bound) continue;
+        if (shadow === undefined || closeness(t) < closeness(shadow)) shadow = t;
+      }
+    }
     if (shadow) result.shadowedBy = shadow.id;
   }
+
+
   return result;
 }
 
