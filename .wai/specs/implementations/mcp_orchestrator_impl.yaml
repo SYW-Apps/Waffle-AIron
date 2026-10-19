@@ -808,8 +808,8 @@ methods:
         targetMethod: listConsumers
       - stepNumber: 3
         description: >-
-          Rename the type and rewrite every reference to it via the core client adapter — or, with
-          dryRun, ask what the rename would do and write nothing
+          Rename the type and rewrite every reference to it via the core client adapter, passing
+          allowShadowed on — or, with dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameType
@@ -957,4 +957,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-18T19:09:40.986Z'
+updatedAt: '2026-10-19T19:48:07.013Z'

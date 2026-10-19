@@ -345,11 +345,14 @@ methods:
       Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
       local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the
       loader kept, every reference to that key — local, or `alias::name` from another project —
-      could mean either, so the tree has no single reading. A local id equal to one of the project's
-      aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them
-      apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside
-      `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made
-      visible. It reads the project graph's owners, alias tables and duplicate-spec problems.
+      could mean either, so the tree has no single reading. For two types of different subsystems
+      the message names both halves by their qualified ids (`subsystem::id`), each of which the type
+      rename tool reaches; any other duplicate is renamed through the kept one, after which the
+      other loads. A local id equal to one of the project's aliases (a `members` or `externals` key)
+      is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them apart (a bare id is local, `alias::name`
+      crosses), but a reader seeing `billing` beside `billing::invoice_portal` cannot tell a local
+      subsystem from a member, so the shadow is made visible. It reads the project graph's owners,
+      alias tables and duplicate-spec problems.
     signature: 'localIds(ctx: RuleContext): void'
     returns: void
     params:
@@ -645,6 +648,32 @@ methods:
         summary: >-
           A method, parameter or field name is a word the target language reserves for that kind of
           identifier
+  - name: typeRefScope
+    description: >-
+      Rule type-ref-scope. A bare type reference resolves in the referring spec's own subsystem
+      first (type_ref_resolution.resolve). Two readings are reported, once per spec and written
+      reference (never per type, so a type having other referents never masks it), naming every
+      position in that spec where the reference is written: a reference that matches several types
+      and nothing in its own subsystem settles which is meant (ambiguous), and a reference that
+      silently lands on one type while another type carries that display name and sits at least as
+      close to the referrer — the referrer's own subsystem nearest, a project-level type in the
+      middle, another subsystem far (shadowed). Judged for every type position — contract method
+      params and returns, type fields, type-method signatures, signature-type params and returns —
+      and for every L1 and L0 export entry's typeDef, in the draft context of the referring spec,
+      whether or not the referring spec is reached or the type used. An unresolved reference is
+      UNDEFINED_TYPE_REFERENCE's to report, never this rule's.
+    signature: 'typeRefScope(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: AMBIGUOUS_TYPE_REF
+        severity: warning
+        summary: >-
+          A written type reference matches several types, or binds to a type while another type
+          carries that name and sits at least as close to the referrer
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-18T19:02:53.005Z'
+updatedAt: '2026-10-19T19:48:47.022Z'

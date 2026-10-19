@@ -168,7 +168,9 @@ methods:
     returns: bool
     description: >-
       Whether a written type reference names this type: the reference's :: or . segments are a
-      suffix of the qualified id, compared ignoring case and punctuation
+      suffix of the qualified id, compared ignoring case and punctuation. This is the candidate test
+      only; a reference several types match is settled by type_ref_resolution.resolve, which prefers
+      the referrer's own subsystem.
     sourcePath: src/models/type-references.ts
     symbol: typeMatchesRef
   - name: genericParameters
@@ -235,4 +237,4 @@ methods:
     symbol: typeDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-07T18:29:33.656Z'
+updatedAt: '2026-10-19T18:22:40.549Z'

@@ -21,15 +21,19 @@ export const unusedTypesRule: SddRule = {
   check(ctx) {
     const referencedTypes = new Set<string>();
     /** Record every type the ref names, except `exceptId` — the type doing the naming, when it names itself. */
-    const markTypeReferenced = (ref: string, exceptId?: string) => {
+    const markTypeReferenced = (ref: string, from?: string, exceptId?: string) => {
       if (ctx.isBuiltinType(ref)) return;
-      for (const spec of ctx.types) {
-        if (spec.id === exceptId) continue;
-        if (typeMatchesRef(spec, ref)) {
-          referencedTypes.add(spec.id);
-        }
+      // The referrer's subsystem first; an ambiguous ref marks every candidate (the
+      // type-ref-scope rule reports it once, never doubled here as UNUSED_TYPE).
+      const r = ctx.resolveTypeRef(ref, from);
+      const hit = r.outcome === 'resolved' && r.type !== undefined ? [r.type]
+        : r.outcome === 'ambiguous' ? ctx.types.filter((spec) => typeMatchesRef(spec, ref)).map((spec) => spec.id) : [];
+      for (const id of hit) {
+        if (id === exceptId) continue;
+        referencedTypes.add(id);
       }
     };
+    const subsystemOfInterface = (component: string): string | undefined => ctx.componentMap.get(component)?.subsystem;
 
     // 1. Scan type fields (the type's own generic parameters are left out),
     // and a signature type's params and returns, its references in place of
@@ -38,10 +42,10 @@ export const unusedTypesRule: SddRule = {
       for (const field of t.fields) {
         const refs = fieldTypeRefs(t, field.type);
         for (const ref of refs) {
-          markTypeReferenced(ref);
+          markTypeReferenced(ref, t.subsystem);
         }
       }
-      for (const ref of signatureTypeRefs(t)) markTypeReferenced(ref, t.id);
+      for (const ref of signatureTypeRefs(t)) markTypeReferenced(ref, t.subsystem, t.id);
     }
 
     // 2. Scan interface method signatures & returns (structured params preferred)
@@ -49,7 +53,7 @@ export const unusedTypesRule: SddRule = {
       for (const m of intf.methods) {
         const refs = methodTypeRefs(m);
         for (const ref of refs) {
-          markTypeReferenced(ref);
+          markTypeReferenced(ref, subsystemOfInterface(intf.component));
         }
       }
     }
@@ -62,9 +66,9 @@ export const unusedTypesRule: SddRule = {
       const named = fact.form === 'signature' && fact.target ? fact.target
         : fact.outcome === 'ambiguous' ? fact.candidates?.[1] : undefined;
       if (!named) continue;
-      for (const spec of ctx.types) {
-        if (spec.id === named || typeMatchesRef(spec, named)) referencedTypes.add(spec.id);
-      }
+      const direct = ctx.types.find((spec) => spec.id === named);
+      if (direct) referencedTypes.add(direct.id);
+      else markTypeReferenced(named, subsystemOfInterface(fact.component));
     }
 
     // 4. Scan the methods declared ON types. A type returned only by another
@@ -77,7 +81,7 @@ export const unusedTypesRule: SddRule = {
       for (const m of t.methods) {
         const refs = methodTypeRefs(m);
         for (const ref of refs) {
-          markTypeReferenced(ref, t.id);
+          markTypeReferenced(ref, t.subsystem, t.id);
         }
       }
     }
@@ -86,7 +90,7 @@ export const unusedTypesRule: SddRule = {
     // type the resolved tables bind. Its consumers are outside this tree, so
     // an exported type is used by definition.
     for (const sub of ctx.subsystems) {
-      for (const pi of sub.publicInterfaces) if (pi.typeDef) markTypeReferenced(pi.typeDef);
+      for (const pi of sub.publicInterfaces) if (pi.typeDef) markTypeReferenced(pi.typeDef, sub.id);
     }
     for (const e of ctx.system.publicInterfaces ?? []) if (e.typeDef) markTypeReferenced(e.typeDef);
     for (const table of ctx.exportTables ?? []) {

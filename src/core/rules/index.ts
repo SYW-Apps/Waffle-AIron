@@ -18,6 +18,7 @@ import {
   isProvidedBy,
   sameContract,
   typeMatchesRef,
+  resolveTypeRef as resolveTypeRefOver,
   isOwnComponentEntry,
   nameKey,
   type AuthoredReference,
@@ -25,6 +26,7 @@ import {
   type ReferenceResolution,
 } from '../../models/index.js';
 import type { ResolvedExportTable } from '../../models/exports.js';
+import type { TypeRefResolution } from '../../models/type-references.js';
 import { createHash } from 'crypto';
 import { canonicalize } from '../../utils/canonical-json.js';
 import { readsV5Forms } from '../../utils/fs.js';
@@ -514,12 +516,16 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     .filter((r) => r.position === 'type' && r.binding !== 'local' && memberOf(r.specId) === undefined)
     .map((r) => r.authored));
 
-  const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
+  /** rule_context.resolveTypeRef — the referrer's subsystem first, over the bound project's own types. */
+  const resolveTypeRef = (ref: string, from?: string): TypeRefResolution => resolveTypeRefOver(ref, from, types);
+
+  const isTypeResolved = (ref: string, generics: Set<string>, from?: string): boolean => {
     const refLower = ref.toLowerCase();
     if (isTypeVocabulary(refLower)) return true;
     if (generics.has(refLower)) return true;
     // Local first: the bound project's own types, compared by nameKey per segment.
-    if (ownTypes.some(spec => typeMatchesRef(spec, ref))) return true;
+    // An ambiguous match counts as resolved here: the type-ref-scope rule reports it once.
+    if (resolveTypeRefOver(ref, from, ownTypes).outcome !== 'none') return true;
     const [first, ...rest] = ref.split(/::|\./);
     if (!rest.length) {
       // A bare name through the imports; any outcome but none is
@@ -1035,6 +1041,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isImplementationDraft,
     getComponentProfile,
     isTypeResolved,
+    resolveTypeRef,
     aliasSpelling,
     targetLanguageFor,
     isSpecInScope,

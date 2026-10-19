@@ -230,18 +230,27 @@ methods:
       - idempotent
   - name: renameType
     description: 'Forward to core_portal.renameType: rename a type and every reference to it'
-    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool, allowShadowed?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
         type: string
-        description: The type to rename
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) when it must reach
+          the second half of a duplicate id
       - name: newId
         type: string
         description: Its new id
       - name: dryRun
         type: bool
-        description: Answer what the rename would do, and write nothing
+        description: Answer what the rename would do, and write nothing; shadowed sites are listed, not refused
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
   - name: setNetwork
     description: >-
@@ -374,4 +383,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T19:08:41.062Z'
+updatedAt: '2026-10-19T19:48:02.800Z'

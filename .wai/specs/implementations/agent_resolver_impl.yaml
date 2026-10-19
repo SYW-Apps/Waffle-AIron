@@ -104,7 +104,9 @@ methods:
       - stepNumber: 16
         description: >-
           Ask where the spec of each type a component's contracts use lives (and of the types their
-          fields name), for its implementer's readPaths
+          fields name), for its implementer's readPaths. Each reference is resolved from the
+          contract's component's subsystem first (type_ref_resolution.resolve), and an ambiguous one
+          puts every candidate in the brief
         type: call
         targetComponent: spec_loader
         targetMethod: typePath
@@ -325,4 +327,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T19:08:50.497Z'
+updatedAt: '2026-10-19T18:24:57.956Z'

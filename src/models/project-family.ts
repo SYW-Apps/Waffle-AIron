@@ -233,6 +233,8 @@ export interface ProjectFamilyProblem {
   projects: string[];
   /** What is wrong, in words a finding can quote. */
   detail: string;
+  /** A duplicate-spec of two types of different subsystems: the two `subsystem::id` addresses, the kept one first. */
+  qualifiedIds?: string[];
 }
 
 /** project_family — the project graph of one scan. */

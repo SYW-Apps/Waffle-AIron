@@ -22,10 +22,12 @@ values:
   - name: alias-conflict
     description: An alias declared both as a member and as an external
   - name: duplicate-spec
-    description: One key declared by two spec files of one project (a part's and its parent's included)
+    description: >-
+      One key declared by two spec files of one project (a part's and its parent's included); for
+      two types of different subsystems the second stays addressable by its `subsystem::id`
   - name: part-unavailable
     description: A part whose files could not be read
   - name: kind-mismatch
     description: What a member's content makes it disagrees with what is declared or written about it
 createdAt: '2026-10-04T23:33:27.910Z'
-updatedAt: '2026-10-04T23:33:28.444Z'
+updatedAt: '2026-10-19T18:24:01.388Z'

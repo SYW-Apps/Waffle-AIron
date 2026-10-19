@@ -38,7 +38,7 @@ export const signatureTypeReferencesRule: SddRule = {
         const allGenerics = new Set([...interfaceGenerics, ...methodGenerics]);
         const refs = methodTypeRefs(m);
         for (const ref of refs) {
-          if (!ctx.isTypeResolved(ref, allGenerics)) {
+          if (!ctx.isTypeResolved(ref, allGenerics, ctx.componentMap.get(intf.component)?.subsystem)) {
             const hint = ctx.importHint(ref);
             const spelled = ctx.aliasSpelling(ref);
             ctx.addIssue(
@@ -66,7 +66,7 @@ export const signatureTypeReferencesRule: SddRule = {
         ...signatureTypeRefs(t).map((ref) => ({ ref, by: `Signature type "${t.id}"` })),
       ];
       for (const { ref, by } of named) {
-        if (ctx.isTypeResolved(ref, typeGenerics)) continue;
+        if (ctx.isTypeResolved(ref, typeGenerics, t.subsystem)) continue;
         const hint = ctx.importHint(ref);
             const spelled = ctx.aliasSpelling(ref);
         ctx.addIssue(

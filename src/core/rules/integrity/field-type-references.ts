@@ -26,7 +26,7 @@ export const fieldTypeReferencesRule: SddRule = {
         // already left out — so none remain in scope to resolve against.
         const refs = fieldTypeRefs(t, field.type);
         for (const ref of refs) {
-          if (!ctx.isTypeResolved(ref, new Set())) {
+          if (!ctx.isTypeResolved(ref, new Set(), t.subsystem)) {
             const hint = ctx.importHint(ref);
             const spelled = ctx.aliasSpelling(ref);
             ctx.addIssue(
