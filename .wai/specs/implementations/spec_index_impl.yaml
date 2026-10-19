@@ -249,8 +249,10 @@ methods:
       - stepNumber: 3
         description: >-
           Parse each against TypeSpecSchema and answer with the one whose id matches — an
-          `alias::name` id bound through the bound project's alias table to the member's key first —
-          or null when none does
+          `alias::name` id bound through the bound project's alias table to the member's key first.
+          An id `subsystem::id` whose qualifier is a subsystem of the bound project answers the type
+          of that subsystem: the kept one, or the second half of a duplicate id the scan recorded
+          (its file read and parsed the same way). Null when none does
         type: local
   - name: load
     narrative:
@@ -313,7 +315,12 @@ methods:
           every declaration under it (`billing::invoice_portal`; a subsystem `billing` declared
           inside member billing is `billing::billing`), and put the root's specs in the index under
           those keys, folding nothing into another root's namespace. A second declaration of one key
-          in one root is a duplicate-spec problem naming both files; the first stays in the index
+          in one root is a duplicate-spec problem naming both files; the first stays in the index. A
+          second TYPE whose subsystem differs from the kept one's is also recorded in the index's
+          duplicates (kind, then `subsystem::id`, to its file), carried on the problem as its two
+          `subsystem::id` addresses (qualifiedIds): it stays out of every model list — no lint, no
+          resolution, since the tree still has no single reading — but loadTypeSpec reaches it by
+          its qualified id. Every other kind is unchanged
         type: local
       - stepNumber: 6
         label: kinds
@@ -685,4 +692,4 @@ methods:
     symbol: getTypePath
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-18T19:08:58.635Z'
+updatedAt: '2026-10-19T18:25:34.423Z'

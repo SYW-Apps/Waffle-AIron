@@ -1,0 +1,62 @@
+kind: value-object
+id: type_ref_resolution
+name: TypeRefResolution
+description: >-
+  How one written type reference resolved, decided from the referrer's own subsystem first: the one
+  type it lands on, every type it matches, and a same-named type of the referrer's subsystem that
+  the binding passed over. Pure: computed from the reference, the referrer's subsystem and the types
+  handed in. Every local resolver reads it (the unused-type and type-reference rules, the agent
+  brief's type reads, the type rename) so that one reference binds to one type everywhere.
+fields:
+  - name: type
+    type: string
+    description: The id of the one type the reference resolves to; absent when the outcome is ambiguous or none
+    optional: true
+  - name: candidates
+    type: list<string>
+    description: >-
+      The ids, in qualified form, of every type the reference matches (type_spec.matchesRef holds),
+      in the order the types were handed in
+    optional: false
+  - name: outcome
+    type: TypeRefOutcome
+    description: Whether the reference resolved to one type, matched several, or matched none
+    optional: false
+  - name: shadowedBy
+    type: string
+    description: >-
+      The id of a type of the referrer's own subsystem whose display name has the reference's
+      nameKey, when the reference resolved to a type of another subsystem. The binding does not
+      change silently: it is reported
+    optional: true
+methods:
+  - name: resolve
+    signature: 'resolve(ref: string, from?: string, types: list<TypeSpec>): TypeRefResolution'
+    params:
+      - name: ref
+        type: string
+        description: The type reference as written
+      - name: from
+        type: string
+        description: >-
+          The referring spec's subsystem: a contract's is its component's subsystem, a type's
+          fields, type-method signatures and signature params its own subsystem, an L1 export
+          entry's that subsystem; the L0 has none
+        optional: true
+      - name: types
+        type: list<TypeSpec>
+        description: The types the reference may name
+    returns: TypeRefResolution
+    description: >-
+      Resolve a written type reference, the referrer's subsystem first. The candidates are the types
+      whose matchesRef(ref) holds; none of them is outcome none. When from is given and some
+      candidates belong to from, only those count: exactly one resolves to it, several are ambiguous
+      among them. Otherwise exactly one candidate resolves to it and several are ambiguous. A
+      reference that resolved to a type of another subsystem while from holds a type t that is not a
+      candidate and whose nameKey(t.name) equals the nameKey of the reference's last segment is
+      still resolved, with shadowedBy = t.id. Pure.
+    sourcePath: src/models/type-references.ts
+    symbol: resolveTypeRef
+sourcePath: src/models/type-references.ts
+createdAt: '2026-10-19T18:22:38.976Z'
+updatedAt: '2026-10-19T18:22:39.771Z'

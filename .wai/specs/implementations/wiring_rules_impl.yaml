@@ -723,35 +723,42 @@ methods:
       - stepNumber: 1
         description: >-
           Mark the types referenced by fields: for every field of every type t in ctx.types, pass
-          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
-          ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
-          in ctx.types whose matchesRef(ref) holds; and, a signature type's params and returns being
-          its references in place of fields, each ref of t.signatureTypeRefs() for every type t,
-          except t itself
+          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced(ref,
+          from) with from = t.subsystem; the helper ignores a ref when ctx.isBuiltinType(ref) holds
+          and otherwise resolves it with type_ref_resolution.resolve(ref, from, ctx.types),
+          recording the resolved type's id — or, when the outcome is ambiguous, the id of EVERY
+          candidate, since an ambiguous reference is reported once by the type-ref-scope rule and
+          must never be doubled here as UNUSED_TYPE. And, a signature type's params and returns
+          being its references in place of fields, each ref of t.signatureTypeRefs() for every type
+          t, except t itself, the same way
         type: local
       - stepNumber: 2
         description: >-
           Mark the types referenced by signatures: pass each ref of m.typeRefs(), for every method m
-          of every interface in ctx.interfaces, to markTypeReferenced
+          of every interface in ctx.interfaces, to markTypeReferenced with from = the subsystem of
+          the interface's component
         type: local
       - stepNumber: 3
         description: >-
           Mark the signature types methods take their signature from: for every source fact in
           ctx.signatureFacts (none on a candidate run) whose type reading named a signature type —
           the target of a fact of form signature, or the signature candidate of an ambiguous one —
-          record every type in ctx.types whose matchesRef(that target) holds. The facts are what the
-          loader resolved, so a signatureFrom counts exactly when it names the type
+          resolve that target as markTypeReferenced does, from the subsystem of the owning
+          interface's component, and record what it resolves to. The facts are what the loader
+          resolved, so a signatureFrom counts exactly when it names the type
         type: local
       - stepNumber: 4
         description: >-
           Mark the types referenced by type methods: pass each ref of m.typeRefs(), for every method
-          m of every type t in ctx.types, to markTypeReferenced — except t itself, so a type named
-          only by its own methods stays unmarked, the way a function that only calls itself is
+          m of every type t in ctx.types, to markTypeReferenced with from = t.subsystem — except t
+          itself, so a type named only by its own methods stays unmarked, the way a function that
+          only calls itself is
         type: local
       - stepNumber: 5
         description: >-
-          Mark the exported types: record the type every L1 and L0 export entry names as its typeDef
-          (its consumers are outside this tree, so an exported type is used by definition)
+          Mark the exported types: record the type every L1 and L0 export entry names as its
+          typeDef, resolved the same way from that L1's subsystem (none for the L0) — its consumers
+          are outside this tree, so an exported type is used by definition
         type: local
       - stepNumber: 6
         label: types
@@ -1029,4 +1036,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-18T19:03:05.647Z'
+updatedAt: '2026-10-19T18:24:56.697Z'

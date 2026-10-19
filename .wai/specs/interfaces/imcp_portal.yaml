@@ -928,22 +928,29 @@ methods:
       - imcp_portal.sdd_demote_member
   - name: renameType
     description: >-
-      Tool: rename a type and rewrite every type position, signatureFrom and export entry naming it;
-      the old id joins the type's rename trace (previousIds), and an export entry that derived its
-      public name from the old id keeps it through `as`. Refuses an id another type of the same
-      owner holds or retired. Reports the specs rewritten, the public names kept, the debt-register
-      edits, `publishedIn` (every public name a consumer reaches the type through: an exported type
-      that is or embeds it, an exported contract whose methods name one in their signature closure)
-      and `breaks`: the consumers in reach (family members included, and checkouts in the `search`
-      folders) whose specs reach one of those — a contract they depend on as a whole included —
-      narrowed to what carries the type, as sdd_rename_field and sdd_rename_param name theirs. With
-      dryRun it answers what the rename would do and writes nothing.
+      Tool: rename a type and rewrite every type position, signatureFrom and export entry that
+      resolves to it from where it is written — a bare name resolves in the referring subsystem
+      first, so a same-named type of another subsystem is left alone; the old id joins the type's
+      rename trace (previousIds), and an export entry that derived its public name from the old id
+      keeps it through `as`. A contract method's stored signature text is re-derived from its
+      params; a prose signature without params has only its result respelled. Refuses an id another
+      type of the same owner holds or retired, and a reference that matches several types including
+      this one (ambiguous-ref: qualify it as subsystem::name first). Reports the specs rewritten,
+      the public names kept, the debt-register edits, `publishedIn` (every public name a consumer
+      reaches the type through: an exported type that is or embeds it, an exported contract whose
+      methods name one in their signature closure) and `breaks`: the consumers in reach (family
+      members included, and checkouts in the `search` folders) whose specs reach one of those — a
+      contract they depend on as a whole included — narrowed to what carries the type, as
+      sdd_rename_field and sdd_rename_param name theirs. With dryRun it answers what the rename
+      would do and writes nothing.
     signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
     returns: TypeRename
     params:
       - name: id
         type: string
-        description: The type to rename (qualified by its owning subsystem if needed)
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) — required to
+          reach the second half of a duplicate id
       - name: newId
         type: string
         description: Its new id
@@ -1312,4 +1319,4 @@ methods:
       method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T16:51:05.092Z'
+updatedAt: '2026-10-19T18:26:02.474Z'

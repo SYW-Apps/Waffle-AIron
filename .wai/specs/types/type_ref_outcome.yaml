@@ -1,0 +1,18 @@
+kind: enum
+id: type_ref_outcome
+name: TypeRefOutcome
+description: How one written type reference resolved against the types in reach.
+fields: []
+methods: []
+sourcePath: src/models/type-references.ts
+values:
+  - name: resolved
+    description: The reference lands on exactly one type
+  - name: ambiguous
+    description: >-
+      The reference matches several types and nothing in the referrer's own subsystem settles which
+      is meant
+  - name: none
+    description: No type matches the reference
+createdAt: '2026-10-19T18:22:36.246Z'
+updatedAt: '2026-10-19T18:22:37.087Z'

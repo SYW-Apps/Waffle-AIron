@@ -2896,7 +2896,9 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Load the type to rename
+        description: >-
+          Load the type to rename. An id `subsystem::id` reaches either half of a duplicate id: the
+          kept type, or the second one the index recorded for another subsystem
         type: call
         targetComponent: spec_loader
         targetMethod: loadTypeSpec
@@ -2958,7 +2960,12 @@ methods:
         type: throw
         error: 'invalid-id: the new id must be a lowercase identifier with no namespace separator'
       - stepNumber: 9
-        description: Load every type spec, for the ids its owner already holds and the trace that retired any
+        description: >-
+          Load every type spec, for the ids its owner already holds and the trace that retired any,
+          adding every second half of a duplicate type id the index recorded (the model lists leave
+          them out), so each takes part in every resolution below: renaming either half of a
+          duplicate respells only the references that resolve to that half, and a reference written
+          in the other half's subsystem stays with it
         type: call
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
@@ -3002,6 +3009,27 @@ methods:
           method names, so the tool can name every consumer whose code spells the type's old name
         type: local
       - stepNumber: 15
+        label: ambiguousRef
+        description: >-
+          Guard: no reference may be ambiguous over the renamed type. Walk every type position the
+          rewrite below would visit, without writing, and resolve each named token with
+          type_ref_resolution.resolve(token, the referring spec's own subsystem, every type spec of
+          step 9); a bare name settles in the referring subsystem first, so only a token matching
+          several types of the subsystem it is written in, or of none and several elsewhere, is
+          ambiguous
+        type: branch
+        condition: some token resolves ambiguously and the renamed type is among its candidates
+        onFalseStep: 17
+      - stepNumber: 16
+        label: ambiguous-ref
+        description: >-
+          Refuse before any write, naming the spec, the token and the matching ids, and saying to
+          qualify it as subsystem::name first
+        type: throw
+        error: >-
+          ambiguous-ref: <spec> names "<token>", which matches <ids>; qualify it as subsystem::name
+          first
+      - stepNumber: 17
         label: typeDryRun
         description: >-
           A dry run stops here, refused exactly as the real rename above: walk every spec without
@@ -3009,53 +3037,60 @@ methods:
           and the export entries that would get an `as`
         type: branch
         condition: dryRun is set
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 19
+      - stepNumber: 18
         description: >-
           Return from and to, the ids it would rewrite, the public names it would keep, publishedIn
           and the register edits the dry rekey planned, marked dryRun; nothing was written
         type: return
         outcome: TypeRename (dry run)
-      - stepNumber: 17
+      - stepNumber: 19
         description: >-
-          Rewrite every reference to the type across the bound tree with a type-expression walk over
-          the raw spec files (the shared reference-field table reads a position whole and never
-          covered contract or type-method returns or typeDef, so it is left to the boundary moves):
-          in every type position — contract method params and returns, type fields, type-method
-          params and returns, signature-type params and returns — the named members of the
-          expression that read as this type (type_spec.matchesRef; when another type reads the same,
-          only in a spec of the type's own owner) are respelled in the style they were written, and
-          a params-derived signature text is re-derived; a signatureFrom, a table type's
-          linkedEntity, a field's references and an L1 or L0 export entry's typeDef naming the type
-          follow too — an export entry that states no `as` first getting `as: <its public name>`,
-          recorded as kept. Rename traces are never rewritten. Then rekey every lint allow naming
-          the type (identity_rename.rekeyAnchor). Record the specs either changed
+          Rewrite every reference that resolves to the type, from where it is written, across the
+          bound tree with a type-expression walk over the raw spec files (the shared reference-field
+          table reads a position whole and never covered contract or type-method returns or typeDef,
+          so it is left to the boundary moves): in every type position — contract method params and
+          returns, type fields, type-method params and returns, signature-type params and returns —
+          the named members of the expression for which type_ref_resolution.resolve(member, the
+          spec's own subsystem, every type spec of step 9 — the second half of a duplicate id
+          included) resolves to this type are respelled in the style they were written, and a
+          params-derived signature text is re-derived. A bare name settles in the referring
+          subsystem first, so a same-named type of another subsystem keeps its spelling. A contract
+          method's stored signature is re-derived from its params; a prose signature without params
+          has only its result respelled. A signatureFrom, a table type's linkedEntity, a field's
+          references and an L1 or L0 export entry's typeDef naming the type follow too — an export
+          entry that states no `as` first getting `as: <its public name>`, recorded as kept. Rename
+          traces are never rewritten. Then rekey every lint allow naming the type
+          (identity_rename.rekeyAnchor). Record the specs either changed
         type: local
-      - stepNumber: 18
+      - stepNumber: 20
         description: Drop the cached spec index, so the save below reads the rewritten tree
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 19
+      - stepNumber: 21
         description: >-
           Write the type, reloaded as the rewrite left it, under newId with the same owner and its
-          old id appended to its rename trace (previousIds)
+          old id appended to its rename trace (previousIds). For the second half of a duplicate id
+          this moves THAT half's file, never the kept type's
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 20
-        description: Remove the file it left behind under its old id
+      - stepNumber: 22
+        description: >-
+          Remove the file it left behind under its old id — the renamed half's own file, so the
+          other half of a duplicate id, if any, stays and now loads
         type: call
         targetComponent: spec_loader
         targetMethod: deleteSpec
-      - stepNumber: 21
+      - stepNumber: 23
         description: >-
           Rekey the debt register for real: every carried entry anchored on the type, rewritten in
           place with every comment and all other formatting kept
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 22
+      - stepNumber: 24
         description: >-
           Return from and to, rewritten (the other specs whose references or lint allows changed),
           keptPublicNames, publishedIn and carried
@@ -3863,4 +3898,4 @@ methods:
         outcome: applied
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T19:11:33.677Z'
+updatedAt: '2026-10-19T18:27:41.511Z'

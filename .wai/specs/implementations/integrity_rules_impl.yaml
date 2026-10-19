@@ -368,8 +368,9 @@ methods:
         description: 'Branch: does the reference fail to resolve?'
         type: branch
         condition: >-
-          ctx.isTypeResolved(ref, no generics) is false (the reference resolves to neither a builtin
-          nor a defined type; t.fieldTypeRefs already left the type's own generic parameters out)
+          ctx.isTypeResolved(ref, no generics, t.subsystem) is false (the reference resolves to
+          neither a builtin nor a defined type, read from the type's own subsystem first;
+          t.fieldTypeRefs already left the type's own generic parameters out)
         onFalseStep: 6
       - stepNumber: 8
         label: refsEnd
@@ -424,8 +425,9 @@ methods:
         description: 'Branch: does the reference fail to resolve?'
         type: branch
         condition: >-
-          ctx.isTypeResolved(ref, allGenerics) is false (the reference does not resolve to a
-          builtin, an in-scope generic, or a defined type)
+          ctx.isTypeResolved(ref, allGenerics, the subsystem of the component ctx.componentMap holds
+          for intf.component) is false (the reference does not resolve to a builtin, an in-scope
+          generic, or a defined type, read from the contract's own subsystem first)
         onFalseStep: 6
       - stepNumber: 8
         label: refsEnd
@@ -457,7 +459,7 @@ methods:
       - stepNumber: 12
         description: 'Branch: does the reference fail to resolve?'
         type: branch
-        condition: ctx.isTypeResolved(ref, typeGenerics) is false
+        condition: ctx.isTypeResolved(ref, typeGenerics, t.subsystem) is false
         onFalseStep: 11
       - stepNumber: 13
         label: typeRefsEnd
@@ -998,8 +1000,11 @@ methods:
       - stepNumber: 5
         description: >-
           Report DUPLICATE_SPEC_ID (error) on the key, when it is in scope, naming the project and
-          both files that declare it, and that every reference to it could mean either — rename one
-          of them
+          both files that declare it, and that every reference to it could mean either. For two
+          types of different subsystems (the problem carries qualifiedIds) the message adds that
+          either half can be renamed by its qualified id: sdd_rename_type <subA>::<id> <new id> or
+          sdd_rename_type <subB>::<id> <new id>; for any other duplicate it says to rename the kept
+          one with its tool, after which the other loads
         type: local
       - stepNumber: 6
         label: shadows
@@ -1440,6 +1445,72 @@ methods:
         type: return
     symbol: check
     exportedVia: memberNamesRule
+  - name: typeRefScope
+    sourcePath: src/core/rules/integrity/type-ref-scope.ts
+    narrative:
+      - stepNumber: 1
+        label: contracts
+        description: For each type identifier a contract method names
+        type: loop
+        loopKind: forEach
+        over: >-
+          each interface intf of ctx.interfaces, each method m of it that names no signatureFrom
+          (its params are its source's, judged where the source declares them), and each ref of
+          m.typeRefs()
+        endStep: 2
+      - stepNumber: 2
+        label: contractsEnd
+        description: >-
+          Judge the reference as written in the contract: from = the subsystem of the component
+          ctx.componentMap holds for intf.component, isDraftCtx =
+          ctx.isComponentDraft(intf.component) or the interface's own status being draft or design,
+          owner = intf.id. The private helper judgeTypeRef(owner, ref, from, isDraftCtx) skips a
+          builtin (ctx.isBuiltinType(ref) holds), resolves the reference with
+          type_ref_resolution.resolve(ref, from, ctx.types) and reports at most once per (owner,
+          ref). When the outcome is ambiguous: AMBIGUOUS_TYPE_REF (warning; isDraftCtx) on the
+          owner, reading `<ref> in <owner> matches <n> types: <id> (subsystem <subsystem>), ... —
+          write it as subsystem::name to say which is meant`. When it is resolved and shadowedBy is
+          set: AMBIGUOUS_TYPE_REF (warning; isDraftCtx) on the owner, reading `<ref> in <owner>
+          binds to <subsystem>::<type id>, while subsystem <from> holds <shadowedBy>, also named
+          <Name> — write the type's id, or subsystem::name, to say which is meant`. A resolved
+          reference without a shadow, and an unresolved one (UNDEFINED_TYPE_REFERENCE's to report),
+          report nothing here
+        type: local
+      - stepNumber: 3
+        label: types
+        description: For each type identifier a type names
+        type: loop
+        loopKind: forEach
+        over: >-
+          each type t of ctx.types and each ref of t.fieldTypeRefs(field.type) for every field, of
+          m.typeRefs() for every method m carrying params, and of t.signatureTypeRefs()
+        endStep: 4
+      - stepNumber: 4
+        label: typesEnd
+        description: >-
+          Judge the reference as written in the type, exactly as step 2 does: from = t.subsystem,
+          isDraftCtx = the subsystem in ctx.subsystems whose id is t.subsystem having status draft
+          or design, owner = t.id
+        type: local
+      - stepNumber: 5
+        label: exports
+        description: For each exported type
+        type: loop
+        loopKind: forEach
+        over: >-
+          each publicInterfaces entry carrying a typeDef, of every subsystem in ctx.subsystems and
+          of ctx.system
+        endStep: 6
+      - stepNumber: 6
+        label: exportsEnd
+        description: >-
+          Judge the typeDef as written in the entry, exactly as step 2 does: owner = the subsystem
+          (or the system) spec holding the entry, from = that subsystem's id (none for the L0),
+          isDraftCtx = that subsystem having status draft or design (none for the L0)
+        type: local
+    detail: full
+    symbol: check
+    exportedVia: typeRefScopeRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-18T19:02:48.809Z'
+updatedAt: '2026-10-19T18:24:12.155Z'

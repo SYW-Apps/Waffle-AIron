@@ -75,8 +75,9 @@ methods:
           bound root's own identity is judged from its configuration and lock, so it is not repeated
           here); a member whose directory is missing is member-absent; an alias declared both as a
           member and as an external is an alias-conflict; a key declared twice in one project is a
-          duplicate-spec naming both files; and each root's stage-8 member problems as the scan
-          recorded them (part-unavailable, kind-mismatch)
+          duplicate-spec naming both files, and, for two types of different subsystems, both
+          `subsystem::id` addresses (qualifiedIds); and each root's stage-8 member problems as the
+          scan recorded them (part-unavailable, kind-mismatch)
         type: local
       - stepNumber: 11
         description: For each node
@@ -143,4 +144,4 @@ methods:
       method's own name, each once in declared order. An unknown contract answers none.
 status: complete
 createdAt: '2026-09-26T17:41:29.805Z'
-updatedAt: '2026-10-09T01:00:51.736Z'
+updatedAt: '2026-10-19T18:25:39.093Z'

@@ -1236,29 +1236,38 @@ methods:
   - name: renameType
     description: >-
       Rename a type and every reference to it. The type moves to the new id and file under the same
-      owner, its old id appended to its rename trace (previousIds); every type position in the bound
-      tree naming it is respelled — contract and type-method params and returns, fields,
-      signature-type params and returns — and so is a signatureFrom naming it as a signature type
-      and an L1 or L0 export entry's typeDef. An export entry that exported it without `as` gets
-      `as: <the old public name>` first, so the published name stays. Rename traces are never
-      rewritten. Findings keyed on the type follow it: lint allows naming it, and debt-register
-      entries anchored on it, rewritten in place with every comment and all other formatting kept
-      and each edit reported. The report names publishedIn — every public name a consumer reaches
-      the type through: an exported type that is or embeds it, and an exported contract whose
-      methods name one in their signature closure (those methods) — so a caller can name the
-      consumers whose code still spells the old name. Refuses a type that does not exist, one inside
-      a chained subproject, a new id outside the id grammar, a new id another type of the same owner
-      holds or retired (id-taken, id-retired naming the holder), and a register that cannot be
-      rewritten that precisely; every refusal happens before the first write. Display names are the
-      author's to change, and a lock goes stale as with any edit. Inside a hosted request every spec
-      it would write is judged against the request's write reach before the first write
-      (SubsystemWriteDenied), and nothing is written on a refusal.
+      owner, its old id appended to its rename trace (previousIds). Only references that resolve to
+      this type from where they are written are respelled — a bare name resolves in the referring
+      subsystem first, so a same-named type of another subsystem is left alone — in every type
+      position of the bound tree: contract and type-method params and returns, fields, a signature
+      type's params and returns; so is a signatureFrom naming it as a signature type, and an L1 or
+      L0 export entry's typeDef. A contract method's stored signature text is re-derived from its
+      params; a prose signature without params has only its result respelled. An export entry that
+      exported it without `as` gets `as: <the old public name>` first, so the published name stays.
+      Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming
+      it, and debt-register entries anchored on it, rewritten in place with every comment and all
+      other formatting kept and each edit reported. The report names publishedIn — every public name
+      a consumer reaches the type through: an exported type that is or embeds it, and an exported
+      contract whose methods name one in their signature closure (those methods) — so a caller can
+      name the consumers whose code still spells the old name. A `subsystem::id` also reaches the
+      second half of a duplicate id (two types of different subsystems declaring one id): that half
+      moves to the new id and only the references that resolve to it are respelled. Refuses a type
+      that does not exist, one inside a chained subproject, a new id outside the id grammar, a new
+      id another type of the same owner holds or retired (id-taken, id-retired naming the holder), a
+      reference that matches several types including this one (ambiguous-ref: qualify it as
+      subsystem::name first), and a register that cannot be rewritten that precisely; every refusal
+      happens before the first write. Display names are the author's to change, and a lock goes
+      stale as with any edit. Inside a hosted request every spec it would write is judged against
+      the request's write reach before the first write (SubsystemWriteDenied), and nothing is
+      written on a refusal.
     signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
         type: string
-        description: The type to rename, qualified by its owning subsystem when two subsystems own that id
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) — required to
+          reach the second half of a duplicate id, and whenever two subsystems own that id
       - name: newId
         type: string
         description: Its new id, under the same owner
@@ -1555,4 +1564,4 @@ methods:
         description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T19:11:00.653Z'
+updatedAt: '2026-10-19T18:25:59.416Z'

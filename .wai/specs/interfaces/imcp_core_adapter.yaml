@@ -235,7 +235,9 @@ methods:
     params:
       - name: typeId
         type: string
-        description: The type to rename
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) when it must reach
+          the second half of a duplicate id
       - name: newId
         type: string
         description: Its new id
@@ -374,4 +376,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T19:08:41.062Z'
+updatedAt: '2026-10-19T18:26:08.468Z'
