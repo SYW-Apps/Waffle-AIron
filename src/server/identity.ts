@@ -29,7 +29,7 @@ import {
   actionableUnitIds,
 } from './authorization.js';
 import { isReservedSubject } from './auth.js';
-import { SSO_ADMIN_ROLE_ID } from './types.js';
+import { SSO_ADMIN_ROLE_ID, providerSetupProblem, providerNotSetUpMessage } from './types.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -38,6 +38,8 @@ import type {
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  IdentityProviderListing,
+  IdentityProviderSaveResult,
   MintedToken,
   Principal,
   PrincipalSubject,
@@ -715,6 +717,19 @@ export function resolveEnabledProvider(cfg: HostConfig, providerId: string): Ide
 export async function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): Promise<string> {
   const provider = resolveEnabledProvider(cfg, providerId);
 
+  // A provider that is not set up yet starts no sign-in: audit the refusal
+  // (best-effort) and answer without echoing any supplied address.
+  if (providerSetupProblem(provider)) {
+    tryAppendAudit(
+      cfg,
+      buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'sso.refused', 'warning', {
+        target: providerId,
+        metadata: JSON.stringify({ reason: 'provider-not-set-up' }),
+      }),
+    );
+    throw new Error(providerNotSetUpMessage(provider));
+  }
+
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload));
@@ -844,10 +859,13 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 export function listProviders(
   cfg: HostConfig,
   credential: string | null,
-): IdentityProviderConfig[] {
+): IdentityProviderListing[] {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
-  return listIdentityProviderRecords(cfg.dataDir);
+  return listIdentityProviderRecords(cfg.dataDir).map((provider) => {
+    const setupProblem = providerSetupProblem(provider);
+    return setupProblem ? { provider, setupProblem } : { provider };
+  });
 }
 
 /**
@@ -860,7 +878,7 @@ export function upsertProvider(
   cfg: HostConfig,
   credential: string | null,
   config: IdentityProviderConfig,
-): IdentityProviderConfig {
+): IdentityProviderSaveResult {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
@@ -868,7 +886,9 @@ export function upsertProvider(
 
   tryAppendAudit(cfg, buildAuditEvent(principal, 'idp.upsert', 'security', 'auth', { target: stored.id }));
 
-  return stored;
+  // Collect the warnings: what still prevents sign-in, when the saved provider is enabled.
+  const problem = stored.enabled ? providerSetupProblem(stored) : undefined;
+  return { provider: stored, warnings: problem ? [problem] : [] };
 }
 
 /**

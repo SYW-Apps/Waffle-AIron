@@ -1097,6 +1097,32 @@ export interface LandscapeGraphModel {
  *  endpoint templates of their own; every other kind resolves as generic OIDC. */
 export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
 
+/** The name a person knows a provider by: its display name, else its id. */
+function providerLabel(provider: IdentityProviderConfig): string {
+  return provider.displayName || provider.id;
+}
+
+/**
+ * The one sentence saying why SSO through this provider cannot work yet, worded
+ * for an administrator, or undefined when nothing prevents it. Today there is one
+ * problem: the provider names no allowed redirect address. Every place that
+ * refuses, hides, warns about or lists a provider's readiness uses this.
+ */
+export function providerSetupProblem(provider: IdentityProviderConfig): string | undefined {
+  const named = (provider.allowedRedirectUris ?? []).some((u) => typeof u === 'string' && u.trim() !== '');
+  if (named) return undefined;
+  return (
+    `SSO through ${providerLabel(provider)} will not work until its allowed redirect addresses are set ` +
+    '(allowedRedirectUris, or WAIRON_OIDC_ALLOWED_REDIRECT_URIS) — usually https://<this host>/web/sso/callback'
+  );
+}
+
+/** What a person is told when they try to sign in through a provider that is not
+ *  set up yet. Echoes no supplied address. */
+export function providerNotSetUpMessage(provider: IdentityProviderConfig): string {
+  return `Sign-in through ${providerLabel(provider)} is not set up yet. Ask an administrator to finish its setup.`;
+}
+
 /** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
@@ -1114,8 +1140,9 @@ export interface IdentityProviderConfig {
   /** Provider group claims that map to instance-admin, when set. */
   adminGroupClaims?: string[];
   /** Exact-match allowlist of redirect URIs accepted for this provider's SSO flow.
-   *  When set and non-empty, a redirectUri not on the list is refused. When
-   *  unset/empty, any redirectUri is accepted (backward compatible). */
+   *  A provider must name the addresses it may return to: a redirectUri not on the
+   *  list is refused, and an unset or empty list means no sign-in can start
+   *  through the provider (see providerSetupProblem in idp.ts). */
   allowedRedirectUris?: string[];
   /** Explicit browser-facing (front-channel) authorization endpoint override.
    *  When set, wins over OIDC discovery and providerType templates. The PUBLIC URL
@@ -1281,8 +1308,26 @@ export interface WebLoginOptions {
    *  WAIRON_ADMIN_USER and WAIRON_ADMIN_PASSWORD set on the server). */
   passwordLogin: boolean;
   /** One entry per ENABLED identity provider — displayName is the admin-set
-   *  label, defaulting to the provider id. Disabled providers never appear. */
-  providers: { id: string; displayName: string }[];
+   *  label, defaulting to the provider id. Disabled providers never appear.
+   *  available is false (with a user-facing unavailableReason) when the provider
+   *  is not set up yet; the admin-worded setup problem is never sent pre-auth. */
+  providers: { id: string; displayName: string; available: boolean; unavailableReason?: string }[];
+}
+
+/** One identity provider as an administrator sees it in a listing: the stored
+ *  configuration paired with its setupProblem (absent when nothing is wrong).
+ *  Mirrors .wai/specs/types/identity_provider_listing.yaml. */
+export interface IdentityProviderListing {
+  provider: IdentityProviderConfig;
+  setupProblem?: string;
+}
+
+/** The answer to saving an identity provider: the stored configuration plus
+ *  warnings telling the administrator what still prevents sign-in through it.
+ *  Mirrors .wai/specs/types/identity_provider_save_result.yaml. */
+export interface IdentityProviderSaveResult {
+  provider: IdentityProviderConfig;
+  warnings: string[];
 }
 
 /** The current principal's identity + derived capability flags, so the web

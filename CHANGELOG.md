@@ -95,6 +95,22 @@ directory, and refuses those forms afterwards:
 - **Exposure policy errors.** An exposure policy file that cannot be read now fails
   loudly, instead of the server silently using the default posture.
 
+### Breaking: an SSO provider must name the addresses it may return to
+
+An enabled SSO provider with no allowed redirect addresses no longer signs anyone in.
+Before, an empty list accepted any address; now it accepts none, and a provider names
+the addresses it may return to (`allowedRedirectUris`, or `WAIRON_OIDC_ALLOWED_REDIRECT_URIS`
+for the provider the server registers from the environment). Usually that is one
+address, `https://<this host>/web/sso/callback`.
+
+- The login page lists such a provider as not set up yet, with a disabled button; trying
+  to sign in anyway answers that sign-in through it is not set up and to ask an
+  administrator, and the refusal is audited (`web.signin.refused`, `sso.refused`).
+- The admin view shows a warning on the provider and suggests the address; saving a
+  provider answers the same warning. The server log names each such provider at start.
+- The admin API changes shape: the provider list answers `{ provider, setupProblem? }`
+  entries, and saving a provider answers `{ provider, warnings }`.
+
 ### Fixes: a type is the one its own subsystem names
 
 - A bare type reference now resolves in the subsystem that writes it first. Before, it

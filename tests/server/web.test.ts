@@ -150,6 +150,8 @@ function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityPro
     clientId: 'test-client',
     clientSecretRef: SECRET_REF,
     enabled: true,
+    // A provider must name the addresses it may return to (sign-in fails closed otherwise).
+    allowedRedirectUris: ['https://app.example/web/sso/callback', 'https://app.example/cb', 'https://app/cb'],
     updatedAt: '2026-07-11T00:00:00.000Z',
     ...over,
   };
@@ -215,6 +217,34 @@ describe('web orchestrator SSO sign-in (sdd_host)', () => {
     await expect(startSignIn(cfg, 'ghost', 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
     upsertIdentityProviderRecord(dataDir, providerConfig({ enabled: false }));
     await expect(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).rejects.toThrow(/unknown or disabled/i);
+  });
+
+  it('startSignIn refuses a provider with no allowed redirect address before endpoint discovery, and audits web.signin.refused', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: undefined }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const attacker = 'https://evil.example/steal?x=1';
+    let thrown: Error | undefined;
+    try {
+      await startSignIn(cfg, PROVIDER_ID, attacker);
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown?.message).toBe('Sign-in through authentik-corp is not set up yet. Ask an administrator to finish its setup.');
+    expect(thrown?.message).not.toContain(attacker);
+    expect(fetchSpy).not.toHaveBeenCalled(); // refused before discovery
+    expect(auditQuery(dataDir, { action: 'web.signin.start' })).toHaveLength(0);
+    const refused = auditQuery(dataDir, { action: 'web.signin.refused' });
+    expect(refused).toHaveLength(1);
+    expect(refused[0].level).toBe('warning');
+    expect(refused[0].category).toBe('auth');
+    expect(refused[0].target).toBe(PROVIDER_ID);
+    expect(JSON.parse(refused[0].metadata ?? '{}')).toEqual({ reason: 'provider-not-set-up' });
+  });
+
+  it('startSignIn still requires an exact match once the allowlist is set', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: ['https://app.example/cb'] }));
+    await expect(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb/')).rejects.toThrow(/redirect_uri not allowed/);
+    await expect(startSignIn(cfg, PROVIDER_ID, 'https://app.example/cb')).resolves.toBeTruthy();
   });
 
   it('completeSignIn (first login): provisions an active binding-free user and creates a resolvable WebSession (no token minted)', async () => {
@@ -911,6 +941,19 @@ describe('web portal HTTP mount (sdd_host)', () => {
     ).toBe(404);
   });
 
+  it('POST /web/sso/start answers a clear 400 (not a 500) for a provider that is not set up', async () => {
+    enableWebUi();
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: undefined }));
+    const res = await raw({
+      method: 'POST',
+      path: '/web/sso/start',
+      headers: { 'content-type': 'application/json', 'x-wairon-web': '1' },
+      body: JSON.stringify({ providerId: PROVIDER_ID, redirectUri: 'https://app/cb' }),
+    });
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body).error).toBe('Sign-in through authentik-corp is not set up yet. Ask an administrator to finish its setup.');
+  });
+
   it('webUiEnabled=true: serves the app shell and completes the SSO callback → session cookie', async () => {
     enableWebUi();
     upsertIdentityProviderRecord(dataDir, providerConfig());
@@ -1299,8 +1342,12 @@ describe('web admin orchestrator (sdd_host)', () => {
 
     // IdP upsert/list forward to the identity orchestrator (instance-admin only).
     const stored = webadmin.upsertIdentityProvider(cfg, admin, providerConfig());
-    expect(stored.id).toBe(PROVIDER_ID);
-    expect(webadmin.listIdentityProviders(cfg, admin).map((p) => p.id)).toContain(PROVIDER_ID);
+    expect(stored.provider.id).toBe(PROVIDER_ID);
+    expect(stored.warnings).toEqual([]);
+    expect(webadmin.listIdentityProviders(cfg, admin).map((l) => l.provider.id)).toContain(PROVIDER_ID);
+    const unset = webadmin.upsertIdentityProvider(cfg, admin, providerConfig({ allowedRedirectUris: [] }));
+    expect(unset.warnings).toHaveLength(1);
+    expect(webadmin.listIdentityProviders(cfg, admin).find((l) => l.provider.id === PROVIDER_ID)?.setupProblem).toBe(unset.warnings[0]);
     // A viewer session is refused by the upstream orchestrator (no new auth surface).
     expect(() => webadmin.listIdentityProviders(cfg, viewer)).toThrow(ForbiddenError);
 
@@ -1606,11 +1653,17 @@ describe('web admin routes over HTTP (sdd_host)', () => {
       body: JSON.stringify({ id: PROVIDER_ID, providerType: 'oidc', enabled: true, updatedAt: '' }),
     });
     expect(put.status).toBe(200);
-    expect(JSON.parse(put.body).id).toBe(PROVIDER_ID);
+    // The body names no redirect address: the save is answered with the warning.
+    const saved = JSON.parse(put.body);
+    expect(saved.provider.id).toBe(PROVIDER_ID);
+    expect(saved.warnings).toHaveLength(1);
+    expect(saved.warnings[0]).toContain('allowed redirect addresses');
 
     const list = await raw({ method: 'GET', path: '/web/admin/providers', headers: { cookie } });
     expect(list.status).toBe(200);
-    expect(JSON.parse(list.body).providers.map((p: { id: string }) => p.id)).toContain(PROVIDER_ID);
+    const listed = JSON.parse(list.body).providers as { provider: { id: string }; setupProblem?: string }[];
+    expect(listed.map((l) => l.provider.id)).toContain(PROVIDER_ID);
+    expect(listed.find((l) => l.provider.id === PROVIDER_ID)?.setupProblem).toBe(saved.warnings[0]);
   }, 20_000);
 
   it('POST /web/tokens mints a single-project agent token (self-service), CSRF-gated; /web/tokens/revoke revokes it', async () => {

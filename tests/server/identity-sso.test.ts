@@ -134,6 +134,8 @@ function providerConfig(over: Partial<IdentityProviderConfig> = {}): IdentityPro
     clientId: 'test-client',
     clientSecretRef: SECRET_REF,
     enabled: true,
+    // A provider must name the addresses it may return to (sign-in fails closed otherwise).
+    allowedRedirectUris: ['https://app.example/cb'],
     updatedAt: '2026-07-10T00:00:00.000Z',
     ...over,
   };
@@ -243,6 +245,42 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     // An allowlisted redirectUri still starts the login.
     const authUrl = await identity.startSsoLogin(cfg, PROVIDER_ID, 'https://app.example/cb');
     expect(new URL(authUrl).searchParams.get('redirect_uri')).toBe('https://app.example/cb');
+  });
+
+  // A provider must name the addresses it may return to: with none, no sign-in starts.
+  it.each([
+    ['unset', undefined],
+    ['empty', []],
+  ])('startSsoLogin refuses a provider whose allowlist is %s, builds no URL, and audits sso.refused', async (_n, list) => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: list as string[] | undefined }));
+    const attacker = 'https://evil.example/steal?x=1';
+    let thrown: Error | undefined;
+    try {
+      await identity.startSsoLogin(cfg, PROVIDER_ID, attacker);
+    } catch (e) {
+      thrown = e as Error;
+    }
+    expect(thrown?.message).toBe('Sign-in through authentik-corp is not set up yet. Ask an administrator to finish its setup.');
+    expect(thrown?.message).not.toContain(attacker);
+    expect(auditQuery(dataDir, { action: 'sso.start' })).toHaveLength(0);
+    const refused = auditQuery(dataDir, { action: 'sso.refused' });
+    expect(refused).toHaveLength(1);
+    expect(refused[0].level).toBe('warning');
+    expect(refused[0].category).toBe('auth');
+    expect(refused[0].target).toBe(PROVIDER_ID);
+    expect(JSON.parse(refused[0].metadata ?? '{}')).toEqual({ reason: 'provider-not-set-up' });
+  });
+
+  it('listProviders carries each provider setupProblem; saving an enabled provider with none answers it as a warning', () => {
+    const saved = identity.upsertProvider(cfg, MASTER, providerConfig({ allowedRedirectUris: undefined }));
+    expect(saved.warnings).toHaveLength(1);
+    expect(saved.warnings[0]).toContain('SSO through authentik-corp will not work until its allowed redirect addresses are set');
+    const listed = identity.listProviders(cfg, MASTER).find((l) => l.provider.id === PROVIDER_ID);
+    expect(listed?.setupProblem).toBe(saved.warnings[0]);
+    // A disabled provider gets no warning on save; a set-up one carries no setupProblem.
+    expect(identity.upsertProvider(cfg, MASTER, providerConfig({ allowedRedirectUris: undefined, enabled: false })).warnings).toEqual([]);
+    identity.upsertProvider(cfg, MASTER, providerConfig());
+    expect(identity.listProviders(cfg, MASTER).find((l) => l.provider.id === PROVIDER_ID)?.setupProblem).toBeUndefined();
   });
 
   // ── completeSsoLogin: first login provisions + mints ───────────────────────
@@ -380,9 +418,10 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(() => identity.removeProvider(cfg, editor, PROVIDER_ID)).toThrow(ForbiddenError);
 
     // Admin upsert → stored + idp.upsert (security) audit.
-    const stored = identity.upsertProvider(cfg, MASTER, providerConfig());
-    expect(stored.id).toBe(PROVIDER_ID);
-    expect(identity.listProviders(cfg, MASTER).map((p) => p.id)).toContain(PROVIDER_ID);
+    const saved = identity.upsertProvider(cfg, MASTER, providerConfig());
+    expect(saved.provider.id).toBe(PROVIDER_ID);
+    expect(saved.warnings).toEqual([]); // set up: nothing to warn about
+    expect(identity.listProviders(cfg, MASTER).map((l) => l.provider.id)).toContain(PROVIDER_ID);
     const upEvents = auditQuery(dataDir, { action: 'idp.upsert' });
     expect(upEvents).toHaveLength(1);
     expect(upEvents[0].level).toBe('security');
@@ -475,6 +514,15 @@ describe('identity SSO portal (sdd_host http)', () => {
     return { status: res.status, json };
   }
 
+  it('POST /identity/sso/start answers a clear 400 for a provider that is not set up', async () => {
+    upsertIdentityProviderRecord(dataDir, providerConfig({ allowedRedirectUris: undefined }));
+    const start = await api('POST', '/identity/sso/start', {
+      body: { providerId: PROVIDER_ID, redirectUri: 'https://app.example/cb' },
+    });
+    expect(start.status).toBe(400);
+    expect(start.json.error).toBe('Sign-in through authentik-corp is not set up yet. Ask an administrator to finish its setup.');
+  });
+
   it('POST /identity/sso/start then GET /identity/sso/callback complete a login over HTTP', async () => {
     upsertIdentityProviderRecord(dataDir, providerConfig());
 
@@ -503,12 +551,13 @@ describe('identity SSO portal (sdd_host http)', () => {
       body: providerConfig(),
     });
     expect(put.status).toBe(200);
-    expect(put.json.id).toBe(PROVIDER_ID);
+    expect(put.json.provider.id).toBe(PROVIDER_ID);
+    expect(put.json.warnings).toEqual([]);
 
     // GET /identity/providers → 200 array containing it.
     const list = await api('GET', '/identity/providers', { cred: MASTER });
     expect(list.status).toBe(200);
-    expect(list.json.map((p: IdentityProviderConfig) => p.id)).toContain(PROVIDER_ID);
+    expect(list.json.map((l: { provider: IdentityProviderConfig }) => l.provider.id)).toContain(PROVIDER_ID);
 
     // Unauthenticated read → 401.
     expect((await api('GET', '/identity/providers')).status).toBe(401);

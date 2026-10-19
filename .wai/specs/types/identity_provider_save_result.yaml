@@ -1,0 +1,22 @@
+kind: value-object
+id: identity_provider_save_result
+name: IdentityProviderSaveResult
+description: >-
+  The answer to saving an identity provider: the stored configuration plus warnings that tell the
+  administrator, at setup, what still prevents sign-in through it.
+subsystem: sdd_host
+fields:
+  - name: provider
+    type: IdentityProviderConfig
+    description: The stored provider configuration.
+    optional: false
+  - name: warnings
+    type: list<string>
+    description: >-
+      Empty unless the saved provider is enabled and has a setupProblem, in which case it carries
+      that one sentence.
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-19T22:11:17.865Z'
+updatedAt: '2026-10-19T22:11:18.804Z'

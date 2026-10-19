@@ -4,7 +4,7 @@ import { ThemeCog } from '../ThemeControls';
 
 interface LoginOptions {
   passwordLogin: boolean;
-  providers: { id: string; displayName: string }[];
+  providers: { id: string; displayName: string; available: boolean; unavailableReason?: string }[];
 }
 
 /** The dynamic sign-in screen: renders exactly the methods the server reports
@@ -84,9 +84,17 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }) {
           <div className="stack">
             {opts.passwordLogin && <div className="or">or</div>}
             {opts.providers.map((p) => (
-              <button key={p.id} className="btn" disabled={busy} onClick={() => signInSso(p.id)}>
-                Sign in with {p.displayName}
-              </button>
+              <div key={p.id} className="stack">
+                <button
+                  className="btn"
+                  disabled={busy || !p.available}
+                  title={p.available ? undefined : p.unavailableReason}
+                  onClick={() => signInSso(p.id)}
+                >
+                  Sign in with {p.displayName}
+                </button>
+                {!p.available && <p className="hint">{p.unavailableReason}</p>}
+              </div>
             ))}
           </div>
         )}

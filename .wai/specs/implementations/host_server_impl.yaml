@@ -43,8 +43,9 @@ methods:
           dir's exposure-policy.json, or the admin UI) and the operator guide; when it is on, how a
           person signs in — read the identity providers through the policy repository, and name the
           built-in admin account (both admin user and password set) and each enabled provider, or
-          say that nobody can sign in yet. Reads only; any failure is swallowed so it never prevents
-          the server from starting
+          say that nobody can sign in yet. Log one warning per enabled provider with a setupProblem
+          (its sentence, so the operator sees it at start-up). Reads only; any failure is swallowed
+          so it never prevents the server from starting
         type: call
         targetComponent: policy_repository
         targetMethod: listIdentityProviders
@@ -112,4 +113,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-19T06:12:19.297Z'
+updatedAt: '2026-10-19T22:11:53.593Z'

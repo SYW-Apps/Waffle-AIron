@@ -55,6 +55,18 @@ describe('host_server.start: the web UI startup line', () => {
     expect(lines[0]).not.toContain('a-long-password');
   });
 
+  it('warns once per enabled provider that names no allowed redirect address, with its sentence', () => {
+    const warnings: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => { warnings.push(args.join(' ')); });
+    enableWebUi();
+    upsertIdentityProviderRecord(dataDir, { id: 'corp', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: true, updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'ready', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: true, allowedRedirectUris: ['https://app.example/web/sso/callback'], updatedAt: '' });
+    upsertIdentityProviderRecord(dataDir, { id: 'off', providerType: 'oidc', issuerUrl: 'https://idp.example', enabled: false, updatedAt: '' });
+    noteWebUiPosture(cfg);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('SSO through corp will not work until its allowed redirect addresses are set');
+  });
+
   it('the dev server says nothing: it is always on and signs in by itself', () => {
     noteWebUiPosture({ ...cfg, devMode: true });
     expect(lines).toHaveLength(0);

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildAuthorizationUrl } from '../../src/server/idp.js';
+import { providerSetupProblem } from '../../src/server/types.js';
 import type { IdentityProviderConfig, ProviderEndpoints } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -33,13 +34,34 @@ function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri:
 }
 
 describe('buildAuthorizationUrl enforces the redirect allowlist', () => {
-  it('accepts any redirectUri when allowedRedirectUris is unset', () => {
-    expect(() => assertAllowedRedirectUri(cfg(), 'https://app.example/cb')).not.toThrow();
-    expect(() => assertAllowedRedirectUri(cfg(), 'https://anything.example/whatever')).not.toThrow();
+  it('fails closed: refuses every redirectUri when allowedRedirectUris is unset', () => {
+    expect(() => assertAllowedRedirectUri(cfg(), 'https://app.example/cb')).toThrow(/not set up yet/);
+    expect(() => assertAllowedRedirectUri(cfg(), 'https://anything.example/whatever')).toThrow(/not set up yet/);
   });
 
-  it('accepts any redirectUri when allowedRedirectUris is an empty array', () => {
-    expect(() => assertAllowedRedirectUri(cfg({ allowedRedirectUris: [] }), 'https://app.example/cb')).not.toThrow();
+  it('fails closed: refuses every redirectUri when allowedRedirectUris is empty or blank', () => {
+    expect(() => assertAllowedRedirectUri(cfg({ allowedRedirectUris: [] }), 'https://app.example/cb')).toThrow(/not set up yet/);
+    expect(() => assertAllowedRedirectUri(cfg({ allowedRedirectUris: ['  '] }), 'https://app.example/cb')).toThrow(/not set up yet/);
+  });
+
+  it('builds no authorization URL for a provider that is not set up, and never echoes the supplied address', () => {
+    const attacker = 'https://evil.example/steal?token=SECRET';
+    try {
+      buildAuthorizationUrl(cfg(), ENDPOINTS, 'signed-state', attacker);
+      throw new Error('expected buildAuthorizationUrl to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(attacker);
+      expect((err as Error).message).toBe('Sign-in through authentik-corp is not set up yet. Ask an administrator to finish its setup.');
+    }
+  });
+
+  it('providerSetupProblem: the admin sentence when no redirect address is named, nothing otherwise', () => {
+    expect(providerSetupProblem(cfg({ displayName: 'Corp SSO' }))).toBe(
+      'SSO through Corp SSO will not work until its allowed redirect addresses are set ' +
+        '(allowedRedirectUris, or WAIRON_OIDC_ALLOWED_REDIRECT_URIS) — usually https://<this host>/web/sso/callback',
+    );
+    expect(providerSetupProblem(cfg())).toContain('SSO through authentik-corp will not work');
+    expect(providerSetupProblem(cfg({ allowedRedirectUris: ['https://app.example/cb'] }))).toBeUndefined();
   });
 
   it('accepts an exact match when allowedRedirectUris is non-empty', () => {

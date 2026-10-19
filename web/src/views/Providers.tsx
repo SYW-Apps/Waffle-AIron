@@ -14,9 +14,11 @@ import {
   useAsync,
   useToast,
 } from '../ui';
-import type { IdentityProviderConfig } from '../types';
+import type { IdentityProviderConfig, IdentityProviderListing, IdentityProviderSaveResult } from '../types';
 
 const PROVIDER_TYPES = ['oidc', 'keycloak', 'authentik', 'google_workspace', 'entra_id'];
+
+const suggestedRedirect = `${window.location.origin}/web/sso/callback`;
 
 const csvToList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter(Boolean);
 const listToCsv = (l?: string[]): string => (l ?? []).join(', ');
@@ -48,8 +50,10 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
       adminGroupClaims: csvToList(adminGroups),
       allowedRedirectUris: csvToList(redirects),
     };
-    await post('/web/admin/providers', record);
+    const result = await post<IdentityProviderSaveResult>('/web/admin/providers', record);
     toast.ok(isEdit ? 'Provider updated' : `Provider “${f.id}” added`);
+    // Saved, but tell the admin now what still prevents sign-in through it.
+    for (const w of result?.warnings ?? []) toast.bad(w);
     props.onSaved();
     props.onClose();
   }
@@ -103,9 +107,19 @@ function ProviderModal(props: { existing?: IdentityProviderConfig; onClose: () =
         <Field label="Admin group claims" hint="Comma-separated. Members of these groups become instance admins.">
           <TextInput value={adminGroups} onChange={setAdminGroups} placeholder="wairon-admins" />
         </Field>
-        <Field label="Allowed redirect URIs" hint="Comma-separated exact-match allowlist. Empty = accept any.">
-          <TextInput value={redirects} onChange={setRedirects} />
+        <Field
+          label="Allowed redirect URIs"
+          hint="Required. Comma-separated exact-match list of the addresses sign-in may return to; without one, nobody can sign in through this provider."
+        >
+          <TextInput value={redirects} onChange={setRedirects} placeholder={suggestedRedirect} />
         </Field>
+        {csvToList(redirects).length === 0 && (
+          <div className="row-actions">
+            <Button size="sm" variant="ghost" onClick={() => setRedirects(suggestedRedirect)}>
+              Use {suggestedRedirect}
+            </Button>
+          </div>
+        )}
 
         <button className="btn btn-ghost btn-sm" onClick={() => setShowAdvanced((s) => !s)}>
           {showAdvanced ? '▾' : '▸'} Split-horizon endpoint overrides
@@ -188,7 +202,7 @@ function SecretsCard() {
 
 export function Providers() {
   const toast = useToast();
-  const providers = useAsync<{ providers: IdentityProviderConfig[] }>(() => get('/web/admin/providers'), [], ['providers']);
+  const providers = useAsync<{ providers: IdentityProviderListing[] }>(() => get('/web/admin/providers'), [], ['providers']);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<IdentityProviderConfig | null>(null);
 
@@ -212,28 +226,38 @@ export function Providers() {
 
       <AsyncView state={providers}>
         {(d) => (
-          <DataTable<IdentityProviderConfig>
-            rowKey={(p) => p.id}
+          <DataTable<IdentityProviderListing>
+            rowKey={(l) => l.provider.id}
             empty="No identity providers configured. Add one so users can sign in with SSO."
             rows={d.providers}
             columns={[
               {
                 key: 'id',
                 header: 'Provider',
-                cell: (p) => (
+                cell: ({ provider: p }) => (
                   <div className="cell-stack">
                     <strong>{p.displayName || p.id}</strong>
                     <code className="subtle">{p.providerType} · {p.id}</code>
                   </div>
                 ),
               },
-              { key: 'issuer', header: 'Issuer', cell: (p) => <code className="subtle">{p.issuerUrl || '—'}</code> },
-              { key: 'enabled', header: 'Status', cell: (p) => <Badge tone={p.enabled ? 'ok' : 'neutral'}>{p.enabled ? 'enabled' : 'disabled'}</Badge> },
+              { key: 'issuer', header: 'Issuer', cell: ({ provider: p }) => <code className="subtle">{p.issuerUrl || '—'}</code> },
+              {
+                key: 'enabled',
+                header: 'Status',
+                cell: ({ provider: p, setupProblem }) => (
+                  <div className="cell-stack">
+                    <Badge tone={p.enabled ? 'ok' : 'neutral'}>{p.enabled ? 'enabled' : 'disabled'}</Badge>
+                    {setupProblem && <Badge tone="warn">not set up</Badge>}
+                    {setupProblem && <span className="hint">{setupProblem}</span>}
+                  </div>
+                ),
+              },
               {
                 key: 'act',
                 header: '',
                 width: '1%',
-                cell: (p) => (
+                cell: ({ provider: p }) => (
                   <div className="row-actions">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
                       Edit

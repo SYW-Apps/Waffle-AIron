@@ -52,10 +52,11 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Enforce the provider's redirect allowlist: when allowedRedirectUris is set and non-empty,
-          the redirectUri must equal one of its entries exactly
+          Enforce the provider's redirect allowlist, failing closed: a provider whose setupProblem
+          is set (allowedRedirectUris unset or empty) refuses every start, and otherwise the
+          redirectUri must equal one of the allowlist entries exactly
         type: branch
-        condition: the provider sets a non-empty allowlist that does not contain redirectUri exactly
+        condition: the provider has a setupProblem, or its allowlist does not contain redirectUri exactly
         onTrueStep: 2
         onFalseStep: 3
       - stepNumber: 2
@@ -141,4 +142,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-10-03T17:52:45.032Z'
+updatedAt: '2026-10-19T22:11:29.392Z'

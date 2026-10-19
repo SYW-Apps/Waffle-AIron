@@ -15,6 +15,7 @@ import { bootstrapInstance } from './instance-bootstrap.js';
 import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
+import { providerSetupProblem } from './types.js';
 import * as policyPortal from './policy-portal.js';
 import * as landscapePortal from './landscape-portal.js';
 import * as operationsPortal from './operations-portal.js';
@@ -677,6 +678,11 @@ export function noteWebUiPosture(cfg: HostConfig): void {
   if (cfg.devMode === true) return;
   try {
     const guide = 'see "Web UI and sign-in" in docs/cli.md';
+    // One warning per enabled provider that cannot sign anyone in yet, with its sentence.
+    for (const p of policy.listIdentityProviderRecords(cfg.dataDir)) {
+      const problem = p.enabled ? providerSetupProblem(p) : undefined;
+      if (problem) console.warn(`[wairon sso] ${problem}`);
+    }
     if (!resolveExposurePolicy(cfg).webUiEnabled) {
       console.log(
         `[wairon web UI] off — set "webUiEnabled": true in ${path.join(cfg.dataDir, 'exposure-policy.json')} `

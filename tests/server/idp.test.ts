@@ -145,6 +145,8 @@ function cfg(overrides: Partial<IdentityProviderConfig> = {}): IdentityProviderC
     clientId: CLIENT_ID,
     clientSecretRef: SECRET_REF,
     enabled: true,
+    // A provider must name the addresses it may return to (sign-in fails closed otherwise).
+    allowedRedirectUris: ['https://app.example/callback', 'https://app.example/cb'],
     updatedAt: '2026-07-13T00:00:00.000Z',
     ...overrides,
   };

@@ -127,11 +127,14 @@ methods:
   - name: startSsoLogin
     description: >-
       Begin a headless SSO login: resolve the enabled identity-provider configuration through the
-      policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
-      redirectUri via the authentication component, build the provider authorization URL through the
-      identity provider adapter, append a best-effort sso.start (info) audit event, and return the
-      authorization URL. Starting a login is unauthenticated by nature — no caller credential is
-      required or accepted; the signed state is the only integrity anchor carried into the callback.
+      policy repository, refuse when it has a setupProblem ("Sign-in through <name> is not set up
+      yet. Ask an administrator to finish its setup."), after appending a best-effort sso.refused
+      (warning) audit event naming the provider, generate a nonce, sign an SSO state binding
+      providerId, nonce, and redirectUri via the authentication component, build the provider
+      authorization URL through the identity provider adapter, append a best-effort sso.start (info)
+      audit event, and return the authorization URL. Starting a login is unauthenticated by nature —
+      no caller credential is required or accepted; the signed state is the only integrity anchor
+      carried into the callback.
     signature: 'startSsoLogin(providerId: string, redirectUri: string): async string'
     returns: async string
     params:
@@ -171,9 +174,9 @@ methods:
       Authenticate the caller, require instance-wide project:admin (the env-anchored instance-admin
       passes via bypass; a delegated project:admin@instance also passes) for identity-provider
       administration, and return every configured identity provider by forwarding to the policy
-      repository. Not audited (a read).
-    signature: 'listProviders(credential: string): list<IdentityProviderConfig>'
-    returns: list<IdentityProviderConfig>
+      repository, each paired with its setupProblem when it has one. Not audited (a read).
+    signature: 'listProviders(credential: string): list<IdentityProviderListing>'
+    returns: list<IdentityProviderListing>
     params:
       - name: credential
         type: string
@@ -181,10 +184,11 @@ methods:
     description: >-
       Authenticate the caller, require instance-wide project:admin for identity-provider
       administration, create or update one identity-provider configuration through the policy
-      repository, append a redacted idp.upsert (security) audit event, and return the stored config.
-      The config carries a clientSecretRef, never a raw secret.
-    signature: 'upsertProvider(credential: string, config: IdentityProviderConfig): IdentityProviderConfig'
-    returns: IdentityProviderConfig
+      repository, append a redacted idp.upsert (security) audit event, and return the stored config
+      with warnings: its setupProblem when the saved provider is enabled and has one, otherwise
+      none. The config carries a clientSecretRef, never a raw secret.
+    signature: 'upsertProvider(credential: string, config: IdentityProviderConfig): IdentityProviderSaveResult'
+    returns: IdentityProviderSaveResult
     params:
       - name: credential
         type: string
@@ -305,4 +309,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-19T06:11:27.837Z'
+updatedAt: '2026-10-19T22:14:42.113Z'

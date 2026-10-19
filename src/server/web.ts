@@ -10,7 +10,7 @@ import {
   isInAdminGroup,
   type SsoStatePayload,
 } from './identity.js';
-import { SSO_ADMIN_ROLE_ID } from './types.js';
+import { SSO_ADMIN_ROLE_ID, providerSetupProblem, providerNotSetUpMessage } from './types.js';
 import * as webadmin from './webadmin.js';
 import * as webproject from './webproject.js';
 import * as projectops from './projectops.js';
@@ -59,6 +59,8 @@ import type {
   HostExposurePolicy,
   ProjectActionOutcome,
   IdentityProviderConfig,
+  IdentityProviderListing,
+  IdentityProviderSaveResult,
   InstanceHealthReport,
   InstancePackPolicy,
   LandscapeGraphModel,
@@ -159,6 +161,9 @@ const DEV_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
  * discovery); never secrets, clientIds, endpoints, or any other config. Reads
  * only; not audited.
  */
+/** The user-facing reason a provider that is not set up yet is unavailable. */
+const NOT_SET_UP_REASON = 'Not set up yet — ask an administrator';
+
 export function getLoginOptions(cfg: HostConfig): WebLoginOptions {
   // step 1: password login is configured only when BOTH env values are set.
   const passwordLogin = !!(cfg.builtinAdminUser && cfg.builtinAdminPassword);
@@ -169,7 +174,12 @@ export function getLoginOptions(cfg: HostConfig): WebLoginOptions {
   // pre-auth payload.
   const providers = listIdentityProviderRecords(cfg.dataDir)
     .filter((p) => p.enabled)
-    .map((p) => ({ id: p.id, displayName: p.displayName || p.id }));
+    .map((p) => {
+      const base = { id: p.id, displayName: p.displayName || p.id };
+      return providerSetupProblem(p)
+        ? { ...base, available: false, unavailableReason: NOT_SET_UP_REASON }
+        : { ...base, available: true };
+    });
 
   return { passwordLogin, providers }; // step 4
 }
@@ -189,6 +199,13 @@ export async function startSignIn(
   redirectUri: string,
 ): Promise<{ url: string; nonce: string }> {
   const provider = resolveEnabledProvider(cfg, providerId); // steps 1–4 (throws on unknown/disabled)
+
+  // A provider that is not set up yet starts no sign-in: audit the refusal
+  // (best-effort, no actor) and answer without echoing any supplied address.
+  if (providerSetupProblem(provider)) {
+    auditSignIn(cfg, null, 'web.signin.refused', 'warning', { target: providerId, metadata: JSON.stringify({ reason: 'provider-not-set-up' }) });
+    throw new Error(providerNotSetUpMessage(provider));
+  }
 
   const nonce = crypto.randomBytes(16).toString('hex'); // step 5
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
@@ -1456,6 +1473,17 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
         var b = document.createElement('button');
         b.className = 'btn-sso';
         b.textContent = 'Sign in with ' + (p.displayName || p.id);
+        if (p.available === false) {
+          // Not set up yet: shown, but not clickable, with the reason beside it.
+          b.disabled = true;
+          b.title = p.unavailableReason || '';
+          list.appendChild(b);
+          var why = document.createElement('div');
+          why.className = 'hint';
+          why.textContent = p.unavailableReason || '';
+          list.appendChild(why);
+          return;
+        }
         b.addEventListener('click', function () { startSso(p.id); });
         list.appendChild(b);
       });
@@ -1996,17 +2024,21 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     });
   }
   // ---- Identity Providers / SSO (admin) -----------------------------------
-  function renderProvidersPanel(el) {
+  function renderProvidersPanel(el, notes) {
     el.innerHTML = '<div class="hint">Loading…</div>';
     adminGet('providers').then(function (d) {
-      var provs = d.providers || [];
+      var listings = d.providers || [];
+      var provs = listings.map(function (l) { return l.provider; });
       var html = '<div class="toolbar"><button class="mini" id="pNew">Add identity provider</button></div><div id="pForm"></div>';
+      (notes || []).forEach(function (n) { html += '<div class="hint bad">' + esc(n) + '</div>'; });
       if (!provs.length) html += '<div class="hint">No identity providers configured.</div>';
       else {
-        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th></th></tr></thead><tbody>';
+        html += '<table class="grid"><thead><tr><th>ID</th><th>Type</th><th>Issuer</th><th>Enabled</th><th>Setup</th><th></th></tr></thead><tbody>';
         provs.forEach(function (p, i) {
+          var problem = listings[i].setupProblem;
           html += '<tr><td>' + esc(p.id) + '</td><td>' + esc(p.providerType) + '</td><td>' + esc(p.issuerUrl || '—') + '</td>'
             + '<td><span class="pill ' + (p.enabled ? 'ok' : 'warn') + '">' + (p.enabled ? 'enabled' : 'disabled') + '</span></td>'
+            + '<td>' + (problem ? '<span class="pill warn" title="' + esc(problem) + '">not set up</span> <span class="hint bad">' + esc(problem) + '</span>' : '<span class="pill ok">ready</span>') + '</td>'
             + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> <button class="mini danger" data-del="' + esc(p.id) + '">Remove</button></td></tr>';
         });
         html += '</tbody></table>';
@@ -2045,7 +2077,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       + fcol('Allowed email domains', '<input id="pDomains" value="' + esc((p.allowedDomains || []).join(', ')) + '" placeholder="comma-separated, e.g. corp.example" />')
       + fcol('Admin group claims', '<input id="pAdminGroups" value="' + esc((p.adminGroupClaims || []).join(', ')) + '" placeholder="comma-separated group claims" />')
       + '</div>';
-    html += '<div class="frow">' + fcol('Allowed redirect URIs', '<input id="pRedirects" value="' + esc((p.allowedRedirectUris || []).join(', ')) + '" placeholder="comma-separated exact-match URIs" />', true) + '</div>';
+    html += '<div class="frow">' + fcol('Allowed redirect URIs', '<input id="pRedirects" value="' + esc((p.allowedRedirectUris || []).join(', ')) + '" placeholder="required — e.g. ' + esc(location.origin + '/web/sso/callback') + '" />', true) + '</div>';
     html += '<details class="adv"><summary>Advanced — split-horizon endpoints (leave blank to auto-discover)</summary>';
     html += '<div class="note">Leave every field blank to resolve endpoints via OIDC discovery from the issuer. Override individually for split-horizon: the token / JWKS / userinfo endpoints may be VPC-internal while the authorize endpoint stays publicly reachable by the browser.</div>';
     html += '<div class="frow">' + fcol('Authorization endpoint (public)', '<input id="pAuthz" value="' + esc(p.authorizationEndpoint || '') + '" placeholder="browser-facing; blank to auto-discover" />', true) + '</div>';
@@ -2078,7 +2110,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var tok = $('pToken').value.trim(); if (tok) cf.tokenEndpoint = tok;
       var jw = $('pJwks').value.trim(); if (jw) cf.jwksUri = jw;
       var ui = $('pUserinfo').value.trim(); if (ui) cf.userinfoEndpoint = ui;
-      postAndParse('/web/admin/providers', cf).then(function () { renderProvidersPanel(el); })
+      postAndParse('/web/admin/providers', cf).then(function (res) { renderProvidersPanel(el, (res && res.warnings) || []); })
         .catch(function (e) { msg.className = 'msg bad'; msg.textContent = e.message; });
     });
   }
@@ -2982,12 +3014,12 @@ function adminGetShareAccessLog(cfg: HostConfig, sessionId: string, linkId: stri
 }
 
 /** List identity-provider (SSO) configurations; forwards to web_admin_orchestrator.listIdentityProviders. */
-function adminListProviders(cfg: HostConfig, sessionId: string): IdentityProviderConfig[] {
+function adminListProviders(cfg: HostConfig, sessionId: string): IdentityProviderListing[] {
   return webadmin.listIdentityProviders(cfg, sessionId);
 }
 
 /** Create or update an identity-provider configuration; forwards to web_admin_orchestrator.upsertIdentityProvider. */
-function adminUpsertProvider(cfg: HostConfig, sessionId: string, config: IdentityProviderConfig): IdentityProviderConfig {
+function adminUpsertProvider(cfg: HostConfig, sessionId: string, config: IdentityProviderConfig): IdentityProviderSaveResult {
   return webadmin.upsertIdentityProvider(cfg, sessionId, config);
 }
 
