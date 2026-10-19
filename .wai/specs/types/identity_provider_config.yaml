@@ -37,7 +37,9 @@ fields:
     optional: true
   - name: enabled
     type: bool
-    description: Whether this provider is available for sign-in.
+    description: >-
+      Whether this provider is available for sign-in. An enabled provider with a setupProblem is
+      listed on the login screen as not set up yet.
     optional: false
   - name: updatedAt
     type: string
@@ -46,9 +48,10 @@ fields:
   - name: allowedRedirectUris
     type: list<string>
     description: >-
-      Exact-match allowlist of redirect URIs accepted for this provider's SSO flow. When set and
-      non-empty, a redirectUri not on the list is refused (server-side redirect_uri pinning). When
-      unset/empty, any redirectUri is accepted (backward compatible).
+      Exact-match allowlist of redirect URIs accepted for this provider's SSO flow: a provider must
+      name the addresses it may return to. A redirectUri not on the list is refused (server-side
+      redirect_uri pinning), and an unset or empty list means no sign-in can start through this
+      provider (see setupProblem).
     optional: true
   - name: authorizationEndpoint
     type: string
@@ -94,6 +97,19 @@ methods:
       intersect its adminGroupClaims. An unset or empty adminGroupClaims admits nobody.
     sourcePath: src/server/identity.ts
     symbol: isInAdminGroup
+  - name: setupProblem
+    signature: 'setupProblem(): string?'
+    returns: string?
+    description: >-
+      The one sentence saying why SSO through this provider cannot work yet, or nothing when it can.
+      Today there is one problem: it names no allowed redirect address (allowedRedirectUris unset or
+      empty). Worded for an administrator: "SSO through <displayName, or the id when unset> will not
+      work until its allowed redirect addresses are set (allowedRedirectUris, or
+      WAIRON_OIDC_ALLOWED_REDIRECT_URIS) — usually https://<this host>/web/sso/callback". Every
+      place that refuses, hides, warns about or lists a provider's readiness uses this one
+      predicate.
+    sourcePath: src/server/idp.ts
+    symbol: providerSetupProblem
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-10-04T23:53:31.265Z'
+updatedAt: '2026-10-19T22:11:19.808Z'

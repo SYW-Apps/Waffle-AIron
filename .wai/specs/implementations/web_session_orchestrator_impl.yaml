@@ -22,23 +22,44 @@ methods:
         targetComponent: identity_orchestrator
         targetMethod: resolveEnabledProvider
       - stepNumber: 2
+        description: >-
+          Refuse a provider that is not set up: one with a setupProblem (it names no allowed
+          redirect address) cannot start a sign-in
+        type: branch
+        condition: the provider has a setupProblem
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Record the web.signin.refused event (warning) with no resolved actor, target the provider
+          id and metadata reason provider-not-set-up, best-effort through the identity orchestrator
+        type: call
+        targetComponent: identity_orchestrator
+        targetMethod: auditSignIn
+      - stepNumber: 4
+        description: >-
+          Answer that the provider is not set up, naming its display name (or id) and echoing no
+          supplied address
+        type: throw
+        error: Sign-in through <name> is not set up yet. Ask an administrator to finish its setup.
+      - stepNumber: 5
         description: Generate a cryptographically random nonce for this sign-in attempt
         type: local
-      - stepNumber: 3
+      - stepNumber: 6
         description: >-
           Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
           authority
         type: call
         targetComponent: authentication
         targetMethod: signSsoState
-      - stepNumber: 4
+      - stepNumber: 7
         description: >-
           Resolve the provider's concrete OIDC endpoints through the identity provider adapter
           (explicit overrides -> OIDC discovery -> providerType template)
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveEndpoints
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
           Build the provider authorization URL from the config, the signed state, and redirectUri;
           the adapter enforces the provider's redirect allowlist, as it does on every sign-in start
@@ -46,14 +67,14 @@ methods:
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: buildAuthorizationUrl
-      - stepNumber: 6
+      - stepNumber: 9
         description: >-
           Record the web.signin.start event (info) with no resolved actor, best-effort through the
           identity orchestrator — a failure never fails the sign-in start
         type: call
         targetComponent: identity_orchestrator
         targetMethod: auditSignIn
-      - stepNumber: 7
+      - stepNumber: 10
         description: Return the provider authorization URL
         type: return
         outcome: authorization URL
@@ -400,9 +421,11 @@ methods:
         targetMethod: listIdentityProviders
       - stepNumber: 3
         description: >-
-          Keep only the ENABLED providers and project each to exactly { id, displayName },
-          displayName defaulting to the provider id when unset — no secret, clientId, endpoint, or
-          any other config field ever crosses into the pre-auth payload
+          Keep only the ENABLED providers and project each to exactly { id, displayName, available,
+          unavailableReason? } — displayName defaulting to the provider id when unset; available
+          false with the user-facing reason "Not set up yet — ask an administrator" when the
+          provider has a setupProblem. No secret, clientId, endpoint, setupProblem text, or any
+          other config field ever crosses into the pre-auth payload
         type: local
       - stepNumber: 4
         description: >-
@@ -451,4 +474,4 @@ lint:
         impossible.)
 status: complete
 createdAt: '2026-07-11T11:36:44.225Z'
-updatedAt: '2026-10-03T17:59:26.001Z'
+updatedAt: '2026-10-19T22:11:34.115Z'

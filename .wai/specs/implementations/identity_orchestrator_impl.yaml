@@ -86,47 +86,80 @@ methods:
         type: throw
         error: unknown or disabled identity provider
       - stepNumber: 5
+        description: 'Refuse a provider that is not set up: one with a setupProblem cannot start a login'
+        type: branch
+        condition: the selected provider has a setupProblem
+        onTrueStep: 6
+        onFalseStep: 11
+      - stepNumber: 6
+        description: Append a redacted audit event without letting a failure fail the refusal
+        type: try
+        endStep: 8
+        catches:
+          - error: audit append failure
+            step: 9
+      - stepNumber: 7
+        description: >-
+          Append the redacted sso.refused audit event (warning level, category auth, target the
+          provider id, metadata reason provider-not-set-up) under the active retention policy
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        description: On a successful append, continue to the refusal and skip the audit-failure handler
+        type: jump
+        toStep: 10
+      - stepNumber: 9
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 10
+        description: >-
+          Answer that the provider is not set up, naming its display name (or id) and echoing no
+          supplied address
+        type: throw
+        error: Sign-in through <name> is not set up yet. Ask an administrator to finish its setup.
+      - stepNumber: 11
         description: Generate a cryptographically random nonce for this login attempt
         type: local
-      - stepNumber: 6
+      - stepNumber: 12
         description: >-
           Sign an SSO state binding providerId, the nonce, and redirectUri via the single signing
           authority
         type: call
         targetComponent: authentication
         targetMethod: signSsoState
-      - stepNumber: 7
+      - stepNumber: 13
         description: >-
           Resolve the provider's concrete OIDC endpoints through the identity provider adapter
           (explicit overrides -> OIDC discovery -> providerType template)
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: resolveEndpoints
-      - stepNumber: 8
+      - stepNumber: 14
         description: Build the provider authorization URL from the config, the signed state, and redirectUri
         type: call
         targetComponent: identity_provider_adapter
         targetMethod: buildAuthorizationUrl
-      - stepNumber: 9
+      - stepNumber: 15
         description: Append a redacted audit event without letting a failure fail the login start
         type: try
-        endStep: 11
+        endStep: 17
         catches:
           - error: audit append failure
-            step: 12
-      - stepNumber: 10
+            step: 18
+      - stepNumber: 16
         description: Append the redacted sso.start audit event (info level) under the active retention policy
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 11
+      - stepNumber: 17
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 13
-      - stepNumber: 12
+        toStep: 19
+      - stepNumber: 18
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 13
+      - stepNumber: 19
         description: Return the provider authorization URL
         type: return
         outcome: authorization URL
@@ -919,9 +952,14 @@ methods:
         targetComponent: policy_repository
         targetMethod: listIdentityProviders
       - stepNumber: 6
+        description: >-
+          Pair each configuration with its setupProblem (present only when it has one) as an
+          IdentityProviderListing
+        type: local
+      - stepNumber: 7
         description: Return the identity-provider configurations
         type: return
-        outcome: identity-provider configurations
+        outcome: identity-provider listings
     detail: full
     symbol: listProviders
   - name: upsertProvider
@@ -970,14 +1008,19 @@ methods:
       - stepNumber: 8
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 10
+        toStep: 11
       - stepNumber: 9
         description: Record the audit append failure as a server diagnostic and continue
         type: local
       - stepNumber: 10
-        description: Return the stored identity-provider configuration
+        description: >-
+          Collect the warnings: the stored config's setupProblem when the saved provider is enabled
+          and has one, otherwise none
+        type: local
+      - stepNumber: 11
+        description: Return the stored identity-provider configuration with its warnings
         type: return
-        outcome: stored identity-provider configuration
+        outcome: stored identity-provider configuration and warnings
     detail: full
     symbol: upsertProvider
   - name: removeProvider
@@ -1100,4 +1143,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-19T06:11:22.029Z'
+updatedAt: '2026-10-19T22:14:02.974Z'

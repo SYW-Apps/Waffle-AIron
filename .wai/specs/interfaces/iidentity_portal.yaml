@@ -130,9 +130,11 @@ methods:
       method: GET
       path: /identity/sso/callback
   - name: listIdentityProviders
-    description: List configured identity providers after instance-admin authorization.
-    signature: 'listIdentityProviders(credential: string): list<IdentityProviderConfig>'
-    returns: list<IdentityProviderConfig>
+    description: >-
+      List configured identity providers, each with its setupProblem when it has one, after
+      instance-admin authorization.
+    signature: 'listIdentityProviders(credential: string): list<IdentityProviderListing>'
+    returns: list<IdentityProviderListing>
     params:
       - name: credential
         type: string
@@ -141,11 +143,13 @@ methods:
       method: GET
       path: /identity/providers
   - name: upsertIdentityProvider
-    description: Create or update one identity-provider configuration after instance-admin authorization.
+    description: >-
+      Create or update one identity-provider configuration after instance-admin authorization;
+      answers the stored config with its setup warnings.
     signature: >-
       upsertIdentityProvider(credential: string, config: IdentityProviderConfig):
-      IdentityProviderConfig
-    returns: IdentityProviderConfig
+      IdentityProviderSaveResult
+    returns: IdentityProviderSaveResult
     params:
       - name: credential
         type: string
@@ -185,4 +189,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-10-19T06:11:31.243Z'
+updatedAt: '2026-10-19T22:11:45.962Z'

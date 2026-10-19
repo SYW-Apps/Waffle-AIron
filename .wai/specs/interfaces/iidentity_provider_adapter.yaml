@@ -31,9 +31,10 @@ methods:
       Build a provider authorization URL for a browser sign-in flow using the resolved endpoints
       (the front-channel authorizationEndpoint), the provider config, and redirect metadata. Every
       sign-in start path builds its URL here, so this is where the provider's redirect allowlist is
-      enforced: when the provider sets allowedRedirectUris, a redirectUri that is not an exact entry
-      of it is refused (the refusal never echoes the supplied value); an unset or empty allowlist
-      accepts any redirectUri.
+      enforced, and it fails closed: a provider with a setupProblem (it names no allowed redirect
+      address) refuses the start and no authorization URL is built; otherwise a redirectUri that is
+      not an exact entry of allowedRedirectUris is refused. The refusal never echoes the supplied
+      value.
     signature: >-
       buildAuthorizationUrl(config: IdentityProviderConfig, endpoints: ProviderEndpoints, state:
       string, redirectUri: string): string
@@ -98,4 +99,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-08T22:00:47.217Z'
-updatedAt: '2026-10-04T10:32:06.518Z'
+updatedAt: '2026-10-19T22:11:27.979Z'

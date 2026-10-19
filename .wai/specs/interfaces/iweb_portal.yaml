@@ -201,10 +201,10 @@ methods:
       path: /web/admin/users/status
   - name: adminListProviders
     description: >-
-      List identity-provider (SSO) configurations; forwards to
-      web_admin_orchestrator.listIdentityProviders.
-    signature: 'adminListProviders(sessionId: string): list<IdentityProviderConfig>'
-    returns: list<IdentityProviderConfig>
+      List identity-provider (SSO) configurations, each with its setupProblem when it has one so the
+      admin view can warn on it; forwards to web_admin_orchestrator.listIdentityProviders.
+    signature: 'adminListProviders(sessionId: string): list<IdentityProviderListing>'
+    returns: list<IdentityProviderListing>
     params:
       - name: sessionId
         type: string
@@ -214,10 +214,12 @@ methods:
       path: /web/admin/providers
   - name: adminUpsertProvider
     description: >-
-      Create or update an identity-provider (SSO) configuration; forwards to
-      web_admin_orchestrator.upsertIdentityProvider.
-    signature: 'adminUpsertProvider(sessionId: string, config: IdentityProviderConfig): IdentityProviderConfig'
-    returns: IdentityProviderConfig
+      Create or update an identity-provider (SSO) configuration and answer the stored config with
+      any setup warnings; forwards to web_admin_orchestrator.upsertIdentityProvider.
+    signature: >-
+      adminUpsertProvider(sessionId: string, config: IdentityProviderConfig):
+      IdentityProviderSaveResult
+    returns: IdentityProviderSaveResult
     params:
       - name: sessionId
         type: string
@@ -432,11 +434,12 @@ methods:
       path: /web/admin/secrets
   - name: getLoginOptions
     description: >-
-      Return the pre-auth sign-in options for the login screen by forwarding to the web
-      orchestrator's getLoginOptions. UNAUTHENTICATED — a pre-auth read that requires no session and
-      rides no CSRF gate (it is a GET) — and gated with every /web route on exposure.webUiEnabled
-      (404 when the web UI is off). The payload carries only the password-login flag and
-      enabled-provider { id, displayName } pairs; never secrets, clientIds, or endpoint config.
+      Serve the pre-auth login options from the web session orchestrator's getLoginOptions.
+      UNAUTHENTICATED — a pre-auth read that requires no session and rides no CSRF gate (it is a
+      GET) — and gated with every /web route on exposure.webUiEnabled (404 when the web UI is off).
+      The payload carries only the password-login flag and, per enabled provider, { id, displayName,
+      available, unavailableReason? } (a provider not set up yet is unavailable, with a reason);
+      never secrets, clientIds, or endpoint config.
     signature: 'getLoginOptions(): WebLoginOptions'
     returns: WebLoginOptions
     params: []
@@ -1599,4 +1602,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-17T19:19:54.249Z'
+updatedAt: '2026-10-19T22:11:39.693Z'
