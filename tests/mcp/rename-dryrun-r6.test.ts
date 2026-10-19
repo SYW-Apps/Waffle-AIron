@@ -20,7 +20,7 @@ describe('rename tools publish a dry run', () => {
     const props = (name: string): string[] => Object.keys(tools.find((t) => t.name === name)?.inputSchema.properties ?? {}).sort();
     expect(props('sdd_rename_component')).toEqual(['dryRun', 'id', 'newId']);
     // Round 8: a type rename names the consumers it breaks, as the field and param renames do.
-    expect(props('sdd_rename_type')).toEqual(['dryRun', 'id', 'newId', 'search']);
+    expect(props('sdd_rename_type')).toEqual(['allowShadowed', 'dryRun', 'id', 'newId', 'search']);
     expect(props('sdd_rename_field')).toEqual(['dryRun', 'field', 'id', 'newName', 'search']);
     expect(props('sdd_rename_param')).toEqual(['dryRun', 'id', 'method', 'newName', 'param', 'search']);
     await client.close();

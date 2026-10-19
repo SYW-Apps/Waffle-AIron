@@ -102,17 +102,24 @@ directory, and refuses those forms afterwards:
   same-named type of another and leave its own type unused.
 - New warning `AMBIGUOUS_TYPE_REF` (rule `type-ref-scope`): a reference that matches
   several types with nothing in its own subsystem to settle which is meant, or that binds
-  to another subsystem's type while its own subsystem holds a type of that display name.
-  Write the type's id, or `subsystem::name`, to say which.
+  to a type while another type carries that display name and sits at least as close to
+  the referrer (its own subsystem nearest, a project-level type in the middle, another
+  subsystem far, so two project-level types sharing a name are caught too). One finding
+  per spec and written reference, naming every position it is written at. Write the
+  type's id, or `subsystem::name`, to say which is meant.
 - Two types of different subsystems declaring one id (`DUPLICATE_SPEC_ID`) no longer
   hide the second one: `subsystem::id` reaches it, and the finding names both
   `sdd_rename_type <subsystem>::<id> <new id>` calls. Renaming either half moves only
   its file and respells only the references that resolve to it.
 - `sdd_rename_type` respells only references that resolve to the renamed type from where
-  they are written, and refuses (`ambiguous-ref`) one that matches several types
-  including it. Its description now says which signatures it rewrites: a signature type's
-  params and returns, a contract method's stored text re-derived from its params, and
-  only the result of a prose signature that has no params.
+  they are written. It refuses, listing every site as `<file> <position>`, a reference
+  that matches several types including it (`ambiguous-ref`, no escape), and one that binds
+  to it while another type carries that name and sits at least as close (`shadowed-ref`):
+  write which type is meant in those specs, or pass `allowShadowed` to rename anyway and
+  respell them. A dry run lists the shadowed sites separately instead of refusing. Its
+  description now says which signatures it rewrites: a signature type's params and
+  returns, a contract method's stored text re-derived from its params, and only the
+  result of a prose signature that has no params.
 
 ### Release QA
 

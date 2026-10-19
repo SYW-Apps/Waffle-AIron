@@ -44,14 +44,14 @@ function project() {
   const write = (dir: string, file: string, data: Spec) => dump(path.join(specs, dir, `${file}.yaml`), { schemaVersion: '1.0.0', ...data, ...STAMP });
   const api = {
     subsystem: (id: string) => write('subsystems', id, { id, name: id, description: `The ${id} subsystem.`, parentSystem: 'TestSystem' }),
-    type: (file: string, id: string, name: string, subsystem: string) =>
-      write('types', file, { kind: 'value-object', id, name, subsystem, description: `The ${name} type.`, fields: [{ name: 'code', type: 'string', description: 'A code', optional: false }], methods: [] }),
+    type: (file: string, id: string, name: string, subsystem?: string) =>
+      write('types', file, { kind: 'value-object', id, name, ...(subsystem !== undefined ? { subsystem } : {}), description: `The ${name} type.`, fields: [{ name: 'code', type: 'string', description: 'A code', optional: false }], methods: [] }),
     /** A component of `subsystem` whose contract has one method taking `paramType`. */
-    user: (id: string, subsystem: string, paramType: string) => {
+    user: (id: string, subsystem: string, paramType: string, returns = 'void') => {
       write('components', id, { id, name: id, description: `The ${id} component.`, subsystem, componentType: 'Orchestrator', dependsOn: [], owns: [] });
       write('interfaces', `i${id}`, {
         id: `i${id}`, name: `I${id}`, description: `The contract of ${id}.`, component: id,
-        methods: [{ name: 'emit', description: 'Emits one binding, observably.', returns: 'void', params: [{ name: 'binding', type: paramType, description: 'The binding' }] }],
+        methods: [{ name: 'emit', description: 'Emits one binding, observably.', returns, params: [{ name: 'binding', type: paramType, description: 'The binding' }] }],
       });
     },
     param: (id: string) => {
@@ -118,6 +118,7 @@ describe('AMBIGUOUS_TYPE_REF', () => {
     expect(found[0]).toMatchObject({ severity: 'warning', specId: 'ix86-emitter' });
     expect(found[0].message).toContain('binds to cpu::cpu-primitive-binding');
     expect(found[0].message).toContain('subsystem cpu-x86 holds x86-primitive-binding');
+    expect(found[0].message).toContain('(at method emit param binding)');
   });
 
   it('is quiet when the reference names the type of its own subsystem', () => {
@@ -202,7 +203,7 @@ describe('a duplicate type id across two subsystems', () => {
     p.user('crm-emitter', 'crm', 'CpuPrimitiveBinding');
     const before = p.snapshot();
     expect(() => renameType(`${keptSubsystem}::cpu-primitive-binding`, 'cpu-binding'))
-      .toThrow(/ambiguous-ref: icrm-emitter names "CpuPrimitiveBinding", which matches .+; qualify it as subsystem::name first/);
+      .toThrow(/ambiguous-ref: 1 references match several types including .+: \.wai\/specs\/interfaces\/icrm-emitter\.yaml method emit param binding: "CpuPrimitiveBinding" matches .+ — qualify each as subsystem::name first/);
     expect(p.snapshot()).toEqual(before);
   });
 });
@@ -220,5 +221,140 @@ describe('renameType resolves references from where they are written', () => {
     renameType('cpu::cpu-primitive-binding', 'cpu-binding');
     expect(p.param('x86-emitter')).toBe('x86-primitive-binding');
     expect(p.param('cpu-emitter')).toBe('CpuBinding');
+  });
+});
+
+describe('shadowing by closeness', () => {
+  const ty = (id: string, name: string, subsystem?: string) => ({ id, name, ...(subsystem !== undefined ? { subsystem } : {}) });
+
+  it('shadows when another type of that name is at least as close; not when it is farther', () => {
+    // bound far, same name near (the reported case); bound far, same name in the middle.
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate', 'quoting'), ty('duty-rate', 'FreightRate', 'customs')]).shadowedBy).toBe('duty-rate');
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate', 'quoting'), ty('duty-rate', 'FreightRate')]).shadowedBy).toBe('duty-rate');
+    // bound near, the other in the middle or far: not shadowed.
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate', 'customs'), ty('duty-rate', 'FreightRate')]).shadowedBy).toBeUndefined();
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate', 'customs'), ty('duty-rate', 'FreightRate', 'quoting')]).shadowedBy).toBeUndefined();
+    // bound in the middle: a far one does not shadow, a near one does, an equal one does.
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate'), ty('duty-rate', 'FreightRate', 'quoting')]).shadowedBy).toBeUndefined();
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate'), ty('duty-rate', 'FreightRate', 'customs')]).shadowedBy).toBe('duty-rate');
+    expect(resolveTypeRef('FreightRate', 'customs', [ty('freight-rate', 'FreightRate'), ty('duty-rate', 'FreightRate')]).shadowedBy).toBe('duty-rate');
+  });
+
+  it('a referrer with no subsystem sees project-level types as middle and subsystem types as far', () => {
+    expect(resolveTypeRef('FreightRate', undefined, [ty('freight-rate', 'FreightRate'), ty('duty-rate', 'FreightRate')]).shadowedBy).toBe('duty-rate');
+    expect(resolveTypeRef('FreightRate', undefined, [ty('freight-rate', 'FreightRate'), ty('duty-rate', 'FreightRate', 'customs')]).shadowedBy).toBeUndefined();
+    expect(resolveTypeRef('FreightRate', undefined, [ty('freight-rate', 'FreightRate', 'quoting'), ty('duty-rate', 'FreightRate', 'customs')]).shadowedBy).toBe('duty-rate');
+  });
+
+  it('takes the closest shadow, the first in input order on a tie', () => {
+    const types = [ty('freight-rate', 'FreightRate', 'quoting'), ty('a-rate', 'FreightRate'), ty('b-rate', 'FreightRate', 'customs'), ty('c-rate', 'FreightRate', 'customs')];
+    expect(resolveTypeRef('FreightRate', 'customs', types).shadowedBy).toBe('b-rate');
+    expect(resolveTypeRef('FreightRate', 'crm', [types[0], types[1], types[3], types[2]]).shadowedBy).toBe('a-rate');
+  });
+
+  it('is never shadowed when the reference is qualified or written exactly as the bound types id', () => {
+    const types = [ty('cpu-primitive-binding', 'CpuPrimitiveBinding', 'cpu'), ty('x86-primitive-binding', 'CpuPrimitiveBinding', 'cpu-x86')];
+    expect(resolveTypeRef('cpu::cpu-primitive-binding', 'cpu-x86', types)).toMatchObject({ outcome: 'resolved', type: 'cpu-primitive-binding' });
+    expect(resolveTypeRef('cpu::cpu-primitive-binding', 'cpu-x86', types).shadowedBy).toBeUndefined();
+    expect(resolveTypeRef('cpu-primitive-binding', 'cpu-x86', types).shadowedBy).toBeUndefined();
+    expect(resolveTypeRef('CpuPrimitiveBinding', 'cpu-x86', types).shadowedBy).toBe('x86-primitive-binding');
+  });
+
+  it('warns for two project-level types sharing a display name, naming the project level', () => {
+    const p = project();
+    p.subsystem('customs');
+    p.type('freight-rate', 'freight-rate', 'FreightRate');
+    p.type('duty-rate', 'duty-rate', 'FreightRate');
+    p.user('customs-declarant', 'customs', 'FreightRate');
+    const found = p.validate().issues.filter((i) => i.code === 'AMBIGUOUS_TYPE_REF');
+    expect(found).toHaveLength(1);
+    expect(found[0].message).toContain('binds to freight-rate, while the project level holds duty-rate, also named FreightRate');
+  });
+
+  it('is quiet when the reference is written as the exact id', () => {
+    const p = project();
+    p.subsystem('customs');
+    p.type('freight-rate', 'freight-rate', 'FreightRate');
+    p.type('duty-rate', 'duty-rate', 'FreightRate');
+    p.user('customs-declarant', 'customs', 'freight-rate');
+    expect(p.validate().issues.filter((i) => i.code === 'AMBIGUOUS_TYPE_REF')).toEqual([]);
+  });
+
+  it('is one finding per written reference, naming every position it is written at', () => {
+    const p = project();
+    p.subsystem('cpu');
+    p.subsystem('cpu-x86');
+    p.type('cpu-primitive-binding', 'cpu-primitive-binding', 'CpuPrimitiveBinding', 'cpu');
+    p.type('x86-primitive-binding', 'x86-primitive-binding', 'CpuPrimitiveBinding', 'cpu-x86');
+    p.user('x86-emitter', 'cpu-x86', 'CpuPrimitiveBinding', 'CpuPrimitiveBinding');
+    const found = p.validate().issues.filter((i) => i.code === 'AMBIGUOUS_TYPE_REF');
+    expect(found).toHaveLength(1);
+    expect(found[0].message).toContain('(at method emit param binding, method emit returns)');
+  });
+});
+
+describe('renameType and shadowed references', () => {
+  /** cpu's type is renamed while cpu-x86's contract writes the shared display name (it binds to cpu's, shadowing x86's own). */
+  function shadowedTree() {
+    const p = project();
+    p.subsystem('cpu');
+    p.subsystem('cpu-x86');
+    p.type('cpu-primitive-binding', 'cpu-primitive-binding', 'CpuPrimitiveBinding', 'cpu');
+    p.type('x86-primitive-binding', 'x86-primitive-binding', 'CpuPrimitiveBinding', 'cpu-x86');
+    p.user('x86-emitter', 'cpu-x86', 'CpuPrimitiveBinding');
+    p.user('cpu-emitter', 'cpu', 'CpuPrimitiveBinding');
+    setProjectRoot(root);
+    invalidateSpecCache();
+    return p;
+  }
+  const site = {
+    spec: 'ix86-emitter', file: '.wai/specs/interfaces/ix86-emitter.yaml', position: 'method emit param binding',
+    token: 'CpuPrimitiveBinding', boundTo: 'cpu::cpu-primitive-binding', shadowedBy: 'x86-primitive-binding',
+  };
+
+  it('refuses, naming every shadowed site, and writes nothing', () => {
+    const p = shadowedTree();
+    const before = p.snapshot();
+    let message = '';
+    try { renameType('cpu::cpu-primitive-binding', 'cpu-binding'); } catch (e) { message = (e as Error).message; }
+    expect(message).toContain('shadowed-ref: 1 references bind to cpu::cpu-primitive-binding while another type carries that name');
+    expect(message).toContain('.wai/specs/interfaces/ix86-emitter.yaml method emit param binding: "CpuPrimitiveBinding" binds to cpu::cpu-primitive-binding while x86-primitive-binding carries that name');
+    expect(message).toContain('allowShadowed: true');
+    expect(p.snapshot()).toEqual(before);
+  });
+
+  it('allowShadowed renames, respells the shadowed site and lists it', () => {
+    const p = shadowedTree();
+    const result = renameType('cpu::cpu-primitive-binding', 'cpu-binding', false, true);
+    expect(result.shadowed).toEqual([site]);
+    expect(p.param('x86-emitter')).toBe('CpuBinding');
+    expect(p.param('cpu-emitter')).toBe('CpuBinding');
+  });
+
+  it('a dry run lists the shadowed sites separately and writes nothing', () => {
+    const p = shadowedTree();
+    const before = p.snapshot();
+    const result = renameType('cpu::cpu-primitive-binding', 'cpu-binding', true);
+    expect(result.dryRun).toBe(true);
+    expect(result.shadowed).toEqual([site]);
+    expect(p.snapshot()).toEqual(before);
+  });
+
+  it('reports no shadowed field when nothing is shadowed', () => {
+    const p = project();
+    p.subsystem('cpu');
+    p.type('cpu-primitive-binding', 'cpu-primitive-binding', 'CpuPrimitiveBinding', 'cpu');
+    p.user('cpu-emitter', 'cpu', 'CpuPrimitiveBinding');
+    setProjectRoot(root);
+    expect(renameType('cpu::cpu-primitive-binding', 'cpu-binding', true).shadowed).toBeUndefined();
+  });
+
+  it('an ambiguous site still refuses a dry run, even with allowShadowed', () => {
+    const { p, keptSubsystem } = duplicates();
+    p.user('crm-emitter', 'crm', 'CpuPrimitiveBinding');
+    const before = p.snapshot();
+    expect(() => renameType(`${keptSubsystem}::cpu-primitive-binding`, 'cpu-binding', true, true))
+      .toThrow(/ambiguous-ref: 1 references match several types including .+: \.wai\/specs\/interfaces\/icrm-emitter\.yaml method emit param binding: "CpuPrimitiveBinding" matches .+ — qualify each as subsystem::name first/);
+    expect(p.snapshot()).toEqual(before);
   });
 });

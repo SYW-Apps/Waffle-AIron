@@ -88,6 +88,7 @@ import {
   qualifiedTypeId,
   resolveTypeRef,
   type TypeRefResolution,
+  type TypeRefSite,
   typeMatchesRef,
   extractTypeIdentifiers,
   methodTypeRefs,
@@ -4595,6 +4596,8 @@ export interface TypeRename {
   publishedIn: ExportUse[];
   /** Every edit the rename made to the debt register: an entry anchored on the type. */
   carried: CarriedRekey[];
+  /** Every reference respelled (or, in a dry run, that would be) although another type carries that name and sits at least as close to where it is written. Absent when none. */
+  shadowed?: TypeRefSite[];
   /** True when this report is a dry run: nothing was written. */
   dryRun?: boolean;
 }
@@ -4647,7 +4650,7 @@ function writeTarget<T>(kind: WritableSpecKind, id: string, tool: string, call: 
   return spec;
 }
 
-export function renameType(typeId: string, newId: string, dryRun?: boolean): TypeRename {
+export function renameType(typeId: string, newId: string, dryRun?: boolean, allowShadowed?: boolean): TypeRename {
   // Steps 1–3: the type must exist. A subsystem-qualified id names the type within its owner.
   const keptTypes = loadTypeSpecs();
   // The second half of a duplicate id (the model lists leave it out) takes part in every resolution below.
@@ -4687,17 +4690,27 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
 
   // Step 12: every type position naming the type, respelled.
   const components = new Map(loadComponentSpecs().map((c) => [c.id, c.subsystem]));
-  /** Tokens that match several types including this one, found by the probing walk. */
-  const ambiguous: { spec: string; token: string; ids: string[] }[] = [];
-  let probing: string | undefined;
+  /** The ambiguous and the shadowed sites over the renamed type, found by the probing walk. */
+  const ambiguous: TypeRefSite[] = [];
+  const shadowedSites: TypeRefSite[] = [];
+  let probing = false;
+  /** Where the walk is: the spec, its file (relative to the project root) and the position being read. */
+  const cur = { spec: '', file: '', position: '' };
+  const record = (list: TypeRefSite[], site: TypeRefSite): void => {
+    if (!list.some((s) => s.file === site.file && s.position === site.position && s.token === site.token)) list.push(site);
+  };
   /** Whether a written named member, in a spec owned by `owner`, resolves to the renamed type (type_ref_resolution.resolve). */
   const namesType = (token: string, owner: string | undefined): boolean => {
     const r = resolveTypeRef(token, owner, all);
     if (r.outcome === 'ambiguous' && r.candidates.includes(typeQualified)) {
-      if (probing !== undefined) ambiguous.push({ spec: probing, token, ids: r.candidates });
+      if (probing) record(ambiguous, { spec: cur.spec, file: cur.file, position: cur.position, token, boundTo: r.candidates[0], candidates: r.candidates });
       return false;
     }
-    return resolvedTo(r, owner) === typeQualified;
+    const names = resolvedTo(r, owner) === typeQualified;
+    if (names && probing && r.shadowedBy !== undefined) {
+      record(shadowedSites, { spec: cur.spec, file: cur.file, position: cur.position, token, boundTo: typeQualified, shadowedBy: r.shadowedBy });
+    }
+    return names;
   };
   const respellText = (text: unknown, owner: string | undefined): unknown => {
     if (typeof text !== 'string') return text;
@@ -4720,9 +4733,12 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     };
     const methodPositions = (method: any, owner: string | undefined, sourced: boolean): void => {
       if (!method || typeof method !== 'object') return;
-      for (const p of Array.isArray(method.params) ? method.params : []) at(p, 'type', owner);
+      for (const p of Array.isArray(method.params) ? method.params : []) { cur.position = `method ${method.name} param ${p?.name}`; at(p, 'type', owner); }
+      cur.position = `method ${method.name} returns`;
       at(method, 'returns', owner);
+      cur.position = `method ${method.name} signatureFrom`;
       if (sourced && typeof method.signatureFrom === 'string' && namesType(method.signatureFrom, owner)) at(method, 'signatureFrom', owner);
+      cur.position = `method ${method.name} signature`;
       // A stored text derives from params; a prose text names its result after the parameter list.
       if (typeof method.signature === 'string') {
         if (Array.isArray(method.params)) method.signature = deriveMethodSignature(method) ?? method.signature;
@@ -4738,19 +4754,23 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     } else if (kind === 'type') {
       const owner = typeof raw.subsystem === 'string' ? raw.subsystem : undefined;
       for (const f of Array.isArray(raw.fields) ? raw.fields : []) {
+        cur.position = `field ${f?.name}`;
         at(f, 'type', owner);
         if (typeof f?.references === 'string') {
           const [head, ...rest] = f.references.split('.');
           if (namesType(head, owner)) f.references = [respellText(head, owner), ...rest].join('.');
         }
       }
-      for (const p of Array.isArray(raw.params) ? raw.params : []) at(p, 'type', owner);
+      for (const p of Array.isArray(raw.params) ? raw.params : []) { cur.position = `signature param ${p?.name}`; at(p, 'type', owner); }
+      cur.position = 'signature returns';
       at(raw, 'returns', owner);
+      cur.position = 'linkedEntity';
       if (typeof raw.linkedEntity === 'string' && namesType(raw.linkedEntity, owner)) at(raw, 'linkedEntity', owner);
       for (const m of Array.isArray(raw.methods) ? raw.methods : []) methodPositions(m, owner, false);
     } else if (kind === 'subsystem' || kind === 'system') {
       const owner = kind === 'subsystem' ? String(raw.id) : undefined;
       for (const e of Array.isArray(raw.publicInterfaces) ? raw.publicInterfaces : []) {
+        cur.position = `export entry ${e?.as ?? String(e?.typeDef ?? '').split('::').pop()}`;
         if (e && typeof e.typeDef === 'string' && namesType(e.typeDef, owner)) at(e, 'typeDef', owner);
       }
     }
@@ -4767,22 +4787,29 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
         continue;
       }
       const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
-      if (probing !== undefined && kind) probing = kind === 'system' ? 'system' : String(raw.id);
+      if (kind) {
+        cur.spec = kind === 'system' ? 'system' : String(raw.id);
+        cur.file = path.relative(getProjectRoot(), file).split(path.sep).join('/');
+      }
       if (!kind || !respellSpec(raw)) continue;
       if (!dryRun) writeYamlFile(file, raw);
       out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
     }
     return out;
   };
-  // Steps 15–16: no reference may be ambiguous over the renamed type. Walk every
-  // type position the rewrite visits, without writing, before anything else.
-  probing = '';
+  // Steps 15–17: no site may be ambiguous over the renamed type, and a shadowed one
+  // needs the caller's say. Walk every type position the rewrite visits, without
+  // writing, before anything else.
+  probing = true;
   respellAll(true);
-  probing = undefined;
+  probing = false;
   if (ambiguous.length > 0) {
-    const first = ambiguous[0];
-    throw new WaironError(`ambiguous-ref: ${first.spec} names "${first.token}", which matches ${first.ids.join(', ')}; qualify it as subsystem::name first`);
+    throw new WaironError(`ambiguous-ref: ${ambiguous.length} references match several types including ${typeQualified}: ${ambiguous.map((s) => `${s.file} ${s.position}: "${s.token}" matches ${(s.candidates ?? []).join(', ')}`).join(', ')} — qualify each as subsystem::name first`);
   }
+  if (shadowedSites.length > 0 && !allowShadowed && !dryRun) {
+    throw new WaironError(`shadowed-ref: ${shadowedSites.length} references bind to ${typeQualified} while another type carries that name: ${shadowedSites.map((s) => `${s.file} ${s.position}: "${s.token}" binds to ${s.boundTo} while ${s.shadowedBy} carries that name`).join(', ')} — write which type is meant (the type's id, or subsystem::name) in those specs, or pass allowShadowed: true to rename anyway and respell them`);
+  }
+  const shadowedReport = shadowedSites.length > 0 ? { shadowed: shadowedSites } : {};
   // Inside a hosted request, every spec the rename would write is judged
   // against the request's write reach before the first write.
   const keptDry = keepPublicNames(specsDir, derivesName, true);
@@ -4805,6 +4832,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
       keptPublicNames: keptDry.names,
       publishedIn,
       carried: Array.isArray(registerEdits) ? registerEdits : [],
+      ...shadowedReport,
       dryRun: true,
     };
   }
@@ -4837,6 +4865,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     keptPublicNames: kept.names,
     publishedIn,
     carried,
+    ...shadowedReport,
   };
 }
 
