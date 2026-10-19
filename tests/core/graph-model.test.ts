@@ -47,7 +47,7 @@ describe('buildGraphModel — level-of-detail project graph', () => {
       name: 'Billing',
       description: 'billing',
       parentSystem: 'GraphSys',
-      publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+      publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
       createdAt: now,
       updatedAt: now,
     });
@@ -65,7 +65,7 @@ describe('buildGraphModel — level-of-detail project graph', () => {
       ...over,
     });
 
-    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'] }) as any);
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-orchestrator'] }) as any);
     saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator', componentType: 'Orchestrator' }) as any);
     // A Repository over a Store — exercises the component→member `owns` nesting.
     saveComponentSpec(comp({ id: 'billing-repository', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);

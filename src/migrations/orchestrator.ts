@@ -420,7 +420,7 @@ function broughtIn(plan: MigrationPlan, family: ProjectFamily): string[] {
   // into it: the copy must hold it, or the family run on the copy would miss it.
   const declared = plan.edits.flatMap((e) => {
     if (e.write?.call !== 'declareMember') return [];
-    const at = (e.write.args[1] as { path?: unknown } | undefined)?.path;
+    const at = (e.write.args[1] as { source?: unknown } | undefined)?.source;
     if (typeof at !== 'string') return [];
     const dir = path.resolve(e.write.root, at);
     return fs.existsSync(path.join(dir, '.wai')) ? [dir] : [];

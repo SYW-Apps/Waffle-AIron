@@ -1,5 +1,5 @@
 import { SddRule, type OwnershipIndex, type RuleContext } from '../types.js';
-import { isRetired, type ComponentSpec, type MethodSignature } from '../../../models/index.js';
+import { type ComponentSpec, type MethodSignature } from '../../../models/index.js';
 
 /** The data components a Supervisor may reach: what it owns is its own, the rest is shared. */
 const DATA_COMPONENTS: ReadonlySet<string> = new Set(['Store', 'Registry', 'Repository', 'Index', 'Query']);
@@ -29,7 +29,7 @@ export const supervisorSharedDataRule: SddRule = {
     for (const impl of ctx.implementations) {
       const contract = ctx.interfaceMap.get(impl.contract);
       const supervisor = contract ? ctx.componentMap.get(contract.component) : undefined;
-      if (!supervisor || supervisor.componentType !== 'Supervisor' || isRetired(supervisor)) continue;
+      if (!supervisor || supervisor.componentType !== 'Supervisor') continue;
       const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {

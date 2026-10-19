@@ -62,8 +62,8 @@ A complete system is specified top-down across six levels:
 | **L4 Implementation** | `…/<component>/.implementation.yaml` | Concrete implementation of a contract: narrative detail level, bound `technologies` (the swap seam for vendors/engines), optional source path |
 | **L5 Narrative** | (within L4) | Step-by-step method logic as a flat numbered list — `call` steps resolve to real dependency methods, and flow steps (`branch`/`switch`/`loop`/`try`/`jump`/`return`/`throw`) jump by step number |
 
-(Legacy undotted names — `system.yaml`, `subsystem.yaml`, … — still load;
-`wairon upgrade` migrates them.)
+(A tree written by an older wairon major — undotted names such as `system.yaml` —
+is moved by `wairon upgrade`.)
 
 `wairon validate` enforces conformance across the tree: reference integrity,
 contract↔implementation method symmetry, narrative-call resolution and

@@ -74,7 +74,7 @@ function makeProject(f: Fixture = {}): string {
     + (f.subsystemLint ? `lint:\n${f.subsystemLint}\n` : '')
     + `${META}\n`);
   fs.writeFileSync(path.join(specs, 'components', 'comp-a.yaml'),
-    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\ndependsOn: []\nstatus: ${status}\n${META}\n`);
+    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP\ndependsOn: []\nstatus: ${status}\n${META}\n`);
   fs.writeFileSync(path.join(specs, 'interfaces', 'icomp-a.yaml'),
     `schemaVersion: 1.0.0\nid: icomp-a\nname: ICompA\ndescription: Interface A\ncomponent: comp-a\nstatus: ${status}\nmethods:\n  - name: callApi\n    description: Api method\n    signature: "callApi(): async void"\n    returns: "async void"\n${META}\n`);
   return dir;

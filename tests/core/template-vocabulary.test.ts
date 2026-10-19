@@ -6,7 +6,7 @@ import * as path from 'path';
 // The skill and agent templates are what an agent designs and implements from,
 // so their stereotype vocabulary must match the validator's: Query is a block,
 // logic is an Orchestrator with a dependency class, a gateway is a Portal
-// variant, and Specialist and Gateway are retired, never advice.
+// variant, and Specialist and Gateway are not stereotypes, never advice.
 // ---------------------------------------------------------------------------
 
 const TEMPLATES = path.resolve(__dirname, '..', '..', 'src', 'templates');
@@ -28,7 +28,7 @@ describe('template stereotype vocabulary', () => {
 
   it('never teaches Specialist or Gateway as a stereotype to design with', () => {
     for (const [rel, text] of templates()) {
-      const live = text.split(/\r?\n/).filter((line) => /\b(Specialist|Gateway)s?\b/.test(line) && !/retired/i.test(line));
+      const live = text.split(/\r?\n/).filter((line) => /\b(Specialist|Gateway)s?\b/.test(line) && !/retired|not stereotypes/i.test(line));
       expect(live, rel).toEqual([]);
     }
   });

@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
 // spec_validator: the owner's gate every selected project runs, and the gate
 // identity a member's lock is compared with.
 import {
@@ -1189,13 +1189,13 @@ function unloadablePacks(): string[] {
 
 /**
  * Steps 8-9: how the parent's lock pinned a member — its `members` entry, else
- * (format 1, until the next major release) its `children` entry.
+ * (format 1, in the v5 reading only) its `children` entry.
  */
 function pinOf(parent: LockRecord | null, alias: string, subject: string | undefined): PinState {
   if (!parent) return 'unpinned';
   const recorded = parent.members
     ? (ownHas(parent.members, alias) ? ownGet(parent.members, alias)!.subject ?? 'never' : undefined)
-    : ownGet(parent.children, alias);
+    : (readsV5Forms() ? ownGet(parent.children, alias) : undefined);
   if (recorded === undefined) return 'unpinned';
   return recorded === (subject ?? 'never') ? 'matches' : 'moved';
 }

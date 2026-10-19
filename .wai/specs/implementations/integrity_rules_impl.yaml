@@ -875,48 +875,6 @@ methods:
         outcome: judged
     symbol: check
     exportedVia: exportTablesRule
-  - name: referenceForms
-    sourcePath: src/core/rules/integrity/reference-forms.ts
-    narrative:
-      - stepNumber: 1
-        description: Read the project graph from the rule context (ctx.projectFamily)
-        type: local
-      - stepNumber: 2
-        description: Is there a graph to read?
-        type: branch
-        condition: the context carries no project graph (a candidate run)
-        onFalseStep: 4
-      - stepNumber: 3
-        description: 'Nothing to judge: report nothing'
-        type: return
-        outcome: no graph
-      - stepNumber: 4
-        label: each-reference
-        description: For each reference an author wrote in a deprecated form
-        type: loop
-        loopKind: forEach
-        over: >-
-          the bound root's authored references in a leading, super or path form — except a
-          two-segment `x::y` that binds nowhere, which is the current `alias::name` form with an
-          alias the project does not declare (EXTERNAL_UNDECLARED says so; reading it as a member
-          path would misdescribe it) — and its bare names whose first segment (before `::` or `.`)
-          is the project's own id (a self-prefix)
-        endStep: 5
-      - stepNumber: 5
-        label: reported
-        description: >-
-          Report DEPRECATED_REFERENCE_FORM (notice) on the referring spec, in its draft context,
-          naming the position, the form as written, what it bound to, and the rewrite to write
-          instead (a bare local id, or `alias::publicName`) — or, when it has none, why (its target
-          lies outside the scan, or nothing names its first segment)
-        type: local
-      - stepNumber: 6
-        description: Every authored reference is reported
-        type: return
-        outcome: judged
-    detail: full
-    symbol: check
-    exportedVia: referenceFormsRule
   - name: externalDeclarations
     sourcePath: src/core/rules/integrity/external-declarations.ts
     narrative:
@@ -1091,43 +1049,23 @@ methods:
         type: return
         outcome: no graph
       - stepNumber: 4
-        label: members
-        description: For each member the family declares in the legacy form
-        type: loop
-        loopKind: forEach
-        over: the graph's nodes carrying a legacy mount
-        endStep: 5
-      - stepNumber: 5
-        label: reported
-        description: >-
-          Report DEPRECATED_MOUNT_FORM (notice) on the member's key, naming the parent, the mount's
-          alias and path, the `members` entry that replaces it (`<alias>: <path>`), and each field
-          the mount carries beyond its description — publicInterfaces, trustedLinks, consumers, lint
-          and any other — that `doctor --fix` moves into the member or stops on; a mount whose alias
-          the parent's `members` also declares is reported as ignored, the `members` entry being the
-          declaration
-        type: local
-      - stepNumber: 6
-        label: kinds
-        description: Then each stage-8 member problem at the bound root
+        description: For each stage-8 member problem at the bound root
         type: loop
         loopKind: forEach
         over: >-
           the bound root's declared members using the deprecated long-form `path`, then its
           part-unavailable and kind-mismatch problems (stage 8; a member's own members are that
           member's gate's)
-        endStep: 7
-      - stepNumber: 7
-        label: kind-report
+        endStep: 5
+      - stepNumber: 5
         description: >-
-          Report it: a long-form `path` as DEPRECATED_MOUNT_FORM (notice) naming the `source` (or
-          shorthand) doctor --fix writes; a kind-mismatch as MEMBER_KIND_MISMATCH (error) naming the
-          alias, what the content makes it and what contradicts it, and the fix (drop or correct the
-          `as`, member promote / demote, add the id or move the fields to the parent, write or
-          correct the PartOf, drop the `use`); a part-unavailable as PART_UNAVAILABLE (error) naming
-          the storage, the directory or source and why
+          Report it: a kind-mismatch as MEMBER_KIND_MISMATCH (error) naming the alias, what the
+          content makes it and what contradicts it, and the fix (drop or correct the `as`, member
+          promote / demote, add the id or move the fields to the parent, write or correct the
+          PartOf, drop the `use`); a part-unavailable as PART_UNAVAILABLE (error) naming the
+          storage, the directory or source and why
         type: local
-      - stepNumber: 8
+      - stepNumber: 6
         description: Every member declaration is judged
         type: return
         outcome: judged
@@ -1504,4 +1442,4 @@ methods:
     exportedVia: memberNamesRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-08T18:55:06.742Z'
+updatedAt: '2026-10-18T19:02:48.809Z'

@@ -3,7 +3,7 @@ import * as migrations from './adapters/migrations.js';
 import * as release from './adapters/release.js';
 import * as stamp from './adapters/stamp.js';
 import * as v5ToV6 from './steps/v5-to-v6/step.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runInV5Reading, runWithProjectRoot } from '../utils/fs.js';
 import { rehearsalRoot, type FileChange } from '../migrations/types.js';
 import { StepRefused } from './types.js';
 import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradePlan, UpgradeStep } from './types.js';
@@ -20,6 +20,11 @@ import type { ReleaseNote, StepPlan, TreeStanding, TreeUpgradeReport, UpgradePla
 // rewrite: its upgrade only stamps it. The orchestrator never locks; the
 // report names the projects whose approved design moved. It holds no state:
 // the plan is a value its caller carries from plan to apply.
+//
+// The core reads only the running major's forms. The forms wairon 5 wrote are
+// read under one binding, the v5 reading, which this orchestrator binds around
+// each step's plan and write on the project's rehearsal root and nothing else
+// ever binds: the core refuses such a form anywhere else.
 // ---------------------------------------------------------------------------
 
 /** The major the one kept step reads: today only 5 to 6 is kept, and its runner is the v5 to v6 tree step. */
@@ -87,14 +92,16 @@ export function plan(root: string): UpgradePlan {
       if (step.from !== RUNNER_FROM) throw new Error(`no runner is kept for the step from major ${step.from}`);
       for (const project of older) {
         if (!chains.get(project.root)?.some((s) => s.from === step.from)) continue;
-        // Step 11: the project's rehearsal root is the bound root for the step.
+        // Step 11: the project's rehearsal root is the bound root for the step,
+        // in the v5 reading: the one binding under which the core reads the
+        // forms the step's major wrote.
         const copy = rehearsalRoot(rehearsal, project.root);
         try {
-          const planned = runWithProjectRoot(copy, () => {
+          const planned = runWithProjectRoot(copy, () => runInV5Reading(() => {
             const p = v5ToV6.plan(copy);
             v5ToV6.write(p);
             return p;
-          });
+          }));
           // Step 14: recorded under the project's live root.
           steps.push({ ...planned, project: project.root });
           ran.set(step.from, step);

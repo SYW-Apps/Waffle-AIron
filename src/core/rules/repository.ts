@@ -22,7 +22,6 @@ import { implementsContractsRule } from './integrity/implements-contracts.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { exportTablesRule } from './integrity/export-tables.js';
 import { externalDeclarationsRule } from './integrity/external-declarations.js';
-import { referenceFormsRule } from './integrity/reference-forms.js';
 import { memberDeclarationsRule } from './integrity/member-declarations.js';
 import { projectBoundariesRule } from './doctrine/project-boundaries.js';
 import { lintAllowsRule } from './integrity/lint-allows.js';
@@ -42,7 +41,6 @@ import { detailSufficiencyRule } from './narrative/detail-sufficiency.js';
 import { portalFieldsRule } from './intrinsic/portal-fields.js';
 import { durabilityDeclarationRule } from './intrinsic/durability-declaration.js';
 import { logicDeclarationRule } from './intrinsic/logic-declaration.js';
-import { retiredStereotypesRule } from './intrinsic/retired-stereotypes.js';
 import { portalsRule } from './doctrine/portal-endpoints.js';
 import { nonPortalEndpointsRule } from './doctrine/non-portal-endpoints.js';
 import { portalCallAuthRule } from './doctrine/portal-call-auth.js';
@@ -71,7 +69,6 @@ import { assertionEndpointShapesRule } from './extension/assertion-endpoint-shap
 import { packResolutionRule } from './extension/pack-resolution.js';
 import { reproducibilityRule } from './extension/pack-reproducibility.js';
 import { packRequirementsRule } from './extension/pack-requirements.js';
-import { packDeprecationsRule } from './extension/pack-deprecations.js';
 import { cyclesRule } from './wiring/dependency-cycles.js';
 import { dispatchTableBindingsRule } from './wiring/dispatch-table-bindings.js';
 import { dispatchStepRoutingRule } from './wiring/dispatch-step-routing.js';
@@ -266,7 +263,6 @@ export const SDD_RULES: SddRule[] = [
   // project go through a declared dependency and a public name, and do the
   // projects depend on each other without a loop.
   externalDeclarationsRule,
-  referenceFormsRule,
   memberDeclarationsRule,
   projectBoundariesRule,
   cyclesRule,
@@ -291,7 +287,6 @@ export const SDD_RULES: SddRule[] = [
   // The other spec-scoped stereotype declarations ride with it: a
   // dependencyClass only on an Orchestrator, and no retired stereotype.
   logicDeclarationRule,
-  retiredStereotypesRule,
   durabilityRule,
   untypedSeamRule,
   proseClaimRule,
@@ -378,7 +373,6 @@ export const SDD_RULES: SddRule[] = [
   packRequirementsRule,
   // The fields a loaded pack still declares that wairon has deprecated: about
   // the packs' configuration too, and only ever a notice.
-  packDeprecationsRule,
   // MUST run last, in this order: each audits what the earlier rules did
   // with a declared exception. The debt register first (which carried
   // findings the conformance family actually matched), then the allows

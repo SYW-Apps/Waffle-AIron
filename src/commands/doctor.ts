@@ -7,7 +7,7 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
-import { DoctorOptionsError, LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
+import { LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
   projectConfigExists,
@@ -56,9 +56,6 @@ import {
 // namespace so each call site names the contract method it reaches.
 import * as migrations from './adapters/migrations.js';
 import type { RecoveredTransaction } from '../migrations/types.js';
-// The stage-4 upgrade report: what the owner's gate changed in each verdict.
-import * as verdictChanges from './verdict-changes.js';
-import type { UpgradeReport } from './verdict-changes.js';
 import type { TreeLockState } from '../core/index.js';
 // Where the tree stands against the running major: a tree another major wrote is `wairon upgrade`'s.
 import { standing } from '../cli/adapters/upgrade.js';
@@ -208,8 +205,6 @@ export interface DoctorOptions {
    * register the MCP server. It never moves a tree another wairon major wrote (`wairon upgrade`).
    */
   fix?: boolean;
-  /** Print one section's report and nothing else, writing nothing: `composed-validation`, the one section. */
-  report?: string;
   /** Answer the confirmation of a write outside the project root, together with `global`. */
   yes?: boolean;
   /** Consent to the --fix writes outside the project root; with --yes it answers their confirmation. */
@@ -218,12 +213,6 @@ export interface DoctorOptions {
 
 export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const tally: Tally = { warn: 0, error: 0 };
-
-  // Steps 1-5: --report prints one section's plan and nothing else.
-  if (options.report !== undefined) {
-    reportOnly(options);
-    return;
-  }
 
   logger.blank();
   console.log(`${chalk.bold('wairon doctor')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
@@ -1011,69 +1000,6 @@ async function confirmOutsideWrites(options: DoctorOptions): Promise<boolean> {
 }
 
 // ── the chaining migration ──────────────────────────────────────────────────
-
-/** Steps 1-5: `--report composed-validation` alone prints that section and writes nothing. */
-function reportOnly(options: DoctorOptions): void {
-  // Steps 2-3: only a lone `--report composed-validation`; it is the one section left.
-  if (options.fix || options.report !== 'composed-validation') {
-    throw new DoctorOptionsError(`--report prints a plan and writes nothing, so it never combines with --fix, and \`composed-validation\` is its one section${options.report === 'composed-validation' ? '' : ` ("${options.report}" is not it)`}.`);
-  }
-  // Steps 4-5: what composed validation changed in each project's verdict.
-  const report = verdictChanges.explain();
-  logger.blank();
-  console.log(`${chalk.bold('wairon doctor --report composed-validation')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
-  logger.blank();
-  printUpgradeReport(report);
-  console.log(chalk.gray('Nothing was written.'));
-  logger.blank();
-}
-
-/** How a project key reads in the report. */
-function reportLabel(key: string): string {
-  return key === '' ? '(this project)' : key;
-}
-
-/**
- * Step 6: the upgrade report per project — the lock's totals beside today's
- * (attributed to the upgrade only when the lock predates composed validation) — then the
- * entries grouped by code with their reasons and rewrites, then how many
- * findings it could not attribute. The lock records totals only, and the
- * report says so: this is not a per-code diff.
- */
-function printUpgradeReport(report: UpgradeReport): void {
-  console.log(chalk.bold('Composed validation: what it changed since each lock'));
-  console.log(chalk.gray('  A lock records totals only (errors, warnings, notices) and the validator version that took it — nothing per code — so this is not a per-code diff. Today\'s findings are classed by a reason computed now.'));
-  for (const p of report.projects) {
-    const locked = p.lockedTotals ? `locked by v${p.lockedBy}: ${p.lockedTotals}` : 'never locked';
-    const attribution = p.lockedTotals
-      ? (p.predatesStage4 ? ' — the lock predates composed validation, so a difference is the upgrade\'s' : ' — the lock was taken under composed validation, so a difference is not the upgrade\'s')
-      : '';
-    console.log(`  ${reportLabel(p.key)}: ${locked}; today (as-complete): ${p.currentTotals}${attribution}`);
-  }
-  const byCode = new Map<string, UpgradeReport['entries']>();
-  for (const e of report.entries) byCode.set(e.code, [...(byCode.get(e.code) ?? []), e]);
-  for (const [code, entries] of [...byCode].sort(([a], [b]) => a.localeCompare(b))) {
-    console.log(`  ${chalk.bold(code)} (${entries.length})`);
-    for (const e of entries) {
-      const where = `${reportLabel(e.project)}${e.specId ? ` ${e.specId}` : ''}`;
-      const reason = e.reason === 'escalated'
-        ? 'escalated: once a notice, an error under composed validation'
-        : e.reason === 'pinned'
-          ? 'pinned: judged against the project\'s own pin, no longer through the parent\'s live tree'
-          : `positional: the family's top matches it${e.resolvedAs ? ` to ${e.resolvedAs}` : ''} by position, which is how it passed before${e.rewrite ? ` — the migration writes ${e.rewrite}` : ''}`;
-      console.log(`    ${e.severity} ${where}: ${reason}`);
-    }
-  }
-  if (report.entries.length === 0) console.log('  No finding is new for a reason composed validation introduced.');
-  console.log(`  ${report.unclassified} finding(s) could not be attributed to composed validation.`);
-  if (report.unmatched.length > 0) {
-    console.log(`  ${chalk.bold('Positional matches no rule decides')} (${report.unmatched.length}) — counted above; a person picks:`);
-    for (const m of report.unmatched) {
-      const what = m.kind === 'ambiguous' ? `matches ${(m.candidates ?? []).join(' and ')} (${m.reason})` : `matches nothing in the family${m.reason ? ` (${m.reason})` : ''}`;
-      console.log(`    ${reportLabel(m.consumer)} ${m.specId}: "${m.authored}" ${what}`);
-    }
-  }
-}
 
 /** doctor --fix, first: roll back (or clean up) every family migration a crash left unfinished under this root. */
 function recoverTransactions(tally: Tally): void {

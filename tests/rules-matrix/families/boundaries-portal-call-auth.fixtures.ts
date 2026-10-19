@@ -29,7 +29,7 @@ const SETTLEMENT_SUB = {
   id: 'settlement',
   description: 'Payout settlement of adjudicated insurance claims.',
   publicInterfaces: [
-    { type: 'Custom', details: 'Settlement submission surface for claim processors.', component: 'settlement-portal', interface: 'isettlement_portal' },
+    { details: 'Settlement submission surface for claim processors.', component: 'settlement-portal', interface: 'isettlement_portal' },
   ],
 };
 
@@ -38,7 +38,7 @@ const CLAIMS_SUB = { id: 'claims', description: 'Insurance claim intake and adju
 const SETTLEMENT_PORTAL = {
   id: 'settlement-portal',
   componentType: 'Portal',
-  portalType: 'Custom',
+  transport: 'Custom',
   subsystem: 'settlement',
   description: 'Inbound settlement surface of the settlement subsystem.',
   auth: { scheme: 'apiKey', in: 'header', name: 'X-Api-Key' },

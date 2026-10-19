@@ -161,7 +161,7 @@ describe('dependency-cycles — a scoped run reports the cycles of its scope', (
 // reconcileRefunds, whose invokedBy states no caller; restock-orch is unreached.
 function returnsDesk(proj: Project, subsystemExtra: Spec = {}) {
   proj.subsystem('returns-desk', subsystemExtra);
-  proj.component('returns-portal', 'returns-desk', 'Portal', { portalType: 'Custom', dependsOn: ['refund-orch'] });
+  proj.component('returns-portal', 'returns-desk', 'Portal', { transport: 'Custom', dependsOn: ['refund-orch'] });
   proj.component('refund-orch', 'returns-desk', 'Orchestrator');
   proj.component('restock-orch', 'returns-desk', 'Orchestrator', { dependencyClass: 'pure' });
   proj.contract('ireturns-portal', 'returns-portal', [{ name: 'openReturn' }]);
@@ -209,8 +209,8 @@ describe('unused-detection — draft context and anchors', () => {
 // ---------------------------------------------------------------------------
 
 function partnerApi(proj: Project, methods: Spec[]) {
-  proj.subsystem('partner-api', { publicInterfaces: [{ type: 'Custom', details: 'Partner claim ingress', component: 'partner-portal' }] });
-  proj.component('partner-portal', 'partner-api', 'Portal', { portalType: 'Custom' });
+  proj.subsystem('partner-api', { publicInterfaces: [{ details: 'Partner claim ingress', component: 'partner-portal' }] });
+  proj.component('partner-portal', 'partner-api', 'Portal', { transport: 'Custom' });
   proj.contract('ipartner-portal', 'partner-portal', methods);
 }
 
@@ -356,11 +356,11 @@ describe('event-topology — one finding per topic per component', () => {
     inProject(proj => {
       proj.subsystem('orders');
       proj.component('order-events-portal', 'orders', 'Portal', {
-        portalType: 'MessageBus',
+        transport: 'MessageBus',
         emits: [{ topic: 'orders.placed', event: 'OrderPlaced' }],
       });
       proj.component('settlement-portal', 'orders', 'Portal', {
-        portalType: 'MessageBus',
+        transport: 'MessageBus',
         subscribesTo: [{ topic: 'payments.settled', event: 'PaymentSettled' }],
       });
       proj.contract('iorder-events-portal', 'order-events-portal', [{
@@ -394,7 +394,7 @@ describe('dispatch-tables — no guarantee finding against a method that does no
     inProject(proj => {
       proj.subsystem('payments');
       proj.component('payments-portal', 'payments', 'Portal', {
-        portalType: 'Custom',
+        transport: 'Custom',
         dependsOn: ['charge-executor'],
         dispatch: [
           { capability: 'payment.capture', component: 'charge-executor', method: 'captureCharge' },

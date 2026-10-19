@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -95,6 +96,7 @@ function approve(
 /** Write a lock record into ANOTHER root (a chained child approving itself). */
 function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
   const record: LockRecord = {
+    format: 3,
     stateId: { algorithm: 'sha256+content+doctrine+inputs', digest: stateDigest },
     lockedAt: now,
     lockedBy: { id: 'child <c@example.com>', source: 'git' },
@@ -102,7 +104,7 @@ function approveAt(root: string, stateDigest = 'a'.repeat(64)): LockRecord {
     validationResult: { valid: true, errors: 0, warnings: 0 },
     status: 'ready',
     specs: {},
-    children: {},
+    specsReading: 'design',
   };
   fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
   fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify(record, null, 2));
@@ -279,10 +281,10 @@ describe('the approval', () => {
     expect(diffSize(diffAgainstApproval()!)).toBe(0);
   });
 
-  it('still READS a format-1 record\'s `children` (until the next major release)', () => {
+  v5it('still READS a format-1 record\'s `children` (until the next major release)', () => {
     root = project();
     const legacy = approveAt(root);
-    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, children: { billing: 'sha256:abc123' } }, null, 2));
+    fs.writeFileSync(path.join(root, '.wai', 'lock.json'), JSON.stringify({ ...legacy, format: undefined, specsReading: undefined, children: { billing: 'sha256:abc123' } }, null, 2));
     expect(approvalRecord()!.children).toEqual({ billing: 'sha256:abc123' });
     expect(approvalRecord()!.format).toBeUndefined();
   });
@@ -295,12 +297,7 @@ describe('the approval', () => {
     // used a fake pin with no mounted child, so it could not see this.
     root = project();
 
-    saveSpec('subsystem', {
-      id: 'billing', name: 'billing', description: 'a chained billing domain',
-      parentSystem: 'approval-sys', publicInterfaces: [], trustedLinks: [],
-      projectPath: 'packages/billing',
-      status: 'draft', createdAt: now, updatedAt: now,
-    } as SubsystemSpec);
+    portal.declareMember('billing', { source: 'packages/billing' });
     const childSpecs = path.join(root, 'packages', 'billing', '.wai', 'specs');
     fs.mkdirSync(path.join(childSpecs, 'subsystems'), { recursive: true });
     fs.mkdirSync(path.join(childSpecs, 'components'), { recursive: true });
@@ -522,7 +519,7 @@ describe('the verdict the lock gives on the tree', () => {
     expect(verdict.text).not.toContain('STALE');
   });
 
-  it('does not say "changed since approval" beside an approval that holds: only what the approval leaves out moved', () => {
+  v5it('does not say "changed since approval" beside an approval that holds: only what the approval leaves out moved', () => {
     root = project();
     const record = approve();
     // A record read in the content reading (before lock format 3): its per-spec

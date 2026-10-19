@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { aiDir, aiDirAt, withLineEndings } from '../utils/fs.js';
+import { aiDir, aiDirAt, readsV5Forms, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
 import { LockRecordUnreadableError } from '../utils/errors.js';
 // The approver is shared vocabulary, not this store's private shape: a command
@@ -77,16 +77,18 @@ export interface LockRecord {
   specs?: Record<string, string>;
   /**
    * LEGACY (format 1): chained child mount id → that child's approved StateId,
-   * copied without checking the child's lock still matched its tree. Read until
-   * the next major release as the member pins; never written from stage 5 on.
+   * copied without checking the child's lock still matched its tree. Read as
+   * the member pins in the v5 reading only (a format-1 record is refused
+   * anywhere else); never written from stage 5 on.
    */
   children?: Record<string, string>;
   /**
    * The record format: 3 from the release in which code linkage left the
    * approval (stateId under the design gate algorithm, `specs` in the design
-   * reading), 2 from stage 5 on, absent means format 1. A format-2 record stays
-   * valid as written: it is judged under its own algorithm (StateId.asRecorded)
-   * and its own reading until it is re-locked or re-expressed.
+   * reading), 2 from stage 5 on, absent means format 1. A format-1 or -2
+   * record was written by wairon 5: it is judged under its own algorithm
+   * (StateId.asRecorded) and its own reading in the v5 reading `wairon upgrade`
+   * binds, which re-expresses it; anywhere else it is refused.
    */
   format?: number;
   /**
@@ -219,7 +221,7 @@ function parseLockRecord(text: string, file: string): LockRecord {
     throw new LockRecordUnreadableError(file, `its "format" is ${JSON.stringify(record.format)}, not a lock record format`);
   }
   if (typeof record.format === 'number' && record.format > LOCK_FORMAT_CURRENT) {
-    throw new LockRecordUnreadableError(file, `it is lock record format ${record.format}, written by a newer wairon (this release reads formats 1-${LOCK_FORMAT_CURRENT}) — upgrade wairon to read it`);
+    throw new LockRecordUnreadableError(file, `it is lock record format ${record.format}, written by a newer wairon (this release reads format ${LOCK_FORMAT_CURRENT}) — upgrade wairon to read it`);
   }
   const stateId = record.stateId as Partial<StateId> | undefined;
   if (!stateId || typeof stateId !== 'object' || typeof stateId.algorithm !== 'string' || typeof stateId.digest !== 'string') {
@@ -228,6 +230,14 @@ function parseLockRecord(text: string, file: string): LockRecord {
   if (record.specs !== undefined && (record.specs === null || typeof record.specs !== 'object' || Array.isArray(record.specs)
     || Object.values(record.specs).some((d) => typeof d !== 'string'))) {
     throw new LockRecordUnreadableError(file, 'its "specs" is not a map of spec path to digest');
+  }
+  // A format-1 (no format) or format-2 record was written by wairon 5: read only in the v5 reading.
+  if (!readsV5Forms() && (record.format === undefined || record.format < LOCK_FORMAT_CURRENT)) {
+    throw new LockRecordUnreadableError(
+      file,
+      `it is lock record format ${record.format ?? 1}, written by wairon 5 (wairon 6 reads format ${LOCK_FORMAT_CURRENT})`,
+      'Run `wairon upgrade` to bring the project to this wairon; it carries the approval over without asking for a new one.',
+    );
   }
   return normalizeRecord(record);
 }

@@ -112,23 +112,6 @@ methods:
         type: call
         targetComponent: cli_runner
         targetMethod: runPack
-  - name: packs
-    narrative:
-      - stepNumber: 1
-        description: >-
-          Print the one-line deprecation notice naming the wairon pack subcommand that replaces this
-          one.
-        type: local
-      - stepNumber: 2
-        description: >-
-          Dispatch `wairon packs <action>` with its parsed arguments and flags to
-          cli_runner.runPacks.
-        type: call
-        targetComponent: cli_runner
-        targetMethod: runPacks
-    symbol: >-
-      [deprecated] alias of `wairon pack` — extension packs: profiles, language tables, and
-      conformance rules
   - name: patternsList
     narrative:
       - stepNumber: 1
@@ -704,4 +687,4 @@ methods:
         targetMethod: runWhatsNew
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-18T14:28:31.034Z'
+updatedAt: '2026-10-18T19:04:05.174Z'

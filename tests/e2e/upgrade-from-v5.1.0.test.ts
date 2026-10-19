@@ -148,8 +148,6 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     // doctor on the un-upgraded tree names the major and the way forward; it writes nothing.
     const doctor = await run(['doctor']);
     expect(doctor.all).toContain('wairon upgrade');
-    const composed = await run(['doctor', '--report', 'composed-validation']);
-    ok(composed);
     expect(snapshot(dir)).toEqual(before);
   });
 

@@ -132,7 +132,7 @@ describe('event-topology — every topic needs both ends', () => {
   it('MessageBus endpoints count as ends: a publish endpoint satisfies a subscribesTo', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('bus-portal', 'sub-a', 'Portal', 'portalType: MessageBus\ndependsOn: [flow-orch]');
+    proj.component('bus-portal', 'sub-a', 'Portal', 'transport: MessageBus\ndependsOn: [flow-orch]');
     proj.component('flow-orch', 'sub-a', 'Orchestrator');
     proj.component('order-observer', 'sub-a', 'Observer', `${SUBSCRIBER}\ndependsOn: [flow-orch]`);
     const specsDir = path.join(proj.tempDir, '.wai', 'specs');

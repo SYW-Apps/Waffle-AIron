@@ -119,15 +119,15 @@ methods:
       - stepNumber: 18
         description: >-
           Build the LAYERED AgentRecord list: the system architect, one owner per local subsystem,
-          and ONE delegating owner per member project this project declares (in `members`, or, until
-          the next major release, a legacy L1 mount) that routes work into the member without
-          enumerating its internals and lists the member's agents by reference (delegatesTo);
-          component implementers only when generateComponentImplementers is enabled (or when a
-          per-component brief asks for one). A PART (stage 8) is no member project here: its
-          subsystems are this layer's local subsystems, so each gets an ordinary owner whose fence
-          holds the part's spec files where the part stores them, and whose description names the
-          part — a part fetched from git is read, never owned (its files are the fetch cache's; it
-          is changed in its own repository and taken in with `member update`). Each owner's and
+          and ONE delegating owner per member project this project declares (in `members`, or, in
+          the v5 reading `wairon upgrade` binds, a legacy L1 mount) that routes work into the member
+          without enumerating its internals and lists the member's agents by reference
+          (delegatesTo); component implementers only when generateComponentImplementers is enabled
+          (or when a per-component brief asks for one). A PART (stage 8) is no member project here:
+          its subsystems are this layer's local subsystems, so each gets an ordinary owner whose
+          fence holds the part's spec files where the part stores them, and whose description names
+          the part — a part fetched from git is read, never owned (its files are the fetch cache's;
+          it is changed in its own repository and taken in with `member update`). Each owner's and
           implementer's ownedPaths fence holds every code location its specs ALONE name, whether the
           file exists yet or is PLANNED: the source files its implementations and their methods
           name, their simPath harnesses and binding modules, and the sourcePaths of its types (an
@@ -152,7 +152,7 @@ methods:
       - stepNumber: 1
         description: >-
           Is the id qualified by a direct member's alias (`<alias>::<rest>`, the alias declared in
-          this project's `members` or, until the next major release, a legacy mount)?
+          this project's `members` or, in the v5 reading `wairon upgrade` binds, a legacy mount)?
         type: branch
         condition: the id's first segment is the alias of a direct member
         onTrueStep: 2
@@ -325,4 +325,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T00:37:19.960Z'
+updatedAt: '2026-10-18T19:08:50.497Z'

@@ -23,7 +23,7 @@ export default [
           id: 'storefront',
           description: 'Customer-facing shop: order intake.',
           publicInterfaces: [
-            { type: 'REST', details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
+            { details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
           ],
         },
       ],
@@ -31,7 +31,7 @@ export default [
         {
           id: 'order-intake-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Public HTTP entry for order submission and amendment.',
         },
       ],
@@ -64,7 +64,7 @@ export default [
           id: 'storefront',
           description: 'Customer-facing shop: order intake.',
           publicInterfaces: [
-            { type: 'REST', details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
+            { details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
           ],
         },
       ],
@@ -72,7 +72,7 @@ export default [
         {
           id: 'order-intake-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Public HTTP entry for order submission.',
         },
       ],
@@ -104,7 +104,7 @@ export default [
           id: 'storefront',
           description: 'Customer-facing shop: order intake.',
           publicInterfaces: [
-            { type: 'REST', details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
+            { details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
           ],
         },
       ],
@@ -112,7 +112,7 @@ export default [
         {
           id: 'order-intake-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Public HTTP entry for order submission.',
         },
       ],
@@ -157,7 +157,7 @@ export default [
           id: 'storefront',
           description: 'Customer-facing shop: order intake.',
           publicInterfaces: [
-            { type: 'REST', details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
+            { details: 'Public order intake API for the storefront.', component: 'order-intake-portal' },
           ],
         },
       ],
@@ -165,7 +165,7 @@ export default [
         {
           id: 'order-intake-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic public portal dispatching order capabilities inward.',
           dependsOn: ['order-workflow'],
           dispatch: [

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -91,7 +92,7 @@ const changeLines = (p: MigrationPlan, top: string): string[] =>
 describe('stage 6 — the chaining migration on the family transaction', () => {
   const made: ReferenceFamily[] = [];
   const family = (): ReferenceFamily => {
-    const f = buildReferenceFamily();
+    const f = buildReferenceFamily({ canonical: true });
     made.push(f);
     return f;
   };
@@ -109,7 +110,7 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     }
   });
 
-  it('plan rehearses on a copy and writes nothing into the family; apply commits exactly the plan; the next plan is empty', () => {
+  v5it('plan rehearses on a copy and writes nothing into the family; apply commits exactly the plan; the next plan is empty', () => {
     const f = family();
     const before = waiState(f.top);
     const planned = at(f.core, () => migrations.plan({ verb: 'chaining' }));
@@ -140,7 +141,7 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     expect(at(f.top, () => migrations.apply(again))).toMatchObject({ applied: false, relock: [] });
   });
 
-  it('a plan made without a rehearsal (doctor\'s, confirmed as printed) is rehearsed at apply and committed', () => {
+  v5it('a plan made without a rehearsal (doctor\'s, confirmed as printed) is rehearsed at apply and committed', () => {
     const f = family();
     const planned = at(f.top, () => migrations.plan({ verb: 'chaining', rehearse: false }));
     expect(planned.rehearsal).toBeUndefined();
@@ -152,7 +153,7 @@ describe('stage 6 — the chaining migration on the family transaction', () => {
     expect(isEmpty(at(f.top, () => planChaining()))).toBe(true);
   });
 
-  it('the rehearsal precondition: no writer on these paths reads source code — absent or unreadable sources plan the same bytes', () => {
+  v5it('the rehearsal precondition: no writer on these paths reads source code — absent or unreadable sources plan the same bytes', () => {
     const withSource = family();
     addImplementation(withSource);
     fs.mkdirSync(path.join(withSource.transpiler, 'src'), { recursive: true });
@@ -208,7 +209,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
 
   beforeEach(() => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    f = buildReferenceFamily();
+    f = buildReferenceFamily({ canonical: true });
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-home-'));
     before = waiState(f.top);
     const planned = at(f.top, () => migrations.plan({ verb: 'chaining' }));
@@ -232,7 +233,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     }
   });
 
-  it('CLI: status and validate lead with a notice naming the transaction; plain doctor reports it; doctor --fix rolls it back first', async () => {
+  v5it('CLI: status and validate lead with a notice naming the transaction; plain doctor reports it; doctor --fix rolls it back first', async () => {
     expect(waiState(f.top)).not.toEqual(before);
     const status = await cli(f.top, home, 'status');
     expect(status.stdout).toMatch(/\[TRANSACTION_PENDING\] an unfinished family migration \(chaining, transaction [0-9a-f]{8}, coordinator phase swapping\) — run `wairon doctor --fix`/);
@@ -260,7 +261,7 @@ describe('stage 6 — the pending-transaction banner and doctor --fix', () => {
     expect(clean.stdout).not.toContain('TRANSACTION_PENDING');
   }, 300_000);
 
-  it('MCP: sdd_get_status leads with the banner and sdd_validate_tree lists it as a notice', async () => {
+  v5it('MCP: sdd_get_status leads with the banner and sdd_validate_tree lists it as a notice', async () => {
     const client = new Client({ name: 'wairon-banner-test', version: '0.0.1' });
     const transport = new StdioClientTransport({
       command: process.execPath,

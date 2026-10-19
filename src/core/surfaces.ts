@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
+import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectRoot } from '../utils/fs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { safeFilenamePart } from '../utils/filenames.js';
@@ -1024,7 +1024,7 @@ export function importSurface(sourcePath: string, origin: SurfaceOrigin): Surfac
 // Stage-1 family pins (listFamilyPins) — the generated family and sibling
 // snapshots `wairon surface pin` once wrote. Nothing reads them since stage 3;
 // the chaining migration converts the family pin into an external and deletes
-// them all.
+// them all, reading them in the v5 reading only (they are a wairon 5 form).
 // ---------------------------------------------------------------------------
 
 /** Whose surface a stage-1 family pin holds: the parent's family surface, or one sibling's published surface. */
@@ -1049,6 +1049,8 @@ export interface FamilyPin {
  * (exchanged or authored) are never family pins. Reads only the bound root.
  */
 export function listFamilyPins(): FamilyPin[] {
+  // Step 0: a stage-1 family pin is a wairon 5 form, read only in the v5 reading.
+  if (!readsV5Forms()) return [];
   // Step 1: the snapshots the bound root holds.
   const snapshots = listSnapshots();
   // Step 2: the generated ones, classified by key.

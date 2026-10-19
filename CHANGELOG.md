@@ -35,6 +35,34 @@ written when a project is created).
 - The "until the next major release" promise for deprecated forms is withdrawn: forms
   are not kept alongside the current ones, `wairon upgrade` rewrites them.
 
+### Breaking: the core reads only wairon 6 forms
+
+The forms wairon 5 wrote are read only inside `wairon upgrade`. Anywhere else a tree
+holding one does not load: the error names the form and what replaces it. The forms are:
+
+- `portalType` (read `transport`) and `HTTP_API`;
+- the `Specialist` and `Gateway` stereotypes;
+- listener `mounts`, and an `invokedBy` of kind `external` or `sibling-subsystem`;
+- an export entry's `type`;
+- a legacy L1 mount (`projectPath`) and a member's long-form `path` (read `source`);
+- the reference forms `::x`, `super::x` and member paths (read `local_id` and `alias::name`);
+- lock record formats 1 and 2;
+- a `.wairon` folder.
+
+- `wairon upgrade` now merges each Gateway into the Portal it owned, which takes the
+  `gateway` variant. A Gateway it cannot merge refuses the upgrade, naming the hand
+  steps.
+- A v5 lock record that nothing proves unchanged is kept in the current format and reads
+  stale until `wairon lock`. Before, it was left unreadable. A lock record or tree the
+  upgrade cannot read now fails the upgrade instead of being skipped.
+- Removed rules: `DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`,
+  `INVOKED_BY_RETIRED_KIND`, `STEREOTYPE_RETIRED` and `PACK_FIELD_DEPRECATED`.
+- Removed CLI surface: the `wairon packs` alias, `generate --no-recurse`,
+  `lock --no-recursive`, and `doctor --report composed-validation` with its verdict
+  changes.
+- Removed MCP inputs: `HTTP_API`, the export `type` input, and the `projectPath` input.
+- A pack's `foreignBuiltins` is a load error naming its removal.
+
 ### Small fixes from the v6.0.0 QA panel
 
 - `wairon mcp install` and `doctor --fix` name the Gemini CLI for the project

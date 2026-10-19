@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -12,8 +13,6 @@ import { ComponentSpecSchema, TypeSpecSchema } from '../../src/models/index.js';
 import { validateProject, validateFamily, type ValidationResult } from '../../src/core/validation.js';
 import { plan, isEmpty } from '../../src/migrations/chaining-migration.js';
 import { apply } from '../helpers/chaining-transaction.js';
-import { runDoctor } from '../../src/commands/doctor.js';
-import { explain } from '../../src/commands/verdict-changes.js';
 import { buildImportFamily, type ImportFamily } from '../helpers/reference-family.js';
 import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
@@ -135,8 +134,6 @@ describe('stage 4 — the positional migration', () => {
     const ambiguous = planned.findings.find((x) => x.kind === 'positional-ambiguous')!;
     expect(ambiguous.detail).toContain('shared::waffler-error and ui::waffler_error');
     expect(ambiguous.detail).toContain('a person picks');
-    // The upgrade report reads the same match: what it leaves to a person is what the plan leaves.
-    expect(at(f.top, () => explain()).unmatched.filter((m) => m.kind === 'ambiguous').map((m) => `${m.consumer}|${m.authored}`)).toEqual(['|WafflerError']);
   });
 
   it('property: newDependencies lists exactly the edges no external and no pin had before', () => {
@@ -238,9 +235,8 @@ describe('stage 4 — the positional migration', () => {
     expect(fs.readFileSync(path.join(f.app, '.wai', 'externals', 'ui.yaml'), 'utf8')).toContain('banner-style');
     // The self-prefix, bare on disk.
     expect(fs.readFileSync(path.join(f.top, '.wai', 'specs', 'types', 'ledger-line.yaml'), 'utf8')).not.toContain('vocab.report');
-    // No positional error is left but the two a person decides, and no deprecated form.
+    // No positional error is left but the two a person decides.
     const after = at(f.top, () => validateFamily({}));
-    expect(after.issues.filter((i) => i.code === 'DEPRECATED_REFERENCE_FORM')).toEqual([]);
     expect(errorsOf(after)).toEqual(['app|UNDEFINED_TYPE_REFERENCE|screen-state', '|UNDEFINED_TYPE_REFERENCE|report']);
     // Each owner's gate agrees from its own root.
     expect(errorsOf(at(f.app, () => validateProject()))).toEqual(['|UNDEFINED_TYPE_REFERENCE|screen-state']);
@@ -265,13 +261,10 @@ describe('stage 4 — the positional migration', () => {
     expect(dirHash(f.top)).toEqual(settled);
   });
 
-  it('property: migration-is-plan-first — the reports, the plan and an unconfirmed --fix write nothing', async () => {
+  it('property: migration-is-plan-first — the plan and an unconfirmed --fix write nothing', async () => {
     const f = fresh();
     const before = dirHash(f.top);
     at(f.top, () => plan());
-    await runDoctor({ report: 'composed-validation' });
-    const printed = vi.mocked(console.log).mock.calls.map((c) => String(c[0])).join('\n');
-    expect(printed).toContain('Positional matches no rule decides');
     expect(dirHash(f.top)).toEqual(before);
     // The migration moved to `wairon upgrade`: --fix finds nothing of it to carry.
     await doctorCli(f.top, '--fix', '--yes');

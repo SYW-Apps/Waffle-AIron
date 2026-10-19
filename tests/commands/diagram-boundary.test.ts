@@ -69,7 +69,7 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
     saveSpec('subsystem', {
       id: 'billing', name: 'Billing', description: 'billing',
       parentSystem: 'BoundarySys',
-      publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+      publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
       createdAt: now, updatedAt: now,
     } as never);
     const comp = (over: Record<string, unknown>) => ({
@@ -79,7 +79,7 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
     });
     saveComponentSpec(comp({
       id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal',
-      portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'],
+      transport: 'HTTP', dependsOn: ['billing-orchestrator'],
     }) as never);
     saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator' }) as never);
     invalidateSpecCache();

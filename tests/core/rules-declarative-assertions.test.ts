@@ -131,7 +131,7 @@ describe('declarative assertions', () => {
       '    transport: [HTTP]',
       "    pathPattern: '^/hooks/[a-z0-9-]+$'",
     ].join('\n'));
-    proj.writeSpec('component', 'portal-a', 'schemaVersion: 1.0.0\nid: portal-a\nname: portal-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API');
+    proj.writeSpec('component', 'portal-a', 'schemaVersion: 1.0.0\nid: portal-a\nname: portal-a\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP');
     proj.writeSpec('interface', 'iportal-a', [
       'schemaVersion: 1.0.0',
       'id: iportal-a',

@@ -122,7 +122,7 @@ function role(
 
 const CONSUMERS: Record<Exclude<MatrixType, 'View'>, MatrixRole> = {
   Portal: role('booking-api-portal', 'Portal', 'the patient-facing booking API portal',
-    'Patient-facing API surface receiving appointment booking requests.', { portalType: 'Custom' }),
+    'Patient-facing API surface receiving appointment booking requests.', { transport: 'Custom' }),
   Workflow: role('appointment-orchestrator', 'Orchestrator', 'the appointment booking orchestrator',
     'Coordinates the appointment booking workflow end to end.'),
   PureLogic: role('slot-matching-arbiter', 'Orchestrator', 'the slot-matching arbiter',
@@ -156,7 +156,7 @@ const CONSUMERS: Record<Exclude<MatrixType, 'View'>, MatrixRole> = {
 
 const TARGETS: Record<MatrixType, MatrixRole> = {
   Portal: role('clinician-console-portal', 'Portal', 'the clinician console portal',
-    'Clinician-facing console surface for managing the day schedule.', { portalType: 'Custom' }),
+    'Clinician-facing console surface for managing the day schedule.', { transport: 'Custom' }),
   Workflow: role('schedule-rebalance-orchestrator', 'Orchestrator', 'the schedule rebalancing orchestrator',
     'Rebalances clinician schedules when slots free up.'),
   PureLogic: role('eligibility-arbiter', 'Orchestrator', 'the insurance eligibility arbiter',

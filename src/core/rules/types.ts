@@ -340,13 +340,6 @@ export interface DependencyEdge {
   surface?: SurfaceRefResolution;
   /** The owner's resolution of an edge that leaves the project; set for `library`, `surface`, `ambiguous` and `cross-project`. */
   resolution?: ReferenceResolution;
-  /**
-   * Either end is a retired stereotype, so no boundary or matrix rule judges
-   * the edge: retired-stereotypes reports the component once, and its
-   * migration decides what the edge becomes. Never set on an edge that
-   * resolved nothing — a reference finding stands whatever declares it.
-   */
-  retired: boolean;
   /** The draft context a finding on this edge takes: the source's, and the target's too once the target resolves. */
   draftContext: boolean;
   /**
@@ -689,12 +682,6 @@ export interface RuleContext {
      * parent's requirements reach a member only in the family run.
      */
     packRequirements: PackRequirement[];
-    /**
-     * Each deprecated field a loaded pack still declares, as the extension
-     * loader recorded it (LoadedExtensions.deprecations) — what the
-     * pack-deprecations rule reports as a notice.
-     */
-    deprecations: string[];
   };
 
   /**

@@ -78,8 +78,8 @@ const byCode = (res: { issues: { code: string; specId?: string; message: string;
 
 function twoSubsystems(proj: ReturnType<typeof createTempProject>, sourceExtra = '') {
   proj.subsystem('front', sourceExtra);
-  proj.subsystem('billing', 'publicInterfaces:\n  - type: REST\n    details: /api/billing\n    component: billing-portal');
-  proj.component('billing-portal', 'billing', 'Portal', 'portalType: HTTP_API\ndependsOn: [billing-orch]');
+  proj.subsystem('billing', 'publicInterfaces:\n  - details: /api/billing\n    component: billing-portal');
+  proj.component('billing-portal', 'billing', 'Portal', 'transport: HTTP\ndependsOn: [billing-orch]');
   proj.component('billing-orch', 'billing', 'Orchestrator');
 }
 
@@ -122,14 +122,13 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
     proj.subsystem('front');
     proj.subsystem('billing', [
       'publicInterfaces:',
-      '  - type: REST',
-      '    details: /api/billing',
+      '  - details: /api/billing',
       '    component: billing-portal',
       'trustedLinks:',
       '  - subsystem: front',
       '    reason: acknowledged mutual coupling only',
     ].join('\n'));
-    proj.component('billing-portal', 'billing', 'Portal', 'portalType: HTTP_API\ndependsOn: [billing-orch]');
+    proj.component('billing-portal', 'billing', 'Portal', 'transport: HTTP\ndependsOn: [billing-orch]');
     proj.component('billing-orch', 'billing', 'Orchestrator');
     proj.component('front-orch', 'front', 'Orchestrator', 'dependsOn: [billing-portal]');
     proj.activate();
@@ -142,7 +141,7 @@ describe('trustedLinks license direct in-process cross-subsystem edges', () => {
 describe('Portal read-face access — reads may shortcut, writes may not', () => {
   function portalWithRepo(proj: ReturnType<typeof createTempProject>, narrative: string[]) {
     proj.subsystem('sub-a');
-    proj.component('front-portal', 'sub-a', 'Portal', 'portalType: HTTP_API\ndependsOn: [rec-repository, flow-orch]');
+    proj.component('front-portal', 'sub-a', 'Portal', 'transport: HTTP\ndependsOn: [rec-repository, flow-orch]');
     proj.component('flow-orch', 'sub-a', 'Orchestrator', 'dependsOn: [rec-repository]');
     proj.component('rec-store', 'sub-a', 'Store', 'durability: ram-projection');
     proj.component('rec-registry', 'sub-a', 'Registry', 'dependsOn: [rec-store]');
@@ -185,7 +184,7 @@ describe('Portal read-face access — reads may shortcut, writes may not', () =>
   it('Portal → Store/Registry/Adapter stay forbidden edges', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('front-portal', 'sub-a', 'Portal', 'portalType: HTTP_API\ndependsOn: [rec-store]');
+    proj.component('front-portal', 'sub-a', 'Portal', 'transport: HTTP\ndependsOn: [rec-store]');
     proj.component('rec-store', 'sub-a', 'Store', 'durability: ram-projection');
     proj.activate();
     try {

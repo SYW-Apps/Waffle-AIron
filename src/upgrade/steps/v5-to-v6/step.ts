@@ -32,13 +32,29 @@ export function familyRoots(root: string): string[] {
   return files.familyRoots(root);
 }
 
-/** The lock record carried into the current format, or null when there is none or the tree cannot be judged yet. */
-function carriedRecord(): ReturnType<typeof core.reexpressApproval> {
-  try {
-    return core.reexpressApproval(core.computeGateStateId());
-  } catch {
-    return null;
-  }
+/** The lock record shape the core writes. */
+type LockRecordOut = NonNullable<ReturnType<typeof core.reexpressApproval>>;
+
+/** The lock record carried into the current format, and whether the design was proven unchanged. */
+interface CarriedRecord {
+  record: LockRecordOut;
+  /** True when the record's identity was proven to hold (it reads current or stale for the gate alone); false for a stale keep. */
+  proven: boolean;
+}
+
+/**
+ * The lock record carried into the current format, or null when the project
+ * holds none (there is nothing to carry). A record the design is proven
+ * unchanged against is re-expressed; any other record of an earlier format is
+ * kept stale, never left unreadable. A failure to judge the tree, or to read the
+ * record, is never read as "no lock": it propagates, so the carry is not
+ * silently skipped.
+ */
+function carriedRecord(): CarriedRecord | null {
+  const carried = core.reexpressApproval(core.computeGateStateId());
+  if (carried) return { record: carried, proven: true };
+  const kept = files.keepStaleRecord(getProjectRoot());
+  return kept ? { record: kept, proven: false } : null;
 }
 
 /** iv5_to_v6_tree_step.plan — what moving the project at the bound root from v5 to v6 rewrites, without writing anything. */
@@ -49,8 +65,10 @@ export function plan(root: string): StepPlan {
     const reported: string[] = [];
     // Steps 2-3: the legacy folder is a file move, not a design change.
     if (files.holdsLegacyFolder(root)) changes.push({ description: FOLDER_MOVE, design: false });
-    // Steps 4-6: the lock record re-expressed in the current format.
-    if (carriedRecord()) changes.push({ description: 'lock.json: re-express the approval in the current reading (who approved it, and when, are kept)', design: false });
+    // Steps 4-6: the lock record carried into the current format.
+    const lock = carriedRecord();
+    if (lock?.proven) changes.push({ description: 'lock.json: re-express the approval in the current reading (who approved it, and when, are kept)', design: false });
+    else if (lock) changes.push({ description: 'lock.json: keep the approval on record in the current format — nothing proves the design unchanged, so it reads stale until `wairon lock` approves it again (who approved it, and when, are kept)', design: false });
     // Steps 7-8: the legacy spec file names.
     for (const legacy of core.findLegacySpecFiles()) {
       changes.push({ description: `rename ${legacy.path} to ${legacy.expected}`, design: false });
@@ -78,7 +96,22 @@ export function plan(root: string): StepPlan {
     for (const variant of retirement.rebasedVariants) {
       changes.push({ spec: variant, description: `${variant}: variant rebased from Specialist to Orchestrator`, design: true });
     }
-    // Steps 17-18: the reachability model.
+    // Steps 17-20: the Gateways, each merged into the Portal it owned, or the step is refused.
+    const gateways = core.retireGateways(false);
+    if (gateways.refused.length > 0) {
+      throw new StepRefused(`${gateways.refused.length === 1 ? 'a Gateway' : 'Gateways'} cannot be merged: ${gateways.refused.join(' ')}`);
+    }
+    for (const merge of gateways.merged) {
+      changes.push({
+        spec: merge.gateway,
+        description: `${merge.gateway}: Gateway merged into the Portal ${merge.portal}, which takes the gateway variant`
+          + `${merge.members.length ? ` and depends on ${merge.members.join(', ')}` : ''}`
+          + `${merge.consumers.length ? `; ${merge.consumers.join(', ')} depend on the Portal` : ''}`
+          + `${merge.exports.length ? `; the exports of ${merge.exports.join(', ')} name the Portal` : ''}`,
+        design: true,
+      });
+    }
+    // Steps 21-22: the reachability model.
     const reach = core.migrateReachability(false);
     for (const rewrite of reach.rewrites) {
       changes.push({ spec: rewrite.specId, description: `${rewrite.specId}: ${rewrite.to}`, design: true });
@@ -86,7 +119,7 @@ export function plan(root: string): StepPlan {
     for (const left of reach.reported) {
       reported.push(`${left.specId}: ${left.to} — ${left.reason}`);
     }
-    // Step 19.
+    // Step 23.
     return { step: { ...STEP }, project: root, changes, reported };
   });
 }
@@ -97,8 +130,8 @@ export function write(plan: StepPlan): void {
   // Steps 1-2.
   if (plan.changes.some((c) => c.description === FOLDER_MOVE)) files.moveLegacyFolder(root);
   // Steps 3-6: the approval carried before any spec moves.
-  const record = carriedRecord();
-  if (record) core.writeLockRecord(record);
+  const carried = carriedRecord();
+  if (carried) core.writeLockRecord(carried.record);
   // Steps 7-9.
   for (const legacy of core.findLegacySpecFiles()) files.renameSpecFile(legacy.path, legacy.expected);
   // Step 10.
@@ -114,8 +147,9 @@ export function write(plan: StepPlan): void {
       throw new StepRefused(`the chaining migration did not commit: ${report.outcome?.failure ?? 'unknown failure'}`);
     }
   }
-  // Steps 16-17.
+  // Steps 16-18.
   core.retireSpecialists(true);
+  core.retireGateways(true);
   core.migrateReachability(true);
 }
 

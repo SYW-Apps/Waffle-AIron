@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -101,7 +102,7 @@ describe('load-time projectPath containment', () => {
     if (base) fs.rmSync(base, { recursive: true, force: true });
   });
 
-  it('surfaces PROJECTPATH_ESCAPE and does NOT federate a ../-escaping victim tree', () => {
+  v5it('surfaces PROJECTPATH_ESCAPE and does NOT federate a ../-escaping victim tree', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-b2-escape-'));
     const root = path.join(base, 'root');
     const victim = path.join(base, 'victim');
@@ -132,7 +133,7 @@ describe('load-time projectPath containment', () => {
     expect(index.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
   });
 
-  it('still loads and namespaces a legitimate nested subproject', () => {
+  v5it('still loads and namespaces a legitimate nested subproject', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-b2-nested-'));
     const root = path.join(base, 'root');
     const child = path.join(root, 'packages', 'billing');
@@ -169,7 +170,7 @@ describe('containment by the declaring project', () => {
     if (base) fs.rmSync(base, { recursive: true, force: true });
   });
 
-  it('refuses a nested mount that leaves its own project from every loading root, even inside the top root', () => {
+  v5it('refuses a nested mount that leaves its own project from every loading root, even inside the top root', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-owning-'));
     const root = path.join(base, 'root');
     const a = path.join(root, 'packages', 'a');
@@ -202,7 +203,7 @@ describe('containment by the declaring project', () => {
     expect(fromChild.subsystems.some((s) => s.id.endsWith('secret'))).toBe(false);
   });
 
-  it('refuses a mount that leaves its project through a link, at write and at load', () => {
+  v5it('refuses a mount that leaves its project through a link, at write and at load', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-link-'));
     const root = path.join(base, 'root');
     const outside = path.join(base, 'outside');
@@ -225,7 +226,7 @@ describe('containment by the declaring project', () => {
     expect(inspectChainedRoots().skipped).toEqual([{ mount: 'billing', alias: 'billing', form: 'mount', projectPath: 'linked', reason: 'escapes' }]);
   });
 
-  it('still loads a nested subproject when the project itself is reached through a link', () => {
+  v5it('still loads a nested subproject when the project itself is reached through a link', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-linked-root-'));
     fs.mkdirSync(path.join(base, 'real'));
     fs.symlinkSync(path.join(base, 'real'), path.join(base, 'alias'), 'junction');
@@ -262,7 +263,7 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     if (base) fs.rmSync(base, { recursive: true, force: true });
   });
 
-  it('keeps a nested mount issue in a validation scoped to the enclosing mount', () => {
+  v5it('keeps a nested mount issue in a validation scoped to the enclosing mount', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-nested-diag-'));
     const root = path.join(base, 'root');
     const billing = path.join(root, 'packages', 'billing');
@@ -290,7 +291,7 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     expect(absent.map((p) => [p.id, p.projects])).toEqual([['ledger', ['billing']]]);
   });
 
-  it('reports each mount a whole-tree walk cannot follow, and why', () => {
+  v5it('reports each mount a whole-tree walk cannot follow, and why', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-inspect-'));
     const root = path.join(base, 'root');
     const billing = path.join(root, 'packages', 'billing');
@@ -314,7 +315,7 @@ describe('nested mounts: qualified diagnostics and the chained-roots inspection'
     ]));
   });
 
-  it('reports a mount nested past the walk bound as too deep', () => {
+  v5it('reports a mount nested past the walk bound as too deep', () => {
     base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-deep-'));
     let dir = path.join(base, 'root');
     const ids: string[] = [];

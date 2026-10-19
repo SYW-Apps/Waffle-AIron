@@ -436,7 +436,7 @@ describe('DETAIL_BELOW_STEREOTYPE — explicit dial below a logic stereotype\'s 
 
   it('does not fire on stereotype-DEFAULTED gaps (a Portal defaulting to calls-only is fine)', () => {
     const proj = createTempProject();
-    proj.component('portal-a', 'Portal', 'portalType: Custom\ndependsOn: [orch-a]');
+    proj.component('portal-a', 'Portal', 'transport: Custom\ndependsOn: [orch-a]');
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
     proj.impl('orch-a', [

@@ -149,7 +149,7 @@ describe('designDepth gates expectation checks', () => {
   it('depth components also gates the L3 expectations (e.g. MISSING_ENDPOINT)', () => {
     const proj = createTempProject();
     proj.subsystem('sub-a');
-    proj.component('front-portal', 'sub-a', 'Portal', 'portalType: HTTP_API\ndependsOn: [orch-sub-a]');
+    proj.component('front-portal', 'sub-a', 'Portal', 'transport: HTTP\ndependsOn: [orch-sub-a]');
     proj.component('orch-sub-a', 'sub-a', 'Orchestrator');
     proj.contract('front-portal', ['handle']);
     proj.activate();
@@ -159,7 +159,7 @@ describe('designDepth gates expectation checks', () => {
 
     const deep = createTempProject();
     deep.subsystem('sub-a');
-    deep.component('front-portal', 'sub-a', 'Portal', 'portalType: HTTP_API\ndependsOn: [orch-sub-a]');
+    deep.component('front-portal', 'sub-a', 'Portal', 'transport: HTTP\ndependsOn: [orch-sub-a]');
     deep.component('orch-sub-a', 'sub-a', 'Orchestrator');
     deep.contract('front-portal', ['handle']);
     deep.activate();

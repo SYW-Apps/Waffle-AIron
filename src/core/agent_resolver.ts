@@ -291,8 +291,9 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  // Each member the bound root declares — `members` or a legacy L1 mount — is
-  // one delegating owner here, shaped as the mount subsystem it used to be.
+  // Each member the bound root declares — `members` (or, in the v5 reading only,
+  // a legacy L1 mount) — is one delegating owner here, shaped as the mount
+  // subsystem it used to be.
   const members = graph().nodes
     .filter((n) => n.parent === '' && n.mountAlias !== undefined)
     .map((n) => ({

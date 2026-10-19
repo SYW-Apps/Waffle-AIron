@@ -44,29 +44,6 @@ methods:
       - name: fix
         type: bool
         description: Resolve, or only report
-  - name: matchPositions
-    description: >-
-      The positional match (routed to position_reader.match): for each unresolved reference, the
-      explicit form that replaces the retired position-based reading — the same answer the chaining
-      migration's positional step writes from, so the upgrade report (verdict_changes) explains
-      exactly what `doctor --fix` would write. Pure; writes nothing.
-    signature: >-
-      matchPositions(unresolved: list<AuthoredReference>, family: ProjectFamily, tables:
-      list<ResolvedExportTable>, types: list<TypeSpec>): list<PositionalMatch>
-    returns: list<PositionalMatch>
-    params:
-      - name: unresolved
-        type: list<AuthoredReference>
-        description: The references to read, from the family top's scan
-      - name: family
-        type: ProjectFamily
-        description: The family top's graph
-      - name: tables
-        type: list<ResolvedExportTable>
-        description: Every project's resolved L0 export table
-      - name: types
-        type: list<TypeSpec>
-        description: Every type the family top's scan loaded
   - name: rehearse
     description: >-
       Route to the family transaction: open a rehearsal over a scope. Published for the hosted
@@ -121,4 +98,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-30T20:36:31.021Z'
-updatedAt: '2026-10-06T18:55:12.466Z'
+updatedAt: '2026-10-18T19:05:49.265Z'

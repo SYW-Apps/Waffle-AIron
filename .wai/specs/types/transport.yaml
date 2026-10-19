@@ -7,7 +7,8 @@ description: >-
   gRPC, GraphQL, MessageBus, Custom) crosses a network, takes scoped entries and produces flows. A
   local transport (CLI, IPC, NamedPipe, JSONRPC) stays on one host and produces no flows. InProcess
   is a library call: no endpoint, no flow, and the callable surface of a library, FFI or DLL. The
-  loader reads the retired portalType spelling HTTP_API as HTTP until the next major release.
+  loader reads the retired portalType spelling HTTP_API as HTTP in the v5 reading `wairon upgrade`
+  binds.
 fields: []
 methods:
   - name: kind
@@ -67,4 +68,4 @@ values:
   - name: Custom
     description: Any other wire, bound by a free-form address. Treated as a network transport
 createdAt: '2026-10-04T23:11:57.694Z'
-updatedAt: '2026-10-18T00:38:12.108Z'
+updatedAt: '2026-10-18T19:09:11.477Z'

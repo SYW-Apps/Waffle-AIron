@@ -132,8 +132,9 @@ describe('UNDECLARED_DEPENDENCY_CALL — surface-resolved cross-tree targets', (
 
   it('judges no dependency on a cross-tree target no surface covers, as for a local target that does not resolve', () => {
     const run = clientRun([], [HUB_CALL, RELAY_DISPATCH], {});
-    // Nothing to judge it against: unavailable, never a pass (stage 4 retired the cross-tree warning).
-    expect(run.issues.map(i => i.code)).toContain('EXTERNAL_CHECK_UNAVAILABLE');
+    // `super::` is a wairon 5 form that does not bind outside the v5 reading: reported as such, never a pass.
+    const refused = run.issues.filter(i => i.code === 'EXTERNAL_UNDECLARED');
+    expect(refused.map(i => i.message).join('\n')).toContain('is a wairon 5 reference form');
     expect(undeclared(run)).toEqual([]);
   });
 });

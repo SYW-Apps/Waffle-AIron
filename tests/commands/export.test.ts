@@ -51,7 +51,7 @@ function buildProject(root: string): void {
   });
   saveComponentSpec({
     id: 'tiny-portal', name: 'Tiny Portal', description: 'serves', subsystem: 'core-sub', componentType: 'Portal',
-    portalType: 'CLI', owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now,
+    transport: 'CLI', owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now,
   } as ComponentSpec);
   saveInterfaceSpec({
     id: 'itiny-portal', name: 'ITinyPortal', description: 'contract', component: 'tiny-portal', status: 'complete',

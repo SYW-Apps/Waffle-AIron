@@ -38,13 +38,15 @@ export class YamlSyntaxError extends WaironError {
  * never read as no approval — that turned a truncated merge into "nothing is
  * gated" — so every reader fails closed on it, with one line naming the file,
  * what is wrong, and the two ways out. A WaironError: every command prints it
- * as one `✖` line and exits non-zero.
+ * as one `✖` line and exits non-zero. A record an older major wrote (format 1
+ * or 2) is read only in the v5 reading `wairon upgrade` binds; anywhere else it
+ * is refused with `remedy` naming the upgrade instead of the two ways out.
  */
 export class LockRecordUnreadableError extends WaironError {
-  constructor(readonly file: string, readonly reason: string) {
+  constructor(readonly file: string, readonly reason: string, remedy?: string) {
     super(`${file} cannot be read as an approval record: ${reason}. The approval cannot be judged, so nothing is passed on it. `
-      + `Restore it from version control (\`git checkout -- ${file}\`), or — to approve the design afresh — delete it and run \`wairon lock\`; `
-      + 'wairon never overwrites a record it cannot read.');
+      + (remedy ?? `Restore it from version control (\`git checkout -- ${file}\`), or — to approve the design afresh — delete it and run \`wairon lock\`; `
+        + 'wairon never overwrites a record it cannot read.'));
     this.name = 'LockRecordUnreadableError';
   }
 }
@@ -89,18 +91,6 @@ export class BundleNotFoundError extends WaironError {
   constructor(id: string) {
     super(`Bundle not found: "${id}"`);
     this.name = 'BundleNotFoundError';
-  }
-}
-
-/**
- * Thrown by `wairon doctor` for flags that do not combine: `--report` prints a
- * plan and writes nothing, so it never goes with `--fix`, and `chaining` is the
- * one section it knows.
- */
-export class DoctorOptionsError extends WaironError {
-  constructor(detail: string) {
-    super(`wairon doctor: ${detail}`);
-    this.name = 'DoctorOptionsError';
   }
 }
 

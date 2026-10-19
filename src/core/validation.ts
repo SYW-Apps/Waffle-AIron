@@ -121,7 +121,7 @@ import {
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { getProjectRoot, pathExists, readsV5Forms } from '../utils/fs.js';
 import { aiPathsAt } from '../config/paths.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
@@ -1384,6 +1384,8 @@ export function computeGateStateId(): StateId {
   // decides whether it IS the previous algorithm.
   const record = approvalRecord(getProjectRoot());
   if (!record?.stateId || record.stateId.algorithm === current.algorithm) return current;
+  // A record under another algorithm was written by wairon 5: judged as it was taken in the v5 reading only.
+  if (!readsV5Forms()) return current;
   const asRecorded = computeGateIdentity(computeOwnStateId(), extensions, builtin, inputs, gate, members);
   if (record.stateId.algorithm === asRecorded.algorithm) return { ...current, asRecorded };
   // Steps 18-21: a lock taken in the earlier design reading (status still in

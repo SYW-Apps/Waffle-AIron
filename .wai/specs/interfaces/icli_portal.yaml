@@ -83,14 +83,6 @@ methods:
     endpoint:
       transport: CLI
       command: wairon pack <action>
-  - name: packs
-    description: >-
-      `wairon packs <action>`: the deprecated alias of `wairon pack` (add | list | remove); the
-      portal prints the deprecation notice before dispatching.
-    signatureFrom: cli_runner.runPacks
-    endpoint:
-      transport: CLI
-      command: wairon packs <action>
   - name: patternsList
     description: '`wairon patterns list`: the pattern definitions loaded packs declare.'
     signatureFrom: cli_runner.runPatterns
@@ -486,4 +478,4 @@ methods:
       command: wairon whatsnew [version]
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-18T14:28:37.838Z'
+updatedAt: '2026-10-18T19:04:11.135Z'

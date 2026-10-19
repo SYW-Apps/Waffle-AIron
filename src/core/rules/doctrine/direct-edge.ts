@@ -63,7 +63,6 @@ function lookupsOf(ctx: RuleContext): Map<string, string[]> {
 export function directEdgeRefusals(ctx: RuleContext, caller: ComponentSpec, target: ComponentSpec, method?: string): string[] {
   if (caller.id === target.id) return ['SELF_EDGE'];
   const edge = resolvedEdge(ctx, caller, target.id, target);
-  if (edge.retired) return ['RETIRED_STEREOTYPE'];
 
   const codes: string[] = [];
   if (edge.reach === 'library') {

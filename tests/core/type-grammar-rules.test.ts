@@ -101,8 +101,8 @@ describe('source_file_facts.dialect', () => {
   });
 });
 
-describe('loaded_extensions.deprecations', () => {
-  it('merges a language without its deprecated foreignBuiltins and records the deprecation', () => {
+describe('loaded_extensions: the removed foreignBuiltins field', () => {
+  it('fails the pack load with an error naming the removed field', () => {
     const dir = mkTemp();
     try {
       const packDir = path.join(dir, 'packs', 'plant-floor');
@@ -118,22 +118,22 @@ describe('loaded_extensions.deprecations', () => {
         '',
       ].join('\n'));
       const loaded = loadExtensions(['./packs/plant-floor'], dir);
-      expect(loaded.errors).toEqual([]);
-      expect(loaded.languages['structured-text']).toEqual({ unsupportedFlow: { try: 'return a status word instead' } });
-      expect(loaded.deprecations).toHaveLength(1);
-      expect(loaded.deprecations[0]).toContain('plant-floor: languages.structured-text.foreignBuiltins');
+      expect(loaded.errors).toHaveLength(1);
+      expect(loaded.errors[0]).toContain('foreignBuiltins');
+      expect(loaded.errors[0]).toContain('was removed');
+      expect(loaded.languages['structured-text']).toBeUndefined();
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('records nothing for a pack that does not declare it', () => {
+  it('loads a pack that does not declare it', () => {
     const dir = mkTemp();
     try {
       const packDir = path.join(dir, 'packs', 'plant-floor');
       fs.mkdirSync(packDir, { recursive: true });
       fs.writeFileSync(path.join(packDir, 'pack.yaml'), 'name: plant-floor\nversion: 1.0.0\nlanguages:\n  structured-text:\n    unsupportedFlow: {}\n');
-      expect(loadExtensions(['./packs/plant-floor'], dir).deprecations).toEqual([]);
+      expect(loadExtensions(['./packs/plant-floor'], dir).errors).toEqual([]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

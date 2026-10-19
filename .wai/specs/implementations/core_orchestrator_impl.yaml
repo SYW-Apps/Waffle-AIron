@@ -870,11 +870,11 @@ methods:
         description: >-
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
-          root's configuration) and, until the next major release, the subsystem specs of its own
-          tree carrying a projectPath; a `members` entry wins over a legacy mount under the same
-          alias. A PART (stage 8: a contained member whose folder holds no id, no L0 and no lock) is
-          no chained project — its subsystems are this root's own, generated, briefed and backfilled
-          with it — so it is not listed
+          root's configuration) and, in the v5 reading `wairon upgrade` binds, the subsystem specs
+          of its own tree carrying a projectPath; a `members` entry wins over a legacy mount under
+          the same alias. A PART (stage 8: a contained member whose folder holds no id, no L0 and no
+          lock) is no chained project — its subsystems are this root's own, generated, briefed and
+          backfilled with it — so it is not listed
         type: local
       - stepNumber: 3
         description: Walk the member declarations
@@ -961,9 +961,7 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadComponentSpecs
       - stepNumber: 2
-        description: >-
-          Collect the Specialists, each unclassified. Gateways are not migrated here:
-          STEREOTYPE_RETIRED gives their manual steps
+        description: Collect the Specialists, each unclassified. Gateways are retireGateways' to merge
         type: local
       - stepNumber: 3
         description: Classify over the dependency graph in passes, until a pass classifies nothing
@@ -2102,9 +2100,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk the members recursively from the root — each project's `members` entries and, until
-          the next major release, its legacy L1 mounts — and keep each directory that holds a spec
-          tree but no project configuration
+          Walk the members recursively from the root — each project's `members` entries and, in the
+          v5 reading `wairon upgrade` binds, its legacy L1 mounts — and keep each directory that
+          holds a spec tree but no project configuration
         type: local
       - stepNumber: 2
         description: Return the directories
@@ -3774,6 +3772,95 @@ methods:
       - stepNumber: 1
         description: Remove the copy's folder and everything in it
         type: local
+  - name: retireGateways
+    sourcePath: src/core/stereotype-migration.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every component spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Collect the Gateways, and the narrative call steps of every other spec that target one of
+          them
+        type: local
+      - stepNumber: 3
+        description: Judge each Gateway
+        type: loop
+        loopKind: forEach
+        over: each Gateway
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Can it be merged? It owns exactly one Portal, and no other spec's narrative calls a method
+          of its own
+        type: branch
+        condition: the Gateway owns exactly one Portal and no other narrative calls it
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Plan the merge: the Portal takes the gateway variant; the other owned members become the
+          Portal's dependencies; each consumer's dependency on the Gateway names the Portal; each L1
+          or L0 export naming the Gateway names the Portal
+        type: local
+      - stepNumber: 6
+        description: Planned
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: refuse
+        description: >-
+          Refuse it, naming why (no Portal owned, more than one, or the callers of its own methods)
+          and the hand steps
+        type: local
+      - stepNumber: 8
+        label: next
+        description: On to the next Gateway
+        type: local
+      - stepNumber: 9
+        description: Without apply, nothing is written
+        type: branch
+        condition: apply is false
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Return the plan with applied false
+        type: return
+        outcome: planned
+      - stepNumber: 11
+        label: write
+        description: Write each merge
+        type: loop
+        loopKind: forEach
+        over: each planned merge
+        endStep: 14
+      - stepNumber: 12
+        description: >-
+          Save the Portal with the gateway variant and its new dependencies, and each consumer with
+          its retargeted dependency
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 13
+        description: Save each L1 subsystem or L0 whose export entry now names the Portal
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 14
+        label: deleted
+        description: Delete the Gateway's spec, its contract and its implementation
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
+      - stepNumber: 15
+        description: Invalidate the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 16
+        description: Return the plan with applied true
+        type: return
+        outcome: applied
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T00:37:24.820Z'
+updatedAt: '2026-10-18T19:11:33.677Z'

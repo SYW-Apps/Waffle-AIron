@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as crypto from 'crypto';
@@ -11,7 +12,7 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { surfaceRepository } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { validateProject, validateFamily, validateAsComplete, computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
-import { ChainingMigrationRefusedError, DoctorOptionsError } from '../../src/utils/errors.js';
+import { ChainingMigrationRefusedError } from '../../src/utils/errors.js';
 import { plan, isEmpty, blocked } from '../../src/migrations/chaining-migration.js';
 import { apply } from '../helpers/chaining-transaction.js';
 import { runDoctor } from '../../src/commands/doctor.js';
@@ -199,11 +200,6 @@ describe('stage 2c — the chaining migration', () => {
     const f = family();
     const before = chainingState(f.root);
     at(f.dispatch, () => plan());
-    expect(chainingState(f.root)).toEqual(before);
-    // The migration moved to `wairon upgrade`: doctor's one report section is composed-validation,
-    // so the `chaining` section is refused, alone or with --fix, and writes nothing.
-    await expect(runDoctor({ report: 'chaining' })).rejects.toThrow(DoctorOptionsError);
-    await expect(runDoctor({ report: 'composed-validation', fix: true })).rejects.toThrow(DoctorOptionsError);
     expect(chainingState(f.root)).toEqual(before);
     // --fix on a tree this release did not stamp is skipped, and the chaining migration is not among its repairs.
     const unconfirmed = await doctorCli(f.root, '--fix', '--yes');

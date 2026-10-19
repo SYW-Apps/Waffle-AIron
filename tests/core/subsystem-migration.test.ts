@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -342,9 +343,7 @@ function verdict(at: string): ValidationResult {
 /** Findings on whether a reference resolves, and on the edge it resolves to, as `CODE @specId` with `strip` removed. */
 function referenceFindings(res: ValidationResult, strip = ''): string[] {
   return res.issues
-    // A deprecated FORM is a notice about how a reference is written, not
-    // whether it resolves: the fixture's root-anchored `::` id is one on purpose.
-    .filter((i) => /REFERENCE|UNRESOLVED|ENTRYPOINT|DISPATCH|CAPABILITY|CROSS_SUBSYSTEM/.test(i.code) && i.code !== 'DEPRECATED_REFERENCE_FORM')
+    .filter((i) => /REFERENCE|UNRESOLVED|ENTRYPOINT|DISPATCH|CAPABILITY|CROSS_SUBSYSTEM/.test(i.code))
     .map((i) => `${i.code} @${strip && i.specId?.startsWith(strip) ? i.specId.slice(strip.length) : i.specId}`)
     .sort();
 }

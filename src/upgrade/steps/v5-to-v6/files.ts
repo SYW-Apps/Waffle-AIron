@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseYaml } from '../../../utils/yaml.js';
+import type { LockRecord } from '../../../core/index.js';
 
 // ---------------------------------------------------------------------------
 // v5_tree_file_adapter — raw file reads and moves over a v5 project tree.
@@ -122,4 +123,30 @@ export function moveLegacyFolder(root: string): void {
 export function renameSpecFile(from: string, to: string): void {
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.renameSync(from, to);
+}
+
+/**
+ * iv5_tree_file_adapter.keepStaleRecord — a lock record wairon 5 wrote that
+ * nothing proves unchanged, kept on record in the current format: who approved
+ * it, when, and the identity it certified are unchanged (so it reads stale), its
+ * per-spec digests are dropped (they are of another reading; the verdict then
+ * says the record cannot name which specs moved), and `reexpressed` says what it
+ * was. wairon 6 reads no earlier format, so without this the upgraded project
+ * would hold an approval nothing can read; one `wairon lock` approves the design
+ * again. Null when the root holds no record, or one already in the current format.
+ */
+export function keepStaleRecord(root: string): LockRecord | null {
+  const dir = configDir(root);
+  const file = dir ? path.join(dir, 'lock.json') : null;
+  if (!file || !fs.existsSync(file)) return null;
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) as Record<string, unknown> & { stateId: { algorithm: string } };
+  if (raw.format === 3) return null;
+  const { specs: _specs, children: _children, specsReading: _reading, format: _format, ...kept } = raw;
+  const lockedBy = typeof raw.lockedBy === 'string' ? { id: raw.lockedBy, source: 'legacy' } : raw.lockedBy;
+  return {
+    ...kept,
+    lockedBy,
+    format: 3,
+    reexpressed: { at: new Date().toISOString(), fromAlgorithm: raw.stateId.algorithm, fromReading: 'content', by: 'wairon upgrade' },
+  } as unknown as LockRecord;
 }

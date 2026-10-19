@@ -162,7 +162,7 @@ export default [
         {
           id: 'payment-events-portal',
           componentType: 'Portal',
-          portalType: 'MessageBus',
+          transport: 'MessageBus',
           description: 'Publishes payment lifecycle events onto the bus.',
         },
         {

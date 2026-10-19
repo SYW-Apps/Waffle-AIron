@@ -6,6 +6,7 @@ import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
 import { createUnit } from '../../src/server/organization.js';
 import { createProject } from '../../src/server/admin.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import type {
   ApiKeyRecord,
   Capability,
@@ -117,6 +118,16 @@ export function seedChainedMount(root: string, subsystemId: string, projectPath:
   return childDir;
 }
 
+/** Seed a chained member project: `alias` declared in the tree's project.yaml `members`
+ *  at `projectPath`, plus the real child dir (with its own .wai/specs) inside the root —
+ *  the wairon 6 form of seedChainedMount. Returns the resolved child dir. */
+export function seedChainedMember(root: string, alias: string, projectPath: string): string {
+  projectConfigRepositoryAt(root).declareMember(alias, { source: projectPath });
+  const childDir = path.resolve(root, projectPath);
+  fs.mkdirSync(path.join(childDir, '.wai', 'specs'), { recursive: true });
+  return childDir;
+}
+
 /** Create a project through the admin plane (master credential) placed into a
  *  fresh unit; returns the unit so tests can scope assignments to it. */
 export function createPlacedProject(
@@ -163,7 +174,8 @@ export interface SeededExport {
   methods?: SeededMethod[];
 }
 
-const PORTAL_TYPE_OF: Record<string, string> = { REST: 'HTTP_API', GraphQL: 'GraphQL', RPC: 'gRPC', MessageBus: 'MessageBus', Custom: 'Custom' };
+/** The transport of the Portal behind a seeded export of each kind. */
+const PORTAL_TYPE_OF: Record<string, string> = { REST: 'HTTP', GraphQL: 'GraphQL', RPC: 'gRPC', MessageBus: 'MessageBus', Custom: 'Custom' };
 
 function writeSpecYaml(file: string, body: Record<string, unknown>): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -174,18 +186,18 @@ function writeSpecYaml(file: string, body: Record<string, unknown>): void {
 export function seedExportedSurface(root: string, exports: SeededExport[]): void {
   const specs = path.join(root, '.wai', 'specs');
   const now = new Date().toISOString();
-  const published = new Map<string, { type: string; details: string; component: string; interface?: string }[]>();
+  const published = new Map<string, { details: string; component: string; interface?: string }[]>();
   const l0 = exports.map((e) => {
     const subsystem = e.subsystem ?? 'api';
     const component = e.component ?? `${e.id.replace(/[^a-z0-9]+/g, '_')}_portal`;
     const contract = e.interface ?? `i${component}`;
     const type = e.type ?? 'REST';
     const list = published.get(subsystem) ?? [];
-    list.push({ type, details: e.details ?? 'd', component, ...(e.interface ? { interface: e.interface } : {}) });
+    list.push({ details: e.details ?? 'd', component, ...(e.interface ? { interface: e.interface } : {}) });
     published.set(subsystem, list);
     writeSpecYaml(path.join(specs, 'components', `${component}.yaml`), {
       id: component, name: component, description: `Serves ${e.id}.`, subsystem, componentType: 'Portal',
-      portalType: PORTAL_TYPE_OF[type], owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now,
+      transport: PORTAL_TYPE_OF[type], owns: [], dependsOn: [], status: 'complete', createdAt: now, updatedAt: now,
     });
     writeSpecYaml(path.join(specs, 'interfaces', `${contract}.yaml`), {
       id: contract, name: contract, description: `Contract of ${e.id}.`, component, status: 'complete', createdAt: now, updatedAt: now,
@@ -199,8 +211,8 @@ export function seedExportedSurface(root: string, exports: SeededExport[]): void
       })),
     });
     return {
-      id: e.id, ...(e.name ? { name: e.name } : {}), subsystem, component, ...(e.interface ? { interface: e.interface } : {}),
-      type, ...(e.audience ? { audience: e.audience } : {}), ...(e.version ? { version: e.version } : {}),
+      as: e.id, ...(e.name ? { name: e.name } : {}), from: subsystem, component, ...(e.interface ? { interface: e.interface } : {}),
+      ...(e.audience ? { audience: e.audience } : {}), ...(e.version ? { version: e.version } : {}),
       ...(e.stability ? { stability: e.stability } : {}), details: e.details ?? 'd',
     };
   });

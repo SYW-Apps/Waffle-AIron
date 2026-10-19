@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -425,7 +426,7 @@ describe('project config index', () => {
     expect(projectConfigRepositoryAt(root).specsDir()).toBe(path.join(path.resolve(root), '.wai', 'specs'));
   });
 
-  it('reads and writes a legacy .wairon configuration', () => {
+  v5it('reads and writes a legacy .wairon configuration', () => {
     const root = tempRoot();
     writeDoc(root, minimal(), '.wairon');
     const repo = projectConfigRepositoryAt(root);

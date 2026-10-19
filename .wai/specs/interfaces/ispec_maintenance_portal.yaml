@@ -397,6 +397,11 @@ methods:
         type: bool
         description: Answer what the rename would do, and write nothing
         optional: true
+  - name: retireGateways
+    description: >-
+      Forward to core_orchestrator.retireGateways: plan, and with apply write, the migration off the
+      retired Gateway stereotype
+    signatureFrom: core_orchestrator.retireGateways
 status: complete
 createdAt: '2026-09-25T17:33:03.747Z'
-updatedAt: '2026-10-09T17:03:26.317Z'
+updatedAt: '2026-10-18T19:11:04.417Z'

@@ -179,15 +179,6 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('--report knows composed-validation only: chaining and reachability are refused, and it never combines with --fix', async () => {
-    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-report-flags-'));
-    buildProject(rootDir);
-    process.chdir(rootDir);
-    await expect(runDoctor({ report: 'chaining' })).rejects.toThrow(/composed-validation/);
-    await expect(runDoctor({ report: 'reachability' })).rejects.toThrow(/composed-validation/);
-    await expect(runDoctor({ report: 'composed-validation', fix: true })).rejects.toThrow(/never combines with --fix/);
-  });
-
   it('the Project check reports "not a wairon project" through the CLI core adapter, for a folder with no configuration', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-uninit-'));
     fs.mkdirSync(rootDir, { recursive: true });

@@ -86,8 +86,8 @@ describe('web OpenAPI viewer — per-portal selection (sdd_host)', () => {
         boundaries: [],
         globalRequirements: [],
         publicInterfaces: [
-          { id: 'public-api', name: 'Public API', subsystem: 'core', component: 'public-portal', type: 'REST', details: 'public', audience: 'external' },
-          { id: 'internal-api', name: 'Internal API', subsystem: 'core', component: 'internal-portal', type: 'REST', details: 'peer', audience: 'external' },
+          { as: 'public-api', name: 'Public API', from: 'core', component: 'public-portal', details: 'public', audience: 'external' },
+          { as: 'internal-api', name: 'Internal API', from: 'core', component: 'internal-portal', details: 'peer', audience: 'external' },
         ],
         createdAt: now,
         updatedAt: now,
@@ -95,16 +95,16 @@ describe('web OpenAPI viewer — per-portal selection (sdd_host)', () => {
       saveSpec('subsystem', {
         id: 'core', name: 'Core', description: 'core', parentSystem: 'ApiSys',
         publicInterfaces: [
-          { type: 'REST', details: 'public', component: 'public-portal' },
-          { type: 'REST', details: 'peer', component: 'internal-portal' },
+          { details: 'public', component: 'public-portal' },
+          { details: 'peer', component: 'internal-portal' },
         ],
         createdAt: now, updatedAt: now,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      saveComponentSpec(component('public-portal', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>) as any);
+      saveComponentSpec(component('public-portal', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>) as any);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      saveComponentSpec(component('internal-portal', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>) as any);
+      saveComponentSpec(component('internal-portal', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>) as any);
       saveInterfaceSpec(iface('ipublic-portal', 'public-portal', [
         { name: 'getThing', description: 'reads', signature: 'getThing(): string', returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/things' } },
       ]));

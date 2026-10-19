@@ -6,8 +6,7 @@
  *    MEMBER_KIND_MISMATCH — what a member's content makes it (an id, an L0 or
  *    a lock: a project; else a part) contradicts what is declared or written
  *    about it; PART_UNAVAILABLE — a part whose files could not be read, so the
- *    project's own subsystems are missing; DEPRECATED_MOUNT_FORM in its stage-8
- *    shape — a member declared with the long-form `path` key.
+ *    project's own subsystems are missing.
  *
  * PART_UNPINNED and PART_JUDGED_ALONE are the owner's gate's own findings at a
  * part opened alone (validateProject), not a rule's: no rule declares them, so
@@ -100,25 +99,6 @@ export default [
     reason: 'The part\'s folder is there, so its subsystem is read into the clinic.',
     scenario: 'The clinic declares its scheduling part at services/scheduling, and the folder holds the scheduling subsystem.',
     tree: clinic({ source: 'services/scheduling', as: 'part' }),
-  }),
-
-  // -------------------------------------------------------------------------
-  // DEPRECATED_MOUNT_FORM — the stage-8 long-form `path`
-  // -------------------------------------------------------------------------
-  defineRuleFixture({
-    code: 'DEPRECATED_MOUNT_FORM',
-    severity: 'notice',
-    anchoredTo: null,
-    expectFire: true,
-    scenario: 'The clinic still declares `scheduling: { path: services/scheduling, description: ... }` — the pre-stage-8 long-form key that `source` replaced.',
-    tree: clinic({ path: 'services/scheduling', description: 'Books appointments' }),
-  }),
-  defineRuleFixture({
-    code: 'DEPRECATED_MOUNT_FORM',
-    expectFire: false,
-    reason: 'The long form names its location with the one key, `source`.',
-    scenario: 'The clinic declares `scheduling: { source: services/scheduling, description: ... }`.',
-    tree: clinic({ source: 'services/scheduling', description: 'Books appointments' }),
   }),
 
 ];

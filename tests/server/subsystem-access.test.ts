@@ -499,7 +499,7 @@ describe('relation health on the HTML canvas and the admin diagrams', () => {
   /** platform's gate consumes billing's exported portal: a consumption edge into a contained member. */
   function platformConsumesBilling(): void {
     system(fam.billing, 'billing', [{ from: 'ops', component: 'billing-portal', audience: 'project' }]);
-    subsystem(fam.billing, 'billing', 'ops', { publicInterfaces: [{ type: 'Custom', details: 'Billing', component: 'billing-portal' }] });
+    subsystem(fam.billing, 'billing', 'ops', { publicInterfaces: [{ details: 'Billing', component: 'billing-portal' }] });
     component(fam.billing, 'ops', 'billing-portal', 'Portal');
     system(fam.platform, 'platform');
     subsystem(fam.platform, 'platform', 'core');

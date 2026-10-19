@@ -83,7 +83,7 @@ export default [
         {
           id: 'telemetry-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic telemetry portal dispatching capabilities inward.',
           dependsOn: ['metrics-flusher'],
           dispatch: [
@@ -133,7 +133,7 @@ export default [
         {
           id: 'device-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic device portal dispatching capabilities inward.',
           dependsOn: ['shadow-reader', 'state-projector'],
           dispatch: [
@@ -170,7 +170,7 @@ export default [
         {
           id: 'device-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic device portal dispatching capabilities inward.',
           dependsOn: ['shadow-reader', 'state-projector'],
           dispatch: [
@@ -212,7 +212,7 @@ export default [
         {
           id: 'firmware-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic firmware portal dispatching rollout capabilities inward.',
           dependsOn: ['firmware-updater'],
           dispatch: [
@@ -243,7 +243,7 @@ export default [
         {
           id: 'firmware-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic firmware portal dispatching rollout capabilities inward.',
           dependsOn: ['firmware-updater'],
           dispatch: [
@@ -305,7 +305,7 @@ export default [
         {
           id: 'firmware-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic firmware portal dispatching rollout capabilities inward.',
           dependsOn: ['firmware-updater'],
           dispatch: [
@@ -374,7 +374,7 @@ export default [
         {
           id: 'device-gateway-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'device-gateway',
           description: 'Generic gateway portal dispatching device capabilities.',
           dependsOn: ['fleet-report-builder'],
@@ -414,7 +414,7 @@ export default [
         {
           id: 'device-gateway-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'device-gateway',
           description: 'Generic gateway portal dispatching device capabilities.',
           dependsOn: ['fleet-report-builder'],
@@ -456,7 +456,7 @@ export default [
         {
           id: 'support-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic support portal dispatching ticket capabilities inward.',
           dependsOn: [],
           dispatch: [
@@ -486,7 +486,7 @@ export default [
         {
           id: 'support-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic support portal dispatching ticket capabilities inward.',
           dependsOn: ['ticket-classifier'],
           dispatch: [
@@ -521,7 +521,7 @@ export default [
         {
           id: 'command-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic command portal dispatching operator capabilities inward.',
           dependsOn: ['command-executor'],
           dispatch: [
@@ -581,7 +581,7 @@ export default [
         {
           id: 'command-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic command portal dispatching operator capabilities inward.',
           dependsOn: ['command-executor'],
           dispatch: [
@@ -647,7 +647,7 @@ export default [
         {
           id: 'payments-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic payments portal dispatching capture capabilities inward.',
           dependsOn: ['charge-executor'],
           dispatch: [
@@ -710,7 +710,7 @@ export default [
         {
           id: 'payments-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic payments portal dispatching capture capabilities inward.',
           dependsOn: ['charge-executor'],
           dispatch: [
@@ -772,7 +772,7 @@ export default [
         {
           id: 'payments-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Generic payments portal dispatching capture capabilities inward.',
           dependsOn: ['charge-executor'],
           dispatch: [

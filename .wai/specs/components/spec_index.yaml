@@ -5,25 +5,30 @@ description: >-
   across flat and per-subsystem layouts, reads documents through the file store, and parses them
   against the level schemas — collecting loader issues instead of throwing on a bad file. Its
   per-root scan reads the bound root and every member it declares (a `members` entry of its
-  project.yaml, or a legacy L1 mount until the next major release), each once, keyed by the member's
-  project id at every depth, and puts every root's specs in the index under that key without folding
-  any of them into another's namespace. It binds references without position, in two passes: first
-  every root is parsed, its declarations keyed and its local references (no `::`) bound inside it —
-  a contract method's signatureFrom among them, its head bound as a component when it names one and
-  kept as a type reference otherwise; then each root's export tables are resolved through the pure
-  export resolver, in dependency order, and every `alias::name` is bound through the referring
-  root's alias table to a public name of the producer's resolved L0 table — the deprecated leading
-  `::`, `super::` and member-path forms still binding until the next major release, each recorded
-  with its form and rewrite. Last, once every reference of the family is bound, it hands the whole
-  index to the pure signature resolver: every method that takes its signature from a source is read
-  with the source's params and returns, every params-bearing method shows its derived signature
-  text, and what resolving found is kept on the index as its signature facts. It records per root
-  what the graph, the export tables and the writer need (key, alias table, legacy mount, L0,
-  configuration, tables, spec keys, authored references). The scan is a cache the index keeps fresh
-  itself: every spec write drops it, a cached scan is re-verified against the tree's file signature
-  — which covers each root's .wai/project.yaml too — at most once per short TTL, and a root switch
-  re-verifies it on the first read regardless of the TTL, so no caller has to invalidate it to read
-  a tree as it is now.
+  project.yaml, or a legacy L1 mount in the v5 reading `wairon upgrade` binds), each once, keyed by
+  the member's project id at every depth, and puts every root's specs in the index under that key
+  without folding any of them into another's namespace. It binds references without position, in two
+  passes: first every root is parsed, its declarations keyed and its local references (no `::`)
+  bound inside it — a contract method's signatureFrom among them, its head bound as a component when
+  it names one and kept as a type reference otherwise; then each root's export tables are resolved
+  through the pure export resolver, in dependency order, and every `alias::name` is bound through
+  the referring root's alias table to a public name of the producer's resolved L0 table — the
+  deprecated leading `::`, `super::` and member-path forms still binding in the v5 reading `wairon
+  upgrade` binds, each recorded with its form and rewrite. Last, once every reference of the family
+  is bound, it hands the whole index to the pure signature resolver: every method that takes its
+  signature from a source is read with the source's params and returns, every params-bearing method
+  shows its derived signature text, and what resolving found is kept on the index as its signature
+  facts. It records per root what the graph, the export tables and the writer need (key, alias
+  table, legacy mount, L0, configuration, tables, spec keys, authored references). The scan is a
+  cache the index keeps fresh itself: every spec write drops it, a cached scan is re-verified
+  against the tree's file signature — which covers each root's .wai/project.yaml too — at most once
+  per short TTL, and a root switch re-verifies it on the first read regardless of the TTL, so no
+  caller has to invalidate it to read a tree as it is now. The index reads only the current major's
+  forms. The forms wairon 5 wrote (a legacy L1 mount, the deprecated reference forms, a member's
+  long-form path, the retired reach forms and stereotypes, the older lock formats, a .wairon folder)
+  are read only in the v5 reading `wairon upgrade` binds around its rehearsal; anywhere else a spec
+  holding one is refused as a load error that names the form and what replaces it, never read
+  silently.
 subsystem: sdd_core
 componentType: Index
 owns: []
@@ -34,4 +39,4 @@ dependsOn:
   - signature_resolver
 status: complete
 createdAt: '2026-07-18T22:57:53.159Z'
-updatedAt: '2026-10-18T00:36:03.345Z'
+updatedAt: '2026-10-18T19:11:52.936Z'

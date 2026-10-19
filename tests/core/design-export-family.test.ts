@@ -6,6 +6,7 @@
  * and a component carries its transport, Portal-level entry, patterns and external links.
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -43,7 +44,7 @@ function patch(file: string, mutate: (raw: any) => void): void {
 }
 
 describe('the design export across project boundaries', () => {
-  it('lists in-tree subdirectory members and a legacy mount as member dependencies, with the names the project uses', () => {
+  v5it('lists in-tree subdirectory members and a legacy mount as member dependencies, with the names the project uses', () => {
     family = buildReferenceFamily();
     const d = exportAt(family.top);
     expect(DesignExportSchema.parse(d)).toBeTruthy();

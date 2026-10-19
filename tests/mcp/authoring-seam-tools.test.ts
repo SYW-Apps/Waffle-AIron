@@ -146,14 +146,14 @@ describe('sdd_set_endpoints — one gated delta, answered with the change report
     expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'CLI', command: 'shop pay' });
   });
 
-  it('reads the retired HTTP_API spelling of a transport as HTTP', async () => {
+  it('refuses the removed HTTP_API spelling, naming it, and writes nothing', async () => {
     const { call } = await bound();
     await seed(call);
     const result = await call('sdd_set_endpoints', { interface: 'ishop_portal', endpoints: [{ method: 'pay', transport: 'HTTP_API', httpMethod: 'POST', path: '/pay' }] });
-    expect(result.isError ?? false, textOf(result)).toBe(false);
-    expect(textOf(result)).toContain('pay→HTTP');
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('HTTP_API');
     invalidateSpecCache();
-    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toEqual({ transport: 'HTTP', method: 'POST', path: '/pay' });
+    expect(loadInterfaceSpec('ishop_portal')?.methods.find(m => m.name === 'pay')?.endpoint).toBeUndefined();
   });
 
   it('binds a JSONRPC verb by its method name', async () => {
@@ -219,7 +219,7 @@ describe('sdd_set_endpoints — one gated delta, answered with the change report
 });
 
 describe('sdd_set_public_interfaces — a replacement through one gated delta', () => {
-  const entry = (component: string, details = `/${component}`) => ({ type: 'REST', details, component });
+  const entry = (component: string, details = `/${component}`) => ({ details, component });
 
   it('removes an entry the new list leaves out, and reports the change', async () => {
     const { call } = await bound();
@@ -231,7 +231,7 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
     expect(textOf(result).split('\n')[0]).toBe('Updated public interfaces for subsystem "shop" (1 entry).');
     expect(result.structuredContent.written).toBe(true);
     invalidateSpecCache();
-    expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual([{ type: 'REST', details: '/v2', component: 'shop_api' }]);
+    expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual([{ details: '/v2', component: 'shop_api' }]);
   });
 
   it('reports no change for the list already stored', async () => {
@@ -260,15 +260,15 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
     const bound2 = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [entry('shop_portal', '/a'), entry('shop_portal', '/b')] });
     expect(bound2.isError).toBe(true);
     expect(textOf(bound2)).toContain('names "shop_portal" more than once');
-    const unbound2 = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [{ type: 'REST', details: '/a' }, { type: 'REST', details: '/a' }] });
+    const unbound2 = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: [{ details: '/a' }, { details: '/a' }] });
     expect(unbound2.isError).toBe(true);
-    expect(textOf(unbound2)).toContain('names "REST /a" more than once');
+    expect(textOf(unbound2)).toContain('names "/a" more than once');
   });
 
   it('accepts two unbound surfaces and round-trips them — the design-first state before components exist', async () => {
     const { call } = await bound();
     await seed(call);
-    const unbound = [{ type: 'REST', details: '/api' }, { type: 'MessageBus', details: 'orders.created' }];
+    const unbound = [{ details: '/api' }, { details: 'orders.created' }];
     const set = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: unbound });
     expect(set.isError ?? false, textOf(set)).toBe(false);
     invalidateSpecCache();
@@ -278,12 +278,12 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
     expect(again.structuredContent.written).toBe(false);
 
     // Binding one of them replaces it: the unbound REST entry is gone, the bound one is added.
-    const boundNow = [{ type: 'REST', details: '/api', component: 'shop_portal' }, unbound[1]];
+    const boundNow = [{ details: '/api', component: 'shop_portal' }, unbound[1]];
     const binding = await call('sdd_set_public_interfaces', { subsystem: 'shop', publicInterfaces: boundNow });
     expect(binding.isError ?? false, textOf(binding)).toBe(false);
     expect(binding.structuredContent.changes.map((c: { path: string; change: string }) => `${c.change} ${c.path}`).sort()).toEqual([
       'added publicInterfaces.shop_portal',
-      'removed publicInterfaces.REST /api',
+      'removed publicInterfaces./api',
     ]);
     invalidateSpecCache();
     expect(loadSubsystemSpec('shop')?.publicInterfaces).toEqual([unbound[1], boundNow[0]]);
@@ -298,12 +298,12 @@ describe('sdd_set_public_interfaces — a replacement through one gated delta', 
 });
 
 describe('sdd_add_subsystem — a subsystem is never a mount', () => {
-  it('refuses a projectPath, naming sdd_add_member, and writes nothing', async () => {
+  it('takes no projectPath: the input is refused, naming it, and nothing is written', async () => {
     const { root, call } = await bound();
     await seed(call);
     const result = await call('sdd_add_subsystem', { id: 'billing', name: 'Billing', description: 'd', projectPath: 'packages/billing' });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toMatch(/^Error: mount form refused: subsystem "billing".*sdd_add_member/);
+    expect(textOf(result)).toContain('projectPath');
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')).toBeNull();
     expect(fs.existsSync(path.join(root, 'packages', 'billing'))).toBe(false);

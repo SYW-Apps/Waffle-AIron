@@ -123,7 +123,7 @@ describe('rule scope declarations', () => {
   it('only rules that declare scope "spec" reach the candidate path', () => {
     registerBuiltinRules();
     const names = specScopedRules().map(r => r.name).sort();
-    expect(names).toEqual(['durability-declaration', 'logic-declaration', 'portal-fields', 'retired-stereotypes']);
+    expect(names).toEqual(['durability-declaration', 'logic-declaration', 'portal-fields']);
   });
 
   it('the spec-scoped subset emits exactly the intrinsic codes', () => {
@@ -135,7 +135,6 @@ describe('rule scope declarations', () => {
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',
       'MISSING_PORTAL_TRANSPORT',
-      'STEREOTYPE_RETIRED',
       'UNEXPECTED_PORTAL_FIELD',
     ]);
   });
@@ -193,7 +192,7 @@ describe('the split is behaviour-preserving for a tree run', () => {
   it('still reports MISSING_ENDPOINT — the tree half survived the split', () => {
     const { tempDir, writeSpec } = createTempProject();
     setProjectRoot(tempDir);
-    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nstatus: complete\nportalType: HTTP_API');
+    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nstatus: complete\ntransport: HTTP');
     writeSpec('interface', 'iapi', [
       'schemaVersion: 1.0.0',
       'id: iapi',
@@ -272,7 +271,7 @@ describe('authoring: updateSpecGated', () => {
     setProjectRoot(tempDir);
     // Legal as a Portal. Demoting it to an Adapter strands basePath — and the
     // delta alone never says so; only the merged spec does.
-    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\nbasePath: /api');
+    writeSpec('component', 'api', 'schemaVersion: 1.0.0\nid: api\nname: Api\ndescription: d\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP\nbasePath: /api');
     invalidateSpecCache();
 
     expect(() => updateSpecGated('component', 'api', { componentType: 'Adapter' }))

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -168,7 +169,7 @@ describe('the gate identity hashes the design identity', () => {
     expect(stateIdEquals(computeGateStateId(), gate)).toBe(true);
   });
 
-  it('carries asRecorded only while the record on disk is a format-2 one', () => {
+  v5it('carries asRecorded only while the record on disk is a format-2 one', () => {
     root = project();
     writeFormat2(root);
     expect(computeGateStateId().asRecorded).toBeDefined();
@@ -243,7 +244,7 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
 });
 
 describe('a format-2 lock after the upgrade', () => {
-  it('an unchanged design passes lock-check without a re-lock, with the doctor hint', () => {
+  v5it('an unchanged design passes lock-check without a re-lock, with the doctor hint', () => {
     root = project();
     writeFormat2(root);
     // Old code compared the record against the design gate only: stale.
@@ -254,7 +255,7 @@ describe('a format-2 lock after the upgrade', () => {
     expect(approvalVerdict().text).toContain('no spec has changed since');
   });
 
-  it('the upgrade re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
+  v5it('the upgrade re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
     root = project();
     const before = writeFormat2(root);
     const carried = reexpressLock()!;
@@ -277,7 +278,7 @@ describe('a format-2 lock after the upgrade', () => {
     expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
-  it('a format-2 lock that already drifted (even by linkage alone) reads stale once and says one re-lock clears it', () => {
+  v5it('a format-2 lock that already drifted (even by linkage alone) reads stale once and says one re-lock clears it', () => {
     root = project();
     writeFormat2(root);
     resave(root, LINKAGE);

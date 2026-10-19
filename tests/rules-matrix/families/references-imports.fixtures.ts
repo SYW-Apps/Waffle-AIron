@@ -1,6 +1,6 @@
 /**
  * Declared imports (stage 4): a project may name another project's public
- * names bare once it imports them — `members: { shared: { path, use: [...] } }`
+ * names bare once it imports them — `members: { shared: { source, use: [...] } }`
  * or `externals: { shared: { use: [...] } }` — owner-scoped and explicit, with
  * no family-wide matching.
  *
@@ -46,7 +46,7 @@ interface Options {
 }
 
 function waffly(o: Options): FixtureTree {
-  const decl = (path: string, use?: string[]) => (use ? { path, use } : path);
+  const decl = (path: string, use?: string[]) => (use ? { source: path, use } : path);
   return {
     system: { name: 'Waffly', vision: 'Waffle machines, their reports and their errors.' },
     subsystems: [{ id: 'reporting', description: 'Machine reports for the operators.' }],

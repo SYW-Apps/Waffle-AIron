@@ -3,13 +3,14 @@
 // identity from sdd_validator).
 //
 // Identity forwards of the rewrites the v5 to v6 step reaches until their
-// bodies move into it: the Specialist retirement, the reachability migration,
+// bodies move into it: the Specialist retirement, the Gateway merge, the reachability migration,
 // the legacy spec file scan, the chained-subproject repair, and the lock
 // record's re-expression and write — each at whatever root the caller bound,
 // which during an upgrade is the rehearsal copy's.
 // ---------------------------------------------------------------------------
 export {
   retireSpecialists,
+  retireGateways,
   migrateReachability,
   findLegacySpecFiles,
   findChainingSubprojectsMissingConfig,

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -379,7 +380,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     fs.writeFileSync(path.join(dir, '.wai', 'lock.json'), JSON.stringify({ ...legacy, ...(children ? { children } : {}) }, null, 2));
   }
 
-  it('a format-1 lock reads stale and upgraded, and lock-check says why without calling the design moved', async () => {
+  v5it('a format-1 lock reads stale and upgraded, and lock-check says why without calling the design moved', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.sib);
     writeFormat1(fam.sib, 'a'.repeat(64));
@@ -402,7 +403,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(checkApproval(false).message).toContain('1 own spec file(s) changed since the approval.');
   });
 
-  it('a content change is plain stale, not upgraded', async () => {
+  v5it('a content change is plain stale, not upgraded', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.sib);
     fam.touch(fam.sib, 'edited');
@@ -412,7 +413,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(lockUpgraded(lock)).toBe(false);
   });
 
-  it('lock-check at a parent names the direct member whose approval moved, and an own edit by its count', async () => {
+  v5it('lock-check at a parent names the direct member whose approval moved, and an own edit by its count', async () => {
     fam = buildApprovalFamily();
     await lockAll(fam);
     fam.touch(fam.mid, 'edited');
@@ -431,7 +432,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(checkApproval(false).message).toContain('What moved: 1 own spec file(s) changed since the approval.');
   });
 
-  it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {
+  v5it('the pin tree marks a format-1 member upgraded and reads its parent\'s legacy `children` as the pin', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.sib);
     await lockAt(fam.mid);
@@ -452,7 +453,7 @@ describe('format 1: read as legacy, reported as upgraded', () => {
     expect(drifted.message).toContain('Re-lock it once');
   });
 
-  it('a lock written now is format 2 and never re-writes a legacy record\'s children', async () => {
+  v5it('a lock written now is format 2 and never re-writes a legacy record\'s children', async () => {
     fam = buildApprovalFamily();
     await lockAt(fam.top);
     writeFormat1(fam.top, 'c'.repeat(64), { mid: 'sha256+content+doctrine+inputs:x' });

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import type { z } from 'zod';
 import {
   ComponentSpecSchema,
@@ -83,7 +84,7 @@ describe('the projections drop exactly the linkage', () => {
     });
   });
 
-  it('a component loses each mount\'s via and its externalLinks, keeping portal and prefixes', () => {
+  v5it('a component loses each mount\'s via and its externalLinks, keeping portal and prefixes', () => {
     const component = {
       id: 'web', name: 'Web', description: 'd', subsystem: 's', componentType: 'Portal', owns: [], dependsOn: [],
       transport: 'HTTP', invokedBy: { kind: 'entry', caller: 'Browsers', scope: 'outside' },

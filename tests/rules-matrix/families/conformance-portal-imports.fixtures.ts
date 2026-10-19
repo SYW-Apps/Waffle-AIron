@@ -63,7 +63,7 @@ function checkoutTree(importPath: string, importedName: string): FixtureTree {
       {
         id: 'billing',
         description: 'Invoicing for placed orders.',
-        publicInterfaces: [{ type: 'REST', details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
+        publicInterfaces: [{ details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
       },
     ],
     components: [
@@ -77,7 +77,7 @@ function checkoutTree(importPath: string, importedName: string): FixtureTree {
       {
         id: 'billing-portal',
         componentType: 'Portal',
-        portalType: 'HTTP_API',
+        transport: 'HTTP',
         subsystem: 'billing',
         description: 'Billing\'s published invoicing API.',
         dependsOn: ['invoicing-engine'],

@@ -11,7 +11,7 @@ import type { ResolvedExportTable } from '../../src/models/exports.js';
 const sub = (id: string, publicInterfaces: unknown[]): SubsystemSpec =>
   ({ id, name: id, description: id, parentSystem: 'Shop', publicInterfaces, status: 'complete' }) as unknown as SubsystemSpec;
 const comp = (id: string, subsystem: string, componentType = 'Portal'): ComponentSpec =>
-  ({ id, name: id, description: id, subsystem, componentType, owns: [], dependsOn: [] }) as unknown as ComponentSpec;
+  ({ id, name: id, description: id, subsystem, componentType, owns: [], dependsOn: [], ...(componentType === 'Portal' ? { transport: 'HTTP' } : {}) }) as unknown as ComponentSpec;
 const intf = (id: string, component: string): InterfaceSpec =>
   ({ id, name: id, description: id, component, methods: [] }) as unknown as InterfaceSpec;
 const type = (id: string, subsystem?: string): TypeSpec =>
@@ -35,9 +35,9 @@ function tables(subsystems: SubsystemSpec[]) {
 describe('export index: subsystem tables', () => {
   it('binds own items under `as ?? interface ?? component`, with the target stereotype', () => {
     const t = tables([sub('payments', [
-      { type: 'REST', details: 'pay', component: 'payment_portal' },
-      { type: 'REST', details: 'admin', component: 'payment_portal', interface: 'ipayment_admin' },
-      { type: 'REST', details: 'refunds', component: 'refund_portal', as: 'refunds' },
+      { details: 'pay', component: 'payment_portal' },
+      { details: 'admin', component: 'payment_portal', interface: 'ipayment_admin' },
+      { details: 'refunds', component: 'refund_portal', as: 'refunds' },
     ])]).get('payments')!;
     expect(t.entries.map((e) => e.publicName).sort()).toEqual(['ipayment_admin', 'payment_portal', 'refunds']);
     expect(t.entries.find((e) => e.publicName === 'ipayment_admin')?.interface).toBe('ipayment_admin');
@@ -47,7 +47,7 @@ describe('export index: subsystem tables', () => {
 
   it('follows a named re-export to its canonical target, renamed and inheriting type and details', () => {
     const all = tables([
-      sub('payments', [{ type: 'REST', details: 'Payments API', component: 'payment_portal' }]),
+      sub('payments', [{ details: 'Payments API', component: 'payment_portal' }]),
       sub('facade', [{ from: 'payments', component: 'payment_portal', as: 'pay' }]),
     ]);
     const [entry] = all.get('facade')!.entries;
@@ -56,8 +56,8 @@ describe('export index: subsystem tables', () => {
 
   it('brings a wildcard source in under its public names, and an explicit entry shadows a wildcard name', () => {
     const all = tables([
-      sub('payments', [{ type: 'REST', details: 'pay', component: 'payment_portal', as: 'api' }]),
-      sub('shipping', [{ type: 'REST', details: 'ship', component: 'shipping_portal', as: 'api' }]),
+      sub('payments', [{ details: 'pay', component: 'payment_portal', as: 'api' }]),
+      sub('shipping', [{ details: 'ship', component: 'shipping_portal', as: 'api' }]),
       sub('facade', [{ from: 'payments' }, { from: 'shipping' }, { from: 'shipping', component: 'shipping_portal', as: 'api' }]),
     ]);
     const facade = all.get('facade')!;
@@ -68,15 +68,15 @@ describe('export index: subsystem tables', () => {
 
   it('leaves a name two wildcards bind to different targets out, as a duplicate; the same target twice is no clash', () => {
     const clash = tables([
-      sub('payments', [{ type: 'REST', details: 'pay', component: 'payment_portal', as: 'api' }]),
-      sub('shipping', [{ type: 'REST', details: 'ship', component: 'shipping_portal', as: 'api' }]),
+      sub('payments', [{ details: 'pay', component: 'payment_portal', as: 'api' }]),
+      sub('shipping', [{ details: 'ship', component: 'shipping_portal', as: 'api' }]),
       sub('facade', [{ from: 'payments' }, { from: 'shipping' }]),
     ]).get('facade')!;
     expect(clash.entries).toEqual([]);
     expect(clash.problems.map((p) => p.kind)).toEqual(['duplicate']);
 
     const same = tables([
-      sub('payments', [{ type: 'REST', details: 'pay', component: 'payment_portal' }]),
+      sub('payments', [{ details: 'pay', component: 'payment_portal' }]),
       sub('middle', [{ from: 'payments' }]),
       sub('facade', [{ from: 'payments' }, { from: 'middle' }]),
     ]).get('facade')!;
@@ -86,8 +86,8 @@ describe('export index: subsystem tables', () => {
 
   it('resolves a wildcard cycle to the union and records it once', () => {
     const all = tables([
-      sub('payments', [{ type: 'REST', details: 'pay', component: 'payment_portal' }, { from: 'shipping' }]),
-      sub('shipping', [{ type: 'REST', details: 'ship', component: 'shipping_portal' }, { from: 'payments' }]),
+      sub('payments', [{ details: 'pay', component: 'payment_portal' }, { from: 'shipping' }]),
+      sub('shipping', [{ details: 'ship', component: 'shipping_portal' }, { from: 'payments' }]),
     ]);
     for (const id of ['payments', 'shipping']) {
       expect(all.get(id)!.entries.map((e) => e.component).sort()).toEqual(['payment_portal', 'shipping_portal']);
@@ -118,7 +118,7 @@ describe('export index: subsystem tables', () => {
   it('reports a missing source, a foreign own type, a bad public name and an unconsumable re-export', () => {
     const all = tables([
       sub('payments', [
-        { type: 'Custom', details: 'math', component: 'payment_math' },
+        { details: 'math', component: 'payment_math' },
         { typeDef: 'money', as: 'Money' },
       ]),
       sub('facade', [
@@ -146,17 +146,17 @@ describe('export index: subsystem tables', () => {
 describe('export index: the project table', () => {
   const SUBSYSTEMS = [
     sub('payments', [
-      { type: 'REST', details: 'Payments API', component: 'payment_portal' },
-      { type: 'Custom', details: 'math', component: 'payment_math' },
+      { details: 'Payments API', component: 'payment_portal' },
+      { details: 'math', component: 'payment_math' },
     ]),
-    sub('shipping', [{ type: 'REST', details: 'Shipping API', component: 'shipping_portal', interface: 'ishipping' }]),
+    sub('shipping', [{ details: 'Shipping API', component: 'shipping_portal', interface: 'ishipping' }]),
   ];
   /** No member or external to re-export from: the bound root alone. */
   const NO_SOURCES = { namespace: '', aliases: new Map<string, string>(), producerTables: new Map<string, ResolvedExportTable | null>(), audienceOf: new Map<string, string>() };
   const project = (entries: unknown[], types: TypeSpec[] = TYPES, sources = NO_SOURCES) =>
     resolveProjectTable(system(entries), SUBSYSTEMS, COMPONENTS, INTERFACES, types, tables(SUBSYSTEMS), sources);
 
-  it('reads a legacy entry as a re-export and keeps its published name: id, then interface, then component', () => {
+  it('reads a legacy L0 entry as a re-export and keeps its published name: id, then interface, then component', () => {
     const t = project([
       { id: 'payments-api', subsystem: 'payments', component: 'payment_portal', audience: 'external' },
       { subsystem: 'shipping', component: 'shipping_portal', interface: 'ishipping' },
@@ -169,7 +169,7 @@ describe('export index: the project table', () => {
   });
 
   it('narrows to an interface the source exports its component under, and infers the source from an interface alone', () => {
-    const t = project([{ id: 'ship', interface: 'ishipping' }]);
+    const t = project([{ as: 'ship', interface: 'ishipping' }]);
     expect(t.entries).toEqual([expect.objectContaining({ publicName: 'ship', component: 'shipping_portal', interface: 'ishipping', source: 'shipping' })]);
   });
 
@@ -180,15 +180,15 @@ describe('export index: the project table', () => {
   });
 
   it('reports an entry that names no source', () => {
-    const t = project([{ id: 'partner-api', type: 'REST', details: 'd' }]);
+    const t = project([{ as: 'partner-api', details: 'd' }]);
     expect(t.entries).toEqual([]);
     expect(t.problems).toEqual([expect.objectContaining({ kind: 'invalid', publicName: 'partner-api' })]);
   });
 
   it('names a sourceless entry that repeats another entry\'s id as a duplicate, with both entry numbers', () => {
     const t = project([
-      { id: 'payments-api', subsystem: 'payments', component: 'payment_portal' },
-      { id: 'payments-api', type: 'REST', details: 'a stray copy' },
+      { as: 'payments-api', from: 'payments', component: 'payment_portal' },
+      { as: 'payments-api', details: 'a stray copy' },
     ]);
     expect(t.entries.map((e) => e.publicName)).toEqual(['payments-api']);
     const problem = t.problems.find((p) => p.kind === 'invalid')!;

@@ -38,25 +38,6 @@ methods:
       - name: fix
         type: bool
         description: Resolve, or only report
-  - name: matchPositions
-    description: Forward to migration_portal.matchPositions.
-    signature: >-
-      matchPositions(unresolved: list<AuthoredReference>, family: ProjectFamily, tables:
-      list<ResolvedExportTable>, types: list<TypeSpec>): list<PositionalMatch>
-    returns: list<PositionalMatch>
-    params:
-      - name: unresolved
-        type: list<AuthoredReference>
-        description: The references to read
-      - name: family
-        type: ProjectFamily
-        description: The family top's graph
-      - name: tables
-        type: list<ResolvedExportTable>
-        description: Every project's resolved L0 export table
-      - name: types
-        type: list<TypeSpec>
-        description: Every type the family top's scan loaded
 status: complete
 createdAt: '2026-09-30T20:37:31.884Z'
-updatedAt: '2026-10-04T10:18:36.612Z'
+updatedAt: '2026-10-18T19:05:41.035Z'

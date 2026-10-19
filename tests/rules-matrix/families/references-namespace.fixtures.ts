@@ -132,7 +132,7 @@ export default [
             id: 'network-http',
             description: 'HTTP protocol stack of the mesh.',
             publicInterfaces: [
-              { type: 'MessageBus', details: 'net.http capability provider surface.', component: 'http-portal' },
+              { details: 'net.http capability provider surface.', component: 'http-portal' },
             ],
             lifecycle: [
               { phase: 'init', component: 'http-portal', method: 'provision', description: 'Bind listeners and announce the capability.' },
@@ -146,7 +146,7 @@ export default [
             description: 'MessageBus portal serving the net.http capability.',
             subsystem: 'network-http',
             componentType: 'Portal',
-            portalType: 'MessageBus',
+            transport: 'MessageBus',
             owns: [],
             dependsOn: [],
           }),

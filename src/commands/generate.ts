@@ -111,9 +111,6 @@ interface GenerateOptions {
   /** --family: also generate each member's own layer in its own root, and
    *  (carried down) its members'. Off by default: generate never cascades. */
   family?: boolean;
-  /** Accepted until the next major release (--no-recurse): this project's layer only is
-   *  now the default, so it changes nothing. */
-  recurse?: boolean;
   /** Reconcile managed output dirs — prune wairon-owned agent files no longer in
    *  the topology (default true). Set false for --no-prune (write-only). */
   prune?: boolean;

@@ -209,7 +209,7 @@ function publicInterfacesReplacement(
     }
     return pi.component
       ? `${pi.component}${pi.interface ? `.${pi.interface}` : ''}`
-      : `${pi.type} ${pi.details}`;
+      : `${pi.type ?? ''} ${pi.details}`.trim();
   };
   const restated = new Map<string, number>();
   for (const pi of list) restated.set(identity(pi), (restated.get(identity(pi)) ?? 0) + 1);
@@ -2109,9 +2109,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // type, optionally renamed with `as`; `from` alone re-exports everything it
   // exports). details are required on an own component item — the canonical
   // schema refuses one without them at the write. The export kind is derived
-  // from the backing Portal's transport; `type` is legacy.
+  // from the backing Portal's transport, so there is no `type` to author.
   const publicInterfaceItemInput = z.object({
-    type: z.enum(['REST', 'GraphQL', 'MessageBus', 'RPC', 'Custom']).optional().describe('LEGACY, no longer authored: the export kind is derived from the backing Portal\'s transport. Accepted until the next major release and carried as written; doctor --fix drops it'),
     role: z.enum(['call', 'implement']).optional().describe('What consumers do with the entry: call it (the default) or implement it — an extension point (a trait, callback or webhook contract) whose realization consumers supply; an Adapter may back an implement entry'),
     details: z.string().optional().describe('Consumer-facing description of an own item (required on an own component item); a re-export inherits its target\'s'),
     component: z.string().optional().describe('For an own item, the L2 component that realizes it (this subsystem\'s published surface); for a re-export, the component re-exported from `from`'),
@@ -2127,7 +2126,6 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         name: z.string().describe('Human-readable display name'),
         description: z.string().describe('Purpose and details of the subsystem'),
         publicInterfaces: z.array(publicInterfaceItemInput).optional().describe('The subsystem\'s export table: its own entrypoints, each bound to a realizing component, and re-exports of what other subsystems of this project export'),
-        projectPath: z.string().optional().describe('REFUSED: the legacy L1 mount form. A subsystem is never a mount — declare a member project with sdd_add_member instead'),
         targetLanguage: z.string().optional().describe('Override of the system-level targetLanguage for this subsystem'),
         profile: z.string().optional().describe('Architectural profile override for this subsystem (built-ins: backend, frontend-reactive, frontend-controller, lowlevel-os, game-ecs, realtime-embedded, plc-cyclic; extension packs may add more — unknown names get UNKNOWN_PROFILE)'),
         designDepth: z.enum(['components', 'interfaces', 'implementations', 'narratives']).optional().describe('How deep THIS subsystem commits to designing (overrides project rules.designDepth; default narratives = full depth). Expectation checks below the depth are gated — soundness of authored content always applies.'),
@@ -2145,14 +2143,14 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const subsystemInputFields = [...Object.keys(subsystemInput), 'parentSystem'];
 
-  reg<{ id: string; name: string; description: string; publicInterfaces?: { type?: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[]; projectPath?: string; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[]; status?: StatedStatus }>(server,
+  reg<{ id: string; name: string; description: string; publicInterfaces?: { details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[]; targetLanguage?: string; profile?: string; designDepth?: 'components' | 'interfaces' | 'implementations' | 'narratives'; trustedLinks?: { subsystem: string; reason: string }[]; lifecycle?: { phase: 'init' | 'shutdown' | 'cyclic' | 'interrupt' | 'scheduled'; component: string; method: string; description?: string }[]; status?: StatedStatus }>(server,
     'sdd_add_subsystem',
     {
-      description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced, lint/ext are carried forward, and the stored status is kept unless this input states a higher one. A subsystem is never a mount: a projectPath is refused, naming sdd_add_member, which declares a member project in project.yaml `members`. The answer carries a write receipt as structured content beside the sentence — the status written and whether a spec already held the id.',
+      description: 'Add an L1 Subsystem / Service under the system boundary. publicInterfaces should bind each entry to the component that realizes it (the subsystem\'s published surface); if components do not exist yet, add them later with sdd_set_public_interfaces. Re-running it on an existing id RE-AUTHORS it: the fields above are replaced, lint/ext are carried forward, and the stored status is kept unless this input states a higher one. A member project is declared with sdd_add_member, in project.yaml `members`, never as a subsystem. The answer carries a write receipt as structured content beside the sentence — the status written and whether a spec already held the id.',
       inputSchema: subsystemInput,
       outputSchema: specWriteReceiptOutput,
     },
-    ({ id, name, description, publicInterfaces, projectPath, targetLanguage, profile, designDepth, trustedLinks, lifecycle, status }) => {
+    ({ id, name, description, publicInterfaces, targetLanguage, profile, designDepth, trustedLinks, lifecycle, status }) => {
       try {
         // mcp_orchestrator.addSubsystem step 1: the restatement. parentSystem is
         // the seam's to derive from the L0; everything this input cannot say
@@ -2164,7 +2162,6 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             name,
             description,
             publicInterfaces: publicInterfaces ?? [],
-            projectPath,
             ...(targetLanguage ? { targetLanguage } : {}),
             ...(profile ? { profile } : {}),
             ...(designDepth ? { designDepth } : {}),
@@ -2174,8 +2171,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           fields: subsystemInputFields,
           status,
         };
-        // Step 2: through the authoring seam, which requires the L0 and refuses
-        // a projectPath (the legacy mount form). Step 3: the receipt.
+        // Step 2: through the authoring seam, which requires the L0. Step 3: the receipt.
         const receipt = writeSpec(restatement);
         return writeReceipt(`Successfully added L1 Subsystem Spec "${name}" (${id}).`, receipt);
       } catch (e) {
@@ -2184,7 +2180,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; publicInterfaces: { type?: 'REST' | 'GraphQL' | 'MessageBus' | 'RPC' | 'Custom'; role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[] }>(server,
+  reg<{ subsystem: string; publicInterfaces: { role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[] }>(server,
     'sdd_set_public_interfaces',
     {
       description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; details are optional on a re-export, which inherits its target\'s. The export kind is derived from the backing Portal\'s transport, so `type` is no longer authored; `role: implement` exports an extension point consumers implement. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
@@ -2666,7 +2662,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         componentType: z.enum(['Portal', 'Orchestrator', 'Supervisor', 'Actor', 'Store', 'Index', 'Query', 'Registry', 'Adapter', 'Observer', 'Repository']).describe('The building block, or the pattern Repository. Specialist and Gateway are retired and cannot be authored: logic is an Orchestrator with a dependencyClass, a gateway is a Portal with the gateway variant'),
         owns: z.array(z.string()).optional().describe('Member block ids privately owned by this component (patterns only)'),
         dependsOn: z.array(z.string()).optional().describe('IDs of other components this collaborates with (facades or standalone blocks)'),
-        transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint. Replaces the retired portalType (HTTP_API is HTTP). On an Adapter, optional: the transport it calls its target Portal over — omit it and it is taken from the Portals its dependsOn names when they share one; a stated one that differs from the target\'s is ADAPTER_TRANSPORT_MISMATCH. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
+        transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint.  On an Adapter, optional: the transport it calls its target Portal over — omit it and it is taken from the Portals its dependsOn names when they share one; a stated one that differs from the target\'s is ADAPTER_TRANSPORT_MISMATCH. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         abi: z.string().optional().describe('Portal-only, InProcess only: how a foreign language links this library — "c" (a C-ABI shared library, DLL or FFI) or "wasm" (a WebAssembly component). Omit for a native API in the project\'s targetLanguage.'),
         invokedBy: z.object({
           kind: z.enum(['entry']).describe('entry: callers outside the design reach every verb of this Portal over its transport'),
@@ -2863,7 +2859,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   // concrete `endpoint`. This is what a Portal needs to satisfy the gate's
   // MISSING_ENDPOINT / ENDPOINT_TRANSPORT_MISMATCH rules. Run it after
   // sdd_define_interface (the methods must already exist).
-  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'HTTP_API' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; status?: number; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }>; dryRun?: boolean; search?: string[] }>(server,
+  reg<{ interface: string; endpoints: Array<{ method: string; transport: 'HTTP' | 'gRPC' | 'GraphQL' | 'MessageBus' | 'NamedPipe' | 'IPC' | 'CLI' | 'JSONRPC' | 'Custom'; httpMethod?: string; path?: string; status?: number; service?: string; rpcMethod?: string; operation?: string; field?: string; topic?: string; event?: string; queue?: string; direction?: string; pipe?: string; channel?: string; command?: string; jsonRpcMethod?: string; address?: string }>; dryRun?: boolean; search?: string[] }>(server,
     'sdd_set_endpoints',
     {
       description: 'Bind concrete wire endpoints to existing L3 interface methods, for a Portal whose transport requires them (every transport but InProcess and Custom). Pick the Portal\'s own `transport` and fill that transport\'s address fields — for HTTP the verb, the path and, optionally, the success `status` (a 2xx or 3xx code: 202 Accepted, a redirect, a 201 for a workflow verb) the operation answers with, which the OpenAPI export uses in place of its convention. A binding for an InProcess Portal is refused: its verbs are its contract methods. Run after sdd_define_interface. Written through the authoring seam as one gated delta, and answered with the change report — every binding set or changed, or that nothing changed — as structured content beside the sentence. A binding that MOVES a route a consumer reaches through an export names, as a rename or a removal does, the public names publishing it and the consumers it breaks (published, breaks, rerouted): a client that spells the old route breaks until it follows.',
@@ -2871,7 +2867,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         interface: z.string().describe('The L3 interface ID (e.g. "ibilling-gateway")'),
         endpoints: z.array(z.object({
           method: z.string().describe('The NAME of the interface method to bind (not the HTTP verb)'),
-          transport: z.enum(['HTTP', 'HTTP_API', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. The retired spelling HTTP_API is still read as HTTP until the next major release; any other transport is refused, naming the Portal\'s'),
+          transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'NamedPipe', 'IPC', 'CLI', 'JSONRPC', 'Custom']).describe('Wire protocol; must be the Portal\'s own transport. Any other transport is refused, naming the Portal\'s'),
           httpMethod: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD']).optional().describe('HTTP: verb'),
           path: z.string().optional().describe('HTTP: route path, e.g. "/v1/checkout"'),
           status: z.number().int().min(200).max(399).optional().describe('HTTP: the success status the operation answers with when it is not the verb\'s convention — 202 Accepted, a 3xx redirect, a 201 for a workflow verb that files something. The OpenAPI export uses it; omitted, the export answers 204 for a method returning nothing, 201 for a POST that creates, else 200'),
@@ -2930,8 +2926,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         for (const e of endpoints) {
           const m = intf.methods.find(x => x.name === e.method);
           if (!m) return errText(`Method "${e.method}" not found on interface "${interfaceId}". Define it via sdd_define_interface first.`);
-          // Step 3: one vocabulary — the retired HTTP_API spelling is read as HTTP.
-          const transport: StoredTransport = e.transport === 'HTTP_API' ? 'HTTP' : e.transport;
+          // Step 3: the binding's transport is the Portal's own, or it is refused.
+          const transport: StoredTransport = e.transport;
           if (implied && transport !== implied) {
             return errText(
               `Method "${e.method}": transport "${e.transport}" does not match ${owner!.id}'s transport `
@@ -3492,7 +3488,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     {
       description: 'Patch an existing spec (system, subsystem, component, interface, implementation or type) with a granular delta, and answer with exactly what changed — and, under NO EFFECT, every path the delta named that the write did not act on. Type positions use the neutral type grammar: an alias (string[], T | null, Promise<T>) is stored canonical and listed under `respellings`; a position with no canonical spelling (number, an inline object, a literal union) is refused, naming the replacement. A delta edits what a spec says, never which spec it is: its id, createdAt, a component\'s or a type\'s subsystem, a contract\'s component and an implementation\'s contract are refused, naming the tool that owns the change. A component or contract write is judged in its tree too: a doctrine edge (a Portal depending on a Store) or a route another method binds is refused, as validate would report it. dryRun takes the same path as the write — the gate and the writer\'s parse included — and is refused exactly when the write would be; it only skips the disk.',
       inputSchema: {
-        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports, and a legacy {id, subsystem} reads as {as, from})'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports)'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
         delta: z.record(z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
         dryRun: z.boolean().optional().describe('Ask what this delta WOULD do: the whole write runs — the gate and the writer\'s parse included — and answers the report it would produce, marked DRY RUN, with not one byte written.'),

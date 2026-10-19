@@ -89,10 +89,7 @@ export function mountCanvas(host, model, opts = {}) {
   }
 
   var PATTERN_TYPES = { Repository:1, FeatureComponent:1, RouterComponent:1 };
-  // A retired Specialist or Gateway renders as a plain box marked retired, so a
-  // tree not yet migrated keeps its picture; a Gateway is no pattern.
   function stereoClass(t) {
-    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
     if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
@@ -117,8 +114,7 @@ export function mountCanvas(host, model, opts = {}) {
   function childCompsOf(subId) {
     return MODEL.components.filter(function (c) { return c.subsystem === subId && !c.owner; });
   }
-  // Only a pattern contains members: a retired Gateway still lists what it
-  // owned, but it has nothing inside to drill into.
+  // Only a pattern contains members.
   function memberCompsOf(compId) {
     var c = compById[compId];
     return c && PATTERN_TYPES[c.componentType] ? c.owns.map(function (id) { return compById[id]; }).filter(Boolean) : [];
@@ -338,7 +334,6 @@ export function mountCanvas(host, model, opts = {}) {
         query:   { fill: '#f3dcc8', stroke: '#a0521d', text: '#3b1d08' },
         adapter: { fill: '#dcf2e4', stroke: '#2e7d4f', text: '#0e3320' },
         patternLeaf: { fill: '#eef1f5', stroke: '#5f6b78', text: '#1a1f24' },
-        retired: { fill: '#ebe8e4', stroke: '#857b73', text: '#35302b' },
       },
       issue: '#b3261e', selGlow: '#3465b4', bgLabel: '#f2f5f8', png: '#f2f5f8',
       relOk: '#2e7d4f', relDrift: '#8a6116', relBad: '#b3261e', relUnknown: '#5f6b78',
@@ -360,7 +355,6 @@ export function mountCanvas(host, model, opts = {}) {
         query:   { fill: '#3f2418', stroke: '#fdba74', text: '#ffedd5' },
         adapter: { fill: '#0f3323', stroke: '#34d399', text: '#d3f8e6' },
         patternLeaf: { fill: '#1b2740', stroke: '#93a1b8', text: '#eef2f8' },
-        retired: { fill: '#24211f', stroke: '#a8a29e', text: '#e7e5e4' },
       },
       issue: '#ff6b81', selGlow: '#22ddff', bgLabel: '#0a0a0f', png: '#0a0a0f',
       relOk: '#34d399', relDrift: '#f59e0b', relBad: '#ff6b81', relUnknown: '#93a1b8',
@@ -391,7 +385,6 @@ export function mountCanvas(host, model, opts = {}) {
       { selector: '.query', style: { 'background-color': t.stereo.query.fill, 'border-color': t.stereo.query.stroke, color: t.stereo.query.text } },
       { selector: '.adapter', style: { 'background-color': t.stereo.adapter.fill, 'border-color': t.stereo.adapter.stroke, color: t.stereo.adapter.text } },
       { selector: '.patternLeaf', style: { 'background-color': t.stereo.patternLeaf.fill, 'border-color': t.stereo.patternLeaf.stroke, color: t.stereo.patternLeaf.text, 'border-style': 'dashed' } },
-      { selector: '.retired', style: { 'background-color': t.stereo.retired.fill, 'border-color': t.stereo.retired.stroke, color: t.stereo.retired.text, 'border-style': 'double', 'border-width': 4 } },
       { selector: '.subsysBox', style: { 'background-color': t.subFill, 'border-color': t.subStroke, color: t.subText, 'font-weight': 'bold', 'font-size': 12.5 } },
       { selector: 'node.public', style: { 'border-width': 3.5 } },
       { selector: ':parent', style: { 'text-valign': 'top', 'text-halign': 'center', 'font-size': 12, 'font-weight': 'bold', 'text-margin-y': -5, padding: '10px', 'background-opacity': 1 } },
@@ -556,7 +549,6 @@ export function mountCanvas(host, model, opts = {}) {
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
       sw(t.stereo.data) + 'Data&nbsp; ' + sw(t.stereo.query) + 'Query&nbsp; ' + sw(t.stereo.adapter) + 'Adapter&nbsp; ' +
       sw(t.stereo.patternLeaf) + 'Pattern&nbsp; ' +
-      sw(t.stereo.retired) + '\u00ABSpecialist\u00BB/\u00ABGateway\u00BB retired, shown until migrated&nbsp; ' +
       sw({ fill: t.ghostFill, stroke: t.ghostStroke }) + 'External&nbsp; ' +
       sw(t.proxyIn) + '\u21E0 in-port&nbsp; ' + sw(t.proxyOut) + '\u21E2 out-port&nbsp; — bold border = published · ' +
       '<span style="color:' + t.cross + '">red</span> = boundary hop · double-click = open<br>' +

@@ -463,7 +463,6 @@ component).
 member's agents by reference (`delegatesTo: <alias>::<agentId>`) instead of
 copying them, and a brief for `<alias>::<agent>` composes at the member's own
 root. `--family` also generates each member's own layer, in its own root.
-(`--no-recurse` is accepted until the next major release; not cascading is now the default.)
 
 ### `wairon lock [-y, --yes] [--subsystem <id>]`
 Review and approve the design. Validates the spec tree **as if complete** (full
@@ -519,8 +518,7 @@ while a direct member is drifted or never approved, naming each.
 
 The identity is captured **before** validating and confirmed **before** writing:
 if a spec, the doctrine, an input or a member's approval moves while the lock
-runs, it refuses and writes nothing. (`--no-recursive` is accepted for one
-release and changes nothing: a lock never reaches below its project.)
+runs, it refuses and writes nothing. A lock never reaches below its project.
 
 **Code linkage is not part of the approval.** The gate identity and the per-spec
 digests read each spec's **design**: where it is realized — `sourcePath`,
@@ -821,7 +819,7 @@ making a failing job stop a merge is a branch-protection / ruleset setting on
 your repository ("Require status checks to pass" → add this job). No workflow
 can declare that for itself.
 
-### `wairon doctor [--fix] [-y, --yes] [--global] [--report composed-validation]`
+### `wairon doctor [--fix] [-y, --yes] [--global]`
 Health check: flags stale generated guides/skills, an unregistered MCP server,
 unfinished family-migration transactions, spec-tree issues and a tree written by
 another wairon major. The **Major** check reads the tree's `waironMajor` stamp
@@ -838,9 +836,6 @@ legacy spec files, re-expressing the lock, retiring Specialists, the reachabilit
 model and the chaining migration are steps of `wairon upgrade`. A write outside the
 project root (a machine-wide MCP config) also needs `--global` (`--yes` answers its
 confirmation in a script); each file it replaces is backed up beside itself.
-`--report composed-validation` prints what the family run changes about each
-member's findings and writes nothing; it is the one report section, and never
-combines with `--fix`.
 
 In a family, `--fix` runs the same per-project repairs in every member project inside the
 project root, each line marked `[alias]`: its specs, and its agent surfaces (the project
@@ -860,10 +855,8 @@ literal union, a union mixing in a primitive, a `number` with no proposal) is
 listed with its replacement for an author. Plain `wairon doctor` prints the same
 plan without writing it.
 
-**How long a deprecated form lasts.** A form, field or flag deprecated during a release line
-keeps working, and is reported, for the rest of that line: only a major release removes one,
-and a minor or patch release never does. `--fix` rewrites the deprecated spec and configuration
-forms; run it any time before the next major upgrade.
+**Older forms.** A release reads only its own major's forms; `wairon upgrade` moves an older
+tree. Deprecated flags and aliases are removed, not kept.
 
 ### `wairon upgrade [--report] [-y, --yes]`
 Moves a project (and every member below it) written by an older wairon major to the
@@ -969,8 +962,7 @@ auditing every agent. Per-agent overrides live in `.wai/project.yaml` under
 ### `wairon pack …`
 Extension packs — plain config files (YAML, or a JS module for programmatic
 rules) injecting custom profiles, language/platform tables, and conformance
-rules (see [Extending wairon](extending-wairon.md)). `wairon packs` is a
-deprecated alias of `wairon pack`.
+rules (see [Extending wairon](extending-wairon.md)). 
 
 | Command | Description |
 |---------|-------------|
@@ -1405,12 +1397,10 @@ requirement nothing installed satisfies. Scaffolding is an unattended pack write
 so it shows no impact report; run `wairon pack impact <name>` at the member's
 root to see one.
 
-**Deprecated forms.** Until the next major release wairon still reads, and reports: a leading
-`::` (`::shared::money`), `super::` (`super::sibling`), a member path
-(`billing::invoice::invoice_portal`) and an L1 subsystem carrying
-`projectPath` (`DEPRECATED_MOUNT_FORM`), and a member's long-form `path` key
-(`{ path: services/x }`; the one location key is `source`). `wairon upgrade`
-rewrites them to `members`, the one location key and `alias::name`.
+**Older forms.** A release reads only its own major's forms: a leading `::`
+(`::shared::money`), `super::`, a member path (`billing::invoice::invoice_portal`), an L1
+subsystem carrying `projectPath` and a member's long-form `path` key belong to an older
+major. `wairon upgrade` rewrites them to `members`, the one location key and `alias::name`.
 
 ---
 

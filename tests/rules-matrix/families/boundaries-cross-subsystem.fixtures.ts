@@ -44,14 +44,14 @@ const BILLING_SUB = (publishedComponent: string) => ({
   id: 'billing',
   description: 'Invoicing and payment collection for booked visits.',
   publicInterfaces: [
-    { type: 'Custom', details: 'Invoice submission surface for sibling subsystems.', component: publishedComponent },
+    { details: 'Invoice submission surface for sibling subsystems.', component: publishedComponent },
   ],
 });
 
 const INVOICE_PORTAL = {
   id: 'invoice-portal',
   componentType: 'Portal',
-  portalType: 'Custom',
+  transport: 'Custom',
   subsystem: 'billing',
   description: 'Inbound invoicing surface of the billing subsystem.',
 };
@@ -275,7 +275,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'Custom', details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
+            { details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
           ],
         },
       ],
@@ -306,7 +306,7 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'Custom', details: 'Invoice submission surface for claims and scheduling.', component: 'invoice-portal', consumers: ['claims', 'scheduling'] },
+            { details: 'Invoice submission surface for claims and scheduling.', component: 'invoice-portal', consumers: ['claims', 'scheduling'] },
           ],
         },
       ],
@@ -337,8 +337,8 @@ export default [
           id: 'billing',
           description: 'Invoicing and payment collection for booked visits.',
           publicInterfaces: [
-            { type: 'Custom', details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
-            { type: 'Custom', details: 'Invoice lookup surface for any sibling subsystem.', component: 'invoice-portal' },
+            { details: 'Invoice submission surface for the claims pipeline.', component: 'invoice-portal', consumers: ['claims'] },
+            { details: 'Invoice lookup surface for any sibling subsystem.', component: 'invoice-portal' },
           ],
         },
       ],
@@ -423,7 +423,7 @@ export default [
     anchoredTo: 'telemetry-export-adapter',
     expectFire: true,
     scenario:
-      'The telemetry export adapter depends on the observability hub\'s ingest portal through a deprecated root-anchored form naming no alias, and no surface snapshot in .wai/surfaces covers it, so there is nothing to judge it against.',
+      'The telemetry export adapter depends on the observability hub\'s ingest portal through `observability-hub::ingest-portal`, the clinic declares the observability-hub external, and nothing is pinned for it, so there is nothing to judge the dependency against.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'clinic-operations', description: 'Operational telemetry and monitoring hooks of the clinic platform.' }],
@@ -433,9 +433,16 @@ export default [
           componentType: 'Adapter',
           subsystem: 'clinic-operations',
           description: 'Ships clinic telemetry to the external observability hub.',
-          dependsOn: ['::observability-hub::ingest-portal'],
+          dependsOn: ['observability-hub::ingest-portal'],
         },
       ],
+      files: {
+        '.wai/project.yaml': JSON.stringify({
+          schemaVersion: '1.0.0', id: 'clinic', name: 'Clinic', targets: [], extensions: { packs: [], useGlobalPacks: false },
+          externals: { 'observability-hub': { project: 'observability-hub' } },
+          createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+        }),
+      },
     },
   }),
   defineRuleFixture({
@@ -492,7 +499,7 @@ export default [
         {
           id: 'booking-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface receiving appointment booking requests.',
           dependsOn: ['appointment-repository'],
@@ -559,7 +566,7 @@ export default [
         {
           id: 'availability-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface answering slot availability queries.',
           dependsOn: ['open-slot-index'],
@@ -616,7 +623,7 @@ export default [
         {
           id: 'booking-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface receiving appointment booking requests.',
           dependsOn: ['appointment-repository'],
@@ -682,7 +689,7 @@ export default [
         {
           id: 'booking-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface receiving appointment booking requests.',
           dependsOn: ['appointment-repository'],
@@ -808,7 +815,7 @@ export default [
         {
           id: 'booking-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface receiving appointment booking requests.',
           dependsOn: ['appointment-repository', 'appointment-booking-orchestrator'],
@@ -866,7 +873,7 @@ export default [
         {
           id: 'booking-api-portal',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           subsystem: 'patient-scheduling',
           description: 'Patient-facing API surface receiving appointment booking requests.',
           dependsOn: ['appointment-repository', 'appointment-booking-orchestrator'],

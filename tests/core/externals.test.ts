@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -43,7 +44,7 @@ interface FleetOptions {
   plannerRef?: string;
 }
 
-const DIRECT_EXPORTS = [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project', type: 'REST' }];
+const DIRECT_EXPORTS = [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project' }];
 
 function write(root: string, rel: string, text: string): void {
   const file = path.join(root, ...rel.split('/'));
@@ -74,12 +75,12 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   const b = 'packages/billing/.wai';
   write(root, `${b}/project.yaml`, projectYaml(o.billingId ?? 'billing', 'Billing Service'));
   const billingExports = o.billingExports ?? (o.viaFacade
-    ? [{ from: 'billing-api', component: 'invoice-portal', as: 'invoicing', audience: 'project', type: 'REST' }]
+    ? [{ from: 'billing-api', component: 'invoice-portal', as: 'invoicing', audience: 'project' }]
     : DIRECT_EXPORTS);
   write(root, `${b}/specs/.index.yaml`, dump({ name: 'BillingService', vision: 'Invoices.', publicInterfaces: billingExports }));
   write(root, `${b}/specs/subsystems/billing.yaml`, dump({
     id: 'billing', name: 'Billing', description: 'Invoicing.', parentSystem: 'BillingService',
-    publicInterfaces: [{ component: 'invoice-portal', type: 'REST', details: 'Issue invoices.' }],
+    publicInterfaces: [{ component: 'invoice-portal', details: 'Issue invoices.' }],
   }));
   if (o.viaFacade) {
     write(root, `${b}/specs/subsystems/billing-api.yaml`, dump({
@@ -89,7 +90,7 @@ function fleet(o: FleetOptions = {}): { root: string; billing: string; dispatch:
   }
   write(root, `${b}/specs/components/invoice-portal.yaml`, dump({
     id: 'invoice-portal', name: 'Invoice Portal', description: 'Issues invoices.', subsystem: 'billing',
-    componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [],
+    componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [],
   }));
   write(root, `${b}/specs/interfaces/iinvoice-portal.yaml`, dump({
     id: 'iinvoice-portal', name: 'Invoice Portal Interface', description: 'Issue invoices.', component: 'invoice-portal',
@@ -147,7 +148,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- the scan and the graph -------------------------------------------------
 
-  it('the scan records one root per project, bound root first, each with its own L0 qualified into its namespace', () => {
+  v5it('the scan records one root per project, bound root first, each with its own L0 qualified into its namespace', () => {
     const f = family();
     const roots = at(f.root, () => listProjectRoots());
     expect(roots.map((r) => r.namespace)).toEqual(['', 'billing', 'dispatch']);
@@ -176,7 +177,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     });
   });
 
-  it('producerOf, ownerOf and declares read the graph', () => {
+  v5it('producerOf, ownerOf and declares read the graph', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     at(f.root, () => {
       const fam = graph();
@@ -197,7 +198,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     });
   });
 
-  it('an edit to a root\'s project.yaml re-scans: the externals join the graph without an invalidate', () => {
+  v5it('an edit to a root\'s project.yaml re-scans: the externals join the graph without an invalidate', () => {
     const f = family();
     at(f.root, () => expect(familyNode(graph(), 'dispatch')?.externals).toEqual([]));
     write(f.root, 'packages/dispatch/.wai/project.yaml', projectYaml('dispatch', 'Dispatch Service', { billing: {} }));
@@ -207,11 +208,11 @@ describe('stage 2b — the project graph and declared externals', () => {
     runWithProjectRoot(f.root, () => expect(familyNode(graph(), 'dispatch')?.externals.map((e) => e.alias)).toEqual(['billing']));
   });
 
-  it('a member project table follows the member\'s own L0; a widening re-export is a problem', () => {
+  v5it('a member project table follows the member\'s own L0; a widening re-export is a problem', () => {
     const f = family();
     write(f.root, '.wai/specs/.index.yaml', dump({
       name: 'FleetWorks', vision: 'Delivery fleet platform.',
-      publicInterfaces: [{ from: 'billing', component: 'invoicing', audience: 'external', type: 'REST' }],
+      publicInterfaces: [{ from: 'billing', component: 'invoicing', audience: 'external' }],
     }));
     at(f.root, () => {
       expect(resolveProjectExports('billing').entries.map((e) => [e.publicName, e.audience])).toEqual([['invoicing', 'project']]);
@@ -224,7 +225,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- the findings --------------------------------------------------------------
 
-  it('stage 4: a member\'s references are its own gate\'s — the parent never reports them, the member does', () => {
+  v5it('stage 4: a member\'s references are its own gate\'s — the parent never reports them, the member does', () => {
     const f = family({ plannerRef: 'billing::invoicing' });
     const fromRoot = at(f.root, () => validateProject());
     expect(codes(fromRoot, 'EXTERNAL_UNDECLARED')).toEqual([]);
@@ -238,7 +239,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(codes(at(legacy.dispatch, () => validateProject()), 'EXTERNAL_CHECK_UNAVAILABLE')).toEqual(['warning @route-planner', 'warning @route-planner-impl']);
   });
 
-  it('property: not-exported-is-reported — judged against the member\'s own pin, which exports nothing public', () => {
+  v5it('property: not-exported-is-reported — judged against the member\'s own pin, which exports nothing public', () => {
     const f = family({ dispatchExternals: { billing: {} }, billingExports: [], plannerRef: 'billing::invoice-portal' });
     const res = at(f.root, () => validateProject());
     expect(codes(res, 'EXTERNAL_UNDECLARED')).toEqual([]);
@@ -258,7 +259,7 @@ describe('stage 2b — the project graph and declared externals', () => {
 
   // ---- pin, status, list -----------------------------------------------------------
 
-  it('property: pin-is-a-projection — the pinned snapshot is the producer\'s table projected at the audience ceiling', () => {
+  v5it('property: pin-is-a-projection — the pinned snapshot is the producer\'s table projected at the audience ceiling', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins).toEqual([expect.objectContaining({ alias: 'billing', outcome: 'pinned', project: 'billing', usedNames: 1, unexported: [] })]);
@@ -275,7 +276,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(fs.statSync(path.join(f.dispatch, '.wai', 'externals.lock.yaml')).mtimeMs).toBe(before);
   });
 
-  it('property: stale-only-when-used-changes — an unused member drifts, a used one goes stale', () => {
+  v5it('property: stale-only-when-used-changes — an unused member drifts, a used one goes stale', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     at(f.dispatch, () => pinExternals());
     expect(at(f.dispatch, () => getExternalsStatus())[0]).toMatchObject({ pinned: true, reachable: true, stale: false, drifted: false });
@@ -293,7 +294,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(stale.uses).toEqual([{ publicName: 'invoicing', member: 'issueInvoice', state: 'changed' }]);
   });
 
-  it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
+  v5it('property: reexport-is-transparent — the lock and the verdict are the same through a re-export chain', () => {
     const direct = family({ dispatchExternals: { billing: {} } });
     const chained = family({ dispatchExternals: { billing: {} }, viaFacade: true });
     const lockOf = (f: ReturnType<typeof fleet>) => {
@@ -318,7 +319,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(fs.existsSync(path.join(f.dispatch, '.wai', 'externals'))).toBe(false);
   });
 
-  it('an unresolved or out-of-reach producer is reported, never read, and keeps its previous pin', () => {
+  v5it('an unresolved or out-of-reach producer is reported, never read, and keeps its previous pin', () => {
     const f = family({ dispatchExternals: { billing: {}, ledger: {} } });
     const pins = at(f.dispatch, () => pinExternals());
     expect(pins.map((p) => [p.alias, p.outcome])).toEqual([['billing', 'pinned'], ['ledger', 'unresolved']]);
@@ -340,12 +341,12 @@ describe('stage 2b — the project graph and declared externals', () => {
     made.push(outside);
     write(outside, '.wai/project.yaml', projectYaml('ledger', 'Ledger'));
     write(outside, '.wai/specs/.index.yaml', dump({ name: 'Ledger', vision: 'v', publicInterfaces: [
-      { from: 'ledger', component: 'ledger-portal', audience: 'instance', type: 'REST' },
-      { from: 'ledger', component: 'audit-portal', as: 'audit', audience: 'project', type: 'REST' },
+      { from: 'ledger', component: 'ledger-portal', audience: 'instance' },
+      { from: 'ledger', component: 'audit-portal', as: 'audit', audience: 'project' },
     ] }));
-    write(outside, '.wai/specs/subsystems/ledger.yaml', dump({ id: 'ledger', name: 'Ledger', description: 'd', parentSystem: 'Ledger', publicInterfaces: [{ component: 'ledger-portal', type: 'REST', details: 'd' }, { component: 'audit-portal', type: 'REST', details: 'd' }] }));
-    write(outside, '.wai/specs/components/ledger-portal.yaml', dump({ id: 'ledger-portal', name: 'Ledger Portal', description: 'd', subsystem: 'ledger', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [] }));
-    write(outside, '.wai/specs/components/audit-portal.yaml', dump({ id: 'audit-portal', name: 'Audit Portal', description: 'd', subsystem: 'ledger', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [] }));
+    write(outside, '.wai/specs/subsystems/ledger.yaml', dump({ id: 'ledger', name: 'Ledger', description: 'd', parentSystem: 'Ledger', publicInterfaces: [{ component: 'ledger-portal', details: 'd' }, { component: 'audit-portal', details: 'd' }] }));
+    write(outside, '.wai/specs/components/ledger-portal.yaml', dump({ id: 'ledger-portal', name: 'Ledger Portal', description: 'd', subsystem: 'ledger', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [] }));
+    write(outside, '.wai/specs/components/audit-portal.yaml', dump({ id: 'audit-portal', name: 'Audit Portal', description: 'd', subsystem: 'ledger', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [] }));
     write(f.root, '.wai/project.yaml', projectYaml('fleetworks', 'FleetWorks', { ledger: { source: { path: path.relative(f.root, outside) } } }));
     const pins = at(f.root, () => pinExternals());
     expect(pins[0]).toMatchObject({ alias: 'ledger', outcome: 'pinned', usedNames: 0 });
@@ -359,7 +360,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(at(f.root, () => listExternals())[0]).toMatchObject({ alias: 'ledger', sourceKind: 'path', audience: 'instance', lock: expect.objectContaining({ project: 'ledger' }) });
   });
 
-  it('the gate inputs cover the pinned externals and the lock, each key naming its kind', () => {
+  v5it('the gate inputs cover the pinned externals and the lock, each key naming its kind', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     const before = at(f.dispatch, () => consumedContractInputs());
     at(f.dispatch, () => pinExternals());
@@ -374,7 +375,7 @@ describe('stage 2b — the project graph and declared externals', () => {
     expect(() => at(f.dispatch, () => externalsFileAdapter.readLock())).toThrow(/externals\.lock\.yaml/);
   });
 
-  it('exportUsage maps the consumer\'s references onto the producer\'s public names', () => {
+  v5it('exportUsage maps the consumer\'s references onto the producer\'s public names', () => {
     const f = family({ dispatchExternals: { billing: {} } });
     at(f.root, () => {
       expect(exportUsage('dispatch', 'billing')).toEqual({

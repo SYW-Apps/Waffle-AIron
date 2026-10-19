@@ -1,5 +1,4 @@
 import { SddRule } from '../types.js';
-import { isRetired } from '../../../models/index.js';
 
 /** What a Repository may own: its Store, the Registry that writes it, its read faces, and optionally the Adapter serving it. */
 const REPOSITORY_MEMBERS: ReadonlySet<string> = new Set(['Store', 'Registry', 'Index', 'Query', 'Adapter']);
@@ -27,30 +26,22 @@ export const patternContainmentRule: SddRule = {
   ],
   check(ctx) {
     // 1. Repository containment, member by member: a retired member is skipped
-    //    (its STEREOTYPE_RETIRED is its one finding), a live member's mistake
+    //    (the upgrade moves it), a live member's mistake
     //    still reports. A retired Repository is skipped entirely, as
     //    everywhere in this family.
     for (const comp of ctx.components) {
-      if (comp.componentType !== 'Repository' || isRetired(comp)) continue;
+      if (comp.componentType !== 'Repository') continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       for (const memberId of comp.owns) {
         const member = ctx.componentMap.get(memberId);
-        if (!member || isRetired(member) || REPOSITORY_MEMBERS.has(member.componentType)) continue;
+        if (!member || REPOSITORY_MEMBERS.has(member.componentType)) continue;
         ctx.addIssue('error', 'REPOSITORY_CONTAINMENT', `Repository "${comp.id}" owns "${memberId}" of type ${member.componentType}; a Repository may own only Store, Registry, Index, Query, and (optionally) Adapter.`, comp.id, isDraftCtx);
       }
     }
 
-    // 2. The counting patterns. A FeatureComponent or RouterComponent owning a
-    //    retired member is not judged for containment until that member is
-    //    migrated: its member counts change with the migration, and the
-    //    member's STEREOTYPE_RETIRED is the one finding.
+    // 2. The counting patterns.
     for (const comp of ctx.components) {
       if (comp.componentType !== 'FeatureComponent' && comp.componentType !== 'RouterComponent') continue;
-      if (isRetired(comp)) continue;
-      if (comp.owns.some(memberId => {
-        const member = ctx.componentMap.get(memberId);
-        return member !== undefined && isRetired(member);
-      })) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
 
       // FeatureComponent containment: exactly one Orchestrator and one or
@@ -96,11 +87,11 @@ export const patternContainmentRule: SddRule = {
     //    Supervisor owns only its supervision state, and works with anything
     //    else as a collaborator in dependsOn.
     for (const comp of ctx.components) {
-      if (comp.componentType !== 'Supervisor' || isRetired(comp)) continue;
+      if (comp.componentType !== 'Supervisor') continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       for (const memberId of comp.owns) {
         const member = ctx.componentMap.get(memberId);
-        if (!member || isRetired(member) || SUPERVISION_STATE.has(member.componentType)) continue;
+        if (!member || SUPERVISION_STATE.has(member.componentType)) continue;
         ctx.addIssue('error', 'SUPERVISOR_CONTAINMENT', `Supervisor "${comp.id}" owns "${memberId}" of type ${member.componentType}; a Supervisor owns only its supervision state — Stores and Registries that are its own. Depend on "${memberId}" as a collaborator instead.`, comp.id, isDraftCtx);
       }
     }

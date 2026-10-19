@@ -56,24 +56,24 @@ function buildTwoPortalProject(rootDir: string): void {
     boundaries: [],
     globalRequirements: [],
     publicInterfaces: [
-      { id: 'gateway', name: 'Gateway API', subsystem: 'core-sub', component: 'gateway-portal', type: 'REST', details: 'public api', audience: 'external' },
-      { id: 'admin', name: 'Admin API', subsystem: 'core-sub', component: 'admin-portal', type: 'REST', details: 'operator api', audience: 'external' },
+      { as: 'gateway', name: 'Gateway API', from: 'core-sub', component: 'gateway-portal', details: 'public api', audience: 'external' },
+      { as: 'admin', name: 'Admin API', from: 'core-sub', component: 'admin-portal', details: 'operator api', audience: 'external' },
     ],
     createdAt: now,
     updatedAt: now,
   });
   saveSpec('subsystem', subsystem('core-sub', {
     publicInterfaces: [
-      { type: 'REST', details: 'public api', component: 'gateway-portal' },
-      { type: 'REST', details: 'operator api', component: 'admin-portal' },
+      { details: 'public api', component: 'gateway-portal' },
+      { details: 'operator api', component: 'admin-portal' },
     ],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
-    componentType: 'Portal', portalType: 'HTTP_API', basePath: '/api',
+    componentType: 'Portal', transport: 'HTTP', basePath: '/api',
     auth: { scheme: 'bearer', bearerFormat: 'JWT' },
   } as Partial<ComponentSpec>));
   saveComponentSpec(component('admin-portal', 'core-sub', {
-    componentType: 'Portal', portalType: 'HTTP_API', basePath: '/admin',
+    componentType: 'Portal', transport: 'HTTP', basePath: '/admin',
     auth: { scheme: 'apiKey', in: 'header', name: 'X-Admin-Key' },
   } as Partial<ComponentSpec>));
   saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [

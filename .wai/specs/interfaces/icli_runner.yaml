@@ -16,19 +16,18 @@ methods:
       Reconciles THIS project's generated outputs to the configured state — and only this project's:
       there is no cascade into members (stage 5). `--family` walks the members explicitly,
       generating each member's own layer in its own root (bootstrapping a member that is not yet
-      runnable, non-destructively); without it nothing below the project is written. `--no-recurse`
-      is accepted until the next major release as the default it now is. Agent-file materialization
-      is OPT-IN via rules.materializeAgentFiles (default off): when ON, generates per-subsystem
-      owner/architect files rendered through the SAME live brief composition (so file, tool, and
-      resource surfaces are one text) and prunes stale managed files against the FULL resolved
-      topology; when OFF (the default), the desired state is ZERO agent files — any leftover
-      wairon:managed agent files are removed once, and only guides and skills are (re)injected.
-      Hand-authored files and .wai/agents/ guidance files are never touched either way. Generate
-      writes nothing outside the project root unless asked: a target whose output directory resolves
-      outside it is named and skipped, both write and prune, until `--global` is given — and then
-      every file there it replaces or prunes is first backed up beside itself. The derived context
-      documents are kept current whenever the project keeps a context directory, exactly as `doctor
-      --fix` keeps them.
+      runnable, non-destructively); without it nothing below the project is written. Agent-file
+      materialization is OPT-IN via rules.materializeAgentFiles (default off): when ON, generates
+      per-subsystem owner/architect files rendered through the SAME live brief composition (so file,
+      tool, and resource surfaces are one text) and prunes stale managed files against the FULL
+      resolved topology; when OFF (the default), the desired state is ZERO agent files — any
+      leftover wairon:managed agent files are removed once, and only guides and skills are
+      (re)injected. Hand-authored files and .wai/agents/ guidance files are never touched either
+      way. Generate writes nothing outside the project root unless asked: a target whose output
+      directory resolves outside it is named and skipped, both write and prune, until `--global` is
+      given — and then every file there it replaces or prunes is first backed up beside itself. The
+      derived context documents are kept current whenever the project keeps a context directory,
+      exactly as `doctor --fix` keeps them.
     signature: >-
       runGenerate(options: { target?: string; domain?: string; domains?: string; root?: boolean;
       dryRun?: boolean; family?: boolean; global?: boolean }): Promise<void>
@@ -150,23 +149,6 @@ methods:
       runSurface(action: string, options: { audience?: string; format?: string; out?: string;
       source?: string; origin?: string; portal?: string }): Promise<void>
     returns: async void
-  - name: runPacks
-    description: >-
-      Deprecated alias of `wairon pack` for the add | list | remove subset — forwards to the packs
-      adapter. Kept for back-compat; new usage should prefer `wairon pack`.
-    signature: 'runPacks(action: string, arg?: string, options?: PackCommandOptions): async void'
-    returns: async void
-    params:
-      - name: action
-        type: string
-      - name: arg
-        type: string
-        description: The pack name or source the action works on
-        optional: true
-      - name: options
-        type: PackCommandOptions
-        description: The subcommand's flags; runPacks reads only `global`
-        optional: true
   - name: runRules
     description: Handle `wairon rules list`, printing the active conformance rule set.
     signature: 'runRules(): void'
@@ -189,8 +171,7 @@ methods:
       Handle the unified `wairon pack <action>` (init | build | install | uninstall | which | use |
       unuse | impact | bundle | sync | add | list | remove), dispatching to the packs adapter;
       `--yes` passes through to the commands that select or update a pack, which otherwise show its
-      impact and ask before writing. The primary pack UX; `wairon packs` remains as a deprecated
-      alias (runPacks) for add | list | remove.
+      impact and ask before writing. The one pack command.
     signature: 'runPack(action: string, arg?: string, options?: PackCommandOptions): async void'
     returns: async void
     params:
@@ -353,9 +334,7 @@ methods:
       wrote is not repaired: `wairon upgrade` moves it. A repair that would write OUTSIDE the
       project root — a machine-wide MCP configuration such as Antigravity's global mcp_config.json,
       the legacy global plugin — is listed in its own plan and written only once confirmed (--yes
-      with --global for a non-interactive run), each replaced file backed up beside itself. --report
-      composed-validation explains what composed validation changed in each project's verdict and
-      writes nothing.
+      with --global for a non-interactive run), each replaced file backed up beside itself.
     signature: 'runDoctor(options?: DoctorOptions): async void'
     returns: async void
     params:
@@ -1004,4 +983,4 @@ methods:
         command's action — a hook the framework calls, not an action endpoint.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T18:05:43.702Z'
+updatedAt: '2026-10-18T19:04:23.324Z'

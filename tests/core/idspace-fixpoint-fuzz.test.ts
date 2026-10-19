@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -352,7 +353,7 @@ function materialize(shape: GenShape, rootDir: string): void {
       subsystemSpec(lvl.mountLocalId, {
         parentSystem: parent.systemName,
         projectPath: `packages/${lvl.mountLocalId}`,
-        publicInterfaces: [{ type: 'Custom', details: 'd', component: lvl.portalLocal! }],
+        publicInterfaces: [{ details: 'd', component: lvl.portalLocal! }],
       }),
       lvl.systemName,
     );
@@ -377,7 +378,7 @@ function materialize(shape: GenShape, rootDir: string): void {
         description: 'd',
         subsystem: lvl.subsystemLocal,
         componentType: comp.componentType,
-        ...(comp.componentType === 'Portal' ? { portalType: 'Custom' } : {}),
+        ...(comp.componentType === 'Portal' ? { transport: 'Custom' } : {}),
         owns: [],
         dependsOn: comp.dependsOn.map(d => d.diskForm),
         previousIds: traceOf(comp),

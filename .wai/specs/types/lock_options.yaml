@@ -15,13 +15,6 @@ fields:
       the rest of the previous approval carries forward. The gate identity recorded is always the
       whole project's.
     optional: true
-  - name: recursive
-    type: bool
-    description: >-
-      Accepted until the next major release and ignored for what is written: a lock approves this
-      project only and never writes below it (parent-lock-writes-nothing-below). Each member is
-      locked at its own root.
-    optional: true
   - name: all
     type: bool
     description: >-
@@ -31,4 +24,4 @@ fields:
 methods: []
 sourcePath: src/commands/lock.ts
 createdAt: '2026-07-24T18:06:34.277Z'
-updatedAt: '2026-10-18T00:37:56.566Z'
+updatedAt: '2026-10-18T19:04:26.304Z'

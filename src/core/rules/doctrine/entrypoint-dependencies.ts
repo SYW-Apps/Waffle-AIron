@@ -1,5 +1,5 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { isRetired, type ComponentSpec } from '../../../models/index.js';
+import { type ComponentSpec } from '../../../models/index.js';
 import { isPureLogic, stereotypeOf, storeResolutionHint, type EdgeFinding } from './stereotype-terms.js';
 
 /**
@@ -16,7 +16,7 @@ export function maintainedRegistries(ctx: RuleContext): Map<string, string[]> {
     set.add(registryId);
   };
   for (const comp of ctx.components) {
-    if (comp.componentType !== 'Supervisor' || isRetired(comp)) continue;
+    if (comp.componentType !== 'Supervisor') continue;
     for (const memberId of comp.owns) {
       if (ctx.componentMap.get(memberId)?.componentType === 'Registry') add(comp.id, memberId);
     }
@@ -24,7 +24,7 @@ export function maintainedRegistries(ctx: RuleContext): Map<string, string[]> {
   for (const impl of ctx.implementations) {
     const contract = ctx.interfaceMap.get(impl.contract);
     const supervisor = contract ? ctx.componentMap.get(contract.component) : undefined;
-    if (!supervisor || supervisor.componentType !== 'Supervisor' || isRetired(supervisor)) continue;
+    if (!supervisor || supervisor.componentType !== 'Supervisor') continue;
     for (const implMethod of impl.methods) {
       for (const step of implMethod.narrative) {
         if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
