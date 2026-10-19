@@ -13,16 +13,16 @@ name: Publish SDK to npm
 # is actually published.
 #
 # Requirements:
-#   - Repo secret NPM_TOKEN with rights to CREATE @wairon/sdk on the FIRST publish
-#     (an Automation token, or a granular token scoped to create @wairon/*
-#     packages — a token scoped only to @wairon/cli cannot create @wairon/sdk).
+#   - npm trusted publishing, as for @wairon/cli (see publish-npm.yml): @wairon/sdk
+#     names this repository and release.yml as its trusted publisher. NPM_TOKEN is
+#     the fallback until a release has published through OIDC.
 #   - The GitHub repository must be PUBLIC (provenance refuses private repos).
 
 on:
   workflow_call:
     secrets:
       NPM_TOKEN:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       version:
@@ -54,9 +54,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+
+      # Trusted publishing (OIDC) needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1
 
       - name: Resolve version and dist-tag
         id: v
