@@ -9,6 +9,7 @@ import { roundtripRule } from './integrity/roundtrip-serialization.js';
 import { typeDeclarationsRule } from './integrity/type-declarations.js';
 import { fieldTypeReferencesRule } from './integrity/field-type-references.js';
 import { signatureTypeReferencesRule } from './integrity/signature-type-references.js';
+import { typeRefScopeRule } from './integrity/type-ref-scope.js';
 import { signatureSourcesRule } from './integrity/signature-sources.js';
 import { signatureTypesRule } from './integrity/signature-types.js';
 import { signatureTextRule } from './integrity/signature-text.js';
@@ -151,6 +152,7 @@ export const SDD_RULES: SddRule[] = [
   typeDeclarationsRule,
   fieldTypeReferencesRule,
   signatureTypeReferencesRule,
+  typeRefScopeRule,
   signatureSourcesRule,
   signatureTypesRule,
   signatureTextRule,

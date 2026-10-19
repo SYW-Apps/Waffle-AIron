@@ -253,6 +253,49 @@ export function typeMatchesRef(type: Pick<TypeSpec, 'id' | 'subsystem'>, ref: st
   return matchTypeRef(ref, qualifiedTypeId(type));
 }
 
+/** type_ref_outcome — how one written type reference resolved. */
+export type TypeRefOutcome = 'resolved' | 'ambiguous' | 'none';
+
+/** type_ref_resolution — how one written type reference resolved, the referrer's subsystem first. */
+export interface TypeRefResolution {
+  /** The id of the one type the reference resolves to. */
+  type?: string;
+  /** The ids (qualified form) of every type the reference matches. */
+  candidates: string[];
+  outcome: TypeRefOutcome;
+  /** A type of the referrer's own subsystem, named like the ref, that the binding passed over. */
+  shadowedBy?: string;
+}
+
+/**
+ * type_ref_resolution.resolve — resolve a written type reference, the
+ * referrer's subsystem first. Candidates are the types matchesRef holds for;
+ * when some belong to `from` only those count. A reference that resolved to
+ * another subsystem's type while `from` holds a non-candidate type of the
+ * same display name is still resolved, with shadowedBy set. Pure.
+ */
+export function resolveTypeRef(
+  ref: string,
+  from: string | undefined,
+  types: readonly Pick<TypeSpec, 'id' | 'name' | 'subsystem'>[],
+): TypeRefResolution {
+  const candidates = types.filter((t) => typeMatchesRef(t, ref));
+  const ids = candidates.map((t) => qualifiedTypeId(t));
+  if (candidates.length === 0) return { candidates: ids, outcome: 'none' };
+  const own = from !== undefined ? candidates.filter((t) => t.subsystem === from) : [];
+  const pool = own.length > 0 ? own : candidates;
+  if (pool.length > 1) return { candidates: ids, outcome: 'ambiguous' };
+  const hit = pool[0];
+  const result: TypeRefResolution = { type: hit.id, candidates: ids, outcome: 'resolved' };
+  if (from !== undefined && hit.subsystem !== from) {
+    const segments = ref.split(/::|\./).filter(Boolean);
+    const key = nameKey(segments[segments.length - 1] ?? '');
+    const shadow = types.find((t) => t.subsystem === from && !candidates.includes(t) && key !== '' && nameKey(t.name.split('<')[0]) === key);
+    if (shadow) result.shadowedBy = shadow.id;
+  }
+  return result;
+}
+
 /** type_spec.genericParameters — the generic parameters declared in the type's name (Page<T> gives T). */
 export function typeGenericParameters(type: Pick<TypeSpec, 'name'>): Set<string> {
   return extractTypeGenerics(type.name);

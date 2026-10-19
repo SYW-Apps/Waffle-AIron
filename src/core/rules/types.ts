@@ -27,6 +27,7 @@ import type { PackSelectionFailure } from '../extensions.js';
 import type { ValidationIssue } from '../validation.js';
 import type { ExportUsage, ResolvedExportTable } from '../../models/exports.js';
 import type { ProjectFamily } from '../../models/project-family.js';
+import type { TypeRefResolution } from '../../models/type-references.js';
 import type { SignatureFacts } from '../signature-sources.js';
 import type { TypeSpellingFacts } from '../../models/type-grammar.js';
 
@@ -579,7 +580,13 @@ export interface RuleContext {
    * project's OWN types first, then through its `use` imports exactly as
    * resolveCrossProject resolves a bare name.
    */
-  isTypeResolved(ref: string, generics: Set<string>): boolean;
+  isTypeResolved(ref: string, generics: Set<string>, from?: string): boolean;
+  /**
+   * How a type reference written in a spec of subsystem `from` (none for the
+   * L0) resolves against the bound project's own types, the referrer's
+   * subsystem first (type_ref_resolution.resolve). Pure over the types held.
+   */
+  resolveTypeRef(ref: string, from?: string): TypeRefResolution;
   /** Effective target language for a subsystem (subsystem override, else system), normalized to the language-table key, or undefined. */
   targetLanguageFor(subsystemId: string | undefined): string | undefined;
   /** Scope filter for granular (per-subsystem) validation. */
