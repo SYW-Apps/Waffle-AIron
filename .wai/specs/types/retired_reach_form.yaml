@@ -30,5 +30,10 @@ values:
       ENDPOINT_OUTSIDE_MOUNT, MOUNT_TARGET_NOT_PORTAL, PUBLIC_INTERFACE_TYPE_MISMATCH,
       PUBLIC_INTERFACE_EVENT_MISTYPED, MISSING_PORTAL_TYPE). The scan does not record it; the
       reachability migration reads the allows itself and names its rewrites with this form
+  - name: export-name
+    description: >-
+      An L0 export entry's wairon 5 names: `id`, now `as`, and `subsystem`, now `from`. The scan
+      does not record it; the reachability migration reads the L0 itself and names its rewrites with
+      this form
 createdAt: '2026-10-06T13:06:37.170Z'
-updatedAt: '2026-10-18T19:09:09.188Z'
+updatedAt: '2026-10-19T11:51:54.075Z'
