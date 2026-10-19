@@ -4,9 +4,9 @@ description: >-
   Brings a hosting data directory and its hosted trees to the running major when the server starts,
   before it serves anything: it refuses to start on a data directory a newer major or a major
   outside the window wrote, copies an older one whole first, runs the kept data-directory steps in
-  order (for 5 to 6: the permission model, then every hosted tree, then the member records the
-  upgraded trees declare), and records the running major. Any failure stops the start, naming what
-  failed and the backup to restore.
+  order (for 5 to 6: the permission model, the retired stored values, then every hosted tree, then
+  the member records the upgraded trees declare), and records the running major. Any failure stops
+  the start, naming what failed and the backup to restore.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -18,8 +18,9 @@ dependsOn:
   - audit_repository
   - host_upgrade_adapter
   - project_repository
+  - retired_value_migration
 previousIds:
   - data_dir_upgrade
 status: complete
 createdAt: '2026-10-18T14:29:20.735Z'
-updatedAt: '2026-10-18T14:34:20.552Z'
+updatedAt: '2026-10-19T06:18:00.921Z'

@@ -348,9 +348,9 @@ methods:
     description: >-
       What the current scan met in the forms the reachability model retired
       (spec_loader.retiredReachFacts): the stored portalType, listener mounts, retired invokedBy
-      kinds, authored export types and in-process Custom endpoints the loader read compatibly. A
-      passthrough read of the spec repository; the validator's entry-declarations rule reports the
-      retired kinds from it.
+      kinds, authored export types and in-process Custom endpoints, which the v5 reading `wairon
+      upgrade` binds still reads. A passthrough read of the spec repository; the validator's
+      entry-declarations rule reports the retired kinds from it.
     signature: 'retiredReachFacts(): list<RetiredReachFact>'
     returns: list<RetiredReachFact>
     params: []
@@ -499,4 +499,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-16T12:01:38.259Z'
+updatedAt: '2026-10-19T06:12:29.456Z'

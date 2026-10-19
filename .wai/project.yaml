@@ -228,15 +228,15 @@ rules:
       # 1 finding(s), 1 unit(s).
       - kind: drift
         why: >-
-          SUBPROJECT_SEPARATOR is the `::` of the deprecated member-qualified selector form
-          (`projectId::alias`), published by the project repository's file and taken by the two
-          components that still build and read that form: member registration formats and matches
-          members' qualifiers with it, and the request orchestrator reads the top project id off the
-          qualifier a deprecated selector carried. The finding is right - a name crossing a boundary no contract
-          promised - and the form resolves only until the next major release. It is retired together with the
-          deprecated `projectId::alias` qualifier form: removing the form removes both call sites and
-          the constant, so modelling the separator now (a qualifier value object, or contract methods
-          on the project repository) would design a surface whose only purpose is to be deleted.
+          SUBPROJECT_SEPARATOR is the `::` of the member-qualified selector form an older major
+          stored in tokens (`projectId::alias`), published by the project repository's file and
+          taken by the one component that still builds and matches it: member registration, whose
+          upgrade at server start rewrites the stored tokens that carry it. The finding is right - a
+          name crossing a boundary no contract promised - and the form is read only by that upgrade.
+          It is retired together with the upgrade step that rewrites the stored form: removing the
+          step removes the call site and the constant, so modelling the separator now (a qualifier
+          value object, or contract methods on the project repository) would design a surface whose
+          only purpose is to be deleted.
         findings:
           - code: UNDECLARED_EXPORT
             spec: project_index_impl

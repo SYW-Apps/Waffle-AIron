@@ -2,9 +2,10 @@ kind: value-object
 id: member_upgrade_report
 name: MemberUpgradeReport
 description: >-
-  The answer of the stage-7 upgrade (`wairon host doctor`, and with --fix its apply): the unfinished
-  transactions found under the data directory first (resolved with --fix, reported otherwise), the
-  plan as reported, whether it was applied, and the transaction outcome when it was attempted.
+  The answer of the stage-7 upgrade (applied by the instance upgrade at server start): the
+  unfinished transactions found under the data directory first (resolved when applied, reported
+  otherwise), the plan as reported, whether it was applied, and the transaction outcome when it was
+  attempted.
 subsystem: sdd_host
 fields:
   - name: plan
@@ -29,4 +30,4 @@ fields:
 methods: []
 sourcePath: src/server/members.ts
 createdAt: '2026-10-01T16:27:26.465Z'
-updatedAt: '2026-10-07T06:28:28.274Z'
+updatedAt: '2026-10-19T06:13:57.599Z'

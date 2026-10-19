@@ -8,8 +8,7 @@ methods:
   - name: mintToken
     description: >-
       Mint a user-bound MCP/API token from a TokenMintRequest; the plaintext is returned once (as
-      `key`), with `mapped` naming each deprecated member-qualified narrowing entry and the member
-      record id it was stored as.
+      `key`).
     signature: 'mintToken(credential: string, request: TokenMintRequest): MintedToken'
     returns: MintedToken
     params:
@@ -186,4 +185,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-10-07T22:29:26.497Z'
+updatedAt: '2026-10-19T06:11:31.243Z'

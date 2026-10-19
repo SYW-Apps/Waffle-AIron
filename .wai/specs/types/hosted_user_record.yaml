@@ -18,12 +18,12 @@ fields:
   - name: status
     type: string
     description: >-
-      Lifecycle status collapsed to a single axis: "active" or "inactive". Any non-"active" value
-      (including legacy "disabled"/"deleted" and the former distinct suspend/deactivate states, now
-      collapsed) is treated as inactive. An inactive record is retained for audit provenance but the
-      user cannot act: on deactivation every one of the user's credentials is revoked and SSO
-      re-login is blocked. Returning to "active" does NOT auto-restore revoked tokens — the user
-      re-logs in via SSO or an admin mints fresh.
+      Lifecycle status on a single axis: "active" or "inactive" - nothing else is stored or accepted
+      (the former suspended, deactivated and disabled values were rewritten to inactive when the
+      data directory was upgraded). An inactive record is retained for audit provenance but the user
+      cannot act: on deactivation every one of the user's credentials is revoked and SSO re-login is
+      blocked. Returning to "active" does NOT auto-restore revoked tokens - the user re-logs in via
+      SSO or an admin mints fresh.
     optional: false
   - name: createdAt
     type: string
@@ -65,4 +65,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-10-04T10:20:16.288Z'
+updatedAt: '2026-10-19T06:12:22.264Z'

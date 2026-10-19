@@ -2972,9 +2972,7 @@ methods:
         onFalseStep: 7
       - stepNumber: 4
         label: mint_owned
-        description: >-
-          Mint an owner-bound token via the host adapter, and print it once together with each
-          deprecated member-qualified entry and the member record id it was stored as
+        description: Mint an owner-bound token via the host adapter, and print it once
         type: call
         targetComponent: cli_host_adapter
         targetMethod: mintToken
@@ -4104,4 +4102,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T19:08:52.054Z'
+updatedAt: '2026-10-19T06:11:24.842Z'

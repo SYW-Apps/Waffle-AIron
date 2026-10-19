@@ -7,12 +7,10 @@ methods: []
 sourcePath: src/models/lock.ts
 values:
   - name: matches
-    description: >-
-      The parent's record carries this member's subject (its members entry, or, until the next major
-      release, its legacy children entry)
+    description: The parent's record carries this member's subject (its members entry)
   - name: moved
     description: The parent recorded another subject, so the parent's own lock is stale until it re-locks
   - name: unpinned
     description: The parent has no lock, or its lock names no pin for this alias
 createdAt: '2026-10-04T23:13:10.734Z'
-updatedAt: '2026-10-18T00:38:00.052Z'
+updatedAt: '2026-10-19T06:12:26.788Z'

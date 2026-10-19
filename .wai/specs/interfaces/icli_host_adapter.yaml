@@ -343,8 +343,7 @@ methods:
   - name: mintToken
     description: >-
       Mint an owner-bound API token acting as its owner's live permission, narrowed to the named
-      projects (instance admin); shown once, with each deprecated member-qualified entry and the
-      member record id it was stored as.
+      projects (instance admin); shown once.
     signature: 'mintToken(credential: string?, request: TokenMintRequest): MintedToken'
     returns: MintedToken
     params:
@@ -430,4 +429,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-04T12:49:25.392Z'
-updatedAt: '2026-10-18T14:28:54.661Z'
+updatedAt: '2026-10-19T06:11:34.165Z'

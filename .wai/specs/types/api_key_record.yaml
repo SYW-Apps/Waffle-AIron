@@ -29,11 +29,11 @@ fields:
       The token's project narrowing: the hosted record ids this token may act on, or "*" for the
       owner's full accessible set. An entry naming a project covers that project and every member
       below it, transitively (projects nest like units), so a family root's entry reaches its
-      members with no expansion. Since stage 7 a member is a record of its own; the upgrade rewrites
-      every member-QUALIFIED entry ('projectId::alias', one alias per hop) to the member's record
-      id, and a qualified entry left unrewritten still resolves until the next major release, to the
-      member's record. The token carries no permissions of its own — within this narrowing it acts
-      as the owner user's LIVE permission, resolved over each bound record's chain.
+      members with no expansion. A member is a record of its own, named by its own id; the
+      data-directory upgrade rewrites every member-QUALIFIED entry an older wairon stored to the
+      member's record id, and drops one that names no member. The token carries no permissions of
+      its own - within this narrowing it acts as the owner user's LIVE permission, resolved over
+      each bound record's chain.
     optional: false
   - name: createdAt
     type: string
@@ -71,4 +71,4 @@ methods:
     symbol: hashToken
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-18T00:37:47.614Z'
+updatedAt: '2026-10-19T06:11:43.607Z'

@@ -38,16 +38,15 @@ methods:
       - idempotent
   - name: projectTable
     description: >-
-      Resolve one project's L0 export table — what other projects may consume. A legacy entry reads
-      as a re-export (`subsystem` as `from`, `id` as `as`; a component or subsystem-owned type
-      without a source infers it from its owner); an entry `{ typeDef }` with no `from` naming a
-      type the project owns at project level (no subsystem) binds that type as an own item; the
-      public name is `as ?? id ?? interface ?? component ?? typeDef`; each entry's audience applies
-      to every name it brings in. A source is one of the project's subsystems (through its subsystem
-      table), or a member or external by alias (through that producer's table in the sources — a
-      producer still on the resolution path is a named-cycle problem, one the scan did not read is
-      an invalid problem); an entry declaring a wider audience than the export it re-exports is a
-      widens problem. Two public names bound to different targets that share one
+      Resolve one project's L0 export table - what other projects may consume. A component or
+      subsystem-owned type without a `from` infers its source from its owner; an entry `{ typeDef }`
+      with no `from` naming a type the project owns at project level (no subsystem) binds that type
+      as an own item; the public name is `as ?? interface ?? component ?? typeDef`; each entry's
+      audience applies to every name it brings in. A source is one of the project's subsystems
+      (through its subsystem table), or a member or external by alias (through that producer's table
+      in the sources - a producer still on the resolution path is a named-cycle problem, one the
+      scan did not read is an invalid problem); an entry declaring a wider audience than the export
+      it re-exports is a widens problem. Two public names bound to different targets that share one
       reference_resolution.nameKey are a duplicate problem (EXPORT_ID_DUPLICATE) and both are left
       out, exactly as two wildcards binding one name are: a consumer's bare `use` import compares by
       that key and could not tell them apart. A project with no L0 answers an empty table.
@@ -82,4 +81,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-27T10:34:29.431Z'
-updatedAt: '2026-10-04T10:18:43.903Z'
+updatedAt: '2026-10-19T06:12:34.564Z'
