@@ -344,6 +344,19 @@ export interface IdentityProviderConfig {
   updatedAt?: string;
 }
 
+/** One provider as an administrator sees it in the listing: the stored config
+ *  plus why SSO through it cannot work yet (absent when nothing is wrong). */
+export interface IdentityProviderListing {
+  provider: IdentityProviderConfig;
+  setupProblem?: string;
+}
+
+/** The answer to saving a provider: the stored config plus setup warnings. */
+export interface IdentityProviderSaveResult {
+  provider: IdentityProviderConfig;
+  warnings: string[];
+}
+
 export interface ApiKeyRecord {
   id: string;
   projects: string[];
