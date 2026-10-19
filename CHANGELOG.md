@@ -95,6 +95,25 @@ directory, and refuses those forms afterwards:
 - **Exposure policy errors.** An exposure policy file that cannot be read now fails
   loudly, instead of the server silently using the default posture.
 
+### Fixes: a type is the one its own subsystem names
+
+- A bare type reference now resolves in the subsystem that writes it first. Before, it
+  bound by id suffix alone, so a contract in one subsystem could bind silently to a
+  same-named type of another and leave its own type unused.
+- New warning `AMBIGUOUS_TYPE_REF` (rule `type-ref-scope`): a reference that matches
+  several types with nothing in its own subsystem to settle which is meant, or that binds
+  to another subsystem's type while its own subsystem holds a type of that display name.
+  Write the type's id, or `subsystem::name`, to say which.
+- Two types of different subsystems declaring one id (`DUPLICATE_SPEC_ID`) no longer
+  hide the second one: `subsystem::id` reaches it, and the finding names both
+  `sdd_rename_type <subsystem>::<id> <new id>` calls. Renaming either half moves only
+  its file and respells only the references that resolve to it.
+- `sdd_rename_type` respells only references that resolve to the renamed type from where
+  they are written, and refuses (`ambiguous-ref`) one that matches several types
+  including it. Its description now says which signatures it rewrites: a signature type's
+  params and returns, a contract method's stored text re-derived from its params, and
+  only the result of a prose signature that has no params.
+
 ### Release QA
 
 - A release's QA verdict passes only when `release-notes/<version>.md` exists with at

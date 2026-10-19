@@ -372,4 +372,66 @@ export default [
       ],
     },
   }),
+
+  // -------------------------------------------------------------------------
+  // AMBIGUOUS_TYPE_REF — a bare name binds across subsystems
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'AMBIGUOUS_TYPE_REF',
+    severity: 'warning',
+    anchoredTo: 'icustoms_declarant',
+    expectFire: true,
+    scenario:
+      'The customs declarant contract takes a FreightRate, but the customs subsystem has its own type named FreightRate: the bare name binds to the rate of the quoting subsystem, passing the customs one over.',
+    tree: {
+      subsystems: [
+        { id: 'quoting', description: 'Carrier quote computation.' },
+        { id: 'customs', description: 'Customs clearance handling for cross-border freight.' },
+      ],
+      types: [
+        { id: 'freight-rate', kind: 'value-object', subsystem: 'quoting', name: 'FreightRate', fields: [{ name: 'cents', type: 'int', description: 'Quoted price in cents.' }] },
+        { id: 'duty-rate', kind: 'value-object', subsystem: 'customs', name: 'FreightRate', fields: [{ name: 'percent', type: 'int', description: 'Duty percentage.' }] },
+      ],
+      components: [{ id: 'customs-declarant', componentType: 'Orchestrator', subsystem: 'customs', description: 'Declares cargo to customs.' }],
+      interfaces: [{
+        id: 'icustoms_declarant',
+        component: 'customs-declarant',
+        methods: [{
+          name: 'declare',
+          description: 'Declare one consignment at the quoted duty.',
+          // The defect: the bare name binds to the type of the quoting subsystem.
+          params: [{ name: 'rate', type: 'FreightRate', description: 'The rate declared.' }],
+          returns: 'void',
+        }],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'AMBIGUOUS_TYPE_REF',
+    expectFire: false,
+    reason: 'The contract writes the id of the customs type, so the reference says which type is meant.',
+    scenario:
+      'The customs declarant contract takes the duty-rate type by its id.',
+    tree: {
+      subsystems: [
+        { id: 'quoting', description: 'Carrier quote computation.' },
+        { id: 'customs', description: 'Customs clearance handling for cross-border freight.' },
+      ],
+      types: [
+        { id: 'freight-rate', kind: 'value-object', subsystem: 'quoting', name: 'FreightRate', fields: [{ name: 'cents', type: 'int', description: 'Quoted price in cents.' }] },
+        { id: 'duty-rate', kind: 'value-object', subsystem: 'customs', name: 'FreightRate', fields: [{ name: 'percent', type: 'int', description: 'Duty percentage.' }] },
+      ],
+      components: [{ id: 'customs-declarant', componentType: 'Orchestrator', subsystem: 'customs', description: 'Declares cargo to customs.' }],
+      interfaces: [{
+        id: 'icustoms_declarant',
+        component: 'customs-declarant',
+        methods: [{
+          name: 'declare',
+          description: 'Declare one consignment at the quoted duty.',
+          params: [{ name: 'rate', type: 'duty-rate', description: 'The rate declared.' }],
+          returns: 'void',
+        }],
+      }],
+    },
+  }),
 ];
