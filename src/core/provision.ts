@@ -24,6 +24,7 @@ import {
   assertContainedProjectPath,
   loadTypeSpecs,
   loadTypeSpec,
+  loadDuplicateTypeSpecs,
   getTypePath,
   deleteSpec,
   scanAllSpecs,
@@ -85,6 +86,8 @@ import {
   type TypeSpec,
   deriveMethodSignature,
   qualifiedTypeId,
+  resolveTypeRef,
+  type TypeRefResolution,
   typeMatchesRef,
   extractTypeIdentifiers,
   methodTypeRefs,
@@ -3534,7 +3537,7 @@ function refuseRetiredIds(wanted: { kind: 'component' | 'interface' | 'implement
  */
 function keepPublicNames(
   specsDir: string,
-  derives: (entry: any) => boolean,
+  derives: (entry: any, owner?: string) => boolean,
   dryRun = false,
 ): { names: string[]; specs: RewrittenSpec[] } {
   const names: string[] = [];
@@ -3552,7 +3555,7 @@ function keepPublicNames(
     let changed = false;
     for (const entry of raw.publicInterfaces) {
       if (!entry || typeof entry !== 'object' || entry.as !== undefined || entry.id !== undefined) continue;
-      if (!derives(entry)) continue;
+      if (!derives(entry, kind === 'subsystem' ? String(raw.id) : undefined)) continue;
       const source = entry.interface ?? entry.component ?? entry.typeDef;
       if (typeof source !== 'string') continue;
       const name = source.split('::').pop() ?? source;
@@ -4562,10 +4565,21 @@ function identifierPattern(methodName: string): RegExp {
 // entry's typeDef. A position is a type EXPRESSION (`list<Invoice>?`), so the
 // rename respells the named members of the expression that name this type and
 // leaves the rest of the text as written. A named member names the type when
-// it reads as the type's id (type_spec.matchesRef) and, when it would read as
-// another type of the same name too, when the spec writing it belongs to the
-// type's own owner — the reading the loader binds.
+// it RESOLVES to it from where it is written (type_ref_resolution.resolve: the
+// referring spec's own subsystem first). A member matching several types with
+// none in its own subsystem is ambiguous, and refuses the rename.
 // ---------------------------------------------------------------------------
+
+/**
+ * The qualified id of the one type a resolution landed on, read from `owner`:
+ * the types of a duplicate id share a local id, so the candidate of the
+ * referrer's own subsystem settles which. Undefined unless it resolved.
+ */
+function resolvedTo(r: TypeRefResolution, owner: string | undefined): string | undefined {
+  if (r.outcome !== 'resolved' || r.type === undefined) return undefined;
+  const named = r.candidates.filter((c) => localOf(c) === r.type);
+  return named.length <= 1 ? named[0] : named.find((c) => owner !== undefined && c.startsWith(`${owner}::`));
+}
 
 /** What renaming a type changed (type_rename). */
 export interface TypeRename {
@@ -4635,7 +4649,10 @@ function writeTarget<T>(kind: WritableSpecKind, id: string, tool: string, call: 
 
 export function renameType(typeId: string, newId: string, dryRun?: boolean): TypeRename {
   // Steps 1–3: the type must exist. A subsystem-qualified id names the type within its owner.
-  const all = loadTypeSpecs();
+  const keptTypes = loadTypeSpecs();
+  // The second half of a duplicate id (the model lists leave it out) takes part in every resolution below.
+  const duplicates = loadDuplicateTypeSpecs();
+  const all = [...keptTypes, ...duplicates.map((d) => d.spec).filter((d) => !keptTypes.some((k) => qualifiedTypeId(k) === qualifiedTypeId(d)))];
   const cut = typeId.lastIndexOf('::');
   const qualifier = cut >= 0 ? typeId.slice(0, cut) : undefined;
   const ownSubsystem = qualifier !== undefined && loadSubsystemSpecs().some((s) => s.id === qualifier);
@@ -4649,13 +4666,16 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     ? all.find((t) => t.id === typeId.slice(cut + 2) && t.subsystem === qualifier) ?? null
     : loadTypeSpec(typeId)), (t) => t.id);
   const oldId = type.id;
+  const typeQualified = qualifiedTypeId(type);
+  // Whether this is the second half of a duplicate id, and the file it lives in.
+  const duplicateFile = duplicates.find((d) => qualifiedTypeId(d.spec) === typeQualified && !keptTypes.some((k) => qualifiedTypeId(k) === typeQualified))?.file;
   // Steps 6–7: the new id must be a plain lowercase identifier.
   if (!SpecIdSchema.safeParse(newId).success) {
     throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator.`);
   }
   // Steps 8–10: no type of the same owner may hold or have retired the new id.
   const sameOwner = (t: TypeSpec): boolean => (t.subsystem ?? '') === (type.subsystem ?? '');
-  if (all.some((t) => t !== type && t.id === newId && sameOwner(t))) {
+  if (all.some((t) => qualifiedTypeId(t) !== typeQualified && t.id === newId && sameOwner(t))) {
     throw new WaironError(`id-taken: another type of ${type.subsystem ? `"${type.subsystem}"` : 'the system'} already has the id "${newId}".`);
   }
   refuseRetiredIds([{ kind: 'type', id: qualifiedTypeId({ id: newId, subsystem: type.subsystem }) }]);
@@ -4667,12 +4687,17 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
 
   // Step 12: every type position naming the type, respelled.
   const components = new Map(loadComponentSpecs().map((c) => [c.id, c.subsystem]));
-  const others = all.filter((t) => t !== type);
-  /** Whether a written named member, in a spec owned by `owner`, names the renamed type. */
+  /** Tokens that match several types including this one, found by the probing walk. */
+  const ambiguous: { spec: string; token: string; ids: string[] }[] = [];
+  let probing: string | undefined;
+  /** Whether a written named member, in a spec owned by `owner`, resolves to the renamed type (type_ref_resolution.resolve). */
   const namesType = (token: string, owner: string | undefined): boolean => {
-    if (!typeMatchesRef(type, token)) return false;
-    if (!others.some((t) => typeMatchesRef(t, token))) return true;
-    return (owner ?? '') === (type.subsystem ?? '');
+    const r = resolveTypeRef(token, owner, all);
+    if (r.outcome === 'ambiguous' && r.candidates.includes(typeQualified)) {
+      if (probing !== undefined) ambiguous.push({ spec: probing, token, ids: r.candidates });
+      return false;
+    }
+    return resolvedTo(r, owner) === typeQualified;
   };
   const respellText = (text: unknown, owner: string | undefined): unknown => {
     if (typeof text !== 'string') return text;
@@ -4684,8 +4709,8 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
     });
   };
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
-  const derivesName = (entry: any): boolean => entry.interface === undefined && entry.component === undefined
-    && typeof entry.typeDef === 'string' && namesType(entry.typeDef, undefined);
+  const derivesName = (entry: any, owner?: string): boolean => entry.interface === undefined && entry.component === undefined
+    && typeof entry.typeDef === 'string' && namesType(entry.typeDef, owner);
   /** Respell one spec's type positions in place; answers whether any changed. */
   const respellSpec = (raw: any): boolean => {
     const kind = specKind(raw);
@@ -4742,12 +4767,22 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
         continue;
       }
       const kind = raw && typeof raw === 'object' ? specKind(raw) : undefined;
+      if (probing !== undefined && kind) probing = kind === 'system' ? 'system' : String(raw.id);
       if (!kind || !respellSpec(raw)) continue;
       if (!dryRun) writeYamlFile(file, raw);
       out.push({ kind, id: kind === 'system' ? 'system' : String(raw.id) });
     }
     return out;
   };
+  // Steps 15–16: no reference may be ambiguous over the renamed type. Walk every
+  // type position the rewrite visits, without writing, before anything else.
+  probing = '';
+  respellAll(true);
+  probing = undefined;
+  if (ambiguous.length > 0) {
+    const first = ambiguous[0];
+    throw new WaironError(`ambiguous-ref: ${first.spec} names "${first.token}", which matches ${first.ids.join(', ')}; qualify it as subsystem::name first`);
+  }
   // Inside a hosted request, every spec the rename would write is judged
   // against the request's write reach before the first write.
   const keptDry = keepPublicNames(specsDir, derivesName, true);
@@ -4784,12 +4819,13 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean): Typ
   // Step 13: the rewrite changed files outside the save paths.
   invalidateSpecCache();
   // Step 14: the type, as the rewrite left it, under its new id and the same owner.
-  const moved = loadTypeSpecs().find((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? '')) ?? type;
+  const moved = (duplicateFile !== undefined ? loadDuplicateTypeSpecs().find((d) => qualifiedTypeId(d.spec) === typeQualified)?.spec : undefined)
+    ?? loadTypeSpecs().find((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? '')) ?? type;
   saveSpec('type', { ...moved, id: newId, previousIds: traced(moved.previousIds, oldId) } as TypeSpec);
   invalidateSpecCache();
   // Step 15: the file it left behind.
-  removeSpecFile(typeFileOf(oldId, type), oldId);
-  if (loadTypeSpecs().some((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? ''))) deleteSpec('type', oldId);
+  removeSpecFile(duplicateFile ?? typeFileOf(oldId, type), oldId);
+  if (duplicateFile === undefined && loadTypeSpecs().some((t) => t.id === oldId && (t.subsystem ?? '') === (type.subsystem ?? ''))) deleteSpec('type', oldId);
   invalidateSpecCache();
   // Step 16: the debt register, keyed by the move.
   const carried = projectConfigRepository.rekeyCarried(rename);
@@ -4880,16 +4916,14 @@ export function renameField(typeId: string, field: string, newName: string, dryR
   if (newName === field) return { type: qualifiedTypeId(type), from: field, to: newName, rewritten: [], mentions: [], publishedIn: [], ...(dryRun ? { dryRun: true } : {}) };
 
   // Step 4: every foreign key naming the field, collected without writing.
-  const others = all.filter((t) => t !== type);
+  const typeQualified = qualifiedTypeId(type);
   /** Whether a `references` value names this type's moving field. */
   const namesField = (ref: unknown, owner: string | undefined): boolean => {
     if (typeof ref !== 'string') return false;
     const dot = ref.lastIndexOf('.');
     if (dot <= 0 || ref.slice(dot + 1) !== field) return false;
     const head = ref.slice(0, dot);
-    if (!typeMatchesRef(type, head)) return false;
-    if (!others.some((t) => typeMatchesRef(t, head))) return true;
-    return (owner ?? '') === (type.subsystem ?? '');
+    return resolvedTo(resolveTypeRef(head, owner, all), owner) === typeQualified;
   };
   const specsDir = aiPathsAt(getProjectRoot()).specsDir();
   const respell = (dryRun: boolean): RewrittenSpec[] => {

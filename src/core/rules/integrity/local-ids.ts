@@ -31,7 +31,7 @@ export const localIdsRule: SddRule = {
   name: 'local-ids',
   judges: 'design',
   description:
-    "Inside one project an id names one spec, and an id without `::` is always local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the loader kept, every reference to that key — local, or `alias::name` from another project — could mean either, so the tree has no single reading. A local id equal to one of the project's aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made visible. It reads the project graph's owners, alias tables and duplicate-spec problems.",
+    "Inside one project an id names one spec, and an id without `::` is always local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the loader kept, every reference to that key — local, or `alias::name` from another project — could mean either, so the tree has no single reading. For two types of different subsystems the message names both halves by their qualified ids (`subsystem::id`), each of which the type rename tool reaches; any other duplicate is renamed through the kept one, after which the other loads. A local id equal to one of the project's aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made visible. It reads the project graph's owners, alias tables and duplicate-spec problems.",
   codes: [
     { code: 'DUPLICATE_SPEC_ID', defaultSeverity: 'error', summary: "Two spec files of one project declare the same id" },
     { code: 'LOCAL_ID_SHADOWS_PROJECT', defaultSeverity: 'warning', summary: "A local spec id equals one of the project's aliases (a member or external), so a bare id and the alias read alike" },
@@ -46,10 +46,14 @@ export const localIdsRule: SddRule = {
       if (problem.kind !== 'duplicate-spec' || problem.id === undefined) continue;
       if (!ctx.isSpecInScope(problem.id)) continue;
       const project = problem.projects[0] === '' ? 'this project' : `project "${problem.projects[0]}"`;
+      const [kept, other] = problem.qualifiedIds ?? [];
+      const remedy = kept !== undefined && other !== undefined
+        ? `Either half can be renamed by its qualified id: sdd_rename_type ${kept} <new id> or sdd_rename_type ${other} <new id>.`
+        : 'Rename the kept one with its tool, after which the other loads.';
       ctx.addIssue(
         'error',
         'DUPLICATE_SPEC_ID',
-        `In ${project}, ${problem.detail}. The loader kept the first; every reference to "${problem.id}" — local, or \`alias::name\` from another project — could mean either, so the tree has no single reading. Rename one of them.`,
+        `In ${project}, ${problem.detail}. The loader kept the first; every reference to "${problem.id}" — local, or \`alias::name\` from another project — could mean either, so the tree has no single reading. ${remedy}`,
         problem.id,
       );
     }
