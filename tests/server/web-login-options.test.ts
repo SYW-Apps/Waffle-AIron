@@ -33,6 +33,8 @@ function provider(over: Partial<IdentityProviderConfig> = {}): IdentityProviderC
     clientSecretRef: SECRET_REF,
     tokenEndpoint: 'http://sso.internal:9000/token',
     enabled: true,
+    // A provider must name the addresses it may return to (sign-in fails closed otherwise).
+    allowedRedirectUris: ['https://app.example/web/sso/callback'],
     updatedAt: '2026-07-14T00:00:00.000Z',
     ...over,
   };
@@ -74,16 +76,27 @@ describe('web orchestrator getLoginOptions (sdd_host)', () => {
 
     const options = getLoginOptions(cfg);
     expect(options.providers).toEqual([
-      { id: 'corp-sso', displayName: 'Corporate SSO' },
-      { id: 'bare', displayName: 'bare' },
+      { id: 'corp-sso', displayName: 'Corporate SSO', available: true },
+      { id: 'bare', displayName: 'bare', available: true },
     ]);
+  });
+
+  it('a provider with no allowed redirect address is listed as unavailable with the user-facing reason only', () => {
+    upsertIdentityProviderRecord(dataDir, provider({ id: 'half', displayName: 'Half set up', allowedRedirectUris: undefined }));
+    const options = getLoginOptions(cfg);
+    expect(options.providers).toEqual([
+      { id: 'half', displayName: 'Half set up', available: false, unavailableReason: 'Not set up yet — ask an administrator' },
+    ]);
+    // The admin-worded setup problem never crosses into the pre-auth payload.
+    expect(JSON.stringify(options)).not.toContain('allowedRedirectUris');
+    expect(JSON.stringify(options)).not.toContain('WAIRON_OIDC');
   });
 
   it('no providers configured → an empty provider list (no SSO section to render)', () => {
     expect(getLoginOptions(cfg).providers).toEqual([]);
   });
 
-  it('SECURITY: the pre-auth payload carries ONLY { id, displayName } — never secrets, clientIds, issuers, or endpoints', () => {
+  it('SECURITY: the pre-auth payload carries ONLY { id, displayName, available } — never secrets, clientIds, issuers, or endpoints', () => {
     upsertIdentityProviderRecord(
       dataDir,
       provider({ id: 'corp-sso', displayName: 'Corporate SSO', adminGroupClaims: ['wairon-admins'] }),
@@ -92,7 +105,7 @@ describe('web orchestrator getLoginOptions (sdd_host)', () => {
     const options = getLoginOptions(cfg);
     expect(options.providers).toHaveLength(1);
     // Exactly the two fields a login page needs — nothing else.
-    expect(Object.keys(options.providers[0]).sort()).toEqual(['displayName', 'id']);
+    expect(Object.keys(options.providers[0]).sort()).toEqual(['available', 'displayName', 'id']);
 
     const raw = JSON.stringify(options);
     expect(raw).not.toContain(SECRET_REF);
@@ -176,7 +189,7 @@ describe('GET /web/login-options HTTP mount (sdd_host)', () => {
     expect(res.headers['content-type']).toMatch(/application\/json/);
     const body = JSON.parse(res.body);
     expect(body.passwordLogin).toBe(false); // no built-in admin on this config
-    expect(body.providers).toEqual([{ id: 'corp-sso', displayName: 'Corporate SSO' }]);
+    expect(body.providers).toEqual([{ id: 'corp-sso', displayName: 'Corporate SSO', available: true }]);
     // No secret material leaks over the wire.
     expect(res.body).not.toContain(SECRET_REF);
     expect(res.body).not.toContain('wairon-client-id');
@@ -236,6 +249,13 @@ describe('web portal legacy client shell dynamic login screen (sdd_host)', () =>
     expect(html).toContain('btn-sso');
     // The existing SSO start flow is reused per button.
     expect(html).toContain('/web/sso/start');
+  });
+
+  it('renders a provider that is not set up as a disabled button with its reason, and warns on the admin list', () => {
+    expect(html).toContain('unavailableReason');
+    expect(html).toContain('b.disabled = true');
+    expect(html).toContain('setupProblem');
+    expect(html).toContain('not set up');
   });
 
   it('has NO free-text provider input and shows the no-method message when nothing is configured', () => {

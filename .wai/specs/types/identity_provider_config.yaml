@@ -108,8 +108,8 @@ methods:
       WAIRON_OIDC_ALLOWED_REDIRECT_URIS) — usually https://<this host>/web/sso/callback". Every
       place that refuses, hides, warns about or lists a provider's readiness uses this one
       predicate.
-    sourcePath: src/server/idp.ts
+    sourcePath: src/server/types.ts
     symbol: providerSetupProblem
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T22:00:13.587Z'
-updatedAt: '2026-10-19T22:11:19.808Z'
+updatedAt: '2026-10-19T22:37:02.255Z'
