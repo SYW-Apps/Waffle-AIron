@@ -1,7 +1,7 @@
 <!-- wairon-root-start -->
 # Wairon SDD Project
 <!-- wairon-guide-start -->
-<!-- wairon-version: 6.0.1-dev.2 -->
+<!-- wairon-version: 6.0.1-dev.3 -->
 ## Wairon — Spec-Driven Development (you are operating inside it)
 
 This project uses **wairon**. System specs live under `.wai/specs/` (L0 System → L1 Subsystem → L2 Component → L3 Interface → L4 Implementation → Narrative); agent topology and code are derived from it.

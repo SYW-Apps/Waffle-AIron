@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "76c4b292a012292d6961d0322409a31eeb429100eec08fdb59f22374862bb193"
+    "digest": "f1559a2425516e7a108753205a054acc387e1d8bd178d2a364db2344382fcae6"
   },
-  "lockedAt": "2026-10-19T06:20:37.755Z",
+  "lockedAt": "2026-10-19T17:24:57.839Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.0.1-dev.2",
+  "validatorVersion": "6.0.1-dev.3",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -1524,7 +1524,7 @@
     ".wai/specs/types/resource_quota_policy.yaml": "40d68ee4d0fd5dda4283e8d9428657b768114f94beb57839f3f82e9cc125354f",
     ".wai/specs/types/resource_usage_snapshot.yaml": "318ea822a0feeeabe390d06f08d8a81d9f59477251f9e665c23583df7d675d2b",
     ".wai/specs/types/retired_reach_fact.yaml": "b236d0e24ff124a1e70c1cadf66c2e3b203a2dacf5a323ab7eb3e1674b557acc",
-    ".wai/specs/types/retired_reach_form.yaml": "0b578d71f63590048f364980cffa46b57515da5edd952af1fb721d481460244d",
+    ".wai/specs/types/retired_reach_form.yaml": "32469a99488283d2511c89ef0d8779d19e70e97866a24f254f4cac44ec05b93b",
     ".wai/specs/types/rewritten_form.yaml": "4067102cd170199f1692a3eaa5a91ed97a52d359e471e41381676f2125887e79",
     ".wai/specs/types/role.yaml": "ae6efb2c1a1ca4a38508c40aca04a3160c8a60dbd9a28118d804ba20de9752bd",
     ".wai/specs/types/role_binding.yaml": "083ac47cf01231789cd6909c35dd69de1997654eb0a2ad83e2fffe7f212bcc40",
@@ -1708,7 +1708,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "b050ba29cf6b16d7b2b4db43f33418f15f2b1217292bf084853fb4bac7b57ebe",
+    "design": "7373411503b86451769e83435dcc63625efc7daf4fdc95330c010b38dbd742e9",
     "release": "cbf4c0aa220c8d0648eadbf5ec3e81a26f5a7938a926b34bdc2f186b65316b05",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1719,12 +1719,12 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.0.1-dev.2",
+      "validatorVersion": "6.0.1-dev.3",
       "doctrineDigest": "a9f18ac10fb11c3d23b1c745fef6c013fee9df3206bd469902e2c5801a7db8a8",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 8,
+    "warnings": 0,
     "notices": 0
   }
 }
