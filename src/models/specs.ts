@@ -2210,7 +2210,7 @@ export function componentEntryFor(
  * scan: the reachability migration reads the allows itself and names its
  * rewrites with it.
  */
-export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'in-process-endpoint', 'retired-allow']);
+export const RetiredReachFormSchema = z.enum(['portal-type', 'listener-mounts', 'invoked-by-kind', 'export-type', 'export-name', 'in-process-endpoint', 'retired-allow']);
 export type RetiredReachForm = z.infer<typeof RetiredReachFormSchema>;
 
 /**

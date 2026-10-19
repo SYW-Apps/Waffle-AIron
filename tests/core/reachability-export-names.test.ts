@@ -92,6 +92,7 @@ describe('the reachability migration rewrites the L0 export names', () => {
       'system|id of "kept-name" is now as',
       'system|subsystem of "kept-name" is now from',
     ]);
+    expect(new Set(plan.rewrites.map((r) => r.form))).toEqual(new Set(['export-name']));
     const both = plan.rewrites.filter((r) => r.to.includes('kept-name'));
     expect(both.every((r) => r.reason.includes('wins'))).toBe(true);
   });

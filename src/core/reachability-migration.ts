@@ -323,14 +323,14 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
         const taken = entry.as !== undefined;
         if (!taken) copy.as = entry.id;
         delete copy.id;
-        rewrite('system', 'export-type', `id of "${name}" is now as`,
+        rewrite('system', 'export-name', `id of "${name}" is now as`,
           taken ? 'The entry states both `as` and the wairon 5 `id`: `as` wins and `id` is dropped.' : 'The public name is `as`; the wairon 5 `id` is retired.');
       }
       if (entry.subsystem !== undefined) {
         const taken = entry.from !== undefined;
         if (!taken) copy.from = entry.subsystem;
         delete copy.subsystem;
-        rewrite('system', 'export-type', `subsystem of "${name}" is now from`,
+        rewrite('system', 'export-name', `subsystem of "${name}" is now from`,
           taken ? 'The entry states both `from` and the wairon 5 `subsystem`: `from` wins and `subsystem` is dropped.' : 'The source subsystem is `from`; the wairon 5 `subsystem` is retired.');
       }
     });
