@@ -13,6 +13,7 @@ import {
 } from './specs.js';
 import {
   isInProcessAddress,
+  l0ExportName,
   retiredMountsOf,
   transportExportKind,
   type ComponentSpec,
@@ -294,7 +295,7 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
     const entries = (spec.publicInterfaces ?? []) as { type?: string; component?: string; interface?: string; as?: string; id?: string }[];
     entries.forEach((entry, index) => {
       if (entry.type === undefined) return;
-      const name = entry.as ?? entry.id ?? entry.interface ?? entry.component ?? `#${index + 1}`;
+      const name = l0ExportName(entry) ?? entry.interface ?? entry.component ?? `#${index + 1}`;
       const derived = derivedKind(entry);
       if (derived === entry.type) {
         const copy = touch(kind, id, spec);
@@ -311,7 +312,31 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
   for (const sub of subsystems) exportTypes('subsystem', sub.id, sub);
   if (system) exportTypes('system', 'system', system);
 
-  // Step 12: the lint allows of retired codes.
+  // Step 12: the L0 export names: `id` becomes `as`, `subsystem` becomes `from`.
+  if (system) {
+    const entries = (system.publicInterfaces ?? []) as { id?: string; subsystem?: string; as?: string; from?: string; interface?: string; component?: string }[];
+    entries.forEach((entry, index) => {
+      if (entry.id === undefined && entry.subsystem === undefined) return;
+      const name = l0ExportName(entry) ?? entry.interface ?? entry.component ?? `#${index + 1}`;
+      const copy = (touch('system', 'system', system).publicInterfaces as typeof entries)[index];
+      if (entry.id !== undefined) {
+        const taken = entry.as !== undefined;
+        if (!taken) copy.as = entry.id;
+        delete copy.id;
+        rewrite('system', 'export-type', `id of "${name}" is now as`,
+          taken ? 'The entry states both `as` and the wairon 5 `id`: `as` wins and `id` is dropped.' : 'The public name is `as`; the wairon 5 `id` is retired.');
+      }
+      if (entry.subsystem !== undefined) {
+        const taken = entry.from !== undefined;
+        if (!taken) copy.from = entry.subsystem;
+        delete copy.subsystem;
+        rewrite('system', 'export-type', `subsystem of "${name}" is now from`,
+          taken ? 'The entry states both `from` and the wairon 5 `subsystem`: `from` wins and `subsystem` is dropped.' : 'The source subsystem is `from`; the wairon 5 `subsystem` is retired.');
+      }
+    });
+  }
+
+  // Step 13: the lint allows of retired codes.
   const allows = (kind: Kind, id: string, spec: AnySpec): void => {
     const stored = (current(kind, id, spec) as { lint?: { allow?: { code: string; at?: string }[] } }).lint?.allow ?? [];
     if (!stored.some((a) => RETIRED_CODES.has(a.code) || RENAMED_CODES[a.code] !== undefined)) return;
@@ -343,10 +368,10 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
   rewrites.sort(bySpec);
   reported.sort(bySpec);
 
-  // Step 13: without apply, nothing is written — the plan is the rehearsal.
+  // Step 14: without apply, nothing is written — the plan is the rehearsal.
   if (!apply || rewrites.length === 0) return { rewrites, reported, applied: false };
 
-  // Steps 14-21: each rewritten spec once, through the store's writers, told
+  // Steps 15-22: each rewritten spec once, through the store's writers, told
   // to retire the forms rather than carry them back.
   for (const kind of WRITE_ORDER) {
     for (const spec of dirty.get(kind)!.values()) {
@@ -355,8 +380,8 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
       else saveSpec(kind, spec);
     }
   }
-  // Step 22: the cache no longer reflects the migrated tree.
+  // Step 23: the cache no longer reflects the migrated tree.
   invalidateSpecCache();
-  // Step 23: the plan, applied.
+  // Step 24: the plan, applied.
   return { rewrites, reported, applied: true };
 }

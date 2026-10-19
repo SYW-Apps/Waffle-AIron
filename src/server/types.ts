@@ -288,12 +288,9 @@ export interface MemberAdoption {
   commit?: GitPublish;
 }
 
-/** An administrative token mint's answer: the plaintext, shown once, and each
- *  deprecated member-qualified entry with the record id it was stored as. */
+/** An administrative token mint's answer: the plaintext, shown exactly once. */
 export interface MintedToken {
   token: string;
-  /** '<qualified entry> -> <member record id>' per mapped entry. */
-  mapped: string[];
 }
 
 /** One API key's narrowing as the member upgrade rewrites it. */
@@ -302,6 +299,8 @@ export interface PlannedNarrowing {
   before: string[];
   after: string[];
   widening: string;
+  /** True when no entry survives: the key is revoked instead of narrowed. */
+  revokes: boolean;
 }
 
 /** Where a hosted project's specs are committed: its family root's repository
@@ -524,7 +523,7 @@ export interface ResourceUsageSnapshot {
 }
 
 /** How an exceeded quota limit is labelled. The quota policy is advisory: neither
- *  mode blocks or throttles. A configured 'block' is read as observe (deprecated). */
+ *  mode blocks or throttles. A configured 'block' is refused at start, naming observe. */
 export type QuotaMode = 'observe' | 'warn';
 
 /** Advisory quota policy protecting the instance; observe/warn only. */
@@ -549,7 +548,7 @@ export interface InstanceHealthReport {
 }
 
 /** How much of an audit event's metadata is persisted. A configured 'full-redacted'
- *  is read as redacted (deprecated): the two were never different. */
+ *  is refused at start, naming redacted: the two were never different. */
 export type AuditMetadataMode = 'none' | 'redacted';
 
 /** Instance-level durable audit capture and retention policy. */
@@ -872,11 +871,6 @@ export interface ShareSnapshot {
   capturedAt: string;
   /** Serialized CanvasModel JSON for the view. */
   canvasModel?: string;
-  /** Serialized OpenAPI document — captured when the shared surface has exactly
-   *  ONE portal. Retained so share links created before per-portal capture keep
-   *  serving their document unchanged; multi-portal shares populate openapiSet
-   *  instead. */
-  openapi?: string;
   /** Standalone HTML export, when captured. */
   html?: string;
   /** Every per-portal OpenAPI document in the shared surface, one per published
@@ -1341,9 +1335,10 @@ export interface GovernedProjectCreation {
   profileImpact?: PackImpact;
 }
 
-/** Whether the admin API is served. Where it listens is the host's adminHost. A stored
- *  or submitted local_only, private_network or public is read as enabled (deprecated):
- *  each only ever meant "served". */
+/** Whether the admin API is served. Where it listens is the host's adminHost. The
+ *  exposure policy loader and setter refuse any other value; the data-directory upgrade
+ *  stores the retired local_only, private_network and public (each only ever meant
+ *  "served") as enabled. */
 export type AdminApiMode = 'disabled' | 'enabled';
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces

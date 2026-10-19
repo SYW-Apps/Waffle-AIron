@@ -41,7 +41,7 @@ import type {
 // mount's local id), never by its place in the mount chain, and a legacy L1
 // mount is a member declaration, not a subsystem. The generator still WRITES
 // the stage-2 position forms (leading `::`, `super::`, member paths) — they
-// bind until the next major release — so each reference has two spellings: the alias path
+// bind in the v5 reading — so each reference has two spellings: the alias path
 // the disk forms are built from, and the key it binds to.
 //
 // Deterministic: a fixed-seed mulberry32 PRNG drives every random choice, so

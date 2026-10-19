@@ -119,7 +119,7 @@ export async function handleIdentityRequest(
       {
         assertNarrowingGiven(body ?? {});
         const minted = identityOrchestrator.mintToken(cfg, credential, body as TokenMintRequest);
-        return sendJson(res, 201, { key: minted.token, mapped: minted.mapped });
+        return sendJson(res, 201, { key: minted.token });
       }
     }
     // DELETE /identity/tokens/{id}

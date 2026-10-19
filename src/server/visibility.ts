@@ -24,14 +24,13 @@ import type {
 //   department (same branch) | instance (same tenant) | partner (cross-tenant).
 // ---------------------------------------------------------------------------
 
-/** Ascending audience reach; 'public' is a legacy alias of 'external'. */
+/** Ascending audience reach. */
 const AUDIENCE_RANKS: Record<string, number> = {
   project: 0,
   department: 1,
   instance: 2,
   partner: 3,
   external: 4,
-  public: 4,
 };
 
 /** Rank of an entry's declared audience ceiling; absent/unknown defaults to 'instance'. */
@@ -42,7 +41,7 @@ export function audienceRank(audience: string | undefined): number {
 /**
  * Whether an entry's audience ceiling covers an observer at `distance`.
  * A null distance (target not visible through the unit graph — e.g. a legacy
- * relation predating a closure) is the farthest class: only external/public
+ * relation predating a closure) is the farthest class: only external
  * entries remain visible.
  */
 export function audienceCovers(entryAudience: string | undefined, distance: string | null): boolean {

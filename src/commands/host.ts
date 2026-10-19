@@ -112,22 +112,21 @@ function resolveHostConfig(options: HostOptions): HostConfig {
 }
 
 /**
- * Policy values that no longer exist, each with the value it now reads as. Each
+ * Policy values that no longer exist, each with the value to use instead. Each
  * stood for no behaviour of its own: full-redacted persisted exactly what
  * redacted did, and an advisory quota policy never blocked anything. They are
- * accepted until the next major release with a warning naming the replacement.
+ * refused at start, naming the replacement.
  */
-const DEPRECATED_POLICY_VALUES: Record<string, Record<string, string>> = {
+const RETIRED_POLICY_VALUES: Record<string, Record<string, string>> = {
   metadataMode: { 'full-redacted': 'redacted' },
   mode: { block: 'observe' },
 };
 
-/** The value a policy field reads as, warning when it is a deprecated one. */
-function retireValue(variable: string, key: string, value: unknown): unknown {
-  const replacement = typeof value === 'string' ? DEPRECATED_POLICY_VALUES[key]?.[value] : undefined;
-  if (replacement === undefined) return value;
-  logger.warn(`${variable} field "${key}": "${String(value)}" is deprecated and reads as "${replacement}" — set "${replacement}" instead.`);
-  return replacement;
+/** The refusal of a field value that fails its check: what it must be, and the replacement when the value was retired. */
+function refuseValue(variable: string, key: string, expects: string, value: unknown): WaironError {
+  const replacement = typeof value === 'string' ? RETIRED_POLICY_VALUES[key]?.[value] : undefined;
+  const retired = replacement === undefined ? '' : ` ('${String(value)}' was retired: use '${replacement}')`;
+  return new WaironError(`${variable} field "${key}" must be ${expects}${retired}.`);
 }
 
 /** The fields WAIRON_AUDIT_POLICY may set, each with the check its value must pass. */
@@ -145,8 +144,7 @@ const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string;
   includeReadEvents: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
   metadataMode: {
     expects: 'one of "none", "redacted"',
-    // "full-redacted" is still accepted, and read as redacted (see DEPRECATED_POLICY_VALUES).
-    accepts: (v) => typeof v === 'string' && ['none', 'redacted', 'full-redacted'].includes(v),
+    accepts: (v) => typeof v === 'string' && ['none', 'redacted'].includes(v),
   },
 };
 
@@ -176,9 +174,9 @@ export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> 
       );
     }
     if (!field.accepts(value)) {
-      throw new WaironError(`WAIRON_AUDIT_POLICY field "${key}" must be ${field.expects}.`);
+      throw refuseValue('WAIRON_AUDIT_POLICY', key, field.expects, value);
     }
-    policy[key] = retireValue('WAIRON_AUDIT_POLICY', key, value);
+    policy[key] = value;
   }
   return policy as Partial<AuditRetentionPolicy>;
 }
@@ -194,8 +192,7 @@ const QUOTA_POLICY_FIELDS: Record<keyof ResourceQuotaPolicy, { expects: string; 
   enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
   mode: {
     expects: 'one of "observe", "warn"',
-    // "block" is still accepted, and read as observe (see DEPRECATED_POLICY_VALUES).
-    accepts: (v) => typeof v === 'string' && ['observe', 'warn', 'block'].includes(v),
+    accepts: (v) => typeof v === 'string' && ['observe', 'warn'].includes(v),
   },
   maxProjectsPerUser: NON_NEGATIVE_INTEGER,
   maxMcpRequestsPerMinute: NON_NEGATIVE_INTEGER,
@@ -229,9 +226,9 @@ export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
       );
     }
     if (!field.accepts(value)) {
-      throw new WaironError(`WAIRON_QUOTA_POLICY field "${key}" must be ${field.expects}.`);
+      throw refuseValue('WAIRON_QUOTA_POLICY', key, field.expects, value);
     }
-    policy[key] = retireValue('WAIRON_QUOTA_POLICY', key, value);
+    policy[key] = value;
   }
   return policy as Partial<ResourceQuotaPolicy>;
 }
@@ -705,10 +702,6 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
           logger.blank();
           console.log(`  ${chalk.bold(minted.token)}`);
           logger.blank();
-          // A deprecated member-qualified entry is stored as the member's own record id: say so.
-          for (const line of minted.mapped) {
-            logger.warn(`Narrowing ${line}: a member is a record of its own, so the token names it by its id (qualified entries are deprecated).`);
-          }
           // The token acts as its owner's live permission: an owner who cannot read
           // the project mints a token that cannot read it either.
           if (options.project !== '*') {

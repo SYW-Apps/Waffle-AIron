@@ -799,8 +799,8 @@ export const ProjectConfigSchema = z.object({
      *    — the project names what it wants and the pack is resolved from the
      *    committed bundle, else this wairon install's store. Omitting `version`
      *    means "latest installed".
-     *  - A legacy PATH string (`.wai/packs/foo.yaml`, an absolute path, or a
-     *    module id) — still loaded, deprecated.
+     *  - A PATH string (`.wai/packs/foo.yaml`, an absolute path, or a
+     *    module id) — loaded as it names, as `pack add` registers it.
      *
      * A declared pack that cannot be resolved is an error, never a silent skip:
      * a project whose doctrine is absent is misconfigured, and the gate says so.
@@ -850,8 +850,8 @@ export type ProjectConfig = z.infer<typeof ProjectConfigSchema>;
 
 /**
  * project_config.activeTargetTypes — the target types this configuration
- * enables: every target not explicitly disabled, in declaration order. A legacy
- * string target names its type directly and carries no enabled flag. Empty for a
+ * enables: every target not explicitly disabled, in declaration order. A string
+ * target names its type directly and carries no enabled flag. Empty for a
  * configuration with no enabled targets.
  */
 export function activeTargetTypes(config: ProjectConfig): string[] {
@@ -886,16 +886,16 @@ export function declaredProfileIds(config: Pick<ProjectConfig, 'profileSelection
   return [...new Set(config.profileSelection?.profileIds ?? [])];
 }
 
-/** pack_path — a legacy path reference to a pack file, as `pack add` registers it in `extensions.packs`. */
+/** pack_path — a path reference to a pack file, as `pack add` registers it in `extensions.packs`. */
 export type PackPath = string;
 
-/** One entry of `extensions.packs`: a by-name selection or a legacy path reference. */
+/** One entry of `extensions.packs`: a by-name selection or a path reference. */
 export type PackEntry = PackSelection | PackPath;
 
 /**
  * project_config.withPack — the configuration as it would read after one pack
  * write, without writing it: a selection drops every same-name selection and
- * is appended last (the highest precedence), a legacy path reference is
+ * is appended last (the highest precedence), a path reference is
  * appended only when absent; with `remove`, the same-name selection (or that
  * exact path reference) is dropped instead. The one reading of a pack write
  * the dry validate and the registry share (impact-matches-apply).

@@ -62,6 +62,43 @@ holding one does not load: the error names the form and what replaces it. The fo
   changes.
 - Removed MCP inputs: `HTTP_API`, the export `type` input, and the `projectPath` input.
 - A pack's `foreignBuiltins` is a load error naming its removal.
+- An L0 export entry's `id` and `subsystem` are wairon 5 forms: `wairon upgrade` rewrites
+  them to `as` and `from`.
+
+### Breaking: the hosted server reads only wairon 6 forms
+
+The server rewrites what an older major stored once, when it starts on an older data
+directory, and refuses those forms afterwards:
+
+- **Member-qualified selectors.**
+  - A `projectId::alias` selector or token entry is no longer resolved. A request
+    naming one gets 400, and minting one is refused: name the member by its own
+    project record id.
+  - The start upgrade rewrites stored token entries to the member's record id. It
+    drops an entry that names no member, and revokes a key left with none.
+- **Old lock requests.** A lock request recorded with a member scope is closed at
+  start: a pending one is denied, an approved one cancelled, so the requester can ask
+  again on the member's record. Executing a lock request that carries a scope is
+  refused.
+- **Retired stored values.**
+  - `adminApiMode` values `local_only`, `private_network` and `public` become
+    `enabled`.
+  - The user statuses `suspended`, `deactivated`, `disabled` and `deleted` become
+    `inactive`.
+  - A surface audience of `public` becomes `external`.
+  - Each is refused afterwards, naming the file and the values it accepts.
+- **Share snapshots.** A snapshot keeps only its per-portal OpenAPI capture. A share
+  captured before per-portal captures loses its OpenAPI download until its owner
+  refreshes it; its canvas and HTML stay.
+- **Policy variables.** `WAIRON_AUDIT_POLICY` `metadataMode: full-redacted` and
+  `WAIRON_QUOTA_POLICY` `mode: block` stop the start, naming `redacted` and `observe`.
+- **Exposure policy errors.** An exposure policy file that cannot be read now fails
+  loudly, instead of the server silently using the default posture.
+
+### Release QA
+
+- A release's QA verdict passes only when `release-notes/<version>.md` exists with at
+  least one highlight.
 
 ### Small fixes from the v6.0.0 QA panel
 

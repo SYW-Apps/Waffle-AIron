@@ -26,7 +26,7 @@ import { createMember } from '../../src/core/provision.js';
 import { writeMemberProject } from '../helpers/legacy-mount.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { seedChainedMount, seedSubsystem } from './helpers.js';
+import { seedChainedMember, seedSubsystem } from './helpers.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
@@ -366,7 +366,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
   function seedChainedSubproject(projectId: string, mountId: string): { parent: string; child: string } {
     seedProject(projectId);
     const parent = existingProjectRoot(dataDir, projectId)!;
-    const child = seedChainedMount(parent, mountId, `packages/${mountId}`);
+    const child = seedChainedMember(parent, mountId, `packages/${mountId}`);
     runWithProjectRoot(child, () => hostCore.provisionProject(mountId));
     seedSubsystem(parent, 'plain'); // exists, but carries no projectPath
     invalidateSpecCache();

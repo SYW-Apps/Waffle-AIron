@@ -3742,7 +3742,7 @@ export class SpecWorkspace {
   /**
    * A spec file's keys its schema does not know — which the parse drops, so
    * they would mean nothing without a word — reported as UNKNOWN_SPEC_KEY,
-   * once per file. A retired reachability form is read compatibly and
+   * once per file. A retired reachability form is read in the v5 reading and
    * reported by its own rule, so a component's `mounts` is no unknown key.
    */
   private reportUnknownKeys(file: string, kind: string, doc: unknown, parsed: unknown, specId: string): void {
@@ -3842,8 +3842,8 @@ export class SpecWorkspace {
           else keep('subsystem', index.subsystems, parsed, file);
         } else if ('componentType' in doc) {
           detectedType = 'component';
-          // Retired reachability forms are read compatibly and kept as facts;
-          // a listener's mounts stay read (untyped) on the loaded spec.
+          // Retired reachability forms are read in the v5 reading only and kept as facts;
+          // a listener's mounts stay read (untyped) on the loaded spec there.
           refuseV5Forms('component', doc);
           const facts = readRetiredReachForms('component', doc as Record<string, unknown>);
           const parsed = attachRetiredMounts(ComponentSpecSchema.parse(doc), doc as Record<string, unknown>);
@@ -5609,7 +5609,7 @@ export class SpecWorkspace {
       implementation: ImplementationSpecSchema,
       type: TypeSpecSchema,
     }[kind];
-    // The retired reachability forms are read compatibly, never stripped: a
+    // The retired reachability forms are read in the v5 reading, never stripped: a
     // portalType becomes the transport it names, and a listener's mounts are
     // carried by the writer until the migration rewrites them.
     if ((kind === 'component' || kind === 'interface') && raw && typeof raw === 'object' && !Array.isArray(raw)) {

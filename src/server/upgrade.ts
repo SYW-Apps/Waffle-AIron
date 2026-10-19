@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as hostUpgrade from './adapters/upgrade.js';
-import { migratePermissionModel } from './migration.js';
+import { migratePermissionModel, run as migrateRetiredValues } from './migration.js';
 import type { MigrationReport } from './migration.js';
 import { upgradeMembers } from './members.js';
 import type { MemberUpgradeReport } from './members.js';
@@ -20,7 +20,8 @@ import type { AuditEvent, HostConfig, PrincipalSubject } from './types.js';
 //   - instance_version_store   : <dataDir>/version.json, `{ "major": n }`.
 //   - instance_backup_adapter  : a whole copy of the data directory, beside it.
 //   - instance_upgrade         : the workflow — back up, run the permission
-//                                model step, upgrade every hosted tree, register
+//                                model step, rewrite the retired stored values,
+//                                upgrade every hosted tree, register
 //                                the member records, stamp the major.
 // The trees are upgraded before the member records are registered, because a
 // v5 tree declares its members only once its legacy mounts have moved into
@@ -176,10 +177,18 @@ export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>): InstanceU
         `the permission-model step of the upgrade failed: ${e instanceof Error ? e.message : String(e)}.${named()}`,
       );
     }
+    // Step 10: the retired values the data directory stores, rewritten; the older major wrote them, this one refuses them.
+    try {
+      migrateRetiredValues(cfg.dataDir, true, cfg.auditPolicy);
+    } catch (e) {
+      throw new StartAborted(
+        `the retired-value step of the upgrade failed: ${e instanceof Error ? e.message : String(e)}.${named()}`,
+      );
+    }
   }
-  // Step 10: run even on a current data directory, so a tree restored or imported from an older major is upgraded too.
+  // Step 11: run even on a current data directory, so a tree restored or imported from an older major is upgraded too.
   const trees = upgradeTrees(cfg);
-  // Steps 11-12.
+  // Steps 12-13.
   const failed = trees.filter((t) => t.failure !== undefined);
   if (failed.length > 0) {
     throw new StartAborted(
@@ -189,19 +198,19 @@ export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>): InstanceU
   }
   let members: MemberUpgradeReport | undefined;
   if (older) {
-    // Step 14.
+    // Step 15.
     members = upgradeMembers(cfg, true);
-    // Steps 15-16: blocked by a refusal, or a commit that failed; a plan with nothing to write is not a failure.
+    // Steps 16-17: blocked by a refusal, or a commit that failed; a plan with nothing to write is not a failure.
     if (members.plan.refusals.length > 0 || (members.outcome !== undefined && !members.applied)) {
       const why = members.plan.refusals.length > 0
         ? members.plan.refusals.map((r) => `${r.area}: ${r.detail}`).join('; ')
         : members.outcome?.failure ?? 'the member upgrade did not commit';
       throw new StartAborted(`the member records were not registered: ${why}.${named()}`);
     }
-    // Step 17.
+    // Step 18.
     writeVersion(cfg.dataDir, to);
   }
-  // Step 18.
+  // Step 19.
   return { fromMajor: from, toMajor: to, ...(backup ? { backup } : {}), ...(permissions ? { permissions } : {}), trees, ...(members ? { members } : {}) };
 }
 

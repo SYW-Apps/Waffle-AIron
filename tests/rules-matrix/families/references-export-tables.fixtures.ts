@@ -209,7 +209,7 @@ export default [
     scenario:
       'The project exports a "partner-api" entry at L0 that names neither a source subsystem nor a component to take one from.',
     tree: {
-      system: { ...SYSTEM, publicInterfaces: [{ id: 'partner-api', name: 'Partner API', details: 'Everything a partner shop calls.' }] },
+      system: { ...SYSTEM, publicInterfaces: [{ as: 'partner-api', name: 'Partner API', details: 'Everything a partner shop calls.' }] },
       subsystems: [{ ...PRICING, publicInterfaces: [QUOTES] }],
       components: [QUOTE_PORTAL],
     },

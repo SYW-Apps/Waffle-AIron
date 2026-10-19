@@ -15,7 +15,7 @@ import {
 } from './projects.js';
 import { gatherPermissionWorld, resolveFamilyReach } from './authorization.js';
 import { listUsers, remapUnitReferences } from './users.js';
-import { listCredentials, renarrowCredential } from './credentials.js';
+import { listCredentials, renarrowCredential, revokeCredential } from './credentials.js';
 import { remapScope, listAssignments, setAssignment } from './permissions.js';
 import { deletePlacement, listProjectPlacements, placeProject } from './organization.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
@@ -100,7 +100,7 @@ export interface MemberUpgradePlan {
   members: PlannedMemberRecord[];
   /** The no-widening proof: every subject x capability x member, before and after. */
   reach: ReachComparison[];
-  /** Every API key with a member-qualified entry, rewritten to record ids. */
+  /** Every non-revoked API key with a member-qualified entry, rewritten to record ids (an entry naming no member dropped, the key revoked when none is left). */
   narrowings: PlannedNarrowing[];
   /** What blocks the whole plan. */
   refusals: MigrationFinding[];
@@ -146,6 +146,7 @@ export function plan(dataDir: string): MemberUpgradePlan {
   }
   // Steps 11-13.
   const narrowings = listCredentials(dataDir, '*')
+    .filter((key) => !key.revokedAt)
     .map((key) => narrowing(key, members))
     .filter((n): n is PlannedNarrowing => n !== null);
   const result: MemberUpgradePlan = { members, reach, narrowings, refusals, changes: [] };
@@ -167,8 +168,10 @@ function rehearsed(dataDir: string, planned: MemberUpgradePlan): MemberUpgradePl
       registerMemberRecord(copy, { ...m.record, rootPath: '' });
     }
     // Steps 19-20.
-    for (const n of planned.narrowings) renarrowCredential(copy, n.keyId, n.after);
-    // Steps 21-22.
+    for (const n of planned.narrowings.filter((x) => !x.revokes)) renarrowCredential(copy, n.keyId, n.after);
+    // Steps 21-22: a key left with no entry names nothing the data plane resolves, and an empty narrowing is not storable.
+    for (const n of planned.narrowings.filter((x) => x.revokes)) revokeCredential(copy, n.keyId);
+    // Steps 23-24.
     return { ...planned, rehearsal, changes: hostMigrations.diff(rehearsal) };
   } catch (e) {
     hostMigrations.drop(rehearsal);
@@ -261,7 +264,7 @@ export function apply(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>, plan: Me
   for (const n of planned.narrowings) {
     audit(cfg, {
       action: 'token.narrowed', outcome: 'success', level: 'security', target: n.keyId,
-      metadata: JSON.stringify({ before: n.before, after: n.after, widening: n.widening }),
+      metadata: JSON.stringify({ before: n.before, after: n.after, widening: n.widening, revoked: n.revokes }),
     });
   }
   // Step 9.

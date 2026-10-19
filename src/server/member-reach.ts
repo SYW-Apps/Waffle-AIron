@@ -22,7 +22,7 @@ import type {
 // world after a membership change, compare resolves every subject x capability
 // before and after it (the upgrade's no-widening proof, or a membership
 // change's reach listing), and narrowing rewrites an API key's member-QUALIFIED
-// entries to record ids.
+// entries to record ids (an entry naming no member is dropped).
 // ---------------------------------------------------------------------------
 
 /** Every capability a comparison resolves — the whole RBAC capability set. */
@@ -38,10 +38,8 @@ const COMPARED_CAPABILITIES: Capability[] = [
 /** The subject id standing for everyone without settings of their own. */
 export const EVERYONE_ELSE = 'everyone';
 
-/** The documented widening of a rewritten qualified entry. */
-const NARROWING_WIDENING =
-  'record-level tools (status, approval, lock requests, packs, policy, producers, commit, landscape discovery) '
-  + "now act on the member's own record — within the member only";
+/** The widening of a rewritten qualified entry: none - it already bound the member's own record. */
+const NARROWING_WIDENING = '';
 
 /**
  * imember_reach_rules.relink — the world with the given parent links added
@@ -180,21 +178,23 @@ export function carryPlan(
 
 /**
  * imember_reach_rules.narrowing — a key's member-QUALIFIED entries rewritten to
- * the record id of the member whose qualifier equals it; every other entry kept;
- * duplicates collapsed, first order kept. Null when no entry is qualified.
+ * the record id of the member whose qualifier equals it, a qualified entry that
+ * equals none dropped (it resolved to nothing, so dropping narrows, never widens);
+ * every other entry kept; duplicates collapsed, first order kept. A key left with
+ * no entry is flagged as revoked. Null for a revoked key or when no entry is qualified.
  */
 export function narrowing(key: ApiKeyRecord, members: PlannedMemberRecord[]): PlannedNarrowing | null {
   // Step 1.
-  if (!key.projects.some((e) => e.includes('::'))) {
-    // Step 2: a project entry covers its members through the chain.
+  if (key.revokedAt || !key.projects.some((e) => e.includes('::'))) {
+    // Step 2: a revoked key is left alone; a project entry covers its members through the chain.
     return null;
   }
   // Step 3.
   const after: string[] = [];
   for (const entry of key.projects) {
-    const id = entry.includes('::') ? members.find((m) => m.qualifier === entry)?.record.id ?? entry : entry;
-    if (!after.includes(id)) after.push(id);
+    const id = entry.includes('::') ? members.find((m) => m.qualifier === entry)?.record.id : entry;
+    if (id !== undefined && !after.includes(id)) after.push(id);
   }
-  // Steps 4-5.
-  return { keyId: key.id, before: [...key.projects], after, widening: NARROWING_WIDENING };
+  // Steps 4-5: nothing widens; a key with no entry left is revoked.
+  return { keyId: key.id, before: [...key.projects], after, widening: NARROWING_WIDENING, revokes: after.length === 0 };
 }

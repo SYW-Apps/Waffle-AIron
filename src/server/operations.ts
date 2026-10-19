@@ -52,8 +52,7 @@ import type {
 // HostExposurePolicy `operationsApiEnabled` flag; http.ts gates the mount.
 // ---------------------------------------------------------------------------
 
-/** Operations reads are project reads: the legacy `operations:read` permission
- *  maps onto the hierarchical model's project:read capability. */
+/** Operations reads are project reads: they need the project:read capability. */
 const OPERATIONS_READ_CAPABILITY = 'project:read';
 
 /** The advisory quota policy resolved when HostConfig.quotaPolicy is unset:
@@ -519,10 +518,8 @@ export function setExposurePolicy(
   policy: HostExposurePolicy,
 ): HostExposurePolicy {
   const principal = requireInstanceExposureAdmin(cfg, credential);
+  // An adminApiMode other than enabled or disabled is refused, naming the two, before anything is written.
   const stored = setExposurePolicyRecord(cfg.dataDir, effectiveExposure(policy));
-  // A retired adminApiMode (local_only, private_network, public) is stored as
-  // enabled; the audit event says so, naming the old and the new value.
-  const submitted = (policy as { adminApiMode?: unknown }).adminApiMode;
   const event: AuditEvent = {
     id: '',
     timestamp: '',
@@ -533,9 +530,6 @@ export function setExposurePolicy(
     actor: principalSubject(principal),
     target: 'exposure-policy',
   };
-  if (submitted !== undefined && submitted !== stored.adminApiMode) {
-    event.metadata = `adminApiMode "${String(submitted)}" is deprecated and was stored as "${stored.adminApiMode}"`;
-  }
   if (principal.tokenId) event.tokenId = principal.tokenId;
   tryAppendAudit(cfg, event);
   return stored;

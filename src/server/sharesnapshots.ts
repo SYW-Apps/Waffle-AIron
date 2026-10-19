@@ -77,16 +77,11 @@ class ShareSnapshotRegistry {
  * per-portal document; several captured specs with no selection yield the INDEX
  * of them; exactly one yields that document. A portalId naming no captured spec
  * is REFUSED (null) — never silently substituted with another portal's API.
- *
- * Back-compat: a snapshot captured before per-portal capture holds only the
- * single `openapi` field and no portal ids, so it keeps answering an unqualified
- * request with exactly the document it always served.
  */
 function selectCapturedOpenApi(snap: ShareSnapshot, portalId?: string): string | null {
   const specs = snap.openapiSet;
   if (!specs || specs.length === 0) {
-    if (portalId) return null; // nothing captured under that name
-    return snap.openapi ?? null;
+    return null; // nothing captured
   }
   if (portalId) {
     const hit = specs.find((s) => s.portalId === portalId);
@@ -196,15 +191,12 @@ export function captureSnapshot(
       // A project publishes ONE OpenAPI document PER PORTAL — distinct portals
       // are separate APIs with their own servers and auth, never merged. Capture
       // the WHOLE set, so a multi-portal share can serve each API (and index
-      // them); the single-document field is filled only when exactly one portal
-      // exists, which is also what pre-existing links carry. Capturing nothing is
-      // honest when the project publishes no portal; an empty `{}` placeholder
+      // them). Capturing nothing is honest when the project publishes no portal; an empty `{}` placeholder
       // standing in for real APIs is not.
       const result = hostSurfaces.exportSurface('project', 'openapi');
       const specs = result.renderedSet ?? [];
       if (specs.length) {
         snapshot.openapiSet = specs;
-        if (specs.length === 1) snapshot.openapi = specs[0].document;
       }
     }
     return snapshot;

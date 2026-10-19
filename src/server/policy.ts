@@ -153,19 +153,25 @@ const COMPATIBLE_DEFAULT_EXPOSURE: HostExposurePolicy = {
 };
 
 /** The effective exposure posture for a partial override: each flag the
- *  override sets wins, and every unset flag keeps the compatible default. Any
- *  adminApiMode but disabled reads as enabled: the retired local_only,
- *  private_network and public each only ever meant "served". */
+ *  override sets wins, and every unset flag keeps the compatible default. */
 export function effectiveExposure(override?: Partial<HostExposurePolicy> | null): HostExposurePolicy {
-  const merged = { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
-  return { ...merged, adminApiMode: merged.adminApiMode === 'disabled' ? 'disabled' : 'enabled' };
+  return { ...COMPATIBLE_DEFAULT_EXPOSURE, ...(override ?? {}) };
+}
+
+/** Refuse an adminApiMode other than enabled or disabled, naming where it was found. */
+function assertAdminApiMode(value: unknown, where: string): void {
+  if (value === undefined || value === 'enabled' || value === 'disabled') return;
+  throw new Error(
+    `${where} names adminApiMode ${JSON.stringify(value)}, which is not a value - it must be "enabled" or "disabled" ` +
+      '(where the admin API listens is the admin bind address, not this mode)',
+  );
 }
 
 /**
  * Read the persisted instance exposure policy, or null when none has ever been
  * configured (callers substitute the safe default — web UI off, TLS required);
- * an unreadable file or structurally invalid JSON fails with a storage error
- * naming the path.
+ * an unreadable file, structurally invalid JSON or an adminApiMode other than
+ * enabled or disabled fails with a storage error naming the path.
  */
 export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | null {
   const p = exposurePolicyPath(dataDir);
@@ -176,17 +182,21 @@ export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | n
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new Error(`Failed to read exposure policy store at ${p}: ${(e as Error).message}`);
   }
+  let parsed: HostExposurePolicy;
   try {
-    return JSON.parse(raw) as HostExposurePolicy;
+    parsed = JSON.parse(raw) as HostExposurePolicy;
   } catch (e) {
     throw new Error(`Exposure policy store at ${p} contains malformed JSON: ${(e as Error).message}`);
   }
+  assertAdminApiMode(parsed?.adminApiMode, `Exposure policy store at ${p}`);
+  return parsed;
 }
 
 /** Persist the instance exposure policy wholesale via write-temp-then-rename
  *  and return it. No stamping — the exposure posture is a plain settings object. */
 export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
   const p = exposurePolicyPath(dataDir);
+  assertAdminApiMode(policy?.adminApiMode, `The exposure policy for ${p}`);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
@@ -347,10 +357,10 @@ export function removeIdentityProviderRecord(dataDir: string, id: string): void 
 
 /** Creating a project is its own capability. */
 const PROJECT_CREATE_CAPABILITY = 'project:create';
-/** The legacy `mcp:write` permission maps onto project:write. */
+/** Writing a project's specs is the project:write capability. */
 const PROJECT_WRITE_CAPABILITY = 'project:write';
 const PROJECT_READ_CAPABILITY = 'project:read';
-/** The legacy `policy:manage` permission maps onto project:admin. */
+/** Managing the instance policy is the project:admin capability. */
 const POLICY_MANAGE_CAPABILITY = 'project:admin';
 
 // An instance-WIDE capability must resolve at the instance root: a unit- or

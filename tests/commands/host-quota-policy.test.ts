@@ -1,5 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-import { logger } from '../../src/utils/logger.js';
+import { describe, it, expect } from 'vitest';
 import { parseQuotaPolicyEnv } from '../../src/commands/host.js';
 import { effectiveQuotaPolicy } from '../../src/server/operations.js';
 
@@ -32,15 +31,10 @@ describe('WAIRON_QUOTA_POLICY', () => {
     }
   });
 
-  it('reads the retired block as observe, with a deprecation warning naming both values', () => {
-    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    try {
-      expect(parseQuotaPolicyEnv('{"mode":"block"}')).toEqual({ mode: 'observe' });
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(String(warn.mock.calls[0][0])).toMatch(/WAIRON_QUOTA_POLICY field "mode": "block" is deprecated and reads as "observe"/);
-    } finally {
-      warn.mockRestore();
-    }
+  it('refuses the retired block, naming observe as the replacement', () => {
+    expect(() => parseQuotaPolicyEnv('{"mode":"block"}')).toThrow(
+      /WAIRON_QUOTA_POLICY field "mode" must be one of "observe", "warn".*'block' was retired: use 'observe'/,
+    );
   });
 
   it('accepts an empty object, which keeps the disabled default', () => {

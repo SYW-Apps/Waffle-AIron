@@ -321,7 +321,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     expect(firstToken).toMatch(/^wk_[0-9a-f]+$/);
 
     // An admin deactivates the user (this also revokes the first token).
-    identity.setUserStatus(cfg, MASTER, `sso:${PROVIDER_ID}:ext-1`, 'suspended');
+    identity.setUserStatus(cfg, MASTER, `sso:${PROVIDER_ID}:ext-1`, 'inactive');
     expect(authenticate(dataDir, firstToken).authenticated).toBe(false);
 
     // A subsequent SSO login for the same (now deactivated) subject is refused before minting …
