@@ -228,6 +228,14 @@ methods:
         type: string
         optional: true
     effect: read
+  - name: loadDuplicateTypeSpecs
+    description: >-
+      Loads the second half of every duplicate type id (two types of different subsystems declaring
+      one id), which no model list holds: each with its `subsystem::id` address, its file and its
+      parsed type.
+    signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
+    returns: list<DuplicateTypeSpec>
+    params: []
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-19T18:25:37.656Z'
+updatedAt: '2026-10-19T19:47:17.495Z'

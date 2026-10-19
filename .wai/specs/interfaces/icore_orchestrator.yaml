@@ -1254,13 +1254,21 @@ methods:
       moves to the new id and only the references that resolve to it are respelled. Refuses a type
       that does not exist, one inside a chained subproject, a new id outside the id grammar, a new
       id another type of the same owner holds or retired (id-taken, id-retired naming the holder), a
-      reference that matches several types including this one (ambiguous-ref: qualify it as
-      subsystem::name first), and a register that cannot be rewritten that precisely; every refusal
-      happens before the first write. Display names are the author's to change, and a lock goes
-      stale as with any edit. Inside a hosted request every spec it would write is judged against
-      the request's write reach before the first write (SubsystemWriteDenied), and nothing is
-      written on a refusal.
-    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
+      reference that matches several types including this one (ambiguous-ref: every such site is
+      listed as `<file> <position>: "<token>" matches <ids>`; qualify each as subsystem::name
+      first), a reference that binds to this type while another type carries that name and sits at
+      least as close to where it is written (shadowed-ref: every such site is listed as `<file>
+      <position>: "<token>" binds to <boundTo> while <shadowedBy> carries that name`; write which
+      type is meant, the type's id or subsystem::name, in those specs, or pass allowShadowed to
+      rename anyway and respell them), and a register that cannot be rewritten that precisely; every
+      refusal happens before the first write. With allowShadowed the shadowed sites are respelled
+      and listed in the report's `shadowed`. A dry run never refuses on a shadowed site: it answers
+      the plan with those sites listed separately (shadowed) and says the real rename refuses
+      without allowShadowed; an ambiguous site still refuses a dry run. Display names are the
+      author's to change, and a lock goes stale as with any edit. Inside a hosted request every spec
+      it would write is judged against the request's write reach before the first write
+      (SubsystemWriteDenied), and nothing is written on a refusal.
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool, allowShadowed?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
@@ -1275,7 +1283,14 @@ methods:
         type: bool
         description: >-
           Answer what the rename would rewrite, keep and rekey — refusing exactly as the real rename
-          would — and write nothing
+          would, except on shadowed sites, which it lists in `shadowed` — and write nothing
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
   - name: setNetwork
     description: >-
@@ -1564,4 +1579,4 @@ methods:
         description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T18:25:59.416Z'
+updatedAt: '2026-10-19T19:48:00.076Z'

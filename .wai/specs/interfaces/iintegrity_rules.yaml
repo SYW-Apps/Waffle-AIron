@@ -651,14 +651,17 @@ methods:
   - name: typeRefScope
     description: >-
       Rule type-ref-scope. A bare type reference resolves in the referring spec's own subsystem
-      first (type_ref_resolution.resolve). Two readings are reported, once per spec and reference: a
-      reference that matches several types and nothing in its own subsystem settles which is meant
-      (ambiguous), and a reference that silently lands in another subsystem's type while the
-      referrer's own subsystem holds a type carrying that display name (shadowed). Judged for every
-      type position — contract method params and returns, type fields, type-method signatures,
-      signature-type params and returns — and for every L1 and L0 export entry's typeDef, in the
-      draft context of the referring spec. An unresolved reference is UNDEFINED_TYPE_REFERENCE's to
-      report, never this rule's.
+      first (type_ref_resolution.resolve). Two readings are reported, once per spec and written
+      reference (never per type, so a type having other referents never masks it), naming every
+      position in that spec where the reference is written: a reference that matches several types
+      and nothing in its own subsystem settles which is meant (ambiguous), and a reference that
+      silently lands on one type while another type carries that display name and sits at least as
+      close to the referrer — the referrer's own subsystem nearest, a project-level type in the
+      middle, another subsystem far (shadowed). Judged for every type position — contract method
+      params and returns, type fields, type-method signatures, signature-type params and returns —
+      and for every L1 and L0 export entry's typeDef, in the draft context of the referring spec,
+      whether or not the referring spec is reached or the type used. An unresolved reference is
+      UNDEFINED_TYPE_REFERENCE's to report, never this rule's.
     signature: 'typeRefScope(ctx: RuleContext): void'
     returns: void
     params:
@@ -669,8 +672,8 @@ methods:
       - code: AMBIGUOUS_TYPE_REF
         severity: warning
         summary: >-
-          A written type reference matches several types, or binds to another subsystem's type while
-          the referrer's own subsystem holds a type of that name
+          A written type reference matches several types, or binds to a type while another type
+          carries that name and sits at least as close to the referrer
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-19T18:24:08.740Z'
+updatedAt: '2026-10-19T19:48:47.022Z'

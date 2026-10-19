@@ -420,10 +420,13 @@ methods:
       Resolve the type id, qualified by its owner if needed (`subsystem::id`, which also reaches the
       second half of a duplicate id), against the bound tree, read the projects that consume the
       bound project (the family in reach — members included — and the searched folders' consumer
-      checkouts), then rename it through the core adapter — or, with dryRun, answer what the rename
-      would do and write nothing — and name every consumer whose specs reach a public name carrying
-      the type (external_consumer.narrowedToUses): the ones whose code spelling the old name breaks
-    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
+      checkouts), then rename it through the core adapter, passing allowShadowed on — or, with
+      dryRun, answer what the rename would do and write nothing — and name every consumer whose
+      specs reach a public name carrying the type (external_consumer.narrowedToUses): the ones whose
+      code spelling the old name breaks
+    signature: >-
+      renameType(id: string, newId: string, dryRun?: bool, search?: list<string>, allowShadowed?:
+      bool): TypeRename
     returns: TypeRename
     params:
       - name: id
@@ -436,11 +439,20 @@ methods:
         description: Its new id
       - name: dryRun
         type: bool
-        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        description: >-
+          Answer what the rename would rewrite, keep and rekey, listing shadowed sites instead of
+          refusing on them, and write nothing
         optional: true
       - name: search
         type: list<string>
         description: Folders to scan for consumer checkouts outside the family
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
   - name: renameField
     description: >-
@@ -560,4 +572,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-19T18:26:05.402Z'
+updatedAt: '2026-10-19T19:48:05.702Z'

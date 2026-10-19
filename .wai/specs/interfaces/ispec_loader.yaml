@@ -321,6 +321,14 @@ methods:
         type: string
         description: 'The system id asked for: a name of this L0, or `alias::name`'
     effect: read
+  - name: loadDuplicateTypeSpecs
+    description: >-
+      Loads the second half of every duplicate type id (two types of different subsystems declaring
+      one id), which no model list holds: each with its `subsystem::id` address, its file and its
+      parsed type.
+    signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
+    returns: list<DuplicateTypeSpec>
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T19:08:49.262Z'
+updatedAt: '2026-10-19T19:47:19.919Z'

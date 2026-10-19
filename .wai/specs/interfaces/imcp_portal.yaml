@@ -934,16 +934,24 @@ methods:
       rename trace (previousIds), and an export entry that derived its public name from the old id
       keeps it through `as`. A contract method's stored signature text is re-derived from its
       params; a prose signature without params has only its result respelled. Refuses an id another
-      type of the same owner holds or retired, and a reference that matches several types including
-      this one (ambiguous-ref: qualify it as subsystem::name first). Reports the specs rewritten,
-      the public names kept, the debt-register edits, `publishedIn` (every public name a consumer
-      reaches the type through: an exported type that is or embeds it, an exported contract whose
-      methods name one in their signature closure) and `breaks`: the consumers in reach (family
-      members included, and checkouts in the `search` folders) whose specs reach one of those — a
-      contract they depend on as a whole included — narrowed to what carries the type, as
-      sdd_rename_field and sdd_rename_param name theirs. With dryRun it answers what the rename
-      would do and writes nothing.
-    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
+      type of the same owner holds or retired, a reference that matches several types including this
+      one (ambiguous-ref: every such site is listed, qualify each as subsystem::name first), and a
+      reference that binds to this type while another type carries that name and sits at least as
+      close to where it is written (shadowed-ref: every such site is listed as `<file> <position>:
+      "<token>" binds to <boundTo> while <shadowedBy> carries that name`; write which type is meant,
+      the type's id or subsystem::name, in those specs, or pass allowShadowed to rename anyway and
+      respell them). Reports the specs rewritten, the public names kept, the debt-register edits,
+      `shadowed` (the shadowed sites respelled), `publishedIn` (every public name a consumer reaches
+      the type through: an exported type that is or embeds it, an exported contract whose methods
+      name one in their signature closure) and `breaks`: the consumers in reach (family members
+      included, and checkouts in the `search` folders) whose specs reach one of those — a contract
+      they depend on as a whole included — narrowed to what carries the type, as sdd_rename_field
+      and sdd_rename_param name theirs. With dryRun it answers what the rename would do and writes
+      nothing; it lists the shadowed sites separately and says the real rename refuses without
+      allowShadowed, while an ambiguous site still refuses it.
+    signature: >-
+      renameType(id: string, newId: string, dryRun?: bool, search?: list<string>, allowShadowed?:
+      bool): TypeRename
     returns: TypeRename
     params:
       - name: id
@@ -956,13 +964,22 @@ methods:
         description: Its new id
       - name: dryRun
         type: bool
-        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        description: >-
+          Answer what the rename would rewrite, keep and rekey — shadowed sites listed separately,
+          not refused — and write nothing
         optional: true
       - name: search
         type: list<string>
         description: >-
           Folders to scan for consumer checkouts outside the family, relative to the bound project
           root or absolute
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1319,4 +1336,4 @@ methods:
       method: tools/call sdd_move_spec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T18:26:02.474Z'
+updatedAt: '2026-10-19T19:48:09.696Z'

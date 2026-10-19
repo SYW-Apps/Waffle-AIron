@@ -1,0 +1,49 @@
+kind: value-object
+id: type_ref_site
+name: TypeRefSite
+description: >-
+  One place a written type reference sits in the bound tree, and how it resolves from there: the
+  spec and file that write it, the position inside the spec, the token as written, the type it binds
+  to, and, when the binding is not a plain one, the type that shadows it or the types it matches.
+  What the type rename lists when it refuses (or, in a dry run, reports) a reference whose meaning
+  it cannot keep silently.
+fields:
+  - name: spec
+    type: string
+    description: The id of the spec that writes the reference
+    optional: false
+  - name: file
+    type: string
+    description: The spec's file, relative to the project root
+    optional: false
+  - name: position
+    type: string
+    description: >-
+      Where in the spec the token is written: `method <name> param <param>`, `method <name>
+      returns`, `field <name>`, `signature param <param>`, `signature returns`, or `export entry
+      <as>` (the entry's public name)
+    optional: false
+  - name: token
+    type: string
+    description: The type reference as written there
+    optional: false
+  - name: boundTo
+    type: string
+    description: >-
+      The id, in qualified form, of the type the token resolves to from there; for an ambiguous
+      site, its first candidate
+    optional: false
+  - name: shadowedBy
+    type: string
+    description: >-
+      Present for a shadowed site: the id of the closer-or-equally-close type that carries the
+      token's name (type_ref_resolution.shadowedBy)
+    optional: true
+  - name: candidates
+    type: list<string>
+    description: 'Present for an ambiguous site: the ids, in qualified form, of every type the token matches'
+    optional: true
+methods: []
+sourcePath: src/models/type-references.ts
+createdAt: '2026-10-19T19:47:09.182Z'
+updatedAt: '2026-10-19T19:47:09.957Z'

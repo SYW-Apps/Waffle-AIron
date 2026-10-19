@@ -317,10 +317,10 @@ methods:
           those keys, folding nothing into another root's namespace. A second declaration of one key
           in one root is a duplicate-spec problem naming both files; the first stays in the index. A
           second TYPE whose subsystem differs from the kept one's is also recorded in the index's
-          duplicates (kind, then `subsystem::id`, to its file), carried on the problem as its two
-          `subsystem::id` addresses (qualifiedIds): it stays out of every model list — no lint, no
-          resolution, since the tree still has no single reading — but loadTypeSpec reaches it by
-          its qualified id. Every other kind is unchanged
+          duplicates (`subsystem::id` to its file), carried on the problem as its two
+          `subsystem::id` addresses (qualifiedIds): it stays out of every model list, with no lint
+          and no resolution since the tree still has no single reading, but loadTypeSpec and
+          loadDuplicateTypeSpecs reach it by its qualified id. Every other kind is unchanged
         type: local
       - stepNumber: 6
         label: kinds
@@ -690,6 +690,23 @@ methods:
           write lands outside the tree
         type: local
     symbol: getTypePath
+  - name: loadDuplicateTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: 'Take every duplicate the scan recorded for a type: `subsystem::id` to its file'
+        type: local
+      - stepNumber: 2
+        description: Read each recorded file through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against TypeSpecSchema, the way loadTypeSpec reads a duplicate; a file that
+          cannot be read yields no entry, and answer each as its address, its file and its parsed
+          type
+        type: return
+        outcome: DuplicateTypeSpec[]
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-19T18:25:34.423Z'
+updatedAt: '2026-10-19T19:47:23.379Z'

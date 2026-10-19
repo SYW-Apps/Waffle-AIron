@@ -25,9 +25,11 @@ fields:
   - name: shadowedBy
     type: string
     description: >-
-      The id of a type of the referrer's own subsystem whose display name has the reference's
-      nameKey, when the reference resolved to a type of another subsystem. The binding does not
-      change silently: it is reported
+      The id of another type, not a candidate, whose display name has the reference's nameKey and
+      that sits at least as close to the referrer as the type the reference resolved to (closeness:
+      the referrer's own subsystem is nearest, a type with no subsystem is in the middle, another
+      subsystem is far). Absent when the reference is qualified with :: or written exactly as the
+      resolved type's id. The binding does not change silently: it is reported
     optional: true
 methods:
   - name: resolve
@@ -52,11 +54,18 @@ methods:
       whose matchesRef(ref) holds; none of them is outcome none. When from is given and some
       candidates belong to from, only those count: exactly one resolves to it, several are ambiguous
       among them. Otherwise exactly one candidate resolves to it and several are ambiguous. A
-      reference that resolved to a type of another subsystem while from holds a type t that is not a
-      candidate and whose nameKey(t.name) equals the nameKey of the reference's last segment is
-      still resolved, with shadowedBy = t.id. Pure.
+      resolved reference to a type X carries shadowedBy when some other type t, not a candidate, has
+      nameKey(t.name) equal to the nameKey of the reference's last segment and is at least as close
+      to the referrer as X. Closeness of a type to a referrer whose subsystem is from: near when the
+      type's subsystem is from, middle when the type has no subsystem, far when it belongs to
+      another subsystem; a referrer with no subsystem (the L0, a project-level type) sees
+      project-level types as middle and every subsystem type as far. shadowedBy is the id of the
+      closest such t, the first in the order the types were handed in on a tie. A reference that
+      already says which type it means is never shadowed: one qualified with ::, or one written
+      exactly as X's id (the way to say it for a project-level type, which has no subsystem to
+      qualify with). The reference stays resolved. Pure.
     sourcePath: src/models/type-references.ts
     symbol: resolveTypeRef
 sourcePath: src/models/type-references.ts
 createdAt: '2026-10-19T18:22:38.976Z'
-updatedAt: '2026-10-19T18:22:39.771Z'
+updatedAt: '2026-10-19T19:50:50.923Z'

@@ -1461,20 +1461,13 @@ methods:
       - stepNumber: 2
         label: contractsEnd
         description: >-
-          Judge the reference as written in the contract: from = the subsystem of the component
+          Note the reference as written in the contract: from = the subsystem of the component
           ctx.componentMap holds for intf.component, isDraftCtx =
           ctx.isComponentDraft(intf.component) or the interface's own status being draft or design,
-          owner = intf.id. The private helper judgeTypeRef(owner, ref, from, isDraftCtx) skips a
-          builtin (ctx.isBuiltinType(ref) holds), resolves the reference with
-          type_ref_resolution.resolve(ref, from, ctx.types) and reports at most once per (owner,
-          ref). When the outcome is ambiguous: AMBIGUOUS_TYPE_REF (warning; isDraftCtx) on the
-          owner, reading `<ref> in <owner> matches <n> types: <id> (subsystem <subsystem>), ... —
-          write it as subsystem::name to say which is meant`. When it is resolved and shadowedBy is
-          set: AMBIGUOUS_TYPE_REF (warning; isDraftCtx) on the owner, reading `<ref> in <owner>
-          binds to <subsystem>::<type id>, while subsystem <from> holds <shadowedBy>, also named
-          <Name> — write the type's id, or subsystem::name, to say which is meant`. A resolved
-          reference without a shadow, and an unresolved one (UNDEFINED_TYPE_REFERENCE's to report),
-          report nothing here
+          owner = intf.id, position = `method <name> param <param>` or `method <name> returns`. The
+          private helper noteTypeRef(owner, ref, from, isDraftCtx, position) skips a builtin
+          (ctx.isBuiltinType(ref) holds) and records the position under (owner, ref), keeping the
+          order written; nothing is reported yet
         type: local
       - stepNumber: 3
         label: types
@@ -1488,9 +1481,10 @@ methods:
       - stepNumber: 4
         label: typesEnd
         description: >-
-          Judge the reference as written in the type, exactly as step 2 does: from = t.subsystem,
+          Note the reference as written in the type, exactly as step 2 does: from = t.subsystem,
           isDraftCtx = the subsystem in ctx.subsystems whose id is t.subsystem having status draft
-          or design, owner = t.id
+          or design, owner = t.id, position = `field <name>`, `method <name> param <param>`, `method
+          <name> returns`, `signature param <param>` or `signature returns`
         type: local
       - stepNumber: 5
         label: exports
@@ -1504,13 +1498,38 @@ methods:
       - stepNumber: 6
         label: exportsEnd
         description: >-
-          Judge the typeDef as written in the entry, exactly as step 2 does: owner = the subsystem
+          Note the typeDef as written in the entry, exactly as step 2 does: owner = the subsystem
           (or the system) spec holding the entry, from = that subsystem's id (none for the L0),
-          isDraftCtx = that subsystem having status draft or design (none for the L0)
+          isDraftCtx = that subsystem having status draft or design (none for the L0), position =
+          `export entry <as>` (the entry's public name)
+        type: local
+      - stepNumber: 7
+        label: report
+        description: For each written reference of each spec
+        type: loop
+        loopKind: forEach
+        over: each (owner, ref) noted by steps 2, 4 and 6, in the order first noted
+        endStep: 8
+      - stepNumber: 8
+        label: reportEnd
+        description: >-
+          Judge the reference once per (owner, ref), however many positions note it and however many
+          other specs or referents the type has: resolve it with type_ref_resolution.resolve(ref,
+          from, ctx.types). When the outcome is ambiguous: AMBIGUOUS_TYPE_REF (warning; isDraftCtx)
+          on the owner, reading `<ref> in <owner> matches <n> types: <id> (subsystem <subsystem>),
+          ... — write it as subsystem::name to say which is meant (at <position>, <position>)`. When
+          it is resolved and shadowedBy is set: AMBIGUOUS_TYPE_REF (warning; isDraftCtx) on the
+          owner, reading `<ref> in <owner> binds to <qualified id of the bound type>, while <where>
+          holds <shadowedBy>, also named <Name> — write the type's id, or subsystem::name, to say
+          which is meant (at <position>, <position>)`, where <where> is `subsystem <s>` when that
+          type has a subsystem and `the project level` when it has none. Every `(at ...)` lists
+          EVERY position noted for that (owner, ref), in the order written. A resolved reference
+          without a shadow, and an unresolved one (UNDEFINED_TYPE_REFERENCE's to report), report
+          nothing here
         type: local
     detail: full
     symbol: check
     exportedVia: typeRefScopeRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-19T18:24:12.155Z'
+updatedAt: '2026-10-19T19:48:48.312Z'
