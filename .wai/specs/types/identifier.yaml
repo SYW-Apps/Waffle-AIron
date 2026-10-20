@@ -58,7 +58,8 @@ methods:
       refuse their keywords as every kind. A language without a table reserves nothing. A tree that
       declares NO targetLanguage is judged by the TypeScript table — the convention whose camelCase
       it is already judged by (naming_rule_config.methodCasingFor), so casing and reserved words
-      never disagree — and the answer says it judged it so. Pure
+      never disagree — and the answer says it judged it so. Pure. A word the language can escape
+      (identifier.escapedIn) is none here.
     symbol: reservedWordProblem
   - name: entryIn
     signature: 'entryIn(record: map<string, any>): any'
@@ -82,7 +83,26 @@ methods:
     description: Whether the record holds this identifier as its own key. Pure
     sourcePath: src/utils/own.ts
     symbol: ownHas
+  - name: escapedIn
+    signature: 'escapedIn(kind: identifier_kind, targetLanguage: string?): string?'
+    params:
+      - name: kind
+        type: identifier_kind
+        description: method, param or field; any other kind is never reserved
+      - name: targetLanguage
+        type: string?
+        description: >-
+          The effective targetLanguage of the spec holding the name, lowercased; none when the tree
+          declares none
+    returns: string?
+    description: >-
+      A notice for a name the target language reserves but can spell as an ordinary identifier,
+      naming that spelling (Rust r#type, C# @class, Kotlin backticks), or none: when the word is not
+      reserved, when no escape reaches it (Rust crate, self, Self, super), or when the language has
+      none (Python, Go, Java, C, and TypeScript parameters). It suggests no rename: the name is
+      legal, and is often a wire name.
+    symbol: reservedWordEscape
 sourcePath: src/models/identifiers.ts
 holds: string
 createdAt: '2026-10-07T21:43:22.463Z'
-updatedAt: '2026-10-08T08:58:22.146Z'
+updatedAt: '2026-10-20T19:14:48.552Z'

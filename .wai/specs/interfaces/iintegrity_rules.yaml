@@ -628,9 +628,12 @@ methods:
       method, two fields of one type; a loaded spec otherwise binds one of them at random wherever a
       name is looked up), and never a word the spec's effective target language reserves for that
       kind of identifier (RESERVED_IDENTIFIER, identifier.reservedIn: TypeScript and JavaScript
-      forbid a keyword as a parameter and constructor as a method, Rust its keywords everywhere, and
-      so on per language), because the implementation the brief asks for could not be written. The
-      message names the language and offers an alternative.
+      forbid a keyword as a parameter and constructor as a method, Rust its keywords, and so on per
+      language), because the implementation the brief asks for could not be written. The message
+      names the language and offers an alternative. A reserved word the language can spell as an
+      ordinary identifier (Rust `r#type`, C# `@class`, a Kotlin backtick) is only a notice,
+      RESERVED_IDENTIFIER_ESCAPED, naming the spelling and suggesting no rename; a word no escape
+      reaches (Rust crate, self, Self, super) stays RESERVED_IDENTIFIER.
     signature: 'memberNames(ctx: RuleContext): void'
     returns: void
     params:
@@ -647,7 +650,12 @@ methods:
         severity: error
         summary: >-
           A method, parameter or field name is a word the target language reserves for that kind of
-          identifier
+          identifier and cannot be escaped
+      - code: RESERVED_IDENTIFIER_ESCAPED
+        severity: notice
+        summary: >-
+          A method, parameter or field name is a reserved word the target language can escape (Rust
+          r#type, C# @class, Kotlin backticks); the code spells it so
   - name: typeRefScope
     description: >-
       Rule type-ref-scope. A bare type reference resolves in the referring spec's own subsystem
@@ -676,4 +684,4 @@ methods:
           carries that name and sits at least as close to the referrer
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-19T19:48:47.022Z'
+updatedAt: '2026-10-20T19:12:10.663Z'
