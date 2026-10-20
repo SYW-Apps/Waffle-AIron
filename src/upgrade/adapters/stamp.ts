@@ -72,6 +72,11 @@ export function read(root: string): number | null {
   return integer(STAMP_LINE.exec(text)?.[1]);
 }
 
+/** iproject_stamp_adapter.holdsConfig — whether the root holds a project.yaml (a part holds none). */
+export function holdsConfig(root: string): boolean {
+  return fs.existsSync(configFile(root));
+}
+
 /** iproject_stamp_adapter.write — set `waironMajor`, adding the line when missing and changing no other byte. */
 export function write(root: string, major: number): void {
   const file = configFile(root);

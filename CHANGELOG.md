@@ -198,6 +198,23 @@ address, `https://<this host>/web/sso/callback`.
 - Docs: the code reading checks structure and linkage, never behaviour (a dropped business
   rule is caught by tests, not the gate).
 
+### Fixes from the v6.1.0 QA panel
+
+- `wairon upgrade` on a 6.0.0 project with a part (a folder holding some of its
+  subsystems, with no `project.yaml` of its own) failed on every command ("Cannot stamp
+  …: it has no project.yaml"). A part carries no stamp: it goes along with the project
+  that declares it, and only a folder holding a `project.yaml` is stamped.
+- `wairon member add <alias> <path> --project` now sets the new project's folder up for
+  its own sessions, as `member promote` does: its guide, skills and context, and its
+  `.mcp.json` when claude is a target.
+
+### Known limitations
+
+- Hosted: when a lock request is still pending and someone with the right to lock
+  approves the same design directly, deciding the request later approves that design
+  again and records the decider as the approver. The request is checked against the
+  design it was made for, so it never approves a design nobody asked about.
+
 ## v6.0.0 (from v5.1.0)
 
 **Breaking: a major release.**

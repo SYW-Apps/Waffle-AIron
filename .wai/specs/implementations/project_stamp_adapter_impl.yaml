@@ -20,6 +20,12 @@ methods:
       Set the top-level waironMajor line of .wai/project.yaml under the root to the major, replacing
       the line in place or adding it after the id line (at the top when there is none), keeping the
       file's line endings and every other byte. A root with no project.yaml refuses with its path.
+  - name: holdsConfig
+    narrative: []
+    detail: intent
+    intent: >-
+      Answer whether .wai/project.yaml exists under the root (the legacy .wairon/project.yaml when
+      no .wai folder exists), the same file read and write use.
 status: draft
 createdAt: '2026-10-18T14:14:14.367Z'
-updatedAt: '2026-10-18T14:14:15.806Z'
+updatedAt: '2026-10-20T00:50:41.662Z'

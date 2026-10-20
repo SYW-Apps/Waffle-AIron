@@ -438,6 +438,34 @@ methods:
           `wairon member promote` makes it a project when it needs its own team, release, approval
           or public surface
         type: local
+      - stepNumber: 8
+        label: project-sessions
+        description: >-
+          Is it a project in a folder on disk (not a git member)? A project is designed from its own
+          root, so a session opened in its folder needs the wairon tools there
+        type: branch
+        condition: a project member whose folder is local was created
+        onFalseStep: 11
+      - stepNumber: 9
+        description: >-
+          Bound at the member's root, give it what `wairon init` gives a project: its guide and root
+          pointer, its skills and its context, for its configured targets (generate's own layer — no
+          agent files unless it opts in)
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runGenerate
+      - stepNumber: 10
+        description: >-
+          Register its portable project MCP entry (.mcp.json) when claude is a configured target,
+          and print one line naming the folder a teammate opens a session in; a failure is reported
+          with the commands to run there, never fatal, since the member is already created
+        type: call
+        targetComponent: cli_mcp_adapter
+        targetMethod: installMcpServer
+      - stepNumber: 11
+        description: Done
+        type: return
+        outcome: member added
   - name: runInit
     sourcePath: src/commands/init.ts
     narrative:
@@ -4102,4 +4130,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T06:11:24.842Z'
+updatedAt: '2026-10-20T00:57:22.845Z'

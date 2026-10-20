@@ -241,4 +241,35 @@ describe('wairon upgrade — a tree already in v6 forms but never stamped', () =
     expect(report.relock).toEqual([]);
     expect(read(root)).toBe(6);
   });
+
+  it('stamps the project and leaves a part (no project.yaml of its own) unstamped', () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-upg-v6-part-')));
+    roots.push(root);
+    projectYaml(root);
+    const config = path.join(root, '.wai', 'project.yaml');
+    fs.appendFileSync(config, 'members:\n  media: services/media\n');
+    setProjectRoot(root);
+    system('root-system');
+    saveSpec('subsystem', subsystem('editorial'));
+    invalidateSpecCache();
+    setProjectRoot(null);
+    const part = path.join(root, 'services', 'media');
+    writeYamlFile(path.join(part, '.wai', 'specs', 'media', '.index.yaml'), subsystem('media'));
+
+    const plan = upgrade.plan(root);
+    expect(plan.refusal).toBeUndefined();
+    expect(plan.standings.map((s) => s.root)).toEqual([root]);
+    expect(plan.changes.map((c) => c.path)).toEqual(['.wai/project.yaml']);
+    const report = upgrade.apply(plan);
+    expect(report.committed).toBe(true);
+    expect(report.stamped).toEqual([root]);
+    expect(read(root)).toBe(6);
+    expect(fs.existsSync(path.join(part, '.wai', 'project.yaml'))).toBe(false);
+
+    // Upgraded once: the part stands with its current family, so nothing is planned again.
+    const again = upgrade.plan(root);
+    expect(again.refusal).toBeUndefined();
+    expect(again.rehearsal).toBeUndefined();
+    expect(again.steps).toEqual([]);
+  });
 });
