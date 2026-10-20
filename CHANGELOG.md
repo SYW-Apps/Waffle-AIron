@@ -66,6 +66,12 @@ Who is affected:
 - **TypeScript:** a class imported with a plain `import { X }` and used only as a type (a
   constructor parameter, an annotation) no longer draws `UNDECLARED_EXPORT` on the file
   that exports it; it is a type import whatever its spelling, as `import type` was.
+- **HTTP Portals:** an endpoint path that repeats its Portal's `basePath` (`basePath: /products`
+  with `/products/{id}`, which serves `/products/products/{id}`) is the new warning
+  `ENDPOINT_BASEPATH_REPEATED`, at design time. `UNDECLARED_ROUTE` and `UNROUTED_ENDPOINT` print
+  the full joined route, and say so when the code and the design differ only by a repeated
+  basePath. A route printed as `//…` is fixed. Designs that repeat the prefix now fail
+  `--ci`: drop the prefix from the endpoint paths, or the `basePath`.
 - A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
   for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
   a session opened in its folder had no wairon tools.
