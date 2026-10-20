@@ -73,9 +73,11 @@ import {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  getLoaderIssues,
   readProjectSystem,
   publishedUsesOf,
 } from './adapters/core.js';
+import { unparsedSpecSentence } from '../models/unparsed-spec.js';
 import { standing as treeStanding } from './adapters/upgrade.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
@@ -961,7 +963,7 @@ const validationIssueOutput = {
     + 'producer (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED). Counted with its severity, '
     + 'but never part of `valid` or `--ci`: the pin is the reproducible gate.',
   ),
-} satisfies Record<keyof ValidationIssue, z.ZodTypeAny>;
+} satisfies Record<Exclude<keyof ValidationIssue, 'target' | 'unparsed'>, z.ZodTypeAny>; // target and unparsed are internal to the fold (foldUnparsedReferences), never in an answer
 
 /** sdd_add_member's structured answer: what creating the member wrote about packs. */
 const memberCreationOutput = {
@@ -3384,7 +3386,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           case 'implementation': result = loadImplementationSpec(id); break;
           case 'type':           result = loadTypeSpec(id); break;
         }
-        if (!result) return pinnedAnswer(kind) ?? errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        if (!result) return pinnedAnswer(kind) ?? errText(unparsedSpecSentence(kind, id, getLoaderIssues()) ?? `Spec of kind "${kind}" with ID "${id}" does not exist.`);
         // A contract answers in STORED form, its sourced methods' resolved
         // signatures beside it as a derived marker (mcp_orchestrator.getSpec).
         let resolvedSignatures: ResolvedSignatureMarker[] = [];

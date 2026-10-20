@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/paths.js';
+import { unparsedSpecSentence } from '../models/unparsed-spec.js';
 import { projectConfigRepository } from '../config/project-config.js';
 import {
   declaredExternals,
@@ -3838,6 +3839,7 @@ export class SpecWorkspace {
       let detectedType = 'spec';
       // The refused spec's own id, once the file got far enough to have one.
       let rawId: string | undefined;
+      let rawComponent: string | undefined;
       try {
         const doc = readSpecFile(file);
         if (doc === null || typeof doc !== 'object') {
@@ -3851,6 +3853,8 @@ export class SpecWorkspace {
         }
         const idField = (doc as { id?: unknown }).id;
         if (typeof idField === 'string' && idField) rawId = idField;
+        const componentField = (doc as { component?: unknown }).component;
+        if (typeof componentField === 'string' && componentField) rawComponent = componentField;
         if ('parentSystem' in doc) {
           detectedType = 'subsystem';
           refuseV5Forms('subsystem', doc);
@@ -3935,6 +3939,8 @@ export class SpecWorkspace {
           // A schema refusal reads as `path: message` per issue, never zod's JSON dump.
           message: `Failed to parse ${detectedType} spec "${file}": ${e instanceof z.ZodError ? formatZodIssues(e) : e.message || String(e)}`,
           specId: this.loaderIssueSpecId(file, rawId, key),
+          // Structured, so references into this spec are folded, not matched on text.
+          unparsed: { kind: detectedType, id: this.loaderIssueSpecId(file, rawId, key), ...(detectedType === 'interface' && rawComponent ? { component: keyIn(key, rawComponent) } : {}) },
         });
       }
     }
@@ -9175,7 +9181,7 @@ export function rewriteReferences(kind: WritableSpecKind, id: string, edits: Ref
  * hint, when given, follows the sentence.
  */
 export function missingSpecSentence(kind: string, id: string, hint?: string): string {
-  return `spec-missing: this project has no ${kind} "${id}".${hint ? ` ${hint}` : ''} Nothing was written.`;
+  return unparsedSpecSentence(kind, id, getLoaderIssues()) ?? `spec-missing: this project has no ${kind} "${id}".${hint ? ` ${hint}` : ''} Nothing was written.`;
 }
 
 /**

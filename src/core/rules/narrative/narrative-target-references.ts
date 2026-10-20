@@ -176,6 +176,9 @@ export const narrativeTargetReferencesRule: SddRule = {
               `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} method "${entry.targetMethod}" on component "${target}" which is not defined on any of its interfaces${where}.${hint}`,
               impl.id,
               isDraftCtx || ctx.isComponentDraft(target),
+              undefined,
+              undefined,
+              `contract-of:${target}`,
             );
             continue;
           }
