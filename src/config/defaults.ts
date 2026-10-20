@@ -30,7 +30,7 @@ export function defaultTargetConfig(type: 'claude' | 'gemini' | 'agy' | 'cursor'
 // waffle-airon CLI version embedded at build time
 // ---------------------------------------------------------------------------
 
-export const WAIRON_VERSION = '6.1.1-dev.4';
+export const WAIRON_VERSION = '6.1.1-dev.5';
 
 /** The major of the running wairon (6.0.1-dev.3 is major 6). */
 export const WAIRON_MAJOR = Number.parseInt(WAIRON_VERSION.split('.')[0], 10);
