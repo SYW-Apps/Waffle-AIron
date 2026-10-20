@@ -153,6 +153,10 @@ describe('installed_release_adapter and releaseNotes', () => {
     expect(releaseNotes(null, '6.1.0').map((n) => n.version)).toEqual(['6.1.0']);
     expect(releaseNotes('6.1.0', '6.1.0')).toEqual([]);
     expect(releaseNotes('6.0.0', '6.1.0').map((n) => n.version)).toEqual(['6.1.0']);
-    expect(releaseNotes('6.1.0', '9.0.0')).toEqual([]);
+    // After 6.1.0: every later note, newest first, and never 6.1.0 itself.
+    const later = all.filter((v) => v !== '6.1.0' && !releaseNotes(null, '6.1.0').some((n) => n.version === v) && releaseNotes('6.1.0', v).some((n) => n.version === v));
+    expect(releaseNotes('6.1.0', '9.0.0').map((n) => n.version)).toEqual([...later].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })));
+    expect(releaseNotes('6.1.0', '9.0.0').map((n) => n.version)).not.toContain('6.1.0');
+    expect(releaseNotes('6.1.0', '6.1.1').map((n) => n.version)).toEqual(['6.1.1']);
   });
 });

@@ -55,6 +55,9 @@ export const hierarchyRule: SddRule = {
           `Component "${comp.id}" references non-existent subsystem "${comp.subsystem}".`,
           comp.id,
           isDraftCtx,
+          undefined,
+          undefined,
+          `subsystem:${comp.subsystem}`,
         );
       }
     }
@@ -69,6 +72,9 @@ export const hierarchyRule: SddRule = {
           `Interface "${intf.id}" references non-existent component "${intf.component}".`,
           intf.id,
           isDraftCtx,
+          undefined,
+          undefined,
+          `component:${intf.component}`,
         );
       }
     }
@@ -84,6 +90,9 @@ export const hierarchyRule: SddRule = {
           `Implementation "${impl.id}" references non-existent interface contract "${impl.contract}".`,
           impl.id,
           ctx.isImplementationDraft(impl),
+          undefined,
+          undefined,
+          `interface:${impl.contract}`,
         );
       }
     }

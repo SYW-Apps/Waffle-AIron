@@ -381,6 +381,13 @@ methods:
         type: string
         description: 'The system id asked for: a name of this L0, or `alias::name`'
     effect: read
+  - name: getLoaderIssues
+    description: >-
+      Forward to the core portal: the loader's diagnostics for the bound tree, so a read or write of
+      a spec whose file exists but fails to parse says so instead of "does not exist".
+    signature: 'getLoaderIssues(): list<ValidationIssue>'
+    returns: list<ValidationIssue>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T19:48:02.800Z'
+updatedAt: '2026-10-20T19:12:22.466Z'

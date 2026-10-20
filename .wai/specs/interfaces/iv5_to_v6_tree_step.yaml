@@ -43,6 +43,16 @@ methods:
     returns: list<string>
     params: []
     effect: none
+  - name: unfinished
+    description: >-
+      The roots whose tree still holds a wairon 5 form: an upgrade an earlier release committed
+      without finishing, which the step runs again.
+    signature: 'unfinished(roots: list<string>): list<string>'
+    returns: list<string>
+    params:
+      - name: roots
+        type: list<string>
+    effect: read
 status: draft
 createdAt: '2026-10-18T13:06:29.720Z'
-updatedAt: '2026-10-18T13:06:32.235Z'
+updatedAt: '2026-10-20T18:42:03.181Z'

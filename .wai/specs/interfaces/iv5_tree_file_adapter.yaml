@@ -52,6 +52,17 @@ methods:
       - name: root
         type: string
     effect: io
+  - name: v5FormsLeft
+    description: >-
+      The spec files under a root's specs folder that still hold a wairon 5 form, read raw (the
+      running release refuses them): the system file, and each subsystem, component and contract,
+      told apart the way the loader tells them.
+    signature: 'v5FormsLeft(root: string): list<V5FormsLeft>'
+    returns: list<V5FormsLeft>
+    params:
+      - name: root
+        type: string
+    effect: read
 status: draft
 createdAt: '2026-10-18T14:11:28.255Z'
-updatedAt: '2026-10-18T21:55:52.432Z'
+updatedAt: '2026-10-20T18:38:34.108Z'

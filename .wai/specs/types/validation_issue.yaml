@@ -56,7 +56,44 @@ fields:
       but never part of a failure decision: `valid` and `validate --ci` both ignore it, because the
       pin is the reproducible gate and a live producer is not.
     optional: true
-methods: []
+  - name: target
+    type: string
+    description: >-
+      Internal to validation: on a finding about a reference, the spec it points into, as kind:id
+      (component:x, subsystem:x, interface:x, contract-of:<component>). A finding whose target
+      exists but failed to parse is folded into that spec's parse error; the field never leaves
+      validation.
+    optional: true
+  - name: unparsed
+    type: map<string, string>
+    description: >-
+      Internal to validation: on a loader finding for a spec file that exists but did not parse,
+      which spec it was (kind, id, and for a contract the component it names when the file got that
+      far), so references into it are folded rather than judged against a hole; the field never
+      leaves validation.
+    optional: true
+methods:
+  - name: unparsedSentence
+    signature: 'unparsedSentence(kind: string, id: string, refusals: list<ValidationIssue>): string?'
+    params:
+      - name: kind
+        type: string
+        description: The kind of spec read or written
+      - name: id
+        type: string
+        description: Its id
+      - name: refusals
+        type: list<ValidationIssue>
+        description: The loader's findings for the bound tree
+    returns: string?
+    description: >-
+      The one sentence a read or a write answers for a spec of this kind and id whose file exists
+      but fails to parse (a SCHEMA_VALIDATION_ERROR keyed on its id), instead of saying it does not
+      exist: it quotes the loader's reason and says the file is repaired first, nothing written.
+      None when no such refusal stands. A refusal a scan recorded carries its kind (unparsed); one a
+      single-spec load recorded names it in its message. Pure.
+    sourcePath: src/models/unparsed-spec.ts
+    symbol: unparsedSpecSentence
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-06T10:07:25.991Z'
+updatedAt: '2026-10-20T19:16:13.519Z'

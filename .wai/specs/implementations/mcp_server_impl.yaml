@@ -30,9 +30,11 @@ methods:
           Wrap every tool registered below in the standing guard, which reads on each call where the
           bound tree stands (its stamp alone, so it is cheap): on a tree another major wrote, the
           tool runs nothing and answers a refusal with the standing's advice — for an older tree,
-          that the human runs `wairon upgrade` (the assistant never runs it); for a newer one or one
-          out of the window, the release to install. Judged per call, so an upgrade the human runs
-          while the server is up clears it without a reconnect
+          that the human runs `wairon upgrade` (the assistant never runs it), saying, for a tree
+          with no stamp, that none was found and the oldest major the upgrade reads is assumed, as
+          the upgrade itself says; for a newer one or one out of the window, the release to install.
+          Judged per call, so an upgrade the human runs while the server is up clears it without a
+          reconnect
         type: register
         targetComponent: mcp_upgrade_adapter
         targetMethod: standing
@@ -236,6 +238,7 @@ lint:
         - mcp_core_adapter.getStatusReport
         - mcp_core_adapter.approvalVerdict
         - mcp_core_adapter.composeAgentBrief
+        - mcp_core_adapter.getLoaderIssues
       reason: >-
         create is the tool registry: these calls are made by the tool handlers it registers, each
         the tool's own behaviour run when an assistant calls that tool, not calls create makes. Its
@@ -244,4 +247,4 @@ lint:
         methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-20T09:31:37.213Z'
+updatedAt: '2026-10-20T19:14:40.613Z'

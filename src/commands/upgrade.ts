@@ -82,7 +82,9 @@ function printPlan(plan: UpgradePlan): void {
   // A stamp-only plan is a tree already in the running major's forms that predates the stamp (6.0.0).
   const stampOnly = isStampOnly(plan);
   for (const s of plan.standings) {
-    const written = !s.stamped && stampOnly ? 'made by wairon 6.0.0, before the major stamp' : `written by major ${s.writtenMajor}${s.stamped ? '' : ' (unstamped)'}`;
+    const written = s.unfinished
+      ? `stamped major ${s.runningMajor}, but still holding wairon ${s.writtenMajor} forms: an unfinished upgrade`
+      : !s.stamped && stampOnly ? 'made by wairon 6.0.0, before the major stamp' : `written by major ${s.writtenMajor}${s.stamped ? '' : ' (unstamped)'}`;
     const note = s.state === 'older' ? written : s.state;
     console.log(`  ${s.root}  ${chalk.gray(note)}`);
   }

@@ -86,7 +86,10 @@ digit, and never a word the tree's `targetLanguage` reserves for that kind of
 identifier: TypeScript and JavaScript allow a keyword as a method or a field but
 not as a parameter, and no method named `constructor`; Rust, Python, Go, Java, C#,
 C and Kotlin refuse their keywords everywhere (`RESERVED_IDENTIFIER`, naming the
-language and an alternative). A display `name` is never blank and holds no
+language and an alternative) — except a word the language can spell as an ordinary
+identifier (Rust `r#type`, C# `@class`, Kotlin backticks), which is only a notice,
+`RESERVED_IDENTIFIER_ESCAPED`, naming the spelling and suggesting no rename; Rust's
+`crate`, `self`, `Self` and `super` have no raw form and stay errors. A display `name` is never blank and holds no
 invisible character.
 
 ### `wairon status [--subsystem <id>] [--no-recursive] [--all]`

@@ -14,6 +14,7 @@ import {
 import {
   isInProcessAddress,
   l0ExportName,
+  parseDeclaredCall,
   retiredMountsOf,
   transportExportKind,
   type ComponentSpec,
@@ -34,12 +35,14 @@ import {
 // retired forms the scan recorded (spec_loader.retiredReachFacts) and writes
 // only with apply; the plan IS the rehearsal of exactly what apply writes.
 //
-// What it never does is invent design. A Portal that was neither a listener
-// nor mounted gets no entry (it surfaces as unreached for its author); a
-// sibling-subsystem invokedBy is reported (its caller is in the tree and must
-// be modelled); an export type that disagrees with the derived kind, an
-// endpoint outside every old prefix and a router already set otherwise are
-// reported, not written.
+// What it never does is invent design, or keep a retired form: wairon 6
+// cannot read a spec holding one. A Portal that was neither a listener nor
+// mounted gets no entry (it surfaces as unreached for its author); a
+// sibling-subsystem invokedBy, an export type that disagrees with the derived
+// kind (or that no Portal derives) and a portalType naming no transport are
+// dropped and reported, with what the author can model instead; an endpoint
+// outside every old prefix and a router already set otherwise are reported,
+// not written.
 // ---------------------------------------------------------------------------
 
 /** One rewrite of the reachability migration, or one thing it reports instead (reach_rewrite). */
@@ -88,6 +91,51 @@ function liesUnder(path: string, prefix: string): boolean {
 /** A list of prefixes as one phrase. */
 function prefixPhrase(prefixes: string[]): string {
   return prefixes.length > 0 ? prefixes.map((p) => `"${p}"`).join(', ') : 'no prefix';
+}
+
+/** Every call the tree models, as component.method, with the first method that makes it: narrative call steps and declared calls. */
+function modelledCalls(implementations: ImplementationSpec[], interfaces: InterfaceSpec[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const impl of implementations) {
+    const component = interfaces.find((i) => i.id === impl.contract)?.component ?? impl.contract;
+    for (const m of impl.methods ?? []) {
+      const steps = (m.narrative ?? []).flatMap((s) => (s.type === 'call' && s.targetComponent && s.targetMethod ? [`${s.targetComponent}.${s.targetMethod}`] : []));
+      const declared = (m.calls ?? []).flatMap((c) => {
+        const call = parseDeclaredCall(c);
+        return call ? [`${call.compId}.${call.methodName}`] : [];
+      });
+      for (const target of [...steps, ...declared]) if (!out.has(target)) out.set(target, `${component}.${m.name}`);
+    }
+  }
+  return out;
+}
+
+/**
+ * What the author of a dropped sibling-subsystem declaration can model, and
+ * which of it the rules allow: the subsystem its stored caller names, when it
+ * names one; a call step only where a sibling may reach the method (the
+ * subsystem's published Portal, through a client Adapter or a trustedLink),
+ * else the route through that Portal; and a runtime declaration where the code
+ * receives the method at wiring time rather than through a modelled call.
+ */
+function siblingCallerAdvice(
+  componentId: string, method: string, caller: string | undefined,
+  componentById: Map<string, ComponentSpec>, subsystems: SubsystemSpec[],
+): string {
+  const component = componentById.get(componentId);
+  const home = component?.subsystem;
+  const named = caller === undefined ? [] : subsystems.filter((s) => s.id !== home
+    && [s.id, s.name].some((word) => word && new RegExp(`(^|[^a-z0-9_-])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9_-])`, 'i').test(caller)));
+  const homeSpec = subsystems.find((s) => s.id === home);
+  const published = component?.componentType === 'Portal' && (homeSpec?.publicInterfaces ?? []).some((e) => {
+    const entry = e as { component?: string };
+    return entry.component === componentId;
+  });
+  const said = caller === undefined ? 'It named no caller' : `Its stored caller was "${caller}"${named.length > 0 ? ` (naming ${named.map((s) => s.id).join(', ')})` : ''}`;
+  const route = published
+    ? `${componentId} is ${home}'s published Portal, so a sibling reaches it legally: model a call step from the caller's client Adapter, or from a component of a subsystem with a trustedLink to ${home}`
+    : `${componentId} is not ${home ?? 'its subsystem'}'s published Portal, so no other subsystem may call it directly: model the call through ${home ?? 'the subsystem'}'s Portal, which dispatches to it`;
+  return `${said}. Until a caller is modelled, ${componentId}.${method} may read as unused. ${route}; or, if the code receives it at wiring time (an injected dependency) rather than through a call the design models, declare \`invokedBy: { kind: runtime${caller !== undefined ? `, caller: "${caller.replace(/"/g, '\\"')}"` : ''} }\` on it.`;
 }
 
 /**
@@ -143,7 +191,10 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
     if (!comp) continue;
     const transport = comp.transport;
     if (transport === undefined) {
-      report(comp.id, 'portal-type', `portalType ${String(fact.stored)} kept`, `"${String(fact.stored)}" is not a transport, so no transport can be written for it: set the Portal's transport by hand.`);
+      touch('component', comp.id, comp);
+      rewrite(comp.id, 'portal-type', `portalType ${String(fact.stored)} dropped`, 'portalType is retired, and wairon 6 cannot read a spec that holds it.');
+      report(comp.id, 'portal-type', 'no transport written',
+        `"${String(fact.stored)}" is not a transport, so none can be written for it: set the Portal's transport (MISSING_PORTAL_TRANSPORT names it until then).`);
       continue;
     }
     touch('component', comp.id, comp).transport = transport;
@@ -261,13 +312,30 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
     }
   }
 
-  // Step 10: the invokedBy kinds.
+  // Step 10: the invokedBy kinds. wairon 6 has no sibling-subsystem kind and
+  // cannot read a spec that holds one, so it is always dropped: what the tree
+  // models already says it, and what it does not is the author's to model,
+  // reported with the routes the rules leave open.
+  const modelled = modelledCalls(implementations, interfaces);
   for (const fact of facts.filter((f) => f.form === 'invoked-by-kind')) {
     const intf = interfaces.find((i) => i.id === fact.specId);
     if (!intf || fact.at === undefined) continue;
     if (fact.stored === 'sibling-subsystem') {
-      report(intf.id, 'invoked-by-kind', `invokedBy sibling-subsystem on "${fact.at}" kept`,
-        `Its caller lives in this tree, so the call must be modelled (a call step from the sibling's Adapter); a migration cannot invent it.`);
+      const copy = touch('interface', intf.id, intf);
+      const method = copy.methods.find((m) => m.name === fact.at);
+      if (!method) continue;
+      const caller = method.invokedBy?.caller;
+      delete method.invokedBy;
+      const by = modelled.get(`${intf.component}.${fact.at}`);
+      if (by !== undefined) {
+        rewrite(intf.id, 'invoked-by-kind', `invokedBy sibling-subsystem on "${fact.at}" dropped`,
+          `The call is modelled: ${by} calls ${intf.component}.${fact.at}, so the declaration said nothing the tree does not.`);
+        continue;
+      }
+      rewrite(intf.id, 'invoked-by-kind', `invokedBy sibling-subsystem on "${fact.at}" dropped`,
+        'wairon 6 has no sibling-subsystem kind, and no call in the tree reaches the method yet.');
+      report(intf.id, 'invoked-by-kind', `caller of "${fact.at}" not modelled`,
+        siblingCallerAdvice(intf.component, fact.at, caller, componentById, subsystems));
       continue;
     }
     if (fact.stored !== 'external') continue;
@@ -297,16 +365,19 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
       if (entry.type === undefined) return;
       const name = l0ExportName(entry) ?? entry.interface ?? entry.component ?? `#${index + 1}`;
       const derived = derivedKind(entry);
+      // wairon 6 derives the kind and cannot read a spec that authors one, so
+      // the type is always dropped; one that said something else is reported.
+      const copy = touch(kind, id, spec);
+      delete (copy.publicInterfaces as typeof entries)[index].type;
       if (derived === entry.type) {
-        const copy = touch(kind, id, spec);
-        delete (copy.publicInterfaces as typeof entries)[index].type;
         rewrite(id, 'export-type', `type of "${name}" dropped`, `The export kind is derived from the backing Portal's transport (${derived}); the authored one agrees.`);
-      } else {
-        report(id, 'export-type', `type ${entry.type} of "${name}" kept`,
-          derived === undefined
-            ? 'No backing Portal derives an export kind for this entry: drop the type by hand once the entry is backed by a Portal, or remove it.'
-            : `The backing Portal's transport derives ${derived}, not ${entry.type}: correct the Portal's transport or drop the type.`);
+        return;
       }
+      rewrite(id, 'export-type', `type ${entry.type} of "${name}" dropped`, 'wairon 6 derives the export kind and reads no authored one.');
+      report(id, 'export-type', `type ${entry.type} of "${name}" not derived`,
+        derived === undefined
+          ? `No backing Portal derives an export kind for this entry: back it by a Portal of the kind ${entry.type} names, or remove it (EXPORT_UNCONSUMABLE judges what consumers can use).`
+          : `The backing Portal's transport derives ${derived}, not ${entry.type}: if ${entry.type} was right, correct the Portal's transport.`);
     });
   };
   for (const sub of subsystems) exportTypes('subsystem', sub.id, sub);

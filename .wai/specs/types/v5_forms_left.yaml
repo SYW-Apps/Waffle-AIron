@@ -1,0 +1,19 @@
+kind: value-object
+id: v5_forms_left
+name: V5FormsLeft
+description: One spec file still holding a wairon 5 form, with the sentences naming each form.
+subsystem: sdd_upgrade
+fields:
+  - name: file
+    type: string
+    description: The spec file, absolute.
+    optional: false
+  - name: forms
+    type: list<string>
+    description: Each v5 form it holds, as the sentence naming it and what wairon 6 reads instead.
+    optional: false
+methods: []
+sourcePath: src/upgrade/steps/v5-to-v6/files.ts
+symbol: V5FormsLeft
+createdAt: '2026-10-20T18:38:29.951Z'
+updatedAt: '2026-10-20T18:38:31.084Z'
