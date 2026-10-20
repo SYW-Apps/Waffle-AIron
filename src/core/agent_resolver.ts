@@ -33,7 +33,7 @@ import {
   // collapsing to one delegating owner.
   graph,
 } from './specs.js';
-import { ComponentSpec, callClaims, effectiveDetail, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type MethodImplementation, type TypeSpec } from '../models/specs.js';
+import { ComponentSpec, callClaims, implementationSourceFiles, statesCalls, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
 import { fieldTypeRefs, methodTypeRefs, resolveTypeRef, typeMatchesRef } from '../models/type-references.js';
 import { languageOfSourcePath } from '../models/code-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
@@ -913,13 +913,6 @@ function methodFileCaller(
 function codeFenceOf(record: AgentRecord): string[] | null {
   if (!implementsComponents(record)) return null;
   return record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
-}
-
-/** Whether a method states its calls: declared calls, or a narrative whose stated detail is call-level (full or calls-only). */
-function statesCalls(method: MethodImplementation, impl: ImplementationSpec, component: ComponentSpec): boolean {
-  if ((method.calls?.length ?? 0) > 0) return true;
-  const detail = effectiveDetail(method, impl, component);
-  return detail.explicit && detail.level !== 'intent' && method.narrative.length > 0;
 }
 
 /**

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import supervision from '../rules-matrix/families/boundaries-supervision.fixtures.js';
 import crossSubsystem from '../rules-matrix/families/boundaries-cross-subsystem.fixtures.js';
 import { defineRuleFixture, runRuleFixture, type FixtureTree, type RuleFixture } from '../rules-matrix/harness.js';
+import { statesCalls } from '../../src/models/specs.js';
 
 // ---------------------------------------------------------------------------
 // Declared `calls` are a statement, exactly as narrative call steps are: every
@@ -30,6 +31,22 @@ const firing = (family: RuleFixture[], code: string): RuleFixture => {
   if (!found) throw new Error(`no firing fixture for ${code}`);
   return found;
 };
+
+describe('method_implementation.statesCalls: stated is binding, the type default is not a statement', () => {
+  const step = { stepNumber: 1, type: 'call' as const, description: 'Post it', targetComponent: 'ledger', targetMethod: 'post' };
+  const orchestrator = { componentType: 'Orchestrator' as const };
+  it('declared calls state the calls', () => {
+    expect(statesCalls({ narrative: [], calls: ['ledger.post'] }, {}, orchestrator)).toBe(true);
+  });
+  it('a narrative whose call-level detail is stated, on the method or its implementation, states them', () => {
+    expect(statesCalls({ narrative: [step], detail: 'full' }, {}, orchestrator)).toBe(true);
+    expect(statesCalls({ narrative: [step] }, { detail: 'calls-only' }, orchestrator)).toBe(true);
+  });
+  it('the component type\'s default detail, or a stated intent, leaves the calls open', () => {
+    expect(statesCalls({ narrative: [step] }, {}, orchestrator)).toBe(false);
+    expect(statesCalls({ narrative: [], detail: 'intent' }, {}, orchestrator)).toBe(false);
+  });
+});
 
 describe('declared calls are judged like narrative call steps', () => {
   for (const [code, family] of [

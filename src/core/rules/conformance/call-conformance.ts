@@ -1,6 +1,7 @@
 import {
   bodySitesOf,
   callClaims,
+  statesCalls,
   defaultConformanceTier,
   effectiveDetail,
   fieldTypesOf,
@@ -725,7 +726,7 @@ export const callConformanceRule: SddRule = {
       }
       const resolved = effectiveDetail(implMethod, impl, component);
       const callLevel = claimsCallLevel(implMethod, impl, component);
-      const stated = callLevel && (resolved.explicit || (implMethod.calls?.length ?? 0) > 0);
+      const stated = statesCalls(implMethod, impl, component);
       const named = new Set([...claims].map(ref => parseDeclaredCall(ref)?.compId).filter((id): id is string => id !== undefined));
       const unnarrated = new Map([...found].filter(([ref]) => stated || (callLevel && named.has(parseDeclaredCall(ref)?.compId ?? ''))));
       const open = new Map([...found].filter(([ref]) => !unnarrated.has(ref) && routeOpen(component, parseDeclaredCall(ref)?.compId ?? '')));

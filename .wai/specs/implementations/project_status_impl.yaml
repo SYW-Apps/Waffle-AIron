@@ -91,12 +91,15 @@ methods:
           supplied: structure, layer, score, draft, present or missing. Under a system line below
           100%, one legend line says what the number counts — 20% a component's spec, +30% a
           contract, +30% an implementation, +20% once the source files it names exist — so a reader
-          never guesses at the rest. A subsystem that holds types but no components (a shared
-          contracts library) scores by its own status — complete is 100%, not 0%. Each member prints
-          as a `[Project]` node (alias and project id, `mount form` noted for a legacy declaration)
-          holding its own subsystems, never as a `[Subsystem]`; a subsystem whose key repeats its
-          member's alias (`billing::billing`) is labelled by its local name under its project. Roles
-          rather than colours, so this renderer never learns what a terminal is
+          never guesses at the rest. Beside it, one line says how much of the design is binding: how
+          many methods state their calls (method_implementation.statesCalls) and how many leave the
+          routes their component depends on open — what the percentage alone cannot say. A subsystem
+          that holds types but no components (a shared contracts library) scores by its own status —
+          complete is 100%, not 0%. Each member prints as a `[Project]` node (alias and project id,
+          `mount form` noted for a legacy declaration) holding its own subsystems, never as a
+          `[Subsystem]`; a subsystem whose key repeats its member's alias (`billing::billing`) is
+          labelled by its local name under its project. Roles rather than colours, so this renderer
+          never learns what a terminal is
         type: local
       - stepNumber: 13
         description: >-
@@ -129,4 +132,4 @@ methods:
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-18T01:13:31.265Z'
+updatedAt: '2026-10-20T14:02:36.633Z'

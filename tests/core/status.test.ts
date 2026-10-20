@@ -755,6 +755,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 const PLAIN_FIXTURE_REPORT = [
   '● System: TestSystem (33% Complete)',
   '  Completeness per component: 20% its spec, +30% a contract, +30% an implementation, +20% once the source files it names exist.',
+  '  Detail: 0 method(s) state their calls (binding), 5 leave routes open (the design allows each collaborator their component depends on).',
   '├── [Subsystem] sub-a (66%)',
   '│   ├── [Component: Orchestrator] c1-full (100%)',
   '│   │   ├── Interface: ic1-full (1 methods)',

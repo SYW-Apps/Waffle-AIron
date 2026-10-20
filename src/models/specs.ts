@@ -1537,6 +1537,23 @@ export function callClaims(method: Pick<MethodImplementation, 'narrative' | 'cal
   return claims;
 }
 
+/**
+ * method_implementation.statesCalls — whether the method states what it calls:
+ * declared calls, or a narrative whose detail, stated on the method or its
+ * implementation, is call-level (full or calls-only). Stated, its claims are
+ * binding — the whole list; unstated, every other route the component's
+ * dependsOn allows is open, never assumed.
+ */
+export function statesCalls(
+  method: Pick<MethodImplementation, 'detail' | 'narrative' | 'calls'>,
+  implementation: Pick<ImplementationSpec, 'detail'>,
+  component?: Pick<ComponentSpec, 'componentType'>,
+): boolean {
+  if ((method.calls?.length ?? 0) > 0) return true;
+  const detail = effectiveDetail(method, implementation, component);
+  return detail.explicit && detail.level !== 'intent' && (method.narrative ?? []).length > 0;
+}
+
 /** How a finding points at a claim: its step, or the declared call. */
 export function claimSite(claim: CallClaim): string {
   return claim.step !== undefined ? `step ${claim.step}` : 'a declared call';
