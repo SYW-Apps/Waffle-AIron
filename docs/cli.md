@@ -151,12 +151,22 @@ warnings as errors (notices are printed and counted, never fatal).
   file exports, that no contract declares and nothing in the project uses — no
   call in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
   (private, protected, `#private`, underscore-prefixed, static, accessor,
-  `override`, constructor, protocol and lifecycle members are exempt). A method
-  whose narrative is at `full` or `calls-only` detail and calls, in its own body,
-  a verb of a collaborator it narrates that no step names is `UNNARRATED_CALL`;
-  calls inside helpers and to collaborators the narrative never names are what
-  the detail lets it summarize (a collaborator the design does not list at all is
-  `UNDECLARED_DEPENDENCY`). Python is read by its signature reader: parameter
+  `override`, constructor, protocol and lifecycle members are exempt).
+  What a method's narrative says about its calls is judged by how much it
+  states. **Stated detail is binding:** a method whose `detail` (`full` or
+  `calls-only`) is set on the method or its implementation, or that declares
+  `calls`, has said its narrative is the whole list, so any call its own body
+  makes into another component's contract that no step names is
+  `UNNARRATED_CALL`. **Unstated detail is open, never assumed:** without a
+  stated detail, leaving out a verb of a collaborator the narrative names is
+  still `UNNARRATED_CALL`, but a call to another collaborator the component
+  depends on, or any such call from a method at `intent` or with no narrative,
+  is a route the design allows without saying the method takes it. That is the
+  `OPEN_ROUTE_CALL` notice, which names each one and never fails `--ci`. A
+  design can stay loose and still see every route its code takes; state the
+  detail where the narrative should be complete. Calls inside helpers are what a
+  step summarizes, and a collaborator the design does not list at all is
+  `UNDECLARED_DEPENDENCY`. Python is read by its signature reader: parameter
   names (in snake_case, so the contract's `documentId` is `document_id`),
   annotations, return annotations, public members and imports are judged like
   TypeScript's. A component importing a Portal that depends on it and calls it is

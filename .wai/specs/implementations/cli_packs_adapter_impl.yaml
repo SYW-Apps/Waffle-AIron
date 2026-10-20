@@ -510,35 +510,45 @@ methods:
         description: Resolve the requested name (and optional version) against the pack store.
         type: local
       - stepNumber: 5
+        description: Look the requested name and version up in the pack store
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 6
         description: A selection must name an installed pack.
         type: branch
         condition: no installed pack matches
-        onTrueStep: 6
-        onFalseStep: 8
-      - stepNumber: 6
+        onTrueStep: 7
+        onFalseStep: 10
+      - stepNumber: 7
         description: >-
           Read the installed packs to name them beside the store directory (packStoreDir) in the
           error.
         type: call
         targetComponent: extension_portal
         targetMethod: listInstalledPacks
-      - stepNumber: 7
+      - stepNumber: 8
+        description: Name the store directory in the error, so the user sees where the pack was looked for
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 9
         description: Report the installed pack names and stop.
         type: return
         outcome: no-such-pack error; exit code 1, nothing written
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Build the selection to record: the name; the resolved version when one was requested or
           --pin was passed; the digest under --pin; the source from --source or the recorded origin,
           only when it is a fetchable URL; the bundle flag when asked
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: 'An unattended run applies without the report: --yes, or no terminal to ask on'
         type: branch
         condition: '--yes was passed or stdin/stdout is not a terminal'
-        onTrueStep: 14
-        onFalseStep: 10
-      - stepNumber: 10
+        onTrueStep: 16
+        onFalseStep: 12
+      - stepNumber: 12
         description: >-
           Measure the selection before writing it: the pack's doctrine against wairon's defaults,
           the profiles of it that would govern, and the findings that change on this project (a dry
@@ -546,21 +556,21 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Print the impact report — on an update, also what the replaced version changed — and ask
           whether to apply it
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: Installing a pack is intentional
         type: branch
         condition: the answer is not yes
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 16
+      - stepNumber: 15
         description: Stop without writing
         type: return
         outcome: declined; nothing written
-      - stepNumber: 14
+      - stepNumber: 16
         label: record
         description: >-
           Record the selection: any same-name selection is dropped and this one is appended last,
@@ -569,7 +579,7 @@ methods:
         type: call
         targetComponent: project_config_portal
         targetMethod: upsertPackSelection
-      - stepNumber: 15
+      - stepNumber: 17
         description: >-
           Report "Re-selected" when a selection was replaced and "Selected" otherwise — an
           unattended run adds that it applied without showing the impact and names `wairon pack
@@ -714,30 +724,45 @@ methods:
         type: loop
         loopKind: forEach
         over: the targets
-        endStep: 7
+        endStep: 10
       - stepNumber: 7
+        description: Look the target up in the pack store specifically, so an existing bundle cannot satisfy it
+        type: call
+        targetComponent: extension_portal
+        targetMethod: resolveInstalledPack
+      - stepNumber: 8
+        description: Label the selection by name and version for the not-installed error
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryLabel
+      - stepNumber: 9
+        description: Name the store directory in the not-installed error
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 10
         description: >-
           Resolve the pack against the STORE specifically, so an existing bundle cannot satisfy the
           lookup. A pack that is not installed is an error naming the store (exit code 1) and the
           next target still proceeds; otherwise replace any previous copy at
           .wai/packs/<name>/<version>/, copy the pack in, and print the written path.
         type: local
-      - stepNumber: 8
+      - stepNumber: 11
         description: Only bundled packs are recorded.
         type: branch
         condition: nothing was bundled
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
+        onTrueStep: 12
+        onFalseStep: 13
+      - stepNumber: 12
         description: Stop without writing the configuration.
         type: return
         outcome: nothing bundled; configuration untouched
-      - stepNumber: 10
+      - stepNumber: 13
         description: 'Record every bundled pack''s exact version and bundle: true on its selection, in one write.'
         type: call
         targetComponent: project_config_portal
         targetMethod: markSelectionsBundled
-      - stepNumber: 11
+      - stepNumber: 14
         description: >-
           Report the bundled packs and remind to commit .wai/: a clone and CI now apply this
           doctrine with no pack store and no network.
@@ -784,37 +809,49 @@ methods:
           unconditionally in CI.
         type: local
       - stepNumber: 6
+        description: >-
+          Resolve each selection to an installed or bundled pack, to find the ones that resolve to
+          nothing
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryRef
+      - stepNumber: 7
         description: A project may select no packs at all.
         type: branch
         condition: the project selects no packs
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 9
+      - stepNumber: 8
         description: Report that there is nothing to sync.
         type: return
         outcome: nothing selected
-      - stepNumber: 8
+      - stepNumber: 9
         description: Everything may already be available.
         type: branch
         condition: every selection already resolves
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 11
+      - stepNumber: 10
         description: Report that all selected packs are already available.
         type: return
         outcome: already available
-      - stepNumber: 10
+      - stepNumber: 11
         description: Fetch each missing selection in turn.
         type: loop
         loopKind: forEach
         over: the unresolvable selections
-        endStep: 13
-      - stepNumber: 11
+        endStep: 15
+      - stepNumber: 12
+        description: Label the selection by name and version, for the messages about fetching it
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packEntryLabel
+      - stepNumber: 13
         description: >-
           Refuse this selection when it records no source, carries a {version} placeholder but pins
           no version, or expands to something that is not a fetchable URL — each naming the manual
           route. Otherwise expand {version} and ${VAR}, so a private URL takes its token from a CI
           secret without ever being committed.
         type: local
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Download the archive to a temporary file and extract it through the SDK portal's hardened
           path — the same envelope inspection, code-pack refusal, and extraction limits a local
@@ -822,7 +859,7 @@ methods:
         type: call
         targetComponent: sdk_portal
         targetMethod: extractPack
-      - stepNumber: 13
+      - stepNumber: 15
         label: sync_done
         description: >-
           Install into the store via the core surface, recording the ORIGINAL source template rather
@@ -832,7 +869,7 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
-      - stepNumber: 14
+      - stepNumber: 16
         description: Report how many packs were synced.
         type: return
         outcome: the synced count
@@ -876,34 +913,39 @@ methods:
         description: Only an installed pack can be measured
         type: branch
         condition: no installed pack matches
-        onFalseStep: 8
+        onFalseStep: 9
       - stepNumber: 6
         description: Read the installed packs to name them beside the store directory in the error.
         type: call
         targetComponent: extension_portal
         targetMethod: listInstalledPacks
       - stepNumber: 7
+        description: Name the store directory in the error, so the user sees where the pack was looked for
+        type: call
+        targetComponent: extension_portal
+        targetMethod: packStoreDir
+      - stepNumber: 8
         description: Report the installed pack names and stop
         type: return
         outcome: no-such-pack error; exit code 1
-      - stepNumber: 8
+      - stepNumber: 9
         label: config
         description: 'Read this project''s configuration: does it already apply the pack exactly as asked?'
         type: call
         targetComponent: project_config_portal
         targetMethod: loadProjectConfig
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Build the candidate: when the pack is applied exactly as asked, its stored entry with
           `remove` (the report then reads as what the pack accounts for now); otherwise the
           selection `pack use` would record for the request
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Measure it, writing nothing
         type: call
         targetComponent: validator_portal
         targetMethod: measurePackImpact
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Print the report: the doctrine changes grouped by profile, the profiles that govern here,
           and the introduced, resolved and regraded findings with both runs' totals
@@ -913,4 +955,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-06T19:11:59.884Z'
+updatedAt: '2026-10-20T09:25:48.916Z'

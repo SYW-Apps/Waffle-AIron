@@ -27,6 +27,16 @@ methods:
       - name: major
         type: int
     effect: io
+  - name: holdsConfig
+    description: >-
+      Whether the root holds a project.yaml. A project does; a part (a folder holding subsystems of
+      the project that declares it) does not, and carries no stamp of its own.
+    signature: 'holdsConfig(root: string): bool'
+    returns: bool
+    params:
+      - name: root
+        type: string
+    effect: io
 status: draft
 createdAt: '2026-10-18T13:06:13.211Z'
-updatedAt: '2026-10-18T13:06:15.680Z'
+updatedAt: '2026-10-20T00:50:32.895Z'

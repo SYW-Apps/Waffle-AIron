@@ -72,27 +72,35 @@ export function plan(root: string): UpgradePlan {
   // Step 1: the family as the oldest kept step reads it.
   const roots = v5ToV6.familyRoots(root);
   const runningMajor = majorOf(release.version());
-  // Steps 2-3.
-  const standings = roots.map((r) => standing(r));
-  // Steps 4-5: a project this release cannot upgrade refuses the whole plan.
+  // Steps 2-3: a part holds no project.yaml, so it carries no stamp of its own.
+  const projects = roots.filter((r) => stamp.holdsConfig(r));
+  const parts = roots.filter((r) => !projects.includes(r));
+  // Steps 4-5.
+  const standings = projects.map((r) => standing(r));
+  // Steps 6-7: a project this release cannot upgrade refuses the whole plan.
   const stuck = standings.find((s) => s.state === 'newer' || s.state === 'out_of_window');
   if (stuck) return emptyPlan(root, runningMajor, standings, `${stuck.root}: ${stuck.advice ?? stuck.state}`);
-  // Steps 6-7: nothing older, nothing to do.
-  const older = standings.filter((s) => s.state === 'older');
-  if (older.length === 0) return emptyPlan(root, runningMajor, standings);
-  // Step 8: a private copy of every project's .wai, and a legacy .wairon folder.
+  // Steps 8-9: nothing older, nothing to do; the parts are current with the family.
+  const olderProjects = standings.filter((s) => s.state === 'older');
+  if (olderProjects.length === 0) return emptyPlan(root, runningMajor, standings);
+  // Step 10: a part stands with the family, at the oldest major a project of it was
+  // written by, so the steps run on it as on the projects. Then a private copy of
+  // every root's .wai, and a legacy .wairon folder.
+  const oldestWritten = Math.min(...olderProjects.map((s) => s.writtenMajor));
+  const partStanding = (r: string): TreeStanding => ({ ...olderProjects[0], root: r, writtenMajor: oldestWritten, stamped: false });
+  const older = roots.flatMap((r) => (parts.includes(r) ? [partStanding(r)] : olderProjects.filter((s) => s.root === r)));
   const rehearsal = migrations.rehearse({ familyRoot: root, projects: roots, areas: ['.wai', '.wairon'] });
   const steps: StepPlan[] = [];
   const ran = new Map<number, UpgradeStep>();
   try {
-    // Steps 9-15: oldest step first, and within it each older project that runs it, the top first.
+    // Steps 11-16: oldest step first, and within it each older root that runs it, the top first.
     const chains = new Map(older.map((s) => [s.root, chain.between(s.writtenMajor, runningMajor).steps]));
     const kept = [...new Map([...chains.values()].flat().map((s) => [s.from, s])).values()].sort((a, b) => a.from - b.from);
     for (const step of kept) {
       if (step.from !== RUNNER_FROM) throw new Error(`no runner is kept for the step from major ${step.from}`);
       for (const project of older) {
         if (!chains.get(project.root)?.some((s) => s.from === step.from)) continue;
-        // Step 11: the project's rehearsal root is the bound root for the step,
+        // Step 13: the project's rehearsal root is the bound root for the step,
         // in the v5 reading: the one binding under which the core reads the
         // forms the step's major wrote.
         const copy = rehearsalRoot(rehearsal, project.root);
@@ -102,7 +110,7 @@ export function plan(root: string): UpgradePlan {
             v5ToV6.write(p);
             return p;
           }));
-          // Step 14: recorded under the project's live root.
+          // Step 16: recorded under the project's live root.
           steps.push({ ...planned, project: project.root });
           ran.set(step.from, step);
         } catch (e) {
@@ -111,14 +119,18 @@ export function plan(root: string): UpgradePlan {
         }
       }
     }
-    // Steps 16-17: stamp each older project's rehearsal copy, so the commit carries the stamps with the rewrites.
-    for (const project of older) stamp.write(rehearsalRoot(rehearsal, project.root), runningMajor);
-    // Steps 18-20.
+    // Steps 18-20: stamp each older root's rehearsal copy that holds a project.yaml (a step may
+    // have written one), so the commit carries the stamps with the rewrites; a part stays unstamped.
+    for (const project of older) {
+      const copy = rehearsalRoot(rehearsal, project.root);
+      if (stamp.holdsConfig(copy)) stamp.write(copy, runningMajor);
+    }
+    // Steps 21-23.
     const changes = migrations.diff(rehearsal);
     const whatChanged = ran.has(RUNNER_FROM) ? v5ToV6.whatChanged() : [];
     return { familyRoot: root, runningMajor, standings, steps, whatChanged, rehearsal, changes };
   } catch (e) {
-    // Steps 21-22: dropped, nothing written live.
+    // Steps 24-25: dropped, nothing written live.
     migrations.drop(rehearsal);
     if (e instanceof StepRefusedAt) {
       return emptyPlan(root, runningMajor, standings, `${e.project}: the step from major ${e.step.from} to ${e.step.to} is refused — ${e.reason}`);

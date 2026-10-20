@@ -188,7 +188,7 @@ describe('wairon diagram renders through cli_core_adapter, not through sdd_core 
     // subsystems, components and edges it had just written.
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/commands/host.ts'), 'utf8');
     expect(source).not.toContain("import { buildCanvasModel } from '../core/canvas.js';");
-    expect(source).toContain("import { buildCanvasDataModel } from './subsystem.js';");
+    expect(source).toContain("import { loadProjectConfig, seedDemoTree, buildCanvasDataModel } from './adapters/core.js';");
   });
 
   // -- 3. the false edge inside sdd_core -------------------------------------

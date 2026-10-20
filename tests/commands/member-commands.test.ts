@@ -78,6 +78,18 @@ describe('wairon member add|move|internalize', () => {
     expect(loadSubsystemSpec('billing')).toBeNull();
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'billing'))).toBe(false);
     expect(output()).toContain('Added the project "billing" → services/billing');
+    // A project is designed from its own root: its folder gets the wairon tools for its own sessions.
+    const member = path.join(root, 'services', 'billing');
+    expect(fs.existsSync(path.join(member, '.mcp.json'))).toBe(true);
+    expect(fs.existsSync(path.join(member, '.claude', 'CLAUDE.md'))).toBe(true);
+    expect(output()).toContain('up for its own sessions');
+  });
+
+  it('member add of a part gives its folder no session tools: its subsystems are designed from the parent', async () => {
+    const root = parentProject();
+    captureOutput();
+    await runMemberAdd('billing', 'services/billing');
+    expect(fs.existsSync(path.join(root, 'services', 'billing', '.mcp.json'))).toBe(false);
   });
 
   it('member add again changes nothing; a different path under the alias is refused', async () => {
