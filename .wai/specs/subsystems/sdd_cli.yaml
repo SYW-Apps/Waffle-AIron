@@ -16,9 +16,9 @@ lifecycle:
     component: cli_runner
     method: cleanStaleBinary
     description: >-
-      When the binary starts, before argv is parsed: remove the .old executable a previous
-      self-update left behind.
+      When the binary starts, before argv is parsed: remove the .old and .old-<time> executables
+      earlier self-updates left behind, except one a process still runs from.
 trustedLinks: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-06T18:55:20.238Z'
+updatedAt: '2026-10-20T20:15:23.263Z'

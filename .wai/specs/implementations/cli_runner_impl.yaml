@@ -291,7 +291,10 @@ methods:
       - stepNumber: 14
         description: >-
           Download the asset for this platform and swap the running binary, keeping the previous one
-          beside it so a bad release can be stepped back from
+          beside it so a bad release can be stepped back from. On Windows the running exe is renamed
+          aside (an exe cannot be overwritten while it runs, but it can be renamed) after the
+          leftovers of earlier updates are swept; when one a process still runs from keeps the .old
+          name, it moves aside under a fresh .old-<time> name instead of failing on it
         type: local
       - stepNumber: 15
         description: Done
@@ -3555,18 +3558,18 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the leftover: the oldPath given, else — only when running as a packaged executable
-          — the executable's own path with `.old` appended, else nothing.
+          Resolve the executable: the one given, else — only when running as a packaged executable —
+          the running one, else nothing.
         type: local
       - stepNumber: 2
-        description: Only an existing leftover is removed.
+        description: Only a resolved executable has leftovers to sweep.
         type: branch
-        condition: a leftover resolved and it exists on disk
+        condition: an executable resolved
         onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Unlink it, swallowing the error a file the OS still holds raises, so the next start
-          retries.
+          Unlink each of its .old and .old-<time> siblings, swallowing the error a file a process
+          still runs from raises, so a later sweep retries.
         type: local
       - stepNumber: 4
         description: Return; the cleanup never throws.
@@ -4159,4 +4162,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-20T09:29:26.895Z'
+updatedAt: '2026-10-20T20:15:14.931Z'

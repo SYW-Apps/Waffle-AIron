@@ -424,18 +424,8 @@ function installBinary(tmpFile: string, destPath: string): void {
   }
 
   if (platform === 'win32') {
-    // On Windows you cannot overwrite a running exe, but you CAN rename it
-    // (executables are opened with FILE_SHARE_DELETE). So we:
-    //   1. Rename the running exe to .old  (instant, atomic on same volume)
-    //   2. Copy the new binary into the now-free slot
-    //   3. Attempt to delete .old immediately (succeeds when this process exits;
-    //      if it fails here, cleanStaleBinary() removes it on next run)
-    const oldPath = destPath + '.old';
     try {
-      cleanStaleBinary(oldPath);
-      fs.renameSync(destPath, oldPath);
-      fs.copyFileSync(extractedBinary, destPath);
-      try { fs.unlinkSync(oldPath); } catch { /* deleted on next startup */ }
+      swapRunningBinary(extractedBinary, destPath);
     } catch (err: any) {
       if (err.code === 'EPERM' || err.code === 'EBUSY') {
         throw new Error(
@@ -457,14 +447,43 @@ function installBinary(tmpFile: string, destPath: string): void {
 }
 
 /**
- * Remove a leftover .old binary from a previous update attempt.
- * Called at startup (cli/index.ts) and before each rename.
+ * Swap a running Windows executable for a new one. A running exe cannot be
+ * overwritten but CAN be renamed (executables are opened with
+ * FILE_SHARE_DELETE), so the running one moves aside and the new one takes its
+ * slot. The leftovers of earlier updates are swept first; one a process still
+ * runs from (an MCP server started before the last update) cannot be removed
+ * and holds its name, so this update moves aside under a fresh name instead of
+ * failing on it.
  */
-export function cleanStaleBinary(oldPath?: string): void {
-  const target = oldPath ?? (isPkgBinary() ? process.execPath + '.old' : null);
-  if (!target) return;
-  if (fs.existsSync(target)) {
-    try { fs.unlinkSync(target); } catch { /* still locked — ignore */ }
+export function swapRunningBinary(newBinary: string, destPath: string): void {
+  cleanStaleBinary(destPath);
+  const aside = fs.existsSync(destPath + '.old') ? `${destPath}.old-${Date.now()}` : destPath + '.old';
+  fs.renameSync(destPath, aside);
+  fs.copyFileSync(newBinary, destPath);
+  // Gone once no process runs from it; until then the next start's sweep retries.
+  try { fs.unlinkSync(aside); } catch { /* removed by a later sweep */ }
+}
+
+/**
+ * Remove the binaries earlier self-updates left beside an executable (its
+ * `.old` and `.old-<time>` siblings), or beside the running packaged one when
+ * none is named. A leftover a process still runs from is left for a later
+ * sweep. Called at startup (cli/index.ts) and before each swap.
+ */
+export function cleanStaleBinary(executable?: string): void {
+  const exe = executable ?? (isPkgBinary() ? process.execPath : null);
+  if (!exe) return;
+  const dir = path.dirname(exe);
+  const base = path.basename(exe);
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (name !== `${base}.old` && !name.startsWith(`${base}.old-`)) continue;
+    try { fs.unlinkSync(path.join(dir, name)); } catch { /* still running — a later sweep */ }
   }
 }
 
