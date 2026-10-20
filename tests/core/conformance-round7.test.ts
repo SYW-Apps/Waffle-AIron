@@ -264,7 +264,7 @@ describe('5. the route reader: stripped prefixes, constants and route tables', (
     expect(byCode(issues, 'UNDECLARED_ROUTE'), said(issues)).toEqual([]);
     const unrouted = byCode(issues, 'UNROUTED_ENDPOINT');
     expect(unrouted).toHaveLength(1);
-    expect(unrouted[0].message).toContain('"GET /me"');
+    expect(unrouted[0].message).toContain('"GET /v1/me"');
     expect(unrouted[0].message).not.toContain('/habits');
   });
 

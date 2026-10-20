@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { runWithProjectBinding, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, loadSubsystemSpec, loadSystemSpec } from '../../src/core/specs.js';
-import { internalizeMember, moveMember } from '../../src/core/provision.js';
+import { createMember, internalizeMember, moveMember } from '../../src/core/provision.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 import { validateProject } from '../../src/core/validation.js';
 import { projectFamilyGraph } from '../../src/core/project-family.js';
@@ -460,6 +460,29 @@ describe('externalize into a part — a storage move — agrees with lock and lo
     const diff = at(f.top, () => diffAgainstApproval())!;
     expect(diff.added.length + diff.changed.length + diff.removed.length).toBe(0);
     expect(diff.moved.length).toBeGreaterThan(0);
+  });
+
+  it('a part declared first under the subsystem\'s id is no completed externalize: the subsystem moves into it', () => {
+    const f = shopFamily();
+    roots.push(f.top);
+    // The order an assistant takes: declare the part, then move the subsystem in.
+    at(f.top, () => createMember('orders', 'services/orders', 'Orders'));
+    invalidateSpecCache();
+    const planned = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    // Before: an empty plan with no refusal, read as an externalize already done.
+    expect(planned.refusals).toEqual([]);
+    expect(planned.edits.map((e) => e.detail)).toEqual([expect.stringContaining('its specs into the part "orders"')]);
+    // The spec tree's write lock is a file of the moment, never a change of the plan.
+    expect(planned.changes.some((c) => c.path.endsWith('.spec-write.lock'))).toBe(false);
+    const report = at(f.top, () => migrations.apply(planned));
+    expect(report.applied).toBe(true);
+    expect(fs.existsSync(path.join(f.top, 'services', 'orders', '.wai', 'specs', 'orders', '.index.yaml'))).toBe(true);
+    expect(fs.existsSync(path.join(f.top, '.wai', 'specs', 'orders', '.index.yaml'))).toBe(false);
+    invalidateSpecCache();
+    // Now it is done: a second plan finds nothing to move.
+    const again = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
+    expect(again.edits).toEqual([]);
+    expect(again.refusals).toEqual([]);
   });
 
   it('control: a project with an unapproved change still owes its re-lock', async () => {

@@ -52,6 +52,31 @@ Who is affected:
   backtick) and suggesting no rename.
 - The MCP server's refusal for a project with no major stamp says no stamp was found
   and that wairon 5 is assumed, as `wairon upgrade` does.
+- Moving a subsystem into a part declared first under the subsystem's id
+  (`sdd_externalize_subsystem`, `wairon subsystem externalize`) planned nothing and gave no
+  reason: it read the part as an externalize already done. It now moves the subsystem in.
+  Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
+  project's tree, and externalize moves one into the part.
+- **Python:** a narrated call deleted from the code is now reported (`CALL_STEP_UNREALIZED`).
+  Python code is read without a type checker, so a call is matched by name: a claim is
+  reported only when the method's code makes no call by that name at all. The
+  "Code checked" line says so ("a narrated call by name"). Before, only calls the code
+  makes that the narrative does not name were judged for Python, though the line said
+  calls were checked.
+- **TypeScript:** a class imported with a plain `import { X }` and used only as a type (a
+  constructor parameter, an annotation) no longer draws `UNDECLARED_EXPORT` on the file
+  that exports it; it is a type import whatever its spelling, as `import type` was.
+- **HTTP Portals:** an endpoint path that repeats its Portal's `basePath` (`basePath: /products`
+  with `/products/{id}`, which serves `/products/products/{id}`) is the new warning
+  `ENDPOINT_BASEPATH_REPEATED`, at design time. `UNDECLARED_ROUTE` and `UNROUTED_ENDPOINT` print
+  the full joined route, and say so when the code and the design differ only by a repeated
+  basePath. A route printed as `//…` is fixed. Designs that repeat the prefix now fail
+  `--ci`: drop the prefix from the endpoint paths, or the `basePath`.
+- A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
+  for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
+  a session opened in its folder had no wairon tools.
+- A migration run through the MCP server no longer lists the spec tree's write lock as a
+  file to delete, and never removes the lock a running write holds.
 
 ### Small fixes
 

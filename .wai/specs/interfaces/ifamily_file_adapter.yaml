@@ -9,13 +9,14 @@ methods:
   - name: mirror
     description: >-
       Copy each scoped owner's areas (its .wai tree by default, everything under it except
-      .wai/transactions/; the listed files when the scope names areas) and every owner the scope
-      names whole (all its files except .wai/transactions/) into the target directory at the owner's
-      path relative to the scope's base — the nearest common ancestor of the coordinator and every
-      owner, the coordinator when it names none — so the layout is reproduced, a sibling checkout
-      beside the family included (stage 8); answer each copied live file's sha256 by its absolute
-      path. Refuses an owner root outside the base, and an owner on another volume than the
-      coordinator: a rename across volumes is not atomic.
+      .wai/transactions/ and the write lock .wai/.spec-write.lock; the listed files when the scope
+      names areas) and every owner the scope names whole (all its files except .wai/transactions/
+      and the write lock .wai/.spec-write.lock) into the target directory at the owner's path
+      relative to the scope's base — the nearest common ancestor of the coordinator and every owner,
+      the coordinator when it names none — so the layout is reproduced, a sibling checkout beside
+      the family included (stage 8); answer each copied live file's sha256 by its absolute path.
+      Refuses an owner root outside the base, and an owner on another volume than the coordinator: a
+      rename across volumes is not atomic.
     signature: 'mirror(scope: TransactionScope, target: string): map<string, string>'
     returns: map<string, string>
     params:
@@ -32,8 +33,9 @@ methods:
       (a relocated member's old directory and its new root, file by file whatever the file),
       byte-exact — a file whose bytes differ is a write, one only in the rehearsal a create, one
       only live a delete — each with its owner (mapped back to live), its owner-relative path, the
-      base digest the mirror recorded and the staged digest. Ordered by owner then path. For a scope
-      that names areas only those areas and whole owners are compared.
+      base digest the mirror recorded and the staged digest. Ordered by owner then path. The
+      transaction area and the write lock, files of the moment, are never compared. For a scope that
+      names areas only those areas and whole owners are compared.
     signature: 'compare(rehearsal: Rehearsal): list<FileChange>'
     returns: list<FileChange>
     params:
@@ -171,4 +173,4 @@ methods:
         description: Where they go, absolute; created as needed
 status: complete
 createdAt: '2026-09-30T20:27:16.585Z'
-updatedAt: '2026-10-04T10:18:46.054Z'
+updatedAt: '2026-10-20T21:40:31.959Z'

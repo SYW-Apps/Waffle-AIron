@@ -81,16 +81,31 @@ interface ServedRoute {
   verb: string;
   segments: string[];
   exactLength: boolean;
-  /** How a message and a register entry name it. */
+  /** How a register entry names it. */
   key: string;
+  /** The whole path the server serves it at, basePath included, as a message names it. */
+  full: string[];
 }
 
 /** One HTTP endpoint the portal's contract binds. */
 interface ContractEndpoint {
   verb: string;
   segments: string[];
-  /** How a message and a register entry name it — as the contract writes it. */
+  /** How a register entry names it — as the contract writes it. */
   key: string;
+  /** The endpoint's path as written, for a message to join under the basePath. */
+  path: string;
+}
+
+/** A path from its segments: always one leading slash, never an empty segment, so never `//`. */
+function pathOf(segments: string[]): string {
+  return `/${segments.filter(segment => segment !== '').join('/')}`;
+}
+
+/** A path with the "continues past here" marker a non-exact route carries, joined without doubling the slash. */
+function openPathOf(segments: string[], exactLength: boolean): string {
+  const path = pathOf(segments);
+  return exactLength ? path : `${path === '/' ? '' : path}/…`;
 }
 
 /**
@@ -102,8 +117,8 @@ interface ContractEndpoint {
 function completed(route: RouteFact, heads: string[], base: string[]): ServedRoute[] {
   // A route that states the whole path carries the Portal's basePath in
   // front, where the contract's endpoint paths are written under it.
-  const stated = base.length > 0 && base.every((segment, index) => route.segments[index] === segment)
-    ? route.segments.slice(base.length) : route.segments;
+  const carriesBase = base.length > 0 && base.every((segment, index) => route.segments[index] === segment);
+  const stated = carriesBase ? route.segments.slice(base.length) : route.segments;
   const variants = !route.fullPath && stated[0] === '*' && heads.length > 0
     ? heads.map(head => [head, ...stated.slice(1)])
     : [stated];
@@ -111,7 +126,10 @@ function completed(route: RouteFact, heads: string[], base: string[]): ServedRou
     verb: route.verb.toUpperCase(),
     segments: segments.map(normalizeSegment),
     exactLength: route.exactLength,
-    key: `${route.verb.toUpperCase()} /${segments.join('/')}${route.exactLength ? '' : '/…'}`,
+    key: `${route.verb.toUpperCase()} ${openPathOf(segments, route.exactLength)}`,
+    // Where the server answers it: a route stating the whole path says so; a
+    // guard written under the basePath is served beneath it.
+    full: carriesBase || route.fullPath ? route.segments : [...base, ...segments],
   }));
 }
 
@@ -121,6 +139,37 @@ function answers(route: ServedRoute, endpoint: ContractEndpoint): boolean {
   if (route.exactLength ? endpoint.segments.length !== route.segments.length
     : endpoint.segments.length < route.segments.length) return false;
   return route.segments.every((segment, index) => segment === endpoint.segments[index]);
+}
+
+/**
+ * Whether a served route and an endpoint differ only by the Portal's basePath
+ * repeated: the code serves the endpoint's path as written (`/products/{id}`)
+ * while the contract, joining the basePath (`/products`) in front of an
+ * endpoint that already starts with it, promises `/products/products/{id}` -
+ * or the reverse. The sentence says exactly that, or nothing.
+ */
+function doubledPrefix(
+  router: { base: string[] },
+  route: ServedRoute,
+  endpoint: ContractEndpoint,
+): string | undefined {
+  const { base } = router;
+  if (base.length === 0 || route.verb !== endpoint.verb) return undefined;
+  const startsWithBase = (segments: string[]): boolean => base.every((segment, index) => segments[index] === segment);
+  const served = route.full.map(normalizeSegment);
+  const basePath = pathOf(base);
+  const serves = `${route.verb} ${openPathOf(route.full, route.exactLength)}`;
+  const joined = `${endpoint.verb} ${pathOf([...base, ...endpoint.path.split('/').filter(Boolean)])}`;
+  // The code serves the endpoint's own path; the contract puts the basePath in front of it again.
+  if (startsWithBase(endpoint.segments) && answers({ ...route, segments: served }, endpoint)) {
+    return `The code serves ${serves}; the design declares ${joined} because basePath ${basePath} is joined in front of an endpoint that repeats it - drop the repeated prefix from the endpoint path (or from the basePath).`;
+  }
+  // The code repeats the basePath where the joined contract route does not.
+  const joinedSegments = [...base, ...endpoint.segments];
+  if (startsWithBase(served) && answers({ ...route, segments: served.slice(base.length) }, { ...endpoint, segments: joinedSegments })) {
+    return `The code serves ${serves}; the design declares ${joined}: the code repeats basePath ${basePath} in front of a route the contract joins under it only once.`;
+  }
+  return undefined;
 }
 
 export const routeCoverageRule: SddRule = {
@@ -196,6 +245,7 @@ export const routeCoverageRule: SddRule = {
         verb: endpoint.method.toUpperCase(),
         segments: endpoint.path.split('/').filter(Boolean).map(normalizeSegment),
         key: `${endpoint.method.toUpperCase()} ${endpoint.path}`,
+        path: endpoint.path,
       }];
     });
     /** Whether a file was read at the grade a route can be read at. */
@@ -508,19 +558,29 @@ export const routeCoverageRule: SddRule = {
         const variants = servedBy(router)[index];
         return variants.some(route => router.endpoints.some(endpoint => answers(route, endpoint)));
       });
-      const undeclared = [...new Set(routes
-        .map((_, index) => index)
-        .filter(index => !declaredBySome(index))
-        .flatMap(index => servedBy(first)[index].map(route => route.key)))].sort();
+      // Each undeclared route by its register key, with the whole path the
+      // server serves it at (basePath included) and why that path may differ
+      // from the contract's only by a repeated basePath.
+      const undeclaredRoutes = new Map<string, { shown: string; route: ServedRoute }>();
+      for (const index of routes.map((_, at) => at).filter(at => !declaredBySome(at))) {
+        for (const route of servedBy(first)[index]) {
+          if (!undeclaredRoutes.has(route.key)) undeclaredRoutes.set(route.key, { shown: `${route.verb} ${openPathOf(route.full, route.exactLength)}`, route });
+        }
+      }
+      const undeclared = [...undeclaredRoutes.keys()].sort();
       if (undeclared.length > 0) {
+        const doubled = [...new Set(undeclared.flatMap(key => routers.flatMap(router => {
+          const { route } = undeclaredRoutes.get(key)!;
+          return router.endpoints.flatMap(endpoint => doubledPrefix(router, route, endpoint) ?? []);
+        })))];
         ctx.addIssue(
           'warning',
           'UNDECLARED_ROUTE',
           `Portal "${first.portal.id}"'s router "${via}" (${where}) answers `
           + `${undeclared.length} route(s) no contract endpoint of ${routers.length > 1 ? `the Portals reading it (${portals})` : `"${first.portal.id}"`} declares — `
-          + `${undeclared.map(key => `"${key}"`).join(', ')}. A surface the code serves and the design never `
+          + `${undeclared.map(key => `"${undeclaredRoutes.get(key)!.shown}"`).join(', ')}. A surface the code serves and the design never `
           + 'promised is how a write runs with no contract: no brief, no auth review, no rule reading it. Declare '
-          + `each as a contract method with its endpoint, or take the route out of the router.${strip(first)}`,
+          + `each as a contract method with its endpoint, or take the route out of the router.${doubled.map(note => ` ${note}`).join('')}${strip(first)}`,
           first.impl.id,
           first.draftContext,
           undefined,
@@ -530,17 +590,21 @@ export const routeCoverageRule: SddRule = {
 
       for (const router of routers) {
         const served = servedBy(router);
-        const unrouted = [...new Set(router.endpoints
-          .filter(endpoint => !served.some(variants => variants.some(route => answers(route, endpoint))))
-          .map(endpoint => endpoint.key))].sort();
+        const unroutedEndpoints = router.endpoints
+          .filter(endpoint => !served.some(variants => variants.some(route => answers(route, endpoint))));
+        const unrouted = [...new Set(unroutedEndpoints.map(endpoint => endpoint.key))].sort();
         if (unrouted.length === 0) continue;
+        const shownOf = new Map(unroutedEndpoints.map(endpoint => [endpoint.key, `${endpoint.verb} ${pathOf([...router.base, ...endpoint.path.split('/').filter(Boolean)])}`]));
+        const doubled = [...new Set(unroutedEndpoints.flatMap(endpoint => routes
+          .flatMap((_, index) => servedBy(router)[index])
+          .flatMap(route => doubledPrefix(router, route, endpoint) ?? [])))];
         ctx.addIssue(
           'warning',
           'UNROUTED_ENDPOINT',
           `Portal "${router.portal.id}" binds ${unrouted.length} HTTP endpoint(s) `
-          + `that no route of its router "${via}" (${where}) answers — ${unrouted.map(key => `"${key}"`).join(', ')}. `
+          + `that no route of its router "${via}" (${where}) answers — ${unrouted.map(key => `"${shownOf.get(key)}"`).join(', ')}. `
           + 'The contract promises a route no request can reach. Route it in the router, or drop the endpoint '
-          + `from the contract.${strip(router)}`,
+          + `from the contract.${doubled.map(note => ` ${note}`).join('')}${strip(router)}`,
           router.impl.id,
           router.draftContext,
           undefined,

@@ -393,8 +393,12 @@ export const exportConformanceRule: SddRule = {
       if (!code.exactPaths.has(consumer)) continue;
       const facts = code.factsAt(consumer);
       if (!facts) continue;
+      const typeUsedOnly = new Set(facts.typePositionOnlyBindings ?? []);
       for (const [local, binding] of Object.entries(facts.importBindings ?? {})) {
         if (binding.namespace) continue;
+        // A value import used only where a type goes (constructor injection
+        // annotated with the class) is erased: a type import, taking nothing.
+        if (typeUsedOnly.has(local)) continue;
         take(consumer, consumer, binding.from, [local, binding.imported]);
       }
       for (const sites of Object.values(facts.functionCallSites ?? {})) {

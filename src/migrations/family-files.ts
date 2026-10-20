@@ -26,6 +26,10 @@ import { removeFile, renamePath } from '../utils/fs.js';
 const WAI = '.wai';
 /** The transaction area inside a .wai tree: never mirrored, never compared. */
 const TRANSACTIONS = 'transactions';
+/** The spec tree's write lock: a file of the moment, held by whoever writes now, never the family's bytes. */
+const WRITE_LOCK = '.spec-write.lock';
+/** Whether a path under an owner is never mirrored, never compared: the transaction area and the write lock. */
+const momentary = (rel: string): boolean => rel === `${WAI}/${TRANSACTIONS}` || rel === `${WAI}/${WRITE_LOCK}`;
 const RETRIED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const ATTEMPTS = 8;
 
@@ -63,7 +67,7 @@ function retrying(operation: string, file: string, run: () => void): void {
   }
 }
 
-/** Every file under a .wai directory except its transaction area, as paths relative to that .wai's parent. */
+/** Every file under a .wai directory except its transaction area and write lock, as paths relative to that .wai's parent. */
 function waiFiles(owner: string): string[] {
   const out: string[] = [];
   const walk = (dir: string, rel: string): void => {
@@ -75,7 +79,7 @@ function waiFiles(owner: string): string[] {
     }
     for (const entry of entries) {
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
-      if (relPath === `${WAI}/${TRANSACTIONS}`) continue;
+      if (momentary(relPath)) continue;
       // Following no link: a linked subtree is not the family's own bytes.
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) walk(nodePath.join(dir, entry.name), relPath);
@@ -111,11 +115,11 @@ function within(root: string, candidate: string): boolean {
   return rel === '' || (!rel.startsWith('..') && !nodePath.isAbsolute(rel));
 }
 
-/** Every file under an area of an owner (a file area answers itself), relative to the owner, forward slashes; .wai/transactions/ never. */
+/** Every file under an area of an owner (a file area answers itself), relative to the owner, forward slashes; .wai/transactions/ and the write lock never. */
 function areaFiles(owner: string, area: string): string[] {
   const out: string[] = [];
   const walk = (rel: string): void => {
-    if (rel === `${WAI}/${TRANSACTIONS}`) return;
+    if (momentary(rel)) return;
     const abs = nodePath.join(owner, ...rel.split('/'));
     let stat: fs.Stats;
     try {
@@ -148,7 +152,7 @@ function everyFile(owner: string): string[] {
     }
     for (const entry of entries) {
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
-      if (relPath === `${WAI}/${TRANSACTIONS}`) continue;
+      if (momentary(relPath)) continue;
       // Following no link: a linked subtree is not the owner's own bytes.
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) walk(nodePath.join(dir, entry.name), relPath);

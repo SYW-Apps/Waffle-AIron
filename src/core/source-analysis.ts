@@ -1307,6 +1307,8 @@ interface ExactFacts {
   importBindings: Map<string, ImportBindingFact>;
   /** Module specifier of each TYPE-ONLY import binding, by local name. */
   typeOnlyBindings: Map<string, string>;
+  /** Value import bindings every reference to which sits in a type position (see SourceFileFacts.typePositionOnlyBindings). */
+  typePositionOnlyBindings: Set<string>;
   /**
    * The type names each instance FIELD is declared with — a class property's
    * annotation, or a constructor parameter property's. Same-named fields of
@@ -2503,6 +2505,48 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     importBindings.set(name, fact);
   }
 
+  // A value import binding that the file only ever uses where a type goes —
+  // a constructor parameter's annotation, a variable's, an `implements`
+  // clause, a `typeof` query — is a type import whatever its spelling, since
+  // the compiler erases it. Exact: any reference the walk cannot place in a
+  // type position (a `new`, a call, an argument, a heritage `extends`, a
+  // re-export) keeps the binding a value one.
+  const typePositionOnlyBindings = new Set<string>();
+  if (importBindings.size > 0) {
+    const used = new Map<string, { type: number; value: number }>();
+    for (const [name, fact] of importBindings) if (!fact.namespace) used.set(name, { type: 0, value: 0 });
+    const inTypePosition = (id: import('typescript').Identifier): boolean => {
+      let node: import('typescript').Node = id;
+      let parent = node.parent;
+      // The left-most name of a qualified name (`Ns.Type`) stands for the whole.
+      while (parent && ts.isQualifiedName(parent) && parent.left === node) { node = parent; parent = node.parent; }
+      if (!parent) return false;
+      if (ts.isTypeReferenceNode(parent)) return parent.typeName === node;
+      if (ts.isTypeQueryNode(parent)) return parent.exprName === node;
+      if (ts.isExpressionWithTypeArguments(parent)) {
+        const clause = parent.parent;
+        return !!clause && ts.isHeritageClause(clause) && clause.token === ts.SyntaxKind.ImplementsKeyword;
+      }
+      return false;
+    };
+    const countUses = (node: import('typescript').Node): void => {
+      if (ts.isImportDeclaration(node)) return;
+      if (ts.isIdentifier(node)) {
+        const entry = used.get(node.text);
+        if (entry) {
+          const parent = node.parent;
+          const isName = !!parent && ((ts.isPropertyAccessExpression(parent) && parent.name === node)
+            || (ts.isPropertyAssignment(parent) && parent.name === node)
+            || (ts.isQualifiedName(parent) && parent.right === node));
+          if (!isName) { if (inTypePosition(node)) entry.type++; else entry.value++; }
+        }
+      }
+      ts.forEachChild(node, countUses);
+    };
+    countUses(sf);
+    for (const [name, entry] of used) if (entry.type > 0 && entry.value === 0) typePositionOnlyBindings.add(name);
+  }
+
   // Only an EXPORTED object is an adapter a consumer reaches through: its
   // property aliases join the specifier aliases.
   for (const alias of propertyAliases) if (exported.has(alias.container!)) exportAliases.push(alias);
@@ -2531,7 +2575,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     visitReference(sf);
   }
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -4159,6 +4203,7 @@ export function buildCodeModel(
             functionBodies: Object.fromEntries(facts.bodies),
             importBindings: Object.fromEntries(facts.importBindings),
             typeOnlyBindings: Object.fromEntries(facts.typeOnlyBindings),
+            ...(facts.typePositionOnlyBindings.size > 0 ? { typePositionOnlyBindings: [...facts.typePositionOnlyBindings] } : {}),
             fieldTypes: Object.fromEntries([...facts.fieldTypes].map(([k, v]) => [k, [...v]])),
             localTypes: Object.fromEntries([...facts.localTypes].map(([k, v]) => [k, [...v]])),
             memberTypes: Object.fromEntries([...facts.memberTypes].map(([k, v]) => [k, [...v]])),
