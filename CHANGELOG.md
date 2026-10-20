@@ -52,6 +52,13 @@ Who is affected:
   backtick) and suggesting no rename.
 - The MCP server's refusal for a project with no major stamp says no stamp was found
   and that wairon 5 is assumed, as `wairon upgrade` does.
+- Moving a subsystem into a part declared first under the subsystem's id
+  (`sdd_externalize_subsystem`, `wairon subsystem externalize`) planned nothing and gave no
+  reason: it read the part as an externalize already done. It now moves the subsystem in.
+  Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
+  project's tree, and externalize moves one into the part.
+- A migration run through the MCP server no longer lists the spec tree's write lock as a
+  file to delete, and never removes the lock a running write holds.
 
 ### Small fixes
 

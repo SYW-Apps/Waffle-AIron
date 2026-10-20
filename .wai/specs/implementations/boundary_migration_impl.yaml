@@ -77,18 +77,25 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          A completed externalize plans nothing: the id is already a member at that path and no
+          longer a subsystem of the bound project's own tree. A part declared under the subsystem's
+          id before the move — an empty part to move it into — is not a completed one: its move is
+          planned like any other
+        type: local
+      - stepNumber: 2
+        description: >-
           Resolve the new member's path from the bound project's directory under the containment
           guard, lexically and through links, through the family file adapter (a planner touches no
           file itself)
         type: call
         targetComponent: family_file_adapter
         targetMethod: resolve
-      - stepNumber: 2
+      - stepNumber: 3
         description: Ask whether that directory already holds a project
         type: call
         targetComponent: family_file_adapter
         targetMethod: holdsProject
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Judge the request against the bound node: no such subsystem, one already in a part or a
           member, or an `as` other than part or project is externalize-refused; a path not strictly
@@ -98,40 +105,40 @@ methods:
           PART (the default) a storage move needs nothing more: plan the core's externalize alone
           and answer it
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Load the subsystem spec the request names, to judge whether it can move
         type: call
         targetComponent: migration_core_adapter
         targetMethod: loadSpec
-      - stepNumber: 5
+      - stepNumber: 6
         description: Is the externalize possible so far?
         type: branch
         condition: a refusal was recorded
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 8
+      - stepNumber: 7
         description: Answer the refusals
         type: return
         outcome: refused plan
-      - stepNumber: 7
+      - stepNumber: 8
         label: crossing
         description: Read the bound project's resolved export table
         type: call
         targetComponent: migration_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           From the graph, find each reference of the moved subtree back into the bound project at a
           component whose subsystem does not publish it: externalize-refused, naming it — publishing
           is a design decision to make first
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Check every other family project consuming the bound project: each public name it uses
           that the moved subsystem realizes must stay exported through the bound project's
           re-pointed re-exports; one that would not is externalize-refused. Nothing is planned for
           them: the names they use do not move (externalize-updates-siblings)
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           As a project: under each family project that pins the bound project, read its externals'
           status; a pin whose every use is unchanged is re-pinned after the move, one already broken
@@ -139,7 +146,7 @@ methods:
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: getExternalsStatus
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Plan the core's externalize, the new member's externals pinned in the member — its
           external for the bound project, and one for every other project its moved specs name
@@ -147,7 +154,7 @@ methods:
           of each family consumer read intact. The references the move respells and the externals it
           declares are listed when the plan is rehearsed, from what the core answers
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: Answer the plan
         type: return
         outcome: the externalize plan
@@ -465,4 +472,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-09-30T20:35:23.802Z'
-updatedAt: '2026-10-20T09:25:43.916Z'
+updatedAt: '2026-10-20T21:40:34.585Z'

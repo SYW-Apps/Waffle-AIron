@@ -697,7 +697,10 @@ methods:
         description: >-
           Answer what was created and declared; when the call created a folder outside this project,
           say so first — where it was created — so a new folder beside the project never appears
-          without a word
+          without a word. For a part, the growth path: its subsystems are this project's own;
+          sdd_add_subsystem adds a subsystem to the top project's tree, and
+          sdd_externalize_subsystem with the part's path moves one into it; sdd_promote_member makes
+          it a project
         type: return
     symbol: sdd_add_member
   - name: validateTree
@@ -962,4 +965,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-20T19:14:39.170Z'
+updatedAt: '2026-10-20T21:41:42.863Z'

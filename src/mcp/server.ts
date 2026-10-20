@@ -2246,7 +2246,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const creation = createMember(alias, source, description, as);
         const next = creation.as === 'project'
           ? `${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`
-          : ` Its subsystems are this project's own: write them by their local ids. sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
+          : ` Its subsystems are this project's own: write them by their local ids. sdd_add_subsystem adds a subsystem to the top project's tree; move one into this part with sdd_externalize_subsystem (path: ${source}). sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
         // Step 3: a folder created beside the project is said first, never left to be found.
         const created = createdOutside ? `Created a new folder OUTSIDE this project, at ${dir} (beside ${root}). ` : '';
         return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
