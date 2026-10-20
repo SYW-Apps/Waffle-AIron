@@ -1,5 +1,5 @@
 import { SddRule, type RuleContext } from '../types.js';
-import type { ComponentSpec, MethodSignature } from '../../../models/index.js';
+import { callClaims, claimSite, type ComponentSpec, type MethodSignature } from '../../../models/index.js';
 
 /**
  * The Portal read-face guard. A Portal may reach a Repository facade or an
@@ -13,9 +13,9 @@ export const portalWriteShortcutRule: SddRule = {
   name: 'portal-write-shortcut',
   judges: 'design',
   description:
-    'A Portal narrative call step or dispatch-table binding that reaches a write- or lifecycle-effect method on a Repository or Index directly is the write shortcut: the Portal→data-facade edge is licensed for reads only, and a mutation — a write, or a lifecycle change to what exists — routes through an Orchestrator that owns the workflow. A dispatch step reaches its server only through a table binding, so judging every binding judges each dispatch step that takes it, once, where the route is declared. Methods that carry no effect tag are not judged.',
+    'A Portal narrative call step, declared call or dispatch-table binding that reaches a write- or lifecycle-effect method on a Repository or Index directly is the write shortcut: the Portal→data-facade edge is licensed for reads only, and a mutation — a write, or a lifecycle change to what exists — routes through an Orchestrator that owns the workflow. A dispatch step reaches its server only through a table binding, so judging every binding judges each dispatch step that takes it, once, where the route is declared. Methods that carry no effect tag are not judged.',
   codes: [
-    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative call or dispatch-table binding reaches a write- or lifecycle-effect method on a Repository/Index directly — reads may shortcut, mutations route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
+    { code: 'PORTAL_WRITE_SHORTCUT', defaultSeverity: 'error', summary: 'Portal narrative call step, declared call or dispatch-table binding reaches a write- or lifecycle-effect method on a Repository/Index directly — reads may shortcut, mutations route through an Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -25,15 +25,14 @@ export const portalWriteShortcutRule: SddRule = {
       const isDraftCtx = ctx.isImplementationDraft(impl);
 
       for (const implMethod of impl.methods) {
-        for (const step of implMethod.narrative) {
-          if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-          const target = ctx.componentMap.get(step.targetComponent);
-          const targetMethod = target ? portalShortcutMethod(ctx, target, step.targetMethod) : undefined;
+        for (const claim of callClaims(implMethod)) {
+          const target = ctx.componentMap.get(claim.component);
+          const targetMethod = target ? portalShortcutMethod(ctx, target, claim.method) : undefined;
           if (!target || !targetMethod) continue;
           ctx.addIssue(
             'error',
             'PORTAL_WRITE_SHORTCUT',
-            `Portal "${component.id}": step ${step.stepNumber} of "${implMethod.name}" calls ${targetMethod.effect}-effect method ${target.id}.${step.targetMethod} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the ${targetMethod.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
+            `Portal "${component.id}": ${claimSite(claim)} of "${implMethod.name}" calls ${targetMethod.effect}-effect method ${target.id}.${claim.method} directly. The Portal→${target.componentType} shortcut is licensed for READS only — route the ${targetMethod.effect === 'write' ? 'write' : 'lifecycle change'} through an Orchestrator that owns the workflow.`,
             impl.id,
             isDraftCtx || ctx.isComponentDraft(target.id),
           );

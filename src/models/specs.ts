@@ -1508,6 +1508,40 @@ export function parseDeclaredCall(ref: string): DeclaredCall | null {
   return { compId: ref.slice(0, at), methodName: ref.slice(at + 1) };
 }
 
+/** One call a method claims: a narrative `call` step (with its number), or a declared `calls` entry (no step). */
+export interface CallClaim {
+  /** The narrative step's number; absent on a declared call, which has no step to point at. */
+  step?: number;
+  component: string;
+  method: string;
+}
+
+/**
+ * method_implementation.callClaims — everything a method states it calls:
+ * its narrative `call` steps, then its declared `calls`. Both are statements
+ * and every rule judging what a method calls reads both. A `dispatch` step
+ * names a capability routed through a runtime table, not a method, so it is
+ * no claim; a declared reference that is not `<component>.<method>` names no
+ * target (MALFORMED_DECLARED_CALL's finding).
+ */
+export function callClaims(method: Pick<MethodImplementation, 'narrative' | 'calls'>): CallClaim[] {
+  const claims: CallClaim[] = [];
+  for (const step of method.narrative ?? []) {
+    if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
+    claims.push({ step: step.stepNumber, component: step.targetComponent, method: step.targetMethod });
+  }
+  for (const ref of method.calls ?? []) {
+    const parsed = parseDeclaredCall(ref);
+    if (parsed) claims.push({ component: parsed.compId, method: parsed.methodName });
+  }
+  return claims;
+}
+
+/** How a finding points at a claim: its step, or the declared call. */
+export function claimSite(claim: CallClaim): string {
+  return claim.step !== undefined ? `step ${claim.step}` : 'a declared call';
+}
+
 /**
  * technology — one entry of an implementation's `technologies`: a bare name
  * (`mysql`), which is also the token the technology-boundaries rule matches,

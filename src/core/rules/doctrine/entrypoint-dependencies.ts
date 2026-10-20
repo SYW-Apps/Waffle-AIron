@@ -1,5 +1,5 @@
 import { SddRule, type RuleContext } from '../types.js';
-import { type ComponentSpec } from '../../../models/index.js';
+import { callClaims, type ComponentSpec } from '../../../models/index.js';
 import { isPureLogic, stereotypeOf, storeResolutionHint, type EdgeFinding } from './stereotype-terms.js';
 
 /**
@@ -26,11 +26,10 @@ export function maintainedRegistries(ctx: RuleContext): Map<string, string[]> {
     const supervisor = contract ? ctx.componentMap.get(contract.component) : undefined;
     if (!supervisor || supervisor.componentType !== 'Supervisor') continue;
     for (const implMethod of impl.methods) {
-      for (const step of implMethod.narrative) {
-        if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-        if (ctx.componentMap.get(step.targetComponent)?.componentType !== 'Registry') continue;
-        const called = ctx.interfaceMethodsOf(step.targetComponent).find(m => m.name === step.targetMethod);
-        if (called?.effect === 'lifecycle') add(supervisor.id, step.targetComponent);
+      for (const claim of callClaims(implMethod)) {
+        if (ctx.componentMap.get(claim.component)?.componentType !== 'Registry') continue;
+        const called = ctx.interfaceMethodsOf(claim.component).find(m => m.name === claim.method);
+        if (called?.effect === 'lifecycle') add(supervisor.id, claim.component);
       }
     }
   }

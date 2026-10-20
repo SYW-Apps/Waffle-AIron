@@ -1,0 +1,25 @@
+kind: value-object
+id: call_claim
+name: CallClaim
+description: >-
+  One call a method states it makes: a narrative call step, pointed at by its step number, or a
+  declared calls entry, which has no step. Both are statements, and every rule judging what a method
+  calls reads both.
+fields:
+  - name: step
+    type: int
+    description: The narrative step's number; absent on a declared call
+    optional: true
+  - name: component
+    type: string
+    description: The component the call names
+    optional: false
+  - name: method
+    type: string
+    description: The method on it
+    optional: false
+methods: []
+sourcePath: src/models/specs.ts
+symbol: CallClaim
+createdAt: '2026-10-20T13:51:38.563Z'
+updatedAt: '2026-10-20T13:52:12.060Z'

@@ -1,5 +1,6 @@
 import {
   bodySitesOf,
+  callClaims,
   defaultConformanceTier,
   effectiveDetail,
   fieldTypesOf,
@@ -424,33 +425,8 @@ function invokedAs(code: CodeIndex, site: CallSiteFact, file: string): Forwarded
  * flow it happens. This check never reads order, so that difference is not
  * part of the claim: it is how a finding POINTS at one, and nothing more.
  */
-interface CallClaim {
-  /** The narrative step's number; absent on a declared call, which has no step to point at. */
-  step?: number;
-  component: string;
-  method: string;
-}
-
-/**
- * Everything a method claims it calls: its narrative `call` steps, then its
- * declared `calls`. A `dispatch` step routes through a runtime table and names
- * a capability rather than a method, so it asserts nothing about a call site
- * and is no claim. A declared reference that is not `<component>.<method>`
- * names no target to check — MALFORMED_DECLARED_CALL reports exactly that, and
- * a second accusation here would say the same thing twice.
- */
-function claimsOf(implMethod: MethodImplementation): CallClaim[] {
-  const claims: CallClaim[] = [];
-  for (const step of implMethod.narrative) {
-    if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-    claims.push({ step: step.stepNumber, component: step.targetComponent, method: step.targetMethod });
-  }
-  for (const ref of implMethod.calls ?? []) {
-    const parsed = parseDeclaredCall(ref);
-    if (parsed) claims.push({ component: parsed.compId, method: parsed.methodName });
-  }
-  return claims;
-}
+/** Everything a method claims it calls (method_implementation.callClaims). */
+const claimsOf = callClaims;
 
 /** Why a claim was not accepted. The three answers are deliberately distinct, and only two of them accuse. */
 type Miss =
