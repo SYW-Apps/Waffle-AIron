@@ -41,6 +41,7 @@ export {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  getLoaderIssues,
   readProjectSystem,
   // What a removal, or a route move, takes away from consumers: the public names publishing the methods.
   publishedUsesOf,

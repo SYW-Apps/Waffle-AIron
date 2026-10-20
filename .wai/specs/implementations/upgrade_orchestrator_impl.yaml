@@ -56,7 +56,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the family roots
-        endStep: 3
+        endStep: 4
       - stepNumber: 3
         label: sorted
         description: Tell a project (its root holds a project.yaml) from a part (it holds none)
@@ -64,39 +64,46 @@ methods:
         targetComponent: project_stamp_adapter
         targetMethod: holdsConfig
       - stepNumber: 4
-        description: For each project of the family
-        type: loop
-        loopKind: forEach
-        over: the projects
-        endStep: 5
-      - stepNumber: 5
         label: stood
-        description: Read where it stands
+        description: When it is a project, read where it stands
         type: call
         targetComponent: upgrade_orchestrator
         targetMethod: standing
-      - stepNumber: 6
+      - stepNumber: 5
         description: Is a project newer than the running major, or out of the window?
         type: branch
         condition: a standing is newer or out_of_window
-        onFalseStep: 8
-      - stepNumber: 7
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Answer the plan refused, naming the project and the release to install; nothing is
           rehearsed
         type: return
         outcome: refused plan
+      - stepNumber: 7
+        description: >-
+          List the roots that still hold a wairon 5 form: an earlier release could commit an upgrade
+          without finishing it
+        type: call
+        targetComponent: v5_to_v6_tree_step
+        targetMethod: unfinished
       - stepNumber: 8
+        description: >-
+          A project of those standing current is an unfinished upgrade: it stands older again, at
+          the step's major, marked unfinished; a part holding one marks the family top so, since a
+          part finishes with the family
+        type: local
+      - stepNumber: 9
         label: any
         description: Is any project older?
         type: branch
         condition: no standing is older
-        onFalseStep: 10
-      - stepNumber: 9
+        onFalseStep: 11
+      - stepNumber: 10
         description: 'Answer the plan with no steps: the family is current, its parts with it'
         type: return
         outcome: empty plan
-      - stepNumber: 10
+      - stepNumber: 11
         label: rehearse
         description: >-
           Rehearse the family: a private copy of every root's .wai and legacy .wairon folders. A
@@ -105,14 +112,14 @@ methods:
         type: call
         targetComponent: upgrade_migration_adapter
         targetMethod: rehearse
-      - stepNumber: 11
+      - stepNumber: 12
         description: Run the steps on the copy; a step's refusal ends the region
         type: try
         endStep: 17
         catches:
           - error: StepRefused
             step: 24
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           For each kept step the oldest root runs, oldest first, and within it each older root that
           runs it, the top first
@@ -120,14 +127,11 @@ methods:
         loopKind: forEach
         over: the steps, then the roots running each
         endStep: 16
-      - stepNumber: 13
-        description: >-
-          Bind the root's rehearsal copy in the v5 reading: the one binding under which the core
-          reads the forms a step's major wrote (everywhere else such a form is refused). The step
-          run is the one whose from is the root's major (today only 5 to 6 is kept)
-        type: local
       - stepNumber: 14
-        description: Plan the v5 to v6 step for the root
+        description: >-
+          Plan the v5 to v6 step for the root, bound on the root's rehearsal copy in the v5 reading:
+          the one binding under which the core reads the forms a step's major wrote (everywhere else
+          such a form is refused)
         type: call
         targetComponent: v5_to_v6_tree_step
         targetMethod: plan
@@ -270,4 +274,4 @@ methods:
         outcome: list<ReleaseNote>
 status: draft
 createdAt: '2026-10-18T14:14:37.637Z'
-updatedAt: '2026-10-20T00:52:36.215Z'
+updatedAt: '2026-10-20T18:41:47.922Z'

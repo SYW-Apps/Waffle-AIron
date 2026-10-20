@@ -188,13 +188,17 @@ describe('journey: one id grammar — project ids, aliases and member names (tin
     }
   });
 
-  it('a Rust tree refuses fn, self, type, a digit-leading and a 120-character method name, each with its reason', async () => {
-    for (const [name, why] of [['fn', /Rust/], ['self', /Rust/], ['type', /Rust/], ['match', /Rust/], ['9starts_with_digit', /digit/], ['m'.repeat(120), /longer than 64/]] as const) {
+  it('a Rust tree refuses self, crate, a digit-leading and a 120-character method name, each with its reason, and takes a keyword a raw identifier spells (fn, type, match)', async () => {
+    for (const [name, why] of [['self', /Rust/], ['crate', /Rust/], ['9starts_with_digit', /digit/], ['m'.repeat(120), /longer than 64/]] as const) {
       const r = await sb.run(['method', 'rename', 'distance_portal', 'initial_bearing', name, '--dry-run'], rust);
       expectOneLineRefusal(r, why);
     }
-    const param = await sb.run(['method', 'rename-param', 'distance_portal', 'initial_bearing', 'unit', 'type'], rust);
+    const param = await sb.run(['method', 'rename-param', 'distance_portal', 'initial_bearing', 'unit', 'self'], rust);
     expectOneLineRefusal(param, /Rust/);
+    for (const keyword of ['fn', 'type', 'match']) {
+      const escaped = await sb.run(['method', 'rename', 'distance_portal', 'initial_bearing', keyword, '--dry-run'], rust);
+      expect(escaped.code, transcript(escaped)).toBe(0);
+    }
     const ok = await sb.run(['method', 'rename', 'distance_portal', 'initial_bearing', 'bearing', '--dry-run'], rust);
     expect(ok.code, transcript(ok)).toBe(0);
   });

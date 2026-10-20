@@ -34,7 +34,13 @@ fields:
       For older: the command that upgrades it; for newer and out_of_window: the release to install,
       in one sentence.
     optional: true
+  - name: unfinished
+    type: bool
+    description: >-
+      True for a tree stamped current that still holds wairon 5 forms: an upgrade an earlier release
+      committed without finishing, which stands older again so the step runs on it once more.
+    optional: true
 methods: []
 sourcePath: src/upgrade/types.ts
 createdAt: '2026-10-18T13:03:58.068Z'
-updatedAt: '2026-10-18T13:03:59.063Z'
+updatedAt: '2026-10-20T18:38:27.806Z'

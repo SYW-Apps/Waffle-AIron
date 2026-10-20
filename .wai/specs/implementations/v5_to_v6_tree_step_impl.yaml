@@ -254,6 +254,21 @@ methods:
         targetComponent: upgrade_core_adapter
         targetMethod: migrateReachability
       - stepNumber: 21
+        description: >-
+          List the spec files on the bound root that still hold a wairon 5 form: the running major
+          cannot read one
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: v5FormsLeft
+      - stepNumber: 22
+        description: Did a rewrite leave one?
+        type: branch
+        condition: a file still holds a wairon 5 form
+        onFalseStep: 24
+      - stepNumber: 23
+        description: Refuse the step, naming each file and form, so nothing is committed
+        type: throw
+      - stepNumber: 24
         description: Written
         type: return
         outcome: void
@@ -269,6 +284,16 @@ methods:
           ones)
         type: return
         outcome: list<string>
+  - name: unfinished
+    narrative:
+      - stepNumber: 1
+        description: List the spec files on the root that still hold a wairon 5 form
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: v5FormsLeft
+      - stepNumber: 2
+        description: Answer whether there is one
+        type: return
 status: draft
 createdAt: '2026-10-18T14:14:32.869Z'
-updatedAt: '2026-10-18T21:55:59.457Z'
+updatedAt: '2026-10-20T18:38:40.158Z'

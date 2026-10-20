@@ -66,6 +66,17 @@ function scaffoldSession(root: string): string[] {
   }
 }
 
+/**
+ * imcp_migration_orchestrator.scaffold — set a project another tool made up
+ * for its own sessions (its guides, skills and .mcp.json), as a migration that
+ * made one does: what it wrote, relative to the project's root, or one line
+ * naming what to run there.
+ */
+export function scaffold(root: string): string[] {
+  // Step 1.
+  return scaffoldSession(root);
+}
+
 /** imcp_migration_orchestrator.pending — one notice line per unfinished transaction under the bound root. Writes nothing. */
 export function pending(): string[] {
   // Step 1: a report, nothing written.

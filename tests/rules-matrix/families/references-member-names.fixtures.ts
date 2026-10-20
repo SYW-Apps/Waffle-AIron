@@ -8,8 +8,11 @@
  *    parameters of one method or two fields of one type share a name; a lookup
  *    by name would bind one of them at random.
  *  - RESERVED_IDENTIFIER (error): a method, parameter or field name the spec's
- *    target language reserves for that kind of identifier — Rust refuses its
- *    keywords everywhere, TypeScript a keyword as a parameter only.
+ *    target language reserves for that kind of identifier and cannot escape —
+ *    Rust refuses crate, self, Self and super, TypeScript a keyword as a
+ *    parameter.
+ *  - RESERVED_IDENTIFIER_ESCAPED (notice): the same, in a language that spells
+ *    the word as an ordinary identifier (Rust r#type, C# @class).
  *  - ENDPOINT_PATH_PLACEHOLDER (error): an HTTP path's `{name}` placeholders
  *    bind the method's parameters: each closed, once, naming a parameter.
  */
@@ -66,7 +69,23 @@ export default [
     severity: 'error',
     anchoredTo: 'itile_calculator',
     expectFire: true,
-    scenario: 'In the Rust SDK the tile calculator takes a parameter named `type` — a Rust keyword, so the brief would ask for `fn tile_at(type: ...)`, which no Rust compiler accepts.',
+    scenario: 'In the Rust SDK the tile calculator takes a parameter named `self` — a Rust keyword that no raw identifier can spell, so the brief would ask for `fn tile_at(self: ...)`, which means something else entirely.',
+    tree: {
+      system: RUST,
+      subsystems: [{ id: 'tiles', description: 'Map tiles.' }],
+      components: [{ id: 'tile_calculator', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Computes tile coordinates.' }],
+      interfaces: [{
+        id: 'itile_calculator', component: 'tile_calculator', methods: [
+          { name: 'tile_at', description: 'The tile holding a point.', params: [{ name: 'self', type: 'string' }], returns: 'string' },
+        ],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'RESERVED_IDENTIFIER',
+    expectFire: false,
+    reason: 'A Rust `type` parameter is spelled r#type in code: RESERVED_IDENTIFIER_ESCAPED notices it instead.',
+    scenario: 'The Rust tile calculator takes a parameter named `type`, which the code spells r#type.',
     tree: {
       system: RUST,
       subsystems: [{ id: 'tiles', description: 'Map tiles.' }],
@@ -90,6 +109,43 @@ export default [
       interfaces: [{
         id: 'iroute_store', component: 'route_store', methods: [
           { name: 'delete', description: 'Remove a route.', params: [{ name: 'routeId', type: 'string' }], returns: 'void', effect: 'lifecycle' },
+        ],
+      }],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // RESERVED_IDENTIFIER_ESCAPED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'RESERVED_IDENTIFIER_ESCAPED',
+    severity: 'notice',
+    anchoredTo: 'itile_calculator',
+    expectFire: true,
+    scenario: 'In the Rust SDK the tile calculator takes a parameter named `type`, a wire name the code spells r#type.',
+    tree: {
+      system: RUST,
+      subsystems: [{ id: 'tiles', description: 'Map tiles.' }],
+      components: [{ id: 'tile_calculator', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Computes tile coordinates.' }],
+      interfaces: [{
+        id: 'itile_calculator', component: 'tile_calculator', methods: [
+          { name: 'tile_at', description: 'The tile holding a point.', params: [{ name: 'type', type: 'string' }], returns: 'string' },
+        ],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'RESERVED_IDENTIFIER_ESCAPED',
+    expectFire: false,
+    reason: 'Rust cannot escape self, so it is the RESERVED_IDENTIFIER error, not a notice.',
+    scenario: 'The Rust tile calculator takes a parameter named `self`.',
+    tree: {
+      system: RUST,
+      subsystems: [{ id: 'tiles', description: 'Map tiles.' }],
+      components: [{ id: 'tile_calculator', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Computes tile coordinates.' }],
+      interfaces: [{
+        id: 'itile_calculator', component: 'tile_calculator', methods: [
+          { name: 'tile_at', description: 'The tile holding a point.', params: [{ name: 'self', type: 'string' }], returns: 'string' },
         ],
       }],
     },

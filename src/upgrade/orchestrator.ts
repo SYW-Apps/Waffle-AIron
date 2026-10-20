@@ -72,18 +72,37 @@ export function plan(root: string): UpgradePlan {
   // Step 1: the family as the oldest kept step reads it.
   const roots = v5ToV6.familyRoots(root);
   const runningMajor = majorOf(release.version());
-  // Steps 2-3: a part holds no project.yaml, so it carries no stamp of its own.
-  const projects = roots.filter((r) => stamp.holdsConfig(r));
-  const parts = roots.filter((r) => !projects.includes(r));
-  // Steps 4-5.
-  const standings = projects.map((r) => standing(r));
-  // Steps 6-7: a project this release cannot upgrade refuses the whole plan.
+  // Steps 2-4: a part holds no project.yaml, so it carries no stamp of its own;
+  // each project stands where its stamp says.
+  const projects: string[] = [];
+  const parts: string[] = [];
+  const standings: TreeStanding[] = [];
+  for (const r of roots) {
+    if (stamp.holdsConfig(r)) {
+      projects.push(r);
+      standings.push(standing(r));
+    } else {
+      parts.push(r);
+    }
+  }
+  // Steps 5-6: a project this release cannot upgrade refuses the whole plan.
   const stuck = standings.find((s) => s.state === 'newer' || s.state === 'out_of_window');
   if (stuck) return emptyPlan(root, runningMajor, standings, `${stuck.root}: ${stuck.advice ?? stuck.state}`);
-  // Steps 8-9: nothing older, nothing to do; the parts are current with the family.
+  // Steps 7-8: a tree stamped current that still holds a wairon 5 form is an
+  // unfinished upgrade (an earlier release committed one without finishing it):
+  // it stands at the step's major again, and the step runs on it once more.
+  const unfinished = v5ToV6.unfinished(roots);
+  // A part holding one finishes with the family, which then stands unfinished at its top.
+  const partLeft = unfinished.some((r) => !projects.includes(r));
+  for (const [i, s] of standings.entries()) {
+    if (s.state === 'current' && (unfinished.includes(s.root) || (partLeft && i === 0))) {
+      standings[i] = { ...s, writtenMajor: RUNNER_FROM, state: 'older', unfinished: true, advice: 'Run `wairon upgrade` to finish the upgrade: the tree still holds wairon 5 forms.' };
+    }
+  }
+  // Steps 9-10: nothing older, nothing to do; the parts are current with the family.
   const olderProjects = standings.filter((s) => s.state === 'older');
   if (olderProjects.length === 0) return emptyPlan(root, runningMajor, standings);
-  // Step 10: a part stands with the family, at the oldest major a project of it was
+  // Step 11: a part stands with the family, at the oldest major a project of it was
   // written by, so the steps run on it as on the projects. Then a private copy of
   // every root's .wai, and a legacy .wairon folder.
   const oldestWritten = Math.min(...olderProjects.map((s) => s.writtenMajor));
@@ -93,16 +112,16 @@ export function plan(root: string): UpgradePlan {
   const steps: StepPlan[] = [];
   const ran = new Map<number, UpgradeStep>();
   try {
-    // Steps 11-16: oldest step first, and within it each older root that runs it, the top first.
+    // Steps 12-16: oldest step first, and within it each older root that runs it, the top first.
     const chains = new Map(older.map((s) => [s.root, chain.between(s.writtenMajor, runningMajor).steps]));
     const kept = [...new Map([...chains.values()].flat().map((s) => [s.from, s])).values()].sort((a, b) => a.from - b.from);
     for (const step of kept) {
       if (step.from !== RUNNER_FROM) throw new Error(`no runner is kept for the step from major ${step.from}`);
       for (const project of older) {
         if (!chains.get(project.root)?.some((s) => s.from === step.from)) continue;
-        // Step 13: the project's rehearsal root is the bound root for the step,
-        // in the v5 reading: the one binding under which the core reads the
-        // forms the step's major wrote.
+        // Steps 14-15: the project's rehearsal root is the bound root for the
+        // step, in the v5 reading: the one binding under which the core reads
+        // the forms the step's major wrote.
         const copy = rehearsalRoot(rehearsal, project.root);
         try {
           const planned = runWithProjectRoot(copy, () => runInV5Reading(() => {

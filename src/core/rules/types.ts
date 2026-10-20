@@ -764,6 +764,11 @@ export interface RuleContext {
    * rule emitting a CARRYABLE code must supply it; a matching entry that lists
    * every unit carries the warning (or notice), and a unit the entry does not list is
    * named back as new rather than absorbed.
+   *
+   * `target` names the spec a reference finding points INTO, as `<kind>:<id>`
+   * (`component:x`, `subsystem:x`, `interface:x`, `contract-of:<component>`).
+   * A finding whose target is a spec that exists but failed to parse is folded
+   * into that spec's parse error (foldUnparsedReferences) instead of reported.
    */
   addIssue(
     defaultSeverity: Severity,
@@ -773,6 +778,7 @@ export interface RuleContext {
     isDraftContext?: boolean,
     resolution?: ReferenceResolution,
     parts?: FindingParts,
+    target?: string,
   ): void;
 }
 

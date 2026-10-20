@@ -80,6 +80,9 @@ export const crossTreeReferencesRule: SddRule = {
             `Method "${implMethod.name}" in implementation "${impl.id}" ${verb} component "${target}" which does not exist (step ${step.stepNumber}).${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
             impl.id,
             isDraftCtx,
+            undefined,
+            undefined,
+            `component:${target}`,
           );
         }
       }

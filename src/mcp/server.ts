@@ -73,9 +73,11 @@ import {
   lockTree,
   unlockTree,
   readPinnedSpec,
+  getLoaderIssues,
   readProjectSystem,
   publishedUsesOf,
 } from './adapters/core.js';
+import { unparsedSpecSentence } from '../models/unparsed-spec.js';
 import { standing as treeStanding } from './adapters/upgrade.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
@@ -100,7 +102,7 @@ import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
-import { pending as pendingMigrations, run as runMigration } from './migrations.js';
+import { pending as pendingMigrations, run as runMigration, scaffold as scaffoldSessions } from './migrations.js';
 import type { FamilyMigrationReport, MigrationRequest } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
@@ -961,7 +963,7 @@ const validationIssueOutput = {
     + 'producer (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED). Counted with its severity, '
     + 'but never part of `valid` or `--ci`: the pin is the reproducible gate.',
   ),
-} satisfies Record<keyof ValidationIssue, z.ZodTypeAny>;
+} satisfies Record<Exclude<keyof ValidationIssue, 'target' | 'unparsed'>, z.ZodTypeAny>; // target and unparsed are internal to the fold (foldUnparsedReferences), never in an answer
 
 /** sdd_add_member's structured answer: what creating the member wrote about packs. */
 const memberCreationOutput = {
@@ -1572,7 +1574,12 @@ function standingRefusal(name: string): string | null {
   const tree = treeStanding(root);
   if (tree.state === 'current') return null;
   if (tree.state === 'older') {
-    return `${name} refused — the project at ${root} was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor}). `
+    // An unstamped tree is not read as written by an older major: no stamp was
+    // found, and the oldest major the upgrade reads is assumed, as upgrade says.
+    const written = tree.stamped
+      ? `was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor})`
+      : `carries no major stamp, so it is assumed to be written by wairon ${tree.writtenMajor} (the running major is ${tree.runningMajor}; a tree wairon 6.0.0 made before the stamp is only stamped)`;
+    return `${name} refused — the project at ${root} ${written}. `
       + 'Ask the human to run `wairon upgrade` there; the assistant never runs it. Nothing was read or written.';
   }
   return `${name} refused — the project at ${root} cannot be served by this wairon (major ${tree.runningMajor}; the tree was written by major ${tree.writtenMajor}). ${tree.advice ?? ''}`.trim();
@@ -2239,10 +2246,18 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const creation = createMember(alias, source, description, as);
         const next = creation.as === 'project'
           ? `${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`
-          : ` Its subsystems are this project's own: write them by their local ids. sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
-        // Step 3: a folder created beside the project is said first, never left to be found.
+          : ` Its subsystems are this project's own: write them by their local ids. sdd_add_subsystem adds a subsystem to the top project's tree; move one into this part with sdd_externalize_subsystem (path: ${source}). sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
+        // Step 3: a project in a folder on disk is set up for its own sessions,
+        // as `wairon member add` sets it up: without them a session opened there
+        // has no tools to design it with.
+        const files = creation.as === 'project' && dir !== null && fs.existsSync(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
+        const sessions = files === null ? ''
+          : files.some((f) => f.startsWith('not set up'))
+            ? ` Its own sessions are ${files.join('; ')}.`
+            : ` It is set up for its own sessions (${files.join(', ')}): a session opened in that folder designs it.`;
+        // Step 4: a folder created beside the project is said first, never left to be found.
         const created = createdOutside ? `Created a new folder OUTSIDE this project, at ${dir} (beside ${root}). ` : '';
-        return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
+        return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}${sessions}`, creation);
       } catch (e) {
         return errText(String(e));
       }
@@ -3379,7 +3394,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           case 'implementation': result = loadImplementationSpec(id); break;
           case 'type':           result = loadTypeSpec(id); break;
         }
-        if (!result) return pinnedAnswer(kind) ?? errText(`Spec of kind "${kind}" with ID "${id}" does not exist.`);
+        if (!result) return pinnedAnswer(kind) ?? errText(unparsedSpecSentence(kind, id, getLoaderIssues()) ?? `Spec of kind "${kind}" with ID "${id}" does not exist.`);
         // A contract answers in STORED form, its sourced methods' resolved
         // signatures beside it as a derived marker (mcp_orchestrator.getSpec).
         let resolvedSignatures: ResolvedSignatureMarker[] = [];

@@ -199,6 +199,20 @@ export interface ValidationIssue {
    */
   resolution?: ReferenceResolution;
   /**
+   * On a finding about a reference: the spec it points INTO, as `<kind>:<id>`
+   * (`component:x`, `subsystem:x`, `interface:x`, `contract-of:<component>`).
+   * When that spec exists but failed to parse, the finding is folded into the
+   * parse error (foldUnparsedReferences).
+   */
+  target?: string;
+  /**
+   * On a loader finding for a spec file that exists but did not parse: which
+   * spec it was, so references into it are not judged against a hole.
+   * `component` is the owning component an interface file names, when the
+   * file got far enough to say.
+   */
+  unparsed?: { kind: string; id: string; component?: string };
+  /**
    * In a family run: the key of the project whose gate (or whose external,
    * for a composition finding) the finding belongs to — '' for the family
    * root. Absent on the owner's own run.
@@ -467,6 +481,39 @@ export interface ValidationOptions {
  * programmatic pack rules, in run order — for `wairon rules list`. Loads and
  * registers the governing packs, then reads the composed sequence.
  */
+/**
+ * validation.foldUnparsedReferences - a reference finding whose TARGET is a spec that exists
+ * on disk but failed to parse is not reported on its own: the parse error carries one
+ * count instead ("N references into it are not judged until it parses"). Works in
+ * place; keyed on the structured `target` / `unparsed` fields, never on message text.
+ */
+export function foldUnparsedReferences(issues: ValidationIssue[]): void {
+  const holes = new Map<string, number>();
+  issues.forEach((i, index) => {
+    const u = i.unparsed;
+    if (!u) return;
+    holes.set(`${u.kind}:${u.id}`, index);
+    if (u.kind === 'interface' && u.component) holes.set(`contract-of:${u.component}`, index);
+  });
+  const counted = new Map<number, number>();
+  const kept = issues.filter((i) => {
+    const hole = i.target !== undefined ? holes.get(i.target) : undefined;
+    if (hole === undefined) return true;
+    counted.set(hole, (counted.get(hole) ?? 0) + 1);
+    return false;
+  });
+  const folded = new Map<ValidationIssue, string>();
+  for (const [index, count] of counted) {
+    folded.set(issues[index], `${issues[index].message} ${count} reference${count === 1 ? '' : 's'} into it ${count === 1 ? 'is' : 'are'} not judged until it parses.`);
+  }
+  issues.length = 0;
+  // target and unparsed are this fold's own bookkeeping: they never leave it.
+  for (const i of kept) {
+    const { target: _target, unparsed: _unparsed, ...plain } = i;
+    issues.push(folded.has(i) ? { ...plain, message: folded.get(i)! } : plain);
+  }
+}
+
 export function listRules(): SddRule[] {
   const extensions = loadProjectExtensions();
   registerBuiltinRules();
@@ -513,7 +560,7 @@ export function validateProject(
 const CHECKED_AT_EXACT = ['methods', 'params', 'returns (where annotated)', 'public members', 'imports', 'calls', 'routes', 'data types'];
 const NOT_CHECKED_EVER = ['calls inside helpers and to collaborators a narrative never names (summarized by its detail)'];
 const READING_CHECKS: Record<string, string> = {
-  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls through declared receivers',
+  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls: through declared receivers; a narrated call by name',
 };
 
 /** A Portal binding HTTP endpoints whose implementation names no router, with its exact-grade files (route-coverage's portalsWithoutRouter). */
@@ -927,6 +974,10 @@ function runOwnersGate(
       ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; the advisory live comparison reads ${count === 1 ? 'its live producer' : 'their live producers'} (offline), and \`wairon externals status\` is the live gate.`
       : undefined;
 
+    // One broken file is one finding: references into a spec that did not parse
+    // are folded into its parse error.
+    foldUnparsedReferences(issues);
+
     // Step 39: the project's verdict — the same from every root.
     return {
       result: {
@@ -1152,6 +1203,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
   const staleOnlyBySkip = (i: ValidationIssue): boolean =>
     i.code === 'UNUSED_LINT_ALLOW' && skippedCodes.some((code) => i.message.includes(`allows "${code}"`));
   const kept = issues.filter((i) => (!i.specId || !context.ids.has(i.specId)) && !staleOnlyBySkip(i));
+  foldUnparsedReferences(kept);
   kept.push(issue('notice', 'PART_JUDGED_ALONE', `This part of "${parentId}" was judged alone against its pinned excerpt (${excerpt.digest}); `
     + `${skipped.length > 0 ? `the whole-system rules ${skipped.map((r) => r.name).join(', ')} were skipped` : 'no rule was skipped'}. The full verdict is the parent's: validate from "${parentId}".`));
   return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept }, codeModel, unroutedPortals: portalsWithoutRouter(ctx) };

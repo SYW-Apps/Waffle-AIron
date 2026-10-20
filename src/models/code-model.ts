@@ -537,6 +537,15 @@ export interface SourceFileFacts {
    */
   typeOnlyBindings?: Record<string, string>;
   /**
+   * The local names of VALUE import bindings (`import { X } from 'm'`) every
+   * reference to which sits in a type position — a parameter or variable
+   * annotation, an `implements` clause, a `typeof X` query. The compiler
+   * erases such an import, so for the surface a file takes from another it is
+   * a type import whatever its spelling. A name that is also constructed,
+   * called, extended or passed anywhere is not listed. EXACT grade only.
+   */
+  typePositionOnlyBindings?: string[];
+  /**
    * The type names each PROPERTY of a named shape the file declares is
    * DECLARED with, keyed `<shape>.<property>` — an interface's or a type
    * literal alias's property signatures, and a class's property declarations

@@ -1437,8 +1437,12 @@ methods:
       - stepNumber: 5
         label: reserved
         description: >-
-          Report RESERVED_IDENTIFIER (error) for each name the language reserves, carrying
-          identifier.reservedIn's sentence: the language and an alternative that fits the casing
+          Report RESERVED_IDENTIFIER (error) for each name the language reserves and cannot escape,
+          carrying identifier.reservedIn's sentence: the language and an alternative that fits the
+          casing; a reserved word the language spells as an ordinary identifier (Rust r#type except
+          crate, self, Self and super; C# @class; a Kotlin backtick) is the
+          RESERVED_IDENTIFIER_ESCAPED notice instead, carrying identifier.escapedIn's sentence,
+          which suggests no rename
         type: local
       - stepNumber: 6
         description: 'Done: every duplicate and every reserved word reported'
@@ -1532,4 +1536,4 @@ methods:
     exportedVia: typeRefScopeRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-19T19:48:48.312Z'
+updatedAt: '2026-10-20T19:12:12.198Z'

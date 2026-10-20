@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   identifierProblem,
   reservedWordProblem,
+  reservedWordEscape,
   displayNameProblem,
   SpecIdSchema,
   MethodNameSchema,
@@ -118,15 +119,46 @@ describe('the schemas and the project-config grammar agree with identifier.probl
 });
 
 describe('identifier.reservedIn — the target language\'s reserved words', () => {
-  it('Rust refuses its keywords as methods, parameters and fields, naming the language and an alternative', () => {
-    for (const word of ['fn', 'self', 'super', 'type', 'match', 'async', 'crate']) {
+  it('Rust refuses only the keywords a raw identifier cannot spell, naming the language and an alternative', () => {
+    for (const word of ['self', 'super', 'crate', 'Self']) {
       for (const kind of ['method', 'param', 'field'] as const) {
         const problem = reservedWordProblem(word, kind, 'rust', 'snake_case');
         expect(problem, `${kind} ${word}`).toMatch(/Rust/);
         expect(problem).toMatch(/e\.g\. "/);
+        expect(reservedWordEscape(word, kind, 'rust'), `${kind} ${word}`).toBeNull();
       }
     }
     expect(reservedWordProblem('typed', 'method', 'rust')).toBeNull();
+  });
+
+  it('Rust spells every other keyword as a raw identifier: no error, a notice naming r#word and suggesting no rename', () => {
+    for (const word of ['fn', 'type', 'match', 'async', 'move', 'impl']) {
+      for (const kind of ['method', 'param', 'field'] as const) {
+        expect(reservedWordProblem(word, kind, 'rust', 'snake_case'), `${kind} ${word}`).toBeNull();
+        const notice = reservedWordEscape(word, kind, 'rust');
+        expect(notice).toBe(`"${word}": a word Rust reserves; the code spells it r#${word} (targetLanguage rust)`);
+        expect(notice).not.toMatch(/e\.g\./);
+      }
+    }
+    expect(reservedWordEscape('typed', 'field', 'rust')).toBeNull();
+  });
+
+  it('C# and Kotlin escape their keywords; Python, Go, Java and C have no escape and keep the error', () => {
+    expect(reservedWordProblem('class', 'field', 'csharp')).toBeNull();
+    expect(reservedWordEscape('class', 'field', 'csharp')).toMatch(/spells it @class \(targetLanguage csharp\)/);
+    expect(reservedWordEscape('class', 'param', 'c#')).toMatch(/@class/);
+    expect(reservedWordProblem('class', 'field', 'kotlin')).toBeNull();
+    expect(reservedWordEscape('class', 'field', 'kotlin')).toMatch(/`class`/);
+    for (const [word, language] of [['class', 'python'], ['func', 'go'], ['new', 'java'], ['register', 'c']] as const) {
+      expect(reservedWordProblem(word, 'field', language), language).not.toBeNull();
+      expect(reservedWordEscape(word, 'field', language), language).toBeNull();
+    }
+  });
+
+  it('a TypeScript keyword parameter has no escape and stays an error', () => {
+    expect(reservedWordProblem('delete', 'param', 'typescript', 'camelCase')).toMatch(/TypeScript/);
+    expect(reservedWordEscape('delete', 'param', 'typescript')).toBeNull();
+    expect(reservedWordEscape('delete', 'method', 'typescript')).toBeNull();
   });
 
   it('TypeScript allows a keyword as a method or a field, never as a parameter, and never constructor as a method', () => {
@@ -142,7 +174,8 @@ describe('identifier.reservedIn — the target language\'s reserved words', () =
     expect(reservedWordProblem('lambda', 'param', 'python')).toMatch(/Python/);
     expect(reservedWordProblem('func', 'field', 'go')).toMatch(/Go/);
     expect(reservedWordProblem('new', 'method', 'java')).toMatch(/Java/);
-    expect(reservedWordProblem('object', 'param', 'csharp')).toMatch(/C#/);
+    expect(reservedWordProblem('object', 'param', 'csharp')).toBeNull();
+    expect(reservedWordEscape('object', 'param', 'csharp')).toMatch(/C#/);
     expect(reservedWordProblem('register', 'field', 'c')).toMatch(/\bC\b/);
     expect(reservedWordProblem('fn', 'method', 'cobol')).toBeNull();
     expect(reservedWordProblem('fn', 'method', undefined)).toBeNull();

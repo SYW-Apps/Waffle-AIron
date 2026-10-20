@@ -898,6 +898,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isDraftContext?: boolean,
     resolution?: ReferenceResolution,
     parts?: FindingParts,
+    target?: string,
   ): void => {
     // A finding on a spec a contained member owns is that member's own gate's,
     // judged under its own configuration — never this project's.
@@ -985,6 +986,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
       specId,
       ...(isDraftContext ? { draftContext: true } : {}),
       ...(resolution ? { resolution } : {}),
+      ...(target ? { target } : {}),
     });
   };
 

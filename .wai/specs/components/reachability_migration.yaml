@@ -4,23 +4,29 @@ description: >-
   The one-project migration onto the reachability model, run by `doctor --fix` and reported by
   `doctor --report reachability`. It plans first from the retired forms the scan recorded
   (spec_loader.retiredReachFacts) and writes only with apply. It never invents an entry where the
-  old model implied none: a Portal that was neither a listener nor mounted gets no entry, so it
-  surfaces as unreached for its author to decide.
+  old model implied none, and never keeps a retired form: wairon 6 cannot read a spec holding one,
+  so what it cannot decide is dropped and reported, never left in place: a Portal that was neither a
+  listener nor mounted gets no entry, so it surfaces as unreached for its author to decide.
 
-  - portalType becomes transport, HTTP_API as HTTP. A Custom Portal that binds no endpoint on any
-  verb, or whose Custom addresses name in-process calls, becomes InProcess, with the address dropped
-  and reported as a symbol hint.
+  - portalType becomes transport, HTTP_API as HTTP; one that names no transport is dropped and
+  reported (MISSING_PORTAL_TRANSPORT names the Portal until its transport is set). A Custom Portal
+  that binds no endpoint on any verb, or whose Custom addresses name in-process calls, becomes
+  InProcess, with the address dropped and reported as a symbol hint.
 
   - A listener's mounts are retired. The listener and every Portal it mounted get a Portal-level
   entry (kind entry, scope outside, the caller naming the listener and its prefixes), each mount's
   `via` moves to the mounted Portal's implementation as its `router`, and an endpoint outside every
   old prefix is reported, not fixed.
 
-  - invokedBy external becomes entry on a Portal and runtime elsewhere. A sibling-subsystem
-  declaration is reported, not rewritten: its caller lives in the same tree and must be modelled.
+  - invokedBy external becomes entry on a Portal and runtime elsewhere. wairon 6 cannot read a
+  sibling-subsystem declaration, so it is dropped: silently where a call the tree models already
+  reaches the method, else with a report naming the stored caller, the subsystem it names, and the
+  routes the rules allow (a call step where a sibling may reach the method, through the subsystem's
+  published Portal otherwise, or a runtime declaration where the code receives it at wiring time).
 
-  - An authored L1 or L0 export type that agrees with the derived kind is dropped; one that
-  disagrees is reported.
+  - An authored L1 or L0 export type is always dropped, since wairon 6 derives the kind and reads no
+  authored one; one that disagrees with the derived kind, or that no backing Portal derives, is
+  reported as well.
 
   - A lint allow of a retired code (UNMOUNTED_PORTAL, ENDPOINT_OUTSIDE_MOUNT,
   MOUNT_TARGET_NOT_PORTAL, PUBLIC_INTERFACE_TYPE_MISMATCH, PUBLIC_INTERFACE_EVENT_MISTYPED,
@@ -36,4 +42,4 @@ dependsOn:
   - spec_loader
 status: complete
 createdAt: '2026-10-06T13:07:07.572Z'
-updatedAt: '2026-10-06T13:07:08.182Z'
+updatedAt: '2026-10-20T18:38:21.412Z'

@@ -149,7 +149,7 @@ describe('r7 (solo-app top-1, lib-and-app R7-21): the route reader', () => {
     const r = await sb.run(['validate'], fresh(routerTree(PREFIX_ROUTER)));
     expect(countCode(r.all, 'UNDECLARED_ROUTE'), transcript(r)).toBe(0);
     expect(countCode(r.all, 'UNROUTED_ENDPOINT')).toBe(1);
-    expect(r.all).toMatch(/\[UNROUTED_ENDPOINT\][^\n]*"GET \/me"/);
+    expect(r.all).toMatch(/\[UNROUTED_ENDPOINT\][^\n]*"GET \/v1\/me"/);
   });
   it('a route table read through a helper → --ci exits 0', async () => {
     const r = await sb.run(['validate', '--ci'], fresh(routerTree(`${TABLE_CONSTANTS}\n${tableRouter(HABIT_TABLE)}`)));

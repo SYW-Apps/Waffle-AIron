@@ -130,6 +130,10 @@ describe('cli_runner.runUpgrade', () => {
     adapter.apply.mockReturnValue(committed(plan));
     await runUpgrade({});
     expect(out).toContain('only the major stamp moves');
+    // A tree in the running major's forms with no stamp is a 6.0.0 tree, never "major 5".
+    expect(plan.standings[0].stamped).toBe(false);
+    expect(out).toContain('made by wairon 6.0.0, before the major stamp');
+    expect(out).not.toContain('(unstamped)');
     expect(adapter.apply).toHaveBeenCalledWith(plan);
     expect(prompt).not.toHaveBeenCalled();
   });

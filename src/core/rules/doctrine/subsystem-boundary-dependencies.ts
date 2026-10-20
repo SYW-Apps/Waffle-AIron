@@ -36,6 +36,9 @@ export const subsystemBoundaryDepsRule: SddRule = {
             `Component "${comp.id}" lists dependency "${edge.ref}" which does not exist.${hint ? ` A declared dependency exports it without this project importing it — add \`${hint}\`.` : ''}`,
             comp.id,
             edge.draftContext,
+            undefined,
+            undefined,
+            `component:${edge.ref}`,
           );
           continue;
         }

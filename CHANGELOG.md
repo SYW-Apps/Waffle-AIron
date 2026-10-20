@@ -1,5 +1,100 @@
 # Changelog
 
+## v6.1.1 (from v6.1.0)
+
+A fix release for `wairon upgrade`. On a project whose design used a wairon 5 form the
+upgrade could not decide for its author, it committed spec files wairon 6 refuses to
+read. The tools then could not open those files, and every reference into them was
+reported as a separate error.
+
+Who is affected:
+
+- **Projects upgraded from wairon 5 with 6.1.0** that used `invokedBy: { kind:
+  sibling-subsystem }`, an export entry's `type` that no backing Portal derives (or
+  that disagrees with the derived kind), or a `portalType` that names no transport.
+  `wairon validate` shows them as `SCHEMA_VALIDATION_ERROR`s naming a "wairon 5 form".
+- **Rust, C# and Kotlin designs** with a member named after a keyword the language can
+  escape (`type`, `move`, `impl`...): that is a notice now, not an error.
+
+### Finishing a stuck upgrade
+
+1. Install 6.1.1 everywhere the project is checked.
+2. At the top of the project, run `wairon upgrade`. A tree stamped 6 that still holds a
+   wairon 5 form is an unfinished upgrade: the plan names it so, and applying it
+   rewrites the remaining forms. No hand edit is needed.
+3. Read the plan's reported items: each dropped declaration says what you can model
+   instead. Then run `wairon lock` where the plan says a re-lock is owed.
+
+### What changed
+
+- `wairon upgrade` never keeps a wairon 5 form. What it cannot decide is dropped and
+  reported:
+  - A `sibling-subsystem` declaration whose call the tree already models goes
+    silently. Otherwise the report quotes its stored caller, names the subsystem that
+    caller names, and gives the routes the rules allow: a call step onto a published
+    Portal, the route through the subsystem's Portal, or `invokedBy: { kind: runtime }`
+    for a dependency the code receives at wiring time.
+  - An export `type` is always dropped; one that disagreed with the derived kind, or
+    that no Portal derives, is reported.
+  - A `portalType` that names no transport is dropped; `MISSING_PORTAL_TRANSPORT`
+    names the Portal until its transport is set.
+- The upgrade checks its own result: a spec file still holding a wairon 5 form refuses
+  the upgrade, and nothing is written.
+- A spec file that exists but fails to parse is said so by `sdd_get_spec`,
+  `sdd_update_spec` and the other tools, quoting the reason, instead of "does not exist".
+  A wairon 5 form's refusal names `wairon upgrade`.
+- References into a spec that fails to parse are folded into its parse error ("N
+  references into it are not judged until it parses") instead of being reported one by
+  one.
+- `RESERVED_IDENTIFIER` is an error only for a keyword the language cannot escape (in
+  Rust: `crate`, `self`, `Self`, `super`). A keyword it can escape is the notice
+  `RESERVED_IDENTIFIER_ESCAPED`, naming the spelling (`r#type`, `@class`, a Kotlin
+  backtick) and suggesting no rename.
+- The MCP server's refusal for a project with no major stamp says no stamp was found
+  and that wairon 5 is assumed, as `wairon upgrade` does.
+- Moving a subsystem into a part declared first under the subsystem's id
+  (`sdd_externalize_subsystem`, `wairon subsystem externalize`) planned nothing and gave no
+  reason: it read the part as an externalize already done. It now moves the subsystem in.
+  Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
+  project's tree, and externalize moves one into the part.
+- **Python:** a narrated call deleted from the code is now reported (`CALL_STEP_UNREALIZED`).
+  Python code is read without a type checker, so a call is matched by name: a claim is
+  reported only when the method's code makes no call by that name at all. The
+  "Code checked" line says so ("a narrated call by name"). Before, only calls the code
+  makes that the narrative does not name were judged for Python, though the line said
+  calls were checked.
+- **TypeScript:** a class imported with a plain `import { X }` and used only as a type (a
+  constructor parameter, an annotation) no longer draws `UNDECLARED_EXPORT` on the file
+  that exports it; it is a type import whatever its spelling, as `import type` was.
+- **HTTP Portals:** an endpoint path that repeats its Portal's `basePath` (`basePath: /products`
+  with `/products/{id}`, which serves `/products/products/{id}`) is the new warning
+  `ENDPOINT_BASEPATH_REPEATED`, at design time. `UNDECLARED_ROUTE` and `UNROUTED_ENDPOINT` print
+  the full joined route, and say so when the code and the design differ only by a repeated
+  basePath. A route printed as `//…` is fixed. Designs that repeat the prefix now fail
+  `--ci`: drop the prefix from the endpoint paths, or the `basePath`.
+- A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
+  for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
+  a session opened in its folder had no wairon tools.
+- A migration run through the MCP server no longer lists the spec tree's write lock as a
+  file to delete, and never removes the lock a running write holds.
+
+### Known limitations
+
+- After `wairon lock`, approved and unchanged specs are judged as complete, so
+  `UNUSED_COMPONENT` on an approved draft component is no longer waived by `validate --ci`
+  (the waiver covers draft components only until they are approved). Wire or remove the
+  component before locking.
+
+### Small fixes
+
+- `wairon update` on Windows no longer fails with "wairon.exe is currently in use" when an
+  MCP server started before the previous update is still running from the old binary:
+  the update moves the running exe aside under a fresh name, and leftovers are swept
+  once no process runs from them.
+- `wairon upgrade` on an unstamped 6.0.0 tree no longer says "written by major 5
+  (unstamped)": it says "made by wairon 6.0.0, before the major stamp".
+- `OPEN_ROUTE_CALL` no longer says "read as full, not stated".
+
 ## v6.1.0 (from v6.0.0)
 
 v6.1 moves compatibility out of the core: a release reads only its own major's forms,

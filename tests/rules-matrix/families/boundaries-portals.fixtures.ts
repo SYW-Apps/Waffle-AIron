@@ -432,6 +432,44 @@ export default [
     },
   }),
   // -------------------------------------------------------------------------
+  // ENDPOINT_BASEPATH_REPEATED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ENDPOINT_BASEPATH_REPEATED',
+    severity: 'warning',
+    anchoredTo: 'iproduct_api',
+    expectFire: true,
+    scenario: 'The catalogue portal mounts under basePath /products and binds GET /products/{productId}: joined, the route is /products/products/{productId}, the prefix twice.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [{ id: 'product_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/products', invokedBy: { kind: 'entry', caller: 'The shop front end, over HTTPS' }, description: 'The catalogue API.' }],
+      interfaces: [{
+        id: 'iproduct_api', component: 'product_portal', methods: [
+          { name: 'getProduct', description: 'Read one product.', params: [{ name: 'productId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/products/{productId}' } },
+        ],
+      }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ENDPOINT_BASEPATH_REPEATED',
+    expectFire: false,
+    reason: 'An endpoint path is written under the basePath: /{productId} under /products joins to /products/{productId}. And the check compares whole segments, so /apiary under /api (a string prefix, not a segment prefix) is not a repeat.',
+    scenario: 'The catalogue portal mounts under /products and binds GET /{productId}; the farm portal mounts under /api and binds GET /apiary.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SCHEDULING_SUB],
+      components: [
+        { id: 'product_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/products', invokedBy: { kind: 'entry', caller: 'The shop front end, over HTTPS' }, description: 'The catalogue API.' },
+        { id: 'farm_portal', componentType: 'Portal', transport: 'HTTP', basePath: '/api', invokedBy: { kind: 'entry', caller: 'The farm shop app, over HTTPS' }, description: 'The farm API.' },
+      ],
+      interfaces: [
+        { id: 'iproduct_api', component: 'product_portal', methods: [{ name: 'getProduct', description: 'Read one product.', params: [{ name: 'productId', type: 'string' }], returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/{productId}' } }] },
+        { id: 'ifarm_api', component: 'farm_portal', methods: [{ name: 'listApiaries', description: 'List the apiaries.', returns: 'string', endpoint: { transport: 'HTTP', method: 'GET', path: '/apiary' } }] },
+      ],
+    },
+  }),
+  // -------------------------------------------------------------------------
   // ENDPOINT_STATUS_MISMATCH
   // -------------------------------------------------------------------------
   defineRuleFixture({
