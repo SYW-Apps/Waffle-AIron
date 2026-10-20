@@ -57,6 +57,15 @@ Who is affected:
   reason: it read the part as an externalize already done. It now moves the subsystem in.
   Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
   project's tree, and externalize moves one into the part.
+- **Python:** a narrated call deleted from the code is now reported (`CALL_STEP_UNREALIZED`).
+  Python code is read without a type checker, so a call is matched by name: a claim is
+  reported only when the method's code makes no call by that name at all. The
+  "Code checked" line says so ("a narrated call by name"). Before, only calls the code
+  makes that the narrative does not name were judged for Python, though the line said
+  calls were checked.
+- **TypeScript:** a class imported with a plain `import { X }` and used only as a type (a
+  constructor parameter, an annotation) no longer draws `UNDECLARED_EXPORT` on the file
+  that exports it; it is a type import whatever its spelling, as `import type` was.
 - A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
   for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
   a session opened in its folder had no wairon tools.
