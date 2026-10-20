@@ -323,6 +323,10 @@ describe('the member tools — sdd_add_member, sdd_move_member, sdd_internalize_
     expect(textOf(added)).toContain('Added the project "billing" at packages/billing');
     expect(members(root)).toEqual({ billing: { source: 'packages/billing', description: 'Invoices' } });
     expect(fs.existsSync(path.join(root, 'packages', 'billing', '.wai', 'project.yaml'))).toBe(true);
+    // Set up for its own sessions, as `wairon member add` sets it up: a session
+    // opened in that folder has the tools to design it.
+    expect(fs.existsSync(path.join(root, 'packages', 'billing', '.mcp.json'))).toBe(true);
+    expect(textOf(added)).toContain('It is set up for its own sessions (');
     invalidateSpecCache();
     expect(loadSubsystemSpec('billing')).toBeNull();
 

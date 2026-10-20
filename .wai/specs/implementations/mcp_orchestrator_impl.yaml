@@ -695,6 +695,14 @@ methods:
         targetMethod: createMember
       - stepNumber: 3
         description: >-
+          When it made a project in a folder on disk, set it up for its own sessions, as `wairon
+          member add` does: without its guide, skills and .mcp.json a session opened there has no
+          tools to design it with
+        type: call
+        targetComponent: mcp_migration_orchestrator
+        targetMethod: scaffold
+      - stepNumber: 4
+        description: >-
           Answer what was created and declared; when the call created a folder outside this project,
           say so first — where it was created — so a new folder beside the project never appears
           without a word. For a part, the growth path: its subsystems are this project's own;
@@ -965,4 +973,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-20T21:41:42.863Z'
+updatedAt: '2026-10-20T21:58:57.288Z'

@@ -13,6 +13,7 @@ dependsOn:
   - mcp_validator_adapter
   - mcp_skills_adapter
   - mcp_surfaces_adapter
+  - mcp_migration_orchestrator
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-07T18:42:19.715Z'
+updatedAt: '2026-10-20T21:58:55.879Z'

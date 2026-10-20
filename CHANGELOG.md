@@ -57,6 +57,9 @@ Who is affected:
   reason: it read the part as an externalize already done. It now moves the subsystem in.
   Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
   project's tree, and externalize moves one into the part.
+- A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
+  for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
+  a session opened in its folder had no wairon tools.
 - A migration run through the MCP server no longer lists the spec tree's write lock as a
   file to delete, and never removes the lock a running write holds.
 

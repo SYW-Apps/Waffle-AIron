@@ -30,6 +30,18 @@ methods:
     params: []
     guarantees:
       - idempotent
+  - name: scaffold
+    description: >-
+      Set a project another tool made up for its own sessions — its guides and root pointer, its
+      skills and, when claude is a target, its portable .mcp.json — as a migration that made one
+      does. Answers what it wrote, relative to the project's root, or one line naming what to run
+      there; never throws, since the change that made the project already stands.
+    signature: 'scaffold(root: string): list<string>'
+    returns: list<string>
+    params:
+      - name: root
+        type: string
+        description: The new project's root
 status: complete
 createdAt: '2026-09-30T20:39:28.924Z'
-updatedAt: '2026-10-04T10:19:01.434Z'
+updatedAt: '2026-10-20T21:58:48.886Z'
