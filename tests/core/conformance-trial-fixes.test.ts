@@ -330,6 +330,39 @@ describe('UNDECLARED_EXPORT — the owns relation is inside the fence', () => {
   });
 });
 
+describe('UNDECLARED_EXPORT — a plain import used only as a type is a type import', () => {
+  const inject = (orchSource: string) => {
+    const proj = createTempProject();
+    proj.component('store-a', 'Store');
+    proj.contract('store-a', ['load']);
+    proj.impl('store-a', `sourcePath: src/user_store.ts\nmethods:\n${intent('load')}`);
+    proj.source('src/user_store.ts', 'export class UserStore {\n  load(): string { return ""; }\n}\n');
+    proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
+    proj.contract('orch-a', ['run']);
+    proj.impl('orch-a', `sourcePath: src/orch.ts\nmethods:\n${intent('run')}`);
+    proj.source('src/orch.ts', orchSource);
+    return proj;
+  };
+
+  it('control: constructor injection with a plain `import { X }` used only as a parameter type draws none', () => {
+    const proj = inject("import { UserStore } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore) {}\n  run(): string { return this.store.load(); }\n}\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_EXPORT')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('fire: the same binding also constructed (a value use) still crosses', () => {
+    const proj = inject("import { UserStore } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore = new UserStore()) {}\n  run(): string { return this.store.load(); }\n}\n");
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'UNDECLARED_EXPORT');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('UserStore');
+    } finally { proj.cleanup(); }
+  });
+});
+
 describe('MISSING_INTEGRATION_SIM — a component with no code yet has nothing to wire', () => {
   const adopted = (proj: Project, laterImpl: string) => {
     proj.component('store-a', 'Store');
