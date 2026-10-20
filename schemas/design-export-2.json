@@ -768,6 +768,9 @@
                     "detail": {
                       "type": "string"
                     },
+                    "detailStated": {
+                      "type": "boolean"
+                    },
                     "intent": {
                       "type": "string"
                     },
@@ -970,6 +973,7 @@
                   "required": [
                     "method",
                     "detail",
+                    "detailStated",
                     "calls",
                     "narrative"
                   ],

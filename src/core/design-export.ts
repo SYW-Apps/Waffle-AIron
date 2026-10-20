@@ -449,13 +449,18 @@ function implementationSection(
   component: ComponentSpec | undefined,
   keys: KeyTable,
 ): DesignImplementation {
-  const methods: DesignMethodBody[] = impl.methods.map((m) => ({
-    method: `${impl.contract}.${m.name}`,
-    detail: effectiveDetail(m, impl, component).level,
-    ...(m.intent !== undefined ? { intent: m.intent } : {}),
-    calls: (m.calls ?? []).map((c) => callKey(c, keys)),
-    narrative: m.narrative.map((s) => stepWithKeys(s, keys)),
-  }));
+  const methods: DesignMethodBody[] = impl.methods.map((m) => {
+    const resolved = effectiveDetail(m, impl, component);
+    return {
+      method: `${impl.contract}.${m.name}`,
+      detail: resolved.level,
+      // Stated detail is binding; unstated, the level is the component type's default and what the method calls beyond its narrative is open.
+      detailStated: resolved.explicit || (m.calls?.length ?? 0) > 0,
+      ...(m.intent !== undefined ? { intent: m.intent } : {}),
+      calls: (m.calls ?? []).map((c) => callKey(c, keys)),
+      narrative: m.narrative.map((s) => stepWithKeys(s, keys)),
+    };
+  });
   return {
     key: impl.id,
     contract: impl.contract,

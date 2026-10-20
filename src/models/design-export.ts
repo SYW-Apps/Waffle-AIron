@@ -40,7 +40,7 @@ export const DESIGN_FORMAT = 'wairon-design';
  * transport, abi and the Portal-level invokedBy added, invokedBy kinds
  * narrowed to entry and runtime with a scope.
  */
-export const DESIGN_FORMAT_VERSION = '2.0';
+export const DESIGN_FORMAT_VERSION = '2.1';
 
 /**
  * design_approval — the approval state a design export is stamped with: the
@@ -235,6 +235,7 @@ export type DesignInterface = z.infer<typeof DesignInterfaceSchema>;
 export const DesignMethodBodySchema = z.object({
   method: z.string(),
   detail: z.string(),
+  detailStated: z.boolean(),
   intent: z.string().optional(),
   calls: z.array(z.string()),
   narrative: z.array(NarrativeStepSchema.passthrough()),
