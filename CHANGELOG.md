@@ -1,5 +1,64 @@
 # Changelog
 
+## v6.1.1 (from v6.1.0)
+
+A fix release for `wairon upgrade`. On a project whose design used a wairon 5 form the
+upgrade could not decide for its author, it committed spec files wairon 6 refuses to
+read. The tools then could not open those files, and every reference into them was
+reported as a separate error.
+
+Who is affected:
+
+- **Projects upgraded from wairon 5 with 6.1.0** that used `invokedBy: { kind:
+  sibling-subsystem }`, an export entry's `type` that no backing Portal derives (or
+  that disagrees with the derived kind), or a `portalType` that names no transport.
+  `wairon validate` shows them as `SCHEMA_VALIDATION_ERROR`s naming a "wairon 5 form".
+- **Rust, C# and Kotlin designs** with a member named after a keyword the language can
+  escape (`type`, `move`, `impl`...): that is a notice now, not an error.
+
+### Finishing a stuck upgrade
+
+1. Install 6.1.1 everywhere the project is checked.
+2. At the top of the project, run `wairon upgrade`. A tree stamped 6 that still holds a
+   wairon 5 form is an unfinished upgrade: the plan names it so, and applying it
+   rewrites the remaining forms. No hand edit is needed.
+3. Read the plan's reported items: each dropped declaration says what you can model
+   instead. Then run `wairon lock` where the plan says a re-lock is owed.
+
+### What changed
+
+- `wairon upgrade` never keeps a wairon 5 form. What it cannot decide is dropped and
+  reported:
+  - A `sibling-subsystem` declaration whose call the tree already models goes
+    silently. Otherwise the report quotes its stored caller, names the subsystem that
+    caller names, and gives the routes the rules allow: a call step onto a published
+    Portal, the route through the subsystem's Portal, or `invokedBy: { kind: runtime }`
+    for a dependency the code receives at wiring time.
+  - An export `type` is always dropped; one that disagreed with the derived kind, or
+    that no Portal derives, is reported.
+  - A `portalType` that names no transport is dropped; `MISSING_PORTAL_TRANSPORT`
+    names the Portal until its transport is set.
+- The upgrade checks its own result: a spec file still holding a wairon 5 form refuses
+  the upgrade, and nothing is written.
+- A spec file that exists but fails to parse is said so by `sdd_get_spec`,
+  `sdd_update_spec` and the other tools, quoting the reason, instead of "does not exist".
+  A wairon 5 form's refusal names `wairon upgrade`.
+- References into a spec that fails to parse are folded into its parse error ("N
+  references into it are not judged until it parses") instead of being reported one by
+  one.
+- `RESERVED_IDENTIFIER` is an error only for a keyword the language cannot escape (in
+  Rust: `crate`, `self`, `Self`, `super`). A keyword it can escape is the notice
+  `RESERVED_IDENTIFIER_ESCAPED`, naming the spelling (`r#type`, `@class`, a Kotlin
+  backtick) and suggesting no rename.
+- The MCP server's refusal for a project with no major stamp says no stamp was found
+  and that wairon 5 is assumed, as `wairon upgrade` does.
+
+### Small fixes
+
+- `wairon upgrade` on an unstamped 6.0.0 tree no longer says "written by major 5
+  (unstamped)": it says "made by wairon 6.0.0, before the major stamp".
+- `OPEN_ROUTE_CALL` no longer says "read as full, not stated".
+
 ## v6.1.0 (from v6.0.0)
 
 v6.1 moves compatibility out of the core: a release reads only its own major's forms,
