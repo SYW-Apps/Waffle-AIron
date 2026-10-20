@@ -617,6 +617,18 @@ methods:
     signature: 'inspectLock(): TreeLockState?'
     returns: TreeLockState?
     params: []
+  - name: buildCanvasDataModel
+    description: >-
+      The bound project's canvas model as data, forwarded to the spec tree portal: what `wairon host
+      demo` counts after it seeds the example tree.
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health to carry; omitted, none
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-18T19:08:28.962Z'
+updatedAt: '2026-10-20T09:29:24.759Z'

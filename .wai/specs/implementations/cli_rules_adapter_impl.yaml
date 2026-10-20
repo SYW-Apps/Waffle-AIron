@@ -29,9 +29,14 @@ methods:
         targetComponent: validator_portal
         targetMethod: listRules
       - stepNumber: 4
+        description: Load the extensions the project applies, to show which pack each rule comes from
+        type: call
+        targetComponent: extension_portal
+        targetMethod: loadProjectExtensions
+      - stepNumber: 5
         description: Print each rule's name, description, emitted codes, and source pack.
         type: local
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:06.420Z'
-updatedAt: '2026-09-25T17:33:35.242Z'
+updatedAt: '2026-10-20T09:25:50.229Z'

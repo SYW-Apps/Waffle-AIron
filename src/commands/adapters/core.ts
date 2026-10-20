@@ -17,6 +17,8 @@ export {
   importSpecTree,
   // `wairon host demo` (spec_maintenance_portal seedDemoTree).
   seedDemoTree,
+  // `wairon host demo` counts what it seeded (spec_tree_portal buildCanvasDataModel).
+  buildCanvasDataModel,
   loadProjectConfig,
   createProjectConfig,
   setExecutionTier,
