@@ -78,6 +78,13 @@ Who is affected:
 - A migration run through the MCP server no longer lists the spec tree's write lock as a
   file to delete, and never removes the lock a running write holds.
 
+### Known limitations
+
+- After `wairon lock`, approved and unchanged specs are judged as complete, so
+  `UNUSED_COMPONENT` on an approved draft component is no longer waived by `validate --ci`
+  (the waiver covers draft components only until they are approved). Wire or remove the
+  component before locking.
+
 ### Small fixes
 
 - `wairon update` on Windows no longer fails with "wairon.exe is currently in use" when an
