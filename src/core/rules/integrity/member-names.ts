@@ -1,5 +1,5 @@
 import { SddRule, RuleContext } from '../types.js';
-import { methodCasingFor, qualifiedTypeId, reservedWordProblem, type IdentifierKind } from '../../../models/index.js';
+import { methodCasingFor, qualifiedTypeId, reservedWordEscape, reservedWordProblem, type IdentifierKind } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
 // member-names — the names inside a spec. A contract's methods, each method's
@@ -35,6 +35,10 @@ function reserved(ctx: RuleContext, place: Place, specId: string, language: stri
   for (const name of new Set(place.names)) {
     const problem = reservedWordProblem(name, place.kind, language, casing);
     if (problem) ctx.addIssue('error', 'RESERVED_IDENTIFIER', `${place.where}: ${problem}.`, specId, draft);
+    else {
+      const escaped = reservedWordEscape(name, place.kind, language);
+      if (escaped) ctx.addIssue('notice', 'RESERVED_IDENTIFIER_ESCAPED', `${place.where}: ${escaped}.`, specId, draft);
+    }
   }
 }
 
@@ -42,10 +46,11 @@ export const memberNamesRule: SddRule = {
   name: 'member-names',
   judges: 'design',
   description:
-    "The names inside a spec — a contract's methods and each method's parameters, a type's fields and methods and each type method's parameters — must be unique where they live (DUPLICATE_MEMBER_NAME: two methods of one contract, two parameters of one method, two fields of one type; a loaded spec otherwise binds one of them at random wherever a name is looked up), and never a word the spec's effective target language reserves for that kind of identifier (RESERVED_IDENTIFIER, identifier.reservedIn: TypeScript and JavaScript forbid a keyword as a parameter and constructor as a method, Rust its keywords everywhere, and so on per language), because the implementation the brief asks for could not be written. The message names the language and offers an alternative.",
+    "The names inside a spec — a contract's methods and each method's parameters, a type's fields and methods and each type method's parameters — must be unique where they live (DUPLICATE_MEMBER_NAME: two methods of one contract, two parameters of one method, two fields of one type; a loaded spec otherwise binds one of them at random wherever a name is looked up), and never a word the spec's effective target language reserves for that kind of identifier (RESERVED_IDENTIFIER, identifier.reservedIn: TypeScript and JavaScript forbid a keyword as a parameter and constructor as a method, Rust its keywords, and so on per language), because the implementation the brief asks for could not be written. The message names the language and offers an alternative. A reserved word the language can spell as an ordinary identifier (Rust `r#type`, C# `@class`, a Kotlin backtick) is only a notice, RESERVED_IDENTIFIER_ESCAPED, naming the spelling and suggesting no rename; a word no escape reaches (Rust crate, self, Self, super) stays RESERVED_IDENTIFIER.",
   codes: [
     { code: 'DUPLICATE_MEMBER_NAME', defaultSeverity: 'error', summary: 'Two methods of one contract or type, two parameters of one method, or two fields of one type share a name' },
-    { code: 'RESERVED_IDENTIFIER', defaultSeverity: 'error', summary: 'A method, parameter or field name is a word the target language reserves for that kind of identifier' },
+    { code: 'RESERVED_IDENTIFIER', defaultSeverity: 'error', summary: 'A method, parameter or field name is a word the target language reserves for that kind of identifier and cannot be escaped' },
+    { code: 'RESERVED_IDENTIFIER_ESCAPED', defaultSeverity: 'notice', summary: 'A method, parameter or field name is a reserved word the target language can escape (Rust r#type, C# @class, Kotlin backticks); the code spells it so' },
   ],
   check(ctx) {
     // Steps 1-5: every interface and type in scope, in its subsystem's language.
