@@ -32,8 +32,9 @@ Who is affected:
    under 6.1.0's rules, the approval carries over. If not, it is stale for exactly the
    findings it names. A type finding (`AMBIGUOUS_TYPE_REF`, or a type that now reads
    unused because its references used to bind to another subsystem's namesake) is fixed
-   by writing the type's id or `subsystem::name` where it is referenced. Then run
-   `wairon lock`.
+   by writing the type's id or `subsystem::name` where it is referenced. An
+   `UNNARRATED_CALL` on a method whose `detail` is stated means its code calls something
+   the narrative leaves out: narrate the call. Then run `wairon lock`.
 5. Commit each `.wai/project.yaml`, the regenerated files, and `.wai/lock.json` if you
    re-locked.
 6. **Hosted:** before you restart the server on 6.1.0, give every enabled SSO provider
@@ -207,6 +208,19 @@ address, `https://<this host>/web/sso/callback`.
 - `wairon member add <alias> <path> --project` now sets the new project's folder up for
   its own sessions, as `member promote` does: its guide, skills and context, and its
   `.mcp.json` when claude is a target.
+- **A narrative's calls are judged by how much it states.** Before, a call to a
+  collaborator a narrative never named passed silently, whatever the narrative claimed,
+  so code could take on a whole new collaboration while `validate` read green.
+  - **Stated detail is binding.** A method whose `detail` (`full` or `calls-only`) is
+    set on the method or its implementation, or that declares `calls`, has said its
+    narrative is complete: every call into another component that no step names is
+    `UNNARRATED_CALL` (warning). A narrative that states its detail and misses calls
+    newly fails `--ci`: narrate the calls.
+  - **Unstated detail is open.** Leaving out a verb of a collaborator the narrative names
+    is still `UNNARRATED_CALL`. A call to another collaborator the component depends on,
+    or any such call from a method at `intent` or with no narrative, is a route the
+    design allows without saying the method takes it: the new `OPEN_ROUTE_CALL` notice
+    names each one and never fails `--ci`.
 
 ### Known limitations
 
