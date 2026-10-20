@@ -1,6 +1,47 @@
 # Changelog
 
-## Unreleased
+## v6.1.0 (from v6.0.0)
+
+v6.1 moves compatibility out of the core: a release reads only its own major's forms,
+and `wairon upgrade` moves an older tree forward once. It also fixes which type a bare
+type name means, and makes an SSO provider name the addresses it may return to.
+
+Who is affected:
+
+- **Every project:** the tree is stamped with the major that wrote it, once. The
+  approval carries over unless 6.1.0's rules find something in the approved design.
+- **Teams and CI:** move together. wairon 6.0.0 reads the stamp as an unknown setting,
+  so its `validate --ci` fails on an upgraded tree.
+- **Designs with same-named types in different subsystems:** a reference may now bind
+  to another type, or report `AMBIGUOUS_TYPE_REF`.
+- **Hosted operators:** an SSO provider with no allowed redirect addresses stops signing
+  anyone in, and the server upgrades its data directory when it starts.
+
+### Upgrading from v6.0.0
+
+1. Install 6.1.0 everywhere the project is checked: every teammate, CI, and the
+   `wairon` your assistant's MCP server starts.
+2. At the top of the project (the family root, when it has members), run
+   `wairon upgrade`. A 6.0.0 tree needs no rewrite, so it is only stamped
+   (`waironMajor: 6` in each `.wai/project.yaml`), without asking. Any other `wairon`
+   command stamps it too. Until it is stamped, the MCP server refuses every tool and
+   names `wairon upgrade`.
+3. Run `wairon generate` to refresh the guides and skills, then reconnect your
+   assistant's MCP server (in Claude Code, `/mcp`) or start a new session.
+4. Run `wairon validate --ci` and `wairon lock-check`. If the approved design is clean
+   under 6.1.0's rules, the approval carries over. If not, it is stale for exactly the
+   findings it names. A type finding (`AMBIGUOUS_TYPE_REF`, or a type that now reads
+   unused because its references used to bind to another subsystem's namesake) is fixed
+   by writing the type's id or `subsystem::name` where it is referenced. Then run
+   `wairon lock`.
+5. Commit each `.wai/project.yaml`, the regenerated files, and `.wai/lock.json` if you
+   re-locked.
+6. **Hosted:** before you restart the server on 6.1.0, give every enabled SSO provider
+   its allowed redirect addresses, usually `https://<this host>/web/sso/callback` (see
+   the SSO section below). At start, the server copies its data directory beside itself
+   and then upgrades it. An environment setting that still holds a retired value stops
+   the start and names its replacement. Scripts that call the admin provider API need
+   to read the new answer shapes.
 
 ### Major upgrades: `wairon upgrade`
 
