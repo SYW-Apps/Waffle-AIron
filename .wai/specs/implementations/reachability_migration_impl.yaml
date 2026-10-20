@@ -47,9 +47,10 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 8
         description: >-
-          Plan the transports: each portalType becomes transport (HTTP_API as HTTP); a Custom Portal
-          that binds no endpoint on any verb, or whose Custom addresses all name in-process calls,
-          becomes InProcess, its addresses dropped and reported as symbol hints
+          Plan the transports: each portalType becomes transport (HTTP_API as HTTP), and one that
+          names no transport is dropped and reported (set the transport); a Custom Portal that binds
+          no endpoint on any verb, or whose Custom addresses all name in-process calls, becomes
+          InProcess, its addresses dropped and reported as symbol hints
         type: local
       - stepNumber: 9
         description: >-
@@ -64,13 +65,18 @@ methods:
       - stepNumber: 10
         description: >-
           Plan the invokedBy kinds: external becomes entry on a Portal and runtime elsewhere,
-          keeping its caller prose; sibling-subsystem is reported (model the call), never rewritten
+          keeping its caller prose; sibling-subsystem, which wairon 6 cannot read, is dropped —
+          silently when a narrative call step or declared call of an implementation already reaches
+          the method, else reported with the stored caller, the subsystem it names, and the routes
+          the rules allow: a call step when the method is its subsystem's published Portal (from a
+          client Adapter or a trustedLinked subsystem), the route through that Portal otherwise, or
+          a runtime declaration where the code receives it at wiring time
         type: local
       - stepNumber: 11
         description: >-
-          Plan the export types: an authored L1 or L0 type that equals the backing Portal's
-          transport.exportKind() (after the transport rewrite) is dropped, one that differs or has
-          no backing Portal is reported
+          Plan the export types: every authored L1 or L0 type is dropped, since wairon 6 derives the
+          kind and reads none; one that differs from the backing Portal's transport.exportKind()
+          (after the transport rewrite), or that no backing Portal derives, is reported as well
         type: local
       - stepNumber: 12
         description: >-
@@ -154,4 +160,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T13:07:22.189Z'
-updatedAt: '2026-10-19T06:12:44.164Z'
+updatedAt: '2026-10-20T18:38:22.492Z'

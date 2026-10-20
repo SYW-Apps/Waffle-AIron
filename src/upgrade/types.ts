@@ -23,6 +23,8 @@ export interface TreeStanding {
   state: TreeStandingState;
   /** For older: the command that upgrades it; for newer and out_of_window: the release to install. */
   advice?: string;
+  /** True for a tree stamped current that still holds wairon 5 forms: an upgrade an earlier release left unfinished. */
+  unfinished?: boolean;
 }
 
 /** upgrade_step — one kept step of the chain: it moves a tree from one major to the next. */

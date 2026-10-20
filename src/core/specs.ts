@@ -448,7 +448,7 @@ function refusedV5Forms(holder: V5FormHolder, doc: unknown): string[] {
 /** Refuse a stored document holding a wairon 5 form as a load error, naming each form; a no-op in the v5 reading. */
 function refuseV5Forms(holder: V5FormHolder, doc: unknown): void {
   const forms = refusedV5Forms(holder, doc);
-  if (forms.length > 0) throw new Error(forms.join('; '));
+  if (forms.length > 0) throw new Error(`${forms.join('; ')} — \`wairon upgrade\` rewrites it`);
 }
 
 /** A stored interface document with every method's invokedBy of one retired kind left out (a copy; the document is not touched). */
@@ -5395,10 +5395,10 @@ export class SpecWorkspace {
     const interfaceOut = parseOrThrow(InterfaceSpecSchema, specToWrite, 'interface', spec.id);
     // A retired invokedBy kind the author left as it was read stays as stored
     // until doctor --fix rewrites it.
-    // The reachability migration retires a stored `external` it rewrote, but
-    // never a stored `sibling-subsystem`: that one it only reports.
+    // The reachability migration retires every stored retired kind: it rewrites
+    // `external` and drops `sibling-subsystem`, which wairon 6 cannot read.
     const storedInterface = storedDocument(p);
-    carryRetiredReachForms('interface', opts?.retireReachForms ? withoutRetiredKind(storedInterface, 'external') : storedInterface, interfaceOut as unknown as Record<string, unknown>);
+    carryRetiredReachForms('interface', opts?.retireReachForms ? withoutRetiredKind(withoutRetiredKind(storedInterface, 'external'), 'sibling-subsystem') : storedInterface, interfaceOut as unknown as Record<string, unknown>);
     this.writeHome(p, interfaceOut, 'interface');
     registryInvalidateCache();
     return notices;

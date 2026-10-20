@@ -131,7 +131,17 @@ function oldShop(): string {
   write('shop/worker/.interface.yaml', contract('iworker', 'worker', [
     method('tick', { invokedBy: { kind: 'external', caller: 'The process scheduler, every minute' } }),
     method('settle', { invokedBy: { kind: 'sibling-subsystem', caller: 'The ledger subsystem after a close' } }),
+    method('refund', { invokedBy: { kind: 'sibling-subsystem', caller: 'The clerk' } }),
   ]));
+  // A component whose narrative already models the call a sibling-subsystem declaration stood for.
+  write('shop/clerk/.index.yaml', { ...portal('clerk'), componentType: 'Orchestrator', dependsOn: ['worker'] });
+  write('shop/clerk/.interface.yaml', contract('iclerk', 'clerk', [method('returnItem')]));
+  write('shop/clerk/.implementation.yaml', {
+    id: 'clerk_impl', name: 'Clerk', description: 'd', contract: 'iclerk', createdAt: now, updatedAt: now,
+    methods: [{ name: 'returnItem', narrative: [{ stepNumber: 1, type: 'call', description: 'Refund it', targetComponent: 'worker', targetMethod: 'refund' }] }],
+  });
+  // A portalType that names no transport (wairon 5 typed it, so only an empty one can).
+  write('shop/odd/.index.yaml', portal('odd', { portalType: null }));
   // A lint allow of a retired code on a type, beside one that stays.
   write('shop/types/item.yaml', {
     kind: 'value-object', id: 'item', name: 'Item', description: 'd', subsystem: 'shop', fields: [], methods: [],
@@ -158,6 +168,7 @@ describe('reachability migration — the plan', () => {
     expect(snapshot(specs)).toEqual(before);
 
     expect(lines(plan.rewrites)).toEqual([
+      'export-type|shop|type RPC of "lib" dropped',
       'export-type|shop|type of "web" dropped',
       'export-type|system|type of "shop-api" dropped',
       'in-process-endpoint|isdk|endpoint of "check" dropped',
@@ -166,6 +177,8 @@ describe('reachability migration — the plan', () => {
       'in-process-endpoint|sdk|transport InProcess',
       'invoked-by-kind|iweb|invokedBy entry on "browse"',
       'invoked-by-kind|iworker|invokedBy runtime on "tick"',
+      'invoked-by-kind|iworker|invokedBy sibling-subsystem on "refund" dropped',
+      'invoked-by-kind|iworker|invokedBy sibling-subsystem on "settle" dropped',
       'listener-mounts|host|invokedBy entry (outside) on the Portal',
       'listener-mounts|host|mounts removed',
       'listener-mounts|solo|mounts removed',
@@ -173,20 +186,36 @@ describe('reachability migration — the plan', () => {
       'listener-mounts|web|invokedBy entry (outside) on the Portal',
       'portal-type|host|transport HTTP',
       'portal-type|mixed|transport Custom',
+      'portal-type|odd|portalType null dropped',
       'portal-type|web|transport HTTP',
       'retired-allow|host|allow of MISSING_PORTAL_TYPE rekeyed to MISSING_PORTAL_TRANSPORT',
       'retired-allow|host|allow of UNMOUNTED_PORTAL removed',
       'retired-allow|item|allow of PUBLIC_INTERFACE_EVENT_MISTYPED removed',
     ]);
-    // What it will not fix: never invented, never guessed.
+    // What it will not decide: never invented, never guessed — reported, while
+    // every retired form is still rewritten, since wairon 6 cannot read one.
     expect(lines(plan.reported)).toEqual([
-      'export-type|shop|type RPC of "lib" kept',
+      'export-type|shop|type RPC of "lib" not derived',
       'in-process-endpoint|mixed|transport Custom kept',
-      'invoked-by-kind|iworker|invokedBy sibling-subsystem on "settle" kept',
+      'invoked-by-kind|iworker|caller of "settle" not modelled',
       'listener-mounts|host|mount of "ledger" dropped',
       'listener-mounts|iweb|endpoint POST /api/legacy of "legacy" kept',
       'listener-mounts|solo|no entry written',
+      'portal-type|odd|no transport written',
     ]);
+  });
+
+  it('a dropped sibling-subsystem declaration names the stored caller and the routes the rules allow', () => {
+    oldShop();
+    const plan = migrate(false);
+    const settle = plan.reported.find((r) => r.to === 'caller of "settle" not modelled')!;
+    // The caller names the ledger, which is no subsystem here; worker is no published Portal.
+    expect(settle.reason).toContain('Its stored caller was "The ledger subsystem after a close"');
+    expect(settle.reason).toContain("worker is not shop's published Portal, so no other subsystem may call it directly");
+    expect(settle.reason).toContain('invokedBy: { kind: runtime, caller: "The ledger subsystem after a close" }');
+    // The modelled call makes the declaration redundant: dropped, nothing reported.
+    expect(plan.rewrites.find((r) => r.to === 'invokedBy sibling-subsystem on "refund" dropped')?.reason).toContain('clerk.returnItem calls worker.refund');
+    expect(plan.reported.some((r) => r.to.includes('"refund"'))).toBe(false);
   });
 
   it('the in-process address is reported as a symbol hint', () => {
@@ -247,20 +276,22 @@ describe('reachability migration — apply', () => {
     expect(loadComponentSpec('loose')?.invokedBy).toBeUndefined();
   });
 
-  it('rewrites external by where it sits, keeping the caller, and leaves sibling-subsystem stored for its author', () => {
+  it('rewrites external by where it sits, keeping the caller, and drops sibling-subsystem, which wairon 6 cannot read', () => {
     const { specs } = applied();
     expect(read(specs, 'shop/web/.interface.yaml').methods[0].invokedBy).toEqual({ kind: 'entry', caller: 'Browsers of the shop' });
     const worker = read(specs, 'shop/worker/.interface.yaml').methods;
     expect(worker[0].invokedBy).toEqual({ kind: 'runtime', caller: 'The process scheduler, every minute' });
-    expect(worker[1].invokedBy).toEqual({ kind: 'sibling-subsystem', caller: 'The ledger subsystem after a close' });
-    expect(loadInterfaceSpec('iworker')!.methods[1].invokedBy?.kind).toBe('runtime');
+    expect(worker[1].invokedBy).toBeUndefined();
+    expect(worker[2].invokedBy).toBeUndefined();
+    expect(loadInterfaceSpec('iworker')!.methods[1].invokedBy).toBeUndefined();
+    expect('portalType' in read(specs, 'shop/odd/.index.yaml')).toBe(false);
   });
 
-  it('drops the export types that agree with the derived kind and keeps the one that does not', () => {
+  it('drops every export type: one that agrees silently, one that does not with a report', () => {
     const { specs } = applied();
     expect(read(specs, 'shop/.index.yaml').publicInterfaces).toEqual([
       { component: 'web', details: 'the shop API' },
-      { component: 'lib', type: 'RPC', details: 'the library' },
+      { component: 'lib', details: 'the library' },
     ]);
     expect('type' in read(specs, '.index.yaml').publicInterfaces[0]).toBe(false);
   });
@@ -275,16 +306,13 @@ describe('reachability migration — apply', () => {
     const { specs, plan } = applied();
     // Only the forms it reports and never writes are still met by the scan.
     expect(retiredReachFacts().map((f) => `${f.form}|${f.specId}|${f.at ?? ''}`).sort()).toEqual([
-      'export-type|shop|lib',
       'in-process-endpoint|imixed|local',
-      'invoked-by-kind|iworker|settle',
     ]);
     const again = migrate(false);
     expect(again.rewrites).toEqual([]);
-    // The forms it reports are reported again, and nothing else.
-    expect(lines(again.reported)).toEqual(lines(plan.reported).filter((l) =>
-      // a dropped mount and an outside endpoint lived on the mounts, which are gone
-      !l.startsWith('listener-mounts|')));
+    // Only the one form wairon 6 still reads (a Custom transport) is reported
+    // again: every retired form is gone, and its report went with it.
+    expect(lines(again.reported)).toEqual(['in-process-endpoint|mixed|transport Custom kept']);
     const before = snapshot(specs);
     expect(migrate(true).applied).toBe(false);
     expect(snapshot(specs)).toEqual(before);

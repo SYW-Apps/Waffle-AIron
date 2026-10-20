@@ -36,6 +36,44 @@ methods:
       keep who approved it (a bare approver string becomes a legacy approver), when, and the
       identity it certified, and answer it in the current format with reexpressed naming the
       algorithm it came from and wairon upgrade.
+  - name: v5FormsLeft
+    narrative:
+      - stepNumber: 1
+        description: Is there a specs folder?
+        type: branch
+        condition: the root holds a specs folder (in .wai, else .wairon)
+        onFalseStep: 7
+      - stepNumber: 2
+        description: For each spec file
+        type: loop
+        loopKind: forEach
+        over: the yaml files under it
+        endStep: 5
+      - stepNumber: 3
+        description: Read it raw, skipping one that is no mapping or no YAML
+        type: local
+      - stepNumber: 4
+        description: >-
+          Tell its kind apart the way the loader does (the specs folder's own .index.yaml or
+          system.yaml is the system, then a subsystem by parentSystem, a component by componentType,
+          a contract by component) and list the wairon 5 forms it holds (the model's v5FormsIn)
+        type: local
+      - stepNumber: 5
+        description: Keep the file with its forms when it holds one
+        type: local
+      - stepNumber: 6
+        description: Answer the files kept
+        type: return
+      - stepNumber: 7
+        description: 'Answer none: there is nothing to read'
+        type: return
+    detail: intent
+    intent: >-
+      List every yaml file under the root's specs folder (in .wai, else .wairon); none answers
+      empty. Parse each raw, skipping one that is no mapping; tell the system file (the specs
+      folder's own .index.yaml or system.yaml), a subsystem (parentSystem), a component
+      (componentType) and a contract (component) apart, and answer each file whose v5 forms (the
+      model's v5FormsIn) are not empty, with those forms.
 status: draft
 createdAt: '2026-10-18T14:14:18.933Z'
-updatedAt: '2026-10-18T21:55:53.843Z'
+updatedAt: '2026-10-20T18:44:22.814Z'

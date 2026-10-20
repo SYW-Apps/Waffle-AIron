@@ -147,10 +147,26 @@ export function write(plan: StepPlan): void {
       throw new StepRefused(`the chaining migration did not commit: ${report.outcome?.failure ?? 'unknown failure'}`);
     }
   }
-  // Steps 16-18.
+  // Steps 18-20.
   core.retireSpecialists(true);
   core.retireGateways(true);
   core.migrateReachability(true);
+  // Steps 21-23: the running major cannot read a file that still holds a v5
+  // form, so a rewrite that left one refuses the step and nothing is committed.
+  const left = files.v5FormsLeft(root);
+  if (left.length > 0) {
+    throw new StepRefused(`the step would leave ${left.length} spec file(s) in a wairon 5 form wairon 6 cannot read: ${left.map((l) => `${l.file} (${l.forms.join('; ')})`).join(' | ')}`);
+  }
+}
+
+/**
+ * iv5_to_v6_tree_step.unfinished — the roots whose tree still holds a v5 form:
+ * an upgrade an earlier release committed without finishing, which the step
+ * runs again.
+ */
+export function unfinished(roots: string[]): string[] {
+  // Steps 1-3.
+  return roots.filter((root) => files.v5FormsLeft(root).length > 0);
 }
 
 /** iv5_to_v6_tree_step.whatChanged — the short, user-facing account of what moving to v6 changes for a project. */

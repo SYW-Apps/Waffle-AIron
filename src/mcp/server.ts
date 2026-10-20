@@ -1572,7 +1572,12 @@ function standingRefusal(name: string): string | null {
   const tree = treeStanding(root);
   if (tree.state === 'current') return null;
   if (tree.state === 'older') {
-    return `${name} refused — the project at ${root} was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor}). `
+    // An unstamped tree is not read as written by an older major: no stamp was
+    // found, and the oldest major the upgrade reads is assumed, as upgrade says.
+    const written = tree.stamped
+      ? `was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor})`
+      : `carries no major stamp, so it is assumed to be written by wairon ${tree.writtenMajor} (the running major is ${tree.runningMajor}; a tree wairon 6.0.0 made before the stamp is only stamped)`;
+    return `${name} refused — the project at ${root} ${written}. `
       + 'Ask the human to run `wairon upgrade` there; the assistant never runs it. Nothing was read or written.';
   }
   return `${name} refused — the project at ${root} cannot be served by this wairon (major ${tree.runningMajor}; the tree was written by major ${tree.writtenMajor}). ${tree.advice ?? ''}`.trim();
