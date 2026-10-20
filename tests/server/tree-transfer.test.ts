@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -9,8 +9,9 @@ import { routeData } from '../../src/server/http.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
+
 import { assembleArchive } from '../../sdk/src/archive.js';
-import { allow, mintUserToken, createPlacedProject, seedChainedMount, seedSubsystem } from './helpers.js';
+import { allow, mintUserToken, createPlacedProject, seedChainedMember, seedSubsystem } from './helpers.js';
 import type { HostConfig } from '../../src/server/types.js';
 
 // ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ describe('hosted spec-tree transfer', () => {
     const root = path.join(dataDir, 'projects', projectId);
     const specs = path.join(root, '.wai', 'specs');
     fs.mkdirSync(specs, { recursive: true });
-    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), `schemaVersion: 1.0.0\nname: ${systemName}\n`);
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), `schemaVersion: 1.0.0\nname: ${systemName}\ncreatedAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n`);
     fs.writeFileSync(
       path.join(specs, '.index.yaml'),
       `schemaVersion: 1.0.0\nname: ${systemName}\nvision: v\nboundaries: []\nglobalRequirements: []\n` +
@@ -289,10 +290,10 @@ describe('hosted spec-tree transfer', () => {
     expect(fs.readdirSync(targetRoot).filter((e) => e.startsWith('.wai-staging-'))).toEqual([]);
   });
 
-  it('exports a member by its own record: the member tree, through a qualified token too (one release)', async () => {
+  it('exports a member by its own record: the member tree; a qualified selector is refused', async () => {
     createPlacedProject(cfg, MASTER, 'parent');
     const root = seedTree('parent', 'Parent System');
-    const childDir = seedChainedMount(root, 'billing', 'packages/billing');
+    const childDir = seedChainedMember(root, 'billing', 'packages/billing');
     fs.writeFileSync(
       path.join(childDir, '.wai', 'project.yaml'),
       "schemaVersion: 1.0.0\nid: billing\nname: Billing\ntargets: []\ncreatedAt: '2026-01-01T00:00:00.000Z'\nupdatedAt: '2026-01-01T00:00:00.000Z'\n",
@@ -311,19 +312,23 @@ describe('hosted spec-tree transfer', () => {
     const childToken = mintUserToken(dataDir, {
       id: 'k-child',
       userId: 'u-child',
-      projects: ['parent::billing'],
+      projects: ['billing'],
     });
 
-    const exported = await call(childToken, 'parent::billing', 'sdd_host_export_tree');
+    // By its own record id, with the parent's grant inherited: the member's own tree, not the parent's.
+    const exported = await call(childToken, 'billing', 'sdd_host_export_tree');
     expect(exported.isError, exported.text).toBe(false);
     const payload = JSON.parse(exported.text);
-    // The member's own tree, not the parent's — the qualifier maps to its record.
     expect(payload.projectName).toBe('Billing');
     expect(payload.roots).toEqual(['.']);
-    // And by its own record id, with the parent's grant inherited.
-    const byId = await call(childToken, 'billing', 'sdd_host_export_tree');
-    expect(byId.isError, byId.text).toBe(false);
-    expect(JSON.parse(byId.text).projectName).toBe('Billing');
+    // A member-qualified selector names no record: it is refused before any lookup.
+    const qualified = await raw({
+      method: 'POST',
+      path: '/mcp?project=' + encodeURIComponent('parent::billing'),
+      headers: { authorization: 'Bearer ' + childToken, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'sdd_host_export_tree', arguments: {} } }),
+    });
+    expect(qualified.status).toBe(400);
   });
 
   it('honours allowPartial: refuses a partial export by default, builds it when set', async () => {
@@ -331,7 +336,10 @@ describe('hosted spec-tree transfer', () => {
     const root = seedTree('demo', 'Demo');
     // 'ghost' declares a mount whose directory was never created — a chained
     // root the export cannot follow.
-    seedSubsystem(root, 'ghost', 'packages/missing');
+    fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), [
+      'schemaVersion: 1.0.0', 'name: Demo', 'members:', '  ghost: packages/missing',
+      "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", '',
+    ].join('\n'));
     invalidateSpecCache();
     allow(dataDir, 'u-owner', 'project:read', 'project', 'demo');
     const token = mintUserToken(dataDir, { id: 'k-owner', userId: 'u-owner', projects: ['demo'] });

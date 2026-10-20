@@ -88,12 +88,12 @@ methods:
     description: >-
       Detect whether the CURRENTLY BOUND project root is a member of another project: walk the
       filesystem upward (bounded) for an ancestor project that declares this root as a member — a
-      `members` entry of its configuration or, for one release, a legacy L1 subsystem whose
-      projectPath resolves exactly to this root — staying within that ancestor's own root. Returns
-      the parent root, the alias and the form, or null for a genuine top root. Pure detection —
-      never rebinds, never mutates, and not reach-gated: a request-scoped caller discovers its
-      parent through resolveChainingParent, which checks the request's reach before reading anything
-      above the bound root.
+      `members` entry of its configuration or, in the v5 reading `wairon upgrade` binds, a legacy L1
+      subsystem whose projectPath resolves exactly to this root — staying within that ancestor's own
+      root. Returns the parent root, the alias and the form, or null for a genuine top root. Pure
+      detection — never rebinds, never mutates, and not reach-gated: a request-scoped caller
+      discovers its parent through resolveChainingParent, which checks the request's reach before
+      reading anything above the bound root.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef?
   - name: invalidateCache
@@ -321,6 +321,14 @@ methods:
         type: string
         description: 'The system id asked for: a name of this L0, or `alias::name`'
     effect: read
+  - name: loadDuplicateTypeSpecs
+    description: >-
+      Loads the second half of every duplicate type id (two types of different subsystems declaring
+      one id), which no model list holds: each with its `subsystem::id` address, its file and its
+      parsed type.
+    signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
+    returns: list<DuplicateTypeSpec>
+    params: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-15T16:06:23.764Z'
+updatedAt: '2026-10-19T19:47:19.919Z'

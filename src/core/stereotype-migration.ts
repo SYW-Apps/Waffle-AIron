@@ -1,6 +1,12 @@
-import { loadComponentSpecs, saveComponentSpec, invalidateSpecCache } from './specs.js';
+import {
+  loadComponentSpecs, saveComponentSpec, invalidateSpecCache, scanAllSpecs, saveSpec, deleteSpec,
+} from './specs.js';
+import { readSpecFile } from './spec-files.js';
+import { aiPathsAt } from '../config/paths.js';
+import { getProjectRoot, pathExists } from '../utils/fs.js';
 import { listProjectVariants, rebaseProjectVariants } from './variants.js';
-import type { ComponentSpec, DependencyClass } from '../models/index.js';
+import { parseDeclaredCall, SystemSpecSchema } from '../models/index.js';
+import type { ComponentSpec, DependencyClass, SubsystemSpec, SystemSpec } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
 // Specialist retirement (sdd_core, behind `wairon doctor`)
@@ -12,7 +18,12 @@ import type { ComponentSpec, DependencyClass } from '../models/index.js';
 // unset — a workflow — when a dependency fits neither. A Specialist's class can
 // hang on another Specialist's, so classes are decided in passes over the
 // dependency graph, and what a cycle leaves undecided is settled last.
-// Gateways are not migrated here: STEREOTYPE_RETIRED gives their manual steps.
+// A Gateway is merged into the Portal it owns (retireGateways, below), or
+// refused with the hand steps.
+//
+// Both retirements read a stereotype wairon 5 wrote, so they run only in the v5
+// reading `wairon upgrade` binds: anywhere else a Specialist or Gateway never
+// loads.
 // ---------------------------------------------------------------------------
 
 /** One retired Specialist and the Orchestrator it becomes (specialist_retype). */
@@ -191,4 +202,188 @@ export function retireSpecialists(apply: boolean): SpecialistRetirement {
   invalidateSpecCache();
   // Step 24: the plan, applied.
   return { retyped, rebasedVariants, applied: true };
+}
+
+// ---------------------------------------------------------------------------
+// Gateway retirement
+// ---------------------------------------------------------------------------
+
+/** One Gateway merged into the Portal it owned (gateway_merge). */
+export interface GatewayMerge {
+  /** The Gateway id, deleted by the merge. */
+  gateway: string;
+  /** The Portal it owned, now the front door with the gateway variant. */
+  portal: string;
+  /** The Gateway's other owned members, now the Portal's dependencies. */
+  members: string[];
+  /** The components whose dependency on the Gateway now names the Portal. */
+  consumers: string[];
+  /** The specs (an L1 subsystem, the L0) whose export entry named the Gateway and now names the Portal. */
+  exports: string[];
+}
+
+/** The migration off the retired Gateway stereotype, planned or applied (gateway_retirement). */
+export interface GatewayRetirement {
+  /** Every Gateway merged into its Portal. */
+  merged: GatewayMerge[];
+  /** Every Gateway the migration cannot merge, each with why and the hand steps. */
+  refused: string[];
+  /** Whether the plan was written; false for a dry run. */
+  applied: boolean;
+}
+
+/** The hand steps a refused Gateway's author takes in its spec files. */
+const GATEWAY_HAND_STEPS =
+  'Migrate it by hand in its spec files: (1) the Portal it owns becomes the front door, with variant: gateway; '
+  + '(2) its other members become dependencies of that Portal instead of owned members; '
+  + '(3) its consumers depend on that Portal; (4) delete the Gateway spec. '
+  + 'sdd_rename_component can then give the Portal the Gateway\'s id.';
+
+/** A list of ids as one phrase, capped. */
+const listed = (ids: string[]): string => (ids.length > 4 ? `${ids.slice(0, 4).join(', ')} and ${ids.length - 4} more` : ids.join(', '));
+
+/**
+ * Plan, and with apply write, the migration off the retired Gateway
+ * stereotype. A Gateway that owns exactly one Portal, and whose own methods no
+ * narrative of another spec calls, is merged into that Portal: the Portal takes
+ * the gateway variant, the Gateway's other owned members become the Portal's
+ * dependencies, every component that depended on the Gateway depends on the
+ * Portal, every L1 or L0 export naming the Gateway names the Portal, and the
+ * Gateway's spec, contract and implementation are deleted. Any other Gateway is
+ * refused, naming why and the hand steps. Without apply nothing is written.
+ */
+export function retireGateways(apply: boolean): GatewayRetirement {
+  // Step 1: every component spec of the bound project, and — from the same scan,
+  // which this component answers itself — the contracts, implementations and
+  // subsystems whose narratives and exports can name a Gateway, and the L0.
+  const components = loadComponentSpecs();
+  const byId = new Map(components.map((c) => [c.id, c]));
+  const index = scanAllSpecs();
+  const interfaces = index.interfaces;
+  const implementations = index.implementations;
+  const subsystems = index.subsystems.filter((s) => !s.id.includes('::'));
+  const l0File = aiPathsAt(getProjectRoot()).specsSystem();
+  const system: SystemSpec | null = pathExists(l0File) ? SystemSpecSchema.parse(readSpecFile(l0File)) : null;
+
+  // Step 2: the Gateways, and what the other specs say about each.
+  const gateways = components
+    .filter((c) => c.componentType === 'Gateway' && !c.id.includes('::'))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const contractsOf = (id: string) => interfaces.filter((i) => i.component === id);
+  const contractIdsOf = (id: string) => new Set(contractsOf(id).map((i) => i.id));
+  const ownImplementationsOf = (id: string) => implementations.filter((m) => contractIdsOf(id).has(m.contract));
+  /** The places outside the Gateway's own implementations that call one of its methods. */
+  const callersOf = (id: string): string[] => {
+    const own = new Set(ownImplementationsOf(id).map((m) => m.id));
+    const callers: string[] = [];
+    for (const impl of implementations) {
+      if (own.has(impl.id)) continue;
+      for (const method of impl.methods) {
+        const stepCall = (method.narrative ?? []).some((s) => s.targetComponent === id);
+        const declared = (method.calls ?? []).some((c) => parseDeclaredCall(c)?.compId === id);
+        if (stepCall || declared) callers.push(`${impl.id}.${method.name}`);
+      }
+    }
+    for (const c of components) {
+      if (c.id !== id && (c.dispatch ?? []).some((d) => d.component === id)) callers.push(`${c.id} (dispatch)`);
+    }
+    for (const s of subsystems) {
+      if ((s.lifecycle ?? []).some((l) => l.component === id)) callers.push(`${s.id} (lifecycle)`);
+    }
+    return callers.sort();
+  };
+
+  // Steps 3-8: judge each Gateway; a mergeable one is planned onto working copies.
+  const working = new Map<string, ComponentSpec>();
+  const edit = (id: string): ComponentSpec => {
+    let copy = working.get(id);
+    if (!copy) {
+      copy = structuredClone(byId.get(id)!);
+      working.set(id, copy);
+    }
+    return copy;
+  };
+  const workingSubsystems = new Map<string, SubsystemSpec>();
+  let workingSystem: SystemSpec | null = null;
+  const merged: GatewayMerge[] = [];
+  const refused: string[] = [];
+  const planned: ComponentSpec[] = [];
+  const refuse = (gateway: ComponentSpec, why: string): void => {
+    refused.push(`Gateway "${gateway.id}" cannot be merged into a Portal: ${why}. ${GATEWAY_HAND_STEPS}`);
+  };
+  for (const gateway of gateways) {
+    const portals = gateway.owns.filter((id) => byId.get(id)?.componentType === 'Portal');
+    // Step 4: owns exactly one Portal, and no other narrative calls one of its own methods.
+    if (portals.length === 0) { refuse(gateway, 'it owns no Portal'); continue; }
+    if (portals.length > 1) { refuse(gateway, `it owns ${portals.length} Portals (${listed(portals)}), and a Gateway merges into exactly one`); continue; }
+    const callers = callersOf(gateway.id);
+    if (callers.length > 0) { refuse(gateway, `its own methods are called by ${listed(callers)}, and the Portal does not carry them`); continue; }
+    const owners = components.filter((c) => c.id !== gateway.id && c.owns.includes(gateway.id)).map((c) => c.id);
+    if (owners.length > 0) { refuse(gateway, `it is owned by ${listed(owners)}`); continue; }
+    const portal = byId.get(portals[0])!;
+    if (portal.variant !== undefined && portal.variant !== 'gateway') {
+      refuse(gateway, `the Portal "${portal.id}" already has the variant "${portal.variant}"`);
+      continue;
+    }
+    const ownContracts = contractIdsOf(gateway.id);
+    const holders = [
+      ...subsystems.map((s) => ({ id: s.id, entries: s.publicInterfaces })),
+      ...(system ? [{ id: 'system', entries: system.publicInterfaces ?? [] }] : []),
+    ];
+    const narrowing = holders
+      .filter((h) => h.entries.some((e) => e.component === gateway.id && e.interface !== undefined && ownContracts.has(e.interface)))
+      .map((h) => h.id);
+    if (narrowing.length > 0) { refuse(gateway, `the export of ${listed(narrowing)} narrows to its own contract`); continue; }
+
+    // Step 5: the Portal takes the variant; the other owned members become its dependencies.
+    const members = gateway.owns.filter((id) => id !== portal.id);
+    const front = edit(portal.id);
+    front.variant = 'gateway';
+    front.dependsOn = [...new Set([...front.dependsOn.filter((d) => d !== gateway.id), ...members])];
+    // Each consumer's dependency on the Gateway names the Portal.
+    const consumers: string[] = [];
+    for (const c of components) {
+      if (c.id === gateway.id || c.id === portal.id || !c.dependsOn.includes(gateway.id)) continue;
+      const copy = edit(c.id);
+      copy.dependsOn = [...new Set(copy.dependsOn.map((d) => (d === gateway.id ? portal.id : d)))];
+      consumers.push(c.id);
+    }
+    // Each L1 or L0 export naming the Gateway names the Portal.
+    const exports: string[] = [];
+    for (const s of subsystems) {
+      const base = workingSubsystems.get(s.id) ?? s;
+      if (!base.publicInterfaces.some((e) => e.component === gateway.id)) continue;
+      const copy = structuredClone(base);
+      copy.publicInterfaces = copy.publicInterfaces.map((e) => (e.component === gateway.id ? { ...e, component: portal.id } : e));
+      workingSubsystems.set(s.id, copy);
+      exports.push(s.id);
+    }
+    const l0: SystemSpec | null = workingSystem ?? system;
+    if (l0?.publicInterfaces?.some((e) => e.component === gateway.id)) {
+      const copy: SystemSpec = structuredClone(l0);
+      copy.publicInterfaces = (copy.publicInterfaces ?? []).map((e) => (e.component === gateway.id ? { ...e, component: portal.id } : e));
+      workingSystem = copy;
+      exports.push('system');
+    }
+    merged.push({ gateway: gateway.id, portal: portal.id, members, consumers: consumers.sort(), exports });
+    planned.push(gateway);
+  }
+
+  // Steps 9-10: without apply, nothing is written.
+  if (!apply) return { merged, refused, applied: false };
+
+  // Steps 11-14: write each merge — the Portals and consumers, the exports, then the deletions.
+  const deleted = new Set(planned.map((g) => g.id));
+  for (const copy of working.values()) if (!deleted.has(copy.id)) saveComponentSpec(copy);
+  for (const copy of workingSubsystems.values()) saveSpec('subsystem', copy);
+  if (workingSystem) saveSpec('system', workingSystem);
+  for (const gateway of planned) {
+    for (const impl of ownImplementationsOf(gateway.id)) deleteSpec('implementation', impl.id);
+    for (const contract of contractsOf(gateway.id)) deleteSpec('interface', contract.id);
+    deleteSpec('component', gateway.id);
+  }
+  // Step 15: the cache no longer reflects the merged tree.
+  invalidateSpecCache();
+  // Step 16: the plan, applied.
+  return { merged, refused, applied: true };
 }

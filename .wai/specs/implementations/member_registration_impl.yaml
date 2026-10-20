@@ -86,13 +86,15 @@ methods:
         targetComponent: credential_repository
         targetMethod: list
       - stepNumber: 12
-        description: For every key
+        description: For every non-revoked key
         type: loop
         loopKind: forEach
         over: keys
         endStep: 13
       - stepNumber: 13
-        description: Plan its qualified entries' rewrite, keeping it when one is answered
+        description: >-
+          Plan its qualified entries' rewrite - each to its member's record id, an entry naming no
+          member dropped, the key revoked when none is left - keeping it when one is answered
         type: call
         targetComponent: member_reach_rules
         targetMethod: narrowing
@@ -131,22 +133,37 @@ methods:
         targetComponent: project_repository
         targetMethod: registerMember
       - stepNumber: 19
-        description: For every planned narrowing
+        description: For every planned narrowing that keeps an entry
         type: loop
         loopKind: forEach
-        over: planned narrowings
+        over: planned narrowings that keep an entry
         endStep: 20
       - stepNumber: 20
-        description: Rewrite the key's qualified entries in the rehearsal
+        description: >-
+          Rewrite the key's entries in the rehearsal: qualified entries as record ids, none left
+          qualified
         type: call
         targetComponent: credential_repository
         targetMethod: renarrow
       - stepNumber: 21
+        description: For every planned narrowing that keeps no entry
+        type: loop
+        loopKind: forEach
+        over: planned narrowings that keep no entry
+        endStep: 22
+      - stepNumber: 22
+        description: >-
+          Revoke the key in the rehearsal: it named nothing the data plane resolves, and an empty
+          narrowing is not storable
+        type: call
+        targetComponent: credential_repository
+        targetMethod: revoke
+      - stepNumber: 23
         description: Compute the file changes the apply would swap in
         type: call
         targetComponent: host_migration_adapter
         targetMethod: diff
-      - stepNumber: 22
+      - stepNumber: 24
         description: Return the plan with its rehearsal and changes
         type: return
         outcome: MemberUpgradePlan
@@ -196,8 +213,8 @@ methods:
         endStep: 8
       - stepNumber: 8
         description: >-
-          Audit token.narrowed naming the key id, the narrowing before and after, and the documented
-          widening
+          Audit token.narrowed naming the key id, the narrowing before and after (empty when the key
+          was revoked)
         type: call
         targetComponent: audit_repository
         targetMethod: append
@@ -233,51 +250,35 @@ methods:
         type: return
         outcome: void
     detail: full
-  - name: pending
+  - name: recover
     narrative:
       - stepNumber: 1
-        description: List every hosted record; the family roots are those without parentProjectId
+        description: >-
+          List the hosted project records, to find the family root project and the root it lives
+          under
         type: call
         targetComponent: project_repository
         targetMethod: list
       - stepNumber: 2
-        description: For every family root
-        type: loop
-        loopKind: forEach
-        over: family root records
-        endStep: 3
-      - stepNumber: 3
-        description: Read the members it declares on disk and count those whose action is register
-        type: call
-        targetComponent: project_repository
-        targetMethod: declaredMembers
-      - stepNumber: 4
-        description: Return the count
-        type: return
-        outcome: number of members awaiting `host doctor --fix`
-    detail: full
-  - name: recover
-    narrative:
-      - stepNumber: 1
         description: For the family root's root and, when different, the bound project's root
         type: loop
         loopKind: forEach
         over: the bound family's roots
-        endStep: 2
-      - stepNumber: 2
+        endStep: 3
+      - stepNumber: 3
         description: >-
           Recover (fix) every transaction under the root; a failure is logged and the next root
           continues
         type: call
         targetComponent: host_migration_adapter
         targetMethod: recover
-      - stepNumber: 3
+      - stepNumber: 4
         description: For every transaction found
         type: loop
         loopKind: forEach
         over: recovered transactions
-        endStep: 4
-      - stepNumber: 4
+        endStep: 5
+      - stepNumber: 5
         description: >-
           Audit it as migration.recovered (id, verb, coordinator phase, rolled-back | cleaned |
           refused) naming the project it was found under, and write the same line to the server log,
@@ -285,7 +286,7 @@ methods:
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 5
+      - stepNumber: 6
         description: Return what was found and done
         type: return
         outcome: RecoveredTransaction[]
@@ -1016,4 +1017,4 @@ methods:
     symbol: upgradeMembers
 status: complete
 createdAt: '2026-10-01T16:32:31.247Z'
-updatedAt: '2026-10-17T16:33:49.849Z'
+updatedAt: '2026-10-20T09:22:02.175Z'

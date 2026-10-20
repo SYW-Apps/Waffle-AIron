@@ -93,8 +93,9 @@ describe('audienceCovers (ceiling ∩ distance)', () => {
     expect(audienceCovers('external', 'partner')).toBe(true);
   });
 
-  it('legacy "public" aliases external; missing audience defaults to instance; null distance requires external', () => {
-    expect(audienceCovers('public', null)).toBe(true);
+  it('"public" is no audience (it ranks as instance); missing audience defaults to instance; null distance requires external', () => {
+    expect(audienceCovers('public', null)).toBe(false);
+    expect(audienceCovers('public', 'instance')).toBe(true);
     expect(audienceCovers('external', null)).toBe(true);
     expect(audienceCovers(undefined, 'instance')).toBe(true);
     expect(audienceCovers(undefined, 'partner')).toBe(false);

@@ -109,9 +109,9 @@ export function seedDemoTree(): void {
     // are externally shareable (they appear in a public share's OpenAPI); Payments
     // is instance-internal (excluded from an external projection).
     publicInterfaces: [
-      { id: 'catalog-api', name: 'Catalog API', subsystem: 'catalog', component: 'catalog-portal', interface: 'icatalog-portal', type: 'REST', details: 'Public product catalog — browse products, categories, and display pricing.', audience: 'external' },
-      { id: 'ordering-api', name: 'Ordering API', subsystem: 'ordering', component: 'ordering-portal', interface: 'iordering-portal', type: 'REST', details: 'Order management — place and fetch orders.', audience: 'external' },
-      { id: 'payments-api', name: 'Payments API', subsystem: 'payments', component: 'payments-portal', interface: 'ipayments-portal', type: 'REST', details: 'Payment settlement (internal).', audience: 'instance' },
+      { as: 'catalog-api', name: 'Catalog API', from: 'catalog', component: 'catalog-portal', interface: 'icatalog-portal', details: 'Public product catalog — browse products, categories, and display pricing.', audience: 'external' },
+      { as: 'ordering-api', name: 'Ordering API', from: 'ordering', component: 'ordering-portal', interface: 'iordering-portal', details: 'Order management — place and fetch orders.', audience: 'external' },
+      { as: 'payments-api', name: 'Payments API', from: 'payments', component: 'payments-portal', interface: 'ipayments-portal', details: 'Payment settlement (internal).', audience: 'instance' },
     ],
     ...base,
   });
@@ -134,13 +134,13 @@ export function seedDemoTree(): void {
     } as SubsystemSpec);
 
   subsystem('catalog', 'Catalog', 'Product catalog: browse products and categories, compute display pricing.', [
-    { type: 'REST', details: 'Public product catalog API', component: 'catalog-portal', interface: 'icatalog-portal' },
+    { details: 'Public product catalog API', component: 'catalog-portal', interface: 'icatalog-portal' },
   ]);
   subsystem('payments', 'Payments', 'Payment settlement: authorize and record charges against orders.', [
-    { type: 'REST', details: 'Payment processing API', component: 'payments-portal', interface: 'ipayments-portal' },
+    { details: 'Payment processing API', component: 'payments-portal', interface: 'ipayments-portal' },
   ]);
   subsystem('ordering', 'Ordering', 'Order workflow: assemble a cart, price it, charge it, and persist the order.', [
-    { type: 'REST', details: 'Order management API', component: 'ordering-portal', interface: 'iordering-portal' },
+    { details: 'Order management API', component: 'ordering-portal', interface: 'iordering-portal' },
   ]);
 
   // ── L2: Components ───────────────────────────────────────────────────────────

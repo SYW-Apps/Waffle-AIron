@@ -17,13 +17,14 @@ import {
   specPathsInScope,
 } from '../../src/core/specs.js';
 import { diffAgainstApproval } from '../../src/core/approval.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { surfaceRepository } from '../../src/core/surfaces.js';
 import { SurfaceSnapshotSchema } from '../../src/models/index.js';
 import { runLock } from '../../src/commands/lock.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
 import { computeGateStateId, type ValidationResult } from '../../src/core/validation.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // `wairon lock` — two seams:
@@ -69,7 +70,7 @@ const iface = (id: string, comp: string, methods: InterfaceSpec['methods']): Int
  */
 function buildLockableProject(rootDir: string, withEndpoint = true): void {
   fs.mkdirSync(path.join(rootDir, '.wai', 'specs'), { recursive: true });
-  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(rootDir, '.wai', 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     name: 'lockable-system',
     projectType: 'backend',
@@ -86,16 +87,16 @@ function buildLockableProject(rootDir: string, withEndpoint = true): void {
     boundaries: [],
     globalRequirements: [],
     publicInterfaces: [
-      { id: 'gateway', name: 'Gateway API', subsystem: 'core-sub', component: 'gateway-portal', type: 'REST', details: 'api', audience: 'external' },
+      { as: 'gateway', name: 'Gateway API', from: 'core-sub', component: 'gateway-portal', details: 'api', audience: 'external' },
     ],
     createdAt: now,
     updatedAt: now,
   });
   saveSpec('subsystem', subsystem('core-sub', {
-    publicInterfaces: [{ type: 'REST', details: 'api', component: 'gateway-portal' }],
+    publicInterfaces: [{ details: 'api', component: 'gateway-portal' }],
   }));
   saveComponentSpec(component('gateway-portal', 'core-sub', {
-    componentType: 'Portal', portalType: 'HTTP_API',
+    componentType: 'Portal', transport: 'HTTP',
   } as Partial<ComponentSpec>));
   saveInterfaceSpec(iface('igateway-portal', 'gateway-portal', [
     {
@@ -290,7 +291,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
   it('a locked parent writes nothing into a chained child — the child pins its own surfaces', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lock-e2e-'));
     buildLockableProject(rootDir);
-    writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+    writeMemberProject(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
     invalidateSpecCache();
     setProjectRoot(null);
     const kidDir = path.join(rootDir, 'packages', 'kid');
@@ -298,7 +299,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
 
     // A parent lock used to push (children × subsystems) snapshots into every
     // child's working tree, on the parent's schedule. It pushes nothing now.
-    const { stdout } = await runCli(rootDir, '--no-recursive');
+    const { stdout } = await runCli(rootDir);
     expect(stdout).not.toContain('delivered surface(s)');
     expect(fs.existsSync(surfacesDir)).toBe(false);
     const record = JSON.parse(fs.readFileSync(path.join(rootDir, '.wai', 'lock.json'), 'utf8'));
@@ -317,7 +318,7 @@ describe('cli_runner.runLock workflow (real CLI): gate, freeze, and no delivery 
     });
 
     // …and a later parent lock leaves the pin exactly as the child committed it.
-    const second = await runCli(rootDir, '--no-recursive');
+    const second = await runCli(rootDir);
     expect(second.stdout).not.toContain('delivered surface(s)');
     for (const { p, bytes, mtime } of pinned) {
       expect(fs.readFileSync(p, 'utf8')).toBe(bytes);
@@ -408,7 +409,7 @@ describe('readLockState (the shared lock verdict)', () => {
 
     // Any edit moves the tree past what was frozen.
     saveComponentSpec(component('gateway-portal', 'core-sub', {
-      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      componentType: 'Portal', transport: 'HTTP', description: 'edited after the freeze',
       status: 'complete',
     } as Partial<ComponentSpec>));
     invalidateSpecCache();
@@ -426,7 +427,7 @@ describe('readLockState (the shared lock verdict)', () => {
     project();
     await runLock({ yes: true }, { valid: true, issues: [] }, computeGateStateId());
     saveComponentSpec(component('gateway-portal', 'core-sub', {
-      componentType: 'Portal', portalType: 'HTTP_API', description: 'edited after the freeze',
+      componentType: 'Portal', transport: 'HTTP', description: 'edited after the freeze',
       status: 'complete',
     } as Partial<ComponentSpec>));
     invalidateSpecCache();

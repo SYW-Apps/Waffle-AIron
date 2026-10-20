@@ -29,7 +29,7 @@ import {
   actionableUnitIds,
 } from './authorization.js';
 import { isReservedSubject } from './auth.js';
-import { SSO_ADMIN_ROLE_ID } from './types.js';
+import { SSO_ADMIN_ROLE_ID, providerSetupProblem, providerNotSetUpMessage } from './types.js';
 import type {
   ApiKeyRecord,
   AuditEvent,
@@ -38,6 +38,8 @@ import type {
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  IdentityProviderListing,
+  IdentityProviderSaveResult,
   MintedToken,
   Principal,
   PrincipalSubject,
@@ -98,8 +100,7 @@ import { UnauthenticatedError, ForbiddenError } from './errors.js';
 // the env-anchored permission-rules bypass (built-in super-admin / master / devMode
 // subject) — a delegated instance-wide project:admin is NOT instanceAdmin.
 
-/** The capability the legacy user:admin / audit:read / key:manage / grant
- *  permissions all map onto. */
+/** The capability user administration, audit reads, key management and grants all need. */
 const PROJECT_ADMIN_CAPABILITY = 'project:admin';
 const PROJECT_READ_CAPABILITY = 'project:read';
 const PROJECT_WRITE_CAPABILITY = 'project:write';
@@ -306,12 +307,10 @@ function requirePrincipal(cfg: HostConfig, credential: string | null): Principal
  * exceeds their own. Only the instance super-admin (who dominates every owner)
  * may mint here; delegated minting-with-dominance is deferred. Rejects a
  * reserved owner id (the built-in subjects can never own a mintable bearer), a
- * deactivated owner (deactivation must stay revoked), and unknown projects in
- * the narrowing — a member-qualified entry ('projectId::alias', one member
- * alias per hop) is validated at mint time: each alias must declare a member of
- * the project it is looked up in, in project.yaml `members` or for one release
- * a legacy L1 mount (an unknown alias, or an internal subsystem, is rejected
- * with guidance, never stored broken). Persists only the hashed record with owner/narrowing
+ * deactivated owner (deactivation must stay revoked), and a narrowing that names
+ * an unknown project, or a member by a qualified entry ('projectId::alias'): a
+ * member is a record of its own, named by its record id (rejected with
+ * guidance, never stored broken). Persists only the hashed record with owner/narrowing
  * metadata and appends a redacted audit event. Returns the plaintext token
  * exactly once.
  */
@@ -328,15 +327,11 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
 
   // The token's project NARROWING (never a grant): which records it may name,
   // each covering its members. The list is required; ['*'] = the owner's full
-  // accessible set, still resolved live. A member-qualified entry ('projectId::alias') is
-  // DEPRECATED: for one release it is accepted and STORED as the member's
-  // record id; an unknown project, an alias that declares no member, or a
-  // member no record holds is rejected with guidance, never stored broken.
+  // accessible set, still resolved live. A member-qualified entry ('projectId::alias'),
+  // an unknown project or an id no record holds is rejected with guidance (the member's
+  // record id is the form to use), never stored broken.
   assertNarrowingGiven(request);
-  const stored = request.projects.map((p) => ({ asked: p, as: assertMintableNarrowingEntry(cfg.dataDir, p) }));
-  const projects = [...new Set(stored.map((e) => e.as))];
-  // The caller learns what each deprecated qualified entry was stored as.
-  const mapped = stored.filter((e) => e.as !== e.asked).map((e) => `${e.asked} -> ${e.as}`);
+  const projects = [...new Set(request.projects.map((p) => assertMintableNarrowingEntry(cfg.dataDir, p)))];
 
   // Refuse minting a token for a user record that has been deactivated — else
   // deactivation could be undone by minting fresh tokens for the inactive owner.
@@ -373,7 +368,7 @@ export function mintToken(cfg: HostConfig, credential: string | null, request: T
     buildAuditEvent(principal, 'token.mint', 'security', 'admin', { target: record.id }),
   );
 
-  return { token, mapped }; // plaintext, shown exactly once
+  return { token }; // plaintext, shown exactly once
 }
 
 /**
@@ -431,9 +426,9 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
-  // The record the token names: a project id as it is, or — a deprecated
-  // member-qualified id, for one release — the member's own record id. An
-  // unknown project or member is rejected with guidance, never stored broken.
+  // The record the token names: a project id as it is (a member's own record id
+  // for a member). A member-qualified id or an unknown project is rejected with
+  // guidance, never stored broken.
   const recordId = assertMintableNarrowingEntry(cfg.dataDir, projectId);
 
   // Self-scoped authorization through permission rules: the caller must ALREADY
@@ -547,7 +542,7 @@ export function listUsers(
 
 /**
  * Authenticate the caller, authorize audit read access via project:admin (the
- * capability the legacy audit:read maps onto), and return redacted audit events
+ * capability audit reads need), and return redacted audit events
  * matching the query FILTERED to the caller's view: an instance-admin reads
  * instance-wide, a scoped caller reads only their actionable projects' events.
  * No audit event (a read).
@@ -722,6 +717,19 @@ export function resolveEnabledProvider(cfg: HostConfig, providerId: string): Ide
 export async function startSsoLogin(cfg: HostConfig, providerId: string, redirectUri: string): Promise<string> {
   const provider = resolveEnabledProvider(cfg, providerId);
 
+  // A provider that is not set up yet starts no sign-in: audit the refusal
+  // (best-effort) and answer without echoing any supplied address.
+  if (providerSetupProblem(provider)) {
+    tryAppendAudit(
+      cfg,
+      buildSsoAuditEvent(ANONYMOUS_SSO_ACTOR, 'sso.refused', 'warning', {
+        target: providerId,
+        metadata: JSON.stringify({ reason: 'provider-not-set-up' }),
+      }),
+    );
+    throw new Error(providerNotSetUpMessage(provider));
+  }
+
   const nonce = crypto.randomBytes(16).toString('hex');
   const payload: SsoStatePayload = { providerId, nonce, redirectUri };
   const state = signSsoState(JSON.stringify(payload));
@@ -851,10 +859,13 @@ export async function completeSsoLogin(cfg: HostConfig, state: string, code: str
 export function listProviders(
   cfg: HostConfig,
   credential: string | null,
-): IdentityProviderConfig[] {
+): IdentityProviderListing[] {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
-  return listIdentityProviderRecords(cfg.dataDir);
+  return listIdentityProviderRecords(cfg.dataDir).map((provider) => {
+    const setupProblem = providerSetupProblem(provider);
+    return setupProblem ? { provider, setupProblem } : { provider };
+  });
 }
 
 /**
@@ -867,7 +878,7 @@ export function upsertProvider(
   cfg: HostConfig,
   credential: string | null,
   config: IdentityProviderConfig,
-): IdentityProviderConfig {
+): IdentityProviderSaveResult {
   const principal = requirePrincipal(cfg, credential);
   requireInstanceProjectAdmin(cfg, principal, 'identity-provider administration');
 
@@ -875,7 +886,9 @@ export function upsertProvider(
 
   tryAppendAudit(cfg, buildAuditEvent(principal, 'idp.upsert', 'security', 'auth', { target: stored.id }));
 
-  return stored;
+  // Collect the warnings: what still prevents sign-in, when the saved provider is enabled.
+  const problem = stored.enabled ? providerSetupProblem(stored) : undefined;
+  return { provider: stored, warnings: problem ? [problem] : [] };
 }
 
 /**

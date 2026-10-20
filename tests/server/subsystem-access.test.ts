@@ -6,7 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
-import { upgradeMemberRecords, listAssignments as localListAssignments } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
+import { listAssignments as localListAssignments } from '../../src/server/local-admin.js';
 import { authorize } from '../../src/server/authorization.js';
 import { setAssignment as repoSetAssignment } from '../../src/server/permissions.js';
 import { setAssignment, bindRole, explain, listAssignments } from '../../src/server/permissionadmin.js';
@@ -498,7 +499,7 @@ describe('relation health on the HTML canvas and the admin diagrams', () => {
   /** platform's gate consumes billing's exported portal: a consumption edge into a contained member. */
   function platformConsumesBilling(): void {
     system(fam.billing, 'billing', [{ from: 'ops', component: 'billing-portal', audience: 'project' }]);
-    subsystem(fam.billing, 'billing', 'ops', { publicInterfaces: [{ type: 'Custom', details: 'Billing', component: 'billing-portal' }] });
+    subsystem(fam.billing, 'billing', 'ops', { publicInterfaces: [{ details: 'Billing', component: 'billing-portal' }] });
     component(fam.billing, 'ops', 'billing-portal', 'Portal');
     system(fam.platform, 'platform');
     subsystem(fam.platform, 'platform', 'core');

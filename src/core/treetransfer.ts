@@ -386,17 +386,12 @@ export function importSpecTree(archive: Uint8Array, options: TreeImportOptions):
 // --- helpers ---------------------------------------------------------------
 
 /**
- * The spec directory a root actually carries today: `.wai`, or the legacy
- * `.wairon` when that is what exists. An import always WRITES `.wai`, so a
- * legacy directory must be moved aside by its own name rather than left behind
- * shadowing the tree that replaced it.
+ * The spec directory a root actually carries today: `.wai`. (A `.wairon` folder
+ * of wairon 5 is the upgrade's to move, never an import's to find.)
  */
 function liveSpecDirFor(rootDir: string): string | null {
   const modern = path.join(rootDir, '.wai');
-  if (fs.existsSync(modern)) return modern;
-  const legacy = path.join(rootDir, '.wairon');
-  if (fs.existsSync(legacy)) return legacy;
-  return null;
+  return fs.existsSync(modern) ? modern : null;
 }
 
 /** A filesystem-safe timestamp for one backup directory. */

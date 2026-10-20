@@ -21,11 +21,11 @@ methods:
       - idempotent
   - name: resolveProjectExports
     description: >-
-      A project's L0 export table — what other projects may consume — as the scan resolved it: the
+      A project's L0 export table - what other projects may consume - as the scan resolved it: the
       bound root's, or the member's with the given key. Own project-level types (`{ typeDef }` with
       no `from`), re-exports from its subsystems, and re-exports from its members and externals by
-      alias are all in it, each with the entry's audience; the public name is `as ?? id ?? interface
-      ?? component ?? typeDef`. A project with no L0 answers an empty table.
+      alias are all in it, each with the entry's audience; the public name is `as ?? interface ??
+      component ?? typeDef`. A project with no L0 answers an empty table.
     signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
     returns: ResolvedExportTable
     params:
@@ -84,4 +84,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-09-26T16:08:30.136Z'
-updatedAt: '2026-10-02T20:47:32.568Z'
+updatedAt: '2026-10-19T06:12:39.367Z'

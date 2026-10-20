@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -17,7 +18,8 @@ import { currentSpecDigests, diffAgainstApproval, reexpress } from '../../src/co
 import { readLockRecord, writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import { computeGateStateId } from '../../src/core/validation.js';
 import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
-import { checkApproval, reexpressLock, runLock } from '../../src/commands/lock.js';
+import { checkApproval, runLock } from '../../src/commands/lock.js';
+import { reexpressLock } from '../helpers/reexpress-lock.js';
 import { canonicalize } from '../../src/utils/canonical-json.js';
 import { parseYaml } from '../../src/utils/yaml.js';
 import {
@@ -141,7 +143,7 @@ describe('status is readiness, never design', () => {
     expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
-  it('a format-3 lock taken while status was in the view keeps passing when only a status moved', () => {
+  v5it('a format-3 lock taken while status was in the view keeps passing when only a status moved', () => {
     root = project();
     writeEarlierFormat3(root);
     expect(readLockState(computeGateStateId()).state).toBe('locked');
@@ -155,14 +157,14 @@ describe('status is readiness, never design', () => {
     expect(diffAgainstApproval()!.changed).toEqual(['.wai/specs/dom/worker/.implementation.yaml']);
   });
 
-  it('the earlier reading recomputes with the approved statuses put back', () => {
+  v5it('the earlier reading recomputes with the approved statuses put back', () => {
     root = project();
     writeEarlierFormat3(root);
     const asRecorded = computeOwnDesignStateIdAsRecorded(new Map());
     expect(asRecorded.algorithm).toBe('sha256-design');
   });
 
-  it('doctor --fix carries an earlier-reading lock into the current reading without a review', () => {
+  v5it('the upgrade carries an earlier-reading lock into the current reading without a review', () => {
     root = project();
     const before = writeEarlierFormat3(root);
     resave(root, { status: 'complete' });
@@ -193,7 +195,7 @@ describe('an older lock over an untouched tree whose gate moved', () => {
     return record;
   }
 
-  it('lock-check names why a record from before gate parts is not carried over, never the design or code linkage (round 7)', () => {
+  v5it('lock-check names why a record from before gate parts is not carried over, never the design or code linkage (round 7)', () => {
     root = project();
     writeFormat2UnderOtherGate();
     const check = checkApproval(false);
@@ -205,7 +207,7 @@ describe('an older lock over an untouched tree whose gate moved', () => {
     expect(check.message).not.toContain('the design, or only code linkage');
   });
 
-  it('doctor --fix re-expresses its reading to format 3 and keeps the claim as certified', () => {
+  v5it('the upgrade re-expresses its reading to format 3 and keeps the claim as certified', () => {
     root = project();
     const before = writeFormat2UnderOtherGate();
     expect(reexpress(computeGateStateId())).not.toBeNull();

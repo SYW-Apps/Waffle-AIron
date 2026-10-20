@@ -24,7 +24,7 @@ const TRACKING_SUB = { id: 'tracking', description: 'Shipment tracking for custo
 const TRACKING_PORTAL = {
   id: 'tracking-portal',
   componentType: 'Portal',
-  portalType: 'Custom',
+  transport: 'Custom',
   description: 'Customer-facing API answering where a shipment is.',
   dependsOn: ['shipment-lookup-orchestrator'],
 };

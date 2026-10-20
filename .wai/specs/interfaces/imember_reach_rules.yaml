@@ -64,11 +64,13 @@ methods:
       - idempotent
   - name: narrowing
     description: >-
-      Rewrite one API key's member-QUALIFIED entries ('platform::billing', one alias per hop) to the
-      record id of the member whose qualifier equals it; every other entry ('*', a project id —
-      which already covers its members through the chain) is kept; duplicates collapse, order kept.
-      Answers null when no entry is qualified, otherwise the rewrite and its documented widening
-      (record-level tools on the member's own record, within the member only).
+      Rewrite one non-revoked API key's member-QUALIFIED entries ('platform::billing', one alias per
+      hop) to the record id of the member whose qualifier equals it; an entry equal to no member's
+      qualifier is dropped (it resolved to nothing, so dropping narrows, never widens); every other
+      entry ('*', a project id - which already covers its members through the chain) is kept;
+      duplicates collapse, order kept. Answers null when the key is revoked or no entry is
+      qualified, otherwise the rewrite, flagged revokes when no entry is left. A qualified entry
+      already bound the member's own record, so the rewrite spells the same reach in record ids.
     signature: 'narrowing(key: ApiKeyRecord, members: list<PlannedMemberRecord>): PlannedNarrowing?'
     returns: PlannedNarrowing?
     params:
@@ -110,4 +112,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-10-01T16:56:27.256Z'
-updatedAt: '2026-10-04T10:19:04.296Z'
+updatedAt: '2026-10-19T06:11:57.659Z'

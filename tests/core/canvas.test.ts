@@ -175,7 +175,7 @@ describe('interactive canvas generation', () => {
       name: 'Billing',
       description: 'billing context',
       parentSystem: 'CanvasSys',
-      publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+      publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
       trustedLinks: [{ subsystem: 'shipping', reason: 'latency fast lane' }],
       createdAt: now,
       updatedAt: now,
@@ -196,7 +196,7 @@ describe('interactive canvas generation', () => {
       componentType: 'Orchestrator' as const, owns: [] as string[], dependsOn: [] as string[],
       createdAt: now, updatedAt: now, ...over,
     });
-    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'] }) as any);
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-orchestrator'] }) as any);
     saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator', dependsOn: ['billing-repo'] }) as any);
     saveComponentSpec(comp({ id: 'billing-store', name: 'Billing Store', componentType: 'Store' }) as any);
     saveComponentSpec(comp({ id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);
@@ -247,20 +247,6 @@ describe('interactive canvas generation', () => {
     expect(billing.trustedLinks).toEqual([{ subsystem: 'shipping', reason: 'latency fast lane' }]);
 
     expect(model.issues).toHaveLength(1);
-  });
-
-  it('records ownership only under a live pattern: a retired Gateway contains nothing', () => {
-    buildFixture();
-    const at = { description: 'd', subsystem: 'billing', dependsOn: [] as string[], createdAt: now, updatedAt: now };
-    saveComponentSpec({ ...at, id: 'edge-portal', name: 'Edge Portal', componentType: 'Portal', portalType: 'HTTP_API', owns: [] } as any);
-    saveComponentSpec({ ...at, id: 'edge-gateway', name: 'Edge Gateway', componentType: 'Gateway', owns: ['edge-portal'] } as any);
-    const model = buildCanvasModel();
-
-    // The Repository still nests its Store; the Gateway's Portal stands on its own.
-    expect(model.components.find(c => c.id === 'billing-store')!.owner).toBe('billing-repo');
-    expect(model.components.find(c => c.id === 'edge-portal')!.owner).toBeUndefined();
-    // The Gateway keeps listing what it owned, so its details stay truthful.
-    expect(model.components.find(c => c.id === 'edge-gateway')!.owns).toEqual(['edge-portal']);
   });
 
   it('derives ERD edge cardinality from field type shapes and the optional flag', () => {
@@ -588,10 +574,7 @@ describe('unit deep-expansion (executed engine)', () => {
   });
 });
 
-/** An auction subsystem: a Repository owning a Store and a Query, plus one
- *  component of each retired stereotype, as a tree not yet migrated holds. The
- *  Gateway still lists the Portal it owned; buildCanvasModel records no owner
- *  under a Gateway, so that Portal is a component of the subsystem. */
+/** An auction subsystem: a Repository owning a Store and a Query. */
 function stereotypeModel(): Record<string, unknown> {
   const comp = (id: string, componentType: string, over: Record<string, unknown> = {}) => ({
     id, name: id, description: '', subsystem: 'auction', componentType,
@@ -605,9 +588,6 @@ function stereotypeModel(): Record<string, unknown> {
       comp('lot_repository', 'Repository', { owns: ['lot_store', 'bid_history'] }),
       comp('lot_store', 'Store', { owner: 'lot_repository' }),
       comp('bid_history', 'Query', { owner: 'lot_repository' }),
-      comp('pricing_specialist', 'Specialist'),
-      comp('edge_gateway', 'Gateway', { owns: ['edge_portal'] }),
-      comp('edge_portal', 'Portal'),
     ],
     edges: [],
     types: [], typeEdges: [], dataEdges: [], issues: [],
@@ -623,18 +603,6 @@ describe('stereotype styling (executed engine)', () => {
     expect(classesOf(eles, 'c~bid_history')).toContain('query');
     expect(classesOf(eles, 'c~lot_store')).toContain('data');
     expect(String(dom.get('legend').innerHTML)).toContain('Query');
-  });
-
-  it('renders retired Specialists and Gateways as plain boxes marked retired, never as containers', () => {
-    const dom = new Map<string, any>();
-    const eles = runEngine(stereotypeModel(), { dom, initialRoute: 'auction' });
-    expect(classesOf(eles, 'c~pricing_specialist')).toContain('retired');
-    expect(classesOf(eles, 'c~edge_gateway')).toContain('retired');
-    // Not a pattern: nothing to drill into, and the Portal it listed stands beside it.
-    expect(classesOf(eles, 'c~edge_gateway')).not.toContain('drillable');
-    expect(classesOf(eles, 'c~edge_portal')).toContain('entry');
-    expect(eles.some(e => e.data.parent === 'c~edge_gateway')).toBe(false);
-    expect(String(dom.get('legend').innerHTML)).toMatch(/Specialist.*Gateway.*retired/);
   });
 });
 

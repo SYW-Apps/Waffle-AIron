@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -15,7 +16,6 @@ import {
 import { writeLegacyMount } from '../helpers/legacy-mount.js';
 import { retireSpecialists, type SpecialistRetirement } from '../../src/core/stereotype-migration.js';
 import * as corePortal from '../../src/core/index.js';
-import { retireSpecialists as cliRetireSpecialists } from '../../src/commands/adapters/core.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
 
@@ -260,11 +260,10 @@ describe('retireSpecialists', () => {
     expect(retireSpecialists(false)).toEqual({ retyped: [], rebasedVariants: [], applied: false });
   });
 
-  it('is published on the core portal and forwarded by the CLI core adapter', () => {
+  it('is published on the core portal', () => {
     fixture();
     const plan = retireSpecialists(false);
     expect(corePortal.retireSpecialists(false)).toEqual(plan);
-    expect(cliRetireSpecialists(false)).toEqual(plan);
     expect(typeof corePortal.renameComponent).toBe('function');
   });
 });

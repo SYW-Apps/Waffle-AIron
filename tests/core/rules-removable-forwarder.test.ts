@@ -93,7 +93,6 @@ const STEREOTYPES: [string, Extra][] = [
   ['Portal', {}], ['Orchestrator', {}], ['Orchestrator', { dependencyClass: 'pure' }], ['Orchestrator', { dependencyClass: 'read' }],
   ['Supervisor', {}], ['Actor', {}], ['Store', {}], ['Index', {}], ['Query', {}], ['Registry', {}], ['Adapter', {}],
   ['Observer', {}], ['View', {}], ['Repository', {}], ['FeatureComponent', {}], ['RouterComponent', {}],
-  ['Specialist', {}],
 ];
 
 const label = ([type, extra]: [string, Extra]) => (extra.dependencyClass ? `${type}(${extra.dependencyClass})` : type);
@@ -121,12 +120,7 @@ describe('directEdgeRefusals agrees with the edge rules', () => {
         const caller = comp('harbor-caller', from[0], from[1]) as unknown as Extra;
         const target = comp('harbor-target', to[0], to[1]) as unknown as Extra;
         const { declared, predicted } = compare(caller, target);
-        // A retired end is retired-stereotypes' finding, never a legal shortcut:
-        // the edge rules stay silent on it, and the predicate refuses it.
-        if (from[0] === 'Specialist' || to[0] === 'Specialist') {
-          if (declared.length !== 0 || predicted.join() !== 'RETIRED_STEREOTYPE') disagreements.push(`${label(from)} → ${label(to)}: retired edge`);
-          continue;
-        }
+
         if (declared.join() !== predicted.join()) disagreements.push(`${label(from)} → ${label(to)}: rules [${declared}] predicate [${predicted}]`);
       }
     }
@@ -141,8 +135,8 @@ describe('directEdgeRefusals agrees with the edge rules', () => {
           sub('tracking', trusted ? { trustedLinks: [{ subsystem: 'rates', reason: 'In-process rate lookups.' }] } : {}),
           sub('rates', published ? { publicInterfaces: [{ component: 'harbor-target', interface: 'iharbor_target' }] } : {}),
         ];
-        for (const from of STEREOTYPES.filter(s => s[0] !== 'Specialist')) {
-          for (const to of STEREOTYPES.filter(s => s[0] !== 'Specialist')) {
+        for (const from of STEREOTYPES) {
+          for (const to of STEREOTYPES) {
             const caller = comp('harbor-caller', from[0], from[1]) as unknown as Extra;
             const target = comp('harbor-target', to[0], { ...to[1], subsystem: 'rates' }) as unknown as Extra;
             const { declared, predicted } = compare(caller, target, { subsystems });
@@ -162,7 +156,7 @@ describe('directEdgeRefusals agrees with the edge rules', () => {
       ['its own Repository', [comp('cargo-repository', 'Repository', { owns: ['harbor-target', 'harbor-caller'] })], {}],
     ];
     for (const [what, others] of owners) {
-      for (const from of STEREOTYPES.filter(s => s[0] !== 'Specialist')) {
+      for (const from of STEREOTYPES) {
         for (const toType of ['Store', 'Registry', 'Index']) {
           const caller = comp('harbor-caller', from[0], from[1]) as unknown as Extra;
           const target = comp('harbor-target', toType) as unknown as Extra;

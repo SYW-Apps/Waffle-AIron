@@ -15,6 +15,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import { invalidateSpecCache, loadSubsystemSpec } from '../../src/core/specs.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const now = new Date().toISOString();
 let roots: string[] = [];
@@ -28,7 +29,7 @@ async function bound(): Promise<(name: string, args: Record<string, unknown>) =>
   roots.push(root);
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'pi-consumers', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'pi-consumers', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);
@@ -58,7 +59,7 @@ afterEach(async () => {
   invalidateSpecCache();
 });
 
-const restricted = { type: 'Custom', details: 'raw invoice writes', component: 'invoice_portal', consumers: ['claims'] };
+const restricted = { details: 'raw invoice writes', component: 'invoice_portal', consumers: ['claims'] };
 
 describe('public_interface.consumers round-trips through the MCP doors', () => {
   it('sdd_add_subsystem stores the consumers an entry states', async () => {
@@ -93,7 +94,7 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
     const call = await bound();
     await call('sdd_add_subsystem', {
       id: 'billing', name: 'Billing', description: 'invoicing',
-      publicInterfaces: [{ type: 'Custom', details: 'raw invoice writes', component: 'invoice_portal' }],
+      publicInterfaces: [{ details: 'raw invoice writes', component: 'invoice_portal' }],
     });
     const result = await call('sdd_update_spec', {
       kind: 'subsystem', id: 'billing',
@@ -105,7 +106,7 @@ describe('public_interface.consumers round-trips through the MCP doors', () => {
 });
 
 describe('re-export entries round-trip through sdd_set_public_interfaces', () => {
-  const own = { type: 'REST', details: 'invoice API', component: 'invoice_portal' };
+  const own = { details: 'invoice API', component: 'invoice_portal' };
   const reexport = { from: 'claims', component: 'claim_portal', as: 'claims-api' };
   const wildcard = { from: 'claims' };
 

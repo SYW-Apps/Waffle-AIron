@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -436,12 +437,12 @@ describe('invariants inside a chained subproject — ids resolve through the mou
     invalidateSpecCache();
   }
 
-  it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
+  v5it('an asserted invariant in the child anchors and resolves clean from the parent root', () => {
     buildChained(true);
     expect(invariantIssues(validateProject())).toHaveLength(0);
   });
 
-  it('a silent child write is the child\u2019s own UNASSERTED_INVARIANT — judged by its gate, never by the parent\u2019s', () => {
+  v5it('a silent child write is the child\u2019s own UNASSERTED_INVARIANT — judged by its gate, never by the parent\u2019s', () => {
     buildChained(false);
     // The parent's gate never judges a contained member's specs (stage 4).
     expect(invariantIssues(validateProject())).toHaveLength(0);

@@ -96,9 +96,9 @@ fields:
       reaches it only as `alias::name` through its L0 exports — or bare, for the names the long
       form's `use` imports; a contained one is read live, any other is judged against its pin.
       Together with `externals` it is this project's alias table, and one alias names one member or
-      external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `doctor
-      --fix` through the registry (which rewrites the deprecated long-form `path`); the L1
-      `projectPath` form still loads for one release (DEPRECATED_MOUNT_FORM).
+      external. Written by hand, by `member add` / `promote` / `demote` / `update`, or by `wairon
+      upgrade` through the registry (which rewrites the deprecated long-form `path`); the L1
+      `projectPath` form still loads in the v5 reading `wairon upgrade` binds.
     optional: true
   - name: composition
     type: CompositionConfig
@@ -158,6 +158,14 @@ fields:
       `{ description }`). Read by the family run's network rules and by the derived networking
       outputs; part of the gate identity, because it changes family-run verdicts. Written by hand.
       Absent in a part's configuration
+    optional: true
+  - name: waironMajor
+    type: int
+    description: >-
+      The wairon major this project's files were written by. Set when the configuration is created
+      and moved only by `wairon upgrade`, which reads it to decide which steps a tree needs; a
+      project with none was made before it existed and is read as the oldest major the running
+      release upgrades.
     optional: true
 methods:
   - name: declaredPackNames
@@ -226,12 +234,12 @@ methods:
     returns: list<DeclaredMember>
     description: >-
       The configuration's `members`, one DeclaredMember per alias in declaration order: the source
-      string (the shorthand, the long form's `source`, or for one release the deprecated `path`,
-      flagged) parsed into its object form and storage, the asserted `as`, the description and `use`
-      copied as written; an alias outside [a-z0-9-_]+, a missing or unparseable source, a git source
-      without its commit, a bad `as`, a hosted source asserted to be a part, an alias `externals`
-      also declares, or a malformed `use` entry is recorded as the entry's problem rather than
-      dropped. Empty when nothing is declared.
+      string (the shorthand, the long form's `source`, or, in the v5 reading `wairon upgrade` binds,
+      the deprecated `path`, flagged) parsed into its object form and storage, the asserted `as`,
+      the description and `use` copied as written; an alias outside [a-z0-9-_]+, a missing or
+      unparseable source, a git source without its commit, a bad `as`, a hosted source asserted to
+      be a part, an alias `externals` also declares, or a malformed `use` entry is recorded as the
+      entry's problem rather than dropped. Empty when nothing is declared.
   - name: withPack
     signature: 'withPack(entry: PackSelection | string, remove?: boolean): ProjectConfig'
     returns: ProjectConfig
@@ -259,4 +267,4 @@ methods:
       `externals pin` at a part, status) asks, so they cannot disagree about it.
 sourcePath: src/models/project.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-07T21:44:04.175Z'
+updatedAt: '2026-10-18T19:09:06.457Z'

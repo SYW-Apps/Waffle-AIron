@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { declaredExternals, declaredMembers, ProjectConfigSchema } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -10,7 +11,7 @@ const TS = '2026-01-01T00:00:00.000Z';
 const config = (extra: Record<string, unknown>) => ProjectConfigSchema.parse({ name: 'Waffly', createdAt: TS, updatedAt: TS, ...extra });
 
 describe('project_config.declaredMembers', () => {
-  it('reads the shorthand as its source and the long form as written, in declaration order', () => {
+  v5it('reads the shorthand as its source and the long form as written, in declaration order', () => {
     expect(declaredMembers(config({
       members: {
         billing: 'services/billing',
@@ -18,7 +19,7 @@ describe('project_config.declaredMembers', () => {
       },
     }))).toEqual([
       { alias: 'billing', path: 'services/billing', use: [], source: { path: 'services/billing' }, storage: 'contained', deprecatedPath: false },
-      // The pre-stage-8 long-form `path` is read as the source for one release, flagged.
+      // The pre-stage-8 long-form `path` is read as the source in the v5 reading, flagged.
       { alias: 'ledger', path: 'services/ledger', description: 'The ledger of record', use: [], source: { path: 'services/ledger' }, storage: 'contained', deprecatedPath: true },
     ]);
   });

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { getStatusReport } from '../../src/core/status.js';
@@ -29,7 +30,7 @@ function bind(root: string): void {
 }
 
 describe('status: members print as projects', () => {
-  it('nests each member as a [Project] holding its own subsystems, the mount form noted', () => {
+  v5it('nests each member as a [Project] holding its own subsystems, the mount form noted', () => {
     family = buildReferenceFamily();
     bind(family.top);
     const report = getStatusReport({});
@@ -53,7 +54,7 @@ describe('status: members print as projects', () => {
     expect(report.text).not.toMatch(/\[Subsystem\] \S*::/);
   });
 
-  it('marks a project line with its own role, so a caller can colour it', () => {
+  v5it('marks a project line with its own role, so a caller can colour it', () => {
     family = buildReferenceFamily();
     bind(family.top);
     const report = getStatusReport({}, { layer: (kind, text) => `«${kind}:${text}»` });
@@ -66,10 +67,12 @@ describe('status: members print as projects', () => {
     bind(family.transpiler);
     const report = getStatusReport({});
     expect(report.text).not.toContain('[Project]');
-    expect(report.text.split('\n')[1]).toBe('└── [Subsystem] lowering (20%)');
+    // Line 1 is the completeness legend a system below 100% carries; the tree follows it.
+    expect(report.text.split('\n')[1]).toMatch(/^ {2}Completeness per component:/);
+    expect(report.text.split('\n')[2]).toBe('└── [Subsystem] lowering (20%)');
   });
 
-  it('the MCP status line lists every member the root declares, legacy mounts included', () => {
+  v5it('the MCP status line lists every member the root declares, legacy mounts included', () => {
     family = buildReferenceFamily();
     bind(family.top);
     expect(statusFamilyContext()).toContain('Family: member projects declared here — core (core), shared (shared, legacy L1 mount).');

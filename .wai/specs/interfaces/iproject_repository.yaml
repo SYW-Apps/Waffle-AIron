@@ -8,10 +8,9 @@ component: project_repository
 methods:
   - name: resolveRoot
     description: >-
-      Resolve the root path of the authorized hosted record — the rootPath projection of
+      Resolve the root path of the authorized hosted record - the rootPath projection of
       resolveBinding, kept for read-plane callers that need only the root. A member is its own
-      record; a deprecated member-qualified selector resolves for one release to the member's
-      record, never wider.
+      record, named by its own id; a member-qualified selector names no record.
     signature: 'resolveRoot(principal: Principal, selector: string): string'
     returns: string?
   - name: create
@@ -30,9 +29,8 @@ methods:
     returns: void
   - name: resolveBinding
     description: >-
-      Resolve the full authorized binding (the bound record's id and root, its family root id, and
-      the deprecated qualifier when one resolved it) — the data-plane request seam; see the index's
-      authorization matrix. Pure 1:1 forward.
+      Resolve the full authorized binding (the bound record's id and root, and its family root id) -
+      the data-plane request seam; see the index's authorization matrix. Pure 1:1 forward.
     signature: 'resolveBinding(principal: Principal, selector: string): ProjectBinding | null'
     returns: ProjectBinding?
   - name: existingRoot
@@ -82,12 +80,10 @@ methods:
   - name: admitNarrowing
     description: >-
       Validate one projects-narrowing entry at mint time and answer what is stored (forwarded to the
-      index): '*' and a record id as they are, a deprecated member-qualified entry mapped to the
-      member's record id. An unknown project, an alias that declares no member, an internal
-      subsystem, or a member no record holds is refused with guidance, so a broken narrowing is
-      never stored.
+      index): '*' and a record id as they are. A member-qualified entry, an unknown project, or an
+      id no record holds is refused with guidance, so a broken narrowing is never stored.
     signatureFrom: project_index.admitNarrowing
     effect: read
 status: complete
 createdAt: '2026-07-04T12:49:59.044Z'
-updatedAt: '2026-10-17T16:35:36.066Z'
+updatedAt: '2026-10-19T06:11:16.827Z'

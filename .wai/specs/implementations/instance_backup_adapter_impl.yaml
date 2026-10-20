@@ -1,0 +1,22 @@
+id: instance_backup_adapter_impl
+name: Data Dir Backup Adapter Implementation
+description: 'src/server/upgrade.ts: a recursive copy beside the data directory.'
+contract: iinstance_backup_adapter
+sourcePath: src/server/upgrade.ts
+injectedParams:
+  - dataDir
+methods:
+  - name: copy
+    narrative: []
+    detail: intent
+    intent: >-
+      Copy every file of the data directory, recursively and keeping its layout, to
+      `<dataDir>.backup-v<from>-to-v<to>-<UTC timestamp>` beside it, and answer that path. A copy
+      that fails removes what it wrote and refuses with the cause, so no upgrade runs without a
+      complete backup.
+    symbol: copyDataDir
+previousIds:
+  - data_dir_backup_adapter_impl
+status: draft
+createdAt: '2026-10-18T14:27:59.122Z'
+updatedAt: '2026-10-18T16:16:38.738Z'

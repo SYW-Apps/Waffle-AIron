@@ -37,10 +37,10 @@ methods:
       The filesystem walk realizing membership detection: from the bound root, examine ancestors
       (bounded depth) for a project that declares the bound root as a member — a `members` entry of
       its configuration (read through that ancestor's per-root binding, as the scan reads a root's
-      configuration) or, for one release, a legacy L1 subsystem spec whose projectPath resolves
-      exactly to the bound root — and return its root, the alias it declares the bound root under
-      and the form, or null. File I/O lives here — the store is the only spec-tree component that
-      touches the disk.
+      configuration) or, in the v5 reading `wairon upgrade` binds, a legacy L1 subsystem spec whose
+      projectPath resolves exactly to the bound root — and return its root, the alias it declares
+      the bound root under and the form, or null. File I/O lives here — the store is the only
+      spec-tree component that touches the disk.
     signature: 'findChainingParent(): ChainingParentRef | null'
     returns: ChainingParentRef?
     effect: read
@@ -109,4 +109,4 @@ methods:
     effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.287Z'
-updatedAt: '2026-10-09T16:55:38.273Z'
+updatedAt: '2026-10-18T19:08:43.777Z'

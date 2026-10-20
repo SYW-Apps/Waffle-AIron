@@ -249,8 +249,10 @@ methods:
       - stepNumber: 3
         description: >-
           Parse each against TypeSpecSchema and answer with the one whose id matches — an
-          `alias::name` id bound through the bound project's alias table to the member's key first —
-          or null when none does
+          `alias::name` id bound through the bound project's alias table to the member's key first.
+          An id `subsystem::id` whose qualifier is a subsystem of the bound project answers the type
+          of that subsystem: the kept one, or the second half of a duplicate id the scan recorded
+          (its file read and parsed the same way). Null when none does
         type: local
   - name: load
     narrative:
@@ -289,13 +291,13 @@ methods:
         description: >-
           Read the root's member declarations: project_config.declaredMembers() — each with its one
           source parsed (contained path, `../` sibling path, git at a commit, hosted record), the
-          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, for one
-          release, every top-level L1 subsystem of the root carrying projectPath — a legacy mount,
-          recorded with every field as written on the member it declares and never loaded as a
-          subsystem, since a mount carries no content. A `members` entry and a legacy mount under
-          one alias are one member, the `members` entry winning; an alias declared both as a member
-          and as an external is an alias-conflict problem; a declaration with a problem is recorded
-          and not followed
+          `as` it asserts if any, and whether it used the deprecated long-form `path` — and, in the
+          v5 reading `wairon upgrade` binds, every top-level L1 subsystem of the root carrying
+          projectPath — a legacy mount, recorded with every field as written on the member it
+          declares and never loaded as a subsystem, since a mount carries no content. A `members`
+          entry and a legacy mount under one alias are one member, the `members` entry winning; an
+          alias declared both as a member and as an external is an alias-conflict problem; a
+          declaration with a problem is recorded and not followed
         type: local
       - stepNumber: 4
         description: >-
@@ -313,7 +315,12 @@ methods:
           every declaration under it (`billing::invoice_portal`; a subsystem `billing` declared
           inside member billing is `billing::billing`), and put the root's specs in the index under
           those keys, folding nothing into another root's namespace. A second declaration of one key
-          in one root is a duplicate-spec problem naming both files; the first stays in the index
+          in one root is a duplicate-spec problem naming both files; the first stays in the index. A
+          second TYPE whose subsystem differs from the kept one's is also recorded in the index's
+          duplicates (`subsystem::id` to its file), carried on the problem as its two
+          `subsystem::id` addresses (qualifiedIds): it stays out of every model list, with no lint
+          and no resolution since the tree still has no single reading, but loadTypeSpec and
+          loadDuplicateTypeSpecs reach it by its qualified id. Every other kind is unchanged
         type: local
       - stepNumber: 6
         label: kinds
@@ -683,6 +690,23 @@ methods:
           write lands outside the tree
         type: local
     symbol: getTypePath
+  - name: loadDuplicateTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: 'Take every duplicate the scan recorded for a type: `subsystem::id` to its file'
+        type: local
+      - stepNumber: 2
+        description: Read each recorded file through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: read
+      - stepNumber: 3
+        description: >-
+          Parse each against TypeSpecSchema, the way loadTypeSpec reads a duplicate; a file that
+          cannot be read yields no entry, and answer each as its address, its file and its parsed
+          type
+        type: return
+        outcome: DuplicateTypeSpec[]
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-09T18:35:09.915Z'
+updatedAt: '2026-10-19T19:47:23.379Z'

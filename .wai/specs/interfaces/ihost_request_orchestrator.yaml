@@ -12,37 +12,32 @@ methods:
       HTTP layer resolved and passes in (a bearer token, or a browser web session bridged from its
       cookie), or, when none is passed, the request's bearer token; resolve the authorized project
       root (rejecting cross-project access), bind the request-scoped root, then dispatch the sdd_*
-      call within that scope. A member-qualified narrowing ('projectId::alias', one member alias per
-      hop — the same strings the legacy mount ids were, so an existing token binds the same root;
-      stage 7 rewrites qualifiers to member project ids) binds the MEMBER's root: every scoped tool
-      — validation included — then operates on the member's tree. Validation is the same two
-      functions the local CLI calls (stage 4): the member's own gate judges it from its own files
-      and pins alone, so its verdict does not depend on whether the credential reaches the top
-      project; a family run composes only within the credential's reach, which it never widens, and
-      nothing above the member's root is read for a narrowed credential. Under a member-qualified
-      binding only tools declared tree-scoped are served — every scoped spec tool, and lock and tree
-      transfer acting on the bound member; record-scoped tools (project record, repository,
-      landscape discovery) and any tool with no declared scope are refused, so confinement fails
-      closed. For an ordinary scoped tool the tool is classified as a read
-      (sdd_get_*/sdd_validate_*, plus the explicitly listed reads listAgents, getAgent, listDomains,
-      validateTopology and getProjectConfig) or a write (every other name — the explicit write
-      prefixes AND any unrecognized or newly added name, failing closed) and the caller's resolved
-      permission for the matching capability (project:read for reads, project:write for writes) over
-      the bound project MUST be yes, resolved through the authorization component; a missing
-      permission is rejected with a clear MCP error, naming the rung that decided it, before
-      dispatch. Writes are judged per subsystem as well: the request binds its write reach (the
-      subsystem rungs the principal meets, each writable or not), a subsystem-scoped write (one
-      whose every change is a spec written through the core's spec writers) is admitted with write
-      on any subsystem of the bound project even without project-wide write, and the spec writers
-      then refuse any spec of a subsystem the principal may not change — a multi-subsystem write
-      needs write on every subsystem it touches, and its refusal names each one denied; a spec that
-      belongs to no subsystem follows the project rung. Reading stays whole-project. With no
-      subsystem settings every call is admitted or refused exactly as before. The execute-primary
-      project-lifecycle MCP tools and the hosted landscape discovery MCP tools are dispatched to
-      their orchestrators (already gated) instead of the scoped MCP tool surface and bypass this
-      data-plane permission gate. Appends a redacted audit event for every handled data-plane tool
-      call — stamped with the TOP project id for provenance plus the bound member qualifier when one
-      applied; append failures are recorded as server diagnostics and never fail the request.
+      call within that scope. A project selector is a hosted record id; a member is a record of its
+      own, named by its own id, and binds the MEMBER's root: every scoped tool - validation included
+      - then operates on the member's tree. A member-qualified selector ('projectId::alias') names
+      no record and is refused with 400 before any lookup. Validation is the same two functions the
+      local CLI calls (stage 4): the member's own gate judges it from its own files and pins alone,
+      so its verdict does not depend on whether the credential reaches the top project; a family run
+      composes only within the credential's reach, which it never widens. For an ordinary scoped
+      tool the tool is classified as a read (sdd_get_*/sdd_validate_*, plus the explicitly listed
+      reads listAgents, getAgent, listDomains, validateTopology and getProjectConfig) or a write
+      (every other name - the explicit write prefixes AND any unrecognized or newly added name,
+      failing closed) and the caller's resolved permission for the matching capability (project:read
+      for reads, project:write for writes) over the bound project MUST be yes, resolved through the
+      authorization component; a missing permission is rejected with a clear MCP error, naming the
+      rung that decided it, before dispatch. Writes are judged per subsystem as well: the request
+      binds its write reach (the subsystem rungs the principal meets, each writable or not), a
+      subsystem-scoped write (one whose every change is a spec written through the core's spec
+      writers) is admitted with write on any subsystem of the bound project even without
+      project-wide write, and the spec writers then refuse any spec of a subsystem the principal may
+      not change - a multi-subsystem write needs write on every subsystem it touches, and its
+      refusal names each one denied; a spec that belongs to no subsystem follows the project rung.
+      Reading stays whole-project. With no subsystem settings every call is admitted or refused
+      exactly as before. The execute-primary project-lifecycle MCP tools and the hosted landscape
+      discovery MCP tools are dispatched to their orchestrators (already gated) instead of the
+      scoped MCP tool surface and bypass this data-plane permission gate. Appends a redacted audit
+      event for every handled data-plane tool call - stamped with the bound record's id; append
+      failures are recorded as server diagnostics and never fail the request.
     signature: 'handle(body: any, credential?: string?): async void'
     returns: async void
     params:
@@ -101,12 +96,10 @@ methods:
     description: >-
       Append the redacted mcp.tool.call audit event for one handled data-plane tool call,
       best-effort: an append failure is recorded as a server diagnostic and never fails the request.
-      The event names the bound record as projectId — the member's own id when a member was bound —
-      and, when a deprecated member qualifier resolved the binding, the family root it named as
-      composition; a legacy principal with no resolved subject gets a synthesized service actor so
-      the required actor is always present. Every data-plane outcome flows through this one path — a
-      permission refusal, a tool the data plane served itself, and a tool the scoped MCP server
-      served.
+      The event names the bound record as projectId - the member's own id when a member was bound; a
+      legacy principal with no resolved subject gets a synthesized service actor so the required
+      actor is always present. Every data-plane outcome flows through this one path - a permission
+      refusal, a tool the data plane served itself, and a tool the scoped MCP server served.
     signature: >-
       auditToolCall(principal: Principal, binding: ProjectBinding, body: any, outcome:
       AuditOutcome): void
@@ -117,7 +110,7 @@ methods:
         description: The authenticated caller — actor and tokenId of the event
       - name: binding
         type: ProjectBinding
-        description: The bound record the event names, and the deprecated qualifier recorded as composition
+        description: The bound record the event names
       - name: body
         type: any
         description: The decoded JSON-RPC message of the handled call, which names the tool the event targets
@@ -128,4 +121,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:49:34.974Z'
-updatedAt: '2026-10-04T23:41:16.377Z'
+updatedAt: '2026-10-19T06:10:31.109Z'

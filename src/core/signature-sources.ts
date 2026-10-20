@@ -109,6 +109,8 @@ interface ResolutionTables {
   types: TypeSpec[];
   /** `<interface key>|<authored text>` → the key the scan bound that type reference to. */
   boundTypes: Map<string, string>;
+  /** Component key → the subsystem it belongs to: where a contract's type references are read from first. */
+  subsystemOf: Map<string, string>;
   /** `<referring namespace>|<alias>::<public name>.<method>` → that export entry's method, spelled as the referrer writes it. */
   exportMethods: ReadonlyMap<string, MethodSignature>;
 }
@@ -152,7 +154,7 @@ function tablesOf(
     if (ref.position !== 'type' || ref.binding === 'outside' || ref.binding === 'unresolved') continue;
     boundTypes.set(`${ref.specId}|${ref.authored}`, ref.resolved);
   }
-  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types, boundTypes, exportMethods };
+  return { methodsOf, componentKeys: new Set(components.map((c) => c.id)), types, boundTypes, exportMethods, subsystemOf: new Map(components.map((c) => [c.id, c.subsystem])) };
 }
 
 /** Step 3, the method reading: the head a component in the owning interface's namespace, the tail a method on its contracts. */
@@ -193,9 +195,13 @@ function typeReading(tables: ResolutionTables, intf: InterfaceSpec, value: strin
   const named = bound !== undefined
     ? tables.types.filter((t) => t.id === bound)
     : tables.types.filter((t) => t.id === value || typeMatchesRef(t, value));
+  // The referrer's own subsystem first (type_ref_resolution.resolve): its types settle a bare name.
+  const from = tables.subsystemOf.get(intf.component);
+  const own = bound === undefined && from !== undefined ? named.filter((t) => t.subsystem === from) : [];
+  const candidates = own.length > 0 ? own : named;
   const ns = namespaceOf(intf.id);
   const local = (t: TypeSpec): number => (namespaceOf(t.id) === ns ? 0 : 1);
-  const ranked = [...named].sort((a, b) => local(a) - local(b));
+  const ranked = [...candidates].sort((a, b) => local(a) - local(b));
   return { signature: ranked.find((t) => t.kind === 'signature'), other: ranked.find((t) => t.kind !== 'signature') };
 }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -85,6 +86,7 @@ function scratchTree(kind: 'healthy' | 'unparseable' | 'no-system'): string {
   }
   fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), JSON.stringify({
     schemaVersion: '1.0.0',
+    waironMajor: WAIRON_MAJOR,
     name: 'status-exit-codes',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
   }));

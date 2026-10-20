@@ -1,0 +1,274 @@
+id: v5_to_v6_tree_step_impl
+name: v5 to v6 Tree Step Implementation
+description: >-
+  src/upgrade/steps/v5-to-v6/step.ts: one project at a time, on the root the orchestrator bound (a
+  rehearsal copy). The lock is re-expressed before any spec moves, so the tree it is compared with
+  is the tree it approved — the order doctor used. The chaining migration plans from the bound root
+  over everything below it, so the family top's write moves the whole family and a member's plan
+  finds it done.
+contract: iv5_to_v6_tree_step
+sourcePath: src/upgrade/steps/v5-to-v6/step.ts
+methods:
+  - name: familyRoots
+    narrative:
+      - stepNumber: 1
+        description: List the family from its raw files, legacy mounts included
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: familyRoots
+      - stepNumber: 2
+        description: Answer the roots, the top first
+        type: return
+        outcome: list<string>
+  - name: plan
+    narrative:
+      - stepNumber: 1
+        description: Start an empty plan of step 5 to 6 for the root
+        type: local
+      - stepNumber: 2
+        description: Does the root still keep its tree in a .wairon folder?
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: holdsLegacyFolder
+      - stepNumber: 3
+        description: When it does, plan the folder move to .wai (not a design change)
+        type: local
+      - stepNumber: 4
+        description: Compute the gate identity the tree is judged under now
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 5
+        description: Read the lock record carried into the current format, when it is an older one
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: reexpressApproval
+      - stepNumber: 6
+        description: >-
+          When one comes back, plan its re-expression, keeping who approved it and when (not a
+          design change)
+        type: local
+      - stepNumber: 7
+        description: >-
+          When none comes back, read an older record nothing proves unchanged, kept on record in the
+          current format
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: keepStaleRecord
+      - stepNumber: 8
+        description: >-
+          When one comes back, plan keeping it: it reads stale until `wairon lock` approves the
+          design again, so the upgraded project never holds an approval nothing can read (not a
+          design change)
+        type: local
+      - stepNumber: 9
+        description: List the spec files stored under a legacy name
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 10
+        description: Plan each rename (not a design change)
+        type: local
+      - stepNumber: 11
+        description: List the chained subprojects with specs but no project.yaml
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: findChainingSubprojectsMissingConfig
+      - stepNumber: 12
+        description: Plan each project.yaml to write (not a design change)
+        type: local
+      - stepNumber: 13
+        description: >-
+          Plan the chaining migration from the root, without a rehearsal: legacy mounts into
+          members, the retired reference forms to alias::name, the exports and pins it needs
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: plan
+      - stepNumber: 14
+        description: Is the chaining migration blocked?
+        type: branch
+        condition: the chaining plan is refused
+        onFalseStep: 16
+      - stepNumber: 15
+        description: >-
+          Refuse the step, naming why the chaining migration is blocked and what the author must
+          decide first
+        type: throw
+        error: 'StepRefused: the chaining migration''s reason'
+      - stepNumber: 16
+        label: chaining
+        description: >-
+          Plan each of its rewrites as a design change, per spec, and report each of its findings
+          for an author
+        type: local
+      - stepNumber: 17
+        description: Plan retiring the Specialists, without writing
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 18
+        description: Plan each retype as a design change
+        type: local
+      - stepNumber: 19
+        description: Plan merging each Gateway into the Portal it owned, without writing
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireGateways
+      - stepNumber: 20
+        description: Can every Gateway be merged?
+        type: branch
+        condition: a Gateway is refused
+        onFalseStep: 22
+      - stepNumber: 21
+        description: >-
+          Refuse the step, naming each Gateway that cannot be merged, why, and the hand steps to
+          take in its spec files before upgrading again
+        type: throw
+        error: 'StepRefused: each Gateway that cannot be merged, with why and the hand steps'
+      - stepNumber: 22
+        label: gateways
+        description: Plan each merge as a design change
+        type: local
+      - stepNumber: 23
+        description: Plan moving onto the reachability model, without writing
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 24
+        description: >-
+          Plan each of its rewrites as a design change, and report what it will not fix, with the
+          decision to make
+        type: local
+      - stepNumber: 25
+        description: Answer the step plan
+        type: return
+        outcome: StepPlan
+  - name: write
+    narrative:
+      - stepNumber: 1
+        description: Does the plan move the .wairon folder?
+        type: branch
+        condition: the plan names the folder move
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Move it to .wai on the bound root
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: moveLegacyFolder
+      - stepNumber: 3
+        label: lock
+        description: Compute the gate identity the tree is judged under now
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: computeGateStateId
+      - stepNumber: 4
+        description: Carry an older lock record into the current format
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: reexpressApproval
+      - stepNumber: 5
+        description: Was none re-expressed?
+        type: branch
+        condition: no record came back
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Keep an older record nothing proves unchanged on record in the current format, reading
+          stale
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: keepStaleRecord
+      - stepNumber: 7
+        description: Is there a record to write?
+        type: branch
+        condition: a record is in hand
+        onFalseStep: 9
+      - stepNumber: 8
+        description: Write it back
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: writeLockRecord
+      - stepNumber: 9
+        label: files
+        description: List the spec files stored under a legacy name
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: findLegacySpecFiles
+      - stepNumber: 10
+        description: For each legacy spec file
+        type: loop
+        loopKind: forEach
+        over: the legacy spec files
+        endStep: 11
+      - stepNumber: 11
+        label: renamed
+        description: Rename it to the name the current layout expects
+        type: call
+        targetComponent: v5_tree_file_adapter
+        targetMethod: renameSpecFile
+      - stepNumber: 12
+        description: Write the project.yaml each chained subproject with specs lacks
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: backfillChainedSubprojectConfigs
+      - stepNumber: 13
+        description: >-
+          Plan the chaining migration from the bound root, rehearsed: its own transaction copies and
+          commits within the upgrade's rehearsal, never the live family
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: plan
+      - stepNumber: 14
+        description: Does it change anything?
+        type: branch
+        condition: the chaining plan has changes
+        onFalseStep: 18
+      - stepNumber: 15
+        description: Apply it
+        type: call
+        targetComponent: upgrade_migration_adapter
+        targetMethod: apply
+      - stepNumber: 16
+        description: Did it commit?
+        type: branch
+        condition: the chaining migration did not commit
+        onFalseStep: 18
+      - stepNumber: 17
+        description: Refuse the step with the chaining migration's failure
+        type: throw
+        error: 'StepRefused: the chaining migration''s failure'
+      - stepNumber: 18
+        label: specialists
+        description: 'Retire the Specialists: each becomes an Orchestrator, its variants rebased'
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireSpecialists
+      - stepNumber: 19
+        description: Merge each Gateway into the Portal it owned
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: retireGateways
+      - stepNumber: 20
+        description: Move the tree onto the reachability model
+        type: call
+        targetComponent: upgrade_core_adapter
+        targetMethod: migrateReachability
+      - stepNumber: 21
+        description: Written
+        type: return
+        outcome: void
+  - name: whatChanged
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the fixed lines, most important first: Specialist and Gateway are gone (an
+          Orchestrator with a dependencyClass, a Portal with the gateway variant); reachability is
+          entries and calls (portalType, listener mounts and the old invokedBy kinds are gone);
+          members replace L1 mounts, and alias::name replaces the leading ::, super:: and member
+          paths; the deprecated flags and commands of v5 are removed (docs/cli.md lists the current
+          ones)
+        type: return
+        outcome: list<string>
+status: draft
+createdAt: '2026-10-18T14:14:32.869Z'
+updatedAt: '2026-10-18T21:55:59.457Z'

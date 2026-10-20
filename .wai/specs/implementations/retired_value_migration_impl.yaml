@@ -1,0 +1,66 @@
+id: retired_value_migration_impl
+name: Retired Value Migration Implementation
+description: >-
+  src/server/migration.ts, beside the permission-model step: the same raw reads of the same data
+  files.
+contract: iretired_value_migration
+sourcePath: src/server/migration.ts
+injectedParams:
+  - dataDir
+  - auditPolicy
+methods:
+  - name: run
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the exposure policy file raw; an adminApiMode of local_only, private_network or
+          public (each only ever meant served) is a finding and, in apply mode, is stored as enabled
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read the users file raw; a status of suspended, deactivated, disabled or deleted (each
+          already meant inactive: not active blocks sign-in) is a finding and, in apply mode, is
+          stored as inactive
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read the public-surface snapshots raw; an entry whose audience is public (the former name
+          of external) is a finding and, in apply mode, is stored as external, so the served reach
+          is exactly what it was
+        type: local
+      - stepNumber: 4
+        description: >-
+          Read each share snapshot raw. One carrying the single-document OpenAPI capture beside the
+          per-portal set loses the single document (it is the set's only member). One carrying it
+          with no per-portal set cannot be split per portal - its portal ids were never recorded -
+          so the capture is dropped and the snapshot id reported: the canvas and HTML stay, and
+          refreshing the share recaptures the OpenAPI per portal
+        type: local
+      - stepNumber: 5
+        description: >-
+          Read the approval requests raw; a project:lock request that is pending or approved and
+          carries a payload (the member-qualifier scope an older major recorded) is a finding and,
+          in apply mode, is closed - denied when pending, cancelled when approved - with the reason
+          naming the member scope and telling the requester to ask again on the member's own record.
+          Its scope is never carried to the member: no approver decided that, so nothing is widened
+        type: local
+      - stepNumber: 6
+        description: Was any request closed?
+        type: branch
+        condition: apply mode is on and a request was closed
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Audit approval.request.closed per closed request, naming the request id, its project and
+          the reason
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 8
+        label: done
+        description: Return the findings and whether they were applied
+        type: return
+        outcome: MigrationReport
+status: complete
+createdAt: '2026-10-19T06:17:40.378Z'
+updatedAt: '2026-10-19T11:41:15.589Z'

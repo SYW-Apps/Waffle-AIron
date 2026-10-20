@@ -1,0 +1,21 @@
+id: upgrade_orchestrator
+name: Upgrade Orchestrator
+description: >-
+  Brings a family of project trees up to the running major. It reads each project's stamp, asks the
+  chain for the steps between that major and the running one, gathers every step's plan, and applies
+  the whole plan in one staged transaction, so the family is fully upgraded or byte-identical to
+  before; then it stamps each project with the running major and names the projects whose design
+  moved and owe a re-lock. It never locks. It also answers where a tree stands, and serves the
+  release notes between two versions.
+subsystem: sdd_upgrade
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - upgrade_chain
+  - v5_to_v6_tree_step
+  - upgrade_migration_adapter
+  - installed_release_adapter
+  - project_stamp_adapter
+status: complete
+createdAt: '2026-10-18T13:02:33.103Z'
+updatedAt: '2026-10-18T15:21:24.607Z'

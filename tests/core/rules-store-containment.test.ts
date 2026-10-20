@@ -113,7 +113,7 @@ describe('Store-target boundary violations prescribe the fix and forbid the shor
   it('Portal → Store: the hop goes through an Orchestrator, never inline the state', () => {
     const proj = createTempProject();
     proj.component('loose-store', 'Store');
-    proj.component('front-portal', 'Portal', 'portalType: Custom\ndependsOn: [loose-store]');
+    proj.component('front-portal', 'Portal', 'transport: Custom\ndependsOn: [loose-store]');
     proj.activate();
     try {
       const found = byCode(validateProject(), 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP');

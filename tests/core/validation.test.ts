@@ -677,7 +677,7 @@ parentSystem: TestSystem
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
-    // comp-grpc is type Portal, portalType: gRPC
+    // comp-grpc is type Portal, transport: gRPC
     proj.writeSpec('component', 'comp-grpc', `
 schemaVersion: 1.0.0
 id: comp-grpc
@@ -685,7 +685,7 @@ name: ComponentGrpc
 description: gRPC component
 subsystem: sub-a
 componentType: Portal
-portalType: gRPC
+transport: gRPC
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -741,7 +741,7 @@ name: ComponentHttp
 description: HTTP component
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -863,7 +863,7 @@ name: ComponentHttp
 description: HTTP component
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -915,7 +915,7 @@ status: draft
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
-    // comp-a has type Portal, portalType: HTTP_API, and is draft because subsystem is draft
+    // comp-a has type Portal, transport: HTTP, and is draft because subsystem is draft
     proj.writeSpec('component', 'comp-a', `
 schemaVersion: 1.0.0
 id: comp-a
@@ -923,7 +923,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -1041,7 +1041,7 @@ parentSystem: TestSystem
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `);
-    // comp-a has type Portal, portalType: HTTP_API, and is complete (default)
+    // comp-a has type Portal, transport: HTTP, and is complete (default)
     proj.writeSpec('component', 'comp-a', `
 schemaVersion: 1.0.0
 id: comp-a
@@ -1049,7 +1049,7 @@ name: ComponentA
 description: Component A description
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -1154,7 +1154,7 @@ name: PortalComponent
 description: A portal entry point
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 dependsOn:
   - comp-b
 createdAt: '2026-06-10T22:00:00Z'
@@ -1200,14 +1200,14 @@ parentSystem: TestSystem
 ${publicInterfaces}createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `;
-  const comp = (id: string, subsystem: string, componentType: string, opts: { dependsOn?: string[]; portalType?: string } = {}): string => `
+  const comp = (id: string, subsystem: string, componentType: string, opts: { dependsOn?: string[]; transport?: string } = {}): string => `
 schemaVersion: 1.0.0
 id: ${id}
 name: ${id}
 description: ${id} description
 subsystem: ${subsystem}
 componentType: ${componentType}
-${opts.portalType ? `portalType: ${opts.portalType}\n` : ''}dependsOn: [${(opts.dependsOn ?? []).join(', ')}]
+${opts.transport ? `transport: ${opts.transport}\n` : ''}dependsOn: [${(opts.dependsOn ?? []).join(', ')}]
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
 `;
@@ -1235,9 +1235,9 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('system', 'system', SYS);
     proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: front door\n    component: portal-b\n'));
+      'publicInterfaces:\n  - details: front door\n    component: portal-b\n'));
     proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['portal-b'] }));
-    proj.writeSpec('component', 'portal-b', comp('portal-b', 'sub-b', 'Portal', { portalType: 'HTTP_API' }));
+    proj.writeSpec('component', 'portal-b', comp('portal-b', 'sub-b', 'Portal', { transport: 'HTTP' }));
     proj.activate();
     try {
       const res = validateProject();
@@ -1254,7 +1254,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.writeSpec('subsystem', 'sub-a', sub('sub-a'));
     // sub-b publishes an internal Orchestrator directly (the leak the rule catches).
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: Custom\n    details: leaked internal\n    component: orch-b\n'));
+      'publicInterfaces:\n  - details: leaked internal\n    component: orch-b\n'));
     proj.writeSpec('component', 'adapter-a', comp('adapter-a', 'sub-a', 'Adapter', { dependsOn: ['orch-b'] }));
     proj.writeSpec('component', 'orch-b', comp('orch-b', 'sub-b', 'Orchestrator'));
     proj.activate();
@@ -1290,7 +1290,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n'));
+      'publicInterfaces:\n  - details: queue\n'));
     proj.activate();
     try {
       const res = validateProject();
@@ -1305,7 +1305,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
-      'publicInterfaces:\n  - type: MessageBus\n    details: queue\n    component: obs-b\n'));
+      'publicInterfaces:\n  - details: queue\n    component: obs-b\n'));
     proj.writeSpec('component', 'obs-b', comp('obs-b', 'sub-b', 'Observer'));
     proj.activate();
     try {
@@ -1884,8 +1884,7 @@ name: SubsystemA
 description: Subsystem A description
 parentSystem: TestSystem
 publicInterfaces:
-  - type: REST
-    details: public rest api
+  - details: public rest api
     component: comp-entry
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -1921,7 +1920,7 @@ name: EntryPortal
 description: Entry portal
 subsystem: sub-a
 componentType: Portal
-portalType: HTTP_API
+transport: HTTP
 invokedBy:
   kind: entry
   caller: Clients outside the design call it over HTTP
@@ -2246,8 +2245,7 @@ name: SubsystemA
 description: Subsystem A
 parentSystem: TestSystem
 publicInterfaces:
-  - type: Custom
-    details: front door
+  - details: front door
     component: a-portal
 ${trustedLinksYaml}
 createdAt: '2026-06-10T22:00:00Z'
@@ -2260,8 +2258,7 @@ name: SubsystemB
 description: Subsystem B
 parentSystem: TestSystem
 publicInterfaces:
-  - type: Custom
-    details: front door
+  - details: front door
     component: b-portal
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'
@@ -2273,7 +2270,7 @@ name: ${id}
 description: portal
 subsystem: ${sub}
 componentType: Portal
-portalType: Custom
+transport: Custom
 dependsOn: []
 createdAt: '2026-06-10T22:00:00Z'
 updatedAt: '2026-06-10T22:00:00Z'

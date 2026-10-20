@@ -10,19 +10,28 @@ import { pathToFileURL } from 'node:url';
 import {
   createProjectRecord,
   registerMemberRecord,
-  parseQualifiedSelector,
   resolveProjectBinding,
   resolveProjectRoot,
-  resolveSubprojectMounts,
   assertMintableNarrowingEntry,
 } from '../../src/server/projects.js';
 import { handleMcpRequest } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
-import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
+import { mintUserToken, allow, seedSubsystem, seedChainedMember } from './helpers.js';
 import type { HostConfig, Principal } from '../../src/server/types.js';
 
+/** A project root's configuration, so a member can be declared in it. */
+function initConfig(root: string, id: string): void {
+  fs.mkdirSync(path.join(root, '.wai'), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, '.wai', 'project.yaml'),
+    ['schemaVersion: 1.0.0', 'id: ' + id, 'name: ' + id, 'targets: []',
+      "createdAt: '2026-01-01T00:00:00.000Z'", "updatedAt: '2026-01-01T00:00:00.000Z'", ''].join('\n'),
+  );
+}
+
 /**
- * Stage 7: a member is a hosted record of its own. Give the chained mount at
+ * Stage 7: a member is a hosted record of its own. Give the member dir at
  * `dir` a project.yaml declaring `id`, and register its record under its parent.
  */
 function recordMember(dataDir: string, id: string, parentProjectId: string, memberPath: string, dir: string): void {
@@ -35,25 +44,15 @@ function recordMember(dataDir: string, id: string, parentProjectId: string, memb
 }
 
 // ---------------------------------------------------------------------------
-// Member-qualified token narrowing (sdd_host) — DEPRECATED since stage 7.
+// Member binding (sdd_host).
 //
-// Since stage 7 each member is a hosted record bound by its own id. For one
-// release a member-qualified entry or selector ('projectId::alias', one alias
-// per hop) still resolves — to the member's RECORD (the binding records the
-// qualifier in `via`), never wider. What follows is the pre-stage-7 suite, kept
-// for that compatibility path:
-//
-// A token's `projects` narrowing entry (and the request selector) may be
-// subproject-qualified: 'projectId::subsystemId', nested mounts composing
-// ('proj::a::b'). Resolution binds the CHAINED CHILD's root INSIDE the
-// project's isolated tree — the mount is looked up on the current root's
-// subsystem specs (a subsystem carrying projectPath), containment-checked, and
-// an unknown / non-chained / escaping mount REJECTS (never a silent fallback
-// to the project root). The qualifier is a NARROWING only: a principal
-// narrowed to 'proj::a' can never bind plain 'proj' or a sibling, while a
-// plain-'proj' (or '*') principal MAY narrow via a qualified selector.
-// Permission capabilities keep resolving over the TOP project, and the audit
-// event keeps the TOP project id, additionally recording the bound qualifier.
+// Each member is a hosted record bound by its own id. A token's `projects`
+// narrowing entry covers its project and every member below it; a
+// member-qualified entry or selector ('projectId::alias') names no record and
+// binds nothing (the server start rewrites the qualified entries an older major
+// stored). A principal narrowed to a member can never bind its family root or
+// a sibling. Permission capabilities resolve over the member's own chain, and
+// the audit event names the member.
 // ---------------------------------------------------------------------------
 
 /** Seed one component spec into the tree at `root` (flat legacy layout — the
@@ -84,7 +83,7 @@ const principalWith = (projects: string[]): Principal => ({
   authenticated: true,
 });
 
-describe('resolveProjectBinding — subproject-qualified selectors and narrowing', () => {
+describe('resolveProjectBinding - members by record id; a qualifier binds nothing', () => {
   let dataDir: string;
   let demoRoot: string;
   let billingDir: string;
@@ -93,15 +92,15 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
   beforeEach(() => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-subproj-bind-'));
     demoRoot = createProjectRecord(dataDir, 'demo').rootPath;
-    // demo ── billing (chained) ── payments (chained, nested inside billing)
-    //     ├── other   (chained sibling)
-    //     ├── plain   (ordinary in-tree subsystem, NOT chained)
-    //     └── esc     (chained but ../-escaping — must be rejected)
-    billingDir = seedChainedMount(demoRoot, 'billing', 'packages/billing');
-    paymentsDir = seedChainedMount(billingDir, 'payments', 'sub/payments');
-    const otherDir = seedChainedMount(demoRoot, 'other', 'packages/other');
+    initConfig(demoRoot, 'demo');
+    // demo -- billing (member) -- payments (member, nested inside billing)
+    //     |-- other   (member sibling)
+    //     `-- plain   (ordinary in-tree subsystem, NOT a member)
+    billingDir = seedChainedMember(demoRoot, 'billing', 'packages/billing');
+    initConfig(billingDir, 'billing');
+    paymentsDir = seedChainedMember(billingDir, 'payments', 'sub/payments');
+    const otherDir = seedChainedMember(demoRoot, 'other', 'packages/other');
     seedSubsystem(demoRoot, 'plain');
-    seedSubsystem(demoRoot, 'esc', '../../escape');
     recordMember(dataDir, 'billing', 'demo', 'packages/billing', billingDir);
     recordMember(dataDir, 'payments', 'billing', 'sub/payments', paymentsDir);
     recordMember(dataDir, 'other', 'demo', 'packages/other', otherDir);
@@ -115,54 +114,28 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
     }
   });
 
-  // ── parsing ────────────────────────────────────────────────────────────────
-
-  it('parses a qualified selector: first ::-segment = project id, remainder = the mount chain', () => {
-    expect(parseQualifiedSelector('demo')).toEqual({ projectId: 'demo', mounts: [] });
-    expect(parseQualifiedSelector('demo::billing')).toEqual({ projectId: 'demo', mounts: ['billing'] });
-    expect(parseQualifiedSelector('demo::a::b')).toEqual({ projectId: 'demo', mounts: ['a', 'b'] });
-    // Malformed: empty mount segment, invalid project id, non-strings.
-    expect(parseQualifiedSelector('demo::')).toBeNull();
-    expect(parseQualifiedSelector('::billing')).toBeNull();
-    expect(parseQualifiedSelector('Bad Id::x')).toBeNull();
-    expect(parseQualifiedSelector('')).toBeNull();
-    expect(parseQualifiedSelector(undefined)).toBeNull();
-  });
-
-  // ── resolution ─────────────────────────────────────────────────────────────
-
-  it('binds the member RECORD for a qualified selector, recording the qualifier in via', () => {
-    const b = resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::billing');
+  it('binds the member RECORD for its own id, from a project principal or a "*" principal', () => {
+    const b = resolveProjectBinding(dataDir, principalWith(['demo']), 'billing');
     expect(b).toEqual({
       rootPath: path.resolve(demoRoot, 'packages', 'billing'),
       projectId: 'billing',
       familyRootId: 'demo',
-      via: 'demo::billing',
     });
-    // The root-path projection agrees.
-    expect(resolveProjectRoot(dataDir, principalWith(['demo']), 'demo::billing')).toBe(b!.rootPath);
+    expect(resolveProjectRoot(dataDir, principalWith(['demo']), 'billing')).toBe(b!.rootPath);
+    expect(resolveProjectBinding(dataDir, principalWith(['*']), 'billing')?.projectId).toBe('billing');
   });
 
-  it('composes nested mounts: each hop resolves within the CURRENT root', () => {
-    const b = resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::billing::payments');
+  it('binds a nested member by its own id', () => {
+    const b = resolveProjectBinding(dataDir, principalWith(['demo']), 'payments');
     expect(b).toEqual({
       rootPath: path.resolve(billingDir, 'sub', 'payments'),
       projectId: 'payments',
       familyRootId: 'demo',
-      via: 'demo::billing::payments',
     });
     expect(b!.rootPath).toBe(path.resolve(paymentsDir));
   });
 
-  it('a single qualified narrowing entry binds the member record with NO selector', () => {
-    const b = resolveProjectBinding(dataDir, principalWith(['demo::billing']));
-    expect(b).toEqual({
-      rootPath: path.resolve(demoRoot, 'packages', 'billing'),
-      projectId: 'billing',
-      familyRootId: 'demo',
-      via: 'demo::billing',
-    });
-    // The member by its own id binds the same root, without a via.
+  it('a single record-id narrowing entry binds the member record with NO selector', () => {
     expect(resolveProjectBinding(dataDir, principalWith(['billing']))).toEqual({
       rootPath: path.resolve(demoRoot, 'packages', 'billing'), projectId: 'billing', familyRootId: 'demo',
     });
@@ -173,48 +146,27 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
     expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'billing')).toBeNull();
   });
 
-  it('REJECTS an unknown mount — never a silent fallback to the project root', () => {
-    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::ghost')).toBeNull();
-    expect(resolveProjectRoot(dataDir, principalWith(['demo']), 'demo::ghost')).toBeNull();
+  it('a member-qualified selector or entry binds nothing - never a silent fallback to the project root', () => {
+    for (const qualified of ['demo::billing', 'demo::billing::payments', 'demo::ghost', 'demo::plain', 'demo::']) {
+      expect(resolveProjectBinding(dataDir, principalWith(['demo']), qualified)).toBeNull();
+      expect(resolveProjectRoot(dataDir, principalWith(['demo']), qualified)).toBeNull();
+      expect(resolveProjectBinding(dataDir, principalWith([qualified]))).toBeNull();
+    }
   });
 
-  it('REJECTS a subsystem without projectPath (not a chained subproject)', () => {
-    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::plain')).toBeNull();
-  });
-
-  it('REJECTS an escaping mount (containment guard): ../-escape never binds', () => {
-    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::esc')).toBeNull();
-  });
-
-  // ── authorization matrix (the qualifier can never widen) ───────────────────
-
-  it('a principal narrowed to proj::a can NEVER bind plain proj or a sibling — only at or below its qualifier', () => {
-    const narrowed = principalWith(['demo::billing']);
-    // Wider than the qualifier: rejected.
+  it('a principal narrowed to a member can NEVER bind its parent or a sibling - only at or below it', () => {
+    const narrowed = principalWith(['billing']);
     expect(resolveProjectBinding(dataDir, narrowed, 'demo')).toBeNull();
-    // Sibling mount: rejected.
-    expect(resolveProjectBinding(dataDir, narrowed, 'demo::other')).toBeNull();
-    // Another project entirely: rejected.
+    expect(resolveProjectBinding(dataDir, narrowed, 'other')).toBeNull();
     createProjectRecord(dataDir, 'unrelated');
     expect(resolveProjectBinding(dataDir, narrowed, 'unrelated')).toBeNull();
-    // Its own qualifier, and its own record id: allowed.
-    expect(resolveProjectBinding(dataDir, narrowed, 'demo::billing')?.projectId).toBe('billing');
     expect(resolveProjectBinding(dataDir, narrowed, 'billing')?.projectId).toBe('billing');
-    // Deeper under the qualifier (its member, by qualifier or by id): allowed.
-    const deeper = resolveProjectBinding(dataDir, narrowed, 'demo::billing::payments');
+    const deeper = resolveProjectBinding(dataDir, narrowed, 'payments');
     expect(deeper?.projectId).toBe('payments');
     expect(deeper?.rootPath).toBe(path.resolve(paymentsDir));
-    expect(resolveProjectBinding(dataDir, narrowed, 'payments')?.projectId).toBe('payments');
-    // A sibling by its record id: rejected.
-    expect(resolveProjectBinding(dataDir, narrowed, 'other')).toBeNull();
   });
 
-  it('a plain-project principal MAY narrow via a qualified selector; so may a "*" principal', () => {
-    expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'demo::billing')?.projectId).toBe('billing');
-    expect(resolveProjectBinding(dataDir, principalWith(['*']), 'demo::billing')?.projectId).toBe('billing');
-  });
-
-  it('an unqualified binding of a family root carries no via', () => {
+  it('a family root binding is plain: its member records, not a qualifier, are below it', () => {
     expect(resolveProjectBinding(dataDir, principalWith(['demo']), 'demo')).toEqual({
       rootPath: demoRoot,
       projectId: 'demo',
@@ -223,33 +175,12 @@ describe('resolveProjectBinding — subproject-qualified selectors and narrowing
     expect(resolveProjectRoot(dataDir, principalWith(['demo']))).toBe(demoRoot);
   });
 
-  // ── mount resolution + mint-time validation helpers ────────────────────────
-
-  it('resolveSubprojectMounts throws ACTIONABLE errors: unknown mount, non-chained subsystem, escape', () => {
-    expect(() => resolveSubprojectMounts('demo', demoRoot, ['ghost'])).toThrow(
-      /unknown member "ghost" on "demo"/,
-    );
-    expect(() => resolveSubprojectMounts('demo', demoRoot, ['plain'])).toThrow(
-      /an internal subsystem is not a member/,
-    );
-    expect(() => resolveSubprojectMounts('demo', demoRoot, ['esc'])).toThrow(
-      /must resolve within the project root/,
-    );
-    // Nested unknown names the qualified position it failed at.
-    expect(() => resolveSubprojectMounts('demo', demoRoot, ['billing', 'ghost'])).toThrow(
-      /unknown member "ghost" on "demo::billing"/,
-    );
-  });
-
-  it('assertMintableNarrowingEntry: "*" and valid plain/qualified entries pass; broken ones throw with guidance', () => {
-    expect(() => assertMintableNarrowingEntry(dataDir, '*')).not.toThrow();
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo')).not.toThrow();
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::billing')).not.toThrow();
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::billing::payments')).not.toThrow();
+  it('assertMintableNarrowingEntry: "*" and project or member record ids pass; a qualified or broken entry throws with guidance', () => {
+    for (const ok of ['*', 'demo', 'billing', 'payments']) expect(() => assertMintableNarrowingEntry(dataDir, ok)).not.toThrow();
     expect(() => assertMintableNarrowingEntry(dataDir, 'ghost')).toThrow(/unknown project "ghost"/);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::ghost')).toThrow(/unknown member/);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/an internal subsystem is not a member/);
-    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::')).toThrow(/invalid project narrowing entry/);
+    for (const qualified of ['demo::billing', 'demo::billing::payments', 'demo::ghost', 'demo::plain', 'demo::']) {
+      expect(() => assertMintableNarrowingEntry(dataDir, qualified)).toThrow(/name it by its project record id/);
+    }
   });
 });
 
@@ -287,8 +218,9 @@ describe('handleMcpRequest subproject binding (end-to-end)', () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-subproj-e2e-'));
     demoRoot = createProjectRecord(dataDir, 'demo').rootPath;
 
-    const billingDir = seedChainedMount(demoRoot, 'billing', 'packages/billing');
-    const otherDir = seedChainedMount(demoRoot, 'other', 'packages/other');
+    initConfig(demoRoot, 'demo');
+    const billingDir = seedChainedMember(demoRoot, 'billing', 'packages/billing');
+    const otherDir = seedChainedMember(demoRoot, 'other', 'packages/other');
     seedSubsystem(demoRoot, 'plain');
     // The component exists ONLY in the chained child tree.
     seedComponent(billingDir, 'child_comp');
@@ -342,11 +274,11 @@ describe('handleMcpRequest subproject binding (end-to-end)', () => {
     allow(dataDir, 'u-plain', 'project:read', 'project', 'demo');
     return mintUserToken(dataDir, { id: 'tok-plain', userId: 'u-plain', projects: ['demo'] });
   };
-  /** A token narrowed with the deprecated qualifier; the owner's read on the
+  /** A token narrowed to the member record; the owner's read on the
    *  parent reaches the member by inheritance. */
   const qualifiedToken = () => {
     allow(dataDir, 'u-qual', 'project:read', 'project', 'demo');
-    return mintUserToken(dataDir, { id: 'tok-qual', userId: 'u-qual', projects: ['demo::billing'] });
+    return mintUserToken(dataDir, { id: 'tok-qual', userId: 'u-qual', projects: ['billing'] });
   };
 
   const post = (bodyObj: unknown, token: string, selector?: string) =>
@@ -362,21 +294,19 @@ describe('handleMcpRequest subproject binding (end-to-end)', () => {
 
   const toolText = (r: RpcResponse): string => r.result?.content?.[0]?.text ?? '';
 
-  it('403 matrix: a qualified token cannot bind the top root or a sibling; unknown / non-chained mounts reject', async () => {
+  it('403 matrix: a member token cannot bind the top root or a sibling; a qualified selector is refused 400 before any lookup', async () => {
     const qual = qualifiedToken();
-    // Wider than the qualifier — plain project: rejected.
     expect((await post(call('sdd_get_status'), qual, 'demo')).status).toBe(403);
-    // Sibling chained mount: rejected.
-    expect((await post(call('sdd_get_status'), qual, 'demo::other')).status).toBe(403);
+    expect((await post(call('sdd_get_status'), qual, 'other')).status).toBe(403);
 
     const plain = plainToken();
-    // Unknown mount: rejected — NEVER silently widened to the project root.
-    expect((await post(call('sdd_get_status'), plain, 'demo::ghost')).status).toBe(403);
-    // Existing but non-chained subsystem: rejected.
-    expect((await post(call('sdd_get_status'), plain, 'demo::plain')).status).toBe(403);
+    for (const qualified of ['demo::ghost', 'demo::plain', 'demo::billing']) {
+      expect((await post(call('sdd_get_status'), plain, qualified)).status).toBe(400);
+    }
+    expect((await post(call('sdd_get_status'), plain, 'ghost')).status).toBe(403);
   }, 20_000);
 
-  it('audits a qualified data-plane call naming the MEMBER, with the family root it named as composition', async () => {
+  it('audits a member-bound data-plane call naming the MEMBER record', async () => {
     const qual = qualifiedToken();
 
     // A FAILED read is captured by the default policy (successful reads are
@@ -389,11 +319,11 @@ describe('handleMcpRequest subproject binding (end-to-end)', () => {
     const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
     expect(events).toHaveLength(1);
     expect(events[0].projectId).toBe('billing'); // the member's own record
-    expect(events[0].composition).toBe('demo'); // the family root the qualifier named
+    expect(events[0].composition).toBeUndefined();
     expect(events[0].target).toBe('sdd_get_spec');
     expect(events[0].tokenId).toBe('tok-qual');
 
-    // An UNQUALIFIED call records no composition.
+    // A call bound to the family root records no composition either.
     const plain = plainToken();
     const res2 = await post(call('sdd_get_spec', { kind: 'component', id: 'missing_comp' }), plain, 'demo');
     expect(res2.status).toBe(200);
@@ -404,8 +334,8 @@ describe('handleMcpRequest subproject binding (end-to-end)', () => {
   }, 20_000);
 
   it('the data-plane permission gate resolves over the member chain: an owner with no read on it is refused', async () => {
-    // Owner holds NO grant at all; the qualified narrowing alone confers nothing.
-    const tok = mintUserToken(dataDir, { id: 'tok-nogrant', userId: 'u-nogrant', projects: ['demo::billing'] });
+    // Owner holds NO grant at all; the narrowing alone confers nothing.
+    const tok = mintUserToken(dataDir, { id: 'tok-nogrant', userId: 'u-nogrant', projects: ['billing'] });
     const res = await post(call('sdd_get_spec', { kind: 'component', id: 'child_comp' }), tok);
     expect(res.status).toBe(200); // an authorization denial is a tool result
     const body = (await res.json()) as RpcResponse;
@@ -459,7 +389,10 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
   beforeEach(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-subproj-fid-'));
     demoRoot = createProjectRecord(dataDir, 'demo').rootPath;
-    billingDir = seedChainedMount(demoRoot, 'billing', 'packages/billing');
+    // The member's record binds it by its directory: no `members` declaration is needed on the data plane.
+    fs.mkdirSync(path.join(demoRoot, '.wai', 'specs'), { recursive: true });
+    billingDir = path.resolve(demoRoot, 'packages/billing');
+    fs.mkdirSync(path.join(billingDir, '.wai', 'specs'), { recursive: true });
     seedComponent(billingDir, 'child_comp'); // exists ONLY in the child tree
     recordMember(dataDir, 'billing', 'demo', 'packages/billing', billingDir);
 
@@ -467,7 +400,7 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     allow(dataDir, 'u-author', 'project:read', 'project', 'demo');
     allow(dataDir, 'u-author', 'project:write', 'project', 'demo');
     token = mintUserToken(dataDir, { id: 'author', userId: 'u-author', projects: ['demo'] });
-    qualToken = mintUserToken(dataDir, { id: 'author-qual', userId: 'u-author', projects: ['demo::billing'] });
+    qualToken = mintUserToken(dataDir, { id: 'author-qual', userId: 'u-author', projects: ['billing'] });
     starToken = mintUserToken(dataDir, { id: 'author-star', userId: 'u-author', projects: ['*'] });
 
     port = await freePort();
@@ -533,28 +466,28 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     return { text: body.result?.content?.[0]?.text ?? '', isError: body.result?.isError === true };
   };
 
-  it('reads resolve the child-only spec through every qualified route (and NOT through the plain binding); a write lands inside the child root', async () => {
-    // Plain token + qualified SELECTOR → child tree: the child-only spec resolves.
-    const viaSelector = await callTool(token, 'demo::billing', 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
+  it('reads resolve the child-only spec through every record-id route (and NOT through the parent binding); a write lands inside the child root', async () => {
+    // Plain token + the member record id as SELECTOR: the child-only spec resolves.
+    const viaSelector = await callTool(token, 'billing', 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
     expect(viaSelector.isError, viaSelector.text).toBe(false);
     expect((JSON.parse(viaSelector.text) as { id: string }).id).toBe('child_comp');
 
-    // Qualified-NARROWED token, NO selector → the single qualified entry binds the child.
+    // Member-NARROWED token, NO selector: the single entry binds the child.
     const viaNarrowing = await callTool(qualToken, undefined, 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
     expect(viaNarrowing.isError, viaNarrowing.text).toBe(false);
     expect((JSON.parse(viaNarrowing.text) as { id: string }).id).toBe('child_comp');
 
-    // '*' token narrows via the qualified selector.
-    const viaStar = await callTool(starToken, 'demo::billing', 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
+    // '*' token narrows via the record id selector.
+    const viaStar = await callTool(starToken, 'billing', 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
     expect(viaStar.isError, viaStar.text).toBe(false);
 
     // The PLAIN project binding does not see the bare child id (distinct trees).
     const viaParent = await callTool(token, 'demo', 'sdd_get_spec', { kind: 'component', id: 'child_comp' });
     expect(viaParent.isError).toBe(true);
 
-    // A WRITE through the qualified binding lands INSIDE the child root: the
+    // A WRITE through the member binding lands INSIDE the child root: the
     // child gains its own L0 system spec; the parent tree gains none.
-    const init = await callTool(token, 'demo::billing', 'sdd_initialize_system', {
+    const init = await callTool(token, 'billing', 'sdd_initialize_system', {
       name: 'childsys',
       vision: 'the chained child system',
     });
@@ -573,11 +506,11 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, [...lines, ''].join('\n'));
     };
-    const writeConfig = (root: string, name: string): void => {
+    const writeConfig = (root: string, name: string, extra: Record<string, unknown> = {}): void => {
       const file = path.join(root, '.wai', 'project.yaml');
       if (fs.existsSync(file)) return;
       fs.writeFileSync(file, JSON.stringify({
-        schemaVersion: '1.0.0', name, projectType: 'backend',
+        schemaVersion: '1.0.0', name, projectType: 'backend', ...extra,
         targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
         rules: {}, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
       }));
@@ -589,20 +522,22 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
       'schemaVersion: 1.0.0', 'name: root-system', 'vision: the parent', 'boundaries: []', 'globalRequirements: []', ...stamp]);
     writeLines(path.join(parentSpecs, 'subsystems', 'parent-sub.yaml'), [
       'id: parent-sub', 'name: parent-sub', 'description: the parent domain', 'parentSystem: root-system',
-      'publicInterfaces:', '  - type: Custom', '    details: the published portal', '    component: parent-portal', ...stamp]);
+      'publicInterfaces:', '  - details: the published portal', '    component: parent-portal', ...stamp]);
     writeLines(path.join(parentSpecs, 'components', 'parent-portal.yaml'), [
       'id: parent-portal', 'name: parent-portal', 'description: the published portal', 'subsystem: parent-sub',
-      'componentType: Portal', 'portalType: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
+      'componentType: Portal', 'transport: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
 
     const childSpecs = path.join(billingDir, '.wai', 'specs');
+    // The child reaches the parent's published Portal the way wairon 6 spells it: an external, never `super::`.
     writeConfig(billingDir, 'billing');
+    projectConfigRepositoryAt(billingDir).declareExternal('parent', { project: 'demo' });
     writeLines(path.join(childSpecs, '.index.yaml'), [
       'schemaVersion: 1.0.0', 'name: billing-system', 'vision: the child', 'boundaries: []', 'globalRequirements: []', ...stamp]);
     writeLines(path.join(childSpecs, 'subsystems', 'k-core.yaml'), [
       'id: k-core', 'name: k-core', 'description: the child domain', 'parentSystem: billing-system', ...stamp]);
     writeLines(path.join(childSpecs, 'components', 'k-orch.yaml'), [
       'id: k-orch', 'name: k-orch', 'description: crosses into the parent', 'subsystem: k-core',
-      'componentType: Orchestrator', 'owns: []', "dependsOn: ['super::parent-portal']", ...stamp]);
+      'componentType: Orchestrator', 'owns: []', "dependsOn: ['parent::parent-portal']", ...stamp]);
 
     interface Verdict {
       errors: { code: string; specId?: string }[];
@@ -619,10 +554,10 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     // Stage 4: the owner's gate never walks up, so every credential that
     // reaches the child gets the one verdict — reach changes what may be read,
     // never how the child is judged (no-softening-by-location).
-    const viaTop = await validate(token, 'demo::billing');
-    const viaStar = await validate(starToken, 'demo::billing');
+    const viaTop = await validate(token, 'billing');
+    const viaStar = await validate(starToken, 'billing');
     const viaNarrowed = await validate(qualToken);
-    expect(verdictOf(viaTop)).toContain('EXTERNAL_CHECK_UNAVAILABLE @k-orch');
+    expect(verdictOf(viaTop), JSON.stringify(verdictOf(viaTop))).toContain('EXTERNAL_CHECK_UNAVAILABLE @k-orch');
     expect(verdictOf(viaStar)).toEqual(verdictOf(viaTop));
     expect(verdictOf(viaNarrowed)).toEqual(verdictOf(viaTop));
   }, 120_000);

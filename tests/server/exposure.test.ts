@@ -7,6 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { routeAdmin, resolveExposurePolicy, startHostServer, type HostServerHandle } from '../../src/server/http.js';
 import type { HostConfig, HostExposurePolicy } from '../../src/server/types.js';
+import { ensureInstanceIdentity } from '../../src/server/instance.js';
+import { getExposurePolicyRecord } from '../../src/server/policy.js';
 
 // ---------------------------------------------------------------------------
 // HostExposurePolicy control-plane gating (sdd_host) — Phase 5b.
@@ -76,10 +78,10 @@ describe('resolveExposurePolicy', () => {
     expect(p.adminApiMode).toBe('enabled');
   });
 
-  it('a retired adminApiMode (local_only, private_network, public) reads as enabled; disabled stays disabled', () => {
+  it('the loader refuses a stored adminApiMode other than enabled or disabled, naming the file; disabled stays disabled', () => {
     for (const retired of ['local_only', 'private_network', 'public']) {
       writePolicyFile(dataDir, { adminApiMode: retired as HostExposurePolicy['adminApiMode'] });
-      expect(resolveExposurePolicy(cfg()).adminApiMode).toBe('enabled');
+      expect(() => getExposurePolicyRecord(dataDir)).toThrow(/exposure-policy.json.*"enabled" or "disabled"/);
     }
     writePolicyFile(dataDir, { adminApiMode: 'disabled' });
     expect(resolveExposurePolicy(cfg()).adminApiMode).toBe('disabled');
@@ -182,16 +184,15 @@ describe('exposure gating: data plane unaffected (startHostServer)', () => {
     }
   });
 
-  it('a stored retired adminApiMode logs one deprecation line at startup, and the admin plane is served', async () => {
+  it('a stored retired adminApiMode is rewritten as enabled by the start upgrade, and the admin plane is served', async () => {
     writePolicyFile(dataDir, { adminApiMode: 'public' as HostExposurePolicy['adminApiMode'] });
-    const errors: string[] = [];
-    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { errors.push(args.join(' ')); });
+    ensureInstanceIdentity(dataDir); // not a first boot: the data directory an older major wrote keeps its stamp
+    fs.writeFileSync(path.join(dataDir, 'version.json'), JSON.stringify({ major: 5 }));
     const port = await freePort();
     const adminPort = await freePort();
     const cfg: HostConfig = { host: '127.0.0.1', port, adminHost: '127.0.0.1', adminPort, dataDir, authEnabled: true };
     handles.push(startHostServer(cfg));
-    spy.mockRestore();
-    expect(errors.filter((e) => e.includes('adminApiMode "public" is deprecated and reads as "enabled"'))).toHaveLength(1);
+    expect(getExposurePolicyRecord(dataDir)?.adminApiMode).toBe('enabled');
     const res = await fetch(`http://127.0.0.1:${adminPort}/admin/projects`, { headers: { Authorization: `Bearer ${MASTER}` } });
     await res.text();
     expect(res.status).toBe(200);

@@ -34,7 +34,7 @@ import {
   graph,
 } from './specs.js';
 import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
-import { fieldTypeRefs, methodTypeRefs, typeMatchesRef } from '../models/type-references.js';
+import { fieldTypeRefs, methodTypeRefs, resolveTypeRef, typeMatchesRef } from '../models/type-references.js';
 import { languageOfSourcePath } from '../models/code-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
 import { readYamlFile } from '../utils/yaml.js';
@@ -291,8 +291,9 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   // .claude/agents/ (and the context every session loads) proportional to one
   // layer, not the whole deep tree.
   const isLocal = (id: string): boolean => !id.includes('::');
-  // Each member the bound root declares — `members` or a legacy L1 mount — is
-  // one delegating owner here, shaped as the mount subsystem it used to be.
+  // Each member the bound root declares — `members` (or, in the v5 reading only,
+  // a legacy L1 mount) — is one delegating owner here, shaped as the mount
+  // subsystem it used to be.
   const members = graph().nodes
     .filter((n) => n.parent === '' && n.mountAlias !== undefined)
     .map((n) => ({
@@ -562,7 +563,7 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
         rel(getComponentPath(comp.id, comp.subsystem)),
         ...compInterfaces.map((i) => rel(getInterfacePath(i.id, comp.id))),
         ...compImpls.map((impl) => rel(getImplementationPath(impl.id, impl.contract))),
-        ...contractTypes(compInterfaces, types).map((t) => rel(getTypePath(t.id, t.subsystem, t.group))),
+        ...contractTypes(compInterfaces, types, new Map([[comp.id, comp.subsystem]])).map((t) => rel(getTypePath(t.id, t.subsystem, t.group))),
         ...depInterfaces.map((i) => rel(getInterfacePath(i.id, i.component))),
         ...depFiles,
       ])];
@@ -803,16 +804,23 @@ function codeLocationsOf(impl: ImplementationSpec): string[] {
  * The named types a set of contracts uses — their params and returns — and,
  * transitively, the types those types' fields name, within the loaded tree.
  */
-function contractTypes(contracts: InterfaceSpec[], types: TypeSpec[]): TypeSpec[] {
+function contractTypes(contracts: InterfaceSpec[], types: TypeSpec[], subsystemOf: ReadonlyMap<string, string | undefined>): TypeSpec[] {
   const found: TypeSpec[] = [];
-  const pending = contracts.flatMap((c) => c.methods.flatMap((m) => methodTypeRefs(m)));
+  // Each reference is read from the subsystem of the spec writing it first (type_ref_resolution.resolve).
+  const pending = contracts.flatMap((c) => c.methods.flatMap((m) => methodTypeRefs(m).map((ref) => ({ ref, from: subsystemOf.get(c.component) }))));
+  const local = types.filter((t) => !t.id.includes('::'));
   while (pending.length > 0) {
-    const ref = pending.shift()!;
+    const { ref, from } = pending.shift()!;
     if (ref.includes('::')) continue; // another project's: its pin is read instead
-    const type = types.find((t) => !t.id.includes('::') && typeMatchesRef(t, ref));
-    if (!type || found.includes(type)) continue;
-    found.push(type);
-    for (const field of type.fields ?? []) pending.push(...fieldTypeRefs(type, field.type));
+    const r = resolveTypeRef(ref, from, local);
+    // An ambiguous reference puts every candidate in the brief.
+    const hits = r.outcome === 'resolved' ? local.filter((t) => t.id === r.type)
+      : r.outcome === 'ambiguous' ? local.filter((t) => typeMatchesRef(t, ref)) : [];
+    for (const type of hits) {
+      if (found.includes(type)) continue;
+      found.push(type);
+      for (const field of type.fields ?? []) pending.push(...fieldTypeRefs(type, field.type).map((r2) => ({ ref: r2, from: type.subsystem })));
+    }
   }
   return found;
 }
@@ -840,10 +848,11 @@ function componentClaims(
     claims.set(file, owners);
   };
   const contractOwner = new Map(interfaces.map((i) => [i.id, i.component]));
+  const subsystemOf = new Map(components.map((c) => [c.id, c.subsystem]));
   for (const impl of implementations) for (const file of codeLocationsOf(impl)) claim(file, contractOwner.get(impl.contract));
   const users = new Map<string, Set<string>>();
   for (const contract of interfaces) {
-    for (const type of contractTypes([contract], types)) {
+    for (const type of contractTypes([contract], types, subsystemOf)) {
       const set = users.get(type.id) ?? new Set<string>();
       set.add(contract.component);
       users.set(type.id, set);

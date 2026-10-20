@@ -396,9 +396,9 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       The DIRECT members of a project, one level deep: its project.yaml `members` entries (read
-      through that root's binding) and, for one release, its legacy L1 mounts, each resolved inside
-      the project root, as the member's directory, alias and form. An absolute or escaping path is
-      skipped.
+      through that root's binding) and, in the v5 reading `wairon upgrade` binds, its legacy L1
+      mounts, each resolved inside the project root, as the member's directory, alias and form. An
+      absolute or escaping path is skipped.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -1236,29 +1236,46 @@ methods:
   - name: renameType
     description: >-
       Rename a type and every reference to it. The type moves to the new id and file under the same
-      owner, its old id appended to its rename trace (previousIds); every type position in the bound
-      tree naming it is respelled — contract and type-method params and returns, fields,
-      signature-type params and returns — and so is a signatureFrom naming it as a signature type
-      and an L1 or L0 export entry's typeDef. An export entry that exported it without `as` gets
-      `as: <the old public name>` first, so the published name stays. Rename traces are never
-      rewritten. Findings keyed on the type follow it: lint allows naming it, and debt-register
-      entries anchored on it, rewritten in place with every comment and all other formatting kept
-      and each edit reported. The report names publishedIn — every public name a consumer reaches
-      the type through: an exported type that is or embeds it, and an exported contract whose
-      methods name one in their signature closure (those methods) — so a caller can name the
-      consumers whose code still spells the old name. Refuses a type that does not exist, one inside
-      a chained subproject, a new id outside the id grammar, a new id another type of the same owner
-      holds or retired (id-taken, id-retired naming the holder), and a register that cannot be
-      rewritten that precisely; every refusal happens before the first write. Display names are the
+      owner, its old id appended to its rename trace (previousIds). Only references that resolve to
+      this type from where they are written are respelled — a bare name resolves in the referring
+      subsystem first, so a same-named type of another subsystem is left alone — in every type
+      position of the bound tree: contract and type-method params and returns, fields, a signature
+      type's params and returns; so is a signatureFrom naming it as a signature type, and an L1 or
+      L0 export entry's typeDef. A contract method's stored signature text is re-derived from its
+      params; a prose signature without params has only its result respelled. An export entry that
+      exported it without `as` gets `as: <the old public name>` first, so the published name stays.
+      Rename traces are never rewritten. Findings keyed on the type follow it: lint allows naming
+      it, and debt-register entries anchored on it, rewritten in place with every comment and all
+      other formatting kept and each edit reported. The report names publishedIn — every public name
+      a consumer reaches the type through: an exported type that is or embeds it, and an exported
+      contract whose methods name one in their signature closure (those methods) — so a caller can
+      name the consumers whose code still spells the old name. A `subsystem::id` also reaches the
+      second half of a duplicate id (two types of different subsystems declaring one id): that half
+      moves to the new id and only the references that resolve to it are respelled. Refuses a type
+      that does not exist, one inside a chained subproject, a new id outside the id grammar, a new
+      id another type of the same owner holds or retired (id-taken, id-retired naming the holder), a
+      reference that matches several types including this one (ambiguous-ref: every such site is
+      listed as `<file> <position>: "<token>" matches <ids>`; qualify each as subsystem::name
+      first), a reference that binds to this type while another type carries that name and sits at
+      least as close to where it is written (shadowed-ref: every such site is listed as `<file>
+      <position>: "<token>" binds to <boundTo> while <shadowedBy> carries that name`; write which
+      type is meant, the type's id or subsystem::name, in those specs, or pass allowShadowed to
+      rename anyway and respell them), and a register that cannot be rewritten that precisely; every
+      refusal happens before the first write. With allowShadowed the shadowed sites are respelled
+      and listed in the report's `shadowed`. A dry run never refuses on a shadowed site: it answers
+      the plan with those sites listed separately (shadowed) and says the real rename refuses
+      without allowShadowed; an ambiguous site still refuses a dry run. Display names are the
       author's to change, and a lock goes stale as with any edit. Inside a hosted request every spec
       it would write is judged against the request's write reach before the first write
       (SubsystemWriteDenied), and nothing is written on a refusal.
-    signature: 'renameType(typeId: string, newId: string, dryRun?: bool): TypeRename'
+    signature: 'renameType(typeId: string, newId: string, dryRun?: bool, allowShadowed?: bool): TypeRename'
     returns: TypeRename
     params:
       - name: typeId
         type: string
-        description: The type to rename, qualified by its owning subsystem when two subsystems own that id
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) — required to
+          reach the second half of a duplicate id, and whenever two subsystems own that id
       - name: newId
         type: string
         description: Its new id, under the same owner
@@ -1266,7 +1283,14 @@ methods:
         type: bool
         description: >-
           Answer what the rename would rewrite, keep and rekey — refusing exactly as the real rename
-          would — and write nothing
+          would, except on shadowed sites, which it lists in `shadowed` — and write nothing
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
   - name: setNetwork
     description: >-
@@ -1537,6 +1561,22 @@ methods:
         type: string
         description: The copy's root, as rehearsalCopy answered it
     effect: write
+  - name: retireGateways
+    description: >-
+      Plan, and with apply write, the migration off the retired Gateway stereotype (a v5 form, read
+      only in the v5 reading `wairon upgrade` binds). A Gateway that owns exactly one Portal, and
+      whose own methods no narrative of another spec calls, is merged into that Portal: the Portal
+      takes the gateway variant; the Gateway's other owned members become the Portal's dependencies;
+      every component that depended on the Gateway depends on the Portal; every L1 or L0 export
+      naming the Gateway names the Portal; and the Gateway's spec, contract and implementation are
+      deleted. Any other Gateway is refused, naming why and the hand steps. Without apply nothing is
+      written.
+    signature: 'retireGateways(apply: bool): GatewayRetirement'
+    returns: GatewayRetirement
+    params:
+      - name: apply
+        type: bool
+        description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-17T16:35:03.436Z'
+updatedAt: '2026-10-19T19:48:00.076Z'

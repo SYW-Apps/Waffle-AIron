@@ -19,6 +19,7 @@
  */
 import * as yaml from 'js-yaml';
 import { BASE_FIXTURE_RULES, defineRuleFixture, type FixtureTree } from '../harness.js';
+import { WAIRON_MAJOR } from '../../../src/config/defaults.js';
 
 const TS = '2026-01-01T00:00:00.000Z';
 
@@ -83,7 +84,7 @@ function tileStudio(bindingSource: string | null): FixtureTree {
     }],
     files: {
       '.wai/project.yaml': yaml.dump({
-        schemaVersion: '1.0.0', name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,
+        schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,
         extensions: { packs: [], useGlobalPacks: false }, externals: { geokit: {} }, createdAt: TS, updatedAt: TS,
       }, { noRefs: true, lineWidth: 200 }),
       '.wai/externals.lock.yaml': yaml.dump({ externals: { geokit: { project: 'geokit', snapshot: '.wai/externals/geokit.yaml', digest: 'sha256:pinned', used: {} } } }),
@@ -109,7 +110,7 @@ function memberDump(spec: Record<string, unknown>): string {
 function geokitMember(): Record<string, string> {
   const base = 'packages/geokit/.wai';
   return {
-    [`${base}/project.yaml`]: memberDump({ id: 'geokit', name: 'GeoKit', targets: [], extensions: { packs: [], useGlobalPacks: false } }),
+    [`${base}/project.yaml`]: memberDump({ waironMajor: WAIRON_MAJOR, id: 'geokit', name: 'GeoKit', targets: [], extensions: { packs: [], useGlobalPacks: false } }),
     [`${base}/specs/.index.yaml`]: memberDump({
       name: 'GeoKit', vision: 'Tile arithmetic for map applications.', targetLanguage: 'typescript',
       publicInterfaces: [
@@ -163,7 +164,7 @@ function tileStudioWithMember(bindingSource: string): FixtureTree {
   delete files['.wai/externals.lock.yaml'];
   delete files['.wai/externals/geokit.yaml'];
   files['.wai/project.yaml'] = yaml.dump({
-    schemaVersion: '1.0.0', id: 'tile-studio', name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id: 'tile-studio', name: 'tile-studio', targets: [], rules: BASE_FIXTURE_RULES,
     extensions: { packs: [], useGlobalPacks: false }, members: { geokit: 'packages/geokit' }, createdAt: TS, updatedAt: TS,
   }, { noRefs: true, lineWidth: 200 });
   return { ...tree, files: { ...files, ...geokitMember() } };
@@ -340,7 +341,7 @@ function tileStudioWithTwoMembers(bindingSource: string): FixtureTree {
   const files: Record<string, string> = { ...tree.files! };
   files['.wai/project.yaml'] = files['.wai/project.yaml'].replace('geokit: packages/geokit', 'geokit: packages/geokit\n  shared: packages/contracts');
   for (const key of Object.keys(files)) if (key.startsWith('packages/geokit/.wai/specs/types/')) delete files[key];
-  files['packages/geokit/.wai/project.yaml'] = memberDump({ id: 'geokit', name: 'GeoKit', targets: [], extensions: { packs: [], useGlobalPacks: false }, externals: { contracts: { source: { path: '../contracts' } } } });
+  files['packages/geokit/.wai/project.yaml'] = memberDump({ waironMajor: WAIRON_MAJOR, id: 'geokit', name: 'GeoKit', targets: [], extensions: { packs: [], useGlobalPacks: false }, externals: { contracts: { source: { path: '../contracts' } } } });
   files['packages/geokit/.wai/specs/.index.yaml'] = memberDump({
     name: 'GeoKit', vision: 'Tile arithmetic for map applications.', targetLanguage: 'typescript',
     publicInterfaces: [{ from: 'tiles', component: 'tile-library', as: 'tiles', audience: 'project' }],
@@ -351,7 +352,7 @@ function tileStudioWithTwoMembers(bindingSource: string): FixtureTree {
     methods: [{ name: 'tileAt', description: 'The tile covering a coordinate at a zoom level.', returns: 'contracts::tile_key', effect: 'none', params: [{ name: 'lat', type: 'float' }, { name: 'lon', type: 'float' }, { name: 'zoom', type: 'int' }] }],
   });
   const base = 'packages/contracts/.wai';
-  files[`${base}/project.yaml`] = memberDump({ id: 'contracts', name: 'Contracts', targets: [], extensions: { packs: [], useGlobalPacks: false } });
+  files[`${base}/project.yaml`] = memberDump({ waironMajor: WAIRON_MAJOR, id: 'contracts', name: 'Contracts', targets: [], extensions: { packs: [], useGlobalPacks: false } });
   files[`${base}/specs/.index.yaml`] = memberDump({ name: 'Contracts', vision: 'The value types the map tools share.', targetLanguage: 'typescript', publicInterfaces: [{ from: 'keys', typeDef: 'tile_key', audience: 'project' }] });
   files[`${base}/specs/subsystems/keys.yaml`] = memberDump({ id: 'keys', name: 'Keys', description: 'Shared keys.', parentSystem: 'Contracts', publicInterfaces: [{ typeDef: 'tile_key' }] });
   files[`${base}/specs/types/tile_key.yaml`] = memberDump({

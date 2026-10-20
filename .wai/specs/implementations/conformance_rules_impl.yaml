@@ -1564,18 +1564,24 @@ methods:
           Once every method is read, report each language boundary the claims crossed once as
           CALL_ACROSS_LANGUAGE (notice; spec the first implementation crossing it; site the project;
           units the claims), naming the two languages and the binding as what crosses it — never as
-          an unrealized call no code could clear. Read the converse for every call too, where the
-          method claims its calls at call level (a narrative at full or calls-only, or declared
-          calls): a call written in the function's OWN body that the checker lands on a contract
+          an unrealized call no code could clear. Read the converse for every call too, at every
+          detail: a call written in the function's OWN body that the checker lands on a contract
           method of another component — or on a port a claimed target is called through (an
-          interface no class realizes), read as that target's component — of a collaborator the
-          narrative names, that no step and no declared call names and no write finding already
-          says, is UNNARRATED_CALL (warning; site the method; units the targets). A call inside a
-          helper, to a collaborator the narrative never names, or taken as a value is what the
-          detail lets it summarize. In a file read without a checker but with its calls read
-          (Python), the body's call sites, closed over its file's helpers and stopping at another
-          modelled method, land through what the code declares — an import binding, a namespace
-          binding, a field's or a name's annotated class — and are judged the same way
+          interface no class realizes), read as that target's component — that no step and no
+          declared call names and no write finding already says, one call landing on several
+          components said once under a component the design routes to. Where the method STATES its
+          calls (a narrative whose detail, full or calls-only, the method or its implementation
+          states, or declared calls) every such call is UNNARRATED_CALL (warning; site the method;
+          units the targets). At unstated call-level detail one to a collaborator the narrative
+          names is UNNARRATED_CALL, and one to a collaborator its component depends on (or a member
+          of a pattern it depends on) that the narrative never names — or any such call from a
+          method at intent or with no narrative and no declared calls — is OPEN_ROUTE_CALL (notice;
+          same site and units): a route the design leaves open, said, never failed. A call inside a
+          helper, to a component the design does not list as a dependency, or taken as a value is
+          neither finding's. In a file read without a checker but with its calls read (Python), the
+          body's call sites, closed over its file's helpers and stopping at another modelled method,
+          land through what the code declares — an import binding, a namespace binding, a field's or
+          a name's annotated class — and are judged the same way
         type: local
     symbol: check
     exportedVia: callConformanceRule
@@ -2437,4 +2443,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-17T19:56:29.004Z'
+updatedAt: '2026-10-20T09:12:09.034Z'

@@ -24,8 +24,7 @@ fields:
     description: >-
       Coarse projection of the token's project narrowing; '*' denotes no narrowing (permission rules
       still gate per record). Entries are hosted record ids; an entry covers its project and every
-      member below it. A member-qualified entry ('projectId::alias', one alias per hop) left by an
-      older wairon still resolves for one release, to the member's record.
+      member below it.
     optional: false
   - name: subject
     type: PrincipalSubject
@@ -60,4 +59,4 @@ methods:
     sourcePath: src/server/authorization.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-04T23:40:18.446Z'
+updatedAt: '2026-10-19T06:11:42.820Z'

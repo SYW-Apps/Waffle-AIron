@@ -28,6 +28,7 @@
   "files": [
     "dist",
     "schemas",
+    "release-notes",
     "README.md",
     "docs/*.md",
     "!docs/release-qa.md",
@@ -67,6 +68,7 @@
   "pkg": {
     "assets": [
       "dist/templates/**/*",
+      "release-notes/*.md",
       "dist/webapp.html"
     ],
     "scripts": [],

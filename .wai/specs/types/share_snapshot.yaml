@@ -26,13 +26,6 @@ fields:
     type: string
     description: Serialized CanvasModel JSON for the view.
     optional: true
-  - name: openapi
-    type: string
-    description: >-
-      Serialized OpenAPI document — captured when the shared surface has exactly ONE portal.
-      Retained so share links created before per-portal capture keep serving their document
-      unchanged; multi-portal shares populate openapiSet instead.
-    optional: true
   - name: html
     type: string
     description: Standalone HTML export, when captured.
@@ -41,12 +34,12 @@ fields:
     type: list<NamedOpenApiSpec>
     description: >-
       Every per-portal OpenAPI document in the shared surface, one per published Portal, so a
-      multi-portal project shares each API separately — distinct portals are never merged into a
+      multi-portal project shares each API separately - distinct portals are never merged into a
       combined document. Serving selects one by portalId; when more than one is present and none is
-      selected, an index lists them.
+      selected, an index lists them; with exactly one it is that document.
     optional: true
 methods: []
 sourcePath: src/server/types.ts
 symbol: ShareSnapshot
 createdAt: '2026-07-17T22:32:32.574Z'
-updatedAt: '2026-10-07T06:29:01.175Z'
+updatedAt: '2026-10-19T06:12:24.422Z'

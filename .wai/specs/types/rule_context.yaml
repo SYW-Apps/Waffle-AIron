@@ -260,24 +260,26 @@ methods:
       The architectural profile governing the component: its subsystem's profile, else the project
       type
   - name: isTypeResolved
-    signature: 'isTypeResolved(ref: string, generics: Set<string>): boolean'
+    signature: 'isTypeResolved(ref: string, generics: Set<string>, from?: string): boolean'
     returns: bool
     description: >-
       Whether a type reference resolves to a builtin, one of the given generic parameters, or a type
       the bound project may name — owner-scoped and explicit, with no family-wide suffix matching
-      anywhere. A bare identifier resolves among the bound project's OWN types first (by
-      type_spec.matchesRef, whose segments compare by nameKey), then through the project's imports
-      exactly as resolveCrossProject resolves a bare name: to a public type one import supplies — a
-      contained member's live L0 table, or the pin of a declared external (its exported types; a
-      type only inside a signature's closure is not importable). A contained member's types are
-      never matched otherwise: the suffix match that used to accept `WafflerError` from anywhere in
-      the scan is gone. A reference written through an alias (`billing::money`) resolves to a public
-      type of that project the same way. The dotted form `billing.money` is a SUBSYSTEM reference:
-      when its first segment names no subsystem of the bound project but one of its aliases, it does
-      NOT resolve — another project is reached only as `alias::name`, and a dotted spelling left
-      behind by a boundary move must never pass silently (aliasSpelling names the replacement). A
-      first segment equal to the project's own id is read as its own id and resolves locally,
-      reported by reference-forms as a deprecated form.
+      anywhere. A bare identifier resolves among the bound project's OWN types first, by
+      type_ref_resolution.resolve(ref, from, types): the referrer's subsystem `from` (a contract's
+      component's subsystem, a type's own subsystem; absent for the L0) is preferred, and an
+      ambiguous match counts as resolved here — the type-ref-scope rule reports it once — then
+      through the project's imports exactly as resolveCrossProject resolves a bare name: to a public
+      type one import supplies — a contained member's live L0 table, or the pin of a declared
+      external (its exported types; a type only inside a signature's closure is not importable). A
+      contained member's types are never matched otherwise: the suffix match that used to accept
+      `WafflerError` from anywhere in the scan is gone. A reference written through an alias
+      (`billing::money`) resolves to a public type of that project the same way. The dotted form
+      `billing.money` is a SUBSYSTEM reference: when its first segment names no subsystem of the
+      bound project but one of its aliases, it does NOT resolve — another project is reached only as
+      `alias::name`, and a dotted spelling left behind by a boundary move must never pass silently
+      (aliasSpelling names the replacement). A first segment equal to the project's own id is read
+      as its own id and resolves locally, reported by reference-forms as a deprecated form.
   - name: targetLanguageFor
     signature: 'targetLanguageFor(subsystemId?: string): string | undefined'
     returns: string?
@@ -467,6 +469,14 @@ methods:
       The key of the project that owns a spec key of the run's scan: '' for the bound project, else
       the contained member's key (its owner in the project graph, else the longest member key
       prefixing it). Pure over the scan.
+  - name: resolveTypeRef
+    signature: 'resolveTypeRef(ref: string, from?: string): TypeRefResolution'
+    returns: TypeRefResolution
+    description: >-
+      How a type reference written in a spec of subsystem `from` (none for the L0) resolves against
+      the bound project's own types: type_ref_resolution.resolve(ref, from, types), the referrer's
+      subsystem first. The one entry the integrity and wiring rules read, so no rule re-derives
+      which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-09T11:38:50.549Z'
+updatedAt: '2026-10-19T18:26:42.823Z'

@@ -109,7 +109,7 @@ describe('WAIRON_OIDC_* startup seeding of the default identity provider (sdd_ho
 
     // Visible through the identity plane (instance-admin master credential).
     const listed = listProviders(cfg, MASTER);
-    expect(listed.map((p) => p.id)).toEqual(['default']);
+    expect(listed.map((l) => l.provider.id)).toEqual(['default']);
   });
 
   it('minimal env: only the issuer set → providerType defaults to oidc, no secret is stored', () => {

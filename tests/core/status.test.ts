@@ -754,6 +754,7 @@ updatedAt: '2026-06-10T22:00:00Z'
 /** The report that tree has always produced, with nothing marking it up. */
 const PLAIN_FIXTURE_REPORT = [
   '● System: TestSystem (33% Complete)',
+  '  Completeness per component: 20% its spec, +30% a contract, +30% an implementation, +20% once the source files it names exist.',
   '├── [Subsystem] sub-a (66%)',
   '│   ├── [Component: Orchestrator] c1-full (100%)',
   '│   │   ├── Interface: ic1-full (1 methods)',
@@ -823,6 +824,9 @@ describe('the report renders once and the caller decides how it looks', () => {
       // The system's own name is the one thing marked `emphasis`, its label is
       // the `system` layer, and the percentage arrives with its number.
       expect(report).toContain('«l/system:● System:» «e:TestSystem» «n/33:(33% Complete)»');
+
+      // Below 100% the legend says what the number counts; it recedes, as `structure`.
+      expect(report).toContain('«s:  Completeness per component: 20% its spec, +30% a contract, +30% an implementation, +20% once the source files it names exist.»');
 
       // Every layer label knows which layer it is.
       expect(report).toContain('«l/subsystem:[Subsystem] sub-a»');

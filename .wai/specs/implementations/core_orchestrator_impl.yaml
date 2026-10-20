@@ -870,11 +870,11 @@ methods:
         description: >-
           Read the project's member declarations at that root: its project.yaml `members`
           (project_config.declaredMembers(), read through that root's binding, as the scan reads a
-          root's configuration) and, for one release, the subsystem specs of its own tree carrying a
-          projectPath; a `members` entry wins over a legacy mount under the same alias. A PART
-          (stage 8: a contained member whose folder holds no id, no L0 and no lock) is no chained
-          project — its subsystems are this root's own, generated, briefed and backfilled with it —
-          so it is not listed
+          root's configuration) and, in the v5 reading `wairon upgrade` binds, the subsystem specs
+          of its own tree carrying a projectPath; a `members` entry wins over a legacy mount under
+          the same alias. A PART (stage 8: a contained member whose folder holds no id, no L0 and no
+          lock) is no chained project — its subsystems are this root's own, generated, briefed and
+          backfilled with it — so it is not listed
         type: local
       - stepNumber: 3
         description: Walk the member declarations
@@ -961,9 +961,7 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadComponentSpecs
       - stepNumber: 2
-        description: >-
-          Collect the Specialists, each unclassified. Gateways are not migrated here:
-          STEREOTYPE_RETIRED gives their manual steps
+        description: Collect the Specialists, each unclassified. Gateways are retireGateways' to merge
         type: local
       - stepNumber: 3
         description: Classify over the dependency graph in passes, until a pass classifies nothing
@@ -2102,9 +2100,9 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Walk the members recursively from the root — each project's `members` entries and, for one
-          release, its legacy L1 mounts — and keep each directory that holds a spec tree but no
-          project configuration
+          Walk the members recursively from the root — each project's `members` entries and, in the
+          v5 reading `wairon upgrade` binds, its legacy L1 mounts — and keep each directory that
+          holds a spec tree but no project configuration
         type: local
       - stepNumber: 2
         description: Return the directories
@@ -2898,7 +2896,9 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: Load the type to rename
+        description: >-
+          Load the type to rename. An id `subsystem::id` reaches either half of a duplicate id: the
+          kept type, or the second one the index recorded for another subsystem
         type: call
         targetComponent: spec_loader
         targetMethod: loadTypeSpec
@@ -2965,20 +2965,29 @@ methods:
         targetComponent: spec_loader
         targetMethod: loadTypeSpecs
       - stepNumber: 10
+        description: >-
+          Load the second half of every duplicate type id the index recorded (the model lists leave
+          them out), so each takes part in every resolution below: renaming either half of a
+          duplicate respells only the references that resolve to that half, and a reference written
+          in the other half's subsystem stays with it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadDuplicateTypeSpecs
+      - stepNumber: 11
         description: 'Guard: no type of the same owner may hold or have retired the new id'
         type: branch
         condition: >-
           a type of the same owner (the same subsystem, or system-level) has the id newId, or lists
           it in its previousIds (spec_index.retiredBy)
-        onFalseStep: 12
-      - stepNumber: 11
+        onFalseStep: 13
+      - stepNumber: 12
         label: id-taken
         description: >-
           Refuse a taken id (id-taken) or a retired one (id-retired, naming the holder and saying
           that unsetting its previousIds releases it)
         type: throw
         error: 'id-taken or id-retired: another type of this owner holds or retired the new id'
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Describe the move as the debt register and lint allows key findings by it
           (identity_rename: the type spec from its old id to its new one) and rekey the debt
@@ -2987,14 +2996,14 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Read every component, to know the subsystem each lives in: a component's types and the
           specs that carry the type are respelled in their own owner's context
         type: call
         targetComponent: spec_loader
         targetMethod: loadComponentSpecs
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Collect where a consumer reaches the type (publishedIn), as a field rename collects it:
           the types that carry it — the renamed type, and every type whose fields, params or returns
@@ -3003,64 +3012,112 @@ methods:
           (those methods: the signature closure), each with its former public names and former
           method names, so the tool can name every consumer whose code spells the type's old name
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
+        label: siteGuard
+        description: >-
+          Guard: no site may be ambiguous over the renamed type, and a shadowed one needs the
+          caller's say. Walk every site the rewrite below would visit — every type position it
+          reads, in every spec file of the bound tree — without writing, resolving each named token
+          with type_ref_resolution.resolve(token, the referring spec's own subsystem, every type
+          spec of steps 9 and 10), and collect a TypeRefSite for each: the AMBIGUOUS ones whose
+          candidates include the renamed type, and the SHADOWED ones (shadowedBy set) that resolve
+          to it. A bare name settles in the referring subsystem first, so a token is ambiguous only
+          when it matches several types of the subsystem it is written in, or of none and several
+          elsewhere. A real rename refuses a shadowed site, one that resolves to the renamed type
+          though another type, at least as close to where it is written, carries that name, unless
+          allowShadowed is true; a dry run never refuses on one, it carries those sites on into its
+          plan
+        type: branch
+        condition: >-
+          some collected site is ambiguous and the renamed type is among its candidates, or some
+          collected site is shadowed over the renamed type while allowShadowed is not true and
+          dryRun is not set
+        onFalseStep: 18
+      - stepNumber: 17
+        label: ambiguous-ref
+        description: >-
+          Refuse before any write. An ambiguous site refuses even a dry run (it has no single
+          meaning to preserve): list every ambiguous site and say to qualify each as subsystem::name
+          first (ambiguous-ref). Otherwise list every shadowed site and say to write which type is
+          meant (the type's id, or subsystem::name) in those specs, or to pass allowShadowed: true
+          to rename anyway and respell them (shadowed-ref)
+        type: throw
+        error: >-
+          ambiguous-ref: <n> references match several types including <type id>: <file> <position>:
+          "<token>" matches <ids>, … — qualify each as subsystem::name first; or shadowed-ref: <n>
+          references bind to <type id> while another type carries that name: <file> <position>:
+          "<token>" binds to <boundTo> while <shadowedBy> carries that name, … — write which type is
+          meant (the type's id, or subsystem::name) in those specs, or pass allowShadowed: true to
+          rename anyway and respell them
+      - stepNumber: 18
         label: typeDryRun
         description: >-
-          A dry run stops here, refused exactly as the real rename above: walk every spec without
-          writing to collect the specs whose type positions, typeDef or lint allows it WOULD respell
-          and the export entries that would get an `as`
+          A dry run stops here, refused exactly as the real rename above, except on shadowed sites:
+          walk every spec without writing to collect the specs whose type positions, typeDef or lint
+          allows it WOULD respell, the export entries that would get an `as`, and the shadowed sites
+          among them
         type: branch
         condition: dryRun is set
-        onFalseStep: 17
-      - stepNumber: 16
+        onFalseStep: 20
+      - stepNumber: 19
         description: >-
-          Return from and to, the ids it would rewrite, the public names it would keep, publishedIn
-          and the register edits the dry rekey planned, marked dryRun; nothing was written
+          Return from and to, the ids it would rewrite, the public names it would keep, publishedIn,
+          the register edits the dry rekey planned and the shadowed sites listed separately in
+          `shadowed` — saying the real rename refuses without allowShadowed when there are any —
+          marked dryRun; nothing was written
         type: return
         outcome: TypeRename (dry run)
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
-          Rewrite every reference to the type across the bound tree with a type-expression walk over
-          the raw spec files (the shared reference-field table reads a position whole and never
-          covered contract or type-method returns or typeDef, so it is left to the boundary moves):
-          in every type position — contract method params and returns, type fields, type-method
-          params and returns, signature-type params and returns — the named members of the
-          expression that read as this type (type_spec.matchesRef; when another type reads the same,
-          only in a spec of the type's own owner) are respelled in the style they were written, and
-          a params-derived signature text is re-derived; a signatureFrom, a table type's
-          linkedEntity, a field's references and an L1 or L0 export entry's typeDef naming the type
-          follow too — an export entry that states no `as` first getting `as: <its public name>`,
-          recorded as kept. Rename traces are never rewritten. Then rekey every lint allow naming
-          the type (identity_rename.rekeyAnchor). Record the specs either changed
+          Rewrite every reference that resolves to the type, from where it is written, across the
+          bound tree with a type-expression walk over the raw spec files (the shared reference-field
+          table reads a position whole and never covered contract or type-method returns or typeDef,
+          so it is left to the boundary moves): in every type position — contract method params and
+          returns, type fields, type-method params and returns, signature-type params and returns —
+          the named members of the expression for which type_ref_resolution.resolve(member, the
+          spec's own subsystem, every type spec of steps 9 and 10 — the second half of a duplicate
+          id included) resolves to this type are respelled in the style they were written, and a
+          params-derived signature text is re-derived. A bare name settles in the referring
+          subsystem first, so a same-named type of another subsystem keeps its spelling. The
+          shadowed sites among them (only reachable with allowShadowed) are respelled the same way
+          and recorded for the report. A contract method's stored signature is re-derived from its
+          params; a prose signature without params has only its result respelled. A signatureFrom, a
+          table type's linkedEntity, a field's references and an L1 or L0 export entry's typeDef
+          naming the type follow too — an export entry that states no `as` first getting `as: <its
+          public name>`, recorded as kept. Rename traces are never rewritten. Then rekey every lint
+          allow naming the type (identity_rename.rekeyAnchor). Record the specs either changed
         type: local
-      - stepNumber: 18
+      - stepNumber: 21
         description: Drop the cached spec index, so the save below reads the rewritten tree
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           Write the type, reloaded as the rewrite left it, under newId with the same owner and its
-          old id appended to its rename trace (previousIds)
+          old id appended to its rename trace (previousIds). For the second half of a duplicate id
+          this moves THAT half's file, never the kept type's
         type: call
         targetComponent: spec_loader
         targetMethod: saveSpec
-      - stepNumber: 20
-        description: Remove the file it left behind under its old id
+      - stepNumber: 23
+        description: >-
+          Remove the file it left behind under its old id — the renamed half's own file, so the
+          other half of a duplicate id, if any, stays and now loads
         type: call
         targetComponent: spec_loader
         targetMethod: deleteSpec
-      - stepNumber: 21
+      - stepNumber: 24
         description: >-
           Rekey the debt register for real: every carried entry anchored on the type, rewritten in
           place with every comment and all other formatting kept
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 22
+      - stepNumber: 25
         description: >-
           Return from and to, rewritten (the other specs whose references or lint allows changed),
-          keptPublicNames, publishedIn and carried
+          the shadowed sites it respelled, keptPublicNames, publishedIn and carried
         type: return
         outcome: renamed
   - name: setNetwork
@@ -3774,6 +3831,95 @@ methods:
       - stepNumber: 1
         description: Remove the copy's folder and everything in it
         type: local
+  - name: retireGateways
+    sourcePath: src/core/stereotype-migration.ts
+    narrative:
+      - stepNumber: 1
+        description: Load every component spec in the bound tree
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Collect the Gateways, and the narrative call steps of every other spec that target one of
+          them
+        type: local
+      - stepNumber: 3
+        description: Judge each Gateway
+        type: loop
+        loopKind: forEach
+        over: each Gateway
+        endStep: 8
+      - stepNumber: 4
+        description: >-
+          Can it be merged? It owns exactly one Portal, and no other spec's narrative calls a method
+          of its own
+        type: branch
+        condition: the Gateway owns exactly one Portal and no other narrative calls it
+        onFalseStep: 7
+      - stepNumber: 5
+        description: >-
+          Plan the merge: the Portal takes the gateway variant; the other owned members become the
+          Portal's dependencies; each consumer's dependency on the Gateway names the Portal; each L1
+          or L0 export naming the Gateway names the Portal
+        type: local
+      - stepNumber: 6
+        description: Planned
+        type: jump
+        toStep: 8
+      - stepNumber: 7
+        label: refuse
+        description: >-
+          Refuse it, naming why (no Portal owned, more than one, or the callers of its own methods)
+          and the hand steps
+        type: local
+      - stepNumber: 8
+        label: next
+        description: On to the next Gateway
+        type: local
+      - stepNumber: 9
+        description: Without apply, nothing is written
+        type: branch
+        condition: apply is false
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Return the plan with applied false
+        type: return
+        outcome: planned
+      - stepNumber: 11
+        label: write
+        description: Write each merge
+        type: loop
+        loopKind: forEach
+        over: each planned merge
+        endStep: 14
+      - stepNumber: 12
+        description: >-
+          Save the Portal with the gateway variant and its new dependencies, and each consumer with
+          its retargeted dependency
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 13
+        description: Save each L1 subsystem or L0 whose export entry now names the Portal
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 14
+        label: deleted
+        description: Delete the Gateway's spec, its contract and its implementation
+        type: call
+        targetComponent: spec_loader
+        targetMethod: deleteSpec
+      - stepNumber: 15
+        description: Invalidate the spec cache
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 16
+        description: Return the plan with applied true
+        type: return
+        outcome: applied
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-17T16:33:52.451Z'
+updatedAt: '2026-10-19T19:49:36.943Z'

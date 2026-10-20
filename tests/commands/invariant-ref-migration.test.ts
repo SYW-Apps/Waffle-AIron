@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -72,7 +73,7 @@ describe('a self-qualified invariant reference', () => {
     expect(found[0].message).not.toContain('no entity declares it');
   });
 
-  it('is rewritten by the chaining migration to the bare local reference', () => {
+  v5it('is rewritten by the chaining migration to the bare local reference', () => {
     family = buildImportFamily();
     const file = withSelfQualifiedInvariant(family);
     const f = family;

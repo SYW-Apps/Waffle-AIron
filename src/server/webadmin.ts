@@ -16,6 +16,8 @@ import type {
   HostConfig,
   HostedUserRecord,
   IdentityProviderConfig,
+  IdentityProviderListing,
+  IdentityProviderSaveResult,
   OrganizationUnitRecord,
   PermissionAssignment,
   Principal,
@@ -76,7 +78,7 @@ export function setUserStatus(cfg: HostConfig, sessionId: string, userId: string
 // ── identity-provider (SSO) administration (forward to identity_orchestrator) ─
 
 /** Forward to identity_orchestrator.listProviders (instance-admin only upstream). */
-export function listIdentityProviders(cfg: HostConfig, sessionId: string): IdentityProviderConfig[] {
+export function listIdentityProviders(cfg: HostConfig, sessionId: string): IdentityProviderListing[] {
   return identity.listProviders(cfg, sessionId);
 }
 
@@ -86,7 +88,7 @@ export function upsertIdentityProvider(
   cfg: HostConfig,
   sessionId: string,
   config: IdentityProviderConfig,
-): IdentityProviderConfig {
+): IdentityProviderSaveResult {
   return identity.upsertProvider(cfg, sessionId, config);
 }
 

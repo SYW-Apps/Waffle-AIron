@@ -18,6 +18,7 @@ import {
   NarrativeStepSchema,
   PublicInterfaceSchema,
 } from '../../src/models/specs.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Schema-field COVERAGE: no canonical field may be unreachable or losable.
@@ -88,7 +89,8 @@ const KINDS: Record<string, KindSpec> = {
   subsystem: {
     tool: 'sdd_add_subsystem',
     schema: SubsystemSpecSchema,
-    derived: ['parentSystem'],
+    // projectPath is the v5 mount form: read for `wairon upgrade`, never authored (the seam refuses it).
+    derived: ['parentSystem', 'projectPath'],
     updateSpecOnly: {
       lint: 'per-spec warning suppression — an answer to a validator finding, so it is authored after validate',
       ext: 'opaque pack/tool data, never authored by hand',
@@ -159,7 +161,7 @@ describe('MCP write-tool schema field coverage', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-cov-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-coverage',
       'targets:',
       '  - type: claude',
@@ -304,7 +306,7 @@ describe('MCP write-tool schema field coverage', () => {
     it(`every publicInterfaces ENTRY field is reachable through ${tool}`, () => {
       const itemProps = (toolProps[tool]?.publicInterfaces?.items?.properties ?? {}) as Record<string, any>;
       expect(Object.keys(itemProps).length, `${tool} publishes no publicInterfaces item schema`).toBeGreaterThan(0);
-      const unclassified = Object.keys(PublicInterfaceSchema.innerType().shape).filter((f) => !(f in itemProps));
+      const unclassified = Object.keys(PublicInterfaceSchema.innerType().shape).filter((f) => f !== 'type' && !(f in itemProps)); // `type` is the v5 export kind, derived from the Portal's transport and no longer authored
       expect(
         unclassified,
         `publicInterfaces entry fields ${tool} cannot set: ${unclassified.join(', ')}. `
@@ -323,7 +325,7 @@ describe('MCP write-tool schema field coverage', () => {
       kind: 'system', id: 'system',
       delta: {
         databases: [{ id: 'maindb', name: 'Main', engine: 'postgresql' }],
-        publicInterfaces: [{ id: 'pub1', name: 'Public API', type: 'REST', details: 'the gateway', audience: 'external' }],
+        publicInterfaces: [{ as: 'pub1', name: 'Public API', details: 'the gateway', audience: 'external' }],
         diagram: { lineStyle: 'taxi', defaultView: 'architecture' },
       },
     });

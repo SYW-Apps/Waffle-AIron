@@ -19,11 +19,14 @@ fields:
   - name: providers
     type: list<any>
     description: >-
-      One entry per ENABLED identity provider, each exactly { id, displayName } — displayName is the
-      admin-set label, defaulting to the provider id. Only what a login page needs to render a
-      sign-in button; disabled providers never appear.
+      One entry per ENABLED identity provider, each exactly { id, displayName, available,
+      unavailableReason? } — displayName is the admin-set label, defaulting to the provider id;
+      available is false when the provider has a setupProblem, and unavailableReason is then the
+      user-facing "Not set up yet — ask an administrator" (the admin-worded setupProblem is never
+      sent pre-auth). Only what a login page needs to render a sign-in button, or a disabled one
+      with that reason; disabled providers never appear.
     optional: false
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-14T12:53:32.525Z'
-updatedAt: '2026-10-04T10:21:28.874Z'
+updatedAt: '2026-10-19T22:11:30.675Z'

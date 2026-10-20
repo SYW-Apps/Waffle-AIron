@@ -1,5 +1,6 @@
 import * as yaml from 'js-yaml';
 import type { FixtureTree } from '../rules-matrix/harness';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The miniature systems the round-6 conformance fixes are judged on, shared by
@@ -25,6 +26,7 @@ const method = (name: string, effect?: string): Record<string, unknown> => ({
 
 export const projectYaml = (id: string, extra: Record<string, unknown> = {}): string => yaml.dump({
   schemaVersion: '1.0.0',
+  waironMajor: WAIRON_MAJOR,
   id,
   name: id,
   targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],

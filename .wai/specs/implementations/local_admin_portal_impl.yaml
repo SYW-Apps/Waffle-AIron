@@ -243,13 +243,6 @@ methods:
         type: call
         targetComponent: identity_provider_bootstrap
         targetMethod: seedDefault
-  - name: migratePermissionModel
-    narrative:
-      - stepNumber: 1
-        description: Forward to the permission-model migration
-        type: call
-        targetComponent: permission_model_migration
-        targetMethod: run
   - name: startHostServer
     narrative:
       - stepNumber: 1
@@ -271,14 +264,6 @@ methods:
         type: call
         targetComponent: pack_orchestrator
         targetMethod: previewProjectPackRemoval
-  - name: upgradeMembers
-    narrative:
-      - stepNumber: 1
-        description: Forward to the member registration's upgrade
-        type: call
-        targetComponent: member_registration
-        targetMethod: upgrade
-    symbol: upgradeMemberRecords
   - name: explain
     narrative:
       - stepNumber: 1
@@ -286,14 +271,7 @@ methods:
         type: call
         targetComponent: permission_admin_orchestrator
         targetMethod: explain
-  - name: migrateReachability
-    narrative:
-      - stepNumber: 1
-        description: Forward to the hosted spec upgrade
-        type: call
-        targetComponent: hosted_spec_upgrade
-        targetMethod: migrateReachability
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-10-06T19:59:25.815Z'
+updatedAt: '2026-10-18T14:28:56.076Z'

@@ -1,0 +1,18 @@
+kind: value-object
+id: release_note
+name: ReleaseNote
+description: 'The curated notes of one release: its few most important changes, in plain words.'
+subsystem: sdd_upgrade
+fields:
+  - name: version
+    type: string
+    description: The release version, e.g. 6.1.0.
+    optional: false
+  - name: highlights
+    type: list<string>
+    description: The most important changes, at most a handful, most important first.
+    optional: false
+methods: []
+sourcePath: src/upgrade/types.ts
+createdAt: '2026-10-18T13:04:16.028Z'
+updatedAt: '2026-10-18T13:04:16.891Z'

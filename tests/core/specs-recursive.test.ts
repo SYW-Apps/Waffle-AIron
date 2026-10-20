@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -29,7 +30,7 @@ describe('recursive subproject loading and namespacing', () => {
     if (childDir) fs.rmSync(childDir, { recursive: true, force: true });
   });
 
-  it('correctly loads and namespaces child subprojects from projectPath', () => {
+  v5it('correctly loads and namespaces child subprojects from projectPath', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-'));
     // Fix B2: a chained subproject must live UNDER its parent root (nested), not
     // as an escaping sibling — a ../-escaping projectPath is now rejected.
@@ -57,7 +58,6 @@ describe('recursive subproject loading and namespacing', () => {
       parentSystem: 'root-system',
       publicInterfaces: [
         {
-          type: 'REST',
           details: 'Public billing portal',
           component: 'invoice_portal',
           interface: 'iinvoice_portal',
@@ -139,7 +139,7 @@ describe('recursive subproject loading and namespacing', () => {
     expect(portalComp?.dependsOn).toContain('billing::invoice_store');
   });
 
-  it('correctly resolves paths and strips namespace prefixes when saving specs to subprojects', () => {
+  v5it('correctly resolves paths and strips namespace prefixes when saving specs to subprojects', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-write-'));
     // Fix B2: nested (contained) subproject, not an escaping sibling.
     childDir = path.join(rootDir, 'packages', 'billing');
@@ -292,7 +292,7 @@ describe('recursive subproject loading and namespacing', () => {
     expect(subContents).not.toContain('parentSystem: root-system');
   });
 
-  it('correctly respects recursive and depth limits when scanning', () => {
+  v5it('correctly respects recursive and depth limits when scanning', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-depth-'));
     // Fix B2: nested chain — child under root, grandchild under child — so every
     // hop stays contained by the bound top root.
@@ -400,7 +400,7 @@ describe('recursive subproject loading and namespacing', () => {
     fs.rmSync(grandchildDir, { recursive: true, force: true });
   });
 
-  it('correctly filters validation and status by scopeSubsystem', () => {
+  v5it('correctly filters validation and status by scopeSubsystem', () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-root-scope-'));
     // Fix B2: nested (contained) subproject, not an escaping sibling.
     childDir = path.join(rootDir, 'packages', 'billing');

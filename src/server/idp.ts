@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { resolveSecret } from '../utils/secrets.js';
+import { providerNotSetUpMessage, providerSetupProblem } from './types.js';
 import type { IdentityProviderConfig, PrincipalSubject, ProviderEndpoints } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -601,19 +602,19 @@ export function resolveGroups(providerMetadata: string): string[] {
 }
 
 /**
- * Enforce the provider's server-side redirect_uri allowlist.
+ * Enforce the provider's server-side redirect_uri allowlist, failing closed.
  *
- * When `config.allowedRedirectUris` is set and non-empty, `redirectUri` must be
- * an EXACT string match of one of its entries (no prefix/substring matching);
- * otherwise this throws. When unset or empty, every redirectUri is accepted
- * (backward compatible). The thrown message never echoes the supplied
- * redirectUri, so a malicious value cannot be reflected back.
+ * A provider with a setup problem (no allowed redirect address) refuses every
+ * start; otherwise `redirectUri` must be an EXACT string match of one of the
+ * entries (no prefix/substring matching), or this throws. The thrown message
+ * never echoes the supplied redirectUri, so a malicious value cannot be
+ * reflected back.
  */
 function assertAllowedRedirectUri(provider: IdentityProviderConfig, redirectUri: string): void {
-  const allowed = provider.allowedRedirectUris;
-  if (!allowed || allowed.length === 0) {
-    return;
+  if (providerSetupProblem(provider)) {
+    throw new Error(providerNotSetUpMessage(provider));
   }
+  const allowed = provider.allowedRedirectUris ?? [];
   if (!allowed.includes(redirectUri)) {
     throw new Error(`redirect_uri not allowed for identity provider '${provider.id}'.`);
   }

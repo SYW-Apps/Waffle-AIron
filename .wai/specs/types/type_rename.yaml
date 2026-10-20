@@ -47,7 +47,15 @@ fields:
       so the caller can name the consumers whose code still spells the type's old name. Empty when
       nothing published carries it
     optional: false
+  - name: shadowed
+    type: list<TypeRefSite>
+    description: >-
+      Every reference respelled, or in a dry run that would be, although another type carries that
+      name and sits at least as close to where it is written (a shadowed site): the ones
+      allowShadowed let through, or the ones the real rename would refuse without it. Absent when
+      none
+    optional: true
 methods: []
 sourcePath: src/core/provision.ts
 createdAt: '2026-10-04T13:52:12.770Z'
-updatedAt: '2026-10-09T00:23:15.464Z'
+updatedAt: '2026-10-19T19:47:14.474Z'

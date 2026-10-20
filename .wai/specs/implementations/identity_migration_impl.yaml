@@ -108,6 +108,11 @@ methods:
           same producer; a local spec id equal to the new alias is a note
         type: local
       - stepNumber: 5
+        description: Read the bound project's pinned externals, to find the lock the renamed alias carries
+        type: call
+        targetComponent: migration_surfaces_adapter
+        targetMethod: listExternals
+      - stepNumber: 6
         description: >-
           Under each other family project that pins the bound project, read its externals' status:
           the alias is the bound project's own, so a pin whose every use is unchanged is taken again
@@ -116,7 +121,7 @@ methods:
         type: call
         targetComponent: migration_surfaces_adapter
         targetMethod: getExternalsStatus
-      - stepNumber: 6
+      - stepNumber: 7
         description: Answer the plan
         type: return
         outcome: the alias-rename plan
@@ -170,4 +175,4 @@ methods:
         type: local
 status: complete
 createdAt: '2026-09-30T20:34:43.534Z'
-updatedAt: '2026-10-16T22:52:16.861Z'
+updatedAt: '2026-10-20T09:25:57.987Z'

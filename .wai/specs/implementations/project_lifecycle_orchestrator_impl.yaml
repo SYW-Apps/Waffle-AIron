@@ -24,93 +24,98 @@ methods:
           required ownerUnitId)
         type: local
       - stepNumber: 3
+        description: List the hosted projects, to reject an id that already exists
+        type: call
+        targetComponent: project_repository
+        targetMethod: list
+      - stepNumber: 4
         description: >-
           Evaluate the request against the active instance pack policy via the policy orchestrator's
           pre-authorized evaluation
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: evaluateInitRequest
-      - stepNumber: 4
+      - stepNumber: 5
         description: If an enforcing policy (block) reports the request non-compliant, reject immediately
         type: branch
         condition: the active policy enforces (block) and the evaluation is non-compliant
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 7
+      - stepNumber: 6
         description: Reject the non-compliant request
         type: throw
         error: policy violation — project initialization rejected under the active pack policy
-      - stepNumber: 6
+      - stepNumber: 7
         description: Attach any warn-mode policy findings to the redacted summary
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: Resolve the caller's project:create permission over the request's required owner unit
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 8
+      - stepNumber: 9
         description: 'Branch on the resolved value: yes executes, no forbids, approval requests'
         type: switch
         'on': the resolved effective permission value
         cases:
           - value: 'yes'
-            step: 9
+            step: 10
           - value: 'no'
-            step: 12
-        defaultStep: 13
-      - stepNumber: 9
+            step: 13
+        defaultStep: 14
+      - stepNumber: 10
         description: >-
           Authorized: initialize the project directly via the policy orchestrator's pre-authorized
           executeApprovedInit
         type: call
         targetComponent: project_policy_orchestrator
         targetMethod: executeApprovedInit
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Build a completed ProjectActionOutcome (action project:init) carrying the init's
           GovernedProjectCreation as `creation` — the record and the impact of every pack and of the
           governing-profile step the policy applied
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: Executed — continue to auditing
         type: jump
-        toStep: 16
-      - stepNumber: 12
+        toStep: 17
+      - stepNumber: 13
         description: Reject the initialization
         type: throw
         error: Forbidden — caller may not initialize a project here
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Approval required: build a pending project:init ApprovalRequest (redacted summary +
           redacted payload)
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 15
+      - stepNumber: 16
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 18
+        endStep: 19
         catches:
           - error: audit append failure
-            step: 19
-      - stepNumber: 17
+            step: 20
+      - stepNumber: 18
         description: Append the redacted project-lifecycle audit event (info level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 18
+      - stepNumber: 19
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 20
-      - stepNumber: 19
+        toStep: 21
+      - stepNumber: 20
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 20
+      - stepNumber: 21
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -418,11 +423,12 @@ methods:
             step: 16
       - stepNumber: 14
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a request recorded with a member qualifier before the upgrade is
-          mapped, for one release, to that member's record, never wider) with the request's
+          project:lock - execute through the admin plane's pre-authorized lock entry on the
+          request's record id (a member's own record for a member lock) with the request's
           gateStateId as the expected identity (so an approval never certifies a design other than
-          the one requested; a request without one executes against the tree as it stands).
+          the one requested; a request without one executes against the tree as it stands). A lock
+          request carrying a payload (the member-qualifier scope an older major recorded, which the
+          instance upgrade closes) is refused, never executed on the record it names.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -576,10 +582,10 @@ methods:
             step: 17
       - stepNumber: 15
         description: >-
-          project:lock — execute through the admin plane's pre-authorized lock entry on the
-          request's record id (a pre-upgrade qualifier mapped to its member record for one release)
-          with the request's gateStateId as the expected identity (the retry path must confine and
-          pin exactly as the auto-execute path does).
+          project:lock - execute through the admin plane's pre-authorized lock entry on the
+          request's record id with the request's gateStateId as the expected identity (the retry
+          path must confine and pin exactly as the auto-execute path does). A lock request carrying
+          a payload is refused, as on the auto-execute path.
         type: call
         targetComponent: admin_orchestrator
         targetMethod: executeApprovedLock
@@ -703,4 +709,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-17T16:25:44.818Z'
+updatedAt: '2026-10-20T09:22:03.364Z'

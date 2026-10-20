@@ -938,7 +938,7 @@ export default [
         {
           id: 'payments-webhook-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'payments',
           description: 'Receives asynchronous payment status webhooks from the PSP.',
         },
@@ -988,7 +988,7 @@ export default [
         {
           id: 'payments-webhook-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'payments',
           description: 'Receives asynchronous payment status webhooks from the PSP.',
         },

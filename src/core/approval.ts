@@ -1,6 +1,6 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
-import { getProjectRoot } from '../utils/fs.js';
+import { getProjectRoot, readsV5Forms } from '../utils/fs.js';
 import { snapshotSpecFiles, graph, scanAllSpecs } from './specs.js';
 import { readLockRecord, readLockRecordAt } from './lockfile.js';
 import { approvalStamp, describeGateParts, sameRulesNotice, type ProjectApproval, type SpecDigestReading } from '../models/lock.js';
@@ -200,7 +200,8 @@ function statusApprovedIn(kind: LinkedKind | undefined, content: string, recorde
  * readiness, not design, so a spec whose status alone moved still matches.
  */
 function designMatches(kind: LinkedKind | undefined, content: string, current: string, recorded: string): boolean {
-  return current === recorded || statusApprovedIn(kind, content, recorded) !== undefined;
+  // A digest taken while the view still carried status is a wairon 5 record's: matched in the v5 reading only.
+  return current === recorded || (readsV5Forms() && statusApprovedIn(kind, content, recorded) !== undefined);
 }
 
 /** Each scanned spec file of a linked kind, by its resolved path. */
@@ -218,9 +219,13 @@ function digestIn(reading: SpecDigestReading, kind: LinkedKind | undefined, cont
   return reading === 'design' ? designDigest(kind, content) : digest(content);
 }
 
-/** The reading a record's `specs` were digested in: `design` when it names it, else the raw content. */
+/**
+ * The reading a record's `specs` were digested in: `design` when it names it,
+ * else the raw content — a wairon 5 record's, read only in the v5 reading
+ * (every record read anywhere else is format 3, in the design reading).
+ */
 function readingOf(record: LockRecord | null): SpecDigestReading {
-  return record?.specsReading === 'design' ? 'design' : 'content';
+  return record?.specsReading === 'design' || !readsV5Forms() ? 'design' : 'content';
 }
 
 /**
@@ -407,7 +412,7 @@ export function settledSpecPaths(root: string = getProjectRoot()): Set<string> |
 }
 
 /** The command a re-expression names as its author: never a person. */
-export const REEXPRESSED_BY = 'wairon doctor --fix';
+export const REEXPRESSED_BY = 'wairon upgrade';
 
 /**
  * approval_comparison.reexpress — the record on file carried into the current
@@ -426,6 +431,8 @@ export const REEXPRESSED_BY = 'wairon doctor --fix';
  * cannot be proven. Writes nothing: the caller writes the answer.
  */
 export function reexpress(gate: StateId): LockRecord | null {
+  // Step 0: an older record exists only in the v5 reading; anywhere else there is nothing to carry.
+  if (!readsV5Forms()) return null;
   // Step 1: the record of the bound project.
   const record = readLockRecord();
   if (!record) return null;
@@ -464,7 +471,7 @@ export function reexpress(gate: StateId): LockRecord | null {
  */
 export function approvedStatuses(record: LockRecord, root: string = getProjectRoot()): Map<string, SpecStatus> {
   const out = new Map<string, SpecStatus>();
-  if (record.specsReading !== 'design' || !record.specs) return out;
+  if (!readsV5Forms() || record.specsReading !== 'design' || !record.specs) return out;
   for (const file of ownSpecFiles(root)) {
     const recorded = record.specs[file.key];
     if (recorded === undefined || !file.kind) continue;
@@ -543,7 +550,7 @@ export function approvalVerdict(approvals?: ProjectApproval[]): ApprovalVerdict 
       };
     }
     // A format-2 lock that still holds: read in its original reading, and
-    // carried into the design reading by `wairon doctor --fix` without a review.
+    // carried into the design reading by `wairon upgrade` without a review.
     const own = (approvals ?? []).find((a) => a.key === '');
     const carry = isContentReadingRecord(approval) && own?.state === 'approved' ? `\n${REEXPRESS_HINT}` : '';
     if (diffSize(diff) === 0) {
@@ -644,15 +651,16 @@ function stampNotice(own: ProjectApproval | undefined): string {
 /**
  * Whether a record predates lock format 3: its per-spec digests are the raw
  * content (no design reading named), and its identity was taken with code
- * linkage in. Read compatibly until it is re-locked or re-expressed.
+ * linkage in. A wairon 5 record: read in the v5 reading only, where it is
+ * re-expressed; anywhere else no record is one.
  */
 export function isContentReadingRecord(record: LockRecord): boolean {
-  return record.specsReading !== 'design';
+  return readsV5Forms() && record.specsReading !== 'design';
 }
 
 /** The hint beside a format-2 lock that still holds. */
 export const REEXPRESS_HINT =
-  'This approval predates lock format 3 and is read in its original reading; `wairon doctor --fix` carries it '
+  'This approval predates lock format 3 and is read in its original reading; `wairon upgrade` carries it '
   + 'into the design reading without a review (the approval stays the approver\'s), after which adding or moving '
   + 'a sourcePath never drifts it.';
 

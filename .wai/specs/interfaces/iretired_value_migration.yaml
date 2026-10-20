@@ -1,0 +1,23 @@
+id: iretired_value_migration
+name: Retired Value Migration Contract
+description: >-
+  Inspect, and in apply mode rewrite, the retired values a hosted data dir stores. The data root is
+  wiring supplied ahead of the contract's parameters.
+component: retired_value_migration
+methods:
+  - name: run
+    description: >-
+      Report every retired value the data dir stores, in order (exposure policy, users, public
+      surfaces, share snapshots, lock requests); with apply, rewrite each in place. A dry run writes
+      nothing; applying twice finds nothing the second time.
+    signature: 'run(apply: bool): MigrationReport'
+    returns: MigrationReport
+    params:
+      - name: apply
+        type: bool
+    guarantees:
+      - idempotent
+    effect: write
+status: complete
+createdAt: '2026-10-19T06:17:36.628Z'
+updatedAt: '2026-10-19T06:18:29.528Z'

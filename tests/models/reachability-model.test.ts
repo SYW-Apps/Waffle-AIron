@@ -3,9 +3,10 @@
  * vocabulary, entries, roles, networks and language casing as the schemas and
  * pure model functions read them, and the retired forms (portalType, listener
  * mounts, the retired invokedBy kinds, authored export types, in-process
- * Custom endpoints) read compatibly and kept as facts — never silently dropped.
+ * Custom endpoints) read in the v5 reading and kept as facts — never silently dropped.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -158,7 +159,7 @@ describe('naming_rule_config.methodCasingFor', () => {
   });
 });
 
-describe('the retired reachability forms, read compatibly (pure)', () => {
+describe('the retired reachability forms, read in the v5 reading (pure)', () => {
   it('portalType becomes transport (HTTP_API as HTTP), unless a transport is already stated; the stored value is a fact', () => {
     const doc: Record<string, unknown> = { id: 'web', componentType: 'Portal', portalType: 'HTTP_API' };
     expect(readRetiredReachForms('component', doc)).toEqual([{ form: 'portal-type', specId: 'web', stored: 'HTTP_API' }]);

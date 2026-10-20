@@ -1,5 +1,5 @@
 import { SddRule } from '../types.js';
-import { PATTERN_TYPES, isPattern, isRetired } from '../../../models/index.js';
+import { PATTERN_TYPES, isPattern } from '../../../models/index.js';
 
 /**
  * Who may own members, and what a membership claim must name. Patterns own
@@ -22,14 +22,9 @@ export const patternMembershipRule: SddRule = {
     { code: 'SHARED_OWNED_MEMBER', defaultSeverity: 'error', summary: 'Block owned by two owners (patterns or Supervisors)' },
   ],
   check(ctx) {
-    // A retired component (a Specialist or Gateway) is skipped by both passes:
-    // it records no ownership and gets no membership finding — retired-
-    // stereotypes reports it once, and its migration decides what its owns
-    // becomes.
 
     // 1. The shape of a component's own `owns`, against its stereotype.
     for (const comp of ctx.components) {
-      if (isRetired(comp)) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       const pattern = isPattern(comp);
       // A Supervisor is the one building block that may own: its supervision state.
@@ -49,7 +44,6 @@ export const patternMembershipRule: SddRule = {
     //    pattern) are stated once in read-model.ts.
     const ownership = ctx.ownershipIndex();
     for (const comp of ctx.components) {
-      if (isRetired(comp)) continue;
       const isDraftCtx = ctx.isComponentDraft(comp.id);
       const pattern = isPattern(comp);
       const supervisor = comp.componentType === 'Supervisor';

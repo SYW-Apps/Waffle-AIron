@@ -2,8 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
-import { getProjectRoot } from '../utils/fs.js';
-import { DEFAULT_TARGET_DIRS } from './defaults.js';
+import { getProjectRoot, legacyFolderAt, readsV5Forms } from '../utils/fs.js';
+import { DEFAULT_TARGET_DIRS, WAIRON_MAJOR } from './defaults.js';
 import * as gitSource from '../core/adapters/git-source.js';
 import { parseYaml, readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { readFileOrNull, writeFile } from '../utils/fs.js';
@@ -107,14 +107,12 @@ export interface ProjectConfigFsAdapter {
 }
 
 /**
- * A project's `.wai` directory: `.wai/` first, then the legacy `.wairon/` of older
- * installs. The same rule as loader.ts's aiDirAt, restated here so this module
+ * A project's `.wai` directory — or, in the v5 reading only, the `.wairon/` wairon 5
+ * kept it in. The same rule as loader.ts's aiDirAt, restated here so this module
  * never imports the loader — the loader resolves its specs folder through it.
  */
 function waiDirAt(root: string): string {
-  const wai = path.join(root, '.wai');
-  const legacy = path.join(root, '.wairon');
-  return !fs.existsSync(wai) && fs.existsSync(legacy) ? legacy : wai;
+  return legacyFolderAt(root) ?? path.join(root, '.wai');
 }
 
 /** The fs adapter for an explicit project root. Exported only as a test seam. */
@@ -979,7 +977,8 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       if (store.exists()) {
         throw new WaironError(`A project configuration already exists at ${root}; creating one never overwrites it.`);
       }
-      save(config);
+      // The major that wrote these files, unless the caller names one.
+      save(config.waironMajor === undefined ? { ...config, waironMajor: WAIRON_MAJOR } : config);
     },
     // The four pack writes read the change through project_config.withPack —
     // the same reading a pack impact's dry run measures, so the report and the
@@ -1283,7 +1282,7 @@ function heldBinding(existing: unknown, declaration: { use?: unknown }): unknown
 /**
  * A member's value as it is written (stage 8): the shorthand — its source alone
  * — when it carries nothing else, else the long form with `source`. The
- * deprecated `path` key is never written: it is read as the source.
+ * deprecated `path` key is never written: the v5 reading reads it as the source.
  */
 function memberValue(declaration: MemberDeclaration): string | MemberDeclaration {
   const source = memberLocationOf(declaration) ?? '';
@@ -1300,15 +1299,15 @@ function memberValue(declaration: MemberDeclaration): string | MemberDeclaration
 }
 
 /**
- * A member's declaration with changes merged in (stage 8): a deprecated
- * `path` becomes `source`; every field the changes name is set, an empty `as`
+ * A member's declaration with changes merged in (stage 8): in the v5 reading a
+ * deprecated `path` becomes `source`; every field the changes name is set, an empty `as`
  * or `use` drops it, and every other field is kept.
  */
 function mergedMember(held: MemberDeclaration, changes: MemberDeclaration): MemberDeclaration {
   const merged: MemberDeclaration = { ...held, path: undefined, source: memberLocationOf(held) };
   for (const [field, value] of Object.entries(changes) as [keyof MemberDeclaration, unknown][]) {
     if (value === undefined) continue;
-    (merged as Record<string, unknown>)[field === 'path' ? 'source' : field] = value;
+    (merged as Record<string, unknown>)[field === 'path' && readsV5Forms() ? 'source' : field] = value;
   }
   if (merged.as === '') delete merged.as;
   if (Array.isArray(merged.use) && merged.use.length === 0) delete merged.use;

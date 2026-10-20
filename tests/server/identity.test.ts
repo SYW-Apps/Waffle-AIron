@@ -18,7 +18,7 @@ import { createWebSession, getWebSessionById } from '../../src/server/websession
 import { createProjectRecord, registerMemberRecord } from '../../src/server/projects.js';
 import { upsertUser as repoUpsertUser } from '../../src/server/users.js';
 import { createUnit, placeProject } from '../../src/server/organization.js';
-import { mintUserToken, allow, seedSubsystem, seedChainedMount } from './helpers.js';
+import { mintUserToken, allow } from './helpers.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
 import { appendAuditEvent, queryAuditEvents as auditQuery, effectiveAuditPolicy } from '../../src/server/audit.js';
 import type {
@@ -150,8 +150,8 @@ describe('identity orchestrator (sdd_host)', () => {
 
     const minted = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'ci token', projects: ['proj-a'] });
     const token = minted.token;
-    // Nothing was mapped: every entry was stored as asked.
-    expect(minted.mapped).toEqual([]);
+    // The answer is the plaintext alone.
+    expect(Object.keys(minted)).toEqual(['token']);
 
     expect(token).toMatch(/^wk_[0-9a-f]+$/);
     const rec = persistedByHash(hashToken(token));
@@ -202,6 +202,30 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(status).toBe(400);
     expect(JSON.parse(body).error).toMatch(/projects is required/);
     expect(listCredentials(dataDir, '*')).toHaveLength(0);
+  });
+
+  it('the identity portal answers a mint with {key} alone, and refuses a member-qualified entry naming the record id form', async () => {
+    createProjectRecord(dataDir, 'proj-a');
+    const post = async (projects: string[]): Promise<{ status: number; body: Record<string, unknown> }> => {
+      let status = 0;
+      let body = '';
+      const res = {
+        writeHead(code: number) { status = code; return res; },
+        end(text: string) { body = text; },
+      } as unknown as ServerResponse;
+      await identityPortal.handleIdentityRequest(
+        cfg, MASTER, { method: 'POST' } as IncomingMessage, res,
+        { ownerUserId: 'u-owner', label: 't', projects }, new URL('http://localhost/identity/tokens'),
+      );
+      return { status, body: JSON.parse(body) as Record<string, unknown> };
+    };
+    const ok = await post(['proj-a']);
+    expect(ok.status).toBe(201);
+    expect(Object.keys(ok.body)).toEqual(['key']);
+    const refused = await post(['proj-a::billing']);
+    expect(refused.status).toBeGreaterThanOrEqual(400);
+    expect(String(refused.body.error)).toMatch(/name it by its project record id/);
+    expect(listCredentials(dataDir, '*')).toHaveLength(1);
   });
 
   it('rejects a mint whose narrowing references an unknown project', () => {
@@ -257,82 +281,48 @@ describe('identity orchestrator (sdd_host)', () => {
     }
   });
 
-  // ── member-qualified narrowing (deprecated; mapped at MINT time) ──────────
+  // ── member-qualified narrowing (refused at MINT time) ─────────────────────
   //
-  // Since stage 7 a member is a hosted record named by its own id. A
-  // member-qualified entry ('projectId::alias', nested members one alias per
-  // hop) is accepted for one release and STORED as the member's record id; an
-  // alias that declares no member, an internal subsystem, or a member no record
-  // holds is rejected with guidance, never stored broken.
+  // A member is a hosted record named by its own id. A member-qualified entry
+  // ('projectId::alias') names no record: minting one is refused, naming the
+  // record id as the form to use, and nothing is stored.
 
-  describe('member-qualified narrowing (deprecated)', () => {
+  describe('member-qualified narrowing (refused)', () => {
     beforeEach(() => {
-      const projRoot = createProjectRecord(dataDir, 'proj-a').rootPath;
-      const billingDir = seedChainedMount(projRoot, 'billing', 'packages/billing');
-      seedChainedMount(billingDir, 'payments', 'sub/payments'); // nested chain
-      seedSubsystem(projRoot, 'plain'); // exists, but NOT chained (no projectPath)
-      // The stage-7 records of the two members.
+      createProjectRecord(dataDir, 'proj-a');
       registerMemberRecord(dataDir, { id: 'billing', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'proj-a', memberPath: 'packages/billing' });
       registerMemberRecord(dataDir, { id: 'payments', rootPath: '', status: 'active', createdAt: '', parentProjectId: 'billing', memberPath: 'sub/payments' });
     });
 
-    it('mintToken accepts qualified entries (nested included) and stores the members\' record ids', () => {
-      const minted = identity.mintToken(cfg, MASTER, {
-        ownerUserId: 'u-owner',
-        label: 'sub token',
-        projects: ['proj-a::billing', 'proj-a::billing::payments'],
-      });
-      const rec = persistedByHash(hashToken(minted.token));
-      expect(rec!.projects).toEqual(['billing', 'payments']);
-      // The caller is told what each deprecated qualified entry was stored as.
-      expect(minted.mapped).toEqual(['proj-a::billing -> billing', 'proj-a::billing::payments -> payments']);
+    it('mintToken refuses a qualified entry (nested included), naming the member record id form, and stores nothing', () => {
+      for (const entry of ['proj-a::billing', 'proj-a::billing::payments', 'proj-a::ghost']) {
+        expect(() =>
+          identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'sub token', projects: [entry] }),
+        ).toThrow(/a member is a record of its own - name it by its project record id/);
+      }
+      expect(listCredentials(dataDir, '*').some((r) => r.projects.some((p) => p.includes('::')))).toBe(false);
     });
 
-    it('mintToken rejects a qualified entry whose member holds no record yet, pointing at host doctor', () => {
-      const projRoot = createProjectRecord(dataDir, 'proj-b').rootPath;
-      seedChainedMount(projRoot, 'ledger', 'packages/ledger');
-      expect(() =>
-        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-b::ledger'] }),
-      ).toThrow(/holds no hosted record yet.*host doctor --fix/);
+    it('mintToken stores a member by its own record id', () => {
+      const minted = identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 'sub token', projects: ['billing', 'payments'] });
+      expect(persistedByHash(hashToken(minted.token))!.projects).toEqual(['billing', 'payments']);
+      expect(Object.keys(minted)).toEqual(['token']);
     });
 
-    it('mintToken rejects an UNKNOWN mount with an actionable error — never stored broken', () => {
-      expect(() =>
-        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::ghost'] }),
-      ).toThrow(/unknown member "ghost" on "proj-a"/);
-      // The failed mint persisted nothing.
-      expect(listCredentials(dataDir, '*').some((r) => r.projects.includes('proj-a::ghost'))).toBe(false);
-    });
-
-    it('mintToken rejects a NON-CHAINED subsystem (exists, but carries no projectPath)', () => {
-      expect(() =>
-        identity.mintToken(cfg, MASTER, { ownerUserId: 'u-owner', label: 't', projects: ['proj-a::plain'] }),
-      ).toThrow(/an internal subsystem is not a member/);
-    });
-
-    it('mintSelfToken maps a qualified id to the member record; the parent grant reaches it by inheritance', () => {
-      // The caller holds read over the PARENT only — inherited by the member.
+    it('mintSelfToken refuses a qualified id, and mints the member record id the parent grant reaches by inheritance', () => {
+      // The caller holds read over the PARENT only - inherited by the member.
       const caller = tokenWith('project:read', 'project', 'proj-a');
-      const token = identity.mintSelfToken(cfg, caller, 'proj-a::billing', false);
-      const rec = persistedByHash(hashToken(token));
-      expect(rec!.projects).toEqual(['billing']);
-      expect(rec!.label).toContain('billing');
+      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::billing', false)).toThrow(
+        /name it by its project record id/,
+      );
+      const token = identity.mintSelfToken(cfg, caller, 'billing', false);
+      expect(persistedByHash(hashToken(token))!.projects).toEqual(['billing']);
       expect(auditQuery(dataDir, { action: 'token.mint.self' })).toHaveLength(1);
     });
 
-    it('mintSelfToken rejects an unknown or non-chained mount with guidance (self-mint variant)', () => {
-      const caller = tokenWith('project:read', 'project', 'proj-a');
-      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::ghost', false)).toThrow(
-        /unknown member "ghost" on "proj-a"/,
-      );
-      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::plain', false)).toThrow(
-        /an internal subsystem is not a member/,
-      );
-    });
-
-    it('mintSelfToken authorization resolves over the member chain: no read anywhere on it → 403', () => {
+    it('mintSelfToken authorization still resolves over the member chain: no read anywhere on it is 403', () => {
       const caller = plainToken(); // owner with NO assignments at all
-      expect(() => identity.mintSelfToken(cfg, caller, 'proj-a::billing', false)).toThrow(ForbiddenError);
+      expect(() => identity.mintSelfToken(cfg, caller, 'billing', false)).toThrow(ForbiddenError);
     });
   });
 
@@ -403,8 +393,8 @@ describe('identity orchestrator (sdd_host)', () => {
   it('deactivates a user as admin (non-active status) and audits a security-level user.deactivate', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-3' }));
 
-    const updated = identity.setUserStatus(cfg, MASTER, 'u-3', 'suspended');
-    expect(updated.status).toBe('suspended');
+    const updated = identity.setUserStatus(cfg, MASTER, 'u-3', 'inactive');
+    expect(updated.status).toBe('inactive');
 
     const events = auditQuery(dataDir, { action: 'user.deactivate' });
     expect(events).toHaveLength(1);
@@ -421,8 +411,8 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(authenticate(dataDir, t1).authenticated).toBe(true);
     expect(authenticate(dataDir, t2).authenticated).toBe(true);
 
-    const updated = identity.setUserStatus(cfg, MASTER, 'u-deact', 'suspended');
-    expect(updated.status).toBe('suspended');
+    const updated = identity.setUserStatus(cfg, MASTER, 'u-deact', 'inactive');
+    expect(updated.status).toBe('inactive');
 
     // Existing sessions are cut off at the credential layer.
     expect(authenticate(dataDir, t1).authenticated).toBe(false);
@@ -446,7 +436,7 @@ describe('identity orchestrator (sdd_host)', () => {
   it('rejects setUserStatus (403) for a caller with no project:admin reach', () => {
     repoUpsertUser(dataDir, mkUser({ id: 'u-3' }));
     const caller = plainToken();
-    expect(() => identity.setUserStatus(cfg, caller, 'u-3', 'suspended')).toThrow(ForbiddenError);
+    expect(() => identity.setUserStatus(cfg, caller, 'u-3', 'inactive')).toThrow(ForbiddenError);
   });
 
   // Adversarial review (web UI wave 3): browser web sessions are a SEPARATE
@@ -465,7 +455,7 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(authenticateSession(dataDir, s1.id).authenticated).toBe(true);
     expect(authenticateSession(dataDir, s2.id).authenticated).toBe(true);
 
-    identity.setUserStatus(cfg, MASTER, 'u-sess', 'suspended');
+    identity.setUserStatus(cfg, MASTER, 'u-sess', 'inactive');
 
     // The user's sessions are gone; the bridge resolves them to UNAUTHENTICATED.
     expect(getWebSessionById(dataDir, s1.id)).toBeNull();
@@ -592,12 +582,12 @@ describe('identity orchestrator (sdd_host)', () => {
     const caller = tokenWith('project:admin', 'unit', ENG);
 
     // In-scope: allowed.
-    expect(identity.setUserStatus(cfg, caller, 'u-web', 'suspended').status).toBe('suspended');
+    expect(identity.setUserStatus(cfg, caller, 'u-web', 'inactive').status).toBe('inactive');
     // Out-of-scope: 403.
-    expect(() => identity.setUserStatus(cfg, caller, 'u-sales', 'suspended')).toThrow(ForbiddenError);
+    expect(() => identity.setUserStatus(cfg, caller, 'u-sales', 'inactive')).toThrow(ForbiddenError);
 
     // MASTER (instance-admin) may act on both.
-    expect(identity.setUserStatus(cfg, MASTER, 'u-sales', 'suspended').status).toBe('suspended');
+    expect(identity.setUserStatus(cfg, MASTER, 'u-sales', 'inactive').status).toBe('inactive');
   });
 
   it('upsertUser: a unit-scoped admin may only create/update users within its subtree; MASTER anywhere', () => {
@@ -658,8 +648,8 @@ describe('identity orchestrator (sdd_host)', () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     // The status change must still succeed and persist.
-    const updated = identity.setUserStatus(cfg, MASTER, 'u-af', 'suspended');
-    expect(updated.status).toBe('suspended');
+    const updated = identity.setUserStatus(cfg, MASTER, 'u-af', 'inactive');
+    expect(updated.status).toBe('inactive');
     // The failure was recorded as a server diagnostic.
     expect(errSpy).toHaveBeenCalled();
   });

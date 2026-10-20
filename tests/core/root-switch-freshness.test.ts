@@ -7,7 +7,7 @@ import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import {
   saveSystemSpec, saveSpec, invalidateSpecCache, workspaceFor, loadSubsystemSpecs,
 } from '../../src/core/specs.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -49,7 +49,7 @@ function family(): { root: string; kidDir: string } {
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
   saveSpec('subsystem', subsystem('parent-sub'));
-  writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+  writeMemberProject(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
   const kidDir = path.join(root, 'packages', 'kid');
   workspaceFor(kidDir).saveSystemSpec({
     schemaVersion: '1.0.0', name: 'kid-system', vision: 'v',

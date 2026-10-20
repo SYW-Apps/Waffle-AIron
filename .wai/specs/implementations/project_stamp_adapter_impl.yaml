@@ -1,0 +1,31 @@
+id: project_stamp_adapter_impl
+name: Project Stamp Adapter Implementation
+description: >-
+  src/upgrade/adapters/stamp.ts: the waironMajor line of project.yaml, read and written as text so
+  any major's configuration can be stamped.
+contract: iproject_stamp_adapter
+sourcePath: src/upgrade/adapters/stamp.ts
+methods:
+  - name: read
+    narrative: []
+    detail: intent
+    intent: >-
+      Read .wai/project.yaml under the root (the legacy .wairon/project.yaml when no .wai folder
+      exists) and answer the integer on its top-level waironMajor line. No file, no such line, or a
+      value that is not an integer answers nothing.
+  - name: write
+    narrative: []
+    detail: intent
+    intent: >-
+      Set the top-level waironMajor line of .wai/project.yaml under the root to the major, replacing
+      the line in place or adding it after the id line (at the top when there is none), keeping the
+      file's line endings and every other byte. A root with no project.yaml refuses with its path.
+  - name: holdsConfig
+    narrative: []
+    detail: intent
+    intent: >-
+      Answer whether .wai/project.yaml exists under the root (the legacy .wairon/project.yaml when
+      no .wai folder exists), the same file read and write use.
+status: draft
+createdAt: '2026-10-18T14:14:14.367Z'
+updatedAt: '2026-10-20T00:50:41.662Z'

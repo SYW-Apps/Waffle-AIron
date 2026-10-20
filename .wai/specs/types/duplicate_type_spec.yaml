@@ -1,0 +1,24 @@
+kind: value-object
+id: duplicate_type_spec
+name: DuplicateTypeSpec
+description: >-
+  The second half of a duplicate type id: a type whose id another subsystem's type already holds,
+  which the model lists leave out. Carries the address it is reached by, the file it is stored in
+  and the parsed type, so a tool can rename it.
+fields:
+  - name: id
+    type: string
+    description: Its address, `subsystem::id`
+    optional: false
+  - name: file
+    type: string
+    description: The absolute path of the file that holds it
+    optional: false
+  - name: spec
+    type: TypeSpec
+    description: The type, parsed against its schema
+    optional: false
+methods: []
+sourcePath: src/core/specs.ts
+createdAt: '2026-10-19T19:47:11.497Z'
+updatedAt: '2026-10-19T19:47:12.271Z'

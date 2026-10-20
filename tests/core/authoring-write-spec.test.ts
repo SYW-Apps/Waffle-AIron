@@ -171,7 +171,7 @@ describe('applyRestatement — computed without touching disk', () => {
   it('keeps namespace-qualified ids through the parse — the candidate stays in load form', () => {
     const existing = {
       id: 'billing', name: 'Billing', description: 'd', parentSystem: 'Shop System', projectPath: 'services/billing',
-      publicInterfaces: [{ type: 'Custom', details: 'writes', component: 'billing::invoice_portal', consumers: ['billing::ledger'] }],
+      publicInterfaces: [{ details: 'writes', component: 'billing::invoice_portal', consumers: ['billing::ledger'] }],
       trustedLinks: [], status: 'draft', createdAt: now, updatedAt: now,
     } as unknown as SubsystemSpec;
     const application = applyRestatement(

@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -37,7 +38,7 @@ const TS = '2026-01-01T00:00:00.000Z';
 
 function configYaml(id: string, extra: Record<string, unknown> = {}): string {
   return yaml.dump({
-    schemaVersion: '1.0.0', id, name: id,
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id, name: id,
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: BASE_FIXTURE_RULES,
     extensions: { packs: [], useGlobalPacks: false },
@@ -481,7 +482,7 @@ describe('8 — implements, undeclared aliases, remove dry run, the externals hi
     expect(v.all).toMatch(/\[EXTERNAL_NOT_EXPORTED\] "itile_cache" writes "geo::tile-library" \(implements\), which the producer exports for consumers to call \(role call\), not as an extension point/);
   });
 
-  it('removing the last external: EXTERNAL_UNDECLARED alone, never a "member path" DEPRECATED_REFERENCE_FORM beside it', async () => {
+  it('removing the last external: EXTERNAL_UNDECLARED', async () => {
     const p = pair('remove-last');
     expect((await sb.run(['externals', 'add', 'geo', '../geo'], p.studio)).code).toBe(0);
     const dry = await sb.run(['externals', 'remove', 'geo', '--dry-run'], p.studio);
@@ -492,8 +493,6 @@ describe('8 — implements, undeclared aliases, remove dry run, the externals hi
     const v = await sb.run(['validate'], p.studio);
     expect(v.code, transcript(v)).toBe(1);
     expect(v.all).toContain('[EXTERNAL_UNDECLARED]');
-    // Round 4: 17× "a member path is read from the bound root" beside the 15 errors.
-    expect(v.all).not.toContain('DEPRECATED_REFERENCE_FORM');
   });
 
   it('a project with externals and no members is not sent to `validate --family` (R4-15/16)', async () => {

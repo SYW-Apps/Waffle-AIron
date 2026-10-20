@@ -1,0 +1,24 @@
+id: installed_release_adapter_impl
+name: Installed Release Adapter Implementation
+description: >-
+  src/upgrade/adapters/release.ts: reads the installed package's package.json and its release-notes
+  folder.
+contract: iinstalled_release_adapter
+sourcePath: src/upgrade/adapters/release.ts
+methods:
+  - name: version
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the version field of the package.json shipped beside the running code. A package that
+      cannot be read refuses with its path.
+  - name: notes
+    narrative: []
+    detail: intent
+    intent: >-
+      Read every release-notes/<version>.md shipped with the package: the version is the file name,
+      the highlights are its bullet lines in order (at most five). Sorted newest version first. A
+      missing or unreadable folder answers none; a file that is not a version name is skipped.
+status: draft
+createdAt: '2026-10-18T14:14:09.712Z'
+updatedAt: '2026-10-18T14:14:11.319Z'

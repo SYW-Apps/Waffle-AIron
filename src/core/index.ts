@@ -119,7 +119,7 @@ export {
   // recorded — a passthrough read of the spec repository (spec_loader).
   typeSpellingFacts,
   // spec_tree_portal retiredReachFacts: the retired reachability forms the
-  // scan read compatibly — a passthrough read of the spec repository.
+  // scan met in the v5 reading — a passthrough read of the spec repository.
   retiredReachFacts,
   // spec_tree_portal lockTree / unlockTree: the bound tree's
   // cross-process write lock, taken around every spec-write tool; and
@@ -412,7 +412,7 @@ export function removeDomain(id: string): void {
 }
 
 // Component rename, contract-method rename, type rename and Specialist retirement
-// (spec_maintenance_portal renameComponent / renameMethod / renameType / retireSpecialists) — pure 1:1
+// (spec_maintenance_portal renameComponent / renameMethod / renameType / retireSpecialists / retireGateways) — pure 1:1
 // forwards to the core orchestrator, stated explicitly for the same anchored
 // conformance check.
 export { renameComponent, renameMethod, renameType, renameField, renameParam } from './provision.js';
@@ -427,8 +427,8 @@ export type { SpecIdRename, SpecMove } from './provision.js';
 // spec_tree_portal crossProjectWriteRefusal: the project boundary every
 // authored write asks before it writes — a 1:1 forward to the core orchestrator.
 export { crossProjectWriteRefusal } from './specs.js';
-export { retireSpecialists } from './stereotype-migration.js';
-export type { SpecialistRetirement, SpecialistRetype } from './stereotype-migration.js';
+export { retireSpecialists, retireGateways } from './stereotype-migration.js';
+export type { SpecialistRetirement, SpecialistRetype, GatewayRetirement, GatewayMerge } from './stereotype-migration.js';
 export { repairForeignStepFields } from './narrative-repair.js';
 export type { ForeignFieldRepair } from './narrative-repair.js';
 // spec_maintenance_portal repairSignatures: the doctor's one-time regeneration

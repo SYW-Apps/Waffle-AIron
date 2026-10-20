@@ -1,0 +1,14 @@
+id: v5_tree_file_adapter
+name: v5 Tree File Adapter
+description: >-
+  The v5 to v6 step's own file access: lists a v5 family from its raw files (members and the legacy
+  L1 mounts, which the running core no longer reads), moves a legacy .wairon folder to .wai, and
+  renames a spec file to the name the current layout expects. It lives with the step and goes when
+  the step goes.
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-18T14:11:24.466Z'
+updatedAt: '2026-10-18T14:34:55.371Z'

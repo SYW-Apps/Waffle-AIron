@@ -17,7 +17,7 @@ export const portalFieldsRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    "A Portal declares its transport (the retired portalType is read as it for one release); only an InProcess Portal may declare an abi. An Adapter may declare a transport: the one it calls its target Portal over (adapter-transport judges it against the target). Every other non-Portal component carries no transport, and no non-Portal carries an abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
+    "A Portal declares its transport (the retired portalType is read as it in the v5 reading `wairon upgrade` binds); only an InProcess Portal may declare an abi. An Adapter may declare a transport: the one it calls its target Portal over (adapter-transport judges it against the target). Every other non-Portal component carries no transport, and no non-Portal carries an abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
   codes: [
     { code: 'MISSING_PORTAL_TRANSPORT', defaultSeverity: 'error', summary: 'Portal without a transport' },
     { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with an abi or basePath, or a transport on one that is not an Adapter, or an abi on a Portal whose transport is not InProcess' },

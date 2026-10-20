@@ -79,13 +79,17 @@ methods:
   - name: loadTypeSpec
     description: >-
       Loads a single type specification by id, across the flat, per-subsystem and grouped layouts;
-      null when the workspace holds none under that id.
+      null when the workspace holds none under that id. An id qualified by a subsystem of the bound
+      project (`subsystem::id`) answers that subsystem's type, including the second half of a
+      duplicate id (two types of different subsystems declaring one id), which no model list holds.
     signature: 'loadTypeSpec(id: string): TypeSpec?'
     returns: TypeSpec?
     params:
       - name: id
         type: string
-        description: The type's id, qualified when it lives in a chained subproject
+        description: >-
+          The type's id, qualified when it lives in a chained subproject or when it names a
+          subsystem's type among duplicates (`subsystem::id`)
   - name: load
     description: >-
       Load one spec of the named kind by id through the typed loader of that kind, or null when none
@@ -200,8 +204,9 @@ methods:
       What the current scan met in the forms the reachability model retired: each Portal's
       portalType and listener mounts, each invokedBy of a retired kind, each authored export type
       and each in-process Custom endpoint, with what the stored spec held there. The loader reads
-      them compatibly for one release, so the stored value would otherwise be gone by the time the
-      migration asks. Read from the cached scan, rescanning first when the tree changed.
+      them compatibly in the v5 reading `wairon upgrade` binds, so the stored value would otherwise
+      be gone by the time the migration asks. Read from the cached scan, rescanning first when the
+      tree changed.
     signature: 'retiredReachFacts(): list<RetiredReachFact>'
     returns: list<RetiredReachFact>
     params: []
@@ -223,6 +228,14 @@ methods:
         type: string
         optional: true
     effect: read
+  - name: loadDuplicateTypeSpecs
+    description: >-
+      Loads the second half of every duplicate type id (two types of different subsystems declaring
+      one id), which no model list holds: each with its `subsystem::id` address, its file and its
+      parsed type.
+    signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
+    returns: list<DuplicateTypeSpec>
+    params: []
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-09T18:34:57.420Z'
+updatedAt: '2026-10-19T19:47:17.495Z'

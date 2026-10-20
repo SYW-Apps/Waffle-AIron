@@ -127,8 +127,8 @@ methods:
   - name: listDirectChainedSubprojects
     description: >-
       Forward to the core portal: the direct members of a project root, one level deep — its
-      `members` entries and, for one release, its legacy L1 mounts — each as its directory, alias
-      and form.
+      `members` entries and, in the v5 reading `wairon upgrade` binds, its legacy L1 mounts — each
+      as its directory, alias and form.
     signature: 'listDirectChainedSubprojects(projectRoot: string): list<ChainedSubprojectDir>'
     returns: list<ChainedSubprojectDir>
     params:
@@ -154,16 +154,6 @@ methods:
       - name: current
         type: StateId
         description: The gate identity as it stands now
-  - name: retireSpecialists
-    description: >-
-      Forward to core_portal.retireSpecialists: plan, and with apply write, the migration off the
-      retired Specialist stereotype
-    signature: 'retireSpecialists(apply: bool): SpecialistRetirement'
-    returns: SpecialistRetirement
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: repairForeignStepFields
     description: >-
       Forward to core_portal.repairForeignStepFields: plan, and with apply write, the removal of
@@ -437,62 +427,16 @@ methods:
         optional: true
     guarantees:
       - idempotent
-  - name: findLegacySpecFiles
-    description: >-
-      Forward to spec_maintenance_portal.findLegacySpecFiles: the spec files `wairon doctor` reports
-      as stored under a legacy name
-    signature: 'findLegacySpecFiles(): list<LegacySpecFile>'
-    returns: list<LegacySpecFile>
-    params: []
-  - name: findChainingSubprojectsMissingConfig
-    description: >-
-      Forward to spec_maintenance_portal.findChainingSubprojectsMissingConfig: the chained
-      subprojects `wairon doctor` reports as unrunnable standalone
-    signature: 'findChainingSubprojectsMissingConfig(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
-  - name: backfillChainedSubprojectConfigs
-    description: >-
-      Forward to spec_maintenance_portal.backfillChainedSubprojectConfigs: the `wairon doctor --fix`
-      repair
-    signature: 'backfillChainedSubprojectConfigs(projectRoot: string): list<string>'
-    returns: list<string>
-    params:
-      - name: projectRoot
-        type: string
   - name: diagnoseProjectPacks
     description: 'Forward to extension_portal.diagnoseProjectPacks: the pack situation `wairon doctor` reports'
     signature: 'diagnoseProjectPacks(): PackDiagnosis'
     returns: PackDiagnosis
-    params: []
-  - name: resolveChainingParent
-    description: >-
-      Forward to spec_tree_portal.resolveChainingParent: the bound root's chaining parent (parent
-      root and mounting subsystem id), or null for a top root and when the bound request may not
-      read above its root.
-    signature: 'resolveChainingParent(): ChainingParentRef?'
-    returns: ChainingParentRef?
     params: []
   - name: projectFamily
     description: 'Forward to spec_tree_portal.projectFamily: the project graph of the bound root''s scan.'
     signature: 'projectFamily(): ProjectFamily'
     returns: ProjectFamily
     params: []
-    guarantees:
-      - idempotent
-  - name: resolveProjectExports
-    description: >-
-      Forward to spec_tree_portal.resolveProjectExports: a project's resolved L0 export table, the
-      bound root's or a member's.
-    signature: 'resolveProjectExports(project?: string): ResolvedExportTable'
-    returns: ResolvedExportTable
-    params:
-      - name: project
-        type: string
-        description: The namespace of a member project; omitted for the bound root
-        optional: true
     guarantees:
       - idempotent
   - name: createMember
@@ -524,13 +468,6 @@ methods:
         type: bool
         description: Answer the plan and write nothing (`--report`)
         optional: true
-  - name: loadTypeSpecs
-    description: >-
-      Forward to spec_tree_portal.loadTypeSpecs: every type the bound root's scan loaded, its
-      members' included (keyed by project id)
-    signature: 'loadTypeSpecs(): list<TypeSpec>'
-    returns: list<TypeSpec>
-    params: []
   - name: advanceMember
     description: >-
       Forward to spec_maintenance_portal.advanceMember: move a git member's pinned commit (`wairon
@@ -575,16 +512,6 @@ methods:
       - name: apply
         type: bool
         description: Write the rewrite; false plans without writing
-  - name: migrateReachability
-    description: >-
-      Forward to spec_maintenance_portal.migrateReachability: plan, and with apply write, the bound
-      project's migration onto the reachability model.
-    signature: 'migrateReachability(apply: bool): ReachabilityMigrationPlan'
-    returns: ReachabilityMigrationPlan
-    params:
-      - name: apply
-        type: bool
-        description: Write the plan; false plans without writing
   - name: setNetwork
     description: >-
       Declare or remove the project's network for `wairon network declare|undeclare`. Forwarded to
@@ -690,6 +617,18 @@ methods:
     signature: 'inspectLock(): TreeLockState?'
     returns: TreeLockState?
     params: []
+  - name: buildCanvasDataModel
+    description: >-
+      The bound project's canvas model as data, forwarded to the spec tree portal: what `wairon host
+      demo` counts after it seeds the example tree.
+    signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
+    returns: CanvasModel
+    params:
+      - name: relations
+        type: list<ProjectRelations>
+        description: The family's relation health to carry; omitted, none
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T17:03:30.272Z'
+updatedAt: '2026-10-20T09:29:24.759Z'

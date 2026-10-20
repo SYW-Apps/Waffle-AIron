@@ -48,10 +48,8 @@ import type { FamilyMigrationReport, MigrationPlan, MigrationRequest } from '../
 // gap belongs in the spec, and it is reported rather than papered over. The
 // re-export lands on the core portal file; this file itself calls none of them.
 //
-// buildCanvasDataModel (a spec_tree_portal method now) is the model as DATA:
-// `wairon host demo` counts what it just seeded rather than drawing it. It is
-// not on icli_core_adapter, so it rides here until the host command's own
-// adapter work moves it.
+// buildCanvasDataModel (a spec_tree_portal method) is the model as DATA. The
+// commands reach it through the core adapter; it stays here for the barrel.
 export {
   generateComponentDiagram,
   generateSequenceDiagram,
@@ -124,6 +122,8 @@ export async function runMemberAdd(alias: string, source: string, options: Membe
   if (creation.as === 'project') {
     logger.info(`It is an independent project — its id is "${alias}". Design it from its own root, export what others consume from its L0, and reference it here as ${alias}::<name>.`);
     reportMemberPacks(creation);
+    // Steps 8-10: a project in a folder on disk gets the wairon tools for its own sessions.
+    if (creation.storage !== 'git') await setUpProjectSessions(nodePath.resolve(getProjectRoot(), source));
   } else {
     logger.info(`Its subsystems are this project's own: write them by their local ids, judged and locked with this project. \`wairon member promote ${alias}\` makes it a project when it needs its own team, release, approval or public surface.`);
   }
@@ -394,16 +394,26 @@ async function provisionMadeProjects(request: MigrationRequest): Promise<void> {
   else made = projectFamily().nodes.find((n) => n.parent === '' && n.mountAlias === request.alias)?.directory;
   for (const dir of made ? [nodePath.resolve(made)] : []) {
     if (dir === root || !pathExists(nodePath.join(dir, '.wai', 'project.yaml'))) continue;
-    const shown = shownDir(dir);
-    try {
-      await runWithProjectRoot(dir, async () => {
-        await runGenerate({});
-        runMcpInstall({ global: false, backend: 'claude' });
-      });
-      logger.success(`Set ${shown} up for its own sessions (guide, skills, .mcp.json): a teammate opens that folder in their AI tool.`);
-    } catch (e) {
-      logger.warn(`Could not set ${shown} up for its own sessions (${e instanceof Error ? e.message : String(e)}). Run there: \`wairon generate\` and \`wairon mcp install --backend claude\`.`);
-    }
+    await setUpProjectSessions(dir);
+  }
+}
+
+/**
+ * What `wairon init` gives a project, for a project folder another command made:
+ * its guide and root pointer, skills and context (generate's own layer) and, when
+ * claude is a configured target, its portable .mcp.json. A failure is reported with
+ * the commands to run there, never fatal: the command's own change already stands.
+ */
+async function setUpProjectSessions(dir: string): Promise<void> {
+  const shown = shownDir(dir);
+  try {
+    await runWithProjectRoot(dir, async () => {
+      await runGenerate({});
+      runMcpInstall({ global: false, backend: 'claude' });
+    });
+    logger.success(`Set ${shown} up for its own sessions (guide, skills, .mcp.json): a teammate opens that folder in their AI tool.`);
+  } catch (e) {
+    logger.warn(`Could not set ${shown} up for its own sessions (${e instanceof Error ? e.message : String(e)}). Run there: \`wairon generate\` and \`wairon mcp install --backend claude\`.`);
   }
 }
 

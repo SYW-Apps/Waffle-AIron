@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -187,7 +188,7 @@ describe('moveMember', () => {
     expect(membersOf(rootDir)).toEqual({ billing: { source: 'services/billing', description: 'Invoices' } });
   });
 
-  it('moves a legacy L1 mount into `members` first, deleting the L1 document, then relocates it', () => {
+  v5it('moves a legacy L1 mount into `members` first, deleting the L1 document, then relocates it', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('billing', 'packages/billing'), 'billing');
     const mountFile = path.join(rootDir, '.wai', 'specs', 'billing', '.index.yaml');
@@ -237,7 +238,7 @@ describe('member discovery and the doctor backfill', () => {
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('lists the direct members in both forms, `members` first, each with its alias and form', () => {
+  v5it('lists the direct members in both forms, `members` first, each with its alias and form', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('legacy', 'packages/legacy'), 'legacy');
     createMember('billing', 'packages/billing', undefined, 'project');
@@ -248,10 +249,10 @@ describe('member discovery and the doctor backfill', () => {
     ]);
   });
 
-  it('a `members` entry wins over a legacy mount under the same alias', () => {
+  v5it('a `members` entry wins over a legacy mount under the same alias', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('billing', 'packages/old'), 'billing');
-    projectConfigRepository.declareMember('billing', { path: 'packages/new' });
+    projectConfigRepository.declareMember('billing', { source: 'packages/new' });
     // A project member (stage 8: a lock makes it one — an empty folder would be a part, never a chained project).
     fs.mkdirSync(path.join(rootDir, 'packages', 'new', '.wai'), { recursive: true });
     fs.writeFileSync(path.join(rootDir, 'packages', 'new', '.wai', 'lock.json'), '{}');
@@ -261,7 +262,7 @@ describe('member discovery and the doctor backfill', () => {
     expect(path.relative(rootDir, direct[0].dir).split(path.sep).join('/')).toBe('packages/new');
   });
 
-  it('detects and backfills a member missing project.yaml, in either form, declaring the alias as its id', () => {
+  v5it('detects and backfills a member missing project.yaml, in either form, declaring the alias as its id', () => {
     rootDir = makeRoot();
     createMember('billing', 'packages/billing', undefined, 'project');
     writeLegacyMount(subsystemSpec('legacy', 'packages/legacy'), 'legacy');
@@ -302,7 +303,7 @@ describe('layered agent topology', () => {
     if (rootDir) fs.rmSync(rootDir, { recursive: true, force: true });
   });
 
-  it('resolveAgentTopology generates only the current layer; a chained subproject collapses to ONE delegate', () => {
+  v5it('resolveAgentTopology generates only the current layer; a chained subproject collapses to ONE delegate', () => {
     rootDir = makeRoot();
     saveSpec('subsystem', subsystemSpec('local-a'));            // a normal local subsystem
     writeLegacyMount(subsystemSpec('child', 'child'), 'child'); // a chained subproject
@@ -331,7 +332,7 @@ describe('layered agent topology', () => {
   // walks) and per-layer topology (what each layer writes) — without loadRegistry
   // (a lazy require inside the loader↔agent_resolver cycle that vitest cannot
   // resolve at call time).
-  it('cascade building blocks: direct subprojects are discovered, and each layer resolves its OWN topology', () => {
+  v5it('cascade building blocks: direct subprojects are discovered, and each layer resolves its OWN topology', () => {
     rootDir = makeRoot();
     writeLegacyMount(subsystemSpec('child', 'child'), 'child');
     const childDir = path.join(rootDir, 'child');

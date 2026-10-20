@@ -47,8 +47,8 @@ describe('project_config_registry.declareMember', () => {
   it('writes the shorthand for a bare path, the long form for a description, after externals, keeping comments and CRLF', () => {
     const root = tempRoot(BASE);
     const repo = projectConfigRepositoryAt(root);
-    expect(repo.declareMember('billing', { path: 'services/billing' })).toBe(true);
-    expect(repo.declareMember('ledger', { path: 'services/ledger', description: 'The ledger of record' })).toBe(true);
+    expect(repo.declareMember('billing', { source: 'services/billing' })).toBe(true);
+    expect(repo.declareMember('ledger', { source: 'services/ledger', description: 'The ledger of record' })).toBe(true);
     const text = textOf(root);
     expect(text).toContain('# the display name');
     expect(text.match(/(?<!\r)\n/g)).toBeNull();
@@ -64,26 +64,26 @@ describe('project_config_registry.declareMember', () => {
   it('writes nothing for the same declaration again, in either form', () => {
     const root = tempRoot(BASE);
     const repo = projectConfigRepositoryAt(root);
-    repo.declareMember('billing', { path: 'services/billing' });
+    repo.declareMember('billing', { source: 'services/billing' });
     const once = textOf(root);
-    expect(repo.declareMember('billing', { path: 'services/billing' })).toBe(false);
+    expect(repo.declareMember('billing', { source: 'services/billing' })).toBe(false);
     expect(textOf(root)).toBe(once);
   });
 
   it('refuses a malformed alias, an empty or absolute path, an alias externals holds, and a different declaration', () => {
     const root = tempRoot(BASE);
     const repo = projectConfigRepositoryAt(root);
-    expect(() => repo.declareMember('Billing.Svc', { path: 'services/billing' })).toThrow(/\[a-z0-9-_\]\+/);
-    expect(() => repo.declareMember('billing', { path: '' })).toThrow(/empty/);
-    expect(() => repo.declareMember('billing', { path: '/srv/billing' })).toThrow(/absolute/);
-    expect(() => repo.declareMember('crm', { path: 'services/crm' })).toThrow(/`externals` already declares "crm"/);
-    repo.declareMember('billing', { path: 'services/billing' });
-    expect(() => repo.declareMember('billing', { path: 'services/billing-v2' })).toThrow(/never overwritten/);
+    expect(() => repo.declareMember('Billing.Svc', { source: 'services/billing' })).toThrow(/\[a-z0-9-_\]\+/);
+    expect(() => repo.declareMember('billing', { source: '' })).toThrow(/empty/);
+    expect(() => repo.declareMember('billing', { source: '/srv/billing' })).toThrow(/absolute/);
+    expect(() => repo.declareMember('crm', { source: 'services/crm' })).toThrow(/`externals` already declares "crm"/);
+    repo.declareMember('billing', { source: 'services/billing' });
+    expect(() => repo.declareMember('billing', { source: 'services/billing-v2' })).toThrow(/never overwritten/);
     expect(membersOf(root)).toEqual({ billing: 'services/billing' });
   });
 
   it('refuses a project with no configuration', () => {
-    expect(() => projectConfigRepositoryAt(tempRoot()).declareMember('billing', { path: 'b' })).toThrow();
+    expect(() => projectConfigRepositoryAt(tempRoot()).declareMember('billing', { source: 'b' })).toThrow();
   });
 });
 
@@ -91,8 +91,8 @@ describe('project_config_registry.setMemberPath / removeMember', () => {
   it('moves a member in the form it was written, keeping a long form\'s description', () => {
     const root = tempRoot(BASE);
     const repo = projectConfigRepositoryAt(root);
-    repo.declareMember('billing', { path: 'services/billing' });
-    repo.declareMember('ledger', { path: 'services/ledger', description: 'The ledger of record' });
+    repo.declareMember('billing', { source: 'services/billing' });
+    repo.declareMember('ledger', { source: 'services/ledger', description: 'The ledger of record' });
     expect(repo.setMemberPath('billing', 'apps/billing')).toBe(true);
     expect(repo.setMemberPath('ledger', 'apps/ledger')).toBe(true);
     expect(repo.setMemberPath('ledger', 'apps/ledger')).toBe(false);
@@ -107,8 +107,8 @@ describe('project_config_registry.setMemberPath / removeMember', () => {
   it('removes one member, and `members` itself with the last one', () => {
     const root = tempRoot(BASE);
     const repo = projectConfigRepositoryAt(root);
-    repo.declareMember('billing', { path: 'services/billing' });
-    repo.declareMember('ledger', { path: 'services/ledger' });
+    repo.declareMember('billing', { source: 'services/billing' });
+    repo.declareMember('ledger', { source: 'services/ledger' });
     expect(repo.removeMember('ledger')).toBe(true);
     expect(membersOf(root)).toEqual({ billing: 'services/billing' });
     expect(repo.removeMember('ledger')).toBe(false);

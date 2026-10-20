@@ -35,7 +35,8 @@ verdict" job unless a passing verdict covers the code being merged (stage 5).
    checks rerun in full, and only the seats whose finding the fix touched rerun, as a short
    confirmation (their findings, then the everyday loop once). Untouched seats keep their result.
 5. **The verdict file, then the release merge.** Write `qa/verdicts/<version>.md`
-   (format in `qa/verdicts/README.md`), add the unfixed edge majors to the CHANGELOG as known
+   (format in `qa/verdicts/README.md`) and the release's curated highlights in
+   `release-notes/<version>.md` (a few `- ` lines: what a user notices, not every change), add the unfixed edge majors to the CHANGELOG as known
    limitations, take the lock if the specs moved, and open dev -> main.
 
 ## CORE and EDGE
@@ -73,7 +74,7 @@ subagent playing a real developer who learns wairon only from the docs shipped i
 
 | Seat | Who | What it proves |
 |---|---|---|
-| 1. Upgrader | Builds a realistic project with the published previous stable (`@wairon/cli@latest`, today 5.1.0), then upgrades to the RC following ONLY the CHANGELOG's upgrade steps. | The upgrade path a real team takes works as written, and the everyday loop survives it. |
+| 1. Upgrader | Builds a realistic project with the published previous stable (`@wairon/cli@latest`), then upgrades to the RC following ONLY the CHANGELOG's upgrade steps. | The upgrade path a real team takes works as written, and the everyday loop survives it. |
 | 2. Newcomer | Has never seen wairon; works from the README and shipped docs only. Builds a small app end to end: design, validate, lock, implement one component from a brief, change the design, re-lock. | The first hour is possible without insider knowledge. |
 | 3. Stress and adversarial | A multi-project family (members plus an external), one Python service. Writes code that deliberately disagrees with its design. | The code-vs-design gate catches ordinary mismatches in more than one language, and does not cry wolf. |
 | 4. Hosted operator (conditional) | Sets up the hosted server with the web UI, two users, tokens and a shared project. | The hosted setup works from the docs, and roles and tokens do what they say. |
@@ -121,11 +122,13 @@ result and the known limitations. The "Release QA verdict" job (`.github/workflo
 requests into main only) fails unless some verdict in `qa/verdicts/` has all of:
 
 1. `result: PASS`;
-2. its `rc` commit is an ancestor of the pull request head;
-3. no change under `src/`, `web/`, `sdk/`, `schemas/`, a `templates` folder, `package.json` or
+2. the release it names ships its notes: `release-notes/<version>.md` exists and holds at least one
+   highlight (a `- ` line), which `wairon whatsnew` and the first command after an update show;
+3. its `rc` commit is an ancestor of the pull request head;
+4. no change under `src/`, `web/`, `sdk/`, `schemas/`, a `templates` folder, `package.json` or
    `package-lock.json` between `rc` and the head.
 
-Lock records, docs, the CHANGELOG, `qa/` and regenerated `.wai/` context may change after the RC, and
+Lock records, docs, the CHANGELOG, the release notes, `qa/` and regenerated `.wai/` context may change after the RC, and
 so may the release bot's version stamp (`chore: release v…` commits that change only
 `src/config/defaults.ts`), which every merge into dev produces. Anything else means the QA has to run again on a new RC. To make the job a hard gate, add it to the
 required checks of the main branch protection (a repository setting, not something this repository can

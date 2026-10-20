@@ -152,7 +152,7 @@ function platform(): { root: string; contracts: string; payments: string } {
   const payments = path.join(root, 'services', 'payments');
   projectYaml(payments, { id: 'payments', name: 'Payments', externals: { contracts: { source: { path: '../../libs/contracts' } } } });
   system(payments, 'Payments', [{ from: 'billing', component: 'payment-portal', audience: 'project' }]);
-  subsystem(payments, 'Payments', 'billing', { publicInterfaces: [{ type: 'Custom', details: 'Payments', component: 'payment-portal' }] });
+  subsystem(payments, 'Payments', 'billing', { publicInterfaces: [{ details: 'Payments', component: 'payment-portal' }] });
   component(payments, 'billing', 'payment-portal', 'Portal');
   contract(payments, 'billing', 'payment-portal', [{
     name: 'charge', description: 'Charge for one sku', signature: 'charge(skuId: contracts::sku_id): void', returns: 'void',

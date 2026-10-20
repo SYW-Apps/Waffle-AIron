@@ -171,59 +171,8 @@ methods:
         type: local
     symbol: check
     exportedVia: logicDeclarationRule
-  - name: retiredStereotypes
-    sourcePath: src/core/rules/intrinsic/retired-stereotypes.ts
-    narrative:
-      - stepNumber: 1
-        label: rsStart
-        description: For each component, check its own stereotype against the retired ones.
-        type: loop
-        loopKind: forEach
-        over: ctx.components
-        endStep: 8
-      - stepNumber: 2
-        description: isDraftCtx = ctx.isComponentDraft(comp.id).
-        type: local
-      - stepNumber: 3
-        description: >-
-          Branch: is the component typed with a retired stereotype? A live stereotype has nothing to
-          migrate.
-        type: branch
-        condition: comp.isRetired() (componentType Specialist or Gateway)
-        onFalseStep: 8
-      - stepNumber: 4
-        description: 'Branch (retired): is it a Specialist? Otherwise it is a Gateway.'
-        type: branch
-        condition: comp.componentType is "Specialist"
-        onFalseStep: 7
-      - stepNumber: 5
-        description: >-
-          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired
-          Specialist: it is logic, an Orchestrator with the dependencyClass its dependencies give
-          it. Run wairon doctor --fix to retype it (the doctor names the class), or set
-          componentType: Orchestrator and its dependencyClass yourself.
-        type: local
-      - stepNumber: 6
-        description: Continue with the next component.
-        type: jump
-        toStep: 8
-      - stepNumber: 7
-        label: rsGateway
-        description: >-
-          Report STEREOTYPE_RETIRED (error; isDraftCtx) naming the component as a retired Gateway
-          and listing its migration: (1) the Portal it owns becomes the front door, with the gateway
-          variant; (2) its other members become dependencies of that Portal instead of owned
-          members; (3) its consumers depend on that Portal; (4) delete the Gateway spec.
-          sdd_rename_component can then give the Portal the Gateway's id.
-        type: local
-      - stepNumber: 8
-        label: rsEnd
-        description: Continue with the next component.
-        type: local
-    symbol: check
-    exportedVia: retiredStereotypesRule
 lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-10-06T23:07:00.038Z'
+updatedAt: '2026-10-18T19:02:55.092Z'

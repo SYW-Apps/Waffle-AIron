@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -6,10 +7,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache, loadComponentSpec, loadInterfaceSpec, retiredReachFacts } from '../../src/core/specs.js';
 import { migrate, type ReachabilityMigrationPlan } from '../../src/core/reachability-migration.js';
 import * as corePortal from '../../src/core/index.js';
-import { migrateReachability as cliMigrateReachability } from '../../src/commands/adapters/core.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
-import { runDoctor } from '../../src/commands/doctor.js';
-import { DoctorOptionsError } from '../../src/utils/errors.js';
 
 // ---------------------------------------------------------------------------
 // reachability_migration.migrate — the one-project migration onto the
@@ -197,9 +195,8 @@ describe('reachability migration — the plan', () => {
     expect(run?.reason).toContain('in-process migration.run');
   });
 
-  it('the spec maintenance portal and the CLI core adapter forward to the same migration', () => {
+  it('the spec maintenance portal forwards to the migration (the upgrade step reaches it through its own core adapter)', () => {
     expect(corePortal.migrateReachability).toBe(migrate);
-    expect(cliMigrateReachability).toBe(migrate);
   });
 });
 
@@ -290,27 +287,6 @@ describe('reachability migration — apply', () => {
       !l.startsWith('listener-mounts|')));
     const before = snapshot(specs);
     expect(migrate(true).applied).toBe(false);
-    expect(snapshot(specs)).toEqual(before);
-  });
-});
-
-describe('wairon doctor --report reachability', () => {
-  it('prints every rewrite by form, what it will not fix, and the totals, writing nothing', async () => {
-    const specs = oldShop();
-    const before = snapshot(specs);
-    const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
-    try {
-      await runDoctor({ report: 'reachability' });
-      const printed = log.mock.calls.map((c) => String(c[0])).join('\n');
-      expect(printed).toContain('portalType (3)');
-      expect(printed).toContain('listener mounts (5)');
-      expect(printed).toContain('Will not fix (6)');
-      expect(printed).toContain('Totals: 19 rewrite(s)');
-      expect(printed).toContain('Nothing was written.');
-      await expect(runDoctor({ report: 'reachability', fix: true })).rejects.toThrow(DoctorOptionsError);
-    } finally {
-      log.mockRestore();
-    }
     expect(snapshot(specs)).toEqual(before);
   });
 });

@@ -1,0 +1,74 @@
+id: upgrade_core_adapter_impl
+name: Upgrade Core Adapter Implementation
+description: >-
+  src/upgrade/adapters/core.ts: in-process imports of the sdd_core, sdd_validator and approval
+  barrels, each bound to the root the caller bound.
+contract: iupgrade_core_adapter
+sourcePath: src/upgrade/adapters/core.ts
+methods:
+  - name: retireSpecialists
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: retireSpecialists
+  - name: migrateReachability
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: migrateReachability
+  - name: findLegacySpecFiles
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findLegacySpecFiles
+  - name: findChainingSubprojectsMissingConfig
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: findChainingSubprojectsMissingConfig
+  - name: backfillChainedSubprojectConfigs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: backfillChainedSubprojectConfigs
+  - name: reexpressApproval
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: reexpress
+  - name: writeLockRecord
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval portal
+        type: call
+        targetComponent: approval_portal
+        targetMethod: writeLockRecord
+  - name: computeGateStateId
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: computeGateStateId
+  - name: retireGateways
+    narrative:
+      - stepNumber: 1
+        description: Forward to the spec maintenance portal
+        type: call
+        targetComponent: spec_maintenance_portal
+        targetMethod: retireGateways
+status: draft
+createdAt: '2026-10-18T14:14:23.627Z'
+updatedAt: '2026-10-18T19:11:09.105Z'

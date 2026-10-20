@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -75,10 +76,10 @@ function metaFamily(): MetaFamily {
     globalRequirements: ['Idempotent settlement'], databases: [{ id: 'ledgerdb', name: 'LedgerDB', engine: 'postgresql' }], targetLanguage: 'rust',
     publicInterfaces: [{ from: 'pay', component: 'pay-portal', audience: 'project' }],
   });
-  write(svc, '.wai/specs/pay/.index.yaml', { id: 'pay', name: 'pay', description: 'Takes payments.', parentSystem: 'Svc', publicInterfaces: [{ type: 'Custom', details: 'Payments', component: 'pay-portal' }], trustedLinks: [] });
-  write(svc, '.wai/specs/pay/pay-portal/.index.yaml', { id: 'pay-portal', name: 'pay-portal', description: 'Takes payments.', subsystem: 'pay', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
+  write(svc, '.wai/specs/pay/.index.yaml', { id: 'pay', name: 'pay', description: 'Takes payments.', parentSystem: 'Svc', publicInterfaces: [{ details: 'Payments', component: 'pay-portal' }], trustedLinks: [] });
+  write(svc, '.wai/specs/pay/pay-portal/.index.yaml', { id: 'pay-portal', name: 'pay-portal', description: 'Takes payments.', subsystem: 'pay', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
   write(svc, '.wai/specs/settle/.index.yaml', { id: 'settle', name: 'settle', description: 'Settles.', parentSystem: 'Svc', publicInterfaces: [], trustedLinks: [] });
-  write(svc, '.wai/lock.json', JSON.stringify({ stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
+  write(svc, '.wai/lock.json', JSON.stringify({ format: 3, stateId: { algorithm: 'sha256', digest: '0' }, lockedAt: TS, lockedBy: { id: 't', source: 'git' }, validatorVersion: '0', validationResult: { valid: true, errors: 0, warnings: 0, notices: 0 }, status: 'ready', projectId: 'svc' }));
   write(svc, '.wai/context/wairon-guide.md', '# derived\n');
 
   config(sub, { id: 'sub', name: 'Sub' });
@@ -278,8 +279,8 @@ describe('stage 6 — internalize re-points every family consumer of the member'
     before = dirHash(f.top);
     check(runWithProjectBinding(f.top, { topRoot: f.top, parentReach: false }, () => { invalidateSpecCache(); return migrations.plan({ verb: 'internalize', alias: 'ledger', destination: { home: '' } }); }), 'family-partial', before);
     // The parent already exports `ledger-portal` for a target of its own, and billing uses ledger's.
-    write(f.top, '.wai/specs/front/front-portal/.index.yaml', { id: 'front-portal', name: 'front-portal', description: 'Ours.', subsystem: 'front', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
-    write(f.top, '.wai/specs/front/.index.yaml', { id: 'front', name: 'front', description: 'The front.', parentSystem: 'House', publicInterfaces: [{ type: 'Custom', details: 'Front', component: 'front-portal' }], trustedLinks: [], status: 'complete' });
+    write(f.top, '.wai/specs/front/front-portal/.index.yaml', { id: 'front-portal', name: 'front-portal', description: 'Ours.', subsystem: 'front', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
+    write(f.top, '.wai/specs/front/.index.yaml', { id: 'front', name: 'front', description: 'The front.', parentSystem: 'House', publicInterfaces: [{ details: 'Front', component: 'front-portal' }], trustedLinks: [], status: 'complete' });
     write(f.top, '.wai/specs/.index.yaml', { name: 'House', vision: 'House in miniature', publicInterfaces: [{ from: 'front', component: 'front-portal', as: 'ledger-portal', audience: 'project' }] });
     invalidateSpecCache();
     before = dirHash(f.top);
@@ -297,7 +298,7 @@ describe('stage 6 — internalize on the reference family (Waffler in miniature,
     r = undefined;
   });
 
-  it('core — two subsystems, a member of its own, a sibling consumer and a consumer below it — folds into the top: family-consistent', () => {
+  v5it('core — two subsystems, a member of its own, a sibling consumer and a consumer below it — folds into the top: family-consistent', () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     r = buildReferenceFamily();
     migrate(r.top, { verb: 'chaining' });
@@ -320,10 +321,10 @@ function shopFamily(): { top: string; shop: string } {
   const shop = path.join(top, 'shop');
   write(top, '.wai/project.yaml', dump({ id: 'house', name: 'House', targets: [], members: { shop: 'shop' }, extensions: { packs: [], useGlobalPacks: false } }));
   write(top, '.wai/specs/.index.yaml', { name: 'House', vision: 'Orders.', publicInterfaces: [{ from: 'orders', component: 'orders-portal', audience: 'project' }] });
-  write(top, '.wai/specs/orders/.index.yaml', { id: 'orders', name: 'orders', description: 'Orders.', parentSystem: 'House', publicInterfaces: [{ type: 'Custom', details: 'Orders', component: 'orders-portal' }], trustedLinks: [] });
-  write(top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders.', subsystem: 'orders', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
-  write(top, '.wai/specs/web/.index.yaml', { id: 'web', name: 'web', description: 'Web.', parentSystem: 'House', publicInterfaces: [{ type: 'Custom', details: 'Web', component: 'web-portal' }], trustedLinks: [] });
-  write(top, '.wai/specs/web/web-portal/.index.yaml', { id: 'web-portal', name: 'web-portal', description: 'The web.', subsystem: 'web', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: ['orders-portal'] });
+  write(top, '.wai/specs/orders/.index.yaml', { id: 'orders', name: 'orders', description: 'Orders.', parentSystem: 'House', publicInterfaces: [{ details: 'Orders', component: 'orders-portal' }], trustedLinks: [] });
+  write(top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders.', subsystem: 'orders', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
+  write(top, '.wai/specs/web/.index.yaml', { id: 'web', name: 'web', description: 'Web.', parentSystem: 'House', publicInterfaces: [{ details: 'Web', component: 'web-portal' }], trustedLinks: [] });
+  write(top, '.wai/specs/web/web-portal/.index.yaml', { id: 'web-portal', name: 'web-portal', description: 'The web.', subsystem: 'web', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: ['orders-portal'] });
   write(top, '.wai/specs/web/web-store/.index.yaml', { id: 'web-store', name: 'web-store', description: 'Unpublished.', subsystem: 'web', componentType: 'Store', owns: [], dependsOn: [] });
   write(shop, '.wai/project.yaml', dump({ id: 'shop', name: 'Shop', targets: [], externals: { house: {} }, extensions: { packs: [], useGlobalPacks: false } }));
   write(shop, '.wai/specs/.index.yaml', { name: 'Shop', vision: 'Shop.' });
@@ -373,7 +374,7 @@ describe('stage 6 — externalize, family-wide', () => {
   it('refuses — each writing nothing: externalize-refused (missing, a reference back into an unpublished component, a sibling name left unresolved), not-contained, alias-taken, id-collision', () => {
     const cases: [string, (f: { top: string; shop: string }) => void, Record<string, string>, string, RegExp?][] = [
       ['missing', () => undefined, { subsystem: 'ghost', path: 'services/ghost' }, 'externalize-refused'],
-      ['crossing', (f) => write(f.top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders.', subsystem: 'orders', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: ['web-store'] }), { subsystem: 'orders', path: 'services/orders' }, 'externalize-refused', /names web-store, which its subsystem web does not publish/],
+      ['crossing', (f) => write(f.top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders.', subsystem: 'orders', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: ['web-store'] }), { subsystem: 'orders', path: 'services/orders' }, 'externalize-refused', /names web-store, which its subsystem web does not publish/],
       ['sibling', (f) => write(f.top, '.wai/specs/.index.yaml', { name: 'House', vision: 'Orders.', publicInterfaces: [{ component: 'orders-portal', audience: 'project' }] }), { subsystem: 'orders', path: 'services/orders' }, 'externalize-refused', /uses "orders-portal"/],
       ['outside', () => undefined, { subsystem: 'orders', path: '../elsewhere' }, 'not-contained'],
       ['holds a project', (f) => write(f.top, 'services/orders/.wai/project.yaml', dump({ id: 'x', name: 'X', targets: [] })), { subsystem: 'orders', path: 'services/orders' }, 'not-contained'],
@@ -465,7 +466,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
     const f = shopFamily();
     roots.push(f.top);
     await lockTop(f.top);
-    write(f.top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders, and refunds.', subsystem: 'orders', componentType: 'Portal', portalType: 'Custom', owns: [], dependsOn: [] });
+    write(f.top, '.wai/specs/orders/orders-portal/.index.yaml', { id: 'orders-portal', name: 'orders-portal', description: 'Takes orders, and refunds.', subsystem: 'orders', componentType: 'Portal', transport: 'Custom', owns: [], dependsOn: [] });
     invalidateSpecCache();
     const planned = plan(f.top, { verb: 'externalize', subsystem: 'orders', path: 'services/orders' });
     expect(planned.relock.map((d) => path.resolve(d))).toEqual([path.resolve(f.top)]);

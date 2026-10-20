@@ -97,11 +97,11 @@ describe('stage 6 — the verbs\' writes, one at a time', () => {
     const before = dirHash(f.top);
     runWithProjectRoot(f.top, () => {
       // Stage 8: leaving the root is only ever a leading `../` (a sibling); an inner `..` that escapes is refused.
-      expect(() => declareMember('away', { path: 'tools/../../elsewhere' })).toThrow(/must resolve within the project root/);
-      expect(() => declareMember('self', { path: '.' })).toThrow(/the project root itself/);
+      expect(() => declareMember('away', { source: 'tools/../../elsewhere' })).toThrow(/must resolve within the project root/);
+      expect(() => declareMember('self', { source: '.' })).toThrow(/the project root itself/);
     });
     expect(dirHash(f.top)).toEqual(before);
-    runWithProjectRoot(f.top, () => expect(declareMember('tools', { path: 'tools', description: 'Tools' })).toBe(true));
+    runWithProjectRoot(f.top, () => expect(declareMember('tools', { source: 'tools', description: 'Tools' })).toBe(true));
     expect(projectConfigRepositoryAt(f.top).load()?.members?.tools).toEqual({ source: 'tools', description: 'Tools' });
   });
 

@@ -19,8 +19,6 @@ export interface ExportModel {
 type LayoutResult = any;
 
 export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
-  // A retired Specialist or Gateway draws as a plain box in the retired colour;
-  // a Gateway is no pattern, so it never contains members.
   const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
   const COLORS: Record<string, { fill: string; stroke: string }> = {
     entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
@@ -29,10 +27,8 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
     query: { fill: '#fbeee4', stroke: '#b0643a' },
     adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
     pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
-    retired: { fill: '#efedeb', stroke: '#8a817c' },
   };
   function stereo(t: string): string {
-    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
     if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';
@@ -111,8 +107,6 @@ export function buildDrawioXml(model: ExportModel, L: LayoutResult): string {
 }
 
 export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): string {
-  // A retired Specialist or Gateway draws as a plain box in the retired colour;
-  // a Gateway is no pattern, so it never contains members.
   const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
   const COLORS: Record<string, { fill: string; stroke: string }> = {
     entry: { fill: '#eef4ff', stroke: '#4a7dcf' },
@@ -121,10 +115,8 @@ export function buildExcalidrawScene(model: ExportModel, L: LayoutResult): strin
     query: { fill: '#fbeee4', stroke: '#b0643a' },
     adapter: { fill: '#eef8f1', stroke: '#4f9e6b' },
     pattern: { fill: '#f6f8fa', stroke: '#6a737d' },
-    retired: { fill: '#efedeb', stroke: '#8a817c' },
   };
   function stereo(t: string): string {
-    if (t === 'Specialist' || t === 'Gateway') return 'retired';
     if (t === 'Portal' || t === 'Observer') return 'entry';
     if (t === 'Query') return 'query';
     if (t === 'Store' || t === 'Index' || t === 'Registry') return 'data';

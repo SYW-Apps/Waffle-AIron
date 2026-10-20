@@ -723,35 +723,42 @@ methods:
       - stepNumber: 1
         description: >-
           Mark the types referenced by fields: for every field of every type t in ctx.types, pass
-          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced, which
-          ignores a ref when ctx.isBuiltinType(ref) holds and otherwise records the id of every type
-          in ctx.types whose matchesRef(ref) holds; and, a signature type's params and returns being
-          its references in place of fields, each ref of t.signatureTypeRefs() for every type t,
-          except t itself
+          each ref of t.fieldTypeRefs(field.type) to the private helper markTypeReferenced(ref,
+          from) with from = t.subsystem; the helper ignores a ref when ctx.isBuiltinType(ref) holds
+          and otherwise resolves it with type_ref_resolution.resolve(ref, from, ctx.types),
+          recording the resolved type's id — or, when the outcome is ambiguous, the id of EVERY
+          candidate, since an ambiguous reference is reported once by the type-ref-scope rule and
+          must never be doubled here as UNUSED_TYPE. And, a signature type's params and returns
+          being its references in place of fields, each ref of t.signatureTypeRefs() for every type
+          t, except t itself, the same way
         type: local
       - stepNumber: 2
         description: >-
           Mark the types referenced by signatures: pass each ref of m.typeRefs(), for every method m
-          of every interface in ctx.interfaces, to markTypeReferenced
+          of every interface in ctx.interfaces, to markTypeReferenced with from = the subsystem of
+          the interface's component
         type: local
       - stepNumber: 3
         description: >-
           Mark the signature types methods take their signature from: for every source fact in
           ctx.signatureFacts (none on a candidate run) whose type reading named a signature type —
           the target of a fact of form signature, or the signature candidate of an ambiguous one —
-          record every type in ctx.types whose matchesRef(that target) holds. The facts are what the
-          loader resolved, so a signatureFrom counts exactly when it names the type
+          resolve that target as markTypeReferenced does, from the subsystem of the owning
+          interface's component, and record what it resolves to. The facts are what the loader
+          resolved, so a signatureFrom counts exactly when it names the type
         type: local
       - stepNumber: 4
         description: >-
           Mark the types referenced by type methods: pass each ref of m.typeRefs(), for every method
-          m of every type t in ctx.types, to markTypeReferenced — except t itself, so a type named
-          only by its own methods stays unmarked, the way a function that only calls itself is
+          m of every type t in ctx.types, to markTypeReferenced with from = t.subsystem — except t
+          itself, so a type named only by its own methods stays unmarked, the way a function that
+          only calls itself is
         type: local
       - stepNumber: 5
         description: >-
-          Mark the exported types: record the type every L1 and L0 export entry names as its typeDef
-          (its consumers are outside this tree, so an exported type is used by definition)
+          Mark the exported types: record the type every L1 and L0 export entry names as its
+          typeDef, resolved the same way from that L1's subsystem (none for the L0) — its consumers
+          are outside this tree, so an exported type is used by definition
         type: local
       - stepNumber: 6
         label: types
@@ -927,7 +934,6 @@ methods:
     sourcePath: src/core/rules/wiring/entry-declarations.ts
     narrative:
       - stepNumber: 1
-        label: declarations
         description: >-
           For each invokedBy declaration in scope: each Portal component's own, and each contract
           method's on an interface whose component resolves
@@ -936,43 +942,32 @@ methods:
         over: >-
           every invokedBy declaration decl in scope, with the component comp it belongs to and the
           spec it is written on
-        endStep: 8
+        endStep: 6
       - stepNumber: 2
-        description: A retired kind is read as entry on a Portal, runtime elsewhere
-        type: branch
-        condition: decl.kind is external or sibling-subsystem
-        onFalseStep: 4
-      - stepNumber: 3
-        description: >-
-          Report INVOKED_BY_RETIRED_KIND (warning) on the spec, naming the kind it is read as, which
-          doctor --fix writes
-        type: local
-      - stepNumber: 4
         description: An entry belongs to a Portal verb
         type: branch
         condition: decl is (read as) kind entry and comp is not a Portal
-        onFalseStep: 6
-      - stepNumber: 5
+        onFalseStep: 4
+      - stepNumber: 3
         description: >-
           Report ENTRY_ON_NON_PORTAL (error) on the spec, sited at the method: a runtime hook
           declares kind runtime, and an outside caller of a non-Portal is a design that needs a
           Portal
         type: jump
         toStep: 1
-      - stepNumber: 6
+      - stepNumber: 4
         description: A scope describes network callers only
         type: branch
         condition: >-
           decl.scope is present and (decl is a runtime declaration or comp.transport.kind() is not
           network)
         onFalseStep: 1
-      - stepNumber: 7
+      - stepNumber: 5
         description: >-
           Report ENTRY_SCOPE_NOT_NETWORK (warning) on the spec, sited at the method, naming the
           transport
         type: local
-      - stepNumber: 8
-        label: declarationsEnd
+      - stepNumber: 6
         description: Continue with the next declaration
         type: local
     symbol: check
@@ -1041,4 +1036,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-07T06:21:54.559Z'
+updatedAt: '2026-10-19T18:24:56.697Z'

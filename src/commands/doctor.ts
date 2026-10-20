@@ -7,15 +7,13 @@ import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { AI_PATHS } from '../config/paths.js';
-import { DoctorOptionsError, LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
+import { LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
   projectConfigExists,
-  retireSpecialists,
   repairForeignStepFields,
   repairSignatures,
   repairTypeSpellings,
-  migrateReachability,
   readLockState,
   // Through the core adapter, never ../core/stamp.js or ../utils/ai-guide.js:
   // reading a stamp and refreshing the guides are sdd_core work, and doctor is
@@ -31,13 +29,9 @@ import {
   syncContextFiles,
   derivedDocPaths,
   staleDerivedDocs,
-  // The filename migration, the chained-subproject repair and the pack
-  // diagnosis are sdd_core's too, and reach it the same way.
-  findLegacySpecFiles,
+  // The pack diagnosis is sdd_core's too, and reaches it the same way.
   // The spec tree's write lock as its file stands — reported when present.
   inspectLock,
-  findChainingSubprojectsMissingConfig,
-  backfillChainedSubprojectConfigs,
   diagnoseProjectPacks,
   // The family a --fix cascades into, and the plain report summarises per member.
   projectFamily,
@@ -52,26 +46,19 @@ import { computeGateStateId, validateFamily } from './validate.js';
 // sdd_core's lock store: rendering a name is the value object's behaviour, and
 // a command has no business reaching a Store to get it.
 import { approvalStamp } from '../models/lock.js';
-// cli_lock_adapter.reexpressApproval: the write behind --fix's approval step.
-import { checkApproval, reexpressLock } from './lock.js';
+import { checkApproval } from './lock.js';
 import {
   claudeMcpConfigPath, planMcpInstall, runMcpInstall, findLegacyPlugin, retireLegacyPlugin,
   type McpConfigWrite, type McpInstallOptions,
 } from './mcp.js';
-// The chaining migration is a family migration of sdd_migrations since stage 6,
-// reached through the migration portal: planned, applied through the family
-// transaction (rehearsed, staged, swapped all-or-nothing), and recovered after
-// a crash. Bound as a namespace so each call site names the contract method it
-// reaches (migrations.plan / .apply / .recover). Its values are read as types
-// only — the plan is data this command prints.
+// Unfinished family-migration transactions (an upgrade or a member migration a
+// crash left half-done) are recovered through the migration portal. Bound as a
+// namespace so each call site names the contract method it reaches.
 import * as migrations from './adapters/migrations.js';
-import type { ChainingMigrationPlan, PlannedExport, ProjectMigration } from '../migrations/chaining-migration.js';
-import type { PlannedRewrite } from '../migrations/position-migration.js';
-import type { FamilyMigrationReport, MigrationPlan, RecoveredTransaction } from '../migrations/types.js';
-// The stage-4 upgrade report: what the owner's gate changed in each verdict.
-import * as verdictChanges from './verdict-changes.js';
-import type { UpgradeReport } from './verdict-changes.js';
-import type { ReachabilityMigrationPlan, ReachRewrite, TreeLockState } from '../core/index.js';
+import type { RecoveredTransaction } from '../migrations/types.js';
+import type { TreeLockState } from '../core/index.js';
+// Where the tree stands against the running major: a tree another major wrote is `wairon upgrade`'s.
+import { standing } from '../cli/adapters/upgrade.js';
 
 /** The bound project's enabled targets; none for a project without a configuration. */
 function enabledTargets(): string[] {
@@ -212,11 +199,13 @@ function launchedVersion(entry: { command?: string; args?: unknown[] }): string 
 
 /** doctor_options — the flags of `wairon doctor`. */
 export interface DoctorOptions {
-  /** Apply the repairs before the report: the fixed steps, then the chaining migration once confirmed. */
+  /**
+   * Apply the repairs before the report: finish unfinished transactions, rebuild the derived
+   * documents, skills and guides, repair foreign step fields, signatures and type spellings,
+   * register the MCP server. It never moves a tree another wairon major wrote (`wairon upgrade`).
+   */
   fix?: boolean;
-  /** Print one section's report and nothing else, writing nothing: `chaining`, `composed-validation` or `reachability`. */
-  report?: string;
-  /** Answer the chaining migration's confirmation for a non-interactive run (not a write outside the project root). */
+  /** Answer the confirmation of a write outside the project root, together with `global`. */
   yes?: boolean;
   /** Consent to the --fix writes outside the project root; with --yes it answers their confirmation. */
   global?: boolean;
@@ -224,12 +213,6 @@ export interface DoctorOptions {
 
 export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   const tally: Tally = { warn: 0, error: 0 };
-
-  // Steps 1-5: --report prints one section's plan and nothing else.
-  if (options.report !== undefined) {
-    reportOnly(options);
-    return;
-  }
 
   logger.blank();
   console.log(`${chalk.bold('wairon doctor')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
@@ -263,6 +246,10 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     try { targets = enabledTargets(); } catch { /* leave empty */ }
   }
 
+  // Major: where the tree stands against the running wairon. A tree another
+  // major wrote waits for `wairon upgrade`; a newer one for a newer release.
+  reportMajor(tally);
+
   // Transactions: each unfinished family migration under this root, as an
   // error pointing at --fix; silent when there is none.
   reportPendingTransactions(tally);
@@ -278,21 +265,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     line(tally, 'warn', 'No system spec yet — design one via the sdd-architect skill / sdd_initialize_system');
   }
 
-  const legacySpecs = findLegacySpecFiles();
-  if (legacySpecs.length > 0) {
-    line(tally, 'warn', `${legacySpecs.length} legacy spec filename(s) detected (e.g. subsystem.yaml, component.yaml) — wairon now uses .index.yaml, .interface.yaml, and .implementation.yaml. Run \`wairon doctor --fix\` to migrate automatically.`);
-  } else {
-    line(tally, 'ok', 'Spec filenames are up to date (.index.yaml)');
-  }
-
-  // Chained subprojects that have specs but no project.yaml are un-runnable
-  // standalone (`wairon` reports "No wairon project found"). Detect + point at --fix.
-  try {
-    const missing = findChainingSubprojectsMissingConfig(getProjectRoot());
-    if (missing.length > 0) {
-      line(tally, 'warn', `${missing.length} chained subproject(s) have specs but no project.yaml (un-runnable standalone): ${missing.map(d => path.relative(getProjectRoot(), d) || '.').join(', ')}. Run \`wairon doctor --fix\` to initialize them.`);
-    }
-  } catch { /* non-fatal detection */ }
   logger.blank();
 
   // ── Spec tree conformance ───────────────────────────────────────────────────
@@ -329,28 +301,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       line(tally, 'warn', `Could not run conformance check: ${e instanceof Error ? e.message : String(e)}`);
     }
     logger.blank();
-
-    // ── Stereotypes ────────────────────────────────────────────────────────
-    // The Specialist retirement plan, dry-run: each remaining Specialist with
-    // the dependencyClass it would take as an Orchestrator, and each project
-    // variant that would rebase. Silent once none remain.
-    try {
-      const plan = retireSpecialists(false);
-      if (plan.retyped.length > 0) {
-        console.log(chalk.bold('Stereotypes'));
-        for (const retype of plan.retyped) {
-          const cls = retype.dependencyClass ?? 'workflow';
-          line(tally, 'warn', `${retype.component}: Specialist → Orchestrator (${cls}) — ${retype.reason}`);
-        }
-        if (plan.rebasedVariants.length > 0) {
-          line(tally, 'warn', `${plan.rebasedVariants.length} project variant(s) to rebase from Specialist to Orchestrator: ${plan.rebasedVariants.join(', ')}`);
-        }
-        line(tally, 'warn', 'Run `wairon doctor --fix` to retire the Specialist stereotype.');
-        logger.blank();
-      }
-    } catch (e) {
-      line(tally, 'warn', `Could not plan Specialist retirement: ${e instanceof Error ? e.message : String(e)}`);
-    }
 
     // ── Narrative steps ────────────────────────────────────────────────────
     // Fields a step's own type cannot have, dry-run: each one named with the
@@ -432,27 +382,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       line(tally, 'warn', `Could not plan the type-spelling repair: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    // ── Reachability ───────────────────────────────────────────────────────
-    // The migration onto the reachability model, dry-run: the rewrites it
-    // would make by retired form, and what it will only report. Silent once
-    // the tree holds no retired form.
-    try {
-      const plan = migrateReachability(false);
-      if (plan.rewrites.length > 0 || plan.reported.length > 0) {
-        console.log(chalk.bold('Reachability'));
-        if (plan.rewrites.length > 0) {
-          line(tally, 'warn', `${plan.rewrites.length} rewrite(s) onto the reachability model: ${describeReachForms(plan.rewrites)}`);
-          line(tally, 'warn', 'Run `wairon doctor --fix` to write them (`wairon doctor --report reachability` lists each one); the design changes, so one `wairon lock` follows.');
-        }
-        if (plan.reported.length > 0) {
-          line(tally, 'warn', `${plan.reported.length} form(s) it will not fix — an author decides: ${describeReachForms(plan.reported)} (see \`wairon doctor --report reachability\`)`);
-        }
-        logger.blank();
-      }
-    } catch (e) {
-      line(tally, 'warn', `Could not plan the reachability migration: ${e instanceof Error ? e.message : String(e)}`);
-    }
-
     // ── Members ────────────────────────────────────────────────────────────
     // The repairs above plan this project's own specs only. Each member's,
     // planned the same way bound to its root, in one line per member with
@@ -463,22 +392,6 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
       line(tally, 'warn', `Could not plan the members' repairs: ${e instanceof Error ? e.message : String(e)}`);
     }
 
-    // ── Chaining ───────────────────────────────────────────────────────────
-    // What the chaining migration still has to write, counted. Silent when
-    // nothing is planned or reported; after an applied --fix this plan is
-    // empty, which is the run's own idempotence check.
-    try {
-      // Planned without a rehearsal: this line prints counts and never applies.
-      const planned = migrations.plan({ verb: 'chaining', rehearse: false });
-      const pending = planned.chaining;
-      if (pending && (pendingCount(pending) > 0 || pending.findings.length > 0)) {
-        console.log(chalk.bold('Chaining'));
-        line(tally, 'warn', chainingStatus(pending));
-        logger.blank();
-      }
-    } catch (e) {
-      line(tally, 'warn', `Could not plan the chaining migration: ${e instanceof Error ? e.message : String(e)}`);
-    }
   }
 
   // ── Generated context files ─────────────────────────────────────────────────
@@ -549,7 +462,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
         if (!lock.record!.specs) {
           line(tally, 'warn', 'this lock predates per-spec approval — re-lock so `wairon status` can name what drifts');
         } else if (lock.record!.specsReading !== 'design') {
-          line(tally, 'warn', 'this lock predates lock format 3 and still holds — `wairon doctor --fix` re-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it');
+          line(tally, 'warn', 'this lock predates lock format 3 and still holds — `wairon upgrade` re-expresses it in the design reading without a review, after which adding or moving a sourcePath never drifts it');
         }
         logger.blank();
       } else if (lock.state === 'stale') {
@@ -677,8 +590,8 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
 
 /**
  * Apply the fixes: regenerate context files, skills, and local guides (so their
- * version stamps match the installed wairon), the spec repairs, the chaining
- * migration once confirmed, and the MCP registration. Every write outside the
+ * version stamps match the installed wairon), the spec repairs, and the MCP
+ * registration. Every write outside the
  * project root — a machine-wide MCP config, the legacy global plugin — is
  * listed in its own plan and made only with its own confirmation.
  */
@@ -700,10 +613,20 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
     return;
   }
 
-  // The approval first: an earlier record is compared with the tree it
-  // approved, so it is carried before any repair or migration below touches a
-  // spec (a repaired file would no longer match the digest it was approved under).
-  reexpressApproval();
+  // A tree another major wrote is not repaired here: the fixes below read the
+  // current major's forms, and `wairon upgrade` is what moves the tree.
+  try {
+    const where = standing(getProjectRoot());
+    if (where.state !== 'current') {
+      logger.warn(`--fix skipped: this tree was written by another wairon major (${where.state}). ${where.state === 'older' ? 'Run \`wairon upgrade\` first.' : (where.advice ?? 'Install the release that wrote it.')}`);
+      logger.blank();
+      return;
+    }
+  } catch (e) {
+    logger.warn(`--fix skipped: could not read where the tree stands (${e instanceof Error ? e.message : String(e)}).`);
+    logger.blank();
+    return;
+  }
 
   try {
     syncContextFiles();
@@ -720,50 +643,17 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // CI cannot obtain. The report names them; `wairon pack use <name>`
   // selects one the project actually wants.
 
-  // Migrate legacy spec filenames
-  try {
-    const legacySpecs = findLegacySpecFiles();
-    if (legacySpecs.length > 0) {
-      for (const { path: oldPath, expected: newPath } of legacySpecs) {
-        fs.renameSync(oldPath, newPath);
-      }
-      console.log(`  ${icon('ok')} Migrated ${legacySpecs.length} legacy spec file(s) to the new dot-prefixed unified schema.`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Spec migration failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // Backfill project.yaml on any chained subproject that has specs but no config
-  // (the "un-runnable standalone" state). Non-destructive — existing specs are
-  // never touched.
-  try {
-    const repaired = backfillChainedSubprojectConfigs(getProjectRoot());
-    if (repaired.length > 0) {
-      console.log(`  ${icon('ok')} Initialized ${repaired.length} chained subproject(s) that were missing project.yaml (now runnable standalone).`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Chained-subproject backfill failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
-  // The per-project spec repairs — Specialists, foreign step fields,
-  // signatures, type spellings — after the filename migration above, so the
-  // specs they re-save are saved under their current names.
+  // The per-project spec repairs — foreign step fields, signatures, type
+  // spellings.
   repairProjectSpecs('');
 
-  // The chaining migration — the last spec-touching fix: after the
-  // configuration backfill, so every chained child has a project.yaml to
-  // declare its id in, and after the filename migration and the spec repairs,
-  // so its gated L0 writes save specs under current names into a repaired tree.
-  await migrateChaining(options, tally);
-
   // The members: the repairs above wrote this project only. Cascade into each
-  // member below it — after the chaining migration, so a legacy mount it moved
-  // into `members` is a member here — the way the family run validates them.
+  // member below it, the way the family run validates them.
   repairMembers();
 
   // The derived documents describe the tree as it stands NOW: the first
-  // regeneration above ran before the spec repairs, the chaining migration and
-  // the members' repairs moved it, so it is written once more, last.
+  // regeneration above ran before the spec repairs and the members' repairs
+  // moved it, so it is written once more, last.
   try {
     syncContextFiles();
   } catch (e) {
@@ -775,32 +665,6 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   logger.blank();
 }
 
-
-/**
- * Step 23 of --fix: carry a format-2 approval into the design reading when its
- * own identity, recomputed, still matches (cli_lock_adapter.reexpressApproval).
- * Silent when there is nothing to carry; a format-2 lock that no longer
- * matches is named by the report's Lock section that follows (one `wairon
- * lock`, after which code linkage never drifts it again).
- */
-function reexpressApproval(): void {
-  try {
-    const carried = reexpressLock();
-    if (carried && carried.stateId.algorithm === carried.reexpressed?.fromAlgorithm) {
-      // The reading carried, the claim kept: no spec file moved, the gate did.
-      console.log(`  ${icon('ok')} Re-expressed the approval of ${approvalStamp(carried)} in the design reading `
-        + '(lock format 3): no spec file moved since it was taken, so from now on adding or moving a sourcePath never drifts it. '
-        + `It still reads stale because the gate it was judged under moved (wairon ${carried.validatorVersion} took it; the design rules of this `
-        + 'release, or the project\'s rule tuning, `composition`, network declaration, consumed contracts or a member\'s approval differ now), '
-        + 'so one `wairon lock` re-approves the unchanged design. Commit .wai/lock.json.');
-    } else if (carried) {
-      console.log(`  ${icon('ok')} Re-expressed the approval of ${approvalStamp(carried)} in the current reading `
-        + '(lock format 3) — the design is provably the one approved, so no review was needed; from now on adding or moving a sourcePath, or promoting a status, never drifts it. Commit .wai/lock.json.');
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} Approval re-expression failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
 
 // ── the per-project repairs, and their cascade into the members ─────────────
 
@@ -825,7 +689,7 @@ function describeEnumProposal(p: { kind: string; specId: string; path: string; w
 
 /**
  * The per-project spec repairs, each idempotent and each writing the bound
- * project's own specs only: retire the Specialists, drop the foreign
+ * project's own specs only: drop the foreign
  * narrative-step fields, regenerate the stored signatures, rewrite the stored
  * type spellings (printing the int and enum proposals and the positions
  * needing an author, none of which is written). Each failure is printed and
@@ -833,21 +697,6 @@ function describeEnumProposal(p: { kind: string; specId: string; path: string; w
  */
 function repairProjectSpecs(who: string): void {
   const at = whoPrefix(who);
-  // Retire the Specialist stereotype: each becomes an Orchestrator with the
-  // dependencyClass its dependencies decide, and each Specialist-based project
-  // variant rebases onto Orchestrator.
-  try {
-    const retirement = retireSpecialists(true);
-    if (retirement.retyped.length > 0) {
-      console.log(`  ${icon('ok')} ${at}Retired ${retirement.retyped.length} Specialist(s) to Orchestrator.`);
-    }
-    if (retirement.rebasedVariants.length > 0) {
-      console.log(`  ${icon('ok')} ${at}Rebased ${retirement.rebasedVariants.length} variant(s) from Specialist to Orchestrator: ${retirement.rebasedVariants.join(', ')}.`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} ${at}Specialist retirement failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-
   // Drop every narrative-step field its own step type cannot have — the
   // leftovers of retypes made before the writer rebuilt a retyped step. The
   // field configures nothing, and no step's `type` is ever guessed at from it.
@@ -908,68 +757,6 @@ function repairProjectSpecs(who: string): void {
   } catch (e) {
     console.log(`  ${icon('error')} ${at}Type-spelling repair failed: ${e instanceof Error ? e.message : String(e)}`);
   }
-
-  // Migrate onto the reachability model: transports, listener mounts into
-  // entries and routers, retired invokedBy kinds, export types, retired
-  // allows. It never invents an entry; what it cannot decide is printed.
-  try {
-    const plan = migrateReachability(true);
-    if (plan.applied) {
-      console.log(`  ${icon('ok')} ${at}Migrated onto the reachability model: ${plan.rewrites.length} rewrite(s) (${describeReachForms(plan.rewrites)}).`);
-      for (const r of plan.rewrites) console.log(`      ${r.specId}: ${r.to}`);
-      console.log(`  ${icon('warn')} ${at}The design changed: review it, then run \`wairon lock\` once.`);
-    }
-    if (plan.reported.length > 0) {
-      console.log(`  ${icon('warn')} ${at}${plan.reported.length} reachability form(s) not fixed — an author decides:`);
-      for (const r of plan.reported) console.log(`      ${r.specId}: ${r.to} — ${r.reason}`);
-    }
-  } catch (e) {
-    console.log(`  ${icon('error')} ${at}Reachability migration failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
-/** The labels the reachability forms read as in doctor's lines. */
-const REACH_FORM_LABELS: Record<string, string> = {
-  'portal-type': 'portalType',
-  'listener-mounts': 'listener mounts',
-  'invoked-by-kind': 'invokedBy kinds',
-  'export-type': 'export types',
-  'in-process-endpoint': 'in-process endpoints',
-  'retired-allow': 'retired allows',
-};
-
-/** A list of reachability rewrites counted by form, e.g. "12 portalType, 3 listener mounts". */
-function describeReachForms(entries: ReachRewrite[]): string {
-  const counts = new Map<string, number>();
-  for (const e of entries) counts.set(e.form, (counts.get(e.form) ?? 0) + 1);
-  return Object.keys(REACH_FORM_LABELS)
-    .filter((form) => counts.has(form))
-    .map((form) => `${counts.get(form)} ${REACH_FORM_LABELS[form]}`)
-    .join(', ');
-}
-
-/** `--report reachability`: every rewrite grouped by form, then what it will not fix, then the totals. */
-function printReachabilityPlan(plan: ReachabilityMigrationPlan): void {
-  if (plan.rewrites.length === 0 && plan.reported.length === 0) {
-    console.log(`  ${icon('ok')} Nothing to migrate: the tree holds no retired reachability form.`);
-    logger.blank();
-    return;
-  }
-  for (const form of Object.keys(REACH_FORM_LABELS)) {
-    const of = plan.rewrites.filter((r) => r.form === form);
-    if (of.length === 0) continue;
-    console.log(chalk.bold(`${REACH_FORM_LABELS[form]} (${of.length})`));
-    for (const r of of) console.log(`  ${r.specId}: ${r.to} — ${r.reason}`);
-    logger.blank();
-  }
-  if (plan.reported.length > 0) {
-    console.log(chalk.bold(`Will not fix (${plan.reported.length}) — an author decides`));
-    for (const r of plan.reported) console.log(`  ${r.specId} [${REACH_FORM_LABELS[r.form] ?? r.form}]: ${r.to} — ${r.reason}`);
-    logger.blank();
-  }
-  console.log(`Totals: ${plan.rewrites.length} rewrite(s) (${describeReachForms(plan.rewrites) || 'none'}); ${plan.reported.length} reported (${describeReachForms(plan.reported) || 'none'}).`);
-  if (plan.rewrites.length > 0) console.log('`wairon doctor --fix` writes the rewrites; the design changes, so one `wairon lock` follows.');
-  logger.blank();
 }
 
 /** A member project below the bound root: the alias it is declared under, its directory, and whether it lies inside the root. */
@@ -1075,12 +862,8 @@ function reportMemberRepairs(tally: Tally): void {
     const counts = runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return null;
       const spellings = repairTypeSpellings(false);
-      const reach = migrateReachability(false);
       return {
         surfaces: memberSurfaceProblems(),
-        reachRewrites: reach.rewrites.length,
-        reachReported: reach.reported.length,
-        specialists: retireSpecialists(false).retyped.length,
         stepFields: repairForeignStepFields(false).length,
         signatures: repairSignatures(false).length,
         respell: spellings.reduce((n, r) => n + r.rewritten.length, 0),
@@ -1090,14 +873,11 @@ function reportMemberRepairs(tally: Tally): void {
     });
     if (!counts) continue;
     const parts = [
-      counts.specialists ? `${counts.specialists} Specialist(s)` : '',
       counts.stepFields ? `${counts.stepFields} step(s) with foreign fields` : '',
       counts.signatures ? `${counts.signatures} spec(s) with stale signatures` : '',
       counts.respell ? `${counts.respell} type position(s) to respell` : '',
       counts.proposals ? `${counts.proposals} proposal(s)` : '',
       counts.authorNeeded ? `${counts.authorNeeded} position(s) needing an author` : '',
-      counts.reachRewrites ? `${counts.reachRewrites} reachability rewrite(s)` : '',
-      counts.reachReported ? `${counts.reachReported} reachability form(s) for an author` : '',
       counts.surfaces.length ? `agent surfaces: ${counts.surfaces.join(', ')}` : '',
     ].filter(Boolean);
     if (parts.length === 0) continue;
@@ -1221,190 +1001,6 @@ async function confirmOutsideWrites(options: DoctorOptions): Promise<boolean> {
 
 // ── the chaining migration ──────────────────────────────────────────────────
 
-/** Steps 1-8: `--report <section>` alone prints that section and writes nothing. */
-function reportOnly(options: DoctorOptions): void {
-  // Steps 2-3: only a lone `--report` of a known section.
-  if (options.fix) {
-    throw new DoctorOptionsError('--report prints a plan and writes nothing, so it never combines with --fix.');
-  }
-  if (options.report !== 'chaining' && options.report !== 'composed-validation' && options.report !== 'reachability') {
-    throw new DoctorOptionsError(`--report knows three sections, \`chaining\`, \`composed-validation\` and \`reachability\`; "${options.report}" is not one.`);
-  }
-  // Step 4: which section?
-  if (options.report === 'composed-validation') {
-    // Steps 5-6: what stage 4 changed in each project's verdict.
-    const report = verdictChanges.explain();
-    logger.blank();
-    console.log(`${chalk.bold('wairon doctor --report composed-validation')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
-    logger.blank();
-    printUpgradeReport(report);
-    console.log(chalk.gray('Nothing was written.'));
-    logger.blank();
-    return;
-  }
-  if (options.report === 'reachability') {
-    // Steps 9-10: the bound project's reachability migration, planned — the
-    // same plan --fix writes, rehearsed without a write.
-    const plan = migrateReachability(false);
-    logger.blank();
-    console.log(`${chalk.bold('wairon doctor --report reachability')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
-    logger.blank();
-    printReachabilityPlan(plan);
-    console.log(chalk.gray('Nothing was written.'));
-    logger.blank();
-    return;
-  }
-  // Steps 7-8: the chaining plan, without a rehearsal — the report writes nothing, so there is nothing to discard.
-  const planned = migrations.plan({ verb: 'chaining', rehearse: false });
-  logger.blank();
-  console.log(`${chalk.bold('wairon doctor --report chaining')} ${chalk.gray(`— installed v${WAIRON_VERSION}`)}`);
-  logger.blank();
-  if (planned.chaining) printChainingPlan(planned.chaining);
-  else printRefusals(planned);
-  console.log(chalk.gray('Nothing was written.'));
-  logger.blank();
-}
-
-/** How a project key reads in the report. */
-function reportLabel(key: string): string {
-  return key === '' ? '(this project)' : key;
-}
-
-/**
- * Step 6: the upgrade report per project — the lock's totals beside today's
- * (attributed to the upgrade only when the lock predates composed validation) — then the
- * entries grouped by code with their reasons and rewrites, then how many
- * findings it could not attribute. The lock records totals only, and the
- * report says so: this is not a per-code diff.
- */
-function printUpgradeReport(report: UpgradeReport): void {
-  console.log(chalk.bold('Composed validation: what it changed since each lock'));
-  console.log(chalk.gray('  A lock records totals only (errors, warnings, notices) and the validator version that took it — nothing per code — so this is not a per-code diff. Today\'s findings are classed by a reason computed now.'));
-  for (const p of report.projects) {
-    const locked = p.lockedTotals ? `locked by v${p.lockedBy}: ${p.lockedTotals}` : 'never locked';
-    const attribution = p.lockedTotals
-      ? (p.predatesStage4 ? ' — the lock predates composed validation, so a difference is the upgrade\'s' : ' — the lock was taken under composed validation, so a difference is not the upgrade\'s')
-      : '';
-    console.log(`  ${reportLabel(p.key)}: ${locked}; today (as-complete): ${p.currentTotals}${attribution}`);
-  }
-  const byCode = new Map<string, UpgradeReport['entries']>();
-  for (const e of report.entries) byCode.set(e.code, [...(byCode.get(e.code) ?? []), e]);
-  for (const [code, entries] of [...byCode].sort(([a], [b]) => a.localeCompare(b))) {
-    console.log(`  ${chalk.bold(code)} (${entries.length})`);
-    for (const e of entries) {
-      const where = `${reportLabel(e.project)}${e.specId ? ` ${e.specId}` : ''}`;
-      const reason = e.reason === 'escalated'
-        ? 'escalated: once a notice, an error under composed validation'
-        : e.reason === 'pinned'
-          ? 'pinned: judged against the project\'s own pin, no longer through the parent\'s live tree'
-          : `positional: the family's top matches it${e.resolvedAs ? ` to ${e.resolvedAs}` : ''} by position, which is how it passed before${e.rewrite ? ` — the migration writes ${e.rewrite}` : ''}`;
-      console.log(`    ${e.severity} ${where}: ${reason}`);
-    }
-  }
-  if (report.entries.length === 0) console.log('  No finding is new for a reason composed validation introduced.');
-  console.log(`  ${report.unclassified} finding(s) could not be attributed to composed validation.`);
-  if (report.unmatched.length > 0) {
-    console.log(`  ${chalk.bold('Positional matches no rule decides')} (${report.unmatched.length}) — counted above; a person picks:`);
-    for (const m of report.unmatched) {
-      const what = m.kind === 'ambiguous' ? `matches ${(m.candidates ?? []).join(' and ')} (${m.reason})` : `matches nothing in the family${m.reason ? ` (${m.reason})` : ''}`;
-      console.log(`    ${reportLabel(m.consumer)} ${m.specId}: "${m.authored}" ${what}`);
-    }
-  }
-}
-
-/**
- * Steps 17-21 of --fix: plan the chaining migration, print it, and apply it
- * only once confirmed. --yes answers yes; a run with no terminal to ask and no
- * --yes, or a no, writes none of it.
- */
-async function migrateChaining(options: DoctorOptions, tally: Tally): Promise<void> {
-  let planned: MigrationPlan;
-  try {
-    // Without a rehearsal: what is printed and confirmed is the chaining plan; apply rehearses it.
-    planned = migrations.plan({ verb: 'chaining', rehearse: false });
-  } catch (e) {
-    console.log(`  ${icon('error')} Could not plan the chaining migration: ${e instanceof Error ? e.message : String(e)}`);
-    tally.error++;
-    return;
-  }
-  if (!planned.chaining) {
-    printRefusals(planned);
-    tally.error++;
-    return;
-  }
-  if (pendingCount(planned.chaining) === 0) {
-    // Nothing to write, yet findings remain: say so, never end silent.
-    if (planned.chaining.findings.length > 0) {
-      printChainingPlan(planned.chaining, false);
-      printHandFixes(planned.chaining, false);
-    }
-    return;
-  }
-  printChainingPlan(planned.chaining, false);
-  if (!(await confirmChaining(options))) return;
-  // Rehearsed, staged and swapped all-or-nothing.
-  const report = migrations.apply(planned);
-  if (report.applied) {
-    printApplied(report);
-    printHandFixes(planned.chaining, true);
-    return;
-  }
-  printNotApplied(report);
-  printHandFixes(planned.chaining, false);
-  tally.error++;
-}
-
-/** The "Chaining" status line: apply is only advised while there is something --fix can write. */
-function chainingStatus(pending: ChainingMigrationPlan): string {
-  const blocking = pending.findings.filter((f) => f.blocking).length;
-  const open = pending.findings.length;
-  const report = 'see `wairon doctor --report chaining`';
-  if (pendingCount(pending) === 0) {
-    return `Chaining: nothing left for --fix to write, ${open} finding(s) need a hand fix first (${chainingTotals(pending)}) — ${report}, fix them, then re-run \`wairon doctor --fix\``;
-  }
-  if (blocking > 0) {
-    return `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}), but ${blocking} blocking finding(s) refuse the apply and need a hand fix first — ${report}, fix them, then run \`wairon doctor --fix\``;
-  }
-  const rest = open > 0 ? `; ${open} finding(s) it will not fix need a hand fix` : '';
-  return `Chaining: ${pendingCount(pending)} pending (${chainingTotals(pending)}) — ${report}, apply with \`wairon doctor --fix\`${rest}`;
-}
-
-/**
- * The findings only a person can resolve, named one by one with their hand
- * fix, and what was and was not written for them. `wrote`: the rest of the
- * migration was applied (a finding blocks the apply only when marked so).
- */
-function printHandFixes(migration: ChainingMigrationPlan, wrote: boolean): void {
-  if (migration.findings.length === 0) return;
-  console.log(`  ${icon('warn')} ${chalk.bold(`${migration.findings.length} finding(s) need a hand fix`)} — the migration will not decide these for you:`);
-  for (const f of migration.findings) console.log(`      ${f.kind} [${f.project === '' ? 'top root' : f.project}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
-  console.log(wrote
-    ? '      The rest of the migration was written; nothing was written for the items above.'
-    : '      Nothing of the chaining migration was written.');
-  console.log('      Fix them by hand, then re-run `wairon doctor --fix`.');
-}
-
-/** A refused, failed or restored apply: what stopped it and whether the family is as it was. */
-function printNotApplied(report: FamilyMigrationReport): void {
-  if (report.outcome === undefined) {
-    console.log(`  ${icon('error')} The chaining migration was not applied; nothing was written:`);
-    for (const r of report.plan.refusals) console.log(`      ${r.code}${r.project ? ` (${r.project})` : ''}: ${r.detail}`);
-    return;
-  }
-  const outcome = report.outcome;
-  if (outcome.restored) {
-    console.log(`  ${icon('error')} The chaining migration failed and was rolled back; the family is byte-identical to before: ${outcome.failure ?? 'unknown failure'}`);
-    return;
-  }
-  console.log(`  ${icon('error')} The chaining migration failed and ${outcome.unrestored.length} file(s) could not be restored — run \`wairon doctor --fix\` to finish the rollback: ${outcome.failure ?? 'unknown failure'}`);
-  for (const file of outcome.unrestored) console.log(`      ${file}`);
-}
-
-/** A plan refused before it was made (an unfinished transaction): each refusal, naming what unblocks it. */
-function printRefusals(planned: MigrationPlan): void {
-  for (const r of planned.refusals) console.log(`  ${icon('error')} ${r.code}: ${r.detail}`);
-}
-
 /** doctor --fix, first: roll back (or clean up) every family migration a crash left unfinished under this root. */
 function recoverTransactions(tally: Tally): void {
   let recovered: RecoveredTransaction[];
@@ -1423,6 +1019,24 @@ function recoverTransactions(tally: Tally): void {
       console.log(`  ${icon('error')} Could not resolve ${what}: ${t.detail}.`);
       tally.error++;
     }
+  }
+}
+
+/** Plain doctor: where the tree stands against the running wairon major. */
+function reportMajor(tally: Tally): void {
+  let where;
+  try {
+    where = standing(getProjectRoot());
+  } catch (e) {
+    line(tally, 'warn', `Could not read where the tree stands: ${e instanceof Error ? e.message : String(e)}`);
+    return;
+  }
+  if (where.state === 'current') {
+    line(tally, 'ok', `Major: written by wairon ${where.writtenMajor}, the running major`);
+  } else if (where.state === 'older') {
+    line(tally, 'error', `Major: written by wairon ${where.writtenMajor}${where.stamped ? '' : ' (unstamped)'}, the running major is ${where.runningMajor} — run \`wairon upgrade\`; the fixes and the commands wait for it`);
+  } else {
+    line(tally, 'error', `Major: written by wairon ${where.writtenMajor}, the running major is ${where.runningMajor} (${where.state === 'newer' ? 'newer' : 'out of the upgrade window'}) — ${where.advice ?? 'install the release that can read it'}`);
   }
 }
 
@@ -1461,30 +1075,6 @@ function reportTreeLock(tally: Tally): void {
   line(tally, 'warn', `${rel} is present (${age}) and ${why}: ${lock.breaks ? 'the next spec write breaks it and goes ahead' : 'the next spec write breaks it once it is 10s old'}. Nothing is lost — it is a lock, not a spec; deleting it by hand is safe when no wairon session is writing.`);
 }
 
-/** Step 19: the person's answer — --yes, a terminal prompt, or no when there is no terminal to ask. */
-async function confirmChaining(options: DoctorOptions): Promise<boolean> {
-  if (options.yes) return true;
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log(`  ${icon('warn')} Chaining migration skipped: no terminal to confirm it — re-run with \`--fix --yes\` to apply it. Nothing of it was written.`);
-    return false;
-  }
-  const { confirmed } = await inquirer.prompt<{ confirmed: boolean }>([
-    { type: 'confirm', name: 'confirmed', message: 'Apply the chaining migration above?', default: false },
-  ]);
-  if (!confirmed) console.log(`  ${icon('warn')} Chaining migration skipped. Nothing of it was written.`);
-  return confirmed;
-}
-
-function printApplied(report: FamilyMigrationReport): void {
-  const written = report.outcome?.written ?? [];
-  console.log(`  ${icon('ok')} Applied the chaining migration: ${written.length} file(s) written.`);
-  for (const change of written) console.log(`      ${change.action} ${path.join(change.project, ...change.path.split('/'))}`);
-  if (report.relock.length === 0) return;
-  console.log(`  ${icon('warn')} The writes staled the approval of ${report.relock.length} project(s); nothing was locked here. Re-lock each with \`wairon lock\`:`);
-  for (const dir of report.relock) console.log(`      ${dir}`);
-}
-
-/** How many writes the plan holds: ids, L0s, entries, externals, imports, pins, mounts, rewrites and family pins. */
 /** One signature repair in a line: the methods whose text is regenerated, and the restatements dropped. */
 function describeSignatureRepair(repair: { regenerated: { method: string }[]; dropped: string[] }): string {
   const parts: string[] = [];
@@ -1500,120 +1090,6 @@ function describeRespellings(respellings: { written: string; stored: string }[])
   return more > 0 ? `${shown.join('; ')}; and ${more} more` : shown.join('; ');
 }
 
-function pendingCount(migration: ChainingMigrationPlan): number {
-  return migration.rewrites.length + migration.projects.reduce((n, p) => n + (p.idToWrite ? 1 : 0) + (p.createsSystem ? 1 : 0)
-    + p.exports.length + p.externals.length + p.imports.length + p.pins.length + p.members.length + p.supersededPins.length + p.locations.length, 0);
-}
-
-/** The totals the report ends with — the P1 probe's counts. */
-function chainingTotals(migration: ChainingMigrationPlan): string {
-  const sum = (f: (p: ProjectMigration) => number): number => migration.projects.reduce((n, p) => n + f(p), 0);
-  const entries = sum((p) => p.exports.length);
-  return [
-    `${sum((p) => (p.idToWrite ? 1 : 0))} id(s)`,
-    `${sum((p) => (p.createsSystem ? 1 : 0))} L0(s) to create`,
-    `${entries} L0 entr${entries === 1 ? 'y' : 'ies'}`,
-    `${sum((p) => p.externals.length)} external(s)`,
-    `${sum((p) => p.imports.length)} import(s)`,
-    `${sum((p) => p.pins.length)} pin(s)`,
-    `${sum((p) => p.members.length)} mount(s) to move`,
-    // Stage 8's one doctor step, named only when there is one to take.
-    ...(sum((p) => p.locations.length) > 0 ? [`${sum((p) => p.locations.length)} member location(s) to rewrite`] : []),
-    `${migration.rewrites.length} rewrite(s)`,
-    `${sum((p) => p.supersededPins.length)} family pin(s) to delete`,
-    `${sum((p) => p.droppedKeys.length)} dropped key(s)`,
-    `${migration.newDependencies.length} new dependenc${migration.newDependencies.length === 1 ? 'y' : 'ies'}`,
-    `${migration.findings.length} finding(s)`,
-  ].join(', ');
-}
-
-/** The new dependencies first, then the plan per project, then every rewrite, every finding and the totals. */
-function printChainingPlan(migration: ChainingMigrationPlan, withFindings = true): void {
-  console.log(chalk.bold('Chaining migration'));
-  console.log(chalk.gray(`  family root: ${migration.familyRoot}${migration.whole ? '' : ' (partial: a hop above was out of reach)'}`));
-  if (migration.newDependencies.length > 0) {
-    console.log(`  ${icon('warn')} ${chalk.bold(`New dependencies (${migration.newDependencies.length})`)} — edges no external or pin had before, added exactly as the specs resolve today; whether each should exist is yours to decide:`);
-    for (const d of migration.newDependencies) console.log(`      ${chalk.bold(d)}`);
-  }
-  if (pendingCount(migration) === 0) console.log('  Nothing to migrate.');
-  for (const p of migration.projects) printProjectMigration(p);
-  printRewrites(migration);
-  for (const f of withFindings ? migration.findings : []) {
-    const where = f.project === '' ? 'top root' : f.project;
-    console.log(`  ${icon(f.blocking ? 'error' : 'warn')} ${f.kind} [${where}]${f.blocking ? ' (blocks apply)' : ''}: ${f.detail}`);
-  }
-  console.log(`  Totals: ${chainingTotals(migration)}.`);
-  logger.blank();
-}
-
-const projectLabel = (project: string): string => (project === '' ? '(top root)' : project);
-
-function printProjectMigration(p: ProjectMigration): void {
-  // A chained member's family can sit ABOVE this project: its writes are in
-  // this plan and its confirmation, and marked so nobody misreads their reach.
-  const above = isOutsideRoot(getProjectRoot(), p.directory) ? chalk.yellow(' (outside this project\'s root — the family above it)') : '';
-  console.log(`  ${chalk.bold(projectLabel(p.project))} ${chalk.gray(p.directory)}${above}`);
-  if (p.idToWrite) console.log(`    id: declare "${p.idToWrite}"`);
-  if (p.createsSystem) console.log('    L0: create a minimal one — the project exports and has none');
-  for (const e of p.exports) console.log(`    L0 entry: ${describeEntry(e)}`);
-  if (p.droppedKeys.length > 0) {
-    console.log(`    will be removed from its stored L0 by the first write (the schema does not know them): ${p.droppedKeys.join('; ')}`);
-  }
-  for (const x of p.externals) {
-    const why = x.reason === 'legacy-pin' ? 'replaces the legacy family pin of' : 'its references cross into';
-    console.log(`    external: ${x.alias}: {} — ${why} ${projectLabel(x.producer)}`);
-  }
-  for (const i of p.imports) {
-    const needs = [i.exportPlanned ? 'its export planned above' : undefined, i.declaresExternal ? 'its external planned above' : undefined].filter(Boolean);
-    const byPlan = i.reason === 'declared-producer' && p.externals.some((x) => x.alias === i.alias) ? ' (declared by this plan)' : '';
-    console.log(`    use: ${i.alias}: [${i.name}] — ${i.target}, ${i.reason}${byPlan}; resolves ${i.references.length} reference(s)${needs.length > 0 ? `, with ${needs.join(' and ')}` : ''}`);
-  }
-  if (p.pins.length > 0) console.log(`    pin (last): ${p.pins.join(', ')}`);
-  for (const m of p.members) {
-    const described = m.description !== undefined ? ', its description carried' : '';
-    const carried = m.carried.length > 0 ? `; carries ${m.carried.length} L0 entr${m.carried.length === 1 ? 'y' : 'ies'} into ${projectLabel(m.member)}` : '';
-    console.log(`    member: ${m.alias}: ${m.path} — moved from its legacy L1 mount${described}${carried}`);
-    if (m.retired.length > 0) console.log(`      retires with the mount: ${m.retired.join('; ')}`);
-  }
-  if (p.supersededPins.length > 0) {
-    console.log(`    superseded family pins: ${p.supersededPins.length} — deleted once the externals that replace them are pinned; nothing reads them any more`);
-  }
-  for (const alias of p.locations) {
-    console.log(`    member: ${alias}: the deprecated long-form \`path\` rewritten to \`source\` — its meaning unchanged`);
-  }
-}
-
-/** One planned L0 entry, its item, where it came from and whom it serves. */
-function describeEntry(e: PlannedExport): string {
-  const item = [
-    e.from !== undefined ? `from: ${e.from}` : undefined,
-    e.component !== undefined ? `component: ${e.component}` : `typeDef: ${e.typeDef}`,
-    e.interface !== undefined ? `interface: ${e.interface}` : undefined,
-    e.type !== undefined ? `type: ${e.type}` : undefined,
-    `audience: ${e.audience}`,
-  ].filter((x) => x !== undefined).join(', ');
-  const why = e.reason === 'mount'
-    ? `carried from its legacy mount${e.publishAtL1 ? `, published at L1 in ${e.from} first (its subsystem does not publish it yet)` : ''}`
-    : `${e.from === undefined ? 'its own project-level type, ' : ''}${e.reason === 'positional' ? 'positional, ' : ''}for ${e.consumers.map(projectLabel).join(', ')}${e.members.length > 0 ? `, reaching ${e.members.join(', ')}` : ''}`;
-  return `{ ${item} } as "${e.publicName}" — ${why}`;
-}
-
-/** Every rewrite, grouped per project and spec, each group with its count. */
-function printRewrites(migration: ChainingMigrationPlan): void {
-  if (migration.rewrites.length === 0) return;
-  console.log(`  ${chalk.bold('Rewrites')} (${migration.rewrites.length}) — each reference out of a deprecated form, to the text the writer emits:`);
-  const byProject = new Map<string, PlannedRewrite[]>();
-  for (const r of migration.rewrites) byProject.set(r.project, [...(byProject.get(r.project) ?? []), r]);
-  for (const [project, rewrites] of byProject) {
-    console.log(`    ${projectLabel(project)} (${rewrites.length}):`);
-    const bySpec = new Map<string, PlannedRewrite[]>();
-    for (const r of rewrites) bySpec.set(r.specId, [...(bySpec.get(r.specId) ?? []), r]);
-    for (const [specId, own] of bySpec) {
-      console.log(`      ${own[0].kind} ${specId} (${own.length}): ${own.map((r) => `${r.from} → ${r.to} [${r.position}]`).join('; ')}`);
-    }
-  }
-}
-
 function printSummary(tally: Tally): void {
   if (tally.error === 0 && tally.warn === 0) {
     logger.success('All checks passed — everything is current.');
@@ -1623,7 +1099,9 @@ function printSummary(tally: Tally): void {
     if (tally.warn > 0) parts.push(chalk.yellow(`${tally.warn} warning(s)`));
     console.log(`${chalk.bold('Summary:')} ${parts.join(', ')}.`);
     if (tally.warn > 0 && tally.error === 0) {
-      logger.info('Most issues clear with `wairon generate` (and `wairon mcp install` for MCP).');
+      // Each warning line names its own remedy; a generic one (`wairon generate`) misled when
+      // only, say, conformance warnings were left.
+      logger.info('Each warning above names how to clear it.');
     }
   }
   logger.blank();

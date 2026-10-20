@@ -1,0 +1,22 @@
+id: instance_version_store
+name: Instance Version Store
+description: >-
+  The major that wrote a hosting data directory, at `<dataDir>/version.json`. Read from disk on
+  every call; an absent file is a data directory no version was recorded in.
+subsystem: sdd_host
+componentType: Store
+owns: []
+dependsOn: []
+durability: read-through
+previousIds:
+  - data_dir_version_store
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state, no lookups beyond the key: one integer in one file, read and written
+        whole by two workflow-layer consumers — instance_bootstrap records it on a first boot,
+        instance_upgrade reads and moves it.
+status: complete
+createdAt: '2026-10-18T14:27:33.137Z'
+updatedAt: '2026-10-18T15:47:54.440Z'

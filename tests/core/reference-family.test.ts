@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { setProjectRoot } from '../../src/utils/fs.js';
@@ -62,7 +63,7 @@ describe('reference family: the loader without position', () => {
     expect(dependsOnOf('engine-portal')).toEqual(['transpiler::lowering-portal']);
   });
 
-  it('binds the deprecated forms for one release, each with its rewrite', () => {
+  it('binds the deprecated forms in the v5 reading, each with its rewrite', () => {
     family = buildReferenceFamily();
     bind(family.top);
     // leading `::` from the top, through the member alias.
@@ -154,16 +155,10 @@ describe('reference family: the loader without position', () => {
     bind(family.top);
     const issues = validateProject().issues;
     const of = (code: string) => issues.filter((i) => i.code === code);
-    // The top's own findings only: its legacy mount and its own deprecated form.
-    expect(of('DEPRECATED_MOUNT_FORM').map((i) => i.specId)).toEqual(['shared']);
-    expect(of('DEPRECATED_REFERENCE_FORM').map((i) => i.message.match(/writes "([^"]+)"/)?.[1]).sort()).toEqual(['::core::engine-portal']);
-    // A member's findings are its own gate's (stage 4): shared's duplicate id, transpiler's forms.
+    // A member's findings are its own gate's (stage 4): shared's duplicate id.
     expect(of('DUPLICATE_SPEC_ID')).toEqual([]);
     bind(family.shared);
     expect(validateProject().issues.filter((i) => i.code === 'DUPLICATE_SPEC_ID').map((i) => [i.severity, i.specId])).toEqual([['error', 'mode']]);
-    bind(family.transpiler);
-    expect(validateProject().issues.filter((i) => i.code === 'DEPRECATED_REFERENCE_FORM').map((i) => i.message.match(/writes "([^"]+)"/)?.[1]).sort())
-      .toEqual(['::core::engine-portal', 'core::transpiler::lowering-portal', 'super::engine-portal']);
   });
 
   it('draws a project node per member, its specs under it, ids honest', () => {
@@ -193,7 +188,6 @@ describe('reference family: the loader without position', () => {
     bind(family.top);
     const shared = projectFamilyGraph().nodes.find((n) => n.namespace === 'shared')!;
     expect(shared.mountForm).toBe('members');
-    expect(validateProject().issues.filter((i) => i.code === 'DEPRECATED_MOUNT_FORM')).toEqual([]);
     // Moved already: nothing to write.
     expect(moveMountToMembers('shared')).toBe(false);
     expect(() => moveMountToMembers('nowhere')).toThrow(/no legacy L1 mount/);

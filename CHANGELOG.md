@@ -1,8 +1,237 @@
 # Changelog
 
-## Unreleased — v6.0.0 (from v5.1.0)
+## v6.1.0 (from v6.0.0)
 
-**Breaking: merge dev → main with `[major]` in the merge commit message → v6.0.0.**
+v6.1 moves compatibility out of the core: a release reads only its own major's forms,
+and `wairon upgrade` moves an older tree forward once. It also fixes which type a bare
+type name means, and makes an SSO provider name the addresses it may return to.
+
+Who is affected:
+
+- **Every project:** the tree is stamped with the major that wrote it, once. The
+  approval carries over unless 6.1.0's rules find something in the approved design.
+- **Teams and CI:** move together. wairon 6.0.0 reads the stamp as an unknown setting,
+  so its `validate --ci` fails on an upgraded tree.
+- **Designs with same-named types in different subsystems:** a reference may now bind
+  to another type, or report `AMBIGUOUS_TYPE_REF`.
+- **Hosted operators:** an SSO provider with no allowed redirect addresses stops signing
+  anyone in, and the server upgrades its data directory when it starts.
+
+### Upgrading from v6.0.0
+
+1. Install 6.1.0 everywhere the project is checked: every teammate, CI, and the
+   `wairon` your assistant's MCP server starts.
+2. At the top of the project (the family root, when it has members), run
+   `wairon upgrade`. A 6.0.0 tree needs no rewrite, so it is only stamped
+   (`waironMajor: 6` in each `.wai/project.yaml`), without asking. Any other `wairon`
+   command stamps it too. Until it is stamped, the MCP server refuses every tool and
+   names `wairon upgrade`.
+3. Run `wairon generate` to refresh the guides and skills, then reconnect your
+   assistant's MCP server (in Claude Code, `/mcp`) or start a new session.
+4. Run `wairon validate --ci` and `wairon lock-check`. If the approved design is clean
+   under 6.1.0's rules, the approval carries over. If not, it is stale for exactly the
+   findings it names. A type finding (`AMBIGUOUS_TYPE_REF`, or a type that now reads
+   unused because its references used to bind to another subsystem's namesake) is fixed
+   by writing the type's id or `subsystem::name` where it is referenced. An
+   `UNNARRATED_CALL` on a method whose `detail` is stated means its code calls something
+   the narrative leaves out: narrate the call. Then run `wairon lock`.
+5. Commit each `.wai/project.yaml`, the regenerated files, and `.wai/lock.json` if you
+   re-locked.
+6. **Hosted:** before you restart the server on 6.1.0, give every enabled SSO provider
+   its allowed redirect addresses, usually `https://<this host>/web/sso/callback` (see
+   the SSO section below). At start, the server copies its data directory beside itself
+   and then upgrades it. An environment setting that still holds a retired value stops
+   the start and names its replacement. Scripts that call the admin provider API need
+   to read the new answer shapes.
+
+### Major upgrades: `wairon upgrade`
+
+wairon now keeps compatibility out of its core: each release reads only its own major's
+forms, and a tree another major wrote is moved forward once, by an upgrade step per major,
+run in order. Every `.wai/project.yaml` records the major that wrote it (`waironMajor`,
+written when a project is created).
+
+- `wairon upgrade` brings a project and every member below it to the running major, all
+  or nothing: it prints the plan (`--report` stops there), asks, and applies it
+  (`--yes` for scripts). It names each project whose design moved: run `wairon lock`
+  there. It never locks. From 5 to 6 it does what `wairon doctor --fix` did for a v5
+  tree: the old lock formats, legacy spec file names, a legacy `.wairon` folder,
+  chained subprojects without a configuration, legacy L1 mounts into `members` with
+  their references rewritten to `alias::name`, Specialists retyped, and the
+  reachability model.
+- Before a project command runs, wairon checks which major wrote the tree. A tree made by
+  6.0.0 carries no stamp but needs no rewrite: it is stamped on the spot. Any other older
+  tree is offered the upgrade on a terminal and refused in CI, naming `wairon upgrade`.
+  A tree a newer wairon wrote is refused, naming the release to install. The MCP server
+  refuses every tool on a tree another major wrote, until the human runs
+  `wairon upgrade`.
+- `wairon whatsnew [version]` prints a release's highlights, and the first command after
+  an update shows the highlights of every release since the one you last saw, once.
+- `wairon doctor` reports the major the tree was written by, and no longer carries the
+  v5 repairs or the `--report chaining` and `--report reachability` sections.
+- **Hosted:** the server upgrades its data directory when it starts: it copies the
+  directory whole beside itself, applies the permission model, upgrades every hosted
+  project's tree, registers the member records, and records the major in
+  `<dataDir>/version.json`. Any failure stops the start, naming the backup to restore.
+  `wairon host doctor` is removed: everything it did now happens at start.
+- The "until the next major release" promise for deprecated forms is withdrawn: forms
+  are not kept alongside the current ones, `wairon upgrade` rewrites them.
+
+### Breaking: the core reads only wairon 6 forms
+
+The forms wairon 5 wrote are read only inside `wairon upgrade`. Anywhere else a tree
+holding one does not load: the error names the form and what replaces it. The forms are:
+
+- `portalType` (read `transport`) and `HTTP_API`;
+- the `Specialist` and `Gateway` stereotypes;
+- listener `mounts`, and an `invokedBy` of kind `external` or `sibling-subsystem`;
+- an export entry's `type`;
+- a legacy L1 mount (`projectPath`) and a member's long-form `path` (read `source`);
+- the reference forms `::x`, `super::x` and member paths (read `local_id` and `alias::name`);
+- lock record formats 1 and 2;
+- a `.wairon` folder.
+
+- `wairon upgrade` now merges each Gateway into the Portal it owned, which takes the
+  `gateway` variant. A Gateway it cannot merge refuses the upgrade, naming the hand
+  steps.
+- A v5 lock record that nothing proves unchanged is kept in the current format and reads
+  stale until `wairon lock`. Before, it was left unreadable. A lock record or tree the
+  upgrade cannot read now fails the upgrade instead of being skipped.
+- Removed rules: `DEPRECATED_REFERENCE_FORM`, `DEPRECATED_MOUNT_FORM`,
+  `INVOKED_BY_RETIRED_KIND`, `STEREOTYPE_RETIRED` and `PACK_FIELD_DEPRECATED`.
+- Removed CLI surface: the `wairon packs` alias, `generate --no-recurse`,
+  `lock --no-recursive`, and `doctor --report composed-validation` with its verdict
+  changes.
+- Removed MCP inputs: `HTTP_API`, the export `type` input, and the `projectPath` input.
+- A pack's `foreignBuiltins` is a load error naming its removal.
+- An L0 export entry's `id` and `subsystem` are wairon 5 forms: `wairon upgrade` rewrites
+  them to `as` and `from`.
+
+### Breaking: the hosted server reads only wairon 6 forms
+
+The server rewrites what an older major stored once, when it starts on an older data
+directory, and refuses those forms afterwards:
+
+- **Member-qualified selectors.**
+  - A `projectId::alias` selector or token entry is no longer resolved. A request
+    naming one gets 400, and minting one is refused: name the member by its own
+    project record id.
+  - The start upgrade rewrites stored token entries to the member's record id. It
+    drops an entry that names no member, and revokes a key left with none.
+- **Old lock requests.** A lock request recorded with a member scope is closed at
+  start: a pending one is denied, an approved one cancelled, so the requester can ask
+  again on the member's record. Executing a lock request that carries a scope is
+  refused.
+- **Retired stored values.**
+  - `adminApiMode` values `local_only`, `private_network` and `public` become
+    `enabled`.
+  - The user statuses `suspended`, `deactivated`, `disabled` and `deleted` become
+    `inactive`.
+  - A surface audience of `public` becomes `external`.
+  - Each is refused afterwards, naming the file and the values it accepts.
+- **Share snapshots.** A snapshot keeps only its per-portal OpenAPI capture. A share
+  captured before per-portal captures loses its OpenAPI download until its owner
+  refreshes it; its canvas and HTML stay.
+- **Policy variables.** `WAIRON_AUDIT_POLICY` `metadataMode: full-redacted` and
+  `WAIRON_QUOTA_POLICY` `mode: block` stop the start, naming `redacted` and `observe`.
+- **Exposure policy errors.** An exposure policy file that cannot be read now fails
+  loudly, instead of the server silently using the default posture.
+
+### Breaking: an SSO provider must name the addresses it may return to
+
+An enabled SSO provider with no allowed redirect addresses no longer signs anyone in.
+Before, an empty list accepted any address; now it accepts none, and a provider names
+the addresses it may return to (`allowedRedirectUris`, or `WAIRON_OIDC_ALLOWED_REDIRECT_URIS`
+for the provider the server registers from the environment). Usually that is one
+address, `https://<this host>/web/sso/callback`.
+
+- The login page lists such a provider as not set up yet, with a disabled button; trying
+  to sign in anyway answers that sign-in through it is not set up and to ask an
+  administrator, and the refusal is audited (`web.signin.refused`, `sso.refused`).
+- The admin view shows a warning on the provider and suggests the address; saving a
+  provider answers the same warning. The server log names each such provider at start.
+- The admin API changes shape: the provider list answers `{ provider, setupProblem? }`
+  entries, and saving a provider answers `{ provider, warnings }`.
+
+### Fixes: a type is the one its own subsystem names
+
+- A bare type reference now resolves in the subsystem that writes it first. Before, it
+  bound by id suffix alone, so a contract in one subsystem could bind silently to a
+  same-named type of another and leave its own type unused.
+- New warning `AMBIGUOUS_TYPE_REF` (rule `type-ref-scope`): a reference that matches
+  several types with nothing in its own subsystem to settle which is meant, or that binds
+  to a type while another type carries that display name and sits at least as close to
+  the referrer (its own subsystem nearest, a project-level type in the middle, another
+  subsystem far, so two project-level types sharing a name are caught too). One finding
+  per spec and written reference, naming every position it is written at. Write the
+  type's id, or `subsystem::name`, to say which is meant.
+- Two types of different subsystems declaring one id (`DUPLICATE_SPEC_ID`) no longer
+  hide the second one: `subsystem::id` reaches it, and the finding names both
+  `sdd_rename_type <subsystem>::<id> <new id>` calls. Renaming either half moves only
+  its file and respells only the references that resolve to it.
+- `sdd_rename_type` respells only references that resolve to the renamed type from where
+  they are written. It refuses, listing every site as `<file> <position>`, a reference
+  that matches several types including it (`ambiguous-ref`, no escape), and one that binds
+  to it while another type carries that name and sits at least as close (`shadowed-ref`):
+  write which type is meant in those specs, or pass `allowShadowed` to rename anyway and
+  respell them. A dry run lists the shadowed sites separately instead of refusing. Its
+  description now says which signatures it rewrites: a signature type's params and
+  returns, a contract method's stored text re-derived from its params, and only the
+  result of a prose signature that has no params.
+
+### Release QA
+
+- A release's QA verdict passes only when `release-notes/<version>.md` exists with at
+  least one highlight.
+
+### Small fixes from the v6.0.0 QA panel
+
+- `wairon mcp install` and `doctor --fix` name the Gemini CLI for the project
+  `.gemini/settings.json`, and Antigravity only for its global `mcp_config.json`.
+- `wairon doctor` no longer closes with "Most issues clear with `wairon generate`" when
+  the warnings left are ones `generate` does not clear; each warning names its own fix.
+- `wairon status` explains a completeness below 100% in one line: 20% a component's spec,
+  +30% a contract, +30% an implementation, +20% once the source files it names exist.
+- `wairon host key list` shows each key's owner (or that it has none and so no
+  permissions), its label, expiry and revocation; the legacy role shows only where set.
+- A contract method stating no parameters is refused with the fix (`params: []`), and
+  `INTENT_FLOOR` says what counts as thin (under 40 characters, or only the method's name).
+- Docs: the code reading checks structure and linkage, never behaviour (a dropped business
+  rule is caught by tests, not the gate).
+
+### Fixes from the v6.1.0 QA panel
+
+- `wairon upgrade` on a 6.0.0 project with a part (a folder holding some of its
+  subsystems, with no `project.yaml` of its own) failed on every command ("Cannot stamp
+  …: it has no project.yaml"). A part carries no stamp: it goes along with the project
+  that declares it, and only a folder holding a `project.yaml` is stamped.
+- `wairon member add <alias> <path> --project` now sets the new project's folder up for
+  its own sessions, as `member promote` does: its guide, skills and context, and its
+  `.mcp.json` when claude is a target.
+- **A narrative's calls are judged by how much it states.** Before, a call to a
+  collaborator a narrative never named passed silently, whatever the narrative claimed,
+  so code could take on a whole new collaboration while `validate` read green.
+  - **Stated detail is binding.** A method whose `detail` (`full` or `calls-only`) is
+    set on the method or its implementation, or that declares `calls`, has said its
+    narrative is complete: every call into another component that no step names is
+    `UNNARRATED_CALL` (warning). A narrative that states its detail and misses calls
+    newly fails `--ci`: narrate the calls.
+  - **Unstated detail is open.** Leaving out a verb of a collaborator the narrative names
+    is still `UNNARRATED_CALL`. A call to another collaborator the component depends on,
+    or any such call from a method at `intent` or with no narrative, is a route the
+    design allows without saying the method takes it: the new `OPEN_ROUTE_CALL` notice
+    names each one and never fails `--ci`.
+
+### Known limitations
+
+- Hosted: when a lock request is still pending and someone with the right to lock
+  approves the same design directly, deciding the request later approves that design
+  again and records the decider as the approver. The request is checked against the
+  design it was made for, so it never approves a design nobody asked about.
+
+## v6.0.0 (from v5.1.0)
+
+**Breaking: a major release.**
 
 v6 makes a wairon project a set of **projects that name each other**. A project has
 an id, its levels export like a module, and another project is reached only as
@@ -36,6 +265,11 @@ Who is affected:
   and 99 exports are gone.
 
 ### Upgrading from v5.1.0
+
+> **From v6.1.0 on**, steps 2, 3 and 5 are done for you: run `wairon upgrade` at the top
+> of the family (`--report` for the plan), and a hosted server upgrades its data directory
+> and every hosted tree when it starts. `wairon host doctor` and `doctor --report chaining`
+> no longer exist. The rest of these steps still apply.
 
 Follow these in order. Every `doctor --fix` rewrite moves the gate identity, so lock
 last.

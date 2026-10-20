@@ -592,7 +592,7 @@ export default [
       system: SYSTEM,
       subsystems: [FARM],
       components: sub([
-        { id: 'farm-api-portal', componentType: 'Portal', portalType: 'Custom', description: 'Operator API of the render farm.', dependsOn: ['batch-run-repository'] },
+        { id: 'farm-api-portal', componentType: 'Portal', transport: 'Custom', description: 'Operator API of the render farm.', dependsOn: ['batch-run-repository'] },
         ...BATCH_RUN_REPOSITORY,
       ]),
       interfaces: [

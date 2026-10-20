@@ -296,34 +296,6 @@ methods:
         summary: >-
           An L0 entry is exported to `department`: outside a hosted instance only this project's
           family sees it, and a path or git consumer is refused
-  - name: referenceForms
-    description: >-
-      Rule reference-forms. A cross-project reference is `alias::name` (or a bare name a `use`
-      imports): the alias is one of the referring project's members or externals, the name a public
-      name of that project's L0 table. The older forms still bind for one release and are reported
-      (DEPRECATED_REFERENCE_FORM), each naming the spec, where in it, the form as written and the
-      text to write instead (the scan's rewrite: a bare local id, or `alias::publicName`): a leading
-      `::`, which escapes to the root of whatever checkout loads it; `super::`, which climbs the
-      containing projects — a place in one family, not a name; a member path (`desktop::shell`
-      written inside desktop, `app_core::engine::x` written inside engine), a first segment the
-      referring project does not declare, read from the bound root; and a self-prefix — the
-      referring project's own id as the first segment, with `::` or `.` (`registry.advisory-channel`
-      inside registry), which `wairon doctor --fix` rewrites to the bare local id. Wairon's own
-      writer emits none of them. A form with no rewrite (its target is out of reach) is reported
-      with the reason. It reads the project graph's authored references, which the scan records
-      before binding erases the form.
-    signature: 'referenceForms(ctx: RuleContext): void'
-    returns: void
-    params:
-      - name: ctx
-        type: RuleContext
-        description: The validation run's shared read model and issue sink
-    findings:
-      - code: DEPRECATED_REFERENCE_FORM
-        severity: notice
-        summary: >-
-          A reference written with a leading ::, super:: or a member path where a local id or
-          alias::name belongs
   - name: externalDeclarations
     description: >-
       Rule external-declarations. Every external a project declares in project.yaml must be usable:
@@ -373,11 +345,14 @@ methods:
       Rule local-ids. Inside one project an id names one spec, and an id without `::` is always
       local. Two spec files of one project declaring one key are DUPLICATE_SPEC_ID: whichever the
       loader kept, every reference to that key — local, or `alias::name` from another project —
-      could mean either, so the tree has no single reading. A local id equal to one of the project's
-      aliases (a `members` or `externals` key) is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them
-      apart (a bare id is local, `alias::name` crosses), but a reader seeing `billing` beside
-      `billing::invoice_portal` cannot tell a local subsystem from a member, so the shadow is made
-      visible. It reads the project graph's owners, alias tables and duplicate-spec problems.
+      could mean either, so the tree has no single reading. For two types of different subsystems
+      the message names both halves by their qualified ids (`subsystem::id`), each of which the type
+      rename tool reaches; any other duplicate is renamed through the kept one, after which the
+      other loads. A local id equal to one of the project's aliases (a `members` or `externals` key)
+      is LOCAL_ID_SHADOWS_PROJECT: the grammar keeps them apart (a bare id is local, `alias::name`
+      crosses), but a reader seeing `billing` beside `billing::invoice_portal` cannot tell a local
+      subsystem from a member, so the shadow is made visible. It reads the project graph's owners,
+      alias tables and duplicate-spec problems.
     signature: 'localIds(ctx: RuleContext): void'
     returns: void
     params:
@@ -396,26 +371,21 @@ methods:
   - name: memberDeclarations
     description: >-
       Rule member-declarations. A project declares its members in project.yaml `members`, each by
-      one source in one grammar. A deprecated declaration form loads for one release and is reported
-      (DEPRECATED_MOUNT_FORM, notice): the L1 form — a subsystem carrying projectPath — naming the
-      mount, its path, the `members` entry that replaces it, and every field it carries that `doctor
-      --fix` will move into the member (or stop on); a mount whose alias `members` also declares is
-      reported as ignored; and the deprecated long-form `path` key, naming the `source` (or
-      shorthand) `doctor --fix` rewrites it to. It also judges what each member of the bound project
-      IS against what is declared or written about it, from the scan's problems at the bound root (a
-      member's own members are that member's gate's): what a member is follows from its content — an
-      id, an L0 or a lock make it a project, anything else a part — and every contradiction is ONE
-      finding, MEMBER_KIND_MISMATCH (error), naming the alias and the contradiction: an asserted
-      `as` the content contradicts; a part whose configuration declares project fields (members,
-      externals, rules, extensions, composition, targets) without the id that would make it a
-      project (add the id, or move them to the parent); a non-contained part with no PartOf, or one
-      naming another project (opened alone it could not say what it belongs to); a contained member
-      declaring PartOf; a `use` on a member whose content is a part (its names are already this
-      project's own). A part whose files could not be read — its directory absent, or its git commit
-      not cached and not fetchable (offline, refused, unknown) — is PART_UNAVAILABLE (error): the
+      one source in one grammar. It judges what each member of the bound project IS against what is
+      declared or written about it, from the scan's problems at the bound root (a member's own
+      members are that member's gate's): what a member is follows from its content — an id, an L0 or
+      a lock make it a project, anything else a part — and every contradiction is ONE finding,
+      MEMBER_KIND_MISMATCH (error), naming the alias and the contradiction: an asserted `as` the
+      content contradicts; a part whose configuration declares project fields (members, externals,
+      rules, extensions, composition, targets) without the id that would make it a project (add the
+      id, or move them to the parent); a non-contained part with no PartOf, or one naming another
+      project (opened alone it could not say what it belongs to); a contained member declaring
+      PartOf; a `use` on a member whose content is a part (its names are already this project's
+      own). A part whose files could not be read — its directory absent, or its git commit not
+      cached and not fetchable (offline, refused, unknown) — is PART_UNAVAILABLE (error): the
       project's own subsystems are missing, so its verdict cannot be a pass. The member findings
-      name no spec: members live in configuration. It reads the project graph's nodes, their legacy
-      mounts, the bound root's declared members and its problems.
+      name no spec: members live in configuration. It reads the project graph's nodes, the bound
+      root's declared members and its problems.
     signature: 'memberDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -423,11 +393,6 @@ methods:
         type: RuleContext
         description: The validation run's shared read model and issue sink
     findings:
-      - code: DEPRECATED_MOUNT_FORM
-        severity: notice
-        summary: >-
-          A member declared in a deprecated form — an L1 subsystem carrying projectPath, or the
-          long-form `path` key — which doctor --fix rewrites to a `members` entry with one `source`.
       - code: MEMBER_KIND_MISMATCH
         severity: error
         summary: >-
@@ -683,6 +648,32 @@ methods:
         summary: >-
           A method, parameter or field name is a word the target language reserves for that kind of
           identifier
+  - name: typeRefScope
+    description: >-
+      Rule type-ref-scope. A bare type reference resolves in the referring spec's own subsystem
+      first (type_ref_resolution.resolve). Two readings are reported, once per spec and written
+      reference (never per type, so a type having other referents never masks it), naming every
+      position in that spec where the reference is written: a reference that matches several types
+      and nothing in its own subsystem settles which is meant (ambiguous), and a reference that
+      silently lands on one type while another type carries that display name and sits at least as
+      close to the referrer — the referrer's own subsystem nearest, a project-level type in the
+      middle, another subsystem far (shadowed). Judged for every type position — contract method
+      params and returns, type fields, type-method signatures, signature-type params and returns —
+      and for every L1 and L0 export entry's typeDef, in the draft context of the referring spec,
+      whether or not the referring spec is reached or the type used. An unresolved reference is
+      UNDEFINED_TYPE_REFERENCE's to report, never this rule's.
+    signature: 'typeRefScope(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: AMBIGUOUS_TYPE_REF
+        severity: warning
+        summary: >-
+          A written type reference matches several types, or binds to a type while another type
+          carries that name and sits at least as close to the referrer
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-08T18:55:08.682Z'
+updatedAt: '2026-10-19T19:48:47.022Z'

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
@@ -32,7 +33,7 @@ const TS = '2026-01-01T00:00:00.000Z';
 /** A project.yaml with a real id (externals resolve by it) and an enabled target (a clean validate). */
 function configYaml(id: string, extra: Record<string, unknown> = {}): string {
   return yaml.dump({
-    schemaVersion: '1.0.0', id, name: id,
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, id, name: id,
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: BASE_FIXTURE_RULES,
     extensions: { packs: [], useGlobalPacks: false },

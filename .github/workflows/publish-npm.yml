@@ -2,8 +2,9 @@ name: Publish to npm
 
 # Reusable workflow: publishes the package in this repo to the public npm
 # registry WITH provenance (a Sigstore attestation tying the tarball to this
-# exact commit + CI run). Called by release.yml on version tags; can also be
-# run manually via the Actions tab.
+# exact commit + CI run). Called by release.yml on version tags, and only by
+# it: npm accepts a publish only from the workflow registered as the trusted
+# publisher (release.yml). To retry a failed publish, re-run the release run.
 #
 # Versioning: git tags are the source of truth. The published version is taken
 # from the tag and written into package.json at build time in the CI checkout
@@ -15,37 +16,20 @@ name: Publish to npm
 #   tag vX.Y.Z-dev.N      -> version X.Y.Z-dev.N,     dist-tag `dev`
 #
 # Requirements:
-#   - Repo secret NPM_TOKEN = an npm Granular Access Token (read+write) or a
-#     classic Automation token. Bypasses 2FA OTP. The FIRST publish must use a
-#     token that can create the package (Automation, or granular "all packages")
-#     because a package-scoped token cannot create a package that doesn't exist.
+#   - npm trusted publishing: @wairon/cli names this repository and release.yml
+#     as its trusted publisher (npmjs.com, package Settings). The publish
+#     authenticates with a short-lived OIDC credential (npm 11.5.1+); no token is
+#     stored, and the package requires 2FA and disallows tokens.
+#   - A trusted publisher cannot create a package: a NEW package's first publish
+#     is done once by hand.
 #   - The GitHub repository must be PUBLIC (provenance refuses private repos).
 
 on:
   workflow_call:
-    secrets:
-      NPM_TOKEN:
-        required: true
     outputs:
       version:
         description: 'The exact version that was published (e.g. 5.1.2 or 5.1.2-dev.3)'
         value: ${{ jobs.publish.outputs.version }}
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Exact version to publish (e.g. 5.0.1 or 5.0.1-dev.1)'
-        required: true
-        type: string
-      dist_tag:
-        description: 'npm dist-tag'
-        required: false
-        default: 'latest'
-        type: choice
-        options:
-          - latest
-          - beta
-          - preview
-          - dev
 
 permissions:
   contents: read
@@ -65,27 +49,26 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
+
+      # Trusted publishing (OIDC) needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@^11.5.1
 
       - name: Resolve version and dist-tag
         id: v
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VER="${{ inputs.version }}"
-            TAG="${{ inputs.dist_tag }}"
-          else
-            # Tag trigger: GITHUB_REF_NAME is the tag, e.g. v5.0.1-dev.2
-            VER="${GITHUB_REF_NAME#v}"
-            case "$VER" in
-              *-dev.*)     TAG=dev ;;
-              *-beta.*)    TAG=beta ;;
-              *-preview.*) TAG=preview ;;
-              *)           TAG=latest ;;
-            esac
-          fi
+          # Tag trigger: GITHUB_REF_NAME is the tag, e.g. v5.0.1-dev.2
+          VER="${GITHUB_REF_NAME#v}"
+          case "$VER" in
+            *-dev.*)     TAG=dev ;;
+            *-beta.*)    TAG=beta ;;
+            *-preview.*) TAG=preview ;;
+            *)           TAG=latest ;;
+          esac
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
           echo "dist_tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "Publishing ${VER} under dist-tag '${TAG}'"
@@ -118,5 +101,3 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance --access public --tag "${{ steps.v.outputs.dist_tag }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

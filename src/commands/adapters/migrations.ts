@@ -5,4 +5,4 @@
 // it for unfinished transactions, and the upgrade report reaches the
 // positional match through it.
 // ---------------------------------------------------------------------------
-export { plan, apply, discard, recover, matchPositions } from '../../migrations/index.js';
+export { plan, apply, discard, recover } from '../../migrations/index.js';

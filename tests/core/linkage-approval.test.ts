@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -24,7 +25,8 @@ import { GATE_ALGORITHM } from '../../src/core/rules/gate-identity.js';
 
 /** The gate algorithm every format-2 lock was taken under (full content, code linkage in). */
 const CONTENT_GATE_ALGORITHM = 'sha256+content+doctrine+inputs+members';
-import { checkApproval, reexpressLock, runLock } from '../../src/commands/lock.js';
+import { checkApproval, runLock } from '../../src/commands/lock.js';
+import { reexpressLock } from '../helpers/reexpress-lock.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -167,7 +169,7 @@ describe('the gate identity hashes the design identity', () => {
     expect(stateIdEquals(computeGateStateId(), gate)).toBe(true);
   });
 
-  it('carries asRecorded only while the record on disk is a format-2 one', () => {
+  v5it('carries asRecorded only while the record on disk is a format-2 one', () => {
     root = project();
     writeFormat2(root);
     expect(computeGateStateId().asRecorded).toBeDefined();
@@ -242,18 +244,18 @@ describe('lock format 3: a linkage-only edit no longer stales the lock, a design
 });
 
 describe('a format-2 lock after the upgrade', () => {
-  it('an unchanged design passes lock-check without a re-lock, with the doctor hint', () => {
+  v5it('an unchanged design passes lock-check without a re-lock, with the doctor hint', () => {
     root = project();
     writeFormat2(root);
     // Old code compared the record against the design gate only: stale.
     expect(readLockState(computeGateStateId()).state).toBe('locked');
     const check = checkApproval(true);
     expect(check.approved, check.message).toBe(true);
-    expect(check.message).toContain('wairon doctor --fix');
+    expect(check.message).toContain('wairon upgrade');
     expect(approvalVerdict().text).toContain('no spec has changed since');
   });
 
-  it('doctor --fix re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
+  v5it('the upgrade re-expresses it: format 3, design reading, `reexpressed`, the approver unchanged', () => {
     root = project();
     const before = writeFormat2(root);
     const carried = reexpressLock()!;
@@ -266,7 +268,7 @@ describe('a format-2 lock after the upgrade', () => {
     expect(written.lockedBy).toEqual(before.lockedBy);
     expect(written.lockedAt).toBe(before.lockedAt);
     expect(written.validatorVersion).toBe(before.validatorVersion);
-    expect(written.reexpressed).toMatchObject({ fromAlgorithm: CONTENT_GATE_ALGORITHM, fromReading: 'content', by: 'wairon doctor --fix' });
+    expect(written.reexpressed).toMatchObject({ fromAlgorithm: CONTENT_GATE_ALGORITHM, fromReading: 'content', by: 'wairon upgrade' });
     expect(readLockState(computeGateStateId()).state).toBe('locked');
     // Idempotent: nothing more to carry.
     expect(reexpressLock()).toBeNull();
@@ -276,7 +278,7 @@ describe('a format-2 lock after the upgrade', () => {
     expect(diffAgainstApproval()!.changed).toEqual([]);
   });
 
-  it('a format-2 lock that already drifted (even by linkage alone) reads stale once and says one re-lock clears it', () => {
+  v5it('a format-2 lock that already drifted (even by linkage alone) reads stale once and says one re-lock clears it', () => {
     root = project();
     writeFormat2(root);
     resave(root, LINKAGE);

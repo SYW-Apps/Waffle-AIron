@@ -5,8 +5,8 @@ description: >-
   One member a hosted family declares on disk, as the member registration plans its hosted record:
   the record it would hold (its own project id, its parent's record id and its path in the parent's
   directory), the family root whose repository and isolated tree contain it, and the
-  member-qualified selector (top id plus one alias per hop) that reached it before stage 7 — the
-  string old tokens and selectors still carry for one release.
+  member-qualified selector (top id plus one alias per hop) that reached it before stage 7 - the
+  string an older wairon stored in tokens, which the member upgrade rewrites once to the record id.
 subsystem: sdd_host
 fields:
   - name: record
@@ -51,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-10-01T16:26:56.046Z'
-updatedAt: '2026-10-07T06:28:43.955Z'
+updatedAt: '2026-10-19T06:12:31.055Z'

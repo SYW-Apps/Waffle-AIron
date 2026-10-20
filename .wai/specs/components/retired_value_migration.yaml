@@ -1,0 +1,22 @@
+id: retired_value_migration
+name: Retired Value Migration
+description: >-
+  The data-directory rewrite of the values an older major stored that the running major no longer
+  reads, applied by the instance upgrade at server start: an exposure policy's retired adminApiMode
+  (local_only, private_network, public) becomes enabled, a user's retired status (suspended,
+  deactivated, disabled, deleted) becomes inactive, a public-surface entry's retired audience public
+  becomes external, a share snapshot's single-document OpenAPI capture is dropped (reported when no
+  per-portal capture stands beside it), and an unexecuted project:lock request recorded with a
+  member-qualifier scope is closed. Every one of these values is read only here: the loaders and
+  setters refuse them. The values are shapes no typed repository models any longer, so they are read
+  and rewritten raw in their data files, which is why its steps are local. A dry run reports and
+  writes nothing; applying is idempotent. It takes no credential: its authority is the operator's
+  access to the data directory.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - audit_repository
+status: complete
+createdAt: '2026-10-19T06:17:34.427Z'
+updatedAt: '2026-10-19T06:18:25.928Z'

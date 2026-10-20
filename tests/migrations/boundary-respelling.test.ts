@@ -55,7 +55,7 @@ function writeShop(root: string, upward = false): { root: string; part: string }
     subsystem: 'contracts', kind: 'signature', fields: [], params: [{ name: 'amount', type: 'contracts.money' }], returns: 'void',
   });
   // orders: a portal published only to billing, and a client of billing that asserts billing's invariant and takes a signature from it.
-  subsystem(root, 'Shop', 'orders', { publicInterfaces: [{ type: 'Custom', details: 'Orders', component: 'orders_portal', consumers: ['billing'] }] });
+  subsystem(root, 'Shop', 'orders', { publicInterfaces: [{ details: 'Orders', component: 'orders_portal', consumers: ['billing'] }] });
   component(root, 'orders', 'orders_portal', 'Portal');
   contract(root, 'orders', 'orders_portal', [{
     name: 'place', description: 'Place an order', params: [{ name: 'total', type: 'contracts.money' }], returns: 'contracts.order_id',
@@ -79,7 +79,7 @@ function writeShop(root: string, upward = false): { root: string; part: string }
   });
   // billing: the part, its own types self-prefixed, and a client of orders.
   const part = path.join(root, 'services', 'billing');
-  subsystem(part, 'Shop', 'billing', { publicInterfaces: [{ type: 'Custom', details: 'Billing', component: 'billing_portal', consumers: ['orders'] }] });
+  subsystem(part, 'Shop', 'billing', { publicInterfaces: [{ details: 'Billing', component: 'billing_portal', consumers: ['orders'] }] });
   component(part, 'billing', 'billing_portal', 'Portal');
   contract(part, 'billing', 'billing_portal', [
     { name: 'charge', description: 'Charge an order', params: [{ name: 'order', type: 'orders.order' }], returns: 'billing.receipt' },

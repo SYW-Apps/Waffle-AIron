@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -9,6 +10,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { runExternals, UnknownExternalsActionError } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // `wairon externals` and the sdd_pin_externals / sdd_get_externals_status
@@ -31,16 +33,16 @@ function write(root: string, rel: string, text: string): void {
 function family(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-ext-cli-'));
   const project = (id: string, name: string, externals?: Record<string, unknown>): string => dump({
-    id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
+    waironMajor: WAIRON_MAJOR, id, name, targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }], rules: {},
     extensions: { packs: [], useGlobalPacks: false }, ...(externals ? { externals } : {}),
   });
   write(root, '.wai/project.yaml', project('fleetworks', 'FleetWorks', { bill: { project: 'billing' }, ledger: {} }));
   write(root, '.wai/specs/.index.yaml', dump({ name: 'FleetWorks', vision: 'v' }));
   write(root, '.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'FleetWorks', projectPath: 'packages/billing' }));
   write(root, 'packages/billing/.wai/project.yaml', project('billing', 'Billing Service'));
-  write(root, 'packages/billing/.wai/specs/.index.yaml', dump({ name: 'BillingService', vision: 'v', publicInterfaces: [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project', type: 'REST' }] }));
-  write(root, 'packages/billing/.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'BillingService', publicInterfaces: [{ component: 'invoice-portal', type: 'REST', details: 'd' }] }));
-  write(root, 'packages/billing/.wai/specs/components/invoice-portal.yaml', dump({ id: 'invoice-portal', name: 'Invoice Portal', description: 'd', subsystem: 'billing', componentType: 'Portal', portalType: 'HTTP_API', owns: [], dependsOn: [] }));
+  write(root, 'packages/billing/.wai/specs/.index.yaml', dump({ name: 'BillingService', vision: 'v', publicInterfaces: [{ from: 'billing', component: 'invoice-portal', as: 'invoicing', audience: 'project' }] }));
+  write(root, 'packages/billing/.wai/specs/subsystems/billing.yaml', dump({ id: 'billing', name: 'Billing', description: 'd', parentSystem: 'BillingService', publicInterfaces: [{ component: 'invoice-portal', details: 'd' }] }));
+  write(root, 'packages/billing/.wai/specs/components/invoice-portal.yaml', dump({ id: 'invoice-portal', name: 'Invoice Portal', description: 'd', subsystem: 'billing', componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: [] }));
   invalidateSpecCache();
   setProjectRoot(root);
   return root;
@@ -58,7 +60,7 @@ describe('wairon externals and the externals MCP tools', () => {
     root = undefined;
   });
 
-  it('pin, list and status answer as JSON; an unknown action is refused', async () => {
+  v5it('pin, list and status answer as JSON; an unknown action is refused', async () => {
     root = family();
     const out: string[] = [];
     vi.spyOn(process.stdout, 'write').mockImplementation((chunk: any) => { out.push(String(chunk)); return true; });
@@ -80,7 +82,7 @@ describe('wairon externals and the externals MCP tools', () => {
     await expect(runExternals('sync', [])).rejects.toThrow(UnknownExternalsActionError);
   });
 
-  it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool is gone', async () => {
+  v5it('sdd_pin_externals and sdd_get_externals_status answer with structured content; the old discovery tool is gone', async () => {
     root = family();
     const server = createMcpServer();
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

@@ -7,6 +7,7 @@
  * retired in stage 3) is never written.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -77,6 +78,18 @@ describe('wairon member add|move|internalize', () => {
     expect(loadSubsystemSpec('billing')).toBeNull();
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'billing'))).toBe(false);
     expect(output()).toContain('Added the project "billing" → services/billing');
+    // A project is designed from its own root: its folder gets the wairon tools for its own sessions.
+    const member = path.join(root, 'services', 'billing');
+    expect(fs.existsSync(path.join(member, '.mcp.json'))).toBe(true);
+    expect(fs.existsSync(path.join(member, '.claude', 'CLAUDE.md'))).toBe(true);
+    expect(output()).toContain('up for its own sessions');
+  });
+
+  it('member add of a part gives its folder no session tools: its subsystems are designed from the parent', async () => {
+    const root = parentProject();
+    captureOutput();
+    await runMemberAdd('billing', 'services/billing');
+    expect(fs.existsSync(path.join(root, 'services', 'billing', '.mcp.json'))).toBe(false);
   });
 
   it('member add again changes nothing; a different path under the alias is refused', async () => {
@@ -99,7 +112,7 @@ describe('wairon member add|move|internalize', () => {
     await expect(runMemberAdd('billing', 'services/billing')).rejects.toThrow(/Not inside an initialized wairon project/);
   });
 
-  it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
+  v5it('member move relocates a member, and moves a legacy L1 mount into `members` first', async () => {
     const root = parentProject();
     const output = captureOutput();
     await runMemberAdd('billing', 'services/billing', { project: true });

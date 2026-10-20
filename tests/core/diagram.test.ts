@@ -46,7 +46,7 @@ describe('diagram generation from the spec tree', () => {
       name: 'Billing',
       description: 'billing',
       parentSystem: 'DiagramSys',
-      publicInterfaces: [{ type: 'REST', details: 'api', component: 'billing-portal' }],
+      publicInterfaces: [{ details: 'api', component: 'billing-portal' }],
       createdAt: now,
       updatedAt: now,
     });
@@ -73,7 +73,7 @@ describe('diagram generation from the spec tree', () => {
       ...over,
     });
 
-    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', portalType: 'HTTP_API', dependsOn: ['billing-orchestrator'] }) as any);
+    saveComponentSpec(comp({ id: 'billing-portal', name: 'Billing Portal', componentType: 'Portal', transport: 'HTTP', dependsOn: ['billing-orchestrator'] }) as any);
     saveComponentSpec(comp({ id: 'billing-orchestrator', name: 'Billing Orchestrator', componentType: 'Orchestrator', dependsOn: ['billing-repo'] }) as any);
     saveComponentSpec(comp({ id: 'billing-store', name: 'Billing Store', componentType: 'Store' }) as any);
     saveComponentSpec(comp({ id: 'billing-repo', name: 'Billing Repository', componentType: 'Repository', owns: ['billing-store'] }) as any);
@@ -145,20 +145,6 @@ describe('diagram generation from the spec tree', () => {
     // stereotype classes + public surface marking
     expect(mmd).toContain('classDef entry');
     expect(mmd).toMatch(/class .*billing_portal.* publicSurface/);
-  });
-
-  it('classes retired Specialists and Gateways as retired, not as logic or a pattern', () => {
-    buildFixture();
-    const at = { description: 'd', subsystem: 'billing', owns: [] as string[], dependsOn: [] as string[], createdAt: now, updatedAt: now };
-    saveComponentSpec({ ...at, id: 'pricing-specialist', name: 'Pricing Specialist', componentType: 'Specialist' } as any);
-    saveComponentSpec({ ...at, id: 'edge-gateway', name: 'Edge Gateway', componentType: 'Gateway' } as any);
-    const mmd = generateComponentDiagram();
-
-    expect(mmd).toContain('classDef retired');
-    const retiredIds = (/^\s*class (\S+) retired$/m.exec(mmd)?.[1] ?? '').split(',');
-    expect(retiredIds).toEqual(expect.arrayContaining(['pricing_specialist', 'edge_gateway']));
-    expect(/^\s*class (\S+) logic$/m.exec(mmd)?.[1] ?? '').not.toContain('pricing_specialist');
-    expect(/^\s*class (\S+) pattern$/m.exec(mmd)?.[1] ?? '').not.toContain('edge_gateway');
   });
 
   it('classes a Query as its own stereotype and draws it as a Repository member beside its Index', () => {

@@ -20,7 +20,13 @@ fields:
       without anyone having to opt in. Only meaningful for binary installs; an npm install registers
       its aliases through package.json and cannot be changed from here.
     optional: true
+  - name: lastSeenVersion
+    type: string
+    description: >-
+      The wairon version whose release notes this person last saw: on the first command after an
+      upgrade, the notes since it are shown once and this moves to the running version.
+    optional: true
 methods: []
 sourcePath: src/config/userconfig.ts
 createdAt: '2026-09-22T21:17:40.819Z'
-updatedAt: '2026-10-04T23:40:53.576Z'
+updatedAt: '2026-10-18T14:20:36.188Z'

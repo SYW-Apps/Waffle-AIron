@@ -6,6 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { routeData } from '../../src/server/http.js';
 import { invalidateSpecCache, saveSystemSpec, saveSpec } from '../../src/core/specs.js';
+
 import { setProjectRoot } from '../../src/utils/fs.js';
 import { pushTree, pullTree, runRemote } from '../../src/commands/remote.js';
 import { allow, mintUserToken, createPlacedProject } from '../server/helpers.js';
@@ -184,18 +185,11 @@ describe('wairon remote (push/pull against a live hosted instance)', () => {
     initLocalProject(child, 'Billing');
     setProjectRoot(local);
     invalidateSpecCache();
-    saveSpec('subsystem', {
-      id: 'billing',
-      name: 'billing',
-      description: 'chained billing',
-      parentSystem: 'Local System',
-      publicInterfaces: [],
-      projectPath: 'packages/billing',
-      trustedLinks: [],
-      status: 'draft',
-      createdAt: now,
-      updatedAt: now,
-    });
+    fs.writeFileSync(path.join(local, '.wai', 'project.yaml'), [
+      'schemaVersion: 1.0.0', 'name: Local System', 'targets: []', 'members:', '  billing: packages/billing',
+      `createdAt: '${now}'`, `updatedAt: '${now}'`, '',
+    ].join('\n'));
+    invalidateSpecCache();
 
     createPlacedProject(cfg, MASTER, 'family');
     const target = { url, projectId: 'family', token: adminToken('family') };

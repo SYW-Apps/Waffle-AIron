@@ -10,6 +10,7 @@ import {
   SystemSpecSchema,
   TypeSpecSchema,
 } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The reference family: Waffler's shape in miniature, on disk, for stage 3's
@@ -51,6 +52,7 @@ function projectYaml(dir: string, lines: string[]): void {
   fs.mkdirSync(path.join(dir, '.wai'), { recursive: true });
   const body = [
     'schemaVersion: 1.0.0',
+    `waironMajor: ${WAIRON_MAJOR}`,
     ...lines,
     'targets: []',
     `createdAt: '${STAMP}'`,
@@ -99,27 +101,41 @@ function type(file: string, id: string, fields: { name: string; type: string }[]
   }));
 }
 
-/** Build the reference family in a fresh temp directory. */
-export function buildReferenceFamily(): ReferenceFamily {
+/**
+ * Build the reference family in a fresh temp directory.
+ *
+ * By default it is written in the forms wairon 5 wrote (a legacy L1 mount, a
+ * leading `::`, `super::` and a member path): what the upgrade's migrations read,
+ * so the tests that use it run in the v5 reading. With `canonical`, the same
+ * family is written in wairon 6's own forms — every member in `members`,
+ * `alias::name` for every cross-project reference — for the tests (and the CLI
+ * runs) that need a family the core reads outside the v5 reading.
+ */
+export function buildReferenceFamily(options: { canonical?: boolean } = {}): ReferenceFamily {
+  const canonical = options.canonical === true;
   const top = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-refam-'));
   const shared = path.join(top, 'shared');
   const core = path.join(top, 'core');
   const transpiler = path.join(core, 'transpiler');
 
   // ── waffly: the top project ──────────────────────────────────────────────
-  projectYaml(top, ['id: waffly', 'name: Waffly', 'members:', '  core: core']);
+  projectYaml(top, canonical
+    ? ['id: waffly', 'name: Waffly', 'members:', '  core: core', '  shared:', '    source: shared', '    description: The vocabulary every project speaks']
+    : ['id: waffly', 'name: Waffly', 'members:', '  core: core']);
   system(top, 'Waffly');
   subsystem(top, 'Waffly', 'app');
   // The legacy L1 mount: a description and a publicInterfaces entry of its own.
-  writeSpecFile(specs(top, 'shared', '.index.yaml'), SubsystemSpecSchema.parse({
-    id: 'shared', name: 'shared', description: 'The vocabulary every project speaks', parentSystem: 'Waffly',
-    projectPath: 'shared', publicInterfaces: [{ type: 'Custom', details: 'The shared vocabulary' }],
-    trustedLinks: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
-  }));
+  if (!canonical) {
+    writeSpecFile(specs(top, 'shared', '.index.yaml'), SubsystemSpecSchema.parse({
+      id: 'shared', name: 'shared', description: 'The vocabulary every project speaks', parentSystem: 'Waffly',
+      projectPath: 'shared', publicInterfaces: [{ type: 'Custom', details: 'The shared vocabulary' }],
+      trustedLinks: [], status: 'complete', createdAt: STAMP, updatedAt: STAMP,
+    }));
+  }
   // An alias-form reference, exported by core's L0.
   component(top, 'app', 'app-shell', 'Portal', ['core::engine-portal']);
-  // A leading-`::` reference: a member path from the bound root.
-  component(top, 'app', 'app-worker', 'Orchestrator', ['::core::engine-portal']);
+  // A leading-`::` reference: a member path from the bound root (canonical: the alias form).
+  component(top, 'app', 'app-worker', 'Orchestrator', [canonical ? 'core::engine-portal' : '::core::engine-portal']);
 
   // ── shared: the vocabulary member (legacy mount) ─────────────────────────
   projectYaml(shared, ['id: shared', 'name: Shared', 'externals:', '  core: {}']);
@@ -149,18 +165,16 @@ export function buildReferenceFamily(): ReferenceFamily {
   type(specs(core, 'types', 'engine-mode.yaml'), 'engine-mode', [{ name: 'label', type: 'string' }]);
 
   // ── transpiler: a member two levels down ─────────────────────────────────
-  projectYaml(transpiler, ['id: transpiler', 'name: Transpiler']);
+  projectYaml(transpiler, canonical ? ['id: transpiler', 'name: Transpiler', 'externals:', '  core: {}'] : ['id: transpiler', 'name: Transpiler']);
   system(transpiler, 'Transpiler', [{ from: 'lowering', component: 'lowering-portal', audience: 'project' }]);
   subsystem(transpiler, 'Transpiler', 'lowering', { publicInterfaces: [{ details: 'The lowering surface', component: 'lowering-portal' }] });
   component(transpiler, 'lowering', 'lowering-portal', 'Portal');
   // `super::` climbs to core; a member path read from the bound root lands
   // back in transpiler; a leading `::` walks from the top to core again — two
   // texts binding one target, each carried back as written.
-  component(transpiler, 'lowering', 'lowering-core', 'Orchestrator', [
-    'super::engine-portal',
-    'core::transpiler::lowering-portal',
-    '::core::engine-portal',
-  ]);
+  component(transpiler, 'lowering', 'lowering-core', 'Orchestrator', canonical
+    ? ['core::engine-portal', 'lowering-portal']
+    : ['super::engine-portal', 'core::transpiler::lowering-portal', '::core::engine-portal']);
 
   const specFiles = (): string[] => {
     const out: string[] = [];

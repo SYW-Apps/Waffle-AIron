@@ -286,7 +286,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
 
   it('Portals default to the anchored tier: a string-literal registration realizes the method', () => {
     const proj = createTempProject();
-    proj.component('portal-a', 'Portal', 'portalType: Custom\ndependsOn: [orch-a]');
+    proj.component('portal-a', 'Portal', 'transport: Custom\ndependsOn: [orch-a]');
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
     proj.impl('orch-a', `sourcePath: src/portal.ts\nmethods:\n${INTENT('runFlow')}`);
@@ -350,7 +350,7 @@ describe('structural conformance — method realization (exact TS analysis)', ()
 
   it('chases export-* barrels so a re-export file realizes what it publishes', () => {
     const proj = createTempProject();
-    proj.component('portal-a', 'Portal', 'portalType: Custom\ndependsOn: [orch-a]');
+    proj.component('portal-a', 'Portal', 'transport: Custom\ndependsOn: [orch-a]');
     proj.component('orch-a', 'Orchestrator');
     proj.contract('orch-a', ['runFlow']);
     proj.impl('orch-a', `sourcePath: src/impl.ts\nmethods:\n${INTENT('runFlow')}`);

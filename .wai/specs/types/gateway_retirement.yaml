@@ -1,0 +1,24 @@
+kind: value-object
+id: gateway_retirement
+name: GatewayRetirement
+description: The migration off the retired Gateway stereotype, planned or applied.
+subsystem: sdd_core
+fields:
+  - name: merged
+    type: list<GatewayMerge>
+    description: Every Gateway merged into its Portal.
+    optional: false
+  - name: refused
+    type: list<string>
+    description: >-
+      Every Gateway the migration cannot merge, each with why and the hand steps: a Portal owned by
+      none or by more than one, or methods of its own another narrative calls.
+    optional: false
+  - name: applied
+    type: bool
+    description: Whether the plan was written; false for a dry run.
+    optional: false
+methods: []
+sourcePath: src/core/stereotype-migration.ts
+createdAt: '2026-10-18T19:10:57.636Z'
+updatedAt: '2026-10-18T19:10:58.393Z'

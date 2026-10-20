@@ -5,8 +5,7 @@ description: Receives triggered records and routes them into persistent storage.
 parentSystem: FlowOpsDemo
 profile: flowops-automation
 publicInterfaces:
-  - type: MessageBus
-    details: Webhook-triggered record intake
+  - details: Webhook-triggered record intake
     component: intake-portal
 createdAt: '2026-07-03T12:00:00Z'
 updatedAt: '2026-07-03T12:00:00Z'

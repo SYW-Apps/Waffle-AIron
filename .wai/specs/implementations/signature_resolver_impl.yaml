@@ -27,12 +27,14 @@ methods:
           bound) and the tail a method on any of its contracts; when no component answers, the
           export methods handed in, keyed by the owning interface's namespace and the value
           (`alias::name.method`: another project's export entry, its types already spelled as the
-          referrer spells them), form `export` — and as a type reference matched against the types
-          as every type reference is matched (type_spec.matchesRef), only a type of kind signature
-          counting; a value carrying `::` is first looked up among the references handed in (the one
-          recorded for the owning interface at a type position with this text), and when the scan
-          bound it, the type reading lands on that bound key — so an alias that differs from the
-          producer's project id resolves as every other `alias::` type reference does
+          referrer spells them), form `export` — and as a type reference resolved against the types
+          as every type reference is (type_ref_resolution.resolve, from the subsystem of the owning
+          interface's component, so a bare name settles in that subsystem first;
+          type_spec.matchesRef is its candidate test), only a type of kind signature counting; a
+          value carrying `::` is first looked up among the references handed in (the one recorded
+          for the owning interface at a type position with this text), and when the scan bound it,
+          the type reading lands on that bound key — so an alias that differs from the producer's
+          project id resolves as every other `alias::` type reference does
         type: local
       - stepNumber: 4
         description: Does exactly one reading resolve?
@@ -99,4 +101,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-03T19:32:24.468Z'
-updatedAt: '2026-10-07T21:53:31.756Z'
+updatedAt: '2026-10-19T18:24:59.187Z'

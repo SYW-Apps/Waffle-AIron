@@ -9,6 +9,7 @@
 
 import * as path from 'path';
 import { isSilent, logger } from '../utils/logger.js';
+import { actsOnNoProject } from '../commands/upgrade.js';
 import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../utils/errors.js';
 // The runner imports each command adapter module DIRECTLY (not through the
 // commands barrel) so the physical import graph mirrors the declared
@@ -178,14 +179,14 @@ async function runLock(options: LockOptions): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /** cli_runner.runLock — hosted when attached, else the local approval. */
-export async function lockCommand(opts: { yes?: boolean; subsystem?: string; recursive?: boolean; all?: boolean }): Promise<void> {
+export async function lockCommand(opts: { yes?: boolean; subsystem?: string; all?: boolean }): Promise<void> {
   const target = resolveTarget(getProjectRoot(), {});
   if (target) {
     const outcome = await lockAttached(target);
     logger.success(`Hosted lock of "${target.projectId}" on ${target.url}: ${outcome}`);
     return;
   }
-  await runLock({ yes: opts.yes, subsystem: opts.subsystem, recursive: opts.recursive, all: opts.all });
+  await runLock({ yes: opts.yes, subsystem: opts.subsystem, all: opts.all });
 }
 
 /** cli_runner.runValidate — hosted when attached, else the local validation. */
@@ -241,14 +242,11 @@ export async function statusCommand(options: { subsystem?: string; recursive?: b
 // repository root unless an ancestor declares the crossing as a member.
 // ---------------------------------------------------------------------------
 
-/** Commands (first word, or the whole path) that act on no project, or announce their own binding. */
-const ANNOUNCE_SILENT = new Set(['init', 'host', 'remote', 'login', 'logout', 'serve', 'dev', 'update', 'aliases', 'help', 'mcp serve']);
-
 /** cli_runner.announceBinding — print `project <id> at <root>` to stderr before a command that acts on a project. */
 export function announceBinding(commandPath: string): void {
   // Step 1: a command that acts on no project says nothing.
   const first = commandPath.split(' ')[0];
-  if (ANNOUNCE_SILENT.has(first) || ANNOUNCE_SILENT.has(commandPath)) return;
+  if (actsOnNoProject(commandPath)) return;
   // Steps 3-5: the bound root; none bound, the command reports it itself.
   const root = getProjectRootOverride() ?? resolveProjectBinding(process.cwd())?.root;
   if (!root) return;
@@ -315,11 +313,6 @@ export function runPatterns(): void {
 }
 export function runVariants(): void {
   listVariants();
-}
-export async function runPacks(action: string, arg?: string, options: PackCommandOptions = {}): Promise<void> {
-  if (action === 'add') await addPack(arg!, options.global);
-  else if (action === 'list') listPacks();
-  else if (action === 'remove') await removePack(arg!, options.global);
 }
 export async function runPack(
   action: string,

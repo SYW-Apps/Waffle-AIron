@@ -1,0 +1,12 @@
+id: instance_backup_adapter
+name: Instance Backup Adapter
+description: Copies a hosting data directory whole, beside itself, before an upgrade moves anything in it.
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn: []
+previousIds:
+  - data_dir_backup_adapter
+status: complete
+createdAt: '2026-10-18T14:27:49.665Z'
+updatedAt: '2026-10-18T14:34:17.021Z'

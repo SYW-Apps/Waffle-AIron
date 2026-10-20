@@ -1,0 +1,62 @@
+id: iupgrade_orchestrator
+name: Upgrade Orchestrator Contract
+description: >-
+  Where a tree stands, the plan that brings its family to the running major, that plan applied all
+  or nothing, and the release notes between two versions.
+component: upgrade_orchestrator
+methods:
+  - name: standing
+    description: >-
+      Where the project at the root stands against the running major, from its stamp alone: nothing
+      is planned to answer it.
+    signature: 'standing(root: string): TreeStanding'
+    returns: TreeStanding
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: plan
+    description: >-
+      Plan the upgrade of the family under the root: each project's standing, the steps each older
+      project runs, written onto a rehearsal, and the file changes they come to. Refused, with
+      nothing written, when a project is newer than the running major or out of the window.
+    signature: 'plan(root: string): UpgradePlan'
+    returns: UpgradePlan
+    params:
+      - name: root
+        type: string
+    effect: read
+  - name: apply
+    description: >-
+      Commit a plan's changes in one staged transaction and stamp every project it brought up to
+      date; the family is fully upgraded or as before. It never locks: the report names the projects
+      whose design moved.
+    signature: 'apply(plan: UpgradePlan): TreeUpgradeReport'
+    returns: TreeUpgradeReport
+    params:
+      - name: plan
+        type: UpgradePlan
+    effect: write
+  - name: discard
+    description: Drop a plan that will not be applied, removing its rehearsal.
+    signature: 'discard(plan: UpgradePlan): void'
+    returns: void
+    params:
+      - name: plan
+        type: UpgradePlan
+    effect: write
+  - name: releaseNotes
+    description: >-
+      The curated notes of every release after one version up to and including another, newest
+      first; with no lower version, only the notes of the upper one.
+    signature: 'releaseNotes(after: string?, upTo: string): list<ReleaseNote>'
+    returns: list<ReleaseNote>
+    params:
+      - name: after
+        type: string?
+      - name: upTo
+        type: string
+    effect: read
+status: draft
+createdAt: '2026-10-18T13:06:33.970Z'
+updatedAt: '2026-10-18T13:06:36.458Z'

@@ -288,12 +288,9 @@ export interface MemberAdoption {
   commit?: GitPublish;
 }
 
-/** An administrative token mint's answer: the plaintext, shown once, and each
- *  deprecated member-qualified entry with the record id it was stored as. */
+/** An administrative token mint's answer: the plaintext, shown exactly once. */
 export interface MintedToken {
   token: string;
-  /** '<qualified entry> -> <member record id>' per mapped entry. */
-  mapped: string[];
 }
 
 /** One API key's narrowing as the member upgrade rewrites it. */
@@ -302,6 +299,8 @@ export interface PlannedNarrowing {
   before: string[];
   after: string[];
   widening: string;
+  /** True when no entry survives: the key is revoked instead of narrowed. */
+  revokes: boolean;
 }
 
 /** Where a hosted project's specs are committed: its family root's repository
@@ -524,7 +523,7 @@ export interface ResourceUsageSnapshot {
 }
 
 /** How an exceeded quota limit is labelled. The quota policy is advisory: neither
- *  mode blocks or throttles. A configured 'block' is read as observe (deprecated). */
+ *  mode blocks or throttles. A configured 'block' is refused at start, naming observe. */
 export type QuotaMode = 'observe' | 'warn';
 
 /** Advisory quota policy protecting the instance; observe/warn only. */
@@ -549,7 +548,7 @@ export interface InstanceHealthReport {
 }
 
 /** How much of an audit event's metadata is persisted. A configured 'full-redacted'
- *  is read as redacted (deprecated): the two were never different. */
+ *  is refused at start, naming redacted: the two were never different. */
 export type AuditMetadataMode = 'none' | 'redacted';
 
 /** Instance-level durable audit capture and retention policy. */
@@ -872,11 +871,6 @@ export interface ShareSnapshot {
   capturedAt: string;
   /** Serialized CanvasModel JSON for the view. */
   canvasModel?: string;
-  /** Serialized OpenAPI document — captured when the shared surface has exactly
-   *  ONE portal. Retained so share links created before per-portal capture keep
-   *  serving their document unchanged; multi-portal shares populate openapiSet
-   *  instead. */
-  openapi?: string;
   /** Standalone HTML export, when captured. */
   html?: string;
   /** Every per-portal OpenAPI document in the shared surface, one per published
@@ -1103,6 +1097,32 @@ export interface LandscapeGraphModel {
  *  endpoint templates of their own; every other kind resolves as generic OIDC. */
 export type IdentityProviderType = 'oidc' | 'keycloak' | 'authentik' | 'google_workspace' | 'entra_id';
 
+/** The name a person knows a provider by: its display name, else its id. */
+function providerLabel(provider: IdentityProviderConfig): string {
+  return provider.displayName || provider.id;
+}
+
+/**
+ * The one sentence saying why SSO through this provider cannot work yet, worded
+ * for an administrator, or undefined when nothing prevents it. Today there is one
+ * problem: the provider names no allowed redirect address. Every place that
+ * refuses, hides, warns about or lists a provider's readiness uses this.
+ */
+export function providerSetupProblem(provider: IdentityProviderConfig): string | undefined {
+  const named = (provider.allowedRedirectUris ?? []).some((u) => typeof u === 'string' && u.trim() !== '');
+  if (named) return undefined;
+  return (
+    `SSO through ${providerLabel(provider)} will not work until its allowed redirect addresses are set ` +
+    '(allowedRedirectUris, or WAIRON_OIDC_ALLOWED_REDIRECT_URIS) — usually https://<this host>/web/sso/callback'
+  );
+}
+
+/** What a person is told when they try to sign in through a provider that is not
+ *  set up yet. Echoes no supplied address. */
+export function providerNotSetUpMessage(provider: IdentityProviderConfig): string {
+  return `Sign-in through ${providerLabel(provider)} is not set up yet. Ask an administrator to finish its setup.`;
+}
+
 /** An OIDC/SSO identity provider configuration. Never carries a raw client secret —
  *  clientSecretRef points into the host secret mechanism. */
 export interface IdentityProviderConfig {
@@ -1120,8 +1140,9 @@ export interface IdentityProviderConfig {
   /** Provider group claims that map to instance-admin, when set. */
   adminGroupClaims?: string[];
   /** Exact-match allowlist of redirect URIs accepted for this provider's SSO flow.
-   *  When set and non-empty, a redirectUri not on the list is refused. When
-   *  unset/empty, any redirectUri is accepted (backward compatible). */
+   *  A provider must name the addresses it may return to: a redirectUri not on the
+   *  list is refused, and an unset or empty list means no sign-in can start
+   *  through the provider (see providerSetupProblem in idp.ts). */
   allowedRedirectUris?: string[];
   /** Explicit browser-facing (front-channel) authorization endpoint override.
    *  When set, wins over OIDC discovery and providerType templates. The PUBLIC URL
@@ -1287,8 +1308,26 @@ export interface WebLoginOptions {
    *  WAIRON_ADMIN_USER and WAIRON_ADMIN_PASSWORD set on the server). */
   passwordLogin: boolean;
   /** One entry per ENABLED identity provider — displayName is the admin-set
-   *  label, defaulting to the provider id. Disabled providers never appear. */
-  providers: { id: string; displayName: string }[];
+   *  label, defaulting to the provider id. Disabled providers never appear.
+   *  available is false (with a user-facing unavailableReason) when the provider
+   *  is not set up yet; the admin-worded setup problem is never sent pre-auth. */
+  providers: { id: string; displayName: string; available: boolean; unavailableReason?: string }[];
+}
+
+/** One identity provider as an administrator sees it in a listing: the stored
+ *  configuration paired with its setupProblem (absent when nothing is wrong).
+ *  Mirrors .wai/specs/types/identity_provider_listing.yaml. */
+export interface IdentityProviderListing {
+  provider: IdentityProviderConfig;
+  setupProblem?: string;
+}
+
+/** The answer to saving an identity provider: the stored configuration plus
+ *  warnings telling the administrator what still prevents sign-in through it.
+ *  Mirrors .wai/specs/types/identity_provider_save_result.yaml. */
+export interface IdentityProviderSaveResult {
+  provider: IdentityProviderConfig;
+  warnings: string[];
 }
 
 /** The current principal's identity + derived capability flags, so the web
@@ -1341,9 +1380,10 @@ export interface GovernedProjectCreation {
   profileImpact?: PackImpact;
 }
 
-/** Whether the admin API is served. Where it listens is the host's adminHost. A stored
- *  or submitted local_only, private_network or public is read as enabled (deprecated):
- *  each only ever meant "served". */
+/** Whether the admin API is served. Where it listens is the host's adminHost. The
+ *  exposure policy loader and setter refuse any other value; the data-directory upgrade
+ *  stores the retired local_only, private_network and public (each only ever meant
+ *  "served") as enabled. */
 export type AdminApiMode = 'disabled' | 'enabled';
 
 /** Runtime exposure posture for a hosted instance: which control-plane surfaces

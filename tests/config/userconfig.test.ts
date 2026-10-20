@@ -244,8 +244,32 @@ describe('user_config_store.channel: an unrecognized value can never widen the i
   });
 });
 
+describe('user_config_store: the version whose release notes were last shown', () => {
+  it('answers nothing when none is recorded, and what was recorded after', async () => {
+    const { store } = await inTempHome();
+    expect(store.lastSeenVersion()).toBeNull();
+    store.setLastSeenVersion('6.1.0');
+    expect(store.lastSeenVersion()).toBe('6.1.0');
+  });
+
+  it('records it without disturbing the other settings, and they do not disturb it', async () => {
+    const { store, configFile } = await inTempHome();
+    store.setChannel('beta');
+    store.setLastSeenVersion('6.0.1');
+    store.setDisabledAliases(['wai']);
+    expect(JSON.parse(fs.readFileSync(configFile, 'utf8'))).toEqual({ channel: 'beta', lastSeenVersion: '6.0.1', disabledAliases: ['wai'] });
+    expect(store.getChannel()).toBe('beta');
+  });
+
+  it('reads a hand-edited value that is not a version string as nothing recorded', async () => {
+    const { store, home } = await inTempHome();
+    writeRaw(home, JSON.stringify({ lastSeenVersion: 7 }));
+    expect(store.lastSeenVersion()).toBeNull();
+  });
+});
+
 describe('user_config_store: the file carries only what something reads', () => {
-  it('offers the six operations and nothing that no caller has', async () => {
+  it('offers the eight operations and nothing that no caller has', async () => {
     const { store } = await inTempHome();
 
     expect(Object.keys(store).sort()).toEqual(
@@ -254,10 +278,12 @@ describe('user_config_store: the file carries only what something reads', () => 
         'getChannel',
         'getDisabledAliases',
         'isUpdateChannel',
+        'lastSeenVersion',
         'loadUserConfig',
         'saveUserConfig',
         'setChannel',
         'setDisabledAliases',
+        'setLastSeenVersion',
       ].sort(),
     );
   });

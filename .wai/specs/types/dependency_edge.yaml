@@ -29,14 +29,6 @@ fields:
       What the surface snapshots answered; set for a surface or ambiguous edge only, and then always
       carrying that kind
     optional: true
-  - name: retired
-    type: bool
-    description: >-
-      Either end is a retired stereotype, so no boundary or matrix rule judges the edge:
-      retired-stereotypes reports the component once, and its migration decides what the edge
-      becomes. Never set on an edge that resolved nothing — a reference finding stands whatever
-      declares it
-    optional: false
   - name: draftContext
     type: bool
     description: >-
@@ -59,4 +51,4 @@ fields:
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:24.794Z'
-updatedAt: '2026-10-04T23:39:16.448Z'
+updatedAt: '2026-10-18T21:56:11.840Z'

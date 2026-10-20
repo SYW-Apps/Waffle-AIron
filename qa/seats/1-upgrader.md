@@ -16,7 +16,7 @@ Your task gives you these values (environment variables or pasted in):
 - `QA_SCENARIO`: your scenario, from the bank below.
 - `QA_FINDINGS_DIR`: where your `FINDINGS.md` goes (default `<QA_SEAT_DIR>`'s parent is fine).
 - The CHANGELOG to follow: `CHANGELOG.md` shipped in the release candidate package
-  (`<QA_TOOLCHAIN>/node_modules/@wairon/cli/CHANGELOG.md`), section Unreleased, "Upgrading from ...".
+  (`<QA_TOOLCHAIN>/node_modules/@wairon/cli/CHANGELOG.md`), the top section (the release being shipped), its "Upgrading from ..." steps.
 
 Git Bash: before every shell command run `export PATH="$QA_PREV_TOOLCHAIN/bin:$PATH"` (phase 1) or
 `export PATH="$QA_TOOLCHAIN/bin:$PATH"` (phase 2). The wrapper isolates all user-level config. Never

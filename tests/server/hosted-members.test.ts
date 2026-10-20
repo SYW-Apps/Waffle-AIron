@@ -14,7 +14,7 @@ import {
   registerMemberRecord,
   removeProjectRecord,
 } from '../../src/server/projects.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import * as memberRegistration from '../../src/server/members.js';
 import { authorize } from '../../src/server/authorization.js';
 import { setAssignment } from '../../src/server/permissions.js';
@@ -25,10 +25,9 @@ import { placeProject as landscapePlace } from '../../src/server/landscape.js';
 import { placeProject as webPlace } from '../../src/server/webadmin.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { ensureInstanceIdentity } from '../../src/server/instance.js';
-import { listCredentials } from '../../src/server/credentials.js';
+import { listCredentials, createCredential } from '../../src/server/credentials.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { handleMcpRequest } from '../../src/server/request.js';
-import { warnIfMembersPending } from '../../src/server/http.js';
 import { migratePermissionModel } from '../../src/server/migration.js';
 import { executeApprovedLock } from '../../src/server/admin.js';
 import { executeApprovedRequest } from '../../src/server/projectlifecycle.js';
@@ -54,7 +53,7 @@ import type {
 //
 // Properties: member-is-a-project, member-inherits-parent, member-no-wins,
 // no-widening (over the RBAC matrix), audit-names-the-member; the upgrade is
-// plan-first and idempotent; qualified tokens stay compatible for one release;
+// plan-first and idempotent; a qualified token entry is rewritten to the member record id by the upgrade (never resolved per request);
 // placing a member refuses; the server warns at boot about members awaiting the
 // upgrade; a crashed family migration is rolled back on the next bind.
 // ---------------------------------------------------------------------------
@@ -284,10 +283,8 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(dry.plan.narrowings).toEqual([expect.objectContaining({ keyId: 'k-q', before: ['platform::billing::payments'], after: ['payments'] })]);
     expect(dry.plan.changes.map((c) => c.path).sort()).toEqual(['auth/credentials.json', 'projects.json']);
     expect(stores()).toEqual(before);
-    expect(memberRegistration.pending(dataDir)).toBe(3);
 
     upgrade();
-    expect(memberRegistration.pending(dataDir)).toBe(0);
     expect(listCredentials(dataDir, '*').find((k) => k.id === 'k-q')!.projects).toEqual(['payments']);
 
     const after = stores();
@@ -315,6 +312,36 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(JSON.parse(narrowed[0].metadata!)).toMatchObject({ before: ['platform::billing'], after: ['billing'] });
   });
 
+  it('an entry naming no member is dropped; a key left with no entry is revoked; a revoked key is skipped without aborting the start', () => {
+    mintUserToken(dataDir, { id: 'k-mixed', userId: 'u-q', projects: ['platform::billing', 'platform::ghost', 'docs'] });
+    mintUserToken(dataDir, { id: 'k-ghost', userId: 'u-q', projects: ['platform::ghost'] });
+    mintUserToken(dataDir, { id: 'k-plain', userId: 'u-q', projects: ['platform'] });
+    createCredential(dataDir, {
+      id: 'k-revoked', keyHash: 'h-revoked', projects: ['platform::billing'], createdAt: new Date().toISOString(),
+      revokedAt: new Date().toISOString(), ownerSubject: subjectOf('u-q'),
+    });
+    const dry = upgradeMemberRecords({ dataDir }, false);
+    expect(dry.plan.narrowings.map((n) => [n.keyId, n.after, n.revokes])).toEqual([
+      ['k-mixed', ['billing', 'docs'], false],
+      ['k-ghost', [], true],
+    ]);
+    expect(dry.plan.narrowings.every((n) => n.widening === '')).toBe(true);
+
+    upgrade();
+    const keys = listCredentials(dataDir, '*');
+    expect(keys.find((k) => k.id === 'k-mixed')!.projects).toEqual(['billing', 'docs']);
+    expect(keys.some((k) => k.id === 'k-ghost')).toBe(false); // revoked: it named nothing the data plane resolves
+    expect(keys.find((k) => k.id === 'k-plain')!.projects).toEqual(['platform']);
+    // The revoked key is untouched: still revoked, still naming what it named.
+    expect(keys.find((k) => k.id === 'k-revoked')!.projects).toEqual(['platform::billing']);
+    const narrowed = queryAuditEvents(dataDir, { action: 'token.narrowed' });
+    expect(narrowed.map((e) => e.target).sort()).toEqual(['k-ghost', 'k-mixed']);
+    const ghost = narrowed.find((e) => e.target === 'k-ghost')!;
+    expect(JSON.parse(ghost.metadata!)).toMatchObject({ before: ['platform::ghost'], after: [] });
+    // Idempotent: the second run finds nothing to rewrite.
+    expect(upgradeMemberRecords({ dataDir }, true).plan.narrowings).toEqual([]);
+  });
+
   it('refuses the whole plan, writing nothing, for an id another record holds, an unreadable member, or a setting already at a member id', () => {
     createProjectRecord(dataDir, 'docs'); // a family root already holds the member's id
     fs.rmSync(path.join(fam.payments, '.wai', 'project.yaml')); // unreadable
@@ -333,44 +360,42 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
 
 // ── tokens ──────────────────────────────────────────────────────────────────
 
-describe('qualified token compatibility (one release)', () => {
-  it('an un-upgraded data dir binds no qualified member; after the upgrade a qualifier maps to the member record, never wider', () => {
+describe('a member-qualified selector or entry binds nothing', () => {
+  it('names no record before or after the upgrade; a record id binds the member, a family root entry covers its members', () => {
     const q = { tokenId: 't', role: 'editor' as const, projects: ['platform::billing'], authenticated: true };
     expect(resolveProjectBinding(dataDir, q)).toBeNull();
     upgrade();
-    expect(resolveProjectBinding(dataDir, q)).toEqual({ rootPath: path.resolve(fam.billing), projectId: 'billing', familyRootId: 'platform', via: 'platform::billing' });
+    expect(resolveProjectBinding(dataDir, q)).toBeNull();
+    expect(resolveProjectBinding(dataDir, { ...q, projects: ['*'] }, 'platform::billing')).toBeNull();
+    // By its record id the member binds, with no qualifier recorded.
+    const byId = { ...q, projects: ['billing'] };
+    expect(resolveProjectBinding(dataDir, byId)).toEqual({ rootPath: path.resolve(fam.billing), projectId: 'billing', familyRootId: 'platform' });
     // Its member is covered; its parent and sibling are not.
-    expect(resolveProjectBinding(dataDir, q, 'payments')?.projectId).toBe('payments');
-    expect(resolveProjectBinding(dataDir, q, 'platform')).toBeNull();
-    expect(resolveProjectBinding(dataDir, q, 'docs')).toBeNull();
+    expect(resolveProjectBinding(dataDir, byId, 'payments')?.projectId).toBe('payments');
+    expect(resolveProjectBinding(dataDir, byId, 'platform')).toBeNull();
+    expect(resolveProjectBinding(dataDir, byId, 'docs')).toBeNull();
     // A token naming the family root covers every member, with no expansion.
     const root = { ...q, projects: ['platform'] };
     for (const id of MEMBERS) expect(resolveProjectBinding(dataDir, root, id)?.projectId).toBe(id);
   });
 });
 
-describe('a pre-upgrade member-qualified lock request (one release)', () => {
+describe('a lock request that carries a member scope an older major recorded', () => {
   /** An approved project:lock request recorded before stage 7, with a member-qualifier payload. */
-  const pending = (subproject: string) => {
+  const approved = (subproject: string) => {
     const req = createApprovalRequest(dataDir, {
       id: '', kind: 'project:lock', status: 'pending', requestedBy: subjectOf('u-req'), projectId: 'platform',
-      summary: `Lock project platform subproject "${subproject}"`, payloadType: 'SubprojectScope',
+      summary: 'Lock project platform subproject "' + subproject + '"', payloadType: 'SubprojectScope',
       payload: JSON.stringify({ subproject }), createdAt: new Date().toISOString(),
     });
     return decideApprovalRequest(dataDir, { requestId: req.id, approved: true, decidedBy: subjectOf('u-decider'), decidedAt: new Date().toISOString() });
   };
 
-  it("executes on the member record its qualifier maps to, never the parent", () => {
+  it('is refused on execution, locking neither the parent nor the member', () => {
     upgrade();
-    const req = pending('billing::payments');
-    expect(executeApprovedRequest(cfg, MASTER, req.id)).toContain('Locked project "payments"');
-    expect(fs.existsSync(path.join(fam.payments, '.wai', 'lock.json'))).toBe(true);
-    expect(fs.existsSync(path.join(fam.platform, '.wai', 'lock.json'))).toBe(false);
-  });
-
-  it('refuses rather than widen when the qualifier maps to no record', () => {
-    const req = pending('billing'); // the data dir is not upgraded yet
-    expect(() => executeApprovedRequest(cfg, MASTER, req.id)).toThrow(/holds no hosted record — refusing to execute/);
+    const req = approved('billing::payments');
+    expect(() => executeApprovedRequest(cfg, MASTER, req.id)).toThrow(/carries a payload.*refusing to execute/);
+    expect(fs.existsSync(path.join(fam.payments, '.wai', 'lock.json'))).toBe(false);
     expect(fs.existsSync(path.join(fam.platform, '.wai', 'lock.json'))).toBe(false);
   });
 });
@@ -402,20 +427,6 @@ describe('placing a member refuses: a member takes its units from its family roo
     const projectsFinding = report.findings.find((f) => f.area === 'projects');
     expect(projectsFinding?.detail).toMatch(/1 project\(s\) are placed in no organization unit: platform /);
     expect(listProjectPlacements(dataDir).map((p) => p.projectId)).toEqual(['platform']);
-  });
-});
-
-// ── boot warning ────────────────────────────────────────────────────────────
-
-describe('boot: members awaiting the upgrade', () => {
-  it('logs how many members await `host doctor --fix`, and nothing once they are records', () => {
-    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    warnIfMembersPending(cfg);
-    expect(log.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/3 member\(s\) of hosted families hold no project record yet and await `wairon host doctor --fix`/);
-    log.mockClear();
-    upgrade();
-    warnIfMembersPending(cfg);
-    expect(log).not.toHaveBeenCalled();
   });
 });
 
@@ -458,16 +469,20 @@ describe('the data plane binds members as records', () => {
     return { text: body.result?.content?.[0]?.text ?? '', isError: body.result?.isError === true };
   };
 
-  it('audit-names-the-member: the event names the member record; a deprecated qualifier adds its family root as composition', async () => {
+  it('audit-names-the-member: the event names the member record; a qualified selector is refused 400 before any lookup', async () => {
     allow(dataDir, 'u-dev', 'project:read', 'project', 'platform');
     const byId = mintUserToken(dataDir, { id: 'tok-id', userId: 'u-dev', projects: ['payments'] });
-    const byQualifier = mintUserToken(dataDir, { id: 'tok-q', userId: 'u-dev', projects: ['platform::billing::payments'] });
     expect((await send(byId, 'sdd_host_pack_list')).isError).toBe(false);
-    expect((await send(byQualifier, 'sdd_host_pack_list')).isError).toBe(false);
     const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
     expect(events.find((e) => e.tokenId === 'tok-id')).toMatchObject({ projectId: 'payments' });
     expect(events.find((e) => e.tokenId === 'tok-id')!.composition).toBeUndefined();
-    expect(events.find((e) => e.tokenId === 'tok-q')).toMatchObject({ projectId: 'payments', composition: 'platform' });
+    const refused = await fetch('http://127.0.0.1:' + port + '/mcp?project=platform::billing', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: 'Bearer ' + byId },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'sdd_host_pack_list', arguments: {} } }),
+    });
+    await refused.text();
+    expect(refused.status).toBe(400);
   });
 
   it('an explicit no on the member refuses its data-plane read even though the parent grants it', async () => {

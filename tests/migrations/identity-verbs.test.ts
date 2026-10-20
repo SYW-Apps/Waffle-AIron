@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -181,7 +182,7 @@ describe('stage 6 — the identity verbs', () => {
     expect(dirHash(f.top)).toEqual(before);
   });
 
-  it('rename-reaches-every-reference on the reference family, once the chaining migration canonicalized it: every project naming core follows; family-consistent', () => {
+  v5it('rename-reaches-every-reference on the reference family, once the chaining migration canonicalized it: every project naming core follows; family-consistent', () => {
     const r = buildReferenceFamily();
     try {
       migrate(r.top, { verb: 'chaining' });
@@ -290,7 +291,7 @@ describe("stage 6 — a rename unblocks stage 3's id-locked member", () => {
     for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true });
   });
 
-  it('the member kept the id its lock approved (id-locked); renaming it to its alias, then re-locking, succeeds', async () => {
+  v5it('the member kept the id its lock approved (id-locked); renaming it to its alias, then re-locking, succeeds', async () => {
     const f = fleet();
     roots.push(f.root);
     expect(await lockAt(f.billing)).toBe('billing-service');

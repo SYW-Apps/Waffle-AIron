@@ -225,6 +225,11 @@ methods:
   - name: computeGateStateId
     narrative:
       - stepNumber: 1
+        description: Scan every spec once, so the identity reads one consistent tree
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
         description: >-
           Compute the DESIGN identity of the bound project's OWN specs through the core adapter —
           code linkage and timestamps left out, its parts' specs included (stage 8: a part is the
@@ -233,27 +238,27 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnDesignId
-      - stepNumber: 2
+      - stepNumber: 3
         description: >-
           Load the governing extension packs (LoadedExtensions) — pack rules, profiles, languages,
           and pattern definitions — the doctrine the gate identity covers
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 3
+      - stepNumber: 4
         description: >-
           Read the bound project's configuration through the core adapter for its projectType, rule
           tuning and composition block
         type: call
         targetComponent: validator_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Take the gate config from the configuration's projectType, rules, composition and network
           declaration, empty when the project has no configuration or its configuration fails its
           schema: the tree identity still stands on its own
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Read the bound root's own consumed contract inputs through the core adapter: its stored
           surface snapshots, pinned external snapshots and externals lock, as canonical content keys
@@ -261,34 +266,34 @@ methods:
         type: call
         targetComponent: validator_core_adapter
         targetMethod: consumedContractInputs
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Read the project graph for the PROJECT members the bound root declares DIRECTLY —
           contained ones, referenced `../` and git ones (opened at their sibling checkout or the
-          fetch cache at the pinned commit) and, for one release, legacy mounts — each with its
-          alias and directory. A referenced `hosted:` member is not read here: only the hosting
-          server can resolve it, so it would make the identity differ locally and hosted; it is
-          covered through its pin in the bound project's externals lock, which is a consumed
-          contract input of the identity, never its live subject. Parts are not read here: their
-          content is already in the own identity. Deeper members are not read: they reach this
-          identity through each direct member's subject
+          fetch cache at the pinned commit) and, in the v5 reading `wairon upgrade` binds, legacy
+          mounts — each with its alias and directory. A referenced `hosted:` member is not read
+          here: only the hosting server can resolve it, so it would make the identity differ locally
+          and hosted; it is covered through its pin in the bound project's externals lock, which is
+          a consumed contract input of the identity, never its live subject. Parts are not read
+          here: their content is already in the own identity. Deeper members are not read: they
+          reach this identity through each direct member's subject
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
-      - stepNumber: 7
+      - stepNumber: 8
         description: For each direct member
         type: loop
         loopKind: forEach
         over: the bound root's direct members
-        endStep: 9
-      - stepNumber: 8
+        endStep: 10
+      - stepNumber: 9
         description: >-
           Read the member's own lock record from its directory — one small file, no scan, no
           validation
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Its composition subject is that record's approval subject (lock_record.approvalSubject),
           rendered `<algorithm>:<digest>` — the member's gate identity at the moment its owner
@@ -298,12 +303,12 @@ methods:
           not recomputed: the member's live edits are the member's to re-approve, and recomputing
           here would load the member's tree into every parent identity
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: Seed the built-in SDD rule set into the in-memory rule set
         type: call
         targetComponent: rule_repository
         targetMethod: registerBuiltinRules
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Read the rule sequence: the built-in rules (gate_identity.compute keeps only those that
           judge design). No pack rule is registered yet; pack rules enter the identity through the
@@ -311,14 +316,14 @@ methods:
         type: call
         targetComponent: rule_repository
         targetMethod: ruleSequence
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Compute the gate identity from the own content identity, the extensions, the built-in
           rules, the own consumed contract inputs, the gate config and the members' subjects
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Digest each input of that identity on its own and carry them as the answer's `parts`: the
           lock records them (gateParts), and a later check compares them input by input — to name
@@ -327,28 +332,28 @@ methods:
         type: call
         targetComponent: gate_identity
         targetMethod: parts
-      - stepNumber: 14
+      - stepNumber: 15
         label: readOwnRecord
         description: Read the bound project's own lock record, to know which gate algorithm it was taken under
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Was it taken under the previous, full-content gate algorithm
           (`sha256+content+doctrine+inputs+members`, a format-2 record)? Then it must be judged as
           it was taken, never forced into a re-lock of an unchanged design
         type: branch
         condition: the record exists and its stateId.algorithm is the full-content gate algorithm
-        onFalseStep: 19
-      - stepNumber: 16
+        onFalseStep: 20
+      - stepNumber: 17
         description: >-
           Compute the full-content identity of the own specs (code linkage included), the content
           reading that record was taken in
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnStateId
-      - stepNumber: 17
+      - stepNumber: 18
         description: >-
           Recompute the gate identity from that full-content identity and the SAME doctrine, inputs,
           gate config and members' subjects — gate_identity.compute marks it with the previous
@@ -357,11 +362,11 @@ methods:
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 18
+      - stepNumber: 19
         description: That record is judged; answer
         type: jump
-        toStep: 23
-      - stepNumber: 19
+        toStep: 24
+      - stepNumber: 20
         label: earlierDesign
         description: >-
           Was it taken in the earlier design reading (`sha256+design+doctrine+inputs+members`,
@@ -369,18 +374,18 @@ methods:
           as approved, so a tree in which nothing but a status moved still matches it
         type: branch
         condition: the record exists and its stateId.algorithm is the earlier design gate algorithm
-        onFalseStep: 23
-      - stepNumber: 20
+        onFalseStep: 24
+      - stepNumber: 21
         description: Recover each own spec's approved status from the record's design digests
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvedStatuses
-      - stepNumber: 21
+      - stepNumber: 22
         description: Compute the own design identity in the earlier reading, statuses put back as approved
         type: call
         targetComponent: validator_core_adapter
         targetMethod: computeOwnDesignIdAsRecorded
-      - stepNumber: 22
+      - stepNumber: 23
         description: >-
           Recompute the gate identity from it and the SAME doctrine, inputs, gate config and
           members' subjects — gate_identity.compute marks it with the earlier design gate algorithm
@@ -388,7 +393,7 @@ methods:
         type: call
         targetComponent: gate_identity
         targetMethod: compute
-      - stepNumber: 23
+      - stepNumber: 24
         label: answer
         description: >-
           Return the gate identity, with asRecorded when the record on disk was taken under an
@@ -983,4 +988,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-17T19:37:15.369Z'
+updatedAt: '2026-10-20T09:25:59.255Z'

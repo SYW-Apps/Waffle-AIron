@@ -59,7 +59,7 @@ export {
   // What the scan's type canonicalisation recorded: the stored aliases and
   // the positions that are not canonical.
   typeSpellingFacts,
-  // The retired reachability forms the scan read compatibly, which
+  // The retired reachability forms the scan met in the v5 reading, which
   // entry-declarations reports.
   retiredReachFacts,
   // The pack loader over a candidate configuration, and one entry's manifest:

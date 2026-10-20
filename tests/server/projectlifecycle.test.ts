@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -22,11 +23,11 @@ import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt } from '../../src/core/lockfile.js';
 import { pinOf } from '../../src/core/approval.js';
 import { createMember } from '../../src/core/provision.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { seedChainedMount, seedSubsystem } from './helpers.js';
-import { upgradeMemberRecords } from '../../src/server/local-admin.js';
+import { seedChainedMember, seedSubsystem } from './helpers.js';
+import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createUnit, placeProject as placeProjectInUnit } from '../../src/server/organization.js';
 import { listProjectPacks } from '../../src/server/packs.js';
 import { UnauthenticatedError, ForbiddenError } from '../../src/server/errors.js';
@@ -365,7 +366,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
   function seedChainedSubproject(projectId: string, mountId: string): { parent: string; child: string } {
     seedProject(projectId);
     const parent = existingProjectRoot(dataDir, projectId)!;
-    const child = seedChainedMount(parent, mountId, `packages/${mountId}`);
+    const child = seedChainedMember(parent, mountId, `packages/${mountId}`);
     runWithProjectRoot(child, () => hostCore.provisionProject(mountId));
     seedSubsystem(parent, 'plain'); // exists, but carries no projectPath
     invalidateSpecCache();
@@ -407,7 +408,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(events[0]).toMatchObject({ projectId: 'billing', target: 'billing' });
   });
 
-  it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
+  v5it('an unqualified lock still locks the project itself and never touches the child (no regression)', () => {
     const { parent, child } = seedChainedSubproject('confine-plain', 'billing');
 
     const outcome = lockProject(cfg, MASTER, 'confine-plain');
@@ -429,7 +430,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     const root = existingProjectRoot(dataDir, 'hosted-pins')!;
     runWithProjectRoot(root, () => {
       createMember('billing', 'packages/billing', undefined, 'project');
-      writeLegacyMount({
+      writeMemberProject({
         id: 'claims', name: 'claims', description: 'd', parentSystem: 'x', publicInterfaces: [], trustedLinks: [],
         projectPath: 'packages/claims', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
       } as SubsystemSpec, 'claims');
@@ -524,10 +525,10 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     };
     writeLines(path.join(parent, '.wai', 'specs', 'subsystems', 'parent-sub.yaml'), [
       'id: parent-sub', 'name: parent-sub', 'description: the parent domain', 'parentSystem: confine-violation',
-      'publicInterfaces:', '  - type: Custom', '    details: the published portal', '    component: parent-portal', ...stamp]);
+      'publicInterfaces:', '  - details: the published portal', '    component: parent-portal', ...stamp]);
     writeLines(path.join(parent, '.wai', 'specs', 'components', 'parent-portal.yaml'), [
       'id: parent-portal', 'name: parent-portal', 'description: the published portal', 'subsystem: parent-sub',
-      'componentType: Portal', 'portalType: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
+      'componentType: Portal', 'transport: Custom', 'owns: []', 'dependsOn: []', ...stamp]);
     writeLines(path.join(child, '.wai', 'specs', 'subsystems', 'k-core.yaml'), [
       'id: k-core', 'name: k-core', 'description: the child domain', 'parentSystem: billing', ...stamp]);
     writeLines(path.join(child, '.wai', 'specs', 'components', 'k-orch.yaml'), [
@@ -548,7 +549,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(child))).toBe(false);
   });
 
-  it('a member lock CONFINES to the member tree: its own state governs, and drift makes only the member stale', () => {
+  v5it('a member lock CONFINES to the member tree: its own state governs, and drift makes only the member stale', () => {
     const { parent, child } = seedChainedSubproject('confine-promo', 'billing');
 
     // Locking the PARENT leaves the child unlocked — the trees are independent.
@@ -612,7 +613,7 @@ describe('project lifecycle orchestrator (sdd_host)', () => {
     expect(fs.existsSync(lockPathOf(parent))).toBe(false);
   });
 
-  it('an approved UNQUALIFIED lock still locks the project itself (no regression)', () => {
+  v5it('an approved UNQUALIFIED lock still locks the project itself (no regression)', () => {
     const { parent, child } = seedChainedSubproject('confine-appr2', 'billing');
     const requester = mintToken('ca2', 'u-ca2');
     allow('u-ca2', 'project:write', 'project', 'confine-appr2', 'approval');

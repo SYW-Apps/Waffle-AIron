@@ -12,6 +12,7 @@ import {
   SystemSpecSchema,
   TypeSpecSchema,
 } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // Stage 8, wave B fixtures: a producer project (ledger) and a consumer (shop)
@@ -78,7 +79,7 @@ export const specs = (dir: string, ...parts: string[]): string => path.join(dir,
 /** A project configuration written as YAML. */
 export function projectYaml(dir: string, fields: Record<string, unknown>): void {
   fs.mkdirSync(path.join(dir, '.wai'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({ schemaVersion: '1.0.0', targets: [], createdAt: STAMP, updatedAt: STAMP, ...fields }));
+  fs.writeFileSync(path.join(dir, '.wai', 'project.yaml'), yaml.dump({ schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, targets: [], createdAt: STAMP, updatedAt: STAMP, ...fields }));
 }
 
 export function system(dir: string, name: string, publicInterfaces: Record<string, unknown>[] = []): void {
@@ -134,7 +135,7 @@ export function type(file: string, id: string, fields: { name: string; type: str
 export function writeLedger(dir: string, method = 'post'): void {
   projectYaml(dir, { id: 'ledger', name: 'Ledger' });
   system(dir, 'Ledger', [{ from: 'books', component: 'ledger-portal', audience: 'instance' }]);
-  subsystem(dir, 'Ledger', 'books', { publicInterfaces: [{ type: 'Custom', details: 'The ledger surface', component: 'ledger-portal' }] });
+  subsystem(dir, 'Ledger', 'books', { publicInterfaces: [{ details: 'The ledger surface', component: 'ledger-portal' }] });
   component(dir, 'books', 'ledger-portal', 'Portal');
   contract(dir, 'books', 'ledger-portal', [{
     name: method, description: 'Post an amount', signature: `${method}(amount: number): void`, returns: 'void',
@@ -182,12 +183,12 @@ export function writeShop(dir: string, declare: Record<string, unknown>): void {
 export function writeClinic(root: string): { root: string; part: string } {
   projectYaml(root, { id: 'clinic', name: 'Clinic', members: { scheduling: 'services/scheduling' } });
   system(root, 'Clinic');
-  subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ type: 'Custom', details: 'Patients', component: 'patient-portal' }] });
+  subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ details: 'Patients', component: 'patient-portal' }] });
   component(root, 'frontdesk', 'patient-portal', 'Portal');
   component(root, 'frontdesk', 'checkin-client', 'Adapter', ['schedule-portal']);
   type(specs(root, 'types', 'patient.yaml'), 'patient', [{ name: 'name', type: 'string' }], { subsystem: 'frontdesk' });
   const part = path.join(root, 'services', 'scheduling');
-  subsystem(part, 'Clinic', 'scheduling', { publicInterfaces: [{ type: 'Custom', details: 'Schedules', component: 'schedule-portal' }] });
+  subsystem(part, 'Clinic', 'scheduling', { publicInterfaces: [{ details: 'Schedules', component: 'schedule-portal' }] });
   component(part, 'scheduling', 'schedule-portal', 'Portal');
   component(part, 'scheduling', 'booking-client', 'Adapter', ['patient-portal']);
   contract(part, 'scheduling', 'booking-client', [{

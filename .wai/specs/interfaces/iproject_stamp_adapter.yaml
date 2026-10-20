@@ -1,0 +1,42 @@
+id: iproject_stamp_adapter
+name: Project Stamp Adapter Contract
+description: >-
+  The major a project's files were written by, read from and written to its project.yaml as raw
+  text.
+component: project_stamp_adapter
+methods:
+  - name: read
+    description: >-
+      The `waironMajor` the project.yaml under the root names, or nothing when it names none or the
+      root has no project.yaml.
+    signature: 'read(root: string): int?'
+    returns: int?
+    params:
+      - name: root
+        type: string
+    effect: io
+  - name: write
+    description: >-
+      Set `waironMajor` in the project.yaml under the root, adding the line when it is missing and
+      changing no other byte of the file.
+    signature: 'write(root: string, major: int): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+      - name: major
+        type: int
+    effect: io
+  - name: holdsConfig
+    description: >-
+      Whether the root holds a project.yaml. A project does; a part (a folder holding subsystems of
+      the project that declares it) does not, and carries no stamp of its own.
+    signature: 'holdsConfig(root: string): bool'
+    returns: bool
+    params:
+      - name: root
+        type: string
+    effect: io
+status: draft
+createdAt: '2026-10-18T13:06:13.211Z'
+updatedAt: '2026-10-20T00:50:32.895Z'

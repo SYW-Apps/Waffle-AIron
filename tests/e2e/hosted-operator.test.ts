@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -78,7 +79,6 @@ describe('hosted operator journey (built server)', () => {
 
     cli('host', 'unit', 'create', '--slug', 'team');
     cli('host', 'project', 'create', '--id', PROJECT, '--unit', 'team');
-    cli('host', 'doctor', '--fix');
     const grant = (user: string, capability: string, ...scope: string[]) =>
       cli('host', 'permission', 'set', '--user', user, '--capability', capability, '--project', PROJECT, ...scope);
     for (const user of ['alice', 'bob', 'carol', 'dana']) grant(user, 'project:read');
@@ -100,6 +100,9 @@ describe('hosted operator journey (built server)', () => {
     server.stderr!.on('data', (d) => { log += String(d); });
     for (let i = 0; i < 200 && !log.includes('hosting server started'); i++) await new Promise((r) => setTimeout(r, 100));
     expect(log).toContain('hosting server started');
+    // The server upgrades its data dir at start (there is no `host doctor` any more) and records the running major.
+    const version = JSON.parse(fs.readFileSync(path.join(dataDir, 'version.json'), 'utf8')) as Record<string, unknown>;
+    expect(JSON.stringify(version)).toContain(String(WAIRON_MAJOR));
 
     const init = await tool(keys.alice, 'sdd_initialize_system', {
       name: PROJECT, vision: 'A team knowledge base for notes and pages.', targetLanguage: 'typescript',

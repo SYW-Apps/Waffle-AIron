@@ -1,0 +1,15 @@
+id: installed_release_adapter
+name: Installed Release Adapter
+description: >-
+  Reads what the installed wairon package says about itself: its version, and the curated release
+  notes bundled with it (one short file per release holding its few most important changes in plain
+  words).
+subsystem: sdd_upgrade
+componentType: Adapter
+owns: []
+dependsOn: []
+previousIds:
+  - release_notes_adapter
+status: complete
+createdAt: '2026-10-18T13:02:21.816Z'
+updatedAt: '2026-10-18T14:34:13.460Z'

@@ -1,0 +1,11 @@
+id: imcp_upgrade_adapter
+name: MCP Upgrade Client Adapter Contract
+description: The one upgrade verb the MCP server uses.
+component: mcp_upgrade_adapter
+methods:
+  - name: standing
+    description: Where the bound project tree stands against the running major.
+    signatureFrom: upgrade_portal.standing
+status: draft
+createdAt: '2026-10-18T14:23:41.987Z'
+updatedAt: '2026-10-18T14:23:45.390Z'

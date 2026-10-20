@@ -302,7 +302,7 @@ describe('stage 8 — promote and demote', () => {
     // A trusted link from the clinic's frontdesk into the part.
     const linked = clinic();
     subsystem(linked.root, 'Clinic', 'frontdesk', {
-      publicInterfaces: [{ type: 'Custom', details: 'Patients', component: 'patient-portal' }],
+      publicInterfaces: [{ details: 'Patients', component: 'patient-portal' }],
       trustedLinks: [{ subsystem: 'scheduling', reason: 'in-process calls' }],
     });
     cases.push(['trusted link', linked, { verb: 'promote', alias: 'scheduling' }, 'trusted-link-crosses']);
@@ -345,7 +345,7 @@ describe('stage 8 — externalize makes a part; internalize of a part is a stora
     const root = path.join(tempDir(cleanups, 'wairon-ext-'), 'clinic');
     projectYaml(root, { id: 'clinic', name: 'Clinic' });
     system(root, 'Clinic');
-    subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ type: 'Custom', details: 'Patients', component: 'patient-portal' }] });
+    subsystem(root, 'Clinic', 'frontdesk', { publicInterfaces: [{ details: 'Patients', component: 'patient-portal' }] });
     component(root, 'frontdesk', 'patient-portal', 'Portal');
     subsystem(root, 'Clinic', 'scheduling');
     component(root, 'scheduling', 'booking-client', 'Adapter', ['patient-portal']);
@@ -372,7 +372,7 @@ describe('stage 8 — externalize makes a part; internalize of a part is a stora
 
   it('externalize --as project composes the move with a promote', () => {
     const { root } = writeClinic(path.join(tempDir(cleanups, 'wairon-extp-'), 'clinic'));
-    subsystem(root, 'Clinic', 'pharmacy', { publicInterfaces: [{ type: 'Custom', details: 'Dispenses', component: 'pharmacy-portal' }] });
+    subsystem(root, 'Clinic', 'pharmacy', { publicInterfaces: [{ details: 'Dispenses', component: 'pharmacy-portal' }] });
     component(root, 'pharmacy', 'pharmacy-portal', 'Portal');
     const report = migrate(root, { verb: 'externalize', subsystem: 'pharmacy', path: 'services/pharmacy', as: 'project' });
     expect(report.applied).toBe(true);

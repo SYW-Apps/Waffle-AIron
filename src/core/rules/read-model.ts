@@ -4,7 +4,6 @@ import {
   implementationSourceFiles,
   importBindingOf,
   isPattern,
-  isRetired,
   localTypesOf,
   memberTypesOf,
   methodSourceFile,
@@ -647,7 +646,7 @@ export function buildImportGraph(index: CodeIndex, universe: Set<string>): Impor
 export function buildOwnershipIndex(ctx: RuleContext): OwnershipIndex {
   const ownedBy = new Map<string, string>();
   for (const comp of ctx.components) {
-    if (isRetired(comp) || !(isPattern(comp) || comp.componentType === 'Supervisor')) continue;
+    if (!(isPattern(comp) || comp.componentType === 'Supervisor')) continue;
     for (const memberId of comp.owns) {
       const member = ctx.componentMap.get(memberId);
       if (!member || isPattern(member)) continue;
@@ -693,7 +692,7 @@ export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
       }
       const edge = resolvedEdge(ctx, from, ref, to, fromDraft, profile);
       all.push(edge);
-      if (edge.reach === 'internal' && !edge.retired && !edge.licensed) matrix.push(edge);
+      if (edge.reach === 'internal' && !edge.licensed) matrix.push(edge);
     }
   }
 
@@ -727,7 +726,6 @@ export function resolvedEdge(
     return {
       from, ref, to, reach: 'library',
       ...(resolution ? { resolution } : {}),
-      retired: isRetired(from),
       draftContext: fromDraft || ctx.isComponentDraft(to.id),
       licensed: false,
     };
@@ -737,7 +735,6 @@ export function resolvedEdge(
     ref,
     to,
     reach: (to.subsystem === from.subsystem ? 'internal' : 'cross-subsystem') as EdgeReachResolved,
-    retired: isRetired(from) || isRetired(to),
     draftContext: fromDraft || ctx.isComponentDraft(to.id),
     licensed: profile?.allowedEdges?.some(
       e => e.from.includes(from.componentType) && e.to.includes(to.componentType),
@@ -826,12 +823,9 @@ function isLibraryTarget(to: ComponentSpec): boolean {
  * snapshot (`surface`); foreign snapshots that disagree make it `ambiguous`;
  * any other outcome is `cross-project`, project-boundaries' single finding. A
  * local id that names nothing is `missing`, the typo it always was.
- *
- * The edge is never marked retired: a reference finding stands whatever
- * declares it, retired or not.
  */
 function offTreeEdge(ctx: RuleContext, from: ComponentSpec, ref: string, fromDraft: boolean): DependencyEdge {
-  const base = { from, ref, retired: false, draftContext: fromDraft, licensed: false };
+  const base = { from, ref, draftContext: fromDraft, licensed: false };
   const resolution = ctx.resolveCrossProject(from.id, 'dependsOn', ref);
   if (!resolution) return { ...base, reach: 'missing' };
   const surface = ctx.resolveSurfaceRef(ref, from.subsystem);

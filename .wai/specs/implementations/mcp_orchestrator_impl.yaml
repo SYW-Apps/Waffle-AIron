@@ -312,12 +312,10 @@ methods:
         targetMethod: loadComponentSpec
       - stepNumber: 3
         description: >-
-          For each binding, normalize the transport to the endpoint vocabulary (a portalType
-          spelling maps explicitly: HTTP_API is HTTP), refuse a transport the Portal's portalType
-          does not carry — naming the one it implies — then build the raw endpoint from that
-          transport's own address fields and parse it against the endpoint schema; a binding the
-          schema rejects refuses the whole write with the offending field named, so a half-bound
-          contract is never saved
+          For each binding, refuse a transport that is not the Portal's own — naming the Portal's —
+          then build the raw endpoint from that transport's own address fields and parse it against
+          the endpoint schema; a binding the schema rejects refuses the whole write with the
+          offending field named, so a half-bound contract is never saved
         type: local
       - stepNumber: 4
         description: >-
@@ -631,10 +629,10 @@ methods:
         targetMethod: getStatusReport
       - stepNumber: 3
         description: >-
-          Read the members the bound root declares — its project.yaml `members` entries and, for one
-          release, its legacy L1 mounts, each with its alias, path and form — so the context line
-          can name which projects this answer spans; a report that silently covered three projects
-          would read exactly like one that covered this one
+          Read the members the bound root declares — its project.yaml `members` entries and, in the
+          v5 reading `wairon upgrade` binds, its legacy L1 mounts, each with its alias, path and
+          form — so the context line can name which projects this answer spans; a report that
+          silently covered three projects would read exactly like one that covered this one
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: listDirectChainedSubprojects
@@ -810,8 +808,8 @@ methods:
         targetMethod: listConsumers
       - stepNumber: 3
         description: >-
-          Rename the type and rewrite every reference to it via the core client adapter — or, with
-          dryRun, ask what the rename would do and write nothing
+          Rename the type and rewrite every reference to it via the core client adapter, passing
+          allowShadowed on — or, with dryRun, ask what the rename would do and write nothing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: renameType
@@ -959,4 +957,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-16T12:03:06.655Z'
+updatedAt: '2026-10-19T19:48:07.013Z'

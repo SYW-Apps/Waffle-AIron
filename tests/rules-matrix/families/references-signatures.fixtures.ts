@@ -124,7 +124,7 @@ export default [
     scenario:
       'The invoice portal takes its quote signature from the settlement workflow\'s quote, which itself takes its signature from the tariff engine — a chain, never followed.',
     tree: tree('tariff-engine.rate', ['tariff-engine'], {}, {
-      components: [{ id: 'invoice-portal', subsystem: 'billing', componentType: 'Portal', portalType: 'REST', description: 'Customer-facing quote endpoint.', dependsOn: ['settlement-workflow'] }],
+      components: [{ id: 'invoice-portal', subsystem: 'billing', componentType: 'Portal', transport: 'REST', description: 'Customer-facing quote endpoint.', dependsOn: ['settlement-workflow'] }],
       interfaces: [{ id: 'iinvoice_portal', component: 'invoice-portal', methods: [{ name: 'quote', description: 'Quote a passage for a customer.', signatureFrom: 'settlement-workflow.quote' }] }],
     }),
   }),
@@ -138,7 +138,7 @@ export default [
       subsystems: [BILLING],
       components: [
         { id: 'settlement-workflow', description: 'Settles rated passages onto customer accounts.' },
-        { id: 'invoice-portal', subsystem: 'billing', componentType: 'Portal', portalType: 'REST', description: 'Customer-facing quote endpoint.', dependsOn: ['settlement-workflow'] },
+        { id: 'invoice-portal', subsystem: 'billing', componentType: 'Portal', transport: 'REST', description: 'Customer-facing quote endpoint.', dependsOn: ['settlement-workflow'] },
       ],
       interfaces: [
         { id: 'isettlement_workflow', component: 'settlement-workflow', methods: [{ name: 'quote', description: 'Quote what a passage will settle for.', params: RATE_PARAMS, returns: 'number' }] },

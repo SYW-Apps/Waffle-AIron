@@ -42,7 +42,6 @@ export function computeLayout(model: LayoutModel, collapsed: Record<string, bool
   const MAX_ROW = 2100;
   // An own key only: an id that is also a prototype name (constructor) is collapsed only when set.
   const isCollapsed = function (id: string): boolean { return Object.prototype.hasOwnProperty.call(collapsed, id) && !!collapsed[id]; };
-  // A retired Gateway is no pattern: it lays out as a plain box.
   const PATTERN_TYPES: Record<string, number> = { Repository: 1, FeatureComponent: 1, RouterComponent: 1 };
 
   const compById: Record<string, LayoutModel['components'][number]> = Object.create(null);

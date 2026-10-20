@@ -197,11 +197,9 @@ methods:
       The sdd_set_endpoints workflow: verify the L3 contract exists, read the Portal it belongs to,
       build one wire endpoint per named method from that transport's own address fields and check it
       against the endpoint schema, then persist the contract with the bindings attached. The
-      transport may be written in either vocabulary — the endpoint's (HTTP, gRPC, …) or the Portal's
-      portalType (HTTP_API is HTTP) — and is stored in the endpoint's. A transport the Portal's
-      portalType does not carry is refused, naming the transport that portalType implies; so is a
-      method the contract does not declare, or an endpoint the schema rejects — each before anything
-      is saved.
+      transport is the Portal's own; another is refused, naming the Portal's — and so is a method
+      the contract does not declare, or an endpoint the schema rejects — each before anything is
+      saved.
     signature: >-
       setEndpoints(interfaceId: string, endpoints: list<EndpointBinding>, dryRun?: bool, search?:
       list<string>): SpecChangeReport
@@ -419,28 +417,42 @@ methods:
       - idempotent
   - name: renameType
     description: >-
-      Resolve the type id, qualified by its owner if needed, against the bound tree, read the
-      projects that consume the bound project (the family in reach — members included — and the
-      searched folders' consumer checkouts), then rename it through the core adapter — or, with
+      Resolve the type id, qualified by its owner if needed (`subsystem::id`, which also reaches the
+      second half of a duplicate id), against the bound tree, read the projects that consume the
+      bound project (the family in reach — members included — and the searched folders' consumer
+      checkouts), then rename it through the core adapter, passing allowShadowed on — or, with
       dryRun, answer what the rename would do and write nothing — and name every consumer whose
       specs reach a public name carrying the type (external_consumer.narrowedToUses): the ones whose
       code spelling the old name breaks
-    signature: 'renameType(id: string, newId: string, dryRun?: bool, search?: list<string>): TypeRename'
+    signature: >-
+      renameType(id: string, newId: string, dryRun?: bool, search?: list<string>, allowShadowed?:
+      bool): TypeRename
     returns: TypeRename
     params:
       - name: id
         type: string
-        description: The type to rename
+        description: >-
+          The type to rename, qualified by its owning subsystem (`subsystem::id`) — required to
+          reach the second half of a duplicate id
       - name: newId
         type: string
         description: Its new id
       - name: dryRun
         type: bool
-        description: Answer what the rename would rewrite, keep and rekey, and write nothing
+        description: >-
+          Answer what the rename would rewrite, keep and rekey, listing shadowed sites instead of
+          refusing on them, and write nothing
         optional: true
       - name: search
         type: list<string>
         description: Folders to scan for consumer checkouts outside the family
+        optional: true
+      - name: allowShadowed
+        type: bool
+        description: >-
+          Rename although some references bind to this type while another type carries that name and
+          sits at least as close to where they are written: those references are respelled to the
+          new id and listed in the report's `shadowed`. An ambiguous reference has no such escape
         optional: true
   - name: renameField
     description: >-
@@ -560,4 +572,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-15T16:03:23.142Z'
+updatedAt: '2026-10-19T19:48:05.702Z'

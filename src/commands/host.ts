@@ -12,12 +12,11 @@ import { WaironError } from '../utils/errors.js';
 // modules that realize the workflows.
 import * as localAdmin from './adapters/host.js';
 import { runWithProjectRoot, resolveProjectBinding } from '../utils/fs.js';
-import { loadProjectConfig, seedDemoTree } from './adapters/core.js';
+import { loadProjectConfig, seedDemoTree, buildCanvasDataModel } from './adapters/core.js';
 import { effectiveProjectId } from '../models/project.js';
 // The demo census crosses into sdd_core through cli_core_adapter, like every
 // other sdd_core call the CLI makes — `../core/canvas.js` was this file
 // reaching past the Portal into another subsystem's module.
-import { buildCanvasDataModel } from './subsystem.js';
 import type {
   AuditRetentionPolicy,
   Capability,
@@ -112,22 +111,21 @@ function resolveHostConfig(options: HostOptions): HostConfig {
 }
 
 /**
- * Policy values that no longer exist, each with the value it now reads as. Each
+ * Policy values that no longer exist, each with the value to use instead. Each
  * stood for no behaviour of its own: full-redacted persisted exactly what
  * redacted did, and an advisory quota policy never blocked anything. They are
- * accepted for one release with a warning naming the replacement.
+ * refused at start, naming the replacement.
  */
-const DEPRECATED_POLICY_VALUES: Record<string, Record<string, string>> = {
+const RETIRED_POLICY_VALUES: Record<string, Record<string, string>> = {
   metadataMode: { 'full-redacted': 'redacted' },
   mode: { block: 'observe' },
 };
 
-/** The value a policy field reads as, warning when it is a deprecated one. */
-function retireValue(variable: string, key: string, value: unknown): unknown {
-  const replacement = typeof value === 'string' ? DEPRECATED_POLICY_VALUES[key]?.[value] : undefined;
-  if (replacement === undefined) return value;
-  logger.warn(`${variable} field "${key}": "${String(value)}" is deprecated and reads as "${replacement}" — set "${replacement}" instead.`);
-  return replacement;
+/** The refusal of a field value that fails its check: what it must be, and the replacement when the value was retired. */
+function refuseValue(variable: string, key: string, expects: string, value: unknown): WaironError {
+  const replacement = typeof value === 'string' ? RETIRED_POLICY_VALUES[key]?.[value] : undefined;
+  const retired = replacement === undefined ? '' : ` ('${String(value)}' was retired: use '${replacement}')`;
+  return new WaironError(`${variable} field "${key}" must be ${expects}${retired}.`);
 }
 
 /** The fields WAIRON_AUDIT_POLICY may set, each with the check its value must pass. */
@@ -145,8 +143,7 @@ const AUDIT_POLICY_FIELDS: Record<keyof AuditRetentionPolicy, { expects: string;
   includeReadEvents: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
   metadataMode: {
     expects: 'one of "none", "redacted"',
-    // "full-redacted" is still accepted, and read as redacted (see DEPRECATED_POLICY_VALUES).
-    accepts: (v) => typeof v === 'string' && ['none', 'redacted', 'full-redacted'].includes(v),
+    accepts: (v) => typeof v === 'string' && ['none', 'redacted'].includes(v),
   },
 };
 
@@ -176,9 +173,9 @@ export function parseAuditPolicyEnv(raw: string): Partial<AuditRetentionPolicy> 
       );
     }
     if (!field.accepts(value)) {
-      throw new WaironError(`WAIRON_AUDIT_POLICY field "${key}" must be ${field.expects}.`);
+      throw refuseValue('WAIRON_AUDIT_POLICY', key, field.expects, value);
     }
-    policy[key] = retireValue('WAIRON_AUDIT_POLICY', key, value);
+    policy[key] = value;
   }
   return policy as Partial<AuditRetentionPolicy>;
 }
@@ -194,8 +191,7 @@ const QUOTA_POLICY_FIELDS: Record<keyof ResourceQuotaPolicy, { expects: string; 
   enabled: { expects: 'a boolean', accepts: (v) => typeof v === 'boolean' },
   mode: {
     expects: 'one of "observe", "warn"',
-    // "block" is still accepted, and read as observe (see DEPRECATED_POLICY_VALUES).
-    accepts: (v) => typeof v === 'string' && ['observe', 'warn', 'block'].includes(v),
+    accepts: (v) => typeof v === 'string' && ['observe', 'warn'].includes(v),
   },
   maxProjectsPerUser: NON_NEGATIVE_INTEGER,
   maxMcpRequestsPerMinute: NON_NEGATIVE_INTEGER,
@@ -229,9 +225,9 @@ export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
       );
     }
     if (!field.accepts(value)) {
-      throw new WaironError(`WAIRON_QUOTA_POLICY field "${key}" must be ${field.expects}.`);
+      throw refuseValue('WAIRON_QUOTA_POLICY', key, field.expects, value);
     }
-    policy[key] = retireValue('WAIRON_QUOTA_POLICY', key, value);
+    policy[key] = value;
   }
   return policy as Partial<ResourceQuotaPolicy>;
 }
@@ -561,126 +557,6 @@ export async function runHostUnit(action: string, options: HostOptions = {}): Pr
   }
 }
 
-// ── wairon host doctor ────────────────────────────────────────────────────────
-
-/**
- * Inspect a hosted data dir for pre-permission-model shapes and (with --fix)
- * migrate them in place: stored grants → grid assignments, ownerless keys →
- * synthesized service owners carrying their legacy authority, units → slugs +
- * qualified dot-path ids with every reference remapped, unplaced projects →
- * the 'unassigned' root unit, legacy builtin sessions/keys → revoked. This
- * migration is REQUIRED at rollout: without it every existing user and token
- * resolves to zero permissions under the live-owner model.
- */
-export async function runHostDoctor(options: HostOptions & { fix?: boolean } = {}): Promise<void> {
-  // Step 1.
-  const cfg = resolveHostConfig(options);
-  const fix = options.fix === true;
-  // Steps 2-3: the permission-model migration first.
-  const report = localAdmin.migratePermissionModel(cfg.dataDir, fix);
-  if (report.findings.length === 0) {
-    logger.success('Hosted data is on the permission model — nothing to migrate.');
-  } else {
-    logger.info(`${report.findings.length} finding(s)${report.applied ? ' — applied' : ' (dry run; re-run with --fix to apply)'}:`);
-    for (const f of report.findings) {
-      logger.info(`  [${f.area.padEnd(8)}] ${f.detail}`);
-    }
-    if (!report.applied) {
-      logger.warn('NOT applied. Without --fix, pre-permission-model users and tokens resolve to ZERO permissions.');
-    }
-  }
-  // Steps 4-5: every hosted project's migration onto the reachability model —
-  // operator-invoked, never at bind, because it rewrites the design and owes a re-lock.
-  printReachMigrations(localAdmin.migrateReachability(cfg, fix), fix);
-  // Step 6: then the member-record upgrade — a dry-run plan, applied all or nothing only with --fix.
-  const upgrade = localAdmin.upgradeMemberRecords(cfg, fix);
-  const plan = upgrade.plan;
-  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
-  // Steps 7-8.
-  if (upgrade.recovered.length === 0 && writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
-    logger.success('Hosted members are records — nothing to upgrade.');
-    return;
-  }
-  // Step 9.
-  printRecovered(upgrade.recovered, fix);
-  if (writes.length === 0 && plan.narrowings.length === 0 && plan.refusals.length === 0) {
-    logger.success('Hosted members are records — nothing to upgrade.');
-    return;
-  }
-  printMemberUpgrade(upgrade, fix);
-}
-
-/** Step 5: each hosted project's reachability rewrites by form, what it left for an author, and any failure. */
-function printReachMigrations(migrations: ReturnType<typeof localAdmin.migrateReachability>, fix: boolean): void {
-  const failed = migrations.filter((m) => m.failure !== undefined);
-  const pending = migrations.filter((m) => m.plan && (m.plan.rewrites.length > 0 || m.plan.reported.length > 0));
-  if (failed.length === 0 && pending.length === 0) {
-    logger.success('Hosted projects are on the reachability model — nothing to migrate.');
-    return;
-  }
-  let rewritten = 0;
-  for (const m of pending) {
-    const plan = m.plan!;
-    if (plan.rewrites.length > 0) {
-      rewritten++;
-      logger.info(`  [reach   ] ${m.projectId}: ${plan.rewrites.length} rewrite(s)${plan.applied ? ' written' : ''} — ${describeForms(plan.rewrites)}`);
-    }
-    if (plan.reported.length > 0) {
-      logger.warn(`  [reach   ] ${m.projectId}: ${plan.reported.length} form(s) left for an author — ${describeForms(plan.reported)} (\`wairon doctor --report reachability\` in its tree lists each)`);
-    }
-  }
-  for (const m of failed) logger.error(`  [reach   ] ${m.projectId}: the reachability migration failed — ${m.failure}`);
-  if (rewritten === 0) return;
-  if (fix) logger.warn(`${rewritten} hosted project(s) migrated onto the reachability model: each design moved, so each owes one re-lock by its approvers.`);
-  else logger.warn(`${rewritten} hosted project(s) await the reachability migration (dry run; re-run with --fix to write it — each then owes one re-lock).`);
-}
-
-/** Reachability rewrites counted by form, e.g. "3 portal-type, 1 listener-mounts". */
-function describeForms(entries: { form: string }[]): string {
-  const counts = new Map<string, number>();
-  for (const e of entries) counts.set(e.form, (counts.get(e.form) ?? 0) + 1);
-  return [...counts].map(([form, n]) => `${n} ${form}`).join(', ');
-}
-
-/** Step 9: each transaction a crash left unfinished under the data directory, and what was done about it. */
-function printRecovered(recovered: ReturnType<typeof localAdmin.upgradeMemberRecords>['recovered'], fix: boolean): void {
-  for (const t of recovered) {
-    const line = `  unfinished ${t.verb} transaction ${t.id} (coordinator phase ${t.phase}): ${t.action} — ${t.detail}`;
-    if (t.action === 'refused') logger.error(line);
-    else logger.info(line);
-  }
-  if (recovered.length > 0 && !fix) logger.warn('A crashed transaction is pending under the data directory — re-run with --fix to roll it back first.');
-}
-
-/** Step 9: the member upgrade plan, once per family, with its proof, key rewrites and refusals. */
-function printMemberUpgrade(upgrade: ReturnType<typeof localAdmin.upgradeMemberRecords>, fix: boolean): void {
-  const plan = upgrade.plan;
-  const writes = plan.members.filter((m) => m.action === 'register' || m.action === 'relocate');
-  for (const familyRootId of [...new Set(writes.map((m) => m.familyRootId))]) {
-    logger.info(`Family ${familyRootId}:`);
-    for (const m of writes.filter((w) => w.familyRootId === familyRootId)) {
-      const rows = plan.reach.filter((r) => r.memberId === m.record.id);
-      const verdict = rows.every((r) => r.equal) ? 'all equal — nobody’s reach changes' : 'NOT all equal';
-      logger.info(`  ${m.action} ${m.record.id} (parent ${m.record.parentProjectId}, path ${m.record.memberPath}) — `
-        + `reach: ${rows.length} row(s) compared, ${verdict}`);
-    }
-  }
-  for (const n of plan.narrowings) {
-    logger.info(`  key ${n.keyId}: ${n.before.join(', ')} → ${n.after.join(', ')} (${n.widening})`);
-  }
-  for (const r of plan.refusals) logger.error(`  refused [${r.area}] ${r.detail}`);
-  if (plan.refusals.length > 0) {
-    logger.warn('The member upgrade is blocked — nothing was written.');
-  } else if (upgrade.applied) {
-    logger.success(`Member upgrade applied (${upgrade.outcome?.written.length ?? 0} store file(s) swapped in).`);
-  } else if (upgrade.outcome) {
-    logger.error(`Member upgrade failed: ${upgrade.outcome.failure ?? 'unknown'} — `
-      + (upgrade.outcome.restored ? 'every store was restored.' : `NOT restored: ${upgrade.outcome.unrestored.join(', ')}`));
-  } else if (!fix) {
-    logger.warn('Member upgrade NOT applied (dry run; re-run with --fix to apply).');
-  }
-}
-
 // ── wairon host permission <action> ──────────────────────────────────────────
 
 const CAPABILITIES: Capability[] = ['project:read', 'project:create', 'project:write', 'project:admin', 'approval:decide', 'share:create'];
@@ -825,10 +701,6 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
           logger.blank();
           console.log(`  ${chalk.bold(minted.token)}`);
           logger.blank();
-          // A deprecated member-qualified entry is stored as the member's own record id: say so.
-          for (const line of minted.mapped) {
-            logger.warn(`Narrowing ${line}: a member is a record of its own, so the token names it by its id (qualified entries are deprecated).`);
-          }
           // The token acts as its owner's live permission: an owner who cannot read
           // the project mints a token that cannot read it either.
           if (options.project !== '*') {
@@ -855,7 +727,18 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
         if (!list.length) {
           logger.info('No keys.');
         } else {
-          for (const r of list) logger.info(`  ${r.id}  ${(r.role ?? 'editor').padEnd(6)} ${r.projects.join(',')}`);
+          // A key acts as its owner, so the owner leads; the legacy role is display-only and
+          // shown only where one was set (it used to default to "editor" for owner-bound keys).
+          for (const r of list) {
+            const owner = r.ownerSubject ? `owner ${r.ownerSubject.userId}` : 'no owner (zero permissions)';
+            const extras = [
+              r.role ? `legacy role ${r.role}` : '',
+              r.label ? `label "${r.label}"` : '',
+              r.expiresAt ? `expires ${r.expiresAt}` : '',
+              r.revokedAt ? `revoked ${r.revokedAt}` : '',
+            ].filter(Boolean);
+            logger.info(`  ${r.id}  ${owner}  projects ${r.projects.join(',')}${extras.length ? `  ${extras.join('  ')}` : ''}`);
+          }
         }
         break;
       }

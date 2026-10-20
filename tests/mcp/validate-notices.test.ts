@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // sdd_validate_tree reports notices as their own list.
@@ -36,7 +37,7 @@ describe('sdd_validate_tree and the notice severity', () => {
     projDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-notice-'));
     fs.mkdirSync(path.join(projDir, '.wai', 'specs'), { recursive: true });
     fs.writeFileSync(path.join(projDir, '.wai', 'project.yaml'), [
-      "schemaVersion: '1.0.0'",
+      "schemaVersion: '1.0.0'", `waironMajor: ${WAIRON_MAJOR}`,
       'name: mcp-notices',
       'targets:',
       '  - type: claude',

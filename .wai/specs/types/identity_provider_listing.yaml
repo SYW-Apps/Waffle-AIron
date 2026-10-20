@@ -1,0 +1,21 @@
+kind: value-object
+id: identity_provider_listing
+name: IdentityProviderListing
+description: >-
+  One identity provider as an administrator sees it in a listing: the stored configuration paired
+  with the one sentence saying why SSO through it cannot work yet (the config's setupProblem),
+  absent when nothing is wrong. Lets the admin views show a warning on that provider.
+subsystem: sdd_host
+fields:
+  - name: provider
+    type: IdentityProviderConfig
+    description: The stored provider configuration.
+    optional: false
+  - name: setupProblem
+    type: string
+    description: The config's setupProblem, present only when it has one. Computed on read, never stored.
+    optional: true
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-19T22:11:15.093Z'
+updatedAt: '2026-10-19T22:11:16.029Z'

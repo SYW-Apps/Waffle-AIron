@@ -218,6 +218,56 @@ export function dispatchTree(code: DispatchCode, python: boolean, opts: { narrat
 export const ts = (members: string[], after: string[] = []): DispatchCode => ({ orchestrator: tsOrchestrator(members, after), store: TS_STORE });
 export const py = (members: string[], after: string[] = [], imports: string[] = []): DispatchCode => ({ orchestrator: pyOrchestrator(members, after, imports), store: PY_STORE });
 
+// ---- a route planner the orchestrator also depends on ----------------------
+
+/**
+ * The dispatch tree where the orchestrator also depends on a pure route
+ * planner, and its code asks the planner for the route. Its narrative names
+ * the planner only where `narrated`; `stated` states the implementation's
+ * detail (full), making the narrative the whole list of what it calls.
+ */
+export function plannerTree(opts: { stated: boolean; narrated: boolean }): FixtureTree {
+  const tree = dispatchTree(ts([]), false);
+  const orchestrator = tree.components!.find(c => c.id === 'dispatch-orchestrator')!;
+  orchestrator.dependsOn = ['tracking-store', 'route-planner'];
+  tree.components!.push({ id: 'route-planner', componentType: 'Orchestrator', dependencyClass: 'pure', description: 'Picks the delivery route for a parcel.' });
+  tree.interfaces!.push({ id: 'iroute_planner', component: 'route-planner', methods: [{ name: 'pickRoute', description: 'Answer the delivery route a parcel goes on.', signature: 'pickRoute(parcelId: string): string', returns: 'string', params: [{ name: 'parcelId', type: 'string' }], effect: 'none' }] });
+  tree.implementations!.push({ id: 'route_planner_impl', contract: 'iroute_planner', sourcePath: 'src/dispatch/route-planner.ts', methods: [{ name: 'pickRoute', detail: 'intent', narrative: [], intent: 'Answers the route id a parcel is delivered on, derived from the parcel id alone; it never fails.' }] });
+  const impl = tree.implementations!.find(i => i.id === 'dispatch_orchestrator_impl')!;
+  if (opts.stated) impl.detail = 'full';
+  impl.methods![0].narrative = [
+    opts.narrated
+      ? { stepNumber: 1, type: 'call', targetComponent: 'route-planner', targetMethod: 'pickRoute', description: 'Ask the route planner for the parcel\'s route.' }
+      : { stepNumber: 1, type: 'local', description: 'Pick the delivery route for the parcel.' },
+    { stepNumber: 2, type: 'call', targetComponent: 'tracking-store', targetMethod: 'record', description: 'Record the booking in the tracking store.' },
+    { stepNumber: 3, type: 'return', outcome: 'success', description: 'Answer the route id.' },
+  ];
+  tree.files!['src/dispatch/route-planner.ts'] = [
+    'export class RoutePlanner {',
+    '  pickRoute(parcelId: string): string {',
+    '    return `route-${parcelId}`;',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  tree.files!['src/dispatch/dispatch_orchestrator.ts'] = [
+    'import { TrackingStore } from \'./tracking-store.js\';',
+    'import { RoutePlanner } from \'./route-planner.js\';',
+    '',
+    'export class DispatchOrchestrator {',
+    '  constructor(private readonly store: TrackingStore, private readonly planner: RoutePlanner) {}',
+    '',
+    '  async dispatchParcel(parcelId: string): Promise<string> {',
+    '    const routeId = this.planner.pickRoute(parcelId);',
+    '    this.store.record(parcelId, routeId);',
+    '    return routeId;',
+    '  }',
+    '}',
+    '',
+  ].join('\n');
+  return tree;
+}
+
 // ---- the dispatch desk: a Portal that calls the orchestrator ---------------
 
 /**
@@ -281,7 +331,7 @@ export function deskTree(code: DispatchCode, python: boolean, opts: { server?: b
 function trackingPortalTree(router: string | null): FixtureTree {
   return {
     subsystems: [{ id: 'parcel-tracking', description: 'Lets recipients follow where their parcel is.' }],
-    components: [{ id: 'tracking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Answers recipients\' parcel-tracking requests over HTTP.' }],
+    components: [{ id: 'tracking-portal', componentType: 'Portal', transport: 'HTTP', description: 'Answers recipients\' parcel-tracking requests over HTTP.' }],
     interfaces: [{
       id: 'itracking_portal',
       component: 'tracking-portal',
@@ -466,6 +516,40 @@ export default [
       '    self._store.record(parcel_id, route_id)',
       '    return route_id',
     ]), true, { narratesLookup: true }),
+  }),
+  defineRuleFixture({
+    code: 'UNNARRATED_CALL',
+    severity: 'warning',
+    anchoredTo: 'dispatch_orchestrator_impl',
+    expectFire: true,
+    scenario: 'The dispatch orchestrator states its narrative is complete (detail: full), yet its code also asks the route planner for the route, a collaborator the narrative never names.',
+    tree: plannerTree({ stated: true, narrated: false }),
+  }),
+  defineRuleFixture({
+    code: 'UNNARRATED_CALL',
+    expectFire: false,
+    reason: 'The complete narrative names the call to the route planner.',
+    scenario: 'The dispatch orchestrator states its narrative is complete, and the narrative asks the route planner for the route.',
+    tree: plannerTree({ stated: true, narrated: true }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // OPEN_ROUTE_CALL
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'OPEN_ROUTE_CALL',
+    severity: 'notice',
+    anchoredTo: 'dispatch_orchestrator_impl',
+    expectFire: true,
+    scenario: 'The dispatch orchestrator states no detail and its code asks the route planner, a collaborator it depends on, for the route; the narrative never names the planner, so the design allows the route without saying the method takes it.',
+    tree: plannerTree({ stated: false, narrated: false }),
+  }),
+  defineRuleFixture({
+    code: 'OPEN_ROUTE_CALL',
+    expectFire: false,
+    reason: 'The narrative names the call to the route planner, so the route is said.',
+    scenario: 'The dispatch orchestrator states no detail, and its narrative asks the route planner for the route.',
+    tree: plannerTree({ stated: false, narrated: true }),
   }),
 
   // -------------------------------------------------------------------------

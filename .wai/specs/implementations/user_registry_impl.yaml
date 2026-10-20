@@ -24,10 +24,10 @@ methods:
   - name: setStatus
     narrative: []
     intent: >-
-      Locate the user by id — failing with a not-found error when absent — set its lifecycle status
-      (active, suspended, deactivated) while preserving identity, grant, and audit-history fields
-      untouched, stamp updatedAt, then persist and swap exactly as upsert does. Invalid status
-      values are rejected before any mutation.
+      Locate the user by id - failing with a not-found error when absent - set its lifecycle status
+      (active or inactive) while preserving identity, grant, and audit-history fields untouched,
+      stamp updatedAt, then persist and swap exactly as upsert does. Any other status value is
+      rejected before any mutation, naming the two.
     calls:
       - user_store.load
       - user_store.replaceAll
@@ -89,4 +89,4 @@ methods:
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-10-04T19:41:51.388Z'
+updatedAt: '2026-10-19T06:12:23.068Z'

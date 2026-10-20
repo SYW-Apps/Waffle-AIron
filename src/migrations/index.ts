@@ -1,8 +1,5 @@
 import * as orchestrator from './orchestrator.js';
 import * as transaction from './transaction.js';
-import * as positionReader from './position-reader.js';
-import type { PositionalMatch } from './position-reader.js';
-import type { AuthoredReference, ProjectFamily, ResolvedExportTable, TypeSpec } from '../models/index.js';
 import type {
   FamilyMigrationReport,
   FileChange,
@@ -19,8 +16,7 @@ import type {
 // the CLI (`wairon doctor`'s chaining migration and transaction recovery, the
 // status and validate banners), the MCP server and the hosted server: plan,
 // apply a confirmed plan, discard one, recover (or only report) unfinished
-// transactions, and — a pure read — the positional match the upgrade report
-// explains, which lives here with the migration that writes from it. It also
+// transactions. It also
 // publishes the family transaction itself (rehearse, diff, commit, drop) for
 // the hosted member upgrade, which scopes the host data directory's store
 // files and commits them through the same all-or-nothing transaction. It
@@ -47,11 +43,6 @@ export function discard(plan: MigrationPlan): void {
 /** imigration_portal.recover — report or resolve the unfinished transactions under a project root. */
 export function recover(root: string, fix: boolean): RecoveredTransaction[] {
   return orchestrator.recover(root, fix);
-}
-
-/** imigration_portal.matchPositions — the positional match (position_reader.match). Pure; writes nothing. */
-export function matchPositions(unresolved: AuthoredReference[], family: ProjectFamily, tables: ResolvedExportTable[], types: TypeSpec[]): PositionalMatch[] {
-  return positionReader.match(unresolved, family, tables, types);
 }
 
 /** imigration_portal.rehearse — route to the family transaction: open a rehearsal over a scope. */

@@ -12,6 +12,7 @@ import { setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import type { ComponentSpec, SystemSpec } from '../../src/models/index.js';
 import type { RulesConfig } from '../../src/models/project.js';
+import { stampedProjectYaml } from '../helpers/stamped-config.js';
 
 // ---------------------------------------------------------------------------
 // The `notice` severity (stage 2a-1).
@@ -53,7 +54,7 @@ function makeProject(f: Fixture = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-notice-'));
   const wai = path.join(dir, '.wai');
   fs.mkdirSync(wai);
-  fs.writeFileSync(path.join(wai, 'project.yaml'), JSON.stringify({
+  fs.writeFileSync(path.join(wai, 'project.yaml'), stampedProjectYaml({
     schemaVersion: '1.0.0',
     // Declared, as every project init writes today — so the one notice these
     // tests count is the one they set up, not PROJECT_ID_DEFAULTED.
@@ -73,7 +74,7 @@ function makeProject(f: Fixture = {}): string {
     + (f.subsystemLint ? `lint:\n${f.subsystemLint}\n` : '')
     + `${META}\n`);
   fs.writeFileSync(path.join(specs, 'components', 'comp-a.yaml'),
-    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\nportalType: HTTP_API\ndependsOn: []\nstatus: ${status}\n${META}\n`);
+    `schemaVersion: 1.0.0\nid: comp-a\nname: CompA\ndescription: HTTP portal\nsubsystem: sub-a\ncomponentType: Portal\ntransport: HTTP\ndependsOn: []\nstatus: ${status}\n${META}\n`);
   fs.writeFileSync(path.join(specs, 'interfaces', 'icomp-a.yaml'),
     `schemaVersion: 1.0.0\nid: icomp-a\nname: ICompA\ndescription: Interface A\ncomponent: comp-a\nstatus: ${status}\nmethods:\n  - name: callApi\n    description: Api method\n    signature: "callApi(): async void"\n    returns: "async void"\n${META}\n`);
   return dir;

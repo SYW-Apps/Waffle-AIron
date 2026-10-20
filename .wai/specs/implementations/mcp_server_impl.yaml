@@ -27,6 +27,17 @@ methods:
         type: local
       - stepNumber: 4
         description: >-
+          Wrap every tool registered below in the standing guard, which reads on each call where the
+          bound tree stands (its stamp alone, so it is cheap): on a tree another major wrote, the
+          tool runs nothing and answers a refusal with the standing's advice — for an older tree,
+          that the human runs `wairon upgrade` (the assistant never runs it); for a newer one or one
+          out of the window, the release to install. Judged per call, so an upgrade the human runs
+          while the server is up clears it without a reconnect
+        type: register
+        targetComponent: mcp_upgrade_adapter
+        targetMethod: standing
+      - stepNumber: 5
+        description: >-
           Wrap every tool registered below in the build-freshness guard, which judges that stamp on
           each call. A spec-write tool on a server whose freshness refuses writes answers with the
           refusal and never runs, so nothing is written; every other answer from a stale server
@@ -36,7 +47,7 @@ methods:
         type: register
         targetComponent: mcp_server
         targetMethod: assessBuildFreshness
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           On the two answers a session builds on, sdd_get_status and sdd_validate_tree, ask the
           build adapter whether the wairon that last wrote the bound project (the release stamped on
@@ -49,7 +60,7 @@ methods:
         type: register
         targetComponent: mcp_build_adapter
         targetMethod: findNewerWriter
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Wrap every spec-write tool registered below in the tree's cross-process write lock, taken
           through the core client adapter before the handler runs on each call — the lock also
@@ -60,40 +71,40 @@ methods:
         type: register
         targetComponent: mcp_core_adapter
         targetMethod: lockTree
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           …and released through the core client adapter once the handler has answered, a refusal or
           an exception included
         type: register
         targetComponent: mcp_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Register tool 'listAgents', which reads the resolved agent registry through the core
           client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Register tool 'getAgent', which retrieves a single resolved agent's details from the same
           registry
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadRegistry
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Register the validation tool, which runs the owner's gate (validateProject) or the family
           run (validateFamily) through the validator client adapter
         type: call
         targetComponent: mcp_validator_adapter
         targetMethod: validateProject
-      - stepNumber: 11
+      - stepNumber: 12
         description: Register loader tools to fetch system, subsystem, and component specs from spec_loader
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadSystemSpec
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Resolve the bound root's chaining context through the core adapter; when the root is a
           chained subproject, announce the parent project, the mounting subsystem id, and the
@@ -103,7 +114,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Return the bare McpServer instance; the MCP portal mounts its own surface (resources,
           prompts, the hosted-tool advertisement) on it
@@ -195,6 +206,42 @@ methods:
           exactly as for a changed schema
         type: return
         outcome: unreadable
+lint:
+  allow:
+    - code: UNNARRATED_CALL
+      at: create
+      covers:
+        - mcp_core_adapter.resolveDomains
+        - mcp_core_adapter.loadProjectConfig
+        - mcp_validator_adapter.validateRegistry
+        - mcp_core_adapter.loadSubsystemSpec
+        - mcp_core_adapter.createMember
+        - mcp_validator_adapter.measurePackImpact
+        - mcp_core_adapter.moveMember
+        - mcp_core_adapter.renameComponent
+        - mcp_core_adapter.renameMethod
+        - mcp_core_adapter.loadTypeSpec
+        - mcp_core_adapter.renameType
+        - mcp_core_adapter.renameField
+        - mcp_core_adapter.renameParam
+        - mcp_core_adapter.renameSpecId
+        - mcp_core_adapter.loadComponentSpec
+        - mcp_core_adapter.loadInterfaceSpec
+        - mcp_core_adapter.publishedUsesOf
+        - mcp_validator_adapter.validateFamily
+        - mcp_validator_adapter.adviseExternals
+        - mcp_core_adapter.readProjectSystem
+        - mcp_core_adapter.loadImplementationSpec
+        - mcp_validator_adapter.familyApprovals
+        - mcp_core_adapter.getStatusReport
+        - mcp_core_adapter.approvalVerdict
+        - mcp_core_adapter.composeAgentBrief
+      reason: >-
+        create is the tool registry: these calls are made by the tool handlers it registers, each
+        the tool's own behaviour run when an assistant calls that tool, not calls create makes. Its
+        narrative summarizes the registrations by group; narrating every handler's calls would
+        exceed the step limit. Remove once the registry is split into per-group registration
+        methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-17T14:44:30.850Z'
+updatedAt: '2026-10-20T09:31:37.213Z'

@@ -62,8 +62,8 @@ A complete system is specified top-down across six levels:
 | **L4 Implementation** | `…/<component>/.implementation.yaml` | Concrete implementation of a contract: narrative detail level, bound `technologies` (the swap seam for vendors/engines), optional source path |
 | **L5 Narrative** | (within L4) | Step-by-step method logic as a flat numbered list — `call` steps resolve to real dependency methods, and flow steps (`branch`/`switch`/`loop`/`try`/`jump`/`return`/`throw`) jump by step number |
 
-(Legacy undotted names — `system.yaml`, `subsystem.yaml`, … — still load;
-`wairon doctor --fix` migrates them.)
+(A tree written by an older wairon major — undotted names such as `system.yaml` —
+is moved by `wairon upgrade`.)
 
 `wairon validate` enforces conformance across the tree: reference integrity,
 contract↔implementation method symmetry, narrative-call resolution and
@@ -114,7 +114,7 @@ reported (`UNUSED_COMPONENT` / `UNUSED_METHOD`), with both remedies named.
   `NetworkPolicy`, a trust-boundary diagram and live-flow checks — the specs
   never hold an address. See [Derived networking](docs/network.md).
 
-Upgrading a tree written before this model: `wairon doctor --fix` migrates the
+Upgrading a tree written before this model: `wairon upgrade` migrates the
 retired forms (`portalType`, listener `mounts`, the old `invokedBy` kinds), then
 declare the entries it will not invent.
 
@@ -268,7 +268,9 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon init` | Bootstrap `.wai/` and the SDD spec tree |
 | `wairon status` | The spec tree, its authoring readiness, and its approval state |
 | `wairon validate [--ci] [--all]` | Architecture-conformance gate (the family run at a project with members) |
-| `wairon doctor [--fix]` | Health check and upgrade repairs |
+| `wairon doctor [--fix]` | Health check and repairs (unfinished transactions, signatures, type spellings, guides, MCP registration) |
+| `wairon upgrade [--report] [--yes]` | Move a project written by an older wairon major to this one |
+| `wairon whatsnew [version]` | The curated release notes of a version and the link to the changelog |
 | `wairon generate [--target] [--domain] [--dry-run]` | Reconcile guides, skills and context; agent files only when `rules.materializeAgentFiles` is on |
 | `wairon list` / `wairon show <id>` / `wairon agent brief <id>` | Inspect agents resolved from the spec tree; print one's live brief |
 | `wairon export [--out <file>]` | The whole design, resolved, as one JSON document ([format](docs/design-export.md)) |

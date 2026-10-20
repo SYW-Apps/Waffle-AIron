@@ -8,15 +8,15 @@
  *  - MISSING_PORTAL_TRANSPORT (error): a Portal declares its transport (the
  *    retired MISSING_PORTAL_TYPE, renamed with the reachability model).
  *  - UNEXPECTED_PORTAL_FIELD (error): non-Portal components carry no
- *    transport (the retired portalType reads as it) or basePath — both
+ *    transport (the retired portalType is a wairon 5 form) or basePath — both
  *    behaviors get a fire — and only an InProcess Portal carries an abi.
  *  - AUTH_ON_NON_PORTAL (warning): auth is inbound transport auth, only
  *    meaningful on a Portal; a gateway is a Portal with the gateway variant, so
  *    it carries the auth itself, never the Orchestrator it dispatches to.
- *  - MISSING_ENDPOINT (error): a Portal whose portalType maps to a transport
+ *  - MISSING_ENDPOINT (error): a Portal whose transport is a wire transport
  *    binds every interface method to a concrete endpoint.
  *  - ENDPOINT_TRANSPORT_MISMATCH (error): the endpoint's transport must match
- *    the Portal's portalType.
+ *    the Portal's transport.
  *  - ARCHITECTURE_VIOLATION_NON_PORTAL_ENDPOINT (error): only Portal
  *    components may carry endpoints on their interface methods.
  */
@@ -63,20 +63,6 @@ export default [
     },
   }),
   defineRuleFixture({
-    code: 'MISSING_PORTAL_TRANSPORT',
-    expectFire: false,
-    reason: 'A stored file still spelling the retired portalType HTTP_API is read as transport HTTP for one release, so it declares its transport.',
-    scenario:
-      'The patient booking portal was written before the reachability model and still declares portalType HTTP_API.',
-    tree: {
-      system: SYSTEM,
-      subsystems: [SCHEDULING_SUB],
-      components: [
-        { id: 'patient-booking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Patient-facing surface for booking visits.' },
-      ],
-    },
-  }),
-  defineRuleFixture({
     code: 'UNEXPECTED_PORTAL_FIELD',
     severity: 'error',
     anchoredTo: 'patient-booking-portal',
@@ -115,7 +101,7 @@ export default [
     anchoredTo: 'billing-export-orchestrator',
     expectFire: true,
     scenario:
-      'The billing export orchestrator carries a portalType although it is an Orchestrator, not a Portal.',
+      'The billing export orchestrator carries a transport although it is an Orchestrator, not a Portal.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for booked visits.' }],
@@ -123,7 +109,7 @@ export default [
         {
           id: 'billing-export-orchestrator',
           componentType: 'Orchestrator',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           description: 'Drives the nightly billing export run.',
         },
       ],
@@ -152,7 +138,7 @@ export default [
   defineRuleFixture({
     code: 'UNEXPECTED_PORTAL_FIELD',
     expectFire: false,
-    reason: 'The non-Portal component carries neither portalType nor basePath; the wire fields live on the Portal that exposes the surface.',
+    reason: 'The non-Portal component carries neither transport nor basePath; the wire fields live on the Portal that exposes the surface.',
     scenario:
       'The billing export orchestrator carries no wire fields, and the invoice API portal owns the basePath of the billing surface.',
     tree: {
@@ -160,7 +146,7 @@ export default [
       subsystems: [{ id: 'billing', description: 'Invoicing and payment collection for booked visits.' }],
       components: [
         { id: 'billing-export-orchestrator', componentType: 'Orchestrator', description: 'Drives the nightly billing export run.' },
-        { id: 'invoice-api-portal', componentType: 'Portal', portalType: 'HTTP_API', basePath: '/invoices', description: 'Inbound invoicing surface of the billing subsystem.' },
+        { id: 'invoice-api-portal', componentType: 'Portal', transport: 'HTTP', basePath: '/invoices', description: 'Inbound invoicing surface of the billing subsystem.' },
       ],
     },
   }),
@@ -182,7 +168,7 @@ export default [
         {
           id: 'partner-api-gateway',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           variant: 'gateway',
           description: 'Front door for partner requests, dispatching to the partner request orchestrator.',
           dependsOn: ['partner-request-orchestrator'],
@@ -209,7 +195,7 @@ export default [
         {
           id: 'partner-api-gateway',
           componentType: 'Portal',
-          portalType: 'Custom',
+          transport: 'Custom',
           variant: 'gateway',
           description: 'Front door for partner requests, dispatching to the partner request orchestrator.',
           dependsOn: ['partner-request-orchestrator'],
@@ -234,7 +220,7 @@ export default [
       system: SYSTEM,
       subsystems: [SCHEDULING_SUB],
       components: [
-        { id: 'patient-booking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Patient-facing surface for booking visits.' },
+        { id: 'patient-booking-portal', componentType: 'Portal', transport: 'HTTP', description: 'Patient-facing surface for booking visits.' },
       ],
       interfaces: [
         {
@@ -255,7 +241,7 @@ export default [
       system: SYSTEM,
       subsystems: [SCHEDULING_SUB],
       components: [
-        { id: 'patient-booking-portal', componentType: 'Portal', portalType: 'HTTP_API', description: 'Patient-facing surface for booking visits.' },
+        { id: 'patient-booking-portal', componentType: 'Portal', transport: 'HTTP', description: 'Patient-facing surface for booking visits.' },
       ],
       interfaces: [
         {
@@ -287,7 +273,7 @@ export default [
       system: SYSTEM,
       subsystems: [{ id: 'referrals', description: 'Inter-clinic referral exchange.' }],
       components: [
-        { id: 'referral-exchange-portal', componentType: 'Portal', portalType: 'gRPC', description: 'Inbound referral exchange surface.' },
+        { id: 'referral-exchange-portal', componentType: 'Portal', transport: 'gRPC', description: 'Inbound referral exchange surface.' },
       ],
       interfaces: [
         {
@@ -307,14 +293,14 @@ export default [
   defineRuleFixture({
     code: 'ENDPOINT_TRANSPORT_MISMATCH',
     expectFire: false,
-    reason: 'The endpoint\'s transport (gRPC) matches the Portal\'s portalType (gRPC).',
+    reason: 'The endpoint\'s transport (gRPC) matches the Portal\'s transport (gRPC).',
     scenario:
       'The gRPC referral exchange portal binds submitReferral to the ReferralExchange service\'s SubmitReferral rpc.',
     tree: {
       system: SYSTEM,
       subsystems: [{ id: 'referrals', description: 'Inter-clinic referral exchange.' }],
       components: [
-        { id: 'referral-exchange-portal', componentType: 'Portal', portalType: 'gRPC', description: 'Inbound referral exchange surface.' },
+        { id: 'referral-exchange-portal', componentType: 'Portal', transport: 'gRPC', description: 'Inbound referral exchange surface.' },
       ],
       interfaces: [
         {

@@ -397,12 +397,11 @@ describe('8 — implements, alias forms, dry runs, duplicated statuses', () => {
     expect(report.notices.some((n) => n.startsWith('EXTERNAL_NOT_EXPORTED: "geo::tile-library" is exported for consumers to call'))).toBe(true);
   });
 
-  it('an undeclared alias is EXTERNAL_UNDECLARED alone — never a DEPRECATED_REFERENCE_FORM "member path"', () => {
+  it('an undeclared alias is EXTERNAL_UNDECLARED', () => {
     const dir = project(tmp('undeclared'), 'studio', tileStudio());
     bind(dir);
     const issues = validateProject().issues;
     expect(issues.some((i) => i.code === 'EXTERNAL_UNDECLARED')).toBe(true);
-    expect(issues.filter((i) => i.code === 'DEPRECATED_REFERENCE_FORM')).toEqual([]);
   });
 
   it('`sdd_remove_external` dry run answers what the real run removes, marked as a dry run (platform R5: it read like an apply)', () => {

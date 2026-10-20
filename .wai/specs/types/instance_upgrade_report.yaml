@@ -1,0 +1,36 @@
+kind: value-object
+id: instance_upgrade_report
+name: InstanceUpgradeReport
+description: What bringing a hosting data directory to the running major at start came to.
+subsystem: sdd_host
+fields:
+  - name: fromMajor
+    type: int
+    description: The major the data directory was written by (5 when it carried no version).
+    optional: false
+  - name: toMajor
+    type: int
+    description: The running major.
+    optional: false
+  - name: backup
+    type: string
+    description: Where the data directory was copied before anything moved; absent when it was current.
+    optional: true
+  - name: permissions
+    type: MigrationReport
+    description: The permission-model step, when it ran.
+    optional: true
+  - name: trees
+    type: list<HostedTreeUpgrade>
+    description: Every hosted project tree an older major wrote, each upgraded.
+    optional: false
+  - name: members
+    type: MemberUpgradeReport
+    description: The member registration step, when it ran.
+    optional: true
+methods: []
+sourcePath: src/server/upgrade.ts
+previousIds:
+  - data_dir_upgrade_report
+createdAt: '2026-10-18T14:27:19.681Z'
+updatedAt: '2026-10-18T14:32:17.205Z'

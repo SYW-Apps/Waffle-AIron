@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -18,7 +19,7 @@ import {
   workspaceFor,
 } from '../../src/core/specs.js';
 import { renameComponent } from '../../src/core/provision.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { validateProject } from '../../src/core/validation.js';
 import { readYamlFile, writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, ImplementationSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -128,11 +129,11 @@ function books(): string {
   setProjectRoot(root);
   saveSystemSpec({
     schemaVersion: '1.0.0', name: 'books-sys', vision: 'v', boundaries: [], globalRequirements: [], databases: [],
-    publicInterfaces: [{ id: 'ledger-api', name: 'Ledger API', subsystem: 'books', component: 'ledger', interface: 'iledger', type: 'Custom', details: 'the ledger', audience: 'project' }],
+    publicInterfaces: [{ as: 'ledger-api', name: 'Ledger API', from: 'books', component: 'ledger', interface: 'iledger', details: 'the ledger', audience: 'project' }],
     createdAt: now, updatedAt: now,
   });
   saveSpec('subsystem', sub('books', {
-    publicInterfaces: [{ type: 'Custom', details: 'the ledger', component: 'ledger', interface: 'iledger' }],
+    publicInterfaces: [{ details: 'the ledger', component: 'ledger', interface: 'iledger' }],
     lifecycle: [{ phase: 'init', component: 'ledger', method: 'open' }],
   }));
   saveComponentSpec(comp('books_repo', 'books', 'Repository', { owns: ['ledger'] }));
@@ -143,7 +144,7 @@ function books(): string {
     post: [{ type: 'call', targetComponent: 'ledger', targetMethod: 'open' }],
   }));
   saveComponentSpec(comp('books_portal', 'books', 'Portal', {
-    portalType: 'Custom', dependsOn: ['ledger', 'books_orch'],
+    transport: 'Custom', dependsOn: ['ledger', 'books_orch'],
     dispatch: [{ capability: 'ledger.open', component: 'ledger', method: 'open' }],
   }));
   saveComponentSpec(comp('books_orch', 'books', 'Orchestrator', { dependsOn: ['ledger'] }));
@@ -155,7 +156,7 @@ function books(): string {
       { type: 'register', targetComponent: 'ledger', targetMethod: 'open' },
     ],
   }));
-  saveComponentSpec(comp('vault_portal', 'books', 'Portal', { portalType: 'Custom', auth: { scheme: 'bearer' } }));
+  saveComponentSpec(comp('vault_portal', 'books', 'Portal', { transport: 'Custom', auth: { scheme: 'bearer' } }));
   saveInterfaceSpec(intf('ivault_portal', 'vault_portal', ['unlock']));
   saveComponentSpec(comp('books_adapter', 'books', 'Adapter', { dependsOn: ['ledger', 'vault_portal'] }));
   saveInterfaceSpec(intf('iarchive', 'books_adapter', ['keep']));
@@ -167,7 +168,7 @@ function books(): string {
     fields: [{ name: 'id', type: 'string', optional: false }], methods: [], createdAt: now, updatedAt: now,
   });
 
-  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeMemberProject(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
   ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
@@ -285,7 +286,7 @@ describe('renameComponent', () => {
     expect(after).toEqual(before);
   });
 
-  it('follows a renamed portal into every listener mount that names it, and the mounts still resolve', () => {
+  v5it('follows a renamed portal into every listener mount that names it, and the mounts still resolve', () => {
     // A listener's mount names the portal it serves; left behind by a rename it
     // would route requests to nothing (MOUNT_TARGET_NOT_PORTAL).
     root = projectRoot('rename-mount-');
@@ -300,13 +301,13 @@ describe('renameComponent', () => {
       spec.methods[0].endpoint = { transport: 'HTTP', method: 'GET', path: routePath };
       return spec;
     };
-    saveComponentSpec(comp('catalog_portal', 'books', 'Portal', { portalType: 'HTTP_API' }));
+    saveComponentSpec(comp('catalog_portal', 'books', 'Portal', { transport: 'HTTP' }));
     saveInterfaceSpec(httpIntf('icatalog_portal', 'catalog_portal', 'listBooks', '/catalog/books'));
-    saveComponentSpec(comp('loans_portal', 'books', 'Portal', { portalType: 'HTTP_API' }));
+    saveComponentSpec(comp('loans_portal', 'books', 'Portal', { transport: 'HTTP' }));
     saveInterfaceSpec(httpIntf('iloans_portal', 'loans_portal', 'listLoans', '/loans'));
     for (const listener of ['public_listener', 'staff_listener']) {
       saveComponentSpec(comp(listener, 'books', 'Portal', {
-        portalType: 'HTTP_API',
+        transport: 'HTTP',
         mounts: [
           { portal: 'catalog_portal', prefixes: ['/catalog'], via: 'handleCatalogRequest' },
           { portal: 'loans_portal', prefixes: ['/loans'] },

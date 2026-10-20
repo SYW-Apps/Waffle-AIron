@@ -4,10 +4,9 @@ name: ProjectBinding
 description: >-
   The resolved binding of one authorized data-plane request: the hosted project record it binds and
   that record's root. Since stage 7 a member is bound as its own record, so projectId is always the
-  project the request acts on — permissions (resolved over the record's chain), audit, approval and
+  project the request acts on - permissions (resolved over the record's chain), audit, approval and
   record-level tools all anchor there. A narrowing entry naming a project covers its members. A
-  member-qualified selector or narrowing ('platform::billing') still resolves for one release, to
-  the member's record, and is recorded in via.
+  member-qualified selector or narrowing ('platform::billing') names no record and binds nothing.
 subsystem: sdd_host
 fields:
   - name: rootPath
@@ -28,13 +27,7 @@ fields:
       The family root record of the bound project (itself for a family root): whose repository the
       project commits through and whose family the request's reach is resolved over.
     optional: false
-  - name: via
-    type: string
-    description: >-
-      The deprecated member-qualified selector or narrowing entry that resolved to this record, kept
-      for one release; recorded in audit as the initiating composition (its first segment).
-    optional: true
 methods: []
 sourcePath: src/server/projects.ts
 createdAt: '2026-07-24T20:50:13.159Z'
-updatedAt: '2026-10-01T16:55:34.494Z'
+updatedAt: '2026-10-19T06:10:45.516Z'

@@ -102,8 +102,8 @@ describe('pack add <file.wpack>', () => {
   });
 });
 
-describe('packs (deprecated alias)', () => {
-  it('still works: `wairon packs list` warns + delegates to the same list handler', () => {
+describe('packs (removed alias)', () => {
+  it('`wairon packs` is no longer a command: it is refused as unknown and `wairon pack` is the one spelling', () => {
     const tsxCli = path.join(REPO_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
     const cwd = mkTmp('wairon-alias-cwd-');
     const packsDir = mkTmp('wairon-alias-packs-');
@@ -115,11 +115,8 @@ describe('packs (deprecated alias)', () => {
     );
 
     const combined = `${res.stdout ?? ''}${res.stderr ?? ''}`;
-    expect(res.status).toBe(0);
-    // Delegated to listPacks (its header) ...
-    expect(combined).toContain('Extension packs');
-    // ... and surfaced the one-line deprecation notice pointing at `wairon pack`.
-    expect(combined.toLowerCase()).toContain('deprecated');
-    expect(combined).toContain('wairon pack list');
+    expect(res.status).not.toBe(0);
+    expect(combined).toMatch(/unknown command/i);
+    expect(combined).not.toContain('Extension packs');
   }, 60000);
 });

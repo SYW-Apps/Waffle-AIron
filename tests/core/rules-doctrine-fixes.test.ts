@@ -180,8 +180,8 @@ describe('pattern-containment: a RouterComponent owns exactly one Portal', () =>
     const proj = createTempProject();
     proj.subsystem('pharmacy-web-ui', 'profile: frontend-reactive');
     proj.component('pharmacy-shell-router', 'pharmacy-web-ui', 'RouterComponent', `owns: [${owns}]`);
-    proj.component('patient-shell-portal', 'pharmacy-web-ui', 'Portal', 'portalType: Custom');
-    proj.component('staff-shell-portal', 'pharmacy-web-ui', 'Portal', 'portalType: Custom');
+    proj.component('patient-shell-portal', 'pharmacy-web-ui', 'Portal', 'transport: Custom');
+    proj.component('staff-shell-portal', 'pharmacy-web-ui', 'Portal', 'transport: Custom');
     proj.component('refill-request-view', 'pharmacy-web-ui', 'View');
     return byCode(proj.validate(), 'ROUTER_COMPONENT_CONTAINMENT');
   };
@@ -225,7 +225,7 @@ describe('portal-write-shortcut: PORTAL_WRITE_SHORTCUT judges dispatch-table rou
     const proj = createTempProject();
     proj.subsystem('scheduling');
     proj.component('booking-portal', 'scheduling', 'Portal', [
-      'portalType: Custom',
+      'transport: Custom',
       'dependsOn: [appointment-repository, booking-orchestrator]',
       'dispatch:',
       '  - capability: appointment.book',
@@ -275,7 +275,7 @@ describe('subsystem-boundary-dependencies: CROSS_SUBSYSTEM_TARGET_NON_PORTAL nam
   function billingPublishesItsOrchestrator(crosser: { id: string; type: string }) {
     const proj = createTempProject();
     proj.subsystem('front', 'trustedLinks:\n  - subsystem: billing\n    reason: in-process modular monolith - no network seam wanted between these two');
-    proj.subsystem('billing', 'publicInterfaces:\n  - type: REST\n    details: /api/billing\n    component: billing-orchestrator');
+    proj.subsystem('billing', 'publicInterfaces:\n  - details: /api/billing\n    component: billing-orchestrator');
     proj.component('billing-orchestrator', 'billing', 'Orchestrator');
     proj.component(crosser.id, 'front', crosser.type, 'dependsOn: [billing-orchestrator]');
     return byCode(proj.validate(), 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL');

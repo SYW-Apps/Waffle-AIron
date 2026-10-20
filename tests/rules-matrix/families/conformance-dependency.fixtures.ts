@@ -279,7 +279,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing for placed orders.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
+          publicInterfaces: [{ details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
         },
       ],
       components: [
@@ -292,7 +292,7 @@ export default [
         {
           id: 'billing-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'billing',
           description: 'Billing\'s published invoicing API.',
         },
@@ -392,7 +392,7 @@ export default [
         {
           id: 'billing',
           description: 'Invoicing for placed orders.',
-          publicInterfaces: [{ type: 'REST', details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
+          publicInterfaces: [{ details: 'Invoicing REST API for sibling subsystems.', component: 'billing-portal' }],
         },
       ],
       components: [
@@ -406,7 +406,7 @@ export default [
         {
           id: 'billing-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'billing',
           description: 'Billing\'s published invoicing API.',
         },
@@ -737,7 +737,7 @@ export default [
         {
           id: 'storefront-api-portal',
           componentType: 'Portal',
-          portalType: 'HTTP_API',
+          transport: 'HTTP',
           subsystem: 'storefront-web',
           description: 'The storefront\'s public REST API surface.',
           dependsOn: ['http-server-supervisor'],

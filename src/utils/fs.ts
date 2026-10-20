@@ -346,6 +346,11 @@ let projectRootOverride: string | null = null;
 // must not learn what the parent contains that way.
 interface RequestScope {
   root: string;
+  /**
+   * The v5 reading is bound (see runInV5Reading): the one binding under which
+   * the core reads the forms wairon 5 wrote. A nested rebinding keeps it.
+   */
+  v5Reading?: true;
   topRoot?: string;
   parentReach?: boolean;
   /**
@@ -446,6 +451,26 @@ export function runWithProjectRoot<T>(dir: string, fn: () => T): T {
   return requestRootStore.run({ ...requestRootStore.getStore(), root: path.resolve(dir) }, fn);
 }
 
+/**
+ * v5_reading.run — run `fn` in the v5 reading: the one binding under which the
+ * core reads the forms wairon 5 wrote (a legacy L1 mount, the deprecated
+ * reference forms, a member's long-form `path`, the retired reach forms and
+ * stereotypes, the older lock formats, a `.wairon` folder). `wairon upgrade`
+ * binds it around its rehearsal and nothing else ever does: anywhere else such
+ * a form is refused, naming what replaces it. It is a fresh binding, so the
+ * spec index re-reads the tree under it, and a nested runWithProjectRoot keeps
+ * it. The root stays the one already bound.
+ */
+export function runInV5Reading<T>(fn: () => T): T {
+  // Outside any binding the scope carries no root (''), so getProjectRoot keeps answering from the override and the cwd.
+  return requestRootStore.run({ ...(requestRootStore.getStore() ?? { root: '' }), v5Reading: true }, fn);
+}
+
+/** v5_reading.reads — whether the v5 reading is bound: true only inside runInV5Reading. */
+export function readsV5Forms(): boolean {
+  return requestRootStore.getStore()?.v5Reading === true;
+}
+
 /** Bind a hosted request's root together with its reach (see RequestScope). */
 export function runWithProjectBinding<T>(
   dir: string,
@@ -455,6 +480,8 @@ export function runWithProjectBinding<T>(
   return requestRootStore.run(
     {
       root: path.resolve(dir), topRoot: path.resolve(reach.topRoot), parentReach: reach.parentReach,
+      // A nested binding keeps the v5 reading (a rehearsal inside the upgrade), as runWithProjectRoot does.
+      ...(requestRootStore.getStore()?.v5Reading ? { v5Reading: true as const } : {}),
       ...(reach.narrowed ? { narrowed: true } : {}),
       ...(reach.unwritableRoots ? { unwritableRoots: reach.unwritableRoots.map((r) => path.resolve(r)) } : {}),
       ...(reach.hostedLookup ? { hostedLookup: reach.hostedLookup } : {}),
@@ -483,7 +510,7 @@ export function runWithHostedLookup<T>(lookup: HostedRecordLookup, fn: () => T):
 
 /** The request-scoped root if one is bound, else null. */
 export function getRequestProjectRoot(): string | null {
-  return requestRootStore.getStore()?.root ?? null;
+  return requestRootStore.getStore()?.root || null;
 }
 
 /** The current hosted request's reach, or null outside a hosted request binding. */
@@ -534,7 +561,10 @@ export interface ProjectBinding {
   repositoryRoot?: string;
 }
 
-/** Whether a folder holds a wairon project's L0 (`.wai/specs/.index.yaml`, or the legacy `system.yaml`; `.wairon` for old installs). */
+/**
+ * Whether a folder holds a wairon project's L0 (`.wai/specs/.index.yaml`, or the legacy `system.yaml`; `.wairon` for old installs).
+ * The `.wairon` look is DISCOVERY only: it lets the standing guard find a wairon 5 tree to refuse it and send its owner to `wairon upgrade`.
+ */
 function holdsSystemSpec(dir: string): boolean {
   for (const base of ['.wai', '.wairon']) {
     const specs = path.join(dir, base, 'specs');
@@ -686,8 +716,19 @@ export function aiDir(...segments: string[]): string {
  * `aiDir` so the `.wai` / legacy `.wairon` choice is made in exactly one place.
  */
 export function aiDirAt(root: string, ...segments: string[]): string {
+  return path.join(legacyFolderAt(root) ?? path.join(root, '.wai'), ...segments);
+}
+
+/**
+ * The `.wairon` folder wairon 5 kept a project in, when this root holds it and
+ * no `.wai` — and only in the v5 reading, the one binding under which the core
+ * reads a wairon 5 form. Anywhere else a `.wairon` folder is not read as a
+ * project's; the standing guards still find it (holdsSystemSpec) to send its
+ * owner to `wairon upgrade`. Null otherwise.
+ */
+export function legacyFolderAt(root: string): string | null {
+  if (!readsV5Forms()) return null;
   const waiPath = path.join(root, '.wai');
   const waironPath = path.join(root, '.wairon');
-  const base = !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : waiPath;
-  return path.join(base, ...segments);
+  return !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : null;
 }

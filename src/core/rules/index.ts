@@ -18,6 +18,7 @@ import {
   isProvidedBy,
   sameContract,
   typeMatchesRef,
+  resolveTypeRef as resolveTypeRefOver,
   isOwnComponentEntry,
   nameKey,
   type AuthoredReference,
@@ -25,8 +26,10 @@ import {
   type ReferenceResolution,
 } from '../../models/index.js';
 import type { ResolvedExportTable } from '../../models/exports.js';
+import type { TypeRefResolution } from '../../models/type-references.js';
 import { createHash } from 'crypto';
 import { canonicalize } from '../../utils/canonical-json.js';
+import { readsV5Forms } from '../../utils/fs.js';
 import type { ValidationIssue } from '../validation.js';
 import { emptyExtensions, LoadedExtensions } from '../extensions.js';
 import type { VariantDef } from '../variants.js';
@@ -513,20 +516,24 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     .filter((r) => r.position === 'type' && r.binding !== 'local' && memberOf(r.specId) === undefined)
     .map((r) => r.authored));
 
-  const isTypeResolved = (ref: string, generics: Set<string>): boolean => {
+  /** rule_context.resolveTypeRef — the referrer's subsystem first, over the bound project's own types. */
+  const resolveTypeRef = (ref: string, from?: string): TypeRefResolution => resolveTypeRefOver(ref, from, types);
+
+  const isTypeResolved = (ref: string, generics: Set<string>, from?: string): boolean => {
     const refLower = ref.toLowerCase();
     if (isTypeVocabulary(refLower)) return true;
     if (generics.has(refLower)) return true;
     // Local first: the bound project's own types, compared by nameKey per segment.
-    if (ownTypes.some(spec => typeMatchesRef(spec, ref))) return true;
+    // An ambiguous match counts as resolved here: the type-ref-scope rule reports it once.
+    if (resolveTypeRefOver(ref, from, ownTypes).outcome !== 'none') return true;
     const [first, ...rest] = ref.split(/::|\./);
     if (!rest.length) {
       // A bare name through the imports; any outcome but none is
       // project-boundaries' single finding (or no finding at all).
       return importOf(ref, 'type').outcome !== 'none';
     }
-    // The project's own id used as a prefix is its own name (a deprecated form).
-    if (ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
+    // The project's own id used as a prefix is its own name (a wairon 5 form, read only in the v5 reading).
+    if (readsV5Forms() && ownerId && nameKey(first) === nameKey(ownerId)) return ownTypes.some((spec) => typeMatchesRef(spec, rest.join('::')));
     // A `::` reference the scan recorded as leaving the project is project-boundaries' to judge.
     if (ref.includes('::') && authoredTypeRefs.has(ref)) return true;
     // The dotted form names a subsystem's type: a first segment that is an
@@ -643,7 +650,12 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (foreign.kind === 'ambiguous') {
           return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
         }
-        if (r.form === 'leading' || r.form === 'super') return unavailable(`the deprecated form "${r.authored}" names no alias of this project, so there is nothing to judge it against — run \`wairon doctor --fix\``);
+        if (r.form === 'leading' || r.form === 'super' || r.form === 'path') {
+          return {
+            ...base, outcome: 'forbidden', canonicalTarget: r.authored,
+            reason: `"${r.authored}" is a wairon 5 reference form (a leading \`::\`, \`super::\` or member path); wairon 6 reads \`local_id\` and \`alias::name\` — \`wairon upgrade\` rewrites a tree wairon 5 wrote`,
+          };
+        }
         return {
           ...base, outcome: 'forbidden', canonicalTarget: r.authored,
           reason: `the first segment of "${r.authored}" is none of this project's subsystems, aliases or foreign providers`,
@@ -687,7 +699,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
         if (foreign.kind === 'ambiguous') {
           return { ...base, outcome: 'ambiguous', canonicalTarget: r.authored, reason: `the foreign snapshots of ${foreign.providers.map((p) => `"${p}"`).join(', ')} expose "${r.authored}" with different contracts` };
         }
-        return unavailable(`the deprecated form "${r.authored}" reaches above this project, and no alias of it names its target — run \`wairon doctor --fix\``);
+        return unavailable(`the deprecated form "${r.authored}" reaches above this project, and no alias of it names its target — run \`wairon upgrade\``);
       }
       default:
         return null;
@@ -1029,6 +1041,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     isImplementationDraft,
     getComponentProfile,
     isTypeResolved,
+    resolveTypeRef,
     aliasSpelling,
     targetLanguageFor,
     isSpecInScope,
@@ -1049,7 +1062,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     documentationConfigFor,
     namingConfigFor,
     isBuiltinType,
-    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [], deprecations: extensions.deprecations ?? [] },
+    ext: { profiles: extensions.profiles, languages: extensions.languages, patterns: extensions.patterns, guarantees: extensions.guarantees, technologyPackages: extensions.technologyPackages ?? {}, assertions: extensions.assertions, packSelections: opts.packSelections ?? [], selectionFailures: extensions.selectionFailures ?? [], packRequirements: opts.packRequirements ?? [] },
     variants: opts.variants ?? [],
     surfaceSnapshots,
     ...(opts.projectIdentity ? { projectIdentity: opts.projectIdentity } : {}),

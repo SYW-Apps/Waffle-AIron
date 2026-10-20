@@ -1,0 +1,26 @@
+id: instance_version_store_impl
+name: Data Dir Version Store Implementation
+description: 'src/server/upgrade.ts: version.json in the data directory, `{ "major": n }`.'
+contract: iinstance_version_store
+sourcePath: src/server/upgrade.ts
+injectedParams:
+  - dataDir
+methods:
+  - name: read
+    narrative: []
+    detail: intent
+    intent: >-
+      Read version.json and answer its integer major. No file answers nothing; a file that does not
+      parse, or whose major is not an integer, refuses with its path, so a start never guesses which
+      major wrote the data.
+    symbol: readVersion
+  - name: write
+    narrative: []
+    detail: intent
+    intent: 'Write `{ "major": n }` to a temporary file beside it and rename it over version.json.'
+    symbol: writeVersion
+previousIds:
+  - data_dir_version_store_impl
+status: draft
+createdAt: '2026-10-18T14:27:46.095Z'
+updatedAt: '2026-10-18T16:16:37.894Z'

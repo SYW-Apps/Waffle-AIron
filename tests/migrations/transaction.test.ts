@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -402,7 +403,7 @@ describe('stage 6 — the crash journal', () => {
 });
 
 describe('stage 6 — a crash mid-swap during a chaining migration', () => {
-  it('property: nothing is half-migrated — a crash at every swap operation is rolled back to byte-identical, and the migration then applies whole', () => {
+  v5it('property: nothing is half-migrated — a crash at every swap operation is rolled back to byte-identical, and the migration then applies whole', () => {
     const plannedOn = (f: ReferenceFamily): MigrationPlan => {
       invalidateSpecCache();
       setProjectRoot(f.top);

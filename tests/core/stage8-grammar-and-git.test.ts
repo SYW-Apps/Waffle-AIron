@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -64,7 +65,7 @@ describe('the one location grammar (member_declaration.source)', () => {
     expect(parseMemberSource('hosted:').problem).toMatch(/names no hosted record/);
   });
 
-  it('reads the long form — source, as, ref, dir — and the deprecated `path` for one release, flagged', () => {
+  v5it('reads the long form — source, as, ref, dir — and the deprecated `path` in the v5 reading, flagged', () => {
     const members = declaredMembers(config({
       members: {
         scheduling: 'services/scheduling',
@@ -84,7 +85,7 @@ describe('the one location grammar (member_declaration.source)', () => {
     ]);
   });
 
-  it('records each declaration problem rather than dropping the entry', () => {
+  v5it('records each declaration problem rather than dropping the entry', () => {
     const problems = declaredMembers(config({
       members: {
         both: { source: 'a', path: 'a' },
@@ -133,7 +134,7 @@ describe('a part\'s configuration: partOf, isPart, setPartOf, updateMember', () 
     expect(fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8')).toBe(before);
   });
 
-  it('updateMember rewrites the deprecated `path` to `source` — the shorthand when nothing else remains — and writes nothing twice', () => {
+  v5it('updateMember rewrites the deprecated `path` to `source` — the shorthand when nothing else remains — and writes nothing twice', () => {
     const root = project({ members: { ledger: { path: 'services/ledger' }, billing: { path: 'services/billing', description: 'Invoices' } } });
     const repo = projectConfigRepositoryAt(root);
     expect(repo.updateMember('ledger', {})).toBe(true);

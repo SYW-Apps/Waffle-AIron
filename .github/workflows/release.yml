@@ -212,8 +212,6 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/publish-npm.yml
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # POST-PUBLISH VERIFY: install the just-published @wairon/cli from the public
   # registry in a clean node container (no repo checkout, no npm cache from the
@@ -299,5 +297,3 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/publish-sdk.yml
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -96,7 +96,7 @@ describe('auth specialist (sdd_host)', () => {
     upsertUser(dataDir, {
       id: 'u-gone',
       subject: ownerSubject,
-      status: 'suspended',
+      status: 'inactive',
       roleBindings: [],
       createdAt: new Date().toISOString(),
     });
@@ -284,7 +284,7 @@ describe('auth specialist (sdd_host)', () => {
     upsertUser(dataDir, {
       id: 'u-web',
       subject: SESSION_SUBJECT,
-      status: 'deactivated',
+      status: 'inactive',
       roleBindings: [],
       createdAt: new Date().toISOString(),
     });
@@ -337,7 +337,7 @@ describe('auth specialist (sdd_host)', () => {
     expect(authenticate(dataDir, before).authenticated).toBe(true);
 
     // Suspend through the real admin flow, addressed by the RECORD id.
-    identity.setUserStatus(cfg, MASTER, 'rec-div-1', 'suspended');
+    identity.setUserStatus(cfg, MASTER, 'rec-div-1', 'inactive');
     // The sweep revoked the pre-existing credential (it sweeps both ids) …
     expect(findByTokenHash(dataDir, hashToken(before))?.revokedAt).toBeTruthy();
     expect(authenticate(dataDir, before).authenticated).toBe(false);

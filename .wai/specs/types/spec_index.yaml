@@ -58,6 +58,14 @@ fields:
       kinds, Custom portals binding no endpoint), kept on the index like typeSpellings so the
       reachability migration reads exactly what was loaded.
     optional: false
+  - name: duplicates
+    type: map<string, string>
+    description: >-
+      The second halves of duplicate type ids, keyed by `subsystem::id`, each to its absolute file
+      path: a second TYPE whose subsystem differs from the kept one's. They stay out of every model
+      list (no lint, no resolution, since the tree still has no single reading) and are reached by
+      their qualified id
+    optional: false
 methods:
   - name: retiredBy
     signature: 'retiredBy(kind: string, id: string): string?'
@@ -135,4 +143,4 @@ methods:
     symbol: specIndexMethodReferences
 sourcePath: src/core/specs.ts
 createdAt: '2026-09-25T21:05:18.930Z'
-updatedAt: '2026-10-09T00:25:15.832Z'
+updatedAt: '2026-10-19T19:47:15.251Z'

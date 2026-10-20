@@ -83,14 +83,6 @@ methods:
     endpoint:
       transport: CLI
       command: wairon pack <action>
-  - name: packs
-    description: >-
-      `wairon packs <action>`: the deprecated alias of `wairon pack` (add | list | remove); the
-      portal prints the deprecation notice before dispatching.
-    signatureFrom: cli_runner.runPacks
-    endpoint:
-      transport: CLI
-      command: wairon packs <action>
   - name: patternsList
     description: '`wairon patterns list`: the pattern definitions loaded packs declare.'
     signatureFrom: cli_runner.runPatterns
@@ -243,12 +235,6 @@ methods:
     endpoint:
       transport: CLI
       command: wairon host unit <action>
-  - name: hostDoctor
-    description: '`wairon host doctor`: check, and with --fix migrate, a hosting data directory.'
-    signatureFrom: cli_runner.runHostDoctor
-    endpoint:
-      transport: CLI
-      command: wairon host doctor
   - name: hostPermission
     description: '`wairon host permission <action>`: set, list or remove a permission assignment.'
     signatureFrom: cli_runner.runHostPermission
@@ -478,6 +464,18 @@ methods:
     endpoint:
       transport: CLI
       command: wairon method rename <component> <method> <new-name>
+  - name: upgrade
+    description: '`wairon upgrade [--report] [--yes]`: bring the family to the running major.'
+    signatureFrom: cli_runner.runUpgrade
+    endpoint:
+      transport: CLI
+      command: wairon upgrade
+  - name: whatsnew
+    description: '`wairon whatsnew [version]`: the curated release notes of a version.'
+    signatureFrom: cli_runner.runWhatsNew
+    endpoint:
+      transport: CLI
+      command: wairon whatsnew [version]
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-07T18:41:51.221Z'
+updatedAt: '2026-10-18T19:04:11.135Z'

@@ -26,8 +26,8 @@ import type { PublicInterface, SubsystemSpec } from '../../src/models/specs.js';
 const now = new Date().toISOString();
 let roots: string[] = [];
 
-const restA: PublicInterface = { type: 'REST', details: '/a' };
-const busB: PublicInterface = { type: 'MessageBus', details: 'orders.created' };
+const restA: PublicInterface = { details: '/a' };
+const busB: PublicInterface = { details: 'orders.created' };
 
 function project(publicInterfaces: PublicInterface[]): void {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-pi-identity-'));
@@ -58,32 +58,32 @@ afterEach(() => {
   invalidateSpecCache();
 });
 
-describe('publicInterfaces merge — an unbound entry is its type and details', () => {
+describe('publicInterfaces merge — an unbound entry is its details', () => {
   it('keeps every unbound entry when a delta names a third one', () => {
     project([restA, busB]);
-    const report = updateSpec('subsystem', 'shop', { publicInterfaces: [{ type: 'GraphQL', details: '/graphql' }] });
-    expect(stored()).toEqual([restA, busB, { type: 'GraphQL', details: '/graphql' }]);
+    const report = updateSpec('subsystem', 'shop', { publicInterfaces: [{ details: '/graphql' }] });
+    expect(stored()).toEqual([restA, busB, { details: '/graphql' }]);
     // The change report names the new entry by what it says, not by an index.
-    expect(report.changes).toEqual([expect.objectContaining({ path: 'publicInterfaces.GraphQL /graphql', change: 'added' })]);
+    expect(report.changes).toEqual([expect.objectContaining({ path: 'publicInterfaces./graphql', change: 'added' })]);
   });
 
   it('removes exactly the unbound entry a delete marker names', () => {
     project([restA, busB]);
     // The SECOND entry: keyed by component + interface, the marker hit whichever came first.
-    updateSpec('subsystem', 'shop', { publicInterfaces: [{ type: 'MessageBus', details: 'orders.created', action: 'delete' }] });
+    updateSpec('subsystem', 'shop', { publicInterfaces: [{ details: 'orders.created', action: 'delete' }] });
     expect(stored()).toEqual([restA]);
   });
 
   it('refuses a delete marker that names no stored entry', () => {
     project([restA, busB]);
-    expect(() => updateSpec('subsystem', 'shop', { publicInterfaces: [{ type: 'REST', details: '/zzz', action: 'delete' }] }))
+    expect(() => updateSpec('subsystem', 'shop', { publicInterfaces: [{ details: '/zzz', action: 'delete' }] }))
       .toThrow(/nothing with that identity exists/);
   });
 
   it('still keys a bound entry by its component and interface', () => {
-    project([{ type: 'REST', details: '/old', component: 'portal' }, restA]);
-    updateSpec('subsystem', 'shop', { publicInterfaces: [{ type: 'REST', details: '/new', component: 'portal' }] });
-    expect(stored()).toEqual([{ type: 'REST', details: '/new', component: 'portal' }, restA]);
+    project([{ details: '/old', component: 'portal' }, restA]);
+    updateSpec('subsystem', 'shop', { publicInterfaces: [{ details: '/new', component: 'portal' }] });
+    expect(stored()).toEqual([{ details: '/new', component: 'portal' }, restA]);
   });
 
   it('binding an unbound entry is a new identity: the delta adds it, and the unbound one stays until deleted', () => {

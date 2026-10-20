@@ -68,20 +68,20 @@ function buildTwoPortals(root: string): void {
       boundaries: [],
       globalRequirements: [],
       publicInterfaces: [
-        { id: 'public-api', name: 'Public API', subsystem: 'core-sub', component: 'public-portal', type: 'REST', details: 'public', audience: 'external' },
-        { id: 'internal-api', name: 'Internal API', subsystem: 'core-sub', component: 'internal-portal', type: 'REST', details: 'peer-to-peer', audience: 'external' },
+        { as: 'public-api', name: 'Public API', from: 'core-sub', component: 'public-portal', details: 'public', audience: 'external' },
+        { as: 'internal-api', name: 'Internal API', from: 'core-sub', component: 'internal-portal', details: 'peer-to-peer', audience: 'external' },
       ],
       createdAt: now,
       updatedAt: now,
     });
     saveSpec('subsystem', subsystem('core-sub', {
       publicInterfaces: [
-        { type: 'REST', details: 'public', component: 'public-portal' },
-        { type: 'REST', details: 'peer-to-peer', component: 'internal-portal' },
+        { details: 'public', component: 'public-portal' },
+        { details: 'peer-to-peer', component: 'internal-portal' },
       ],
     }));
-    saveComponentSpec(component('public-portal', 'core-sub', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>));
-    saveComponentSpec(component('internal-portal', 'core-sub', { componentType: 'Portal', portalType: 'HTTP_API' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('public-portal', 'core-sub', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('internal-portal', 'core-sub', { componentType: 'Portal', transport: 'HTTP' } as Partial<ComponentSpec>));
     saveInterfaceSpec(iface('ipublic-portal', 'public-portal', [
       {
         name: 'getThing', description: 'reads a thing', signature: 'getThing(): string', returns: 'string',
@@ -187,6 +187,9 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     { portalId: 'internal-portal', name: 'Internal API', document: '{"openapi":"3.1.0","paths":{"/sync":{}}}' },
   ];
 
+  /** One captured portal: the shape a single-portal share holds. */
+  const ONE_SPEC = [{ portalId: 'solo-portal', name: 'Solo API', document: '{"openapi":"3.1.0","info":{"title":"Solo"}}' }];
+
   // ── capture ───────────────────────────────────────────────────────────────
 
   it('captures EVERY per-portal document — never one merged doc, never an empty placeholder', () => {
@@ -212,7 +215,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   it('a project with no requested openapi artifact captures neither field', () => {
     const snapshot = captureSnapshot(dataDir, principal(), 'billing', 'architecture', ['canvas']);
     expect(snapshot.openapiSet).toBeUndefined();
-    expect(snapshot.openapi).toBeUndefined();
+    expect('openapi' in snapshot).toBe(false);
   });
 
   // ── serving (share access orchestrator) ───────────────────────────────────
@@ -253,7 +256,7 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   });
 
   it('exactly one captured spec is served directly (no index ceremony)', () => {
-    seedLink('SECRET-TOKEN', { openapiSet: [TWO_SPECS[0]], openapi: TWO_SPECS[0].document });
+    seedLink('SECRET-TOKEN', { openapiSet: [TWO_SPECS[0]] });
     const result = downloadArtifact(cfg, 'SECRET-TOKEN', 'openapi', META);
     expect(result.content).toBe(TWO_SPECS[0].document);
   });
@@ -265,14 +268,11 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
     expect(result.content).toBeUndefined();
   });
 
-  it('BACK-COMPAT: a snapshot captured before per-portal capture still serves its one document', () => {
-    // Exactly the pre-change on-disk shape: `openapi` only, no openapiSet.
-    seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' });
+  it('a snapshot holding only the retired single document serves nothing (the start upgrade drops that capture)', () => {
+    // The pre-per-portal on-disk shape: `openapi` only, no openapiSet. The type no longer has the field.
+    seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' } as never);
 
-    const result = downloadArtifact(cfg, 'OLD-TOKEN', 'openapi', META);
-    expect(result).toMatchObject({ found: true, outcome: 'served' });
-    expect(JSON.parse(result.content!).info.title).toBe('Legacy');
-    // It names no portal, so it can only answer an unqualified request.
+    expect(downloadArtifact(cfg, 'OLD-TOKEN', 'openapi', META)).toMatchObject({ found: false, outcome: 'not-found' });
     expect(downloadArtifact(cfg, 'OLD-TOKEN', 'openapi', META, 'public-portal')).toMatchObject({
       found: false,
       outcome: 'not-found',
@@ -321,13 +321,13 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   });
 
   it('a single-spec share opens directly in Swagger UI, exactly as before', () => {
-    seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' });
+    seedLink('ONE-TOKEN', { openapiSet: ONE_SPEC });
     const { res, out } = mockRes();
-    handleShareRequest(cfg, mockReq('/share/OLD-TOKEN/openapi'), res);
+    handleShareRequest(cfg, mockReq('/share/ONE-TOKEN/openapi'), res);
 
     expect(out.statusCode).toBe(200);
     expect(out.body).toContain('SwaggerUIBundle');
-    expect(out.body).toContain('Legacy');
+    expect(out.body).toContain('Solo');
   });
 
   it('a selected download carries the portal id in its filename so downloads never collide', () => {
@@ -348,11 +348,11 @@ describe('multi-portal OpenAPI across the hosted share + artifact path (sdd_host
   });
 
   it('a single-document download keeps its original attachment name', () => {
-    seedLink('OLD-TOKEN', { openapi: '{"openapi":"3.1.0","info":{"title":"Legacy"}}' });
+    seedLink('ONE-TOKEN', { openapiSet: ONE_SPEC });
     const { res, out } = mockRes();
-    handleShareRequest(cfg, mockReq('/share/OLD-TOKEN/download/openapi'), res);
+    handleShareRequest(cfg, mockReq('/share/ONE-TOKEN/download/openapi'), res);
     expect(out.headers['content-disposition']).toBe('attachment; filename="shared-canvas.openapi.json"');
-    expect(JSON.parse(out.body).info.title).toBe('Legacy');
+    expect(JSON.parse(out.body).info.title).toBe('Solo');
   });
 
   // ── the landscape surface artifact ────────────────────────────────────────

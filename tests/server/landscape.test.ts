@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
@@ -234,7 +235,7 @@ describe('landscape orchestrator (sdd_host)', () => {
     expect(snap.interfaces).toEqual([]);
   });
 
-  it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
+  v5it('refreshPublicSurface: resolves type/details from the referenced subsystem public interface', () => {
     const rec = project('resolve-proj');
     // sub1 publishes gql_portal through igql_portal as GraphQL; the L0 entry
     // then names only the subsystem and the interface, and inherits the rest.

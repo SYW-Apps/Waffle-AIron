@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -89,7 +90,7 @@ describe('the owner\'s gate — location', () => {
     const before = verdict(validateAt(f.transpiler));
     // The parent's doctrine switches off exactly the codes the member reports.
     const lenient = ['id: waffly', 'name: Waffly', 'members:', '  core: core', 'rules:', '  sddRuleSeverity:',
-      '    EXTERNAL_CHECK_UNAVAILABLE: "off"', '    DEPRECATED_REFERENCE_FORM: "off"', '    INVALID_DEPENDENCY_REFERENCE: "off"',
+      '    EXTERNAL_CHECK_UNAVAILABLE: "off"', '    UNUSED_COMPONENT: "off"', '    INVALID_DEPENDENCY_REFERENCE: "off"',
       'targets: []', "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''];
     fs.writeFileSync(path.join(f.top, '.wai', 'project.yaml'), lenient.join('\n'));
     expect(verdict(validateAt(f.transpiler))).toEqual(before);
@@ -98,19 +99,19 @@ describe('the owner\'s gate — location', () => {
     expect(fromTop.issues.filter((i) => (i.specId ?? '').startsWith('transpiler::'))).toEqual([]);
   });
 
-  it('same-config-both-roots: the member\'s own configuration governs it however the request binds it', () => {
+  v5it('same-config-both-roots: the member\'s own configuration governs it however the request binds it', () => {
     const f = referenceFamily();
-    // The member raises a notice to an error in its own project.yaml.
+    // The member raises a warning to an error in its own project.yaml.
     const config = projectConfigRepositoryAt(f.transpiler).load()!;
     fs.writeFileSync(path.join(f.transpiler, '.wai', 'project.yaml'), [
-      'schemaVersion: 1.0.0', 'id: transpiler', `name: ${config.name}`, 'rules:', '  sddRuleSeverity:', '    DEPRECATED_REFERENCE_FORM: error',
+      'schemaVersion: 1.0.0', 'id: transpiler', `name: ${config.name}`, 'rules:', '  sddRuleSeverity:', '    EXTERNAL_CHECK_UNAVAILABLE: error',
       'targets: []', "createdAt: '2026-09-27T00:00:00.000Z'", "updatedAt: '2026-09-27T00:00:00.000Z'", ''].join('\n'));
     // The caller supplies the bound project's own rules (as the CLI and MCP do).
     const rules = projectConfigRepositoryAt(f.transpiler).load()!.rules;
     bind(f.transpiler);
     const own = validateProject({ rules });
-    expect(codes(own, 'DEPRECATED_REFERENCE_FORM').length).toBeGreaterThan(0);
-    expect(codes(own, 'DEPRECATED_REFERENCE_FORM').every((l) => l.startsWith('error '))).toBe(true);
+    expect(codes(own, 'EXTERNAL_CHECK_UNAVAILABLE').length).toBeGreaterThan(0);
+    expect(codes(own, 'EXTERNAL_CHECK_UNAVAILABLE').every((l) => l.startsWith('error '))).toBe(true);
     // A request bound to the member through a credential for the whole family: the same verdict.
     invalidateSpecCache();
     let viaFamily: ValidationResult | undefined;
@@ -145,40 +146,40 @@ describe('the owner\'s gate — `use` imports', () => {
     expect(undefinedRef[0].message).toContain('members.shared.use: [waffler-error]');
   });
 
-  it('nameKey: `WafflerError` imports as `waffler-error` — one key for every spelling', () => {
+  v5it('nameKey: `WafflerError` imports as `waffler-error` — one key for every spelling', () => {
     expect(nameKey('WafflerError')).toBe(nameKey('waffler-error'));
     expect(nameKey('waffler_error')).toBe('wafflererror');
     const f = importFamily();
-    f.setTopMembers({ shared: { path: 'shared', use: ['waffler-error'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['waffler-error'] } });
     expect(codes(validateAt(f.top), 'UNDEFINED_TYPE_REFERENCE', 'IMPORT_AMBIGUOUS', 'IMPORT_UNRESOLVED')).toEqual([]);
   });
 
-  it('two `*` imports supplying one name are ambiguous; an explicit name beats a `*`', () => {
+  v5it('two `*` imports supplying one name are ambiguous; an explicit name beats a `*`', () => {
     const f = importFamily();
-    f.setTopMembers({ shared: { path: 'shared', use: ['*'] }, ui: { path: 'ui', use: ['*'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['*'] }, ui: { source: 'ui', use: ['*'] } });
     const ambiguous = validateAt(f.top);
     expect(codes(ambiguous, 'IMPORT_AMBIGUOUS')).toEqual(['error IMPORT_AMBIGUOUS @report']);
     expect(ambiguous.issues.find((i) => i.code === 'IMPORT_AMBIGUOUS')!.resolution?.outcome).toBe('ambiguous');
-    f.setTopMembers({ shared: { path: 'shared', use: ['waffler-error'] }, ui: { path: 'ui', use: ['*'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['waffler-error'] }, ui: { source: 'ui', use: ['*'] } });
     expect(codes(validateAt(f.top), 'IMPORT_AMBIGUOUS', 'UNDEFINED_TYPE_REFERENCE')).toEqual([]);
     // Two explicit names are ambiguous too.
-    f.setTopMembers({ shared: { path: 'shared', use: ['waffler-error'] }, ui: { path: 'ui', use: ['waffler_error'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['waffler-error'] }, ui: { source: 'ui', use: ['waffler_error'] } });
     expect(codes(validateAt(f.top), 'IMPORT_AMBIGUOUS')).toEqual(['error IMPORT_AMBIGUOUS @report']);
   });
 
-  it('local first: a named import a local spec hides is IMPORT_SHADOWED_BY_LOCAL; a hidden `*` is silent', () => {
+  v5it('local first: a named import a local spec hides is IMPORT_SHADOWED_BY_LOCAL; a hidden `*` is silent', () => {
     const f = importFamily();
     f.addTopType('waffler-error', [{ name: 'code', type: 'number' }]);
-    f.setTopMembers({ shared: { path: 'shared', use: ['waffler-error'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['waffler-error'] } });
     expect(codes(validateAt(f.top), 'IMPORT_SHADOWED_BY_LOCAL')).toEqual(['error IMPORT_SHADOWED_BY_LOCAL @-']);
-    f.setTopMembers({ shared: { path: 'shared', use: ['*'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['*'] } });
     const star = validateAt(f.top);
     expect(codes(star, 'IMPORT_SHADOWED_BY_LOCAL', 'IMPORT_AMBIGUOUS', 'UNDEFINED_TYPE_REFERENCE')).toEqual([]);
   });
 
-  it('a `use` name the producer does not export is IMPORT_UNRESOLVED, naming what it does export', () => {
+  v5it('a `use` name the producer does not export is IMPORT_UNRESOLVED, naming what it does export', () => {
     const f = importFamily();
-    f.setTopMembers({ shared: { path: 'shared', use: ['waffler-eror'] } });
+    f.setTopMembers({ shared: { source: 'shared', use: ['waffler-eror'] } });
     const res = validateAt(f.top);
     const unresolved = res.issues.filter((i) => i.code === 'IMPORT_UNRESOLVED');
     expect(unresolved).toHaveLength(1);

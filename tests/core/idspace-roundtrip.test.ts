@@ -1,4 +1,5 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, expect, afterEach } from 'vitest';
+import { v5it as it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -85,7 +86,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
     rootDir = makeRoot();
     // Root-level component the child references across the tree.
     saveSpec('subsystem', subsystem('core-sub'));
-    saveComponentSpec(component('crates-portal', 'core-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('crates-portal', 'core-sub', { componentType: 'Portal', transport: 'Custom' } as Partial<ComponentSpec>));
 
     // Chained child project mounted as "transpiler".
     writeLegacyMount(subsystem('transpiler', { projectPath: 'packages/transpiler' }), 'transpiler');
@@ -206,7 +207,7 @@ describe('cross-tree narrative targets survive re-save (the re-namespacing bug)'
       boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
     });
     a.save('subsystem', subsystem('a-core', { parentSystem: 'amid-system' }));
-    a.saveComponentSpec(component('a-portal', 'a-core', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    a.saveComponentSpec(component('a-portal', 'a-core', { componentType: 'Portal', transport: 'Custom' } as Partial<ComponentSpec>));
     a.save('subsystem', subsystem('bleaf', { parentSystem: 'amid-system', projectPath: 'bleaf' }));
 
     // bleaf's tree, authored via bleaf's workspace. b-orch (in bleaf) depends on
@@ -258,9 +259,9 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     const child = workspaceFor(childDir);
     child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
-      publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
+      publicInterfaces: [{ details: 'net.http capability provider', component: 'http-portal' }],
     }));
-    child.saveComponentSpec(component('http-portal', 'network_http', { componentType: 'Portal', portalType: 'MessageBus' } as Partial<ComponentSpec>));
+    child.saveComponentSpec(component('http-portal', 'network_http', { componentType: 'Portal', transport: 'MessageBus' } as Partial<ComponentSpec>));
     invalidateSpecCache();
     return childDir;
   }
@@ -291,7 +292,7 @@ describe('root-mounted external subsystem publicInterfaces (the lock-refusal bug
     const child = workspaceFor(childDir);
     child.save('subsystem', subsystem('network_http', {
       parentSystem: 'network_http',
-      publicInterfaces: [{ type: 'MessageBus', details: 'net.http capability provider', component: 'http-portal' }],
+      publicInterfaces: [{ details: 'net.http capability provider', component: 'http-portal' }],
       lifecycle: [{ phase: 'init', component: 'http-portal', method: 'provision' }],
     }));
     invalidateSpecCache();
@@ -358,7 +359,7 @@ describe('standalone child: cross-tree refs are judged by the owner alone (stage
     const unavailable = res.issues.filter(i => i.code === 'EXTERNAL_CHECK_UNAVAILABLE');
     expect(unavailable.map(i => i.specId).sort()).toEqual(['transpiler-impl', 'transpiler-orch']);
     expect(unavailable.every(i => i.severity === 'warning' && i.resolution?.outcome === 'unavailable')).toBe(true);
-    expect(unavailable.map(i => i.message).join('\n')).toMatch(/doctor --fix/);
+    expect(unavailable.map(i => i.message).join('\n')).toMatch(/wairon upgrade/);
     expect(res.issues.filter(i => i.code === 'INVALID_TARGET_COMPONENT_REFERENCE')).toHaveLength(0);
     expect(res.issues.filter(i => i.code === 'INVALID_DEPENDENCY_REFERENCE')).toHaveLength(0);
   });
@@ -370,7 +371,7 @@ describe('standalone child: cross-tree refs are judged by the owner alone (stage
     // parent says so.
     rootDir = makeRoot();
     saveSpec('subsystem', subsystem('parent-sub'));
-    saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    saveComponentSpec(component('parent-portal', 'parent-sub', { componentType: 'Portal', transport: 'Custom' } as Partial<ComponentSpec>));
     saveSpec('subsystem', subsystem('kid', { projectPath: 'kid' }));
 
     const kidDir = path.join(rootDir, 'kid');
@@ -438,7 +439,7 @@ describe('keyed merges for dispatch and lifecycle arrays', () => {
       ],
     }));
     saveComponentSpec(component('gateway-portal', 'sub-a', {
-      componentType: 'Portal', portalType: 'Custom',
+      componentType: 'Portal', transport: 'Custom',
       dependsOn: ['server-a', 'server-b'],
       dispatch: [
         { capability: 'a.get', component: 'server-a', method: 'get' },
@@ -835,9 +836,9 @@ describe('public_interface.consumers are subsystem references in a chained subpr
     child.save('subsystem', subsystem('stock', { parentSystem: 'pharmacy' }));
     child.save('subsystem', subsystem('dispensing', {
       parentSystem: 'pharmacy',
-      publicInterfaces: [{ type: 'Custom', details: 'dispense orders', component: 'dispensing-portal', consumers: ['stock'] }],
+      publicInterfaces: [{ details: 'dispense orders', component: 'dispensing-portal', consumers: ['stock'] }],
     }));
-    child.saveComponentSpec(component('dispensing-portal', 'dispensing', { componentType: 'Portal', portalType: 'Custom' } as Partial<ComponentSpec>));
+    child.saveComponentSpec(component('dispensing-portal', 'dispensing', { componentType: 'Portal', transport: 'Custom' } as Partial<ComponentSpec>));
     invalidateSpecCache();
     return childDir;
   }
@@ -849,7 +850,7 @@ describe('public_interface.consumers are subsystem references in a chained subpr
     buildFixture();
     const dispensing = loadSubsystemSpec('pharmacy::dispensing');
     expect(dispensing?.publicInterfaces).toEqual([
-      { type: 'Custom', details: 'dispense orders', component: 'pharmacy::dispensing-portal', consumers: ['pharmacy::stock'] },
+      { details: 'dispense orders', component: 'pharmacy::dispensing-portal', consumers: ['pharmacy::stock'] },
     ]);
   });
 

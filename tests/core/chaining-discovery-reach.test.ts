@@ -34,7 +34,8 @@ import {
   saveSystemSpec, saveSpec, saveComponentSpec,
   invalidateSpecCache, workspaceFor, resolveChainingParent,
 } from '../../src/core/specs.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { validateProject, type ValidationResult } from '../../src/core/validation.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, SubsystemSpec } from '../../src/models/index.js';
@@ -66,7 +67,7 @@ function family(): { root: string; kidDir: string } {
   });
   saveSpec('subsystem', subsystem('parent-sub'));
   saveComponentSpec(component('parent-orch', 'parent-sub'));
-  writeLegacyMount(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
+  writeMemberProject(subsystem('kid', { projectPath: 'packages/kid' }), 'kid');
 
   const kidDir = path.join(root, 'packages', 'kid');
   const kid = workspaceFor(kidDir);
@@ -75,7 +76,9 @@ function family(): { root: string; kidDir: string } {
     boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now,
   });
   kid.save('subsystem', subsystem('k-core', { parentSystem: 'kid-system' }));
-  kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['super::parent-orch'] }));
+  // The child reaches its parent the way wairon 6 spells it: an external it declares, never `super::`.
+  projectConfigRepositoryAt(kidDir).declareExternal('parent', { project: 'parent' });
+  kid.saveComponentSpec(component('k-orch', 'k-core', { dependsOn: ['parent::parent-orch'] }));
   invalidateSpecCache();
   return { root, kidDir };
 }
@@ -130,7 +133,8 @@ describe('parent discovery sits behind the reach gate', () => {
 
     const result = validateBound(fam.kidDir, fam.root, false);
 
-    expect(result.hint).toBeUndefined();
+    // The only hint is the external's own (judged against its pin) — never one about a parent that was found above.
+    expect(result.hint ?? '').toMatch(/^1 external was judged against its pin/);
     expect(probedSpecsOf(fam.root)).toBe(false);
   });
 
@@ -140,7 +144,8 @@ describe('parent discovery sits behind the reach gate', () => {
 
     const result = validateBound(fam.kidDir, fam.kidDir, true);
 
-    expect(result.hint).toBeUndefined();
+    // The only hint is the external's own (judged against its pin) — never one about a parent that was found above.
+    expect(result.hint ?? '').toMatch(/^1 external was judged against its pin/);
     expect(probedSpecsOf(fam.root)).toBe(false);
   });
 

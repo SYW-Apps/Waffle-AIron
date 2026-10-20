@@ -1,0 +1,41 @@
+id: v5_tree_file_adapter_impl
+name: v5 Tree File Adapter Implementation
+description: >-
+  src/upgrade/steps/v5-to-v6/files.ts: the v5 step's raw file access, inside the step's own folder
+  so the whole step is removed as one.
+contract: iv5_tree_file_adapter
+sourcePath: src/upgrade/steps/v5-to-v6/files.ts
+methods:
+  - name: familyRoots
+    narrative: []
+    detail: intent
+    intent: >-
+      From the root, read project.yaml members (a key to a path, or the long form's source) and
+      every L1 subsystem file whose projectPath names a folder, resolve each against the root that
+      declares it, and follow each found project the same way, once each. Answers the roots, the top
+      first; a path that does not exist or holds no .wai or .wairon folder is left out. A git source
+      is left out: it is not checked out here.
+  - name: holdsLegacyFolder
+    narrative: []
+    detail: intent
+    intent: True when the root holds a .wairon folder and no .wai folder.
+  - name: moveLegacyFolder
+    narrative: []
+    detail: intent
+    intent: Rename the root's .wairon folder to .wai when no .wai folder exists; otherwise do nothing.
+  - name: renameSpecFile
+    narrative: []
+    detail: intent
+    intent: Rename the file; a target that already exists refuses with both paths.
+  - name: keepStaleRecord
+    narrative: []
+    detail: intent
+    intent: >-
+      Read the root's lock.json (in .wai, else .wairon). None, or one in the current format, answers
+      null. Otherwise drop its per-spec digests, its children and the reading they were taken in,
+      keep who approved it (a bare approver string becomes a legacy approver), when, and the
+      identity it certified, and answer it in the current format with reexpressed naming the
+      algorithm it came from and wairon upgrade.
+status: draft
+createdAt: '2026-10-18T14:14:18.933Z'
+updatedAt: '2026-10-18T21:55:53.843Z'

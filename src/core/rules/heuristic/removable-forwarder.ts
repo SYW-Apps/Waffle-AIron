@@ -1,4 +1,4 @@
-import { parseDeclaredCall, isRetired, type ComponentSpec, type NarrativeStep } from '../../../models/index.js';
+import { parseDeclaredCall, type ComponentSpec, type NarrativeStep } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 import { directEdgeRefusals } from '../doctrine/direct-edge.js';
 import { pureForwarderComponents } from './method-cohesion.js';
@@ -55,7 +55,7 @@ export const removableForwarderRule: SddRule = {
     //    hand-offs, read across every implementation that realizes them.
     const forwarders = [...pureForwarderComponents(ctx)]
       .map(id => ctx.componentMap.get(id))
-      .filter((c): c is ComponentSpec => !!c && c.componentType === 'Orchestrator' && !isRetired(c) && !ctx.isInChainedSubproject(c.subsystem));
+      .filter((c): c is ComponentSpec => !!c && c.componentType === 'Orchestrator' && !ctx.isInChainedSubproject(c.subsystem));
     if (forwarders.length === 0) return;
     const forwarderIds = new Set(forwarders.map(f => f.id));
 

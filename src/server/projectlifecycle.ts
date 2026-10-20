@@ -15,7 +15,7 @@ import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
-import { isValidProjectId, listProjectRecords, existingProjectRoot, resolveProjectBinding } from './projects.js';
+import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
 import { describeDecision } from './types.js';
 import type {
@@ -356,42 +356,6 @@ function codeBesideClaim(lock: LockRecord): string {
     + `analyzer ${lock.code.analyzer.validatorVersion}, grade ${lock.code.analyzer.grade})`;
 }
 
-/** The payload type a project:lock request recorded before stage 7 when its
- *  requester was bound to a member through a qualifier. Read for one release. */
-const SUBPROJECT_SCOPE_PAYLOAD = 'SubprojectScope';
-
-/** An unnarrowed lookup principal: resolves a pre-authorized request's qualifier to its record, nothing else. */
-const RECORD_LOOKUP: Principal = { tokenId: 'approval-lookup', role: 'editor', projects: ['*'], authenticated: true };
-
-/**
- * The record a project:lock request executes on: its own projectId, or — for a
- * request recorded with a member qualifier before the upgrade (one release) —
- * the member record the qualifier maps to, never wider. A qualifier payload
- * that does not parse, or names a member no record holds, refuses: falling
- * back to the whole project would widen the scope the requester was confined to.
- */
-function lockTargetOf(cfg: HostConfig, req: ApprovalRequest): string {
-  const projectId = req.projectId ?? '';
-  if (req.payloadType !== SUBPROJECT_SCOPE_PAYLOAD || !req.payload) return projectId;
-  const parsed = JSON.parse(req.payload) as { subproject?: unknown };
-  if (typeof parsed.subproject !== 'string' || !parsed.subproject) {
-    throw new Error(
-      `Approved ${req.kind} request "${req.id}" carries a ${SUBPROJECT_SCOPE_PAYLOAD} payload with no usable ` +
-        'member qualifier — refusing to execute, because falling back to the whole project would widen the ' +
-        'scope the requester was confined to.',
-    );
-  }
-  // The qualifier mapped to its member record exactly as a data-plane binding maps it.
-  const member = resolveProjectBinding(cfg.dataDir, RECORD_LOOKUP, `${projectId}::${parsed.subproject}`);
-  if (!member) {
-    throw new Error(
-      `Approved ${req.kind} request "${req.id}" names member "${parsed.subproject}" of "${projectId}", which holds no ` +
-        'hosted record — refusing to execute rather than widen to the whole project; run `wairon host doctor --fix`.',
-    );
-  }
-  return member.projectId;
-}
-
 /** Shared body for the gated lifecycle actions. A lock is the project's
  *  APPROVAL, so it is decided by approval:decide over the project's own
  *  record, never by the right to edit it:
@@ -649,9 +613,18 @@ function executeApproved(cfg: HostConfig, req: ApprovalRequest): ApprovedExecuti
       };
     }
     case 'project:lock': {
-      // The request's record id — a pre-upgrade member qualifier mapped to its
-      // member record for one release, never wider.
-      const target = lockTargetOf(cfg, req);
+      // A lock request carries no payload. One that does recorded the member-qualifier
+      // scope an older major used (the instance upgrade closes those): refuse it rather than
+      // execute it on the record it names, which would widen the scope its requester was
+      // confined to.
+      if (req.payload) {
+        throw new Error(
+          `Approved ${req.kind} request "${req.id}" carries a payload (the member scope an older wairon recorded) - ` +
+            "refusing to execute it, because it would lock the whole project it names; ask again on the member's own record.",
+        );
+      }
+      // The request's record id: a member's own record for a member lock.
+      const target = req.projectId ?? '';
       // The request's gateStateId is the expected identity: an approval never
       // certifies a design other than the one requested (a request without one,
       // created before stage 5, executes against the tree as it stands).

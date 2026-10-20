@@ -2,6 +2,7 @@ import * as path from 'path';
 import type { ExportUsage, ExportUse } from './exports.js';
 import type { DeclaredExternal } from './project.js';
 import type { SubsystemSpec } from './specs.js';
+import { readsV5Forms } from '../utils/fs.js';
 // TYPE-ONLY: a part is recorded by the scan that read it (spec_index), and the graph carries it as read.
 import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 
@@ -13,7 +14,7 @@ import type { ScannedPart, WritableSpecKind } from '../core/specs.js';
 // only through its L0 exports, and only as a dependency it declared — a member
 // it declares, or an external it names in project.yaml. A cross-project
 // reference is `alias::name` (stage 3); the leading `::`, `super::` and
-// member-path forms still bind for one release. These are the shapes the
+// member-path forms bind only in the v5 reading `wairon upgrade` binds. These are the shapes the
 // project family index answers with, and the pure lookups every consumer of
 // the graph asks it. Nothing here does I/O, and nothing here judges.
 // ---------------------------------------------------------------------------
@@ -232,6 +233,8 @@ export interface ProjectFamilyProblem {
   projects: string[];
   /** What is wrong, in words a finding can quote. */
   detail: string;
+  /** A duplicate-spec of two types of different subsystems: the two `subsystem::id` addresses, the kept one first. */
+  qualifiedIds?: string[];
 }
 
 /** project_family — the project graph of one scan. */
@@ -462,10 +465,12 @@ function walkMemberPath(
  * Read a reference from the project `from` the way the scan binds one, without
  * position: an id without `::` is local; `alias::name` goes through `from`'s
  * alias table; a first segment naming one of `from`'s own subsystems qualifies
- * a local item; the deprecated forms still bind for one release — a leading
+ * a local item. The deprecated forms bind only in the v5 reading — a leading
  * `::` is a member path from the bound root, each `super::` climbs one
  * containing project and reads the rest there, and a first segment `from` does
- * not declare is a member path from the bound root, else a family project id.
+ * not declare is a member path from the bound root, else a family project id;
+ * anywhere else such a reference lands nowhere (unresolved, with the form it
+ * was written in), and the reference rules report it.
  */
 export function landReference(projects: ReadableProject[], reference: string, from: string): ReferenceLanding {
   const byKey = new Map(projects.map((p) => [p.namespace, p] as const));
@@ -479,9 +484,12 @@ export function landReference(projects: ReadableProject[], reference: string, fr
     if (walked) return { kind: 'project', form, project: walked.project.namespace, name: walked.name };
     return { kind: 'unresolved', form };
   };
-  if (reference.startsWith('::')) return land('leading', root, reference.slice(2).split('::'));
+  // Step 1: a deprecated form lands only in the v5 reading.
+  const v5 = readsV5Forms();
+  if (reference.startsWith('::')) return v5 ? land('leading', root, reference.slice(2).split('::')) : { kind: 'unresolved', form: 'leading' };
   const segments = reference.split('::');
   if (segments[0] === 'super') {
+    if (!v5) return { kind: 'unresolved', form: 'super' };
     let node = origin;
     while (segments[0] === 'super') {
       segments.shift();
@@ -494,10 +502,13 @@ export function landReference(projects: ReadableProject[], reference: string, fr
   if (!origin) return { kind: 'unresolved', form: 'path' };
   const [first] = segments;
   if (origin.aliases.has(first) || origin.declaredAliases.has(first)) {
+    // A member path through an alias (`alias::sub::name`) is the deprecated form.
+    if (!v5 && segments.length !== 2) return { kind: 'unresolved', form: 'path' };
     if (!origin.aliases.has(first)) return { kind: 'outside', form: 'alias' };
     return land(segments.length === 2 ? 'alias' : 'path', origin, segments);
   }
   if (origin.subsystems.has(first)) return { kind: 'project', project: from, name: segments[segments.length - 1] };
+  if (!v5) return { kind: 'unresolved', form: 'path' };
   const fromRoot = root ? walkMemberPath(byKey, root, segments) : null;
   if (fromRoot && fromRoot !== 'outside') return { kind: 'project', form: 'path', project: fromRoot.project.namespace, name: fromRoot.name };
   // A first segment naming a project of the family by its id (or key) — the

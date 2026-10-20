@@ -45,7 +45,7 @@ import {
   packManifest,
 } from '../core/index.js';
 
-/** The flags of the `wairon pack` / `wairon packs` subcommands, as the CLI
+/** The flags of the `wairon pack` subcommands, as the CLI
  *  hands them to the runner; each subcommand reads only the ones it takes. */
 export interface PackCommandOptions {
   /** Act on the global pack store instead of the project's. */
@@ -87,7 +87,7 @@ export interface PackCommandOptions {
 // --global copies it into ~/.wairon/packs (WAIRON_PACKS_DIR), which is
 // auto-loaded for every project on this machine. A wrapper product's installer
 // is just one `wairon pack add <file.wpack>` — these commands are equally
-// usable by hand. `wairon packs` remains as a deprecated alias.
+// usable by hand.
 // ---------------------------------------------------------------------------
 
 interface PackProbe {

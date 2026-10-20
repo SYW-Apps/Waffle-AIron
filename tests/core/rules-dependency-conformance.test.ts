@@ -121,7 +121,7 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
     const proj = createTempProject();
     // portal declares it mounts onto the server; the server file imports the portal file
     proj.component('server-s', 'Supervisor');
-    proj.component('portal-p', 'Portal', 'sub-a', 'portalType: Custom\ndependsOn: [server-s]');
+    proj.component('portal-p', 'Portal', 'sub-a', 'transport: Custom\ndependsOn: [server-s]');
     proj.wire('server-s', 'src/server.ts');
     proj.wire('portal-p', 'src/portal.ts');
     proj.source('src/server.ts', body('servers', "import { runportalp } from './portal.js';\nrunportalp();\n"));
@@ -166,8 +166,8 @@ describe('dependency conformance — UNDECLARED_DEPENDENCY', () => {
 
   it('cross-subsystem: a declared edge to the published surface justifies imports of that subsystem\'s files', () => {
     const proj = createTempProject();
-    proj.subsystem('sub-b', 'publicInterfaces:\n  - type: Custom\n    details: in-process portal\n    component: portal-b');
-    proj.component('portal-b', 'Portal', 'sub-b', 'portalType: Custom\ndependsOn: [inner-b]');
+    proj.subsystem('sub-b', 'publicInterfaces:\n  - details: in-process portal\n    component: portal-b');
+    proj.component('portal-b', 'Portal', 'sub-b', 'transport: Custom\ndependsOn: [inner-b]');
     proj.component('inner-b', 'Orchestrator', 'sub-b', 'dependencyClass: pure');
     proj.component('adapter-a', 'Adapter', 'sub-a', 'dependsOn: [portal-b]');
     proj.wire('portal-b', 'src/b/portal.ts');
@@ -287,7 +287,7 @@ describe('dependency conformance — UNREALIZED_DEPENDENCY', () => {
 
   it('a re-export barrel realizes the declared forwarding edge without being accused', () => {
     const proj = createTempProject();
-    proj.component('portal-p', 'Portal', 'sub-a', 'portalType: Custom\ndependsOn: [orch-a]');
+    proj.component('portal-p', 'Portal', 'sub-a', 'transport: Custom\ndependsOn: [orch-a]');
     proj.component('orch-a', 'Orchestrator');
     proj.wire('portal-p', 'src/index.ts');
     proj.wire('orch-a', 'src/orch.ts');

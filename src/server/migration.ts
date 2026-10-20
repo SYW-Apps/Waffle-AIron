@@ -12,15 +12,20 @@ import {
 } from './organization.js';
 import { listProjectRecords } from './projects.js';
 import { isLegacyBuiltin } from './auth.js';
+import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import type {
+  ApprovalRequest,
+  AuditEvent,
   Capability,
+  HostConfig,
   PrincipalSubject,
   ScopeKind,
   UnitIdRemap,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
-// Permission-model rollout migration (`wairon host doctor --fix`).
+// Permission-model rollout migration (run by the data directory upgrade when the
+// server starts).
 //
 // A hosted data dir written by a PRE-permission-model wairon carries shapes the
 // current server no longer produces — and in two cases actively breaks on:
@@ -456,5 +461,164 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
     }
   }
 
+  return { findings, applied: apply };
+}
+
+// ---------------------------------------------------------------------------
+// Retired-value migration (retired_value_migration; run by the data directory
+// upgrade right after the permission-model step).
+//
+// Values an older major stored that this major no longer reads: the loaders and
+// setters refuse them, so this is the one place that still sees them. They are
+// shapes no typed repository models any longer, so they are read and rewritten
+// raw in their data files - the same raw reads as the permission-model step.
+// A dry run reports and writes nothing; applying twice finds nothing the second
+// time.
+// ---------------------------------------------------------------------------
+
+/** The exposure modes an older major stored that each only ever meant "served". */
+const RETIRED_ADMIN_API_MODES = new Set(['local_only', 'private_network', 'public']);
+
+/** The user statuses an older major stored that each already meant inactive. */
+const RETIRED_USER_STATUSES = new Set(['suspended', 'deactivated', 'disabled', 'deleted']);
+
+/** The operator behind the start-up upgrade: authority is access to the data directory. */
+const RETIRED_VALUE_OPERATOR: PrincipalSubject = { userId: 'operator:host-upgrade', kind: 'service', issuer: 'local' };
+
+/** The reason recorded on a lock request closed for its member-qualifier scope. */
+const MEMBER_SCOPE_CLOSED =
+  'closed by the upgrade: the request carried the member scope an older wairon recorded, which is no longer executed '
+  + '- ask again on the member record itself';
+
+/**
+ * iretired_value_migration.run - report every retired value the data dir
+ * stores, in order (exposure policy, users, public surfaces, share snapshots,
+ * lock requests); with apply, rewrite each in place. Idempotent.
+ */
+export function run(
+  dataDir: string,
+  apply: boolean,
+  auditPolicy?: HostConfig['auditPolicy'],
+): MigrationReport {
+  const findings: MigrationFinding[] = [];
+  const found = (area: string, detail: string): void => {
+    findings.push({ area, detail });
+  };
+
+  // Step 1: the exposure policy's adminApiMode.
+  const exposurePath = path.join(dataDir, 'exposure-policy.json');
+  const exposure = readRaw<Record<string, unknown>>(exposurePath);
+  if (exposure && typeof exposure === 'object' && typeof exposure.adminApiMode === 'string' && RETIRED_ADMIN_API_MODES.has(exposure.adminApiMode)) {
+    found('exposure', `adminApiMode "${exposure.adminApiMode}" (it only ever meant served) is stored as "enabled"`);
+    if (apply) {
+      exposure.adminApiMode = 'enabled';
+      writeRaw(exposurePath, exposure);
+    }
+  }
+
+  // Step 2: user statuses.
+  const usersPath = path.join(dataDir, 'users.json');
+  const users = readRaw<({ id: string; status?: unknown } & Record<string, unknown>)[]>(usersPath);
+  if (Array.isArray(users)) {
+    let changed = false;
+    for (const user of users) {
+      if (typeof user.status !== 'string' || !RETIRED_USER_STATUSES.has(user.status)) continue;
+      found('users', `user "${user.id}": status "${user.status}" is stored as "inactive"`);
+      if (apply) {
+        user.status = 'inactive';
+        changed = true;
+      }
+    }
+    if (apply && changed) writeRaw(usersPath, users);
+  }
+
+  // Step 3: public-surface audiences.
+  const surfacesPath = path.join(dataDir, 'public-surfaces.json');
+  const surfaces = readRaw<({ projectId?: string; interfaces?: ({ audience?: unknown } & Record<string, unknown>)[] } & Record<string, unknown>)[]>(surfacesPath);
+  if (Array.isArray(surfaces)) {
+    let changed = false;
+    for (const snapshot of surfaces) {
+      for (const entry of Array.isArray(snapshot.interfaces) ? snapshot.interfaces : []) {
+        if (entry.audience !== 'public') continue;
+        found('surfaces', `project "${snapshot.projectId}": an exported interface's audience "public" is stored as "external"`);
+        if (apply) {
+          entry.audience = 'external';
+          changed = true;
+        }
+      }
+    }
+    if (apply && changed) writeRaw(surfacesPath, surfaces);
+  }
+
+  // Step 4: share snapshots' single-document OpenAPI capture.
+  const snapshotsDir = path.join(dataDir, 'share-snapshots');
+  let snapshotFiles: string[] = [];
+  try {
+    snapshotFiles = fs.readdirSync(snapshotsDir).filter((f) => f.endsWith('.json')).sort();
+  } catch {
+    /* no share snapshots */
+  }
+  for (const file of snapshotFiles) {
+    const snapshotPath = path.join(snapshotsDir, file);
+    const snapshot = readRaw<Record<string, unknown>>(snapshotPath);
+    if (!snapshot || typeof snapshot !== 'object' || !('openapi' in snapshot)) continue;
+    const id = typeof snapshot.id === 'string' ? snapshot.id : file.replace(/\.json$/, '');
+    const set = snapshot.openapiSet;
+    if (Array.isArray(set) && set.length > 0) {
+      found('shares', `share snapshot "${id}": the single-document OpenAPI capture is dropped (the per-portal capture stands beside it)`);
+    } else {
+      found('shares', `share snapshot "${id}": its OpenAPI capture cannot be split per portal (its portal ids were never recorded), so it is dropped - the canvas and HTML stay; refresh the share to recapture the OpenAPI per portal`);
+    }
+    if (apply) {
+      delete snapshot.openapi;
+      writeRaw(snapshotPath, snapshot);
+    }
+  }
+
+  // Steps 5-7: lock requests carrying a member scope are closed, never carried to the member.
+  const approvalsPath = path.join(dataDir, 'approvals.json');
+  const approvals = readRaw<ApprovalRequest[]>(approvalsPath);
+  const closed: { id: string; projectId?: string; closedAs: string }[] = [];
+  if (Array.isArray(approvals)) {
+    for (const request of approvals) {
+      if (request.kind !== 'project:lock' || !request.payload) continue;
+      if (request.status !== 'pending' && request.status !== 'approved') continue;
+      const closedAs = request.status === 'pending' ? 'denied' : 'cancelled';
+      found('requests', `project:lock request "${request.id}" (${request.status}, project "${request.projectId ?? ''}") carries a member scope: it is ${closedAs}`);
+      if (!apply) continue;
+      if (request.status === 'pending') {
+        request.status = 'denied';
+        request.decidedBy = RETIRED_VALUE_OPERATOR;
+        request.decidedAt = new Date().toISOString();
+        request.decisionReason = MEMBER_SCOPE_CLOSED;
+      } else {
+        request.status = 'cancelled';
+        request.executionSummary = MEMBER_SCOPE_CLOSED;
+      }
+      closed.push({ id: request.id, ...(request.projectId !== undefined ? { projectId: request.projectId } : {}), closedAs });
+    }
+    if (apply && closed.length > 0) writeRaw(approvalsPath, approvals);
+  }
+  for (const c of closed) {
+    const event: AuditEvent = {
+      id: '',
+      timestamp: '',
+      level: 'security',
+      category: 'security',
+      action: 'approval.request.closed',
+      outcome: 'success',
+      actor: RETIRED_VALUE_OPERATOR,
+      ...(c.projectId !== undefined ? { projectId: c.projectId } : {}),
+      target: c.id,
+      metadata: JSON.stringify({ requestId: c.id, closedAs: c.closedAs, reason: MEMBER_SCOPE_CLOSED }),
+    };
+    try {
+      appendAuditEvent(dataDir, event, effectiveAuditPolicy({ auditPolicy }));
+    } catch (e) {
+      console.error(`[sdd_host] audit append failed for approval.request.closed (request=${c.id}): ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Step 8.
   return { findings, applied: apply };
 }

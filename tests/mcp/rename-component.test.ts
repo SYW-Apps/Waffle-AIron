@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -15,10 +16,11 @@ import {
   invalidateSpecCache,
   workspaceFor,
 } from '../../src/core/specs.js';
-import { writeLegacyMount } from '../helpers/legacy-mount.js';
+import { writeMemberProject } from '../helpers/legacy-mount.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { writeYamlFile } from '../../src/utils/yaml.js';
 import type { ComponentSpec, InterfaceSpec, SubsystemSpec } from '../../src/models/index.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // sdd_rename_component (mcp_portal → mcp_orchestrator → mcp_core_adapter →
@@ -47,7 +49,7 @@ function books(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-mcp-rename-'));
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   writeYamlFile(path.join(root, '.wai', 'project.yaml'), {
-    schemaVersion: '1.0.0', name: 'books', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'books', targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: {}, extensions: { packs: [], useGlobalPacks: false }, createdAt: now, updatedAt: now,
   });
   setProjectRoot(root);
@@ -56,7 +58,7 @@ function books(): string {
   saveComponentSpec(comp('ledger', 'books', 'Orchestrator'));
   saveInterfaceSpec(intf('iledger', 'ledger'));
   saveComponentSpec(comp('books_orch', 'books', 'Orchestrator', { dependsOn: ['ledger'] }));
-  writeLegacyMount(sub('ext', { projectPath: 'packages/ext' }), 'ext');
+  writeMemberProject(sub('ext', { projectPath: 'packages/ext' }), 'ext');
   const ext = workspaceFor(path.join(root, 'packages', 'ext'));
   ext.save('subsystem', sub('ext', { parentSystem: 'ext' }));
   ext.saveComponentSpec(comp('widget', 'ext', 'Adapter'));
@@ -122,7 +124,7 @@ describe('sdd_rename_component', () => {
     expect(loadComponentSpec('books_orch')?.dependsOn).toEqual(['journal']);
   });
 
-  it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
+  v5it('resolves a bare id naming a chained component to its qualified id, so core refuses it as chained', async () => {
     root = books();
     client = await connect(createMcpServer());
 

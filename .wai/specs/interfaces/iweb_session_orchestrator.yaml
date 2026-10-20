@@ -13,11 +13,13 @@ methods:
   - name: startSignIn
     description: >-
       Begin a browser SSO sign-in: resolve the enabled identity-provider configuration through the
-      policy repository, generate a nonce, sign an SSO state binding providerId, nonce, and
-      redirectUri via the single signing authority, build the provider authorization URL through the
-      identity provider adapter, append a best-effort web.signin.start (info) audit event, and
-      return the authorization URL. Unauthenticated by nature; no caller credential is required or
-      accepted.
+      policy repository, refuse when the provider has a setupProblem (audit web.signin.refused,
+      answer "Sign-in through <name> is not set up yet. Ask an administrator to finish its setup."
+      without echoing any supplied address), generate a nonce, sign an SSO state binding providerId,
+      nonce, and redirectUri via the single signing authority, build the provider authorization URL
+      through the identity provider adapter, append a best-effort web.signin.start (info) audit
+      event, and return the authorization URL. Unauthenticated by nature; no caller credential is
+      required or accepted.
     signature: 'startSignIn(providerId: string, redirectUri: string): async string'
     returns: async string
     params:
@@ -119,17 +121,13 @@ methods:
         type: string
   - name: getLoginOptions
     description: >-
-      Return the pre-auth login options the login screen renders from: passwordLogin = whether the
-      built-in admin password login is configured (BOTH env-anchored builtinAdminUser and
-      builtinAdminPassword set on the host config — either unset means password login is disabled),
-      and providers = one { id, displayName } entry per ENABLED identity provider read through the
-      policy repository, displayName defaulting to the provider id when the admin set none.
-      Unauthenticated by nature — a pre-auth read for the login page. The projection carries ONLY
-      provider ids and display labels (standard, safe pre-auth SSO discovery); never secrets,
-      clientIds, endpoints, or any other config. Reads only; not audited.
+      Return the pre-auth login options: the built-in password-login flag plus one { id,
+      displayName, available, unavailableReason? } entry per enabled identity provider, where a
+      provider with a setupProblem is available: false with the user-facing reason "Not set up yet —
+      ask an administrator". Unauthenticated; reads only; not audited.
     signature: 'getLoginOptions(): WebLoginOptions'
     returns: WebLoginOptions
     params: []
 status: complete
 createdAt: '2026-07-11T11:33:17.127Z'
-updatedAt: '2026-10-04T10:32:15.207Z'
+updatedAt: '2026-10-19T22:11:37.037Z'

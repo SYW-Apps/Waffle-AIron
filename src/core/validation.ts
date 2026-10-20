@@ -121,7 +121,7 @@ import {
   findTestsReferencing as findTestsUnderRoots,
   type TestsToRevisit,
 } from './source-analysis.js';
-import { getProjectRoot, pathExists } from '../utils/fs.js';
+import { getProjectRoot, pathExists, readsV5Forms } from '../utils/fs.js';
 import { aiPathsAt } from '../config/paths.js';
 import { approvalKeyIn } from '../models/project-family.js';
 import {
@@ -897,7 +897,7 @@ function runOwnersGate(
       ...(boundConfig ? { declaredMembers: declaredMembers(boundConfig) } : {}),
       // The bound project's own network, for network-boundaries.
       ...(boundConfig?.network ? { network: boundConfig.network } : {}),
-      // The retired reachability forms the scan read compatibly, for entry-declarations.
+      // The retired reachability forms the scan met in the v5 reading, for entry-declarations.
       retiredReachFacts: retiredReachFacts(),
       surfaceSnapshots,
       codeModel,
@@ -1003,7 +1003,7 @@ function readExcerptSpecs(excerpt: ParentExcerpt): ExcerptSpecs {
       if (parsed.success) out.system = parsed.data;
     } else if ('parentSystem' in doc) take(out.subsystems, SubsystemSpecSchema.safeParse(doc));
     else if ('componentType' in doc) {
-      // Retired reachability forms read compatibly, as the loader reads them.
+      // Retired reachability forms read in the v5 reading, as the loader reads them.
       readRetiredReachForms('component', doc);
       const parsed = ComponentSpecSchema.safeParse(doc);
       take(out.components, parsed.success ? { success: true, data: attachRetiredMounts(parsed.data, doc) } : parsed);
@@ -1384,6 +1384,8 @@ export function computeGateStateId(): StateId {
   // decides whether it IS the previous algorithm.
   const record = approvalRecord(getProjectRoot());
   if (!record?.stateId || record.stateId.algorithm === current.algorithm) return current;
+  // A record under another algorithm was written by wairon 5: judged as it was taken in the v5 reading only.
+  if (!readsV5Forms()) return current;
   const asRecorded = computeGateIdentity(computeOwnStateId(), extensions, builtin, inputs, gate, members);
   if (record.stateId.algorithm === asRecorded.algorithm) return { ...current, asRecorded };
   // Steps 18-21: a lock taken in the earlier design reading (status still in

@@ -1,5 +1,7 @@
 import {
   SURFACE_AUDIENCES,
+  l0ExportFrom,
+  l0ExportName,
   nameKey,
   transportExportKind,
   parseDeclaredCall,
@@ -24,6 +26,7 @@ import {
 // export_index projects the tables the Spec Index's scan resolved — the one
 // sanctioned case of an Index over another Index of the same Repository.
 import { listProjectRoots, loadComponentSpecs, loadImplementationSpecs } from './specs.js';
+import { readsV5Forms } from '../utils/fs.js';
 // ...and over the Project Family Index of the same Repository, for the
 // the references the scan bound, counted into each consumer's usage (never in
 // a cycle: the family index depends on the Spec Index alone).
@@ -66,8 +69,9 @@ const IMPLEMENTABLE: ReadonlySet<string> = new Set(['Portal', 'Adapter']);
 
 /**
  * The export kind an own component entry is shown as: derived from its backing
- * Portal's transport (transport.exportKind). An authored kind is read only as
- * the legacy value, where no transport derives one.
+ * Portal's transport (transport.exportKind). An authored kind is a wairon 5
+ * form, read as the legacy value in the v5 reading only, where no transport
+ * derives one.
  */
 function exportKindOf(comp: ComponentSpec, authored: string | undefined, role?: string): string | undefined {
   // A library is called in-process: shown as InProcess, never as the
@@ -373,7 +377,7 @@ function bindOwn(world: ExportWorld, sub: SubsystemSpec, pi: PublicInterface, pr
     component: comp.id,
     ...(narrowed ? { interface: narrowed } : {}),
     componentType: comp.componentType,
-    ...(exportKindOf(comp, pi.type, pi.role) ? { type: exportKindOf(comp, pi.type, pi.role)! } : {}),
+    ...(exportKindOf(comp, legacyType(pi), pi.role) ? { type: exportKindOf(comp, legacyType(pi), pi.role)! } : {}),
     ...(pi.details !== undefined ? { details: pi.details } : {}),
     ...(pi.role ? { role: pi.role } : {}),
     via: [],
@@ -412,7 +416,7 @@ function subsystemCandidates(
       // authored kind is read only where none is derived (the legacy value).
       const entry = {
         ...bound,
-        ...(pi.type && !bound.type ? { type: pi.type } : {}),
+        ...(legacyType(pi) && !bound.type ? { type: legacyType(pi) } : {}),
         ...(pi.details !== undefined ? { details: pi.details } : {}),
         ...(pi.role ? { role: pi.role } : {}),
       };
@@ -585,9 +589,15 @@ export interface ExportSources {
   audienceOf: Map<string, string>;
 }
 
-/** Where an L0 entry re-exports from: `from`, `subsystem`, else its item's owner; `own` for a project-level type. */
+/** An export entry's wairon 5 authored `type`, read in the v5 reading only; the kind is otherwise derived from the backing Portal's transport. */
+function legacyType(entry: { type?: string }): string | undefined {
+  return readsV5Forms() ? entry.type : undefined;
+}
+
+/** Where an L0 entry re-exports from: `from` (or, in the v5 reading, the wairon 5 `subsystem`), else its item's owner; `own` for a project-level type. */
 function sourceOf(world: ExportWorld, e: SystemPublicInterface): string | 'own' | undefined {
-  if (e.from ?? e.subsystem) return e.from ?? e.subsystem;
+  const stated = l0ExportFrom(e);
+  if (stated) return stated;
   if (e.component) return world.components.get(e.component)?.subsystem;
   if (e.interface) {
     const intf = world.interfaces.get(e.interface);
@@ -609,7 +619,7 @@ function withEntryMetadata(entry: ResolvedExport, e: SystemPublicInterface): Res
     ...(e.name ? { name: e.name } : {}),
     // The export kind is derived from the backing Portal's transport; an
     // authored L0 kind is read only where none is derived (the legacy value).
-    ...(e.type && !entry.type ? { type: e.type } : {}),
+    ...(legacyType(e) && !entry.type ? { type: legacyType(e) } : {}),
     ...(e.role ? { role: e.role } : {}),
     ...(e.details !== undefined ? { details: e.details } : {}),
     ...(e.authPolicy ? { authPolicy: e.authPolicy } : {}),
@@ -654,9 +664,9 @@ function classifySource(world: ExportWorld, sourceId: string | 'own' | undefined
 function duplicateDetail(entries: SystemPublicInterface[], index: number): string | null {
   const e = entries[index];
   if (e.from !== undefined || e.component !== undefined || e.interface !== undefined || e.typeDef !== undefined) return null;
-  const name = e.as ?? e.id;
+  const name = l0ExportName(e);
   if (name === undefined) return null;
-  const other = entries.findIndex((x, i) => i !== index && (x.as ?? x.id) === name);
+  const other = entries.findIndex((x, i) => i !== index && l0ExportName(x) === name);
   if (other === -1) return null;
   return `has a duplicate entry "${name}": entry #${index + 1} names no source and no item, while entry #${other + 1} declares the same id — delete the copy (entry #${index + 1}), or give it a source and an item under an id of its own`;
 }
@@ -665,10 +675,10 @@ function duplicateDetail(entries: SystemPublicInterface[], index: number): strin
 function bindOwnType(world: ExportWorld, owner: string, e: SystemPublicInterface, problems: ExportProblem[]): ResolvedExport | undefined {
   const type = (world.types.get(e.typeDef!) ?? []).find((t) => !t.subsystem);
   if (!type) {
-    problems.push({ kind: 'invalid', owner, publicName: e.as ?? e.id ?? localName(e.typeDef!), detail: `exports type "${e.typeDef}" as its own, but the project owns no project-level type of that id` });
+    problems.push({ kind: 'invalid', owner, publicName: l0ExportName(e) ?? localName(e.typeDef!), detail: `exports type "${e.typeDef}" as its own, but the project owns no project-level type of that id` });
     return undefined;
   }
-  const name = e.as ?? e.id ?? localName(type.id);
+  const name = l0ExportName(e) ?? localName(type.id);
   checkPublicName(name, owner, problems);
   return { publicName: name, kind: 'type', source: owner, typeDef: type.id, via: [] };
 }
@@ -698,21 +708,21 @@ function bindFromProject(
   if (named && picked.length === 0) {
     // The source is recorded, so the scan can follow the producer's rename
     // trace (followProducerRenames) and a consumer is told where the name went.
-    const from = e.from ?? e.subsystem;
+    const from = l0ExportFrom(e);
     problems.push({
-      kind: 'invalid', owner, publicName: e.as ?? e.id ?? requested,
+      kind: 'invalid', owner, publicName: l0ExportName(e) ?? requested,
       detail: `re-exports "${requested}" from ${source.label}, whose export table has no such public name — another project is reached only through its L0 exports`,
       ...(from !== undefined ? { source: from } : {}),
     });
     return [];
   }
   if (!named && table.entries.length === 0) {
-    problems.push({ kind: 'invalid', owner, ...((e.from ?? e.subsystem) !== undefined ? { source: (e.from ?? e.subsystem)! } : {}), detail: emptySourceDetail(source.label, 'its L0 export table exports nothing') });
+    problems.push({ kind: 'invalid', owner, ...(l0ExportFrom(e) !== undefined ? { source: l0ExportFrom(e)! } : {}), detail: emptySourceDetail(source.label, 'its L0 export table exports nothing') });
     return [];
   }
   const declared = e.audience ?? 'instance';
   return picked.map((found) => {
-    const publicName = named ? (e.as ?? e.id ?? found.publicName) : found.publicName;
+    const publicName = named ? (l0ExportName(e) ?? found.publicName) : found.publicName;
     const bound = withEntryMetadata({ ...found, publicName, via: [source.namespace, ...found.via] }, e);
     if (reach(declared) > reach(found.audience)) {
       problems.push({
@@ -743,11 +753,11 @@ function bindFromSubsystem(
   const sourceTable = subsystemTables.get(subsystem.id) ?? emptyTable(subsystem.id, 'subsystem');
   if (e.component !== undefined || e.typeDef !== undefined || e.interface !== undefined) {
     const bound = bindNamed(world, owner, subsystem, sourceTable,
-      { component: e.component, interface: e.interface, typeDef: e.typeDef, ...((e.as ?? e.id) !== undefined ? { as: e.as ?? e.id } : {}) },
+      { component: e.component, interface: e.interface, typeDef: e.typeDef, ...(l0ExportName(e) !== undefined ? { as: l0ExportName(e) } : {}) },
       // The default public name is the item's own LOCAL id: a member's L0 is
       // read with its ids keyed under its project, and its entry names the
       // item as the member wrote it.
-      () => e.as ?? e.id ?? localName(e.interface ?? e.component ?? e.typeDef!),
+      () => l0ExportName(e) ?? localName(e.interface ?? e.component ?? e.typeDef!),
       false, problems);
     if (!bound) return [];
     checkPublicName(bound.publicName, owner, problems);
@@ -771,7 +781,7 @@ function bindFromSubsystem(
 /**
  * iexport_resolver.projectTable — resolve a project's L0 table through its
  * subsystem tables, its own project-level types and the tables of the members
- * and externals its aliases name. The public name is `as ?? id ?? interface ??
+ * and externals its aliases name. The public name is `as ?? interface ??
  * component ?? typeDef` exactly as the entry writes it; each entry's audience
  * (default instance) applies to every name it brings in. A project with no L0
  * answers an empty table.
@@ -795,7 +805,7 @@ export function resolveProjectTable(
   // Steps 4-11: each entry, followed by its source's kind.
   const entries = system.publicInterfaces ?? [];
   entries.forEach((e, index) => {
-    const label = e.as ?? e.id ?? e.interface ?? e.component ?? e.typeDef ?? `#${index + 1}`;
+    const label = l0ExportName(e) ?? e.interface ?? e.component ?? e.typeDef ?? `#${index + 1}`;
     const source = classifySource(world, sourceOf(world, e), label, sources);
     switch (source.kind) {
       case 'own': {

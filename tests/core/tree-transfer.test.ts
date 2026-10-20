@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { v5it } from '../helpers/v5-reading.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -81,7 +82,7 @@ describe('inspectChainedRoots().roots', () => {
     expect(inspectChainedRoots().roots).toEqual([]);
   });
 
-  it('walks nested chains, and skips a mount whose directory is missing', () => {
+  v5it('walks nested chains, and skips a mount whose directory is missing', () => {
     const root = mkTmp('wai-chain-nested-');
     initProject(root, 'parent');
     const child = path.join(root, 'packages', 'billing');
@@ -135,7 +136,7 @@ describe('exportSpecTree', () => {
     expect(result.archive.byteLength).toBeGreaterThan(0);
   });
 
-  it('packs every chained subproject alongside the parent', () => {
+  v5it('packs every chained subproject alongside the parent', () => {
     const root = mkTmp('wai-export-chain-');
     initProject(root, 'parent');
     initProject(path.join(root, 'packages', 'billing'), 'billing');
@@ -156,7 +157,7 @@ describe('exportSpecTree', () => {
     expect(() => exportSpecTree()).toThrow(/no spec tree to export/);
   });
 
-  it('refuses a partial export, naming the missing mount, unless allowPartial is set', () => {
+  v5it('refuses a partial export, naming the missing mount, unless allowPartial is set', () => {
     const root = mkTmp('wai-export-missing-');
     initProject(root, 'parent');
     setProjectRoot(root);
@@ -174,7 +175,7 @@ describe('exportSpecTree', () => {
     expect(result.archive.byteLength).toBeGreaterThan(0);
   });
 
-  it('skips a chained root whose directory exists but holds no .wai, as no-spec-tree', () => {
+  v5it('skips a chained root whose directory exists but holds no .wai, as no-spec-tree', () => {
     const root = mkTmp('wai-export-nospec-');
     initProject(root, 'parent');
     // The directory is real, but never provisioned as a wairon project.
@@ -266,7 +267,7 @@ describe('importSpecTree', () => {
     expect(fs.readFileSync(backedUp, 'utf8')).toContain('old');
   });
 
-  it('recreates a chained subproject layout at the destination', () => {
+  v5it('recreates a chained subproject layout at the destination', () => {
     const src = mkTmp('wai-chain-src-');
     initProject(src, 'parent');
     initProject(path.join(src, 'packages', 'billing'), 'billing');
