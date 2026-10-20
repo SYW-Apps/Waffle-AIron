@@ -141,6 +141,9 @@ const RUBY_KEYWORDS = words(`alias and begin break case class def defined? do el
   module next nil not or redo rescue retry return self super then true undef unless until when while yield
   BEGIN END __ENCODING__ __LINE__ __FILE__`);
 
+/** The Rust keywords that can never be raw identifiers (the compiler refuses `r#self`). */
+const RUST_UNESCAPABLE = words('crate self Self super');
+
 /** One language's table: what it reserves, and for which kinds of identifier. */
 interface LanguageWords {
   label: string;
@@ -149,6 +152,8 @@ interface LanguageWords {
   kinds: ReadonlySet<'method' | 'param' | 'field'>;
   /** Extra words refused for one kind only (TypeScript: constructor as a method). */
   extra?: Partial<Record<'method' | 'param' | 'field', ReadonlySet<string>>>;
+  /** How the language spells a reserved word as an ordinary identifier, or null for a word it cannot escape; absent when the language has no escape. */
+  escape?: (word: string) => string | null;
 }
 
 const EVERY = new Set<'method' | 'param' | 'field'>(['method', 'param', 'field']);
@@ -160,19 +165,21 @@ const PARAMS_ONLY = new Set<'method' | 'param' | 'field'>(['param']);
  * never as a parameter, and a class method can never be named `constructor`;
  * Ruby allows a keyword as a method name only after an explicit receiver and
  * never as a parameter. Rust, Python, Go, Java, C#, C and Kotlin refuse their
- * keywords as every kind of identifier.
+ * keywords as every kind of identifier. A language that can spell a reserved
+ * word as an ordinary identifier (Rust `r#type`, C# `@class`, Kotlin backticks)
+ * carries an `escape`; such a word is no error here (see reservedWordEscape).
  */
 const LANGUAGES: Readonly<Record<string, LanguageWords>> = {
   typescript: { label: 'TypeScript', reserved: JS_KEYWORDS, kinds: PARAMS_ONLY, extra: { method: words('constructor') } },
   javascript: { label: 'JavaScript', reserved: JS_KEYWORDS, kinds: PARAMS_ONLY, extra: { method: words('constructor') } },
-  rust: { label: 'Rust', reserved: RUST_KEYWORDS, kinds: EVERY },
+  rust: { label: 'Rust', reserved: RUST_KEYWORDS, kinds: EVERY, escape: (w) => (RUST_UNESCAPABLE.has(w) ? null : `r#${w}`) },
   python: { label: 'Python', reserved: PYTHON_KEYWORDS, kinds: EVERY },
   go: { label: 'Go', reserved: GO_KEYWORDS, kinds: EVERY },
   java: { label: 'Java', reserved: JAVA_KEYWORDS, kinds: EVERY },
-  csharp: { label: 'C#', reserved: CSHARP_KEYWORDS, kinds: EVERY },
-  'c#': { label: 'C#', reserved: CSHARP_KEYWORDS, kinds: EVERY },
+  csharp: { label: 'C#', reserved: CSHARP_KEYWORDS, kinds: EVERY, escape: (w) => `@${w}` },
+  'c#': { label: 'C#', reserved: CSHARP_KEYWORDS, kinds: EVERY, escape: (w) => `@${w}` },
   c: { label: 'C', reserved: C_KEYWORDS, kinds: EVERY },
-  kotlin: { label: 'Kotlin', reserved: KOTLIN_KEYWORDS, kinds: EVERY },
+  kotlin: { label: 'Kotlin', reserved: KOTLIN_KEYWORDS, kinds: EVERY, escape: (w) => `\`${w}\`` },
   ruby: { label: 'Ruby', reserved: RUBY_KEYWORDS, kinds: PARAMS_ONLY },
 };
 
@@ -210,6 +217,8 @@ export function reservedWordProblem(text: string, kind: IdentifierKind, targetLa
   if (!table) return null;
   const reserved = (table.kinds.has(kind) && table.reserved.has(text)) || (table.extra?.[kind]?.has(text) ?? false);
   if (!reserved) return null;
+  // A word the language can escape is no error: reservedWordEscape notices it.
+  if (table.escape?.(text)) return null;
   const what = kind === 'param' ? 'parameter' : kind;
   const why = kind === 'method' && text === 'constructor'
     ? `in ${table.label} a class method named "constructor" is the class's constructor, so no ${what} can be named so`
@@ -218,4 +227,21 @@ export function reservedWordProblem(text: string, kind: IdentifierKind, targetLa
     ? `targetLanguage ${declared}`
     : 'no targetLanguage is declared, so the tree is judged as TypeScript, the convention its camelCase method casing follows';
   return `"${text}": ${why} (${language}) — choose another, e.g. "${alternative(text, kind === 'method' ? casing : undefined)}"`;
+}
+
+/**
+ * identifier.escapedIn — a notice for a name the target language reserves but
+ * can spell as an ordinary identifier (Rust `r#type`, C# `@class`, Kotlin
+ * backticks), or null when the word is not reserved, cannot be escaped (Rust
+ * `self`) or the language has no escape. It suggests no rename. Pure.
+ */
+export function reservedWordEscape(text: string, kind: IdentifierKind, targetLanguage?: string): string | null {
+  if (kind !== 'method' && kind !== 'param' && kind !== 'field') return null;
+  const declared = targetLanguage?.trim() ? targetLanguage.trim().toLowerCase() : undefined;
+  const table = ownGet(LANGUAGES, declared ?? 'typescript');
+  if (!table?.escape) return null;
+  const reserved = (table.kinds.has(kind) && table.reserved.has(text)) || (table.extra?.[kind]?.has(text) ?? false);
+  const spelled = reserved ? table.escape(text) : null;
+  if (!spelled) return null;
+  return `"${text}": a word ${table.label} reserves; the code spells it ${spelled} (targetLanguage ${declared ?? 'typescript'})`;
 }

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseYaml } from '../../../utils/yaml.js';
 import type { LockRecord } from '../../../core/index.js';
+import { v5FormsIn, type V5FormHolder } from '../../../models/index.js';
 
 // ---------------------------------------------------------------------------
 // v5_tree_file_adapter — raw file reads and moves over a v5 project tree.
@@ -149,4 +150,47 @@ export function keepStaleRecord(root: string): LockRecord | null {
     format: 3,
     reexpressed: { at: new Date().toISOString(), fromAlgorithm: raw.stateId.algorithm, fromReading: 'content', by: 'wairon upgrade' },
   } as unknown as LockRecord;
+}
+
+/** One spec file still holding a wairon 5 form, with the sentences naming each form. */
+export interface V5FormsLeft {
+  file: string;
+  forms: string[];
+}
+
+/** A spec file's raw document, or null when it is no mapping or no YAML. */
+function rawDocument(file: string): Record<string, unknown> | null {
+  try {
+    const doc = parseYaml(fs.readFileSync(file, 'utf-8'));
+    return doc && typeof doc === 'object' && !Array.isArray(doc) ? (doc as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Which kind of spec a raw document is, told apart the way the loader tells them; null for one that holds no v5 form. */
+function holderOf(file: string, specs: string, doc: Record<string, unknown>): V5FormHolder | null {
+  if (path.dirname(file) === specs && ['.index.yaml', 'system.yaml'].includes(path.basename(file))) return 'system';
+  if ('parentSystem' in doc) return 'subsystem';
+  if ('componentType' in doc) return 'component';
+  return 'component' in doc ? 'interface' : null;
+}
+
+/**
+ * The spec files under a root's specs folder that still hold a wairon 5 form,
+ * read raw (the running release refuses them): the system file, and each
+ * subsystem, component and contract.
+ */
+export function v5FormsLeft(root: string): V5FormsLeft[] {
+  const dir = configDir(root);
+  const specs = dir ? path.join(dir, 'specs') : null;
+  if (!specs || !fs.existsSync(specs)) return [];
+  const out: V5FormsLeft[] = [];
+  for (const file of yamlFiles(specs)) {
+    const doc = rawDocument(file);
+    const holder = doc ? holderOf(file, specs, doc) : null;
+    const forms = doc && holder ? v5FormsIn(holder, doc) : [];
+    if (forms.length > 0) out.push({ file, forms });
+  }
+  return out;
 }

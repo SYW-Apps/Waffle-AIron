@@ -26,6 +26,9 @@ export const typeDeclarationsRule: SddRule = {
           `Type "${t.id}" references non-existent subsystem "${t.subsystem}".`,
           t.id,
           isDraftCtx,
+          undefined,
+          undefined,
+          `subsystem:${t.subsystem}`,
         );
       }
 

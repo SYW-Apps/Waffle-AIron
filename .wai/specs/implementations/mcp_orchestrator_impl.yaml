@@ -500,7 +500,7 @@ methods:
           under its key
         type: branch
         condition: the load found nothing
-        onTrueStep: 20
+        onTrueStep: 21
         onFalseStep: 18
       - stepNumber: 18
         label: not-found
@@ -515,21 +515,21 @@ methods:
         targetMethod: readPinnedSpec
       - stepNumber: 19
         description: >-
+          When no pin holds it either, read the loader's findings: a spec of that kind and id whose
+          file exists but fails to parse is not missing, and must not be answered as missing
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: getLoaderIssues
+      - stepNumber: 20
+        description: >-
           Answer the pinned read when the pin holds the name — the pinned entry as the spec, the
           pinnedSnapshot marker beside it (alias, producer, snapshot file, StateId), read-only: an
           external is written from its own root; narrowed to named methods as a spec of this tree is
-          (step 20: a name the entry does not hold refused, a partial-result marker) — else refuse a
-          read of a spec that does not exist, naming the kind and the id asked for
+          (a name the entry does not hold refused, a partial-result marker). Else, when the loader
+          refused that spec's file, refuse saying it exists but fails to parse, quoting the loader's
+          reason, so the author repairs the file rather than recreating it; else refuse a read of a
+          spec that does not exist, naming the kind and the id asked for
         type: return
-      - stepNumber: 20
-        description: >-
-          When the read was narrowed to named methods: refuse the filter outright when the spec
-          declares no methods at all, or when a name it does not declare is asked for — naming the
-          ones it does, and returning nothing, so a misspelling never reads as a method with no
-          content. Otherwise keep the named methods and attach the partial-result marker: what is
-          shown, how many are omitted, and the warning that a write REPLACES the method list, so
-          re-authoring from this answer would remove every method left out
-        type: local
       - stepNumber: 21
         description: Decide whether the spec read carries variant guidance
         type: branch
@@ -555,9 +555,14 @@ methods:
         targetMethod: resolveVariantGuidance
       - stepNumber: 25
         description: >-
-          Answer with the STORED spec and the derived markers beside it, so nothing derived can be
-          mistaken for something stored and written back; the text rendering folds them in, as it
-          always has
+          When the read was narrowed to named methods, refuse the filter outright when the spec
+          declares no methods at all, or when a name it does not declare is asked for — naming the
+          ones it does, and returning nothing, so a misspelling never reads as a method with no
+          content; otherwise keep the named methods and attach the partial-result marker: what is
+          shown, how many are omitted, and the warning that a write REPLACES the method list, so
+          re-authoring from this answer would remove every method left out. Answer with the STORED
+          spec and the derived markers beside it, so nothing derived can be mistaken for something
+          stored and written back; the text rendering folds them in, as it always has
         type: return
         outcome: SpecReadResult
     symbol: sdd_get_spec
@@ -957,4 +962,4 @@ methods:
 conformance: anchored
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-19T19:48:07.013Z'
+updatedAt: '2026-10-20T19:14:39.170Z'

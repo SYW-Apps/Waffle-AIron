@@ -246,7 +246,14 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: readProjectSystem
+  - name: getLoaderIssues
+    narrative:
+      - stepNumber: 1
+        description: Forward the read to the core subsystem's published portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: getLoaderIssues
 conformance: anchored
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-15T16:03:16.679Z'
+updatedAt: '2026-10-20T19:12:23.561Z'
