@@ -755,7 +755,7 @@ export const callConformanceRule: SddRule = {
       const open = new Map([...found].filter(([ref]) => !unnarrated.has(ref) && routeOpen(component, parseDeclaredCall(ref)?.compId ?? '')));
       if (open.size > 0) {
         const said = implMethod.narrative.length > 0 && callLevel
-          ? `its narrative states no detail (read as ${resolved.level}, not stated) and never names these collaborators`
+          ? `its narrative names none of these collaborators, and neither the method nor its implementation states a detail that would make it the whole list`
           : implMethod.narrative.length > 0 ? 'its narrative is at detail: intent' : 'it has no narrative and declares no calls';
         ctx.addIssue(
           'notice',
