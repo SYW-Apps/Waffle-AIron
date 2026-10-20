@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### Stated detail is binding, unstated detail is open
+
+Detail is never required, and wairon never assumes what was left out: what a method states
+it calls is binding, and where it states nothing, every route its component depends on is
+open, and wairon says so.
+
+- **Declared `calls` are judged like narrative call steps.** `PORTAL_WRITE_SHORTCUT`,
+  `SUPERVISOR_WRITE_SHORTCUT`, `LIFECYCLE_CALLS_WRITE` and the entry-point checks read only
+  narrative steps, so a write declared in `calls` passed them. They now read both and point at
+  "step N" or "a declared call". A design whose declared calls break one of these newly fails.
+- **Agent briefs say what is fixed and what is open.** Each implementer brief has a section
+  with one line per method: binding (make exactly the calls named), or open (the collaborators
+  the narrative names, and every other one its component depends on, which the design allows
+  without saying the method takes it — take one only as needed, and name it in the report).
+- **Status says how much of the design is binding.** Beside the completeness percentage,
+  `wairon status` and `sdd_get_status` count the methods that state their calls and the ones
+  that leave routes open.
+- **Design export 2.1:** each method body carries `detailStated`. A minor version: the field
+  is added, nothing is removed or redefined.
+
+### Small fixes
+
+- `wairon upgrade` on an unstamped 6.0.0 tree no longer says "written by major 5
+  (unstamped)": it says "made by wairon 6.0.0, before the major stamp".
+- `OPEN_ROUTE_CALL` no longer says "read as full, not stated".
+
 ## v6.1.0 (from v6.0.0)
 
 v6.1 moves compatibility out of the core: a release reads only its own major's forms,
