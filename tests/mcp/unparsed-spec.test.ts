@@ -124,6 +124,15 @@ describe('references into a spec that fails to parse', () => {
     expect(issues.every((i) => i.target === undefined && i.unparsed === undefined)).toBe(true);
   });
 
+  it('the fold\'s bookkeeping never leaves validation, on an early exit too (no L0 to judge)', () => {
+    const root = brokenProject();
+    fs.rmSync(path.join(root, '.wai', 'specs', '.index.yaml'));
+    const { issues } = validateProject({ rules: BASE_FIXTURE_RULES as never, projectType: 'backend' });
+    expect(issues.some((i) => i.code === 'MISSING_SYSTEM_SPEC')).toBe(true);
+    expect(issues.some((i) => i.code === 'SCHEMA_VALIDATION_ERROR')).toBe(true);
+    expect(issues.every((i) => i.target === undefined && i.unparsed === undefined)).toBe(true);
+  });
+
   it('are reported as before once the file parses', () => {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-unparsed-ok-')));
     roots.push(root);

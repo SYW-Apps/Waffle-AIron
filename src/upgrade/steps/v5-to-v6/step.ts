@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as files from './files.js';
 import * as core from '../../adapters/core.js';
 import * as migrations from '../../adapters/migrations.js';
@@ -153,9 +154,11 @@ export function write(plan: StepPlan): void {
   core.migrateReachability(true);
   // Steps 21-23: the running major cannot read a file that still holds a v5
   // form, so a rewrite that left one refuses the step and nothing is committed.
+  // Each file is named from the project root: the root bound here is the
+  // rehearsal copy, dropped with the refused plan.
   const left = files.v5FormsLeft(root);
   if (left.length > 0) {
-    throw new StepRefused(`the step would leave ${left.length} spec file(s) in a wairon 5 form wairon 6 cannot read: ${left.map((l) => `${l.file} (${l.forms.join('; ')})`).join(' | ')}`);
+    throw new StepRefused(`the step would leave ${left.length} spec file(s) in a wairon 5 form wairon 6 cannot read: ${left.map((l) => `${path.relative(root, l.file).split(path.sep).join('/')} (${l.forms.join('; ')})`).join(' | ')}`);
   }
 }
 

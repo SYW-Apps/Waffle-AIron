@@ -429,8 +429,9 @@ function installBinary(tmpFile: string, destPath: string): void {
     } catch (err: any) {
       if (err.code === 'EPERM' || err.code === 'EBUSY') {
         throw new Error(
-          `wairon.exe is currently in use by an active session (e.g. background MCP servers or IDE agents).\n` +
-          `  Please close all running wairon processes (or run 'taskkill /F /IM wairon.exe' in PowerShell) and try again.`
+          `The update was not installed (${err.code}: ${err.message}); the wairon you run is unchanged.\n` +
+          `  A file it needs is held, usually by a running wairon (background MCP servers or IDE agents).\n` +
+          `  Close the running wairon processes (or run 'taskkill /F /IM wairon.exe' in PowerShell) and try again.`
         );
       }
       throw err;
@@ -457,11 +458,30 @@ function installBinary(tmpFile: string, destPath: string): void {
  */
 export function swapRunningBinary(newBinary: string, destPath: string): void {
   cleanStaleBinary(destPath);
-  const aside = fs.existsSync(destPath + '.old') ? `${destPath}.old-${Date.now()}` : destPath + '.old';
+  const aside = freeAsideName(destPath);
   fs.renameSync(destPath, aside);
-  fs.copyFileSync(newBinary, destPath);
+  try {
+    fs.copyFileSync(newBinary, destPath);
+  } catch (err) {
+    // The new build could not take the slot (a full disk, a scanner holding the
+    // file): the running one goes back, so the install is never left with no
+    // executable at all, and the caller reports the copy's own error.
+    try { fs.rmSync(destPath, { force: true }); } catch { /* nothing was written */ }
+    fs.renameSync(aside, destPath);
+    throw err;
+  }
   // Gone once no process runs from it; until then the next start's sweep retries.
   try { fs.unlinkSync(aside); } catch { /* removed by a later sweep */ }
+}
+
+/** A name beside the executable no leftover holds: `.old`, else `.old-<time>`, counted on past one taken in the same millisecond. */
+function freeAsideName(destPath: string): string {
+  if (!fs.existsSync(`${destPath}.old`)) return `${destPath}.old`;
+  const stamp = Date.now();
+  for (let n = 0; ; n++) {
+    const candidate = n === 0 ? `${destPath}.old-${stamp}` : `${destPath}.old-${stamp}-${n}`;
+    if (!fs.existsSync(candidate)) return candidate;
+  }
 }
 
 /**
