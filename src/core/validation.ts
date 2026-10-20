@@ -560,7 +560,7 @@ export function validateProject(
 const CHECKED_AT_EXACT = ['methods', 'params', 'returns (where annotated)', 'public members', 'imports', 'calls', 'routes', 'data types'];
 const NOT_CHECKED_EVER = ['calls inside helpers and to collaborators a narrative never names (summarized by its detail)'];
 const READING_CHECKS: Record<string, string> = {
-  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls through declared receivers',
+  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls: through declared receivers; a narrated call by name',
 };
 
 /** A Portal binding HTTP endpoints whose implementation names no router, with its exact-grade files (route-coverage's portalsWithoutRouter). */
