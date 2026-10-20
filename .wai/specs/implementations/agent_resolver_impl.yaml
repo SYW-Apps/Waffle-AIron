@@ -302,7 +302,14 @@ methods:
           its code takes such a parameter (sdd_write_narrative injectedParams, or sdd_update_spec —
           no re-lock), never guessed at design time, and the ones its implementations already
           declare are listed as possibly design-time guesses, to be removed when the code does not
-          take them (UNUSED_INJECTED_PARAM). An agent that implements nothing gets none of these
+          take them (UNUSED_INJECTED_PARAM). Each method the record implements then gets one line in
+          a '## What the design fixes and what it leaves open' section, ahead of the project
+          guidance: binding where the method states its calls (declared calls, or a narrative whose
+          stated detail is full or calls-only) — the code makes exactly the calls named, a call left
+          out is UNNARRATED_CALL; open otherwise — the collaborators its narrative names, and every
+          other collaborator its component depends on, which the design allows without saying the
+          method takes it: taken only as the method needs, and named in the report
+          (OPEN_ROUTE_CALL). An agent that implements nothing gets none of these
         type: local
       - stepNumber: 14
         description: >-
@@ -327,4 +334,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T18:24:57.956Z'
+updatedAt: '2026-10-20T13:59:06.611Z'

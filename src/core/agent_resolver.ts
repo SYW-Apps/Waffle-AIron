@@ -33,7 +33,7 @@ import {
   // collapsing to one delegating owner.
   graph,
 } from './specs.js';
-import { ComponentSpec, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type TypeSpec } from '../models/specs.js';
+import { ComponentSpec, callClaims, effectiveDetail, implementationSourceFiles, typeSourceFiles, type ImplementationSpec, type InterfaceSpec, type MethodImplementation, type TypeSpec } from '../models/specs.js';
 import { fieldTypeRefs, methodTypeRefs, resolveTypeRef, typeMatchesRef } from '../models/type-references.js';
 import { languageOfSourcePath } from '../models/code-model.js';
 import { typeMappingFor } from '../models/type-dialects.js';
@@ -710,6 +710,10 @@ export function composeAgentBrief(agentId: string): AgentBrief {
     instructions = `${instructions.trimEnd()}\n\n${linkageSection(record)}`;
   }
 
+  // What the design fixes and what it leaves open, per method this agent implements.
+  const detail = codeFence ? detailSection(record) : null;
+  if (detail) instructions = `${instructions.trimEnd()}\n\n${detail}`;
+
   // Fold the optional user-owned project guidance (.wai/agents/<agentId>.md,
   // read LIVE — an edit applies on the next call) under an attributed section,
   // so the user's delta stays legible AS a delta over the inferred brief.
@@ -909,6 +913,56 @@ function methodFileCaller(
 function codeFenceOf(record: AgentRecord): string[] | null {
   if (!implementsComponents(record)) return null;
   return record.ownedPaths.filter((p) => !p.startsWith('.wai/') && !p.includes('/.wai/') && !/[*?]/.test(p));
+}
+
+/** Whether a method states its calls: declared calls, or a narrative whose stated detail is call-level (full or calls-only). */
+function statesCalls(method: MethodImplementation, impl: ImplementationSpec, component: ComponentSpec): boolean {
+  if ((method.calls?.length ?? 0) > 0) return true;
+  const detail = effectiveDetail(method, impl, component);
+  return detail.explicit && detail.level !== 'intent' && method.narrative.length > 0;
+}
+
+/**
+ * The brief's account of what the design fixes and what it leaves open, one
+ * line per method this agent implements. Stated detail is binding: the code
+ * makes exactly the calls the narrative or declared calls name. Unstated, the
+ * narrative says what the design says, and every other collaborator the
+ * component depends on is a route the design allows without saying the
+ * method takes it: open, never assumed — used only as the method needs, and
+ * named in the report. Null when the agent implements no method.
+ */
+function detailSection(record: AgentRecord): string | null {
+  const owned = new Set(record.ownedPaths);
+  const contracts = new Map(loadInterfaceSpecs().map((i) => [i.id, i]));
+  const components = new Map(loadComponentSpecs().map((c) => [c.id, c]));
+  const lines: string[] = [];
+  for (const impl of loadImplementationSpecs().filter((i) => implementationSourceFiles(i).some((file) => owned.has(file)))) {
+    const component = components.get(contracts.get(impl.contract)?.component ?? '');
+    if (!component) continue;
+    for (const method of impl.methods) {
+      const named = [...new Set(callClaims(method).map((c) => c.component))];
+      const where = `\`${component.id}.${method.name}\``;
+      if (statesCalls(method, impl, component)) {
+        const list = method.narrative.length > 0 ? 'narrative' : 'declared calls';
+        lines.push(`- ${where}: binding — make exactly the calls its ${list} name${named.length > 0 ? ` (${named.join(', ')})` : ''}.`);
+        continue;
+      }
+      const open = component.dependsOn.filter((dep) => !named.includes(dep));
+      const says = named.length > 0 ? `its narrative names ${named.join(', ')}` : 'its narrative names no collaborator';
+      lines.push(open.length > 0
+        ? `- ${where}: open — ${says}; it may also call ${open.join(', ')}, which the design allows without saying this method does.`
+        : `- ${where}: open — ${says}, every collaborator its component depends on.`);
+    }
+  }
+  if (lines.length === 0) return null;
+  return [
+    '## What the design fixes and what it leaves open',
+    '',
+    'Where a method states its detail (or declares its calls) its calls are binding: the narrative is the whole list, and a call it leaves out fails `validate --ci` (UNNARRATED_CALL). Where it does not, the design is open: take an open route only as the method needs it, and name every one you use in your report — `validate` shows each as OPEN_ROUTE_CALL.',
+    '',
+    ...lines,
+    '',
+  ].join('\n');
 }
 
 /**
