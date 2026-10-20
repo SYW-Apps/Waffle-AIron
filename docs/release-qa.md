@@ -74,7 +74,7 @@ subagent playing a real developer who learns wairon only from the docs shipped i
 
 | Seat | Who | What it proves |
 |---|---|---|
-| 1. Upgrader | Builds a realistic project with the published previous stable (`@wairon/cli@latest`, today 5.1.0), then upgrades to the RC following ONLY the CHANGELOG's upgrade steps. | The upgrade path a real team takes works as written, and the everyday loop survives it. |
+| 1. Upgrader | Builds a realistic project with the published previous stable (`@wairon/cli@latest`), then upgrades to the RC following ONLY the CHANGELOG's upgrade steps. | The upgrade path a real team takes works as written, and the everyday loop survives it. |
 | 2. Newcomer | Has never seen wairon; works from the README and shipped docs only. Builds a small app end to end: design, validate, lock, implement one component from a brief, change the design, re-lock. | The first hour is possible without insider knowledge. |
 | 3. Stress and adversarial | A multi-project family (members plus an external), one Python service. Writes code that deliberately disagrees with its design. | The code-vs-design gate catches ordinary mismatches in more than one language, and does not cry wolf. |
 | 4. Hosted operator (conditional) | Sets up the hosted server with the web UI, two users, tokens and a shared project. | The hosted setup works from the docs, and roles and tokens do what they say. |
