@@ -55,6 +55,10 @@ Who is affected:
 
 ### Small fixes
 
+- `wairon update` on Windows no longer fails with "wairon.exe is currently in use" when an
+  MCP server started before the previous update is still running from the old binary:
+  the update moves the running exe aside under a fresh name, and leftovers are swept
+  once no process runs from them.
 - `wairon upgrade` on an unstamped 6.0.0 tree no longer says "written by major 5
   (unstamped)": it says "made by wairon 6.0.0, before the major stamp".
 - `OPEN_ROUTE_CALL` no longer says "read as full, not stated".

@@ -729,17 +729,20 @@ methods:
         optional: true
   - name: cleanStaleBinary
     description: >-
-      Remove the `.old` binary a previous self-update left beside a packaged (pkg) executable, or
-      the one named — once when the binary starts, and before each rename during `wairon update`. A
-      file still locked by the OS is left for the next start; a non-packaged install has nothing to
-      clean.
-    signature: 'cleanStaleBinary(oldPath?: string): void'
+      Remove the binaries earlier self-updates left beside an executable — its .old and .old-<time>
+      siblings — or beside the running packaged (pkg) executable when none is named: once when the
+      binary starts, and before each swap during `wairon update`. A leftover a process still runs
+      from (an MCP server started before the last update) is left for a later sweep; a non-packaged
+      install has nothing to clean.
+    signature: 'cleanStaleBinary(executable?: string): void'
     returns: void
     params:
-      - name: oldPath
+      - name: executable
         type: string
-        description: The leftover to remove; omitted, the running packaged executable's `.old` sibling
+        description: The executable whose leftovers to sweep; omitted, the running packaged executable
         optional: true
+        previousNames:
+          - oldPath
   - name: announceBinding
     description: >-
       Name the project a command is about to act on: `project <id> at <root>` on one line, on stderr
@@ -983,4 +986,4 @@ methods:
         command's action — a hook the framework calls, not an action endpoint.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-18T19:04:23.324Z'
+updatedAt: '2026-10-20T20:15:07.106Z'
