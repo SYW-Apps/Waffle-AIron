@@ -310,17 +310,20 @@ export function planExternalize(family: ProjectFamily, bound: string, request: M
   const id = request.subsystem ?? '';
   const node = familyNode(family, bound)!;
   const subKey = keyIn(bound, id);
-  // A completed externalize plans nothing: the id is a member at that path, and no subsystem of ours any more.
+  const sub = id.includes('::') ? null : core.loadSpec('subsystem', subKey) as SubsystemSpec | null;
+  const inPart = node.parts.some((p) => p.subsystems.includes(subKey));
+  // A completed externalize plans nothing: the id is a member at that path, and
+  // no subsystem of the top tree any more. A part declared under the subsystem's
+  // id before the move (an empty part to move it into) is not a completed one.
   const done = ownGet(configAt(node.directory)?.members, id);
   const donePath = done === undefined ? undefined : memberLocationOf(done);
   const asProject = request.as === 'project';
-  if (donePath !== undefined && request.path !== undefined && path.resolve(node.directory, donePath) === path.resolve(node.directory, request.path)) return plan;
+  const samePath = donePath !== undefined && request.path !== undefined && path.resolve(node.directory, donePath) === path.resolve(node.directory, request.path);
+  if (samePath && (!sub || inPart)) return plan;
   // Steps 1-2: where the path lands, and whether a project is already there.
   const dir = files.resolve(node.directory, request.path ?? '');
   const occupied = dir !== null && files.holdsProject(dir);
   // Step 3: judge the request.
-  const sub = id.includes('::') ? null : core.loadSpec('subsystem', subKey) as SubsystemSpec | null;
-  const inPart = node.parts.some((p) => p.subsystems.includes(subKey));
   if (!sub || sub.projectPath || (family.owners.get(subKey) ?? '') !== bound || inPart) refuse(plan, 'externalize-refused', bound, `${label(bound)} has no subsystem "${id}" to externalize (it is missing, already in a part, or a member)`);
   if (request.as !== undefined && request.as !== 'part' && request.as !== 'project') refuse(plan, 'externalize-refused', bound, `\`as: ${request.as}\` — a member is a part or a project`);
   if (dir === null) refuse(plan, 'not-contained', bound, `the path "${request.path ?? ''}" does not resolve strictly within ${label(bound)}`);

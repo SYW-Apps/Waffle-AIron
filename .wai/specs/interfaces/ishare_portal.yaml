@@ -85,4 +85,4 @@ methods:
       path: /share/:token/download/:kind
 status: complete
 createdAt: '2026-07-17T22:30:37.401Z'
-updatedAt: '2026-10-03T17:53:37.146Z'
+updatedAt: '2026-10-20T22:22:15.675Z'

@@ -227,6 +227,65 @@ describe('the findings name the method that changed', () => {
   });
 });
 
+describe('Python: a narrated call the code no longer makes is reported by absence', () => {
+  const unrealized = (tree: FixtureTree): string[] =>
+    run(tree).issues.filter(i => i.code === 'CALL_STEP_UNREALIZED').map(i => i.message);
+
+  it('a dropped call is CALL_STEP_UNREALIZED, naming the target and that a call is matched by name', () => {
+    const found = unrealized(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    return "route-" + parcel_id',
+    ]), true));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('tracking-store.record');
+    expect(found[0]).toContain("makes no call by the target method's name");
+    expect(found[0]).toContain('matched by name');
+  });
+
+  it('a call renamed in the code alone is reported', () => {
+    const found = unrealized(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    self._store.record_v2(parcel_id, parcel_id)',
+      '    return parcel_id',
+    ]), true));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('tracking-store.record');
+  });
+
+  it('an honest call through self._field is silent', () => {
+    expect(unrealized(dispatchTree(py(PY_DISPATCH_BODY), true))).toEqual([]);
+  });
+
+  it('a call through an unannotated receiver with the right name is silent', () => {
+    expect(unrealized(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    sink = self._pick()',
+      '    sink.record(parcel_id, parcel_id)',
+      '    return parcel_id',
+    ]), true))).toEqual([]);
+  });
+
+  it('a call made in a helper the function reaches is silent', () => {
+    expect(unrealized(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    self._book(parcel_id)',
+      '    return parcel_id',
+      '',
+      'def _book(self, parcel_id: str) -> None:',
+      '    self._store.record(parcel_id, parcel_id)',
+    ]), true))).toEqual([]);
+  });
+
+  it('conformance off judges nothing forward', () => {
+    const tree = dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    return "route-" + parcel_id',
+    ]), true);
+    tree.implementations!.find(i => i.id === 'dispatch_orchestrator_impl')!.methods![0].conformance = 'off';
+    expect(unrealized(tree)).toEqual([]);
+  });
+});
+
 describe('an import against a Portal\'s call edge is reported once, on the importer', () => {
   const importsDesk = (python: boolean, imports: string[]): string[] => {
     const tree = python
@@ -275,7 +334,7 @@ describe('the code reading says what was checked', () => {
   it('a Python realization is read at pattern grade, its checks and its gaps named', () => {
     const reading = run(dispatchTree(py(PY_DISPATCH_BODY), true)).result.codeReading ?? '';
     expect(reading).toMatch(/^Code read at grade pattern/);
-    expect(reading).toContain('python: 2 file(s) at grade pattern with its signature reader, checked methods, params, returns (where annotated), public members, imports, calls through declared receivers — not checked: routes, data types');
+    expect(reading).toContain('python: 2 file(s) at grade pattern with its signature reader, checked methods, params, returns (where annotated), public members, imports, calls: through declared receivers; a narrated call by name — not checked: routes, data types');
   });
 
   it('a Portal binding HTTP endpoints with no router named is counted among what was not checked', () => {

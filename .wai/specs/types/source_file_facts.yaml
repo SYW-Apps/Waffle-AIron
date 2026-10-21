@@ -325,6 +325,16 @@ fields:
       tells an exported class nothing uses from the module's own factoring
       (UNDECLARED_PUBLIC_MEMBER). EXACT grade, and the Python reader
     optional: true
+  - name: typePositionOnlyBindings
+    type: list<string>
+    description: >-
+      The value import bindings of the file whose every reference is in a type position (a type
+      reference, typeof, an implements clause): a type import whatever its spelling. A name also
+      constructed, called, extended, passed or re-exported anywhere is not listed, nor one
+      annotating a constructor parameter or property of a class carrying a decorator: under
+      decorator metadata that annotation is emitted as a runtime value, an injection token. Exact
+      grade only; UNDECLARED_EXPORT does not count such a binding as taking the export.
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -443,4 +453,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-17T19:36:49.683Z'
+updatedAt: '2026-10-20T23:40:13.862Z'

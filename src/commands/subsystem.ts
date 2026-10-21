@@ -125,7 +125,7 @@ export async function runMemberAdd(alias: string, source: string, options: Membe
     // Steps 8-10: a project in a folder on disk gets the wairon tools for its own sessions.
     if (creation.storage !== 'git') await setUpProjectSessions(nodePath.resolve(getProjectRoot(), source));
   } else {
-    logger.info(`Its subsystems are this project's own: write them by their local ids, judged and locked with this project. \`wairon member promote ${alias}\` makes it a project when it needs its own team, release, approval or public surface.`);
+    logger.info(`Its subsystems are this project's own: write them by their local ids, judged and locked with this project. A new subsystem is added to the top project's tree; \`wairon subsystem externalize <id> --path ${JSON.stringify(source)}\` moves one into this part. \`wairon member promote ${alias}\` makes it a project when it needs its own team, release, approval or public surface.`);
   }
 }
 

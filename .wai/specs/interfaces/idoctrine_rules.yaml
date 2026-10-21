@@ -23,7 +23,12 @@ methods:
       same HTTP method and path — the Portal's basePath joined in, placeholders compared by position
       whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal,
       or across Portals that declare the same basePath, are a duplicate route: no router can
-      dispatch both and an OpenAPI document holds one operation per path and verb.
+      dispatch both and an OpenAPI document holds one operation per path and verb. An endpoint's
+      path is written under its Portal's basePath, which is joined in front of it, so a path
+      beginning with the basePath's own whole segments (basePath /products with /products/{id}) is
+      joined into a route that repeats the prefix (/products/products/{id}):
+      ENDPOINT_BASEPATH_REPEATED, a warning, naming the joined route and both fixes — a segment
+      prefix only, so /apiary under /api is not judged.
     signature: 'portalEndpoints(ctx: RuleContext): void'
     returns: void
     params:
@@ -53,6 +58,12 @@ methods:
           An HTTP endpoint states a status that is no standard success or redirect code, or one that
           contradicts what its method answers: a 204 or 304 for a method answering a value, or a
           redirect for a method answering anything but the location (a string)
+      - code: ENDPOINT_BASEPATH_REPEATED
+        severity: warning
+        summary: >-
+          An HTTP endpoint's path begins with its Portal's own basePath segments, so the joined
+          route repeats the prefix (basePath /products with /products/{id} serves
+          /products/products/{id})
   - name: nonPortalEndpoints
     description: >-
       Rule non-portal-endpoints. Only a Portal may carry endpoints: a method on a non-Portal
@@ -542,4 +553,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-20T13:50:42.756Z'
+updatedAt: '2026-10-20T22:21:15.166Z'

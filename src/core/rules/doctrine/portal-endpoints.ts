@@ -66,12 +66,13 @@ export const portalsRule: SddRule = {
   name: 'portal-endpoints',
   judges: 'design',
   description:
-    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names). An HTTP endpoint's stated `status` is the success code its callers and its OpenAPI document read, so it must be a standard success or redirect code (200-208, 226, 300-308) and must agree with what the method answers: a 204 or a 304 carries no body, so a method that answers a value cannot state it, and a redirect sends the caller on with a Location header and no body, so the value a redirecting method answers is that location — a string (or a named type holding one), never a record. One HTTP route binds one verb: two methods bound to the same HTTP method and path — the Portal's basePath joined in, placeholders compared by position whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI document holds one operation per path and verb.",
+    "A Portal binds every interface method to a concrete endpoint of its own transport, when that transport requires one (transport.requiresEndpoint): every transport but InProcess, whose verbs are the contract methods themselves, and Custom, whose address is free-form. An HTTP endpoint's path placeholders (`{name}`, or a `:name` segment) bind the method's parameters, so each must be closed, appear once and name a parameter of the method or a field of a parameter's type (a method that states no structured params is not judged on names). An HTTP endpoint's stated `status` is the success code its callers and its OpenAPI document read, so it must be a standard success or redirect code (200-208, 226, 300-308) and must agree with what the method answers: a 204 or a 304 carries no body, so a method that answers a value cannot state it, and a redirect sends the caller on with a Location header and no body, so the value a redirecting method answers is that location — a string (or a named type holding one), never a record. One HTTP route binds one verb: two methods bound to the same HTTP method and path — the Portal's basePath joined in, placeholders compared by position whatever their name or spelling (`{id}` and `:code` are the same segment) — within one Portal, or across Portals that declare the same basePath, are a duplicate route: no router can dispatch both and an OpenAPI document holds one operation per path and verb. An endpoint's path is written under its Portal's basePath, which is joined in front of it, so a path beginning with the basePath's own whole segments (basePath /products with /products/{id}) is joined into a route that repeats the prefix (/products/products/{id}): ENDPOINT_BASEPATH_REPEATED, a warning, naming the joined route and both fixes — a segment prefix only, so /apiary under /api is not judged.",
   codes: [
     { code: 'MISSING_ENDPOINT', defaultSeverity: 'error', summary: 'Portal method without a wire endpoint binding, on a transport that requires one' },
     { code: 'ENDPOINT_TRANSPORT_MISMATCH', defaultSeverity: 'error', summary: "Endpoint transport does not match the Portal's transport" },
     { code: 'ENDPOINT_PATH_PLACEHOLDER', defaultSeverity: 'error', summary: 'An HTTP endpoint path holds an unclosed placeholder, one placeholder twice, or a placeholder that names no parameter of its method' },
     { code: 'ENDPOINT_ROUTE_DUPLICATE', defaultSeverity: 'error', summary: 'Two methods bound to the same HTTP method and path (placeholders compared by position) within one Portal, or across Portals declaring the same basePath' },
+    { code: 'ENDPOINT_BASEPATH_REPEATED', defaultSeverity: 'warning', summary: "An HTTP endpoint's path begins with its Portal's own basePath segments, so the joined route repeats the prefix (basePath /products with /products/{id} serves /products/products/{id})" },
     { code: 'ENDPOINT_STATUS_MISMATCH', defaultSeverity: 'warning', summary: 'An HTTP endpoint states a status that is no standard success or redirect code, or one that contradicts what its method answers: a 204 or 304 for a method answering a value, or a redirect for a method answering anything but the location (a string)' },
   ],
   check(ctx) {
@@ -130,6 +131,8 @@ export const portalsRule: SddRule = {
         }
       }
     }
+    // Step 12b: an endpoint path that repeats the basePath it is joined under.
+    repeatedBasePaths(ctx);
     // Step 13: a stated status the protocol or the method contradicts.
     statusMismatches(ctx);
     // Steps 14-17: one HTTP route binds one verb.
@@ -195,6 +198,41 @@ function duplicateRoutes(ctx: RuleContext): void {
         // A contradiction, not unfinished work: never downgraded on a draft.
         false,
       );
+    }
+  }
+}
+
+/**
+ * Step 12b of portal-endpoints: an HTTP endpoint path is written UNDER its
+ * Portal's basePath, so one that begins with the basePath's own segments
+ * (whole segments, never a string prefix: `/apiary` is not under `/api`)
+ * is joined into a route that repeats the prefix. Nearly always a mistake;
+ * ENDPOINT_BASEPATH_REPEATED, a warning, names the joined route and both fixes.
+ */
+function repeatedBasePaths(ctx: RuleContext): void {
+  for (const comp of ctx.components) {
+    if (comp.componentType !== 'Portal' || comp.transport !== 'HTTP') continue;
+    const base = (comp.basePath ?? '').split('/').map((s) => s.trim()).filter(Boolean);
+    if (base.length === 0) continue;
+    const basePath = `/${base.join('/')}`;
+    const isDraftCtx = ctx.isComponentDraft(comp.id);
+    for (const intf of ctx.interfaces.filter((i) => i.component === comp.id)) {
+      const isIntfDraft = intf.status === 'draft' || intf.status === 'design';
+      for (const m of intf.methods) {
+        const endpoint = m.endpoint as { transport?: string; method?: string; path?: string } | undefined;
+        if (endpoint?.transport !== 'HTTP' || typeof endpoint.path !== 'string') continue;
+        const segments = endpoint.path.split('/').map((s) => s.trim()).filter(Boolean);
+        if (!base.every((segment, index) => segments[index] === segment)) continue;
+        const joined = `/${[...base, ...segments].join('/')}`;
+        const stripped = `/${segments.slice(base.length).join('/')}`;
+        ctx.addIssue(
+          'warning',
+          'ENDPOINT_BASEPATH_REPEATED',
+          `Method "${m.name}" on interface "${intf.id}" binds ${String(endpoint.method ?? 'HTTP').toUpperCase()} ${endpoint.path}, which begins with the basePath "${basePath}" of its Portal "${comp.id}": the basePath is joined in front of every endpoint path, so the route is ${joined}, repeating the prefix. Drop the prefix from the endpoint (${stripped}), or from the Portal's basePath, so the route is not doubled.`,
+          intf.id,
+          isDraftCtx || isIntfDraft,
+        );
+      }
     }
   }
 }

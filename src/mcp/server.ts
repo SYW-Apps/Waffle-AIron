@@ -102,7 +102,7 @@ import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
 // The pending-transaction banner sdd_get_status and sdd_validate_tree lead
 // with: unfinished family migrations under the bound root (mcp_migration_orchestrator).
-import { pending as pendingMigrations, run as runMigration } from './migrations.js';
+import { pending as pendingMigrations, run as runMigration, scaffold as scaffoldSessions } from './migrations.js';
 import type { FamilyMigrationReport, MigrationRequest } from '../migrations/types.js';
 
 // ---------------------------------------------------------------------------
@@ -1578,7 +1578,7 @@ function standingRefusal(name: string): string | null {
     // found, and the oldest major the upgrade reads is assumed, as upgrade says.
     const written = tree.stamped
       ? `was written by an older wairon major (${tree.writtenMajor}) than the one running (${tree.runningMajor})`
-      : `carries no major stamp, so it is assumed to be written by wairon ${tree.writtenMajor} (the running major is ${tree.runningMajor}; a tree wairon 6.0.0 made before the stamp is only stamped)`;
+      : `carries no major stamp, so it is assumed to be written by wairon ${tree.writtenMajor} (the running major is ${tree.runningMajor}); if wairon 6.0.0 made it before the stamp existed, \`wairon upgrade\` only adds the stamp`;
     return `${name} refused — the project at ${root} ${written}. `
       + 'Ask the human to run `wairon upgrade` there; the assistant never runs it. Nothing was read or written.';
   }
@@ -2246,10 +2246,18 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const creation = createMember(alias, source, description, as);
         const next = creation.as === 'project'
           ? `${describeMemberPacks(creation)} Design it from its own root and export what others consume from its L0; reference it here as ${alias}::<name>.`
-          : ` Its subsystems are this project's own: write them by their local ids. sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
-        // Step 3: a folder created beside the project is said first, never left to be found.
+          : ` Its subsystems are this project's own: write them by their local ids. sdd_add_subsystem adds a subsystem to the top project's tree; move one into this part with sdd_externalize_subsystem (path: ${source}). sdd_promote_member makes it a project when it needs its own team, release, approval or public surface.`;
+        // Step 3: a project in a folder on disk is set up for its own sessions,
+        // as `wairon member add` sets it up: without them a session opened there
+        // has no tools to design it with.
+        const files = creation.as === 'project' && dir !== null && fs.existsSync(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
+        const sessions = files === null ? ''
+          : files.some((f) => f.startsWith('not set up'))
+            ? ` Its own sessions are ${files.join('; ')}.`
+            : ` It is set up for its own sessions (${files.join(', ')}): a session opened in that folder designs it.`;
+        // Step 4: a folder created beside the project is said first, never left to be found.
         const created = createdOutside ? `Created a new folder OUTSIDE this project, at ${dir} (beside ${root}). ` : '';
-        return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}`, creation);
+        return structured(`${created}Added the ${creation.as} "${alias}" at ${source}${creation.commit ? ` (pinned at ${creation.commit})` : ''}, declared in project.yaml \`members\`.${next}${sessions}`, creation);
       } catch (e) {
         return errText(String(e));
       }

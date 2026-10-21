@@ -250,15 +250,19 @@ methods:
       a call made inside a helper the function calls (one statement, one local step), a call to a
       component the design does not list as a dependency at all (UNDECLARED_DEPENDENCY's), or a
       reference taken as a value; a write said as one is UNDECLARED_WRITE_CALL's. Where no type
-      checker read the file but a reader read its calls (Python), the call sites of the method's
-      body, closed over its own file's helpers and stopping at another modelled method, land through
-      what the code DECLARES: a bare call on an import binding in that module, a call through a
-      namespace binding in that module, `self.<field>` through the class the field is annotated with
-      (or the annotated parameter the constructor assigns it from), an annotated name the same way.
-      A claim on a component whose own code drifted from its contract's return
-      (RETURN_TYPE_MISMATCH) is not reported as CALL_ORIGIN_UNRESOLVED: a port typed after the
-      contract no longer matches the class, so the call no longer resolves for that reason — the
-      drift's consequence, held under that one finding and judged again once it is fixed.
+      checker read the file but a reader read its calls (Python), a claim is judged forward by name,
+      by absence only: it is realized by any call of the function (closed over everything it
+      reaches) under a name the target is realized by, whatever the receiver, and reported as
+      CALL_STEP_UNREALIZED only when no call carries that name (a target in another language, with
+      no file, or whose code has not begun is not judged); and the call sites of the method's body,
+      closed over its own file's helpers and stopping at another modelled method, land through what
+      the code DECLARES: a bare call on an import binding in that module, a call through a namespace
+      binding in that module, `self.<field>` through the class the field is annotated with (or the
+      annotated parameter the constructor assigns it from), an annotated name the same way. A claim
+      on a component whose own code drifted from its contract's return (RETURN_TYPE_MISMATCH) is not
+      reported as CALL_ORIGIN_UNRESOLVED: a port typed after the contract no longer matches the
+      class, so the call no longer resolves for that reason — the drift's consequence, held under
+      that one finding and judged again once it is fixed.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -743,15 +747,19 @@ methods:
       from: below that nothing separates an export from a mention, or a shared word from a shared
       module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns,
       so the owner's file, or another member of the same pattern, importing a member's class is the
-      owns relation made real. And the surface no taker reveals: a public method of a component's
-      REALIZING class — a class holding one of its modelled methods — or a function its realizing
-      file exports, that no contract of the components the file realizes declares (nor a `symbol`,
-      `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or
-      reference in its own file, no name another analyzed file writes, no identifier in a project
-      file the run did not analyze (its tests, a composition root), no star re-export publishing the
-      module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller
-      explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to
-      it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
+      owns relation made real. Nor is a declared dependent taking a class that realizes the
+      component it depends on (a class holding one of its modelled methods): constructing it, or
+      receiving it injected under its class (a decorator-metadata token), is the dependsOn edge made
+      real. Taken by a component with no such dependency it still crosses, an owned member's class
+      above all. And the surface no taker reveals: a public method of a component's REALIZING class
+      — a class holding one of its modelled methods — or a function its realizing file exports, that
+      no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`,
+      `router` or type of it) and that NOTHING in the project uses — no call or reference in its own
+      file, no name another analyzed file writes, no identifier in a project file the run did not
+      analyze (its tests, a composition root), no star re-export publishing the module on — is
+      UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains.
+      Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a
+      function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
       constructors, accessors and fields, static, private, protected, #private and
       underscore-prefixed members, an `override`, a computed name, a language protocol or framework
       lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount,
@@ -1238,4 +1246,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-20T09:11:52.467Z'
+updatedAt: '2026-10-21T07:56:56.283Z'

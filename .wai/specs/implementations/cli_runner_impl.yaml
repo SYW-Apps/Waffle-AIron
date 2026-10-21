@@ -291,7 +291,13 @@ methods:
       - stepNumber: 14
         description: >-
           Download the asset for this platform and swap the running binary, keeping the previous one
-          beside it so a bad release can be stepped back from
+          beside it so a bad release can be stepped back from. On Windows the running exe is renamed
+          aside (an exe cannot be overwritten while it runs, but it can be renamed) after the
+          leftovers of earlier updates are swept; when one a process still runs from keeps the .old
+          name, it moves aside under a fresh .old-<time> name instead of failing on it; when the new
+          build cannot take the slot, the running one is moved back before the error is reported, so
+          the install is never left without an executable, and the error says the running wairon is
+          unchanged
         type: local
       - stepNumber: 15
         description: Done
@@ -435,8 +441,9 @@ methods:
           commit); for a project whose configuration was created, the required packs it applied
           (name and pinned version), the projectType it set, and each requirement nothing installed
           satisfies. For a part, one line on the growth path: its subsystems are this project's own;
-          `wairon member promote` makes it a project when it needs its own team, release, approval
-          or public surface
+          a new subsystem is added to the top project's tree and `wairon subsystem externalize <id>
+          --path <the part's path>` moves one into the part; `wairon member promote` makes it a
+          project when it needs its own team, release, approval or public surface
         type: local
       - stepNumber: 8
         label: project-sessions
@@ -3555,18 +3562,18 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Resolve the leftover: the oldPath given, else — only when running as a packaged executable
-          — the executable's own path with `.old` appended, else nothing.
+          Resolve the executable: the one given, else — only when running as a packaged executable —
+          the running one, else nothing.
         type: local
       - stepNumber: 2
-        description: Only an existing leftover is removed.
+        description: Only a resolved executable has leftovers to sweep.
         type: branch
-        condition: a leftover resolved and it exists on disk
+        condition: an executable resolved
         onFalseStep: 4
       - stepNumber: 3
         description: >-
-          Unlink it, swallowing the error a file the OS still holds raises, so the next start
-          retries.
+          Unlink each of its .old and .old-<time> siblings, swallowing the error a file a process
+          still runs from raises, so a later sweep retries.
         type: local
       - stepNumber: 4
         description: Return; the cleanup never throws.
@@ -3946,7 +3953,9 @@ methods:
         label: done
         description: >-
           Print the projects now on the running major, and each project whose design moved with
-          `wairon lock` to run at its root
+          `wairon lock` to run at its root; a plan that rewrote anything is also written whole to
+          .wai/upgrade-report.md at the family root (every rewrite and every decision verbatim, one
+          per line), so an author works from the file and never copies text off a wrapped console
         type: local
       - stepNumber: 15
         description: Upgraded
@@ -4159,4 +4168,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-20T09:29:26.895Z'
+updatedAt: '2026-10-21T06:01:57.904Z'

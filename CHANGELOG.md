@@ -22,6 +22,46 @@ open, and wairon says so.
 - **Design export 2.1:** each method body carries `detailStated`. A minor version: the field
   is added, nothing is removed or redefined.
 
+### Fixes
+
+- **`wairon update` on Windows stages the new build first.** The new executable is copied beside the
+  running one before anything moves, so a failed copy (a full disk, a scanner holding the file)
+  leaves the running wairon untouched; the swap itself is two renames.
+- **`.wai/upgrade-report.md` is written whole or not at all**: it is staged and renamed into place,
+  so a failed write never leaves a partial report.
+
+## v6.1.2 (from v6.1.1)
+
+A fix release from the review of 6.1.1 and from upgrading a large family. Nothing to do when
+upgrading: install 6.1.2.
+
+- **`wairon upgrade` keeps who calls a method.** A v5 `invokedBy: { kind: sibling-subsystem }` that
+  no modelled call stands for is now rewritten to `kind: runtime` with its `caller` kept byte for
+  byte, instead of dropped: the method stays reached, as it was, and the report names the call to
+  model instead (`INVOKED_BY_REDUNDANT` then names the declaration to remove). A tree 6.1.1 already
+  upgraded has lost those callers: recover them from version control, or upgrade the pre-upgrade
+  commit again with 6.1.2.
+- **`wairon upgrade` writes its report to `.wai/upgrade-report.md`.** Every rewrite and decision is
+  there in full, one per line, so nothing has to be copied off a wrapped console.
+- The upgrade report for a subsystem export no Portal backs no longer points at
+  `EXPORT_UNCONSUMABLE`, which judges only the L0 table and L1 re-exports.
+- **TypeScript, NestJS and Angular:** 6.1.1 counted a plain import used only as a type as a type
+  import. In a class carrying a decorator, a constructor parameter or property type is emitted as a
+  runtime injection token under decorator metadata, so it is a value use again, and an
+  `UNDECLARED_EXPORT` crossing there is reported as before 6.1.1.
+- **`UNDECLARED_EXPORT` no longer reports dependency injection by class.** A component that declares
+  `dependsOn` on another and constructs or injects the class realizing it (decorated or not) is
+  the dependency made real, not a surface reached across. A component without that dependency
+  taking the class, or anyone taking an owned member's class, is still reported.
+- **`wairon update` (Windows):** when the new build cannot be copied into place after the running
+  one was moved aside, the running one is moved back, so the install is never left without
+  `wairon.exe`; the error says the running wairon is unchanged.
+- Validation no longer returns its internal reference bookkeeping when it stops early (no L0, an
+  unknown subsystem).
+- The MCP refusal for an unstamped project reads as a sentence; the upgrade's own refusal names
+  leftover files from the project root, not from its temporary copy; the printed
+  `subsystem externalize --path` is quoted.
+
 ## v6.1.1 (from v6.1.0)
 
 A fix release for `wairon upgrade`. On a project whose design used a wairon 5 form the
@@ -74,9 +114,45 @@ Who is affected:
   backtick) and suggesting no rename.
 - The MCP server's refusal for a project with no major stamp says no stamp was found
   and that wairon 5 is assumed, as `wairon upgrade` does.
+- Moving a subsystem into a part declared first under the subsystem's id
+  (`sdd_externalize_subsystem`, `wairon subsystem externalize`) planned nothing and gave no
+  reason: it read the part as an externalize already done. It now moves the subsystem in.
+  Adding a part also says how a subsystem gets into it: `sdd_add_subsystem` adds to the top
+  project's tree, and externalize moves one into the part.
+- **Python:** a narrated call deleted from the code is now reported (`CALL_STEP_UNREALIZED`).
+  Python code is read without a type checker, so a call is matched by name: a claim is
+  reported only when the method's code makes no call by that name at all. The
+  "Code checked" line says so ("a narrated call by name"). Before, only calls the code
+  makes that the narrative does not name were judged for Python, though the line said
+  calls were checked.
+- **TypeScript:** a class imported with a plain `import { X }` and used only as a type (a
+  constructor parameter, an annotation) no longer draws `UNDECLARED_EXPORT` on the file
+  that exports it; it is a type import whatever its spelling, as `import type` was.
+- **HTTP Portals:** an endpoint path that repeats its Portal's `basePath` (`basePath: /products`
+  with `/products/{id}`, which serves `/products/products/{id}`) is the new warning
+  `ENDPOINT_BASEPATH_REPEATED`, at design time. `UNDECLARED_ROUTE` and `UNROUTED_ENDPOINT` print
+  the full joined route, and say so when the code and the design differ only by a repeated
+  basePath. A route printed as `//…` is fixed. Designs that repeat the prefix now fail
+  `--ci`: drop the prefix from the endpoint paths, or the `basePath`.
+- A project member added through the MCP server (`sdd_add_member` with `as: project`) is set up
+  for its own sessions (guide, skills, `.mcp.json`), as `wairon member add` already did; before,
+  a session opened in its folder had no wairon tools.
+- A migration run through the MCP server no longer lists the spec tree's write lock as a
+  file to delete, and never removes the lock a running write holds.
+
+### Known limitations
+
+- After `wairon lock`, approved and unchanged specs are judged as complete, so
+  `UNUSED_COMPONENT` on an approved draft component is no longer waived by `validate --ci`
+  (the waiver covers draft components only until they are approved). Wire or remove the
+  component before locking.
 
 ### Small fixes
 
+- `wairon update` on Windows no longer fails with "wairon.exe is currently in use" when an
+  MCP server started before the previous update is still running from the old binary:
+  the update moves the running exe aside under a fresh name, and leftovers are swept
+  once no process runs from them.
 - `wairon upgrade` on an unstamped 6.0.0 tree no longer says "written by major 5
   (unstamped)": it says "made by wairon 6.0.0, before the major stamp".
 - `OPEN_ROUTE_CALL` no longer says "read as full, not stated".

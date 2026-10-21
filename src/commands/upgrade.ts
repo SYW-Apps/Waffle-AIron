@@ -109,10 +109,53 @@ function printPlan(plan: UpgradePlan): void {
   logger.blank();
 }
 
-/** Print the projects now stamped and each that owes `wairon lock`. */
+/** Where an applied upgrade's plan is written, under the family's top root. */
+export const UPGRADE_REPORT_FILE = path.join('.wai', 'upgrade-report.md');
+
+/**
+ * The applied plan as Markdown: every rewrite and every decision in full, so
+ * an author works from the file and never copies text off a wrapped console.
+ * Pure.
+ */
+export function reportMarkdown(plan: UpgradePlan): string {
+  const lines = [`# wairon upgrade — to major ${plan.runningMajor}`, ''];
+  for (const s of plan.standings) {
+    if (s.state === 'older') lines.push(`- \`${s.root}\`: ${s.unfinished ? `an unfinished upgrade from wairon ${s.writtenMajor}` : `written by major ${s.writtenMajor}`}`);
+  }
+  for (const step of plan.steps) {
+    if (step.changes.length === 0 && step.reported.length === 0) continue;
+    lines.push('', `## ${step.project} (major ${step.step.from} to ${step.step.to})`);
+    if (step.changes.length > 0) {
+      lines.push('', '### Rewritten', '');
+      for (const c of step.changes) lines.push(`- ${c.design ? '**design** ' : ''}${c.spec ? `\`${c.spec}\`: ` : ''}${c.description}`);
+    }
+    if (step.reported.length > 0) {
+      lines.push('', '### To decide', '');
+      for (const r of step.reported) lines.push(`- ${r}`);
+    }
+  }
+  if (plan.whatChanged.length > 0) {
+    lines.push('', '## What the new major changes', '');
+    for (const line of plan.whatChanged) lines.push(`- ${line}`);
+  }
+  return lines.join('\n') + '\n';
+}
+
+/** Print the projects now stamped and each that owes `wairon lock`; a plan that rewrote anything is also written to the report file. */
 function printOutcome(report: TreeUpgradeReport): void {
   for (const root of report.stamped) logger.success(`${root} is now on major ${report.plan.runningMajor}`);
   for (const root of report.relock) logger.warn(`${root}: the approved design moved — run \`wairon lock\` at its root`);
+  if (isStampOnly(report.plan)) return;
+  const file = path.join(report.plan.familyRoot, UPGRADE_REPORT_FILE);
+  try {
+    // Written whole or not at all: a failed write never leaves a partial report.
+    const staged = `${file}.tmp`;
+    fs.writeFileSync(staged, reportMarkdown(report.plan));
+    fs.renameSync(staged, file);
+    logger.info(`Every rewrite and decision is written to ${file}.`);
+  } catch (err) {
+    logger.warn(`The upgrade is applied, but its report could not be written to ${file} (${(err as Error).message}); the plan above is the whole of it.`);
+  }
 }
 
 /** Ask the person a yes/no question; the default is no. */
