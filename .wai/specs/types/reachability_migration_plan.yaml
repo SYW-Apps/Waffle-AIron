@@ -14,8 +14,8 @@ fields:
     type: list<ReachRewrite>
     description: >-
       What it will not decide for the author, and why: an endpoint outside every old prefix, a
-      dropped sibling-subsystem declaration whose caller is not modelled, a dropped export type that
-      disagreed with the derived one or that no Portal derives, a portalType that named no
+      sibling-subsystem declaration kept as runtime whose caller is not modelled, a dropped export
+      type that disagreed with the derived one or that no Portal derives, a portalType that named no
       transport. Never a form left in place: wairon 6 cannot read one
     optional: false
   - name: applied
@@ -25,4 +25,4 @@ fields:
 methods: []
 sourcePath: src/core/reachability-migration.ts
 createdAt: '2026-10-06T13:06:43.847Z'
-updatedAt: '2026-10-20T18:38:26.785Z'
+updatedAt: '2026-10-21T06:02:16.789Z'

@@ -2,8 +2,19 @@
 
 ## v6.1.2 (from v6.1.1)
 
-A fix release from the review of 6.1.1. Nothing to do when upgrading: install 6.1.2.
+A fix release from the review of 6.1.1 and from upgrading a large family. Nothing to do when
+upgrading: install 6.1.2.
 
+- **`wairon upgrade` keeps who calls a method.** A v5 `invokedBy: { kind: sibling-subsystem }` that
+  no modelled call stands for is now rewritten to `kind: runtime` with its `caller` kept byte for
+  byte, instead of dropped: the method stays reached, as it was, and the report names the call to
+  model instead (`INVOKED_BY_REDUNDANT` then names the declaration to remove). A tree 6.1.1 already
+  upgraded has lost those callers: recover them from version control, or upgrade the pre-upgrade
+  commit again with 6.1.2.
+- **`wairon upgrade` writes its report to `.wai/upgrade-report.md`.** Every rewrite and decision is
+  there in full, one per line, so nothing has to be copied off a wrapped console.
+- The upgrade report for a subsystem export no Portal backs no longer points at
+  `EXPORT_UNCONSUMABLE`, which judges only the L0 table and L1 re-exports.
 - **TypeScript, NestJS and Angular:** 6.1.1 counted a plain import used only as a type as a type
   import. In a class carrying a decorator, a constructor parameter or property type is emitted as a
   runtime injection token under decorator metadata, so it is a value use again, and an

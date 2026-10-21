@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "d092943db26a7ee8783868e916d261cc308e9b42d4287cc858a15df31896a329"
+    "digest": "37886952a9f8983b95d6937a1e39a7ba5b406c820d888b73a22d4ac8dbe674ae"
   },
-  "lockedAt": "2026-10-21T05:33:14.364Z",
+  "lockedAt": "2026-10-21T06:27:27.784Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -250,7 +250,7 @@
     ".wai/specs/components/public_surface_store.yaml": "e210bb3aff43780961c2b572367f1b0ec4075aa544f511ca2b5bc77800602cf9",
     ".wai/specs/components/quota_rules.yaml": "0a4ea4caf7bced6dd6d3fcee10b14bff75d37bc3e4065a1fbda8d87aef75d4fc",
     ".wai/specs/components/reach_model_projector.yaml": "33cf0a49be3d8224142515d36028fa6caf5120f2d86de33b776e1db198471ce9",
-    ".wai/specs/components/reachability_migration.yaml": "1016a822f5b07ee45966414cca57e2df20547f0f59f84576c3eaeedecd033deb",
+    ".wai/specs/components/reachability_migration.yaml": "8f5a20a90a0abf441f73888a3bf85339b2965d008be8614dc9917268ecf281fa",
     ".wai/specs/components/remote_binding_store.yaml": "878dd89eb8ded30bc1c18460c7d04a369330b8b6702e51957259fd8b17e775bc",
     ".wai/specs/components/remote_orchestrator.yaml": "a3cf3fe4b9dc93000a15dcfdcc81443c2553b7fd2e944b0ab51b55240b087e48",
     ".wai/specs/components/retired_value_migration.yaml": "5a09599cda86e12e3a24a2fc6084798aecc593ea830576e711b9779998e494fa",
@@ -392,7 +392,7 @@
     ".wai/specs/implementations/cli_producer_adapter_impl.yaml": "8912d8673b69fe7216636bb24fa560099b74588538c52a3084ea78e8b7333519",
     ".wai/specs/implementations/cli_remote_adapter_impl.yaml": "da3f84647aa94c48f19c930d78b50fde8fc71255f4faaea44b829c62b0a983e0",
     ".wai/specs/implementations/cli_rules_adapter_impl.yaml": "9a4925af85d5e7b7308cae63327a02ff2ebc1180c538f2a2c8825eff35271138",
-    ".wai/specs/implementations/cli_runner_impl.yaml": "9e0ee4fe53b9f0572c90de0317fd65a1901a37be587e853a424dbd169bcfac87",
+    ".wai/specs/implementations/cli_runner_impl.yaml": "e4f0cb076de0320a7694e51f9e25e98988fd24cb49ae69e013a485c1b90d46eb",
     ".wai/specs/implementations/cli_skills_adapter_impl.yaml": "474f9b058c52e74e6b2b41ec9c77fc39f21945949d88aa4c958ef0bed298ec4f",
     ".wai/specs/implementations/cli_surfaces_client_adapter_impl.yaml": "a7e9125c0ab25ccd52a8d420f51127057ad9c21da9375e15e2226ea4936aa2b3",
     ".wai/specs/implementations/cli_upgrade_adapter_impl.yaml": "c5ecf287fad973bf799d6cdd999500f2779a8c7d0fc83e8c13c213379c59bb0f",
@@ -582,7 +582,7 @@
     ".wai/specs/implementations/public_surface_store_impl.yaml": "8187d5b25e49273801cc3038b6eec9fc9b7e9c9c733bd2eecfc744783045992c",
     ".wai/specs/implementations/quota_rules_impl.yaml": "cd3522a184de2a9c13b72f63354e85d7b1a8c9544bef8d51bdf4fbdede92ff78",
     ".wai/specs/implementations/reach_model_projector_impl.yaml": "486da4fb794adbb527042bf441f7dea16b767209634f395adc1d1f37a30163ed",
-    ".wai/specs/implementations/reachability_migration_impl.yaml": "c799dacfdb46e1649a3d020620a40e3145ec2e63a5586bfd7a9b48d32e782650",
+    ".wai/specs/implementations/reachability_migration_impl.yaml": "9b36b20660bec5f9a11af91ced127ee8b01c435ab99abdb42f7fb1b0fb194b65",
     ".wai/specs/implementations/remote_binding_store_impl.yaml": "e575476a23e5d8eaf5a8556f5ceae6a8efdca0b021d208c06598ec746dc8847b",
     ".wai/specs/implementations/remote_orchestrator_impl.yaml": "c7999ea495a045662edd2ad495eedf7ddef15d36bd7ae918095158692140b7af",
     ".wai/specs/implementations/retired_value_migration_impl.yaml": "0226099cf43cac845c11701d0cfd24f9bc4cd4302984b36dcdec06f7da0a388e",
@@ -1486,7 +1486,7 @@
     ".wai/specs/types/reach_finding.yaml": "2e94ac87a295456d004124f489c2c35f93240897210d3f602b06341844ccfd23",
     ".wai/specs/types/reach_model.yaml": "94ede83d89385dcc04b61284c1a17c6318b2fb6b9580cf101b25aeda015f0e00",
     ".wai/specs/types/reach_rewrite.yaml": "e80803297751f4d7c15ba4e573910331385d6a0f807203dd315d3940791b1f84",
-    ".wai/specs/types/reachability_migration_plan.yaml": "6759c3889ab27b8488d6bec0574806157d61aff9fcd1256320c911d14cdee2b7",
+    ".wai/specs/types/reachability_migration_plan.yaml": "02f6bf73b2cb314274e0c9f60a0542daccd3f70a4e1a5a1def17d706f53aedb2",
     ".wai/specs/types/reachable_project_ref.yaml": "393c706100a4d2eaae8418ffb8e90c0bb020cf4bb6ed9a492878263f1abf9ac9",
     ".wai/specs/types/realization_index.yaml": "c3ba317d33765e075bb8911a823fe37a317d661de8b965a84d6f443db712797b",
     ".wai/specs/types/reasoning_depth.yaml": "ccc1cd04ed266f18f07434b351b3babc5b28aa0db4cbfdb0cf8ba7be71ac510a",
@@ -1715,7 +1715,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "dc03ed957c9c40a9e68305146f78b8e9f93ce1a7f00a69516612a88c8be83a01",
+    "design": "0b76c4e9efcc17475d590b3fb03378d882616c73af3d9f87051da8ff323984e4",
     "release": "9de73b24df9f3251ac78e334a0428ee64926abd148137a0dc1774423e2de60d7",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",

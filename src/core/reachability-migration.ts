@@ -38,9 +38,10 @@ import {
 // What it never does is invent design, or keep a retired form: wairon 6
 // cannot read a spec holding one. A Portal that was neither a listener nor
 // mounted gets no entry (it surfaces as unreached for its author); a
-// sibling-subsystem invokedBy, an export type that disagrees with the derived
-// kind (or that no Portal derives) and a portalType naming no transport are
-// dropped and reported, with what the author can model instead; an endpoint
+// sibling-subsystem invokedBy no modelled call says is kept as runtime, its
+// caller unchanged, and reported with the call the author can model instead;
+// an export type that disagrees with the derived kind (or that no Portal
+// derives) and a portalType naming no transport are dropped and reported; an endpoint
 // outside every old prefix and a router already set otherwise are reported,
 // not written.
 // ---------------------------------------------------------------------------
@@ -111,15 +112,15 @@ function modelledCalls(implementations: ImplementationSpec[], interfaces: Interf
 }
 
 /**
- * What the author of a dropped sibling-subsystem declaration can model, and
- * which of it the rules allow: the subsystem its stored caller names, when it
- * names one; a call step only where a sibling may reach the method (the
- * subsystem's published Portal, through a client Adapter or a trustedLink),
- * else the route through that Portal; and a runtime declaration where the code
- * receives the method at wiring time rather than through a modelled call.
+ * What the author of a sibling-subsystem declaration kept as runtime can
+ * model, and which of it the rules allow: the subsystem its stored caller
+ * names, when it names one; a call step only where a sibling may reach the
+ * method (the subsystem's published Portal, through a client Adapter or a
+ * trustedLink), else the route through that Portal. The runtime declaration
+ * stays right where the code receives the method at wiring time.
  */
 function siblingCallerAdvice(
-  componentId: string, method: string, caller: string | undefined,
+  componentId: string, caller: string | undefined,
   componentById: Map<string, ComponentSpec>, subsystems: SubsystemSpec[],
 ): string {
   const component = componentById.get(componentId);
@@ -135,7 +136,7 @@ function siblingCallerAdvice(
   const route = published
     ? `${componentId} is ${home}'s published Portal, so a sibling reaches it legally: model a call step from the caller's client Adapter, or from a component of a subsystem with a trustedLink to ${home}`
     : `${componentId} is not ${home ?? 'its subsystem'}'s published Portal, so no other subsystem may call it directly: model the call through ${home ?? 'the subsystem'}'s Portal, which dispatches to it`;
-  return `${said}. Until a caller is modelled, ${componentId}.${method} may read as unused. ${route}; or, if the code receives it at wiring time (an injected dependency) rather than through a call the design models, declare \`invokedBy: { kind: runtime${caller !== undefined ? `, caller: "${caller.replace(/"/g, '\\"')}"` : ''} }\` on it.`;
+  return `${said}. It is kept as \`invokedBy: { kind: runtime }\`${caller !== undefined ? ' with that caller' : ''}, so it stays reached; but runtime says the process's own runtime calls it. If the caller is a component the design can show: ${route}, and INVOKED_BY_REDUNDANT then names the runtime declaration to remove. If the code receives it at wiring time (an injected dependency), runtime is right as it stands.`;
 }
 
 /**
@@ -313,9 +314,10 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
   }
 
   // Step 10: the invokedBy kinds. wairon 6 has no sibling-subsystem kind and
-  // cannot read a spec that holds one, so it is always dropped: what the tree
-  // models already says it, and what it does not is the author's to model,
-  // reported with the routes the rules leave open.
+  // cannot read a spec that holds one. Where a modelled call says it already,
+  // it is dropped; elsewhere it is kept as runtime with its caller unchanged
+  // (the method stays reached, as it was), and reported with the call the
+  // author can model instead.
   const modelled = modelledCalls(implementations, interfaces);
   for (const fact of facts.filter((f) => f.form === 'invoked-by-kind')) {
     const intf = interfaces.find((i) => i.id === fact.specId);
@@ -323,19 +325,20 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
     if (fact.stored === 'sibling-subsystem') {
       const copy = touch('interface', intf.id, intf);
       const method = copy.methods.find((m) => m.name === fact.at);
-      if (!method) continue;
-      const caller = method.invokedBy?.caller;
-      delete method.invokedBy;
+      if (!method?.invokedBy) continue;
+      const caller = method.invokedBy.caller;
       const by = modelled.get(`${intf.component}.${fact.at}`);
       if (by !== undefined) {
+        delete method.invokedBy;
         rewrite(intf.id, 'invoked-by-kind', `invokedBy sibling-subsystem on "${fact.at}" dropped`,
           `The call is modelled: ${by} calls ${intf.component}.${fact.at}, so the declaration said nothing the tree does not.`);
         continue;
       }
-      rewrite(intf.id, 'invoked-by-kind', `invokedBy sibling-subsystem on "${fact.at}" dropped`,
-        'wairon 6 has no sibling-subsystem kind, and no call in the tree reaches the method yet.');
+      method.invokedBy = { ...method.invokedBy, kind: 'runtime' };
+      rewrite(intf.id, 'invoked-by-kind', `invokedBy runtime on "${fact.at}"`,
+        'wairon 6 has no sibling-subsystem kind and no call in the tree reaches the method yet, so it is kept as runtime, its caller unchanged.');
       report(intf.id, 'invoked-by-kind', `caller of "${fact.at}" not modelled`,
-        siblingCallerAdvice(intf.component, fact.at, caller, componentById, subsystems));
+        siblingCallerAdvice(intf.component, caller, componentById, subsystems));
       continue;
     }
     if (fact.stored !== 'external') continue;
@@ -376,7 +379,9 @@ export function migrate(apply: boolean): ReachabilityMigrationPlan {
       rewrite(id, 'export-type', `type ${entry.type} of "${name}" dropped`, 'wairon 6 derives the export kind and reads no authored one.');
       report(id, 'export-type', `type ${entry.type} of "${name}" not derived`,
         derived === undefined
-          ? `No backing Portal derives an export kind for this entry: back it by a Portal of the kind ${entry.type} names, or remove it (EXPORT_UNCONSUMABLE judges what consumers can use).`
+          ? (kind === 'system'
+            ? `No backing Portal derives an export kind for this entry: back it by a Portal of the kind ${entry.type} names, or remove it (EXPORT_UNCONSUMABLE judges what consumers can use).`
+            : `No backing Portal derives an export kind for this entry: a subsystem publishes its Portal, and another subsystem's dependency on anything else is refused where it is declared. Back the entry by a Portal of the kind ${entry.type} names, or remove it.`)
           : `The backing Portal's transport derives ${derived}, not ${entry.type}: if ${entry.type} was right, correct the Portal's transport.`);
     });
   };
