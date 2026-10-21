@@ -1,5 +1,22 @@
 # Changelog
 
+## v6.1.2 (from v6.1.1)
+
+A fix release from the review of 6.1.1. Nothing to do when upgrading: install 6.1.2.
+
+- **TypeScript, NestJS and Angular:** 6.1.1 counted a plain import used only as a type as a type
+  import. In a class carrying a decorator, a constructor parameter or property type is emitted as a
+  runtime injection token under decorator metadata, so it is a value use again, and an
+  `UNDECLARED_EXPORT` crossing there is reported as before 6.1.1.
+- **`wairon update` (Windows):** when the new build cannot be copied into place after the running
+  one was moved aside, the running one is moved back, so the install is never left without
+  `wairon.exe`; the error says the running wairon is unchanged.
+- Validation no longer returns its internal reference bookkeeping when it stops early (no L0, an
+  unknown subsystem).
+- The MCP refusal for an unstamped project reads as a sentence; the upgrade's own refusal names
+  leftover files from the project root, not from its temporary copy; the printed
+  `subsystem externalize --path` is quoted.
+
 ## v6.1.1 (from v6.1.0)
 
 A fix release for `wairon upgrade`. On a project whose design used a wairon 5 form the

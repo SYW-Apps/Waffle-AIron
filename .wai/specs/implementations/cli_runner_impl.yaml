@@ -294,7 +294,10 @@ methods:
           beside it so a bad release can be stepped back from. On Windows the running exe is renamed
           aside (an exe cannot be overwritten while it runs, but it can be renamed) after the
           leftovers of earlier updates are swept; when one a process still runs from keeps the .old
-          name, it moves aside under a fresh .old-<time> name instead of failing on it
+          name, it moves aside under a fresh .old-<time> name instead of failing on it; when the new
+          build cannot take the slot, the running one is moved back before the error is reported, so
+          the install is never left without an executable, and the error says the running wairon is
+          unchanged
         type: local
       - stepNumber: 15
         description: Done
@@ -4163,4 +4166,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-20T21:41:40.852Z'
+updatedAt: '2026-10-20T23:40:14.747Z'

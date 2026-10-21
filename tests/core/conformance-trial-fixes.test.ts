@@ -352,6 +352,16 @@ describe('UNDECLARED_EXPORT — a plain import used only as a type is a type imp
     } finally { proj.cleanup(); }
   });
 
+  it('fire: a decorated class\'s constructor parameter type is an injection token under decorator metadata, a value use', () => {
+    const proj = inject("import { UserStore } from './user_store';\nfunction Injectable(): ClassDecorator { return () => undefined; }\n@Injectable()\nexport class Orch {\n  constructor(private readonly store: UserStore) {}\n  run(): string { return this.store.load(); }\n}\n");
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'UNDECLARED_EXPORT');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('UserStore');
+    } finally { proj.cleanup(); }
+  });
+
   it('fire: the same binding also constructed (a value use) still crosses', () => {
     const proj = inject("import { UserStore } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore = new UserStore()) {}\n  run(): string { return this.store.load(); }\n}\n");
     proj.activate();
