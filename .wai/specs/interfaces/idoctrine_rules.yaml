@@ -240,8 +240,10 @@ methods:
       Supervisor stays out of presentation; what it may do to the data it reaches is judged per call
       (supervisor-shared-data), and what it owns as its supervision state by the ownership rules. A
       component depending on a live Actor reaches it through the Actor's supervision: by depending
-      on a Supervisor that supervises it, or on a Registry such a Supervisor maintains (owns, or
-      calls with lifecycle-effect methods) — the lookup hop callers really take.
+      on a Supervisor that supervises it and taking the handle from it (a lookup by id, or a runner
+      checked out of a pool, needs no data component), or on a Registry such a Supervisor maintains
+      through lifecycle-effect methods when callers find live Actors by id there. A Registry the
+      Supervisor owns is its private supervision state, so a remedy never names one.
     signature: 'entrypointDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -268,8 +270,8 @@ methods:
         severity: error
         summary: >-
           Component depending on a live Actor it does not supervise, reaching it neither through a
-          Supervisor that supervises it nor through a Registry such a Supervisor maintains — model
-          the real lookup hop
+          Supervisor that supervises it nor through a Registry such a Supervisor maintains — depend
+          on the Supervisor, or on that Registry
   - name: portalWriteShortcut
     description: >-
       Rule portal-write-shortcut. A Portal narrative call step, declared call or dispatch-table
@@ -363,8 +365,10 @@ methods:
       stays a Repository; what must never happen is folding the state into a consuming component,
       where no spec, diagram or conformance check can see it again. A Registry standing alone with
       no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent
-      store that belongs typed Store) or orphaned. A Query has no standalone form at all: it
-      computes reads over its own Repository's Store.
+      store that belongs typed Store) or orphaned — unless a Supervisor maintains it through
+      lifecycle-effect calls: then it is that Supervisor's directory of live handles, which holds
+      the handles itself and writes to no Store. A Query has no standalone form at all: it computes
+      reads over its own Repository's Store.
     signature: 'unownedBlocks(ctx: RuleContext): void'
     returns: void
     params:
@@ -381,7 +385,7 @@ methods:
         severity: warning
         summary: >-
           Standalone Registry with no Store to write to — either mistyped (a fused file-backed store
-          belongs typed Store) or orphaned
+          belongs typed Store) or orphaned; a Supervisor's directory of live handles excepted
       - code: UNOWNED_QUERY
         severity: error
         summary: Query not owned by a Repository — a Query computes reads over its own Repository's Store
@@ -553,4 +557,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-20T22:21:15.166Z'
+updatedAt: '2026-10-21T22:44:44.003Z'

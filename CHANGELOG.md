@@ -41,6 +41,13 @@ open, and wairon says so.
   a Portal is reported where it publishes it: nothing can use it, since a hop from another
   subsystem enters through a published Portal and another project consumes only a Portal's
   verbs. Before, only the dependency on it was refused. **Can fail `--ci`.**
+- **A live Actor's handle is supervision, not data.** `ACTOR_REACHED_WITHOUT_SUPERVISOR` now
+  names the Actor's Supervisor first: depend on it and take the handle from it, since a lookup by
+  id or a runner checked out of a pool needs no data component. A Registry is named only as the
+  by-id alternative, and never one the Supervisor owns. Before, the remedy could point at an owned
+  Registry, which is the Supervisor's private state and `SUPERVISION_STATE_INTRUSION`. A Registry
+  a Supervisor maintains through lifecycle calls (a directory of live handles) no longer draws
+  `REGISTRY_WITHOUT_STORE`.
 
 ### Agent files
 

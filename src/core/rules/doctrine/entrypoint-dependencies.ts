@@ -48,13 +48,13 @@ export const entrypointDepsRule: SddRule = {
   name: 'entrypoint-dependencies',
   judges: 'design',
   description:
-    'Judges the edges at the system\'s entry points and its process layer. Portals and Observers are top-level entry points and subscribers, so nothing may depend on them — and that is the edge\'s one finding, which is why no other matrix rule judges it. Downward, a Portal dispatches to Orchestrators and may READ through Indexes and Repository facades but never reaches Store/Registry/Query or an Adapter, while an Observer forwards to one Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A Supervisor stays out of presentation; what it may do to the data it reaches is judged per call (supervisor-shared-data), and what it owns as its supervision state by the ownership rules. A component depending on a live Actor reaches it through the Actor\'s supervision: by depending on a Supervisor that supervises it, or on a Registry such a Supervisor maintains (owns, or calls with lifecycle-effect methods) — the lookup hop callers really take.',
+    'Judges the edges at the system\'s entry points and its process layer. Portals and Observers are top-level entry points and subscribers, so nothing may depend on them — and that is the edge\'s one finding, which is why no other matrix rule judges it. Downward, a Portal dispatches to Orchestrators and may READ through Indexes and Repository facades but never reaches Store/Registry/Query or an Adapter, while an Observer forwards to one Orchestrator or Supervisor over a message-bus Adapter. A View stays a passive presenter. A Supervisor stays out of presentation; what it may do to the data it reaches is judged per call (supervisor-shared-data), and what it owns as its supervision state by the ownership rules. A component depending on a live Actor reaches it through the Actor\'s supervision: by depending on a Supervisor that supervises it and taking the handle from it (a lookup by id, or a runner checked out of a pool, needs no data component), or on a Registry such a Supervisor maintains through lifecycle-effect methods when callers find live Actors by id there. A Registry the Supervisor owns is its private supervision state, so a remedy never names one.',
   codes: [
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_DEP', defaultSeverity: 'error', summary: 'Component depending on a Portal/Observer' },
     { code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP', defaultSeverity: 'error', summary: 'Portal/Observer reaching the data layer directly' },
     { code: 'ARCHITECTURE_VIOLATION_VIEW_DEP', defaultSeverity: 'error', summary: 'View depending on persistence layers or on logic that is not pure' },
     { code: 'ARCHITECTURE_VIOLATION_SUPERVISOR_DEP', defaultSeverity: 'error', summary: 'Supervisor depending on a presentation block (View, FeatureComponent, RouterComponent) — a Supervisor manages live processes; the data it reaches is judged per call by supervisor-shared-data' },
-    { code: 'ACTOR_REACHED_WITHOUT_SUPERVISOR', defaultSeverity: 'error', summary: 'Component depending on a live Actor it does not supervise, reaching it neither through a Supervisor that supervises it nor through a Registry such a Supervisor maintains — model the real lookup hop' },
+    { code: 'ACTOR_REACHED_WITHOUT_SUPERVISOR', defaultSeverity: 'error', summary: 'Component depending on a live Actor it does not supervise, reaching it neither through a Supervisor that supervises it nor through a Registry such a Supervisor maintains — depend on the Supervisor, or on that Registry' },
   ],
   check(ctx) {
     const lookups = maintainedRegistries(ctx);
@@ -156,18 +156,23 @@ export function entrypointEdgeFindings(
     const reached = supervisors.some(s => comp.dependsOn.includes(s.id))
       || registries.some(r => comp.dependsOn.includes(r.registry));
     if (!reached) {
+      // A Registry the Supervisor OWNS is its private supervision state: a
+      // remedy never sends a caller there (SUPERVISION_STATE_INTRUSION).
+      const shared = registries.filter(r => !supervisors.find(s => s.id === r.supervisor)?.owns.includes(r.registry));
       let remedy: string;
-      if (registries.length > 0) {
-        remedy = `depend on ${registries.length === 1 ? 'the Registry' : 'one of the Registries'} its Supervisor maintains (${registries.map(r => `"${r.registry}", kept by "${r.supervisor}"`).join('; ')}) and look the Actor up by id there`;
-      } else if (supervisors.length > 0) {
-        remedy = `${supervisors.length === 1 ? 'its Supervisor' : 'its Supervisors'} (${supervisors.map(s => `"${s.id}"`).join(', ')}) maintain no Registry of its live handles yet: model that lookup as a Registry the Supervisor keeps through lifecycle-effect methods (registering and unregistering a live handle), and depend on that Registry`;
+      if (supervisors.length > 0) {
+        const named = supervisors.map(s => `"${s.id}"`).join(', ');
+        remedy = `depend on ${supervisors.length === 1 ? 'its Supervisor' : 'one of its Supervisors'} (${named}) and take the Actor's handle from it — a lookup by id, or a runner checked out of a pool, needs no data component`;
+        if (shared.length > 0) {
+          remedy += `; or, to find it by id among the live Actors, depend on ${shared.length === 1 ? 'the Registry' : 'one of the Registries'} its Supervisor maintains (${shared.map(r => `"${r.registry}", kept by "${r.supervisor}"`).join('; ')})`;
+        }
       } else {
-        remedy = `no Supervisor depends on "${depComp.id}" yet: give it a Supervisor that depends on it and maintains a Registry of its live handles through lifecycle-effect methods, and depend on that Registry`;
+        remedy = `no Supervisor depends on "${depComp.id}" yet: give it a Supervisor that depends on it, and depend on that Supervisor`;
       }
       findings.push({
         severity: 'error',
         code: 'ACTOR_REACHED_WITHOUT_SUPERVISOR',
-        message: `Architectural violation: ${stereotypeOf(comp)} "${comp.id}" depends on the live Actor "${depComp.id}" without reaching it through its supervision. A live Actor is found by id through a Registry its Supervisor maintains, or messaged through that Supervisor — ${remedy}.`,
+        message: `Architectural violation: ${stereotypeOf(comp)} "${comp.id}" depends on the live Actor "${depComp.id}" without reaching it through its supervision. A live Actor's handle comes from a Supervisor that supervises it, or from a Registry such a Supervisor maintains — ${remedy}.`,
       });
     }
   }

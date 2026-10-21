@@ -143,12 +143,15 @@ standard.
     callee's declared effect; a callee that declares no effect is refused too).
     A read made on behalf of a request still passes; in practice the paired write
     forces the workflow out, and the read moves with it.
-- **Actor** — a live Actor is **reached through its supervision**. A caller finds
-  it by id through a **Registry its Supervisor maintains** — owns, or keeps
-  through lifecycle calls (register and unregister a live handle) — so the
-  caller's `dependsOn` lists that Registry and the Actor: the lookup hop the code
-  really takes. Depending on a Supervisor that supervises the Actor (messaging it
-  by id) is reach too; anything else is `ACTOR_REACHED_WITHOUT_SUPERVISOR`. A
+- **Actor** — a live Actor is **reached through its supervision**. A live handle
+  is supervision, not data: a caller depends on a **Supervisor that supervises
+  the Actor** and takes the handle from it (a lookup by id, or a runner checked
+  out of a pool), with the Actor in its `dependsOn` too. A data component enters
+  only when the live set has real query needs: then callers find the Actor by id
+  in a **Registry its Supervisor maintains** through lifecycle calls (register
+  and unregister a live handle), a directory of live handles that writes to no
+  Store. A Registry the Supervisor owns is its private supervision state, which
+  no caller depends on. Anything else is `ACTOR_REACHED_WITHOUT_SUPERVISOR`. A
   Supervisor depending on the Actor supervises it. The Actor itself may use
   Repository facades, Indexes, Adapters and Orchestrators, and never depends on
   its own Supervisor.
@@ -1054,7 +1057,8 @@ tell apart components that share a noun, and it matches the block:
     Supervisor owns the set of Actors, may supervise Supervisors, owns its
     supervision state, and reaches shared data only through read and lifecycle
     methods — writes go through a workflow. A live Actor is reached through its
-    supervision — looked up by id in a Registry its Supervisor maintains — and is
+    supervision — its handle taken from a Supervisor that supervises it, or looked
+    up by id in a Registry such a Supervisor maintains — and is
     the only writer of its aggregate; the method that owns a workflow owns its
     transaction, and in-memory state changes only after commit. A lifecycle
     method changes what exists, never domain fields, and calls only read and
