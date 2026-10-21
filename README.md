@@ -126,9 +126,8 @@ Agents are **derived from the spec tree** — you never hand-maintain an agent
 registry:
 
 - a **`system-architect`** from L0,
-- a **`<subsystem>-owner`** per subsystem,
-- a **`<component>-implementer`** per component, when
-  `rules.generateComponentImplementers` is on.
+- a **`<subsystem>-owner`** per subsystem, which owns its components' code (a
+  component's own brief is composed on demand).
 
 Each agent is served as a **live brief** (`sdd_get_agent_brief`, or
 `wairon agent brief <id>`), composed from the current tree whenever it is

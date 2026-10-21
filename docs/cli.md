@@ -455,13 +455,13 @@ vendor call (`technologies: [redis]`), and that component becomes its home.
 Reconcile the generated guides, skills and context, and — only when the project
 opts in — write the agent files from the spec-derived topology.
 
-**Agent files are opt-in.** With `rules.materializeAgentFiles` off (the default
-for a new project) no agent file is written, and a run removes the ones an
-earlier version wrote; agents are served as live briefs instead
+**Agent files are opt-in.** With `rules.materializeAgentFiles` off (the default,
+and what an unstated setting reads as) no agent file is written, and a run removes
+the ones an earlier version wrote; agents are served as live briefs instead
 (`sdd_get_agent_brief`, `wairon agent brief <id>`). Set
 `rules.materializeAgentFiles: true` in `.wai/project.yaml` to keep agent files
-on disk (`rules.generateComponentImplementers: true` adds one implementer per
-component).
+on disk: one owner per subsystem, never one per component (the retired
+`rules.generateComponentImplementers` is ignored).
 
 - `--target <name>` limits generation to one of the project's configured
   targets (`claude`, `agy`, …); an unknown name exits non-zero and lists the
@@ -899,9 +899,8 @@ newest first, once; it stays silent under `--silent`, `CI` and any non-interacti
 
 ### `wairon list` (alias `ls`) / `wairon show <id>`
 List, or show full details of, the agents resolved from the spec tree
-(`system-architect`, `<subsystem>-owner`, owners for free-standing domains, and
-a `<component>-implementer` per component when
-`rules.generateComponentImplementers` is on).
+(`system-architect`, `<subsystem>-owner` and owners for free-standing domains).
+A component's own brief is composed on demand (`wairon agent brief <component>`).
 
 ### `wairon agent brief <id>` / `wairon agent customize <id>`
 `brief` prints the live delegation brief for one agent — the same composition

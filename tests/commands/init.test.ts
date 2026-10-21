@@ -26,7 +26,7 @@ describe('cli_runner.runInit: written project config (real CLI)', () => {
     try { fs.rmSync(rootDir, { recursive: true, force: true }); } catch { /* win file locks */ }
   });
 
-  it('writes generateComponentImplementers: false (owners + live briefs are the model)', async () => {
+  it('writes no agent files and no retired generateComponentImplementers (owners + live briefs are the model)', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-init-'));
 
     await execFileP(process.execPath, [TSX_CLI, WAIRON_CLI, 'init', '--yes'], {
@@ -36,9 +36,10 @@ describe('cli_runner.runInit: written project config (real CLI)', () => {
     const configPath = path.join(rootDir, '.wai', 'project.yaml');
     expect(fs.existsSync(configPath)).toBe(true);
     const config = yaml.load(fs.readFileSync(configPath, 'utf8')) as {
-      rules: { generateComponentImplementers: boolean };
+      rules: { generateComponentImplementers?: boolean; materializeAgentFiles: boolean };
     };
-    expect(config.rules.generateComponentImplementers).toBe(false);
+    expect(config.rules.generateComponentImplementers).toBeUndefined();
+    expect(config.rules.materializeAgentFiles).toBe(false);
   }, 180_000);
 });
 

@@ -273,9 +273,9 @@ function isWithinDir(dir: string, target: string): boolean {
 
 /**
  * One layer's topology; `delegate` lists each member's own agents by reference.
- * `implementers` derives every component's implementer record even when
- * rules.generateComponentImplementers is off — what a per-component brief
- * composes from, so it never needs agent files or the setting.
+ * `implementers` derives every component's implementer record — what a
+ * per-component brief composes from. Never part of the materialized topology:
+ * the owner of each subsystem owns its components' code.
  */
 function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   projectFilesCache.clear();
@@ -409,42 +409,40 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
       ownedPaths.push(path.relative(getProjectRoot(), getComponentPath(c.id, sub.id)).replace(/\\/g, '/'));
     }
 
-    if (!config.rules.generateComponentImplementers) {
-      // Aggregate all component implementation source paths under the subsystem owner.
-      // Several spec-level roles may be realized in one shared module, so dedupe —
-      // an owner claiming the same path twice would trip OVERLAPPING_OWNERSHIP.
-      for (const comp of subComponents) {
-        // Find contract interfaces for this component
-        const compInterfaces = interfaces.filter((i) => i.component === comp.id);
-        const compInterfaceIds = compInterfaces.map((i) => i.id);
+    // Aggregate all component implementation source paths under the subsystem owner.
+    // Several spec-level roles may be realized in one shared module, so dedupe —
+    // an owner claiming the same path twice would trip OVERLAPPING_OWNERSHIP.
+    for (const comp of subComponents) {
+      // Find contract interfaces for this component
+      const compInterfaces = interfaces.filter((i) => i.component === comp.id);
+      const compInterfaceIds = compInterfaces.map((i) => i.id);
 
-        // Find implementations of those contracts
-        const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
+      // Find implementations of those contracts
+      const compImpls = implementations.filter((impl) => compInterfaceIds.includes(impl.contract));
 
-        let hasExplicitSource = false;
-        for (const impl of compImpls) {
-          // Every code location the implementation names, existing or PLANNED:
-          // its own sourcePath, each method's, and its simPath harness.
-          const files = codeLocationsOf(impl);
-          if (files.length > 0) hasExplicitSource = true;
-          for (const file of files) {
-            // A file the specs of another subsystem name too is no single
-            // owner's: the brief lists it as shared instead.
-            if ((namedBy.get(file)?.size ?? 0) > 1) continue;
-            if (!ownedPaths.includes(file)) ownedPaths.push(file);
-          }
+      let hasExplicitSource = false;
+      for (const impl of compImpls) {
+        // Every code location the implementation names, existing or PLANNED:
+        // its own sourcePath, each method's, and its simPath harness.
+        const files = codeLocationsOf(impl);
+        if (files.length > 0) hasExplicitSource = true;
+        for (const file of files) {
+          // A file the specs of another subsystem name too is no single
+          // owner's: the brief lists it as shared instead.
+          if ((namedBy.get(file)?.size ?? 0) > 1) continue;
+          if (!ownedPaths.includes(file)) ownedPaths.push(file);
         }
+      }
 
-        // Inference is a FALLBACK for components whose implementations name no
-        // source file at all. Running it on implemented components lets a filename
-        // that matches the component TYPE claim a foreign file — e.g. a
-        // Repository facade realized in specs.ts inferring rules/repository.ts
-        // owned by another subsystem — tripping OVERLAPPING_OWNERSHIP.
-        if (!hasExplicitSource) {
-          const inferred = inferSourcePathForComponent(comp, subsystems);
-          if (inferred && !ownedPaths.includes(inferred)) {
-            ownedPaths.push(inferred);
-          }
+      // Inference is a FALLBACK for components whose implementations name no
+      // source file at all. Running it on implemented components lets a filename
+      // that matches the component TYPE claim a foreign file — e.g. a
+      // Repository facade realized in specs.ts inferring rules/repository.ts
+      // owned by another subsystem — tripping OVERLAPPING_OWNERSHIP.
+      if (!hasExplicitSource) {
+        const inferred = inferSourcePathForComponent(comp, subsystems);
+        if (inferred && !ownedPaths.includes(inferred)) {
+          ownedPaths.push(inferred);
         }
       }
     }
@@ -453,31 +451,24 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
     // sourcePath and its methods', existing or planned. A file the specs of
     // ANOTHER subsystem name as well (a shared models module) is no single
     // owner's to fence: claiming it would give one path two owners.
-    if (!config.rules.generateComponentImplementers) {
-      for (const type of types.filter((t) => t.subsystem === sub.id)) {
-        for (const file of typeSourceFiles(type)) {
-          if ((namedBy.get(file)?.size ?? 0) > 1) continue;
-          if (!ownedPaths.includes(file)) ownedPaths.push(file);
-        }
+    for (const type of types.filter((t) => t.subsystem === sub.id)) {
+      for (const file of typeSourceFiles(type)) {
+        if ((namedBy.get(file)?.size ?? 0) > 1) continue;
+        if (!ownedPaths.includes(file)) ownedPaths.push(file);
       }
     }
 
-    let dependencies: string[] = [];
-    if (config.rules.generateComponentImplementers) {
-      dependencies = subComponents.map((c) => `${c.id}-implementer`);
-    } else {
-      // Subsystem depends on other subsystem owners that its components depend on
-      const depSubsystems = new Set<string>();
-      for (const c of subComponents) {
-        for (const depId of c.dependsOn) {
-          const depComp = components.find((other) => other.id === depId);
-          if (depComp && depComp.subsystem !== sub.id) {
-            depSubsystems.add(`${depComp.subsystem}-owner`);
-          }
+    // The owner depends on the other subsystems' owners its components depend on.
+    const depSubsystems = new Set<string>();
+    for (const c of subComponents) {
+      for (const depId of c.dependsOn) {
+        const depComp = components.find((other) => other.id === depId);
+        if (depComp && depComp.subsystem !== sub.id) {
+          depSubsystems.add(`${depComp.subsystem}-owner`);
         }
       }
-      dependencies = Array.from(depSubsystems);
     }
+    const dependencies = Array.from(depSubsystems);
 
     // Stage 8: a part's subsystems are this project's own, so the same owner
     // covers them — its spec files where the part stores them. A part fetched
@@ -506,7 +497,7 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
   }
 
   // 3. Component Implementers
-  if (config.rules.generateComponentImplementers || implementers) {
+  if (implementers) {
     // Which components' specs name each code file: a file one component's
     // specs alone name is that component's fence; one several name is shared.
     const claims = componentClaims(components, interfaces, implementations, types);
@@ -784,8 +775,8 @@ export function composeAgentBrief(agentId: string): AgentBrief {
 /**
  * A component's implementer record, derived on demand for an id naming a
  * component (`<component>` or `<component>-implementer`) of this layer — the
- * record rules.generateComponentImplementers would materialize. Null when the
- * id names no component.
+ * record a per-component brief composes from. Null when the id names no
+ * component.
  */
 function componentImplementer(agentId: string): AgentRecord | null {
   const componentId = agentId.endsWith('-implementer') ? agentId.slice(0, -'-implementer'.length) : agentId;
