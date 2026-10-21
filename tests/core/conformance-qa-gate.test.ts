@@ -225,6 +225,20 @@ describe('the findings name the method that changed', () => {
     expect(issues[0].message).toContain('"parcel_id"');
     expect(issues[0].message).toContain('"parcel_ref"');
   });
+
+  it('a Python parameter renamed under a type the contract\'s cannot be compared with is still told, saying so', () => {
+    // `dict` is no spelling of the contract's `str`, and Python has no type
+    // checker to settle a kind: nothing decides rename or substitution, but
+    // the name differs from the contract's either way.
+    const issues = run(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_ref: dict) -> str:',
+      '    self._store.record(parcel_ref, parcel_ref)',
+      '    return "ok"',
+    ]), true)).issues.filter(i => i.code === 'PARAM_NAME_MISMATCH');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('"parcel_id" (the code calls it "parcel_ref"; its type "dict" cannot be compared');
+    expect(issues[0].message).toContain('possibly a different argument');
+  });
 });
 
 describe('Python: a narrated call the code no longer makes is reported by absence', () => {

@@ -1045,15 +1045,15 @@ function registryOver(store: ProjectConfigStore, root: string): ProjectConfigReg
       save(withImports(config, alias, [...held, ...added]));
       return true;
     },
-    setMemberPath(alias, memberPath) {
-      assertMemberSource(alias, memberPath, root);
+    setMemberPath(alias, path) {
+      assertMemberSource(alias, path, root);
       const config = current();
       const existing = ownGet(config.members, alias);
       if (existing === undefined) {
         throw new WaironError(`Refusing to move the member "${alias}" at ${root}: \`members\` declares no "${alias}".`);
       }
-      if (memberLocationOf(existing) === memberPath) return false;
-      const next = memberValue({ ...memberDeclarationOf(existing), path: undefined, source: memberPath });
+      if (memberLocationOf(existing) === path) return false;
+      const next = memberValue({ ...memberDeclarationOf(existing), path: undefined, source: path });
       save({ ...config, members: { ...config.members, [alias]: next } });
       return true;
     },
@@ -1359,7 +1359,7 @@ export function projectConfigRepositoryOver(adapter: ProjectConfigFsAdapter, roo
     setId(id) { return registry.setId(id); },
     declareExternal(alias, declaration) { return registry.declareExternal(alias, declaration); },
     declareMember(alias, declaration) { return registry.declareMember(alias, declaration); },
-    setMemberPath(alias, memberPath) { return registry.setMemberPath(alias, memberPath); },
+    setMemberPath(alias, path) { return registry.setMemberPath(alias, path); },
     updateMember(alias, changes) { return registry.updateMember(alias, changes); },
     setPartOf(partOf) { return registry.setPartOf(partOf); },
     setNetwork(network) { return registry.setNetwork(network); },
@@ -1407,7 +1407,7 @@ export const projectConfigRepository: ProjectConfigRepository = {
   setId(id) { return bound().setId(id); },
   declareExternal(alias, declaration) { return bound().declareExternal(alias, declaration); },
   declareMember(alias, declaration) { return bound().declareMember(alias, declaration); },
-  setMemberPath(alias, memberPath) { return bound().setMemberPath(alias, memberPath); },
+  setMemberPath(alias, path) { return bound().setMemberPath(alias, path); },
   updateMember(alias, changes) { return bound().updateMember(alias, changes); },
   setPartOf(partOf) { return bound().setPartOf(partOf); },
   setNetwork(network) { return bound().setNetwork(network); },

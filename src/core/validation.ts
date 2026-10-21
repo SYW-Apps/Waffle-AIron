@@ -547,10 +547,10 @@ function memberOwning(owners: Map<string, string>, memberKeys: string[], key: st
  * are never judged here: its gate judges them under its own configuration.
  */
 export function validateProject(
-  rulesOrOptions?: RulesConfig | ValidationOptions,
+  options?: RulesConfig | ValidationOptions,
   projectType: string = 'backend'
 ): ValidationResult {
-  const run = runOwnersGate(rulesOrOptions, projectType);
+  const run = runOwnersGate(options, projectType);
   // Step 53: how the code was read, one line beside the hint.
   const unrouted = run.unroutedPortals ?? [];
   return { ...run.result, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };

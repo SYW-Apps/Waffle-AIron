@@ -63,6 +63,11 @@ open, and wairon says so.
 
 ### Fixes
 
+- **A renamed parameter is reported even where the types cannot be compared.** A Python
+  `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` passed
+  silently: nothing decided rename or substitution, so nothing was said about the name. It is now
+  `PARAM_NAME_MISMATCH`, saying the comparison could not be made. **Can fail `--ci`** where code
+  and contract name a parameter differently.
 - **`wairon update` on Windows stages the new build first.** The new executable is copied beside the
   running one before anything moves, so a failed copy (a full disk, a scanner holding the file)
   leaves the running wairon untouched; the swap itself is two renames.
