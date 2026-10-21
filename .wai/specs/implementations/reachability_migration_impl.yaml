@@ -65,12 +65,13 @@ methods:
       - stepNumber: 10
         description: >-
           Plan the invokedBy kinds: external becomes entry on a Portal and runtime elsewhere,
-          keeping its caller prose; sibling-subsystem, which wairon 6 cannot read, is dropped —
+          keeping its caller prose; sibling-subsystem, which wairon 6 cannot read, is dropped
           silently when a narrative call step or declared call of an implementation already reaches
-          the method, else reported with the stored caller, the subsystem it names, and the routes
-          the rules allow: a call step when the method is its subsystem's published Portal (from a
-          client Adapter or a trustedLinked subsystem), the route through that Portal otherwise, or
-          a runtime declaration where the code receives it at wiring time
+          the method, else rewritten to runtime with its caller kept byte for byte and reported with
+          the stored caller, the subsystem it names, and the call the rules allow: a call step when
+          the method is its subsystem's published Portal (from a client Adapter or a trustedLinked
+          subsystem), the route through that Portal otherwise; INVOKED_BY_REDUNDANT then names the
+          runtime declaration to remove
         type: local
       - stepNumber: 11
         description: >-
@@ -160,4 +161,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-06T13:07:22.189Z'
-updatedAt: '2026-10-20T18:38:22.492Z'
+updatedAt: '2026-10-21T06:01:56.646Z'

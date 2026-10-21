@@ -176,9 +176,9 @@ describe('reachability migration — the plan', () => {
       'in-process-endpoint|lib|transport InProcess',
       'in-process-endpoint|sdk|transport InProcess',
       'invoked-by-kind|iweb|invokedBy entry on "browse"',
+      'invoked-by-kind|iworker|invokedBy runtime on "settle"',
       'invoked-by-kind|iworker|invokedBy runtime on "tick"',
       'invoked-by-kind|iworker|invokedBy sibling-subsystem on "refund" dropped',
-      'invoked-by-kind|iworker|invokedBy sibling-subsystem on "settle" dropped',
       'listener-mounts|host|invokedBy entry (outside) on the Portal',
       'listener-mounts|host|mounts removed',
       'listener-mounts|solo|mounts removed',
@@ -205,14 +205,15 @@ describe('reachability migration — the plan', () => {
     ]);
   });
 
-  it('a dropped sibling-subsystem declaration names the stored caller and the routes the rules allow', () => {
+  it('a sibling-subsystem declaration kept as runtime names the stored caller and the routes the rules allow', () => {
     oldShop();
     const plan = migrate(false);
     const settle = plan.reported.find((r) => r.to === 'caller of "settle" not modelled')!;
     // The caller names the ledger, which is no subsystem here; worker is no published Portal.
     expect(settle.reason).toContain('Its stored caller was "The ledger subsystem after a close"');
     expect(settle.reason).toContain("worker is not shop's published Portal, so no other subsystem may call it directly");
-    expect(settle.reason).toContain('invokedBy: { kind: runtime, caller: "The ledger subsystem after a close" }');
+    expect(settle.reason).toContain('It is kept as `invokedBy: { kind: runtime }` with that caller, so it stays reached');
+    expect(settle.reason).toContain('INVOKED_BY_REDUNDANT then names the runtime declaration to remove');
     // The modelled call makes the declaration redundant: dropped, nothing reported.
     expect(plan.rewrites.find((r) => r.to === 'invokedBy sibling-subsystem on "refund" dropped')?.reason).toContain('clerk.returnItem calls worker.refund');
     expect(plan.reported.some((r) => r.to.includes('"refund"'))).toBe(false);
@@ -276,14 +277,14 @@ describe('reachability migration — apply', () => {
     expect(loadComponentSpec('loose')?.invokedBy).toBeUndefined();
   });
 
-  it('rewrites external by where it sits, keeping the caller, and drops sibling-subsystem, which wairon 6 cannot read', () => {
+  it('rewrites external by where it sits and sibling-subsystem to runtime, keeping each caller byte for byte, unless a modelled call says it', () => {
     const { specs } = applied();
     expect(read(specs, 'shop/web/.interface.yaml').methods[0].invokedBy).toEqual({ kind: 'entry', caller: 'Browsers of the shop' });
     const worker = read(specs, 'shop/worker/.interface.yaml').methods;
     expect(worker[0].invokedBy).toEqual({ kind: 'runtime', caller: 'The process scheduler, every minute' });
-    expect(worker[1].invokedBy).toBeUndefined();
+    expect(worker[1].invokedBy).toEqual({ kind: 'runtime', caller: 'The ledger subsystem after a close' });
     expect(worker[2].invokedBy).toBeUndefined();
-    expect(loadInterfaceSpec('iworker')!.methods[1].invokedBy).toBeUndefined();
+    expect(loadInterfaceSpec('iworker')!.methods[1].invokedBy).toEqual({ kind: 'runtime', caller: 'The ledger subsystem after a close' });
     expect('portalType' in read(specs, 'shop/odd/.index.yaml')).toBe(false);
   });
 

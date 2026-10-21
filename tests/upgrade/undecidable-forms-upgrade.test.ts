@@ -13,8 +13,9 @@ import { writeYamlFile } from '../../src/utils/yaml.js';
 // `wairon upgrade` over the v5 forms it cannot decide for the author: an
 // `invokedBy: { kind: sibling-subsystem }` no modelled call stands for, and an
 // authored export `type` no backing Portal derives. wairon 6 cannot read a
-// spec holding either, so the upgrade never keeps one: it drops the form and
-// reports what the author owes, and the tree it commits is read cleanly. A
+// spec holding either, so the upgrade never keeps one: the declaration becomes
+// runtime with its caller unchanged, the type is dropped, each is reported
+// with what the author owes, and the tree it commits is read cleanly. A
 // tree an earlier release stamped current while leaving such a form behind is
 // an unfinished upgrade, and `wairon upgrade` finishes it.
 // ---------------------------------------------------------------------------
@@ -67,7 +68,7 @@ function project(stamped = false): string {
 }
 
 describe('wairon upgrade over the forms it cannot decide', () => {
-  it('drops each one, reports what the author owes, and leaves a tree wairon 6 reads cleanly', () => {
+  it('rewrites each one, reports what the author owes, and leaves a tree wairon 6 reads cleanly', () => {
     const root = project();
     const plan = upgrade.plan(root);
     expect(plan.refusal).toBeUndefined();
@@ -90,7 +91,7 @@ describe('wairon upgrade over the forms it cannot decide', () => {
     const interfaces = loadInterfaceSpecs();
     const subsystems = loadSubsystemSpecs();
     expect(getLoaderIssues().filter((i) => i.severity === 'error').map((i) => i.message)).toEqual([]);
-    expect(interfaces.find((i) => i.id === 'iport')!.methods[0].invokedBy).toBeUndefined();
+    expect(interfaces.find((i) => i.id === 'iport')!.methods[0].invokedBy).toEqual({ kind: 'runtime', caller: 'The backend subsystem, through the injected port' });
     expect(subsystems.find((s) => s.id === 'compiler')!.publicInterfaces).toEqual([{ details: 'the rule set', component: 'rules' }]);
     setProjectRoot(null);
 
