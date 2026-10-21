@@ -131,6 +131,7 @@ describe('rule scope declarations', () => {
     const emitted = specScopedRules().flatMap(r => r.codes.map(c => c.code)).sort();
     expect(emitted).toEqual([
       'AUTH_ON_NON_PORTAL',
+      'CUSTOM_TRANSPORT_AS_NETWORK',
       'DEPENDENCY_CLASS_ON_NON_ORCHESTRATOR',
       'DURABILITY_ON_NON_STORE',
       'MISSING_DURABILITY',

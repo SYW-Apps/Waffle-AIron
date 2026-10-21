@@ -23,11 +23,11 @@ export const reachabilityRule: SddRule = {
   needsWholeTree: true,
   judges: 'design',
   description:
-    "Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every declared root and flags the components and methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer; each method of an interface that implements an imported extension point (the producer calls it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its own and a published component is not either, so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported: the message names the two remedies, modelling the caller or declaring the entry with its scope. A network-scoped entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared roots) already reaches is stale and is reported. An entry never is, because it also states the verb's scope for the network rules and the flow matrix.",
+    "Walks the narrative execution graph (call steps, register handoffs, dispatch-table routing, lifecycle flows) from every declared root and flags the components and methods no execution chain reaches. The roots are: each lifecycle entrypoint; each Observer; each method of an interface that implements an imported extension point (the producer calls it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its Portal's); and each method with a runtime invokedBy, its own or inherited from its component's. A Portal is no longer a root of its own and a published component is not either, so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported: the message names the two remedies, modelling the caller or declaring the entry with its scope. A network-scoped entry counts as declared here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared roots) already reaches is stale and is reported: a method's when the walk reaches that method, a component's when it reaches every method that inherits it. An entry never is, because it also states the verb's scope for the network rules and the flow matrix.",
   codes: [
     { code: 'UNUSED_COMPONENT', defaultSeverity: 'warning', summary: 'Component never reached by any narrative call chain from a declared root; for a Portal, none of its verbs is called by a modelled caller or declared an entry' },
     { code: 'UNUSED_METHOD', defaultSeverity: 'warning', summary: 'Method never called by any narrative step; for a Portal verb, no modelled caller reaches it and no entry is declared for it' },
-    { code: 'INVOKED_BY_REDUNDANT', defaultSeverity: 'warning', summary: 'A runtime invokedBy declaration on a method the internal narrative walk already reaches: stale, remove it' },
+    { code: 'INVOKED_BY_REDUNDANT', defaultSeverity: 'warning', summary: 'A runtime invokedBy the internal narrative walk already makes needless (on a method it reaches, or on a component every inheriting method of which it reaches): stale, remove it' },
   ],
   check(ctx) {
     // Step 1: the base roots — every Observer (all its methods), each
@@ -74,17 +74,28 @@ export const reachabilityRule: SddRule = {
     // its scope: a network-scoped entry counts as declared here, the family
     // run proves it), and each runtime declaration, judged for staleness.
     const declaredRoots: WalkSeed[] = [];
+    // Steps 7 and 10: a component's own runtime declaration is stale only when the internal
+    // walk reaches every method that inherits it.
+    const inherited = new Map<string, { inheriting: number; reached: number }>();
     for (const intf of ctx.interfaces) {
       // A declaration on a dangling component is the hierarchy family's finding.
       const comp = ctx.componentMap.get(intf.component);
       if (!comp) continue;
       for (const m of intf.methods) {
-        if (comp.componentType === 'Portal' && componentEntryFor(comp, m.invokedBy)?.kind === 'entry') {
+        const decl = componentEntryFor(comp, m.invokedBy);
+        if (comp.componentType === 'Portal' && decl?.kind === 'entry') {
           declaredRoots.push({ compId: comp.id, methodName: m.name });
           continue;
         }
-        if (m.invokedBy?.kind !== 'runtime') continue;
+        if (decl?.kind !== 'runtime') continue;
         declaredRoots.push({ compId: comp.id, methodName: m.name });
+        if (m.invokedBy === undefined) {
+          const tally = inherited.get(comp.id) ?? { inheriting: 0, reached: 0 };
+          tally.inheriting++;
+          if (baseWalk.reachesMethod(comp.id, m.name)) tally.reached++;
+          inherited.set(comp.id, tally);
+          continue;
+        }
         if (!ctx.isSpecInScope(intf.id) || !baseWalk.reachesMethod(comp.id, m.name)) continue;
         const isDraftCtx = ctx.isComponentDraft(comp.id) || intf.status === 'draft' || intf.status === 'design';
         ctx.addIssue(
@@ -98,11 +109,21 @@ export const reachabilityRule: SddRule = {
         );
       }
     }
+    for (const [compId, tally] of inherited) {
+      if (tally.reached < tally.inheriting || !ctx.isSpecInScope(compId)) continue;
+      ctx.addIssue(
+        'warning',
+        'INVOKED_BY_REDUNDANT',
+        `Component "${compId}" declares a runtime invokedBy for every method, but the internal narrative walk already reaches each method that inherits it — the declaration is stale; remove it.`,
+        compId,
+        ctx.isComponentDraft(compId),
+      );
+    }
 
-    // Step 10: phase 2, the FULL walk — an entered verb's narrative propagates.
+    // Step 11: phase 2, the FULL walk — an entered verb's narrative propagates.
     const reach = declaredRoots.length ? walk(ctx, [...baseRoots, ...declaredRoots]) : baseWalk;
 
-    // Steps 11-17: the verdicts.
+    // Steps 12-18: the verdicts.
     for (const comp of ctx.components) {
       if (!ctx.isSpecInScope(comp.id)) continue;
       if (!reach.reachesComponent(comp.id)) {

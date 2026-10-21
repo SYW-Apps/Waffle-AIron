@@ -227,16 +227,23 @@ export const RETIRED_INVOCATION_KINDS: ReadonlySet<string> = new Set(['external'
 
 /**
  * A declared invocation from outside the modelled narrative graph, on an L3
- * contract method or on a Portal component (the entry every verb inherits; a
- * verb may override only its scope). Seeds unused-detection. The caller prose
- * is checked by INVOKED_BY_UNDESCRIBED, so a missing one parses and is
- * reported rather than refused.
+ * contract method or on a component: a Portal's entry every verb inherits (a
+ * verb may override only its scope), or any component's runtime hook every
+ * method inherits (a method's own declaration replaces it). Seeds
+ * unused-detection. The caller prose is checked by INVOKED_BY_UNDESCRIBED, so
+ * a missing one parses and is reported rather than refused.
  */
 export const DeclaredInvocationSchema = z.object({
   kind: InvocationKindSchema,
   caller: z.string().optional(),
   /** Entry on a network transport only: outside (the default) or network. */
   scope: EntryScopeSchema.optional(),
+  /**
+   * The caller is planned, not built yet: the declaration still reaches the
+   * method, and ENTRY_CALLER_PLANNED says so until the caller exists and the
+   * flag is dropped.
+   */
+  planned: z.boolean().optional(),
 });
 export type DeclaredInvocation = z.infer<typeof DeclaredInvocationSchema>;
 
@@ -786,9 +793,12 @@ export const ComponentSpecSchema = z.object({
    */
   abi: z.string().optional(),
   /**
-   * Portal-only: the entry every verb inherits (kind entry, with a scope on a
-   * network transport); a verb's own invokedBy overrides only the scope. Never
-   * defaulted by a tool and never invented by a migration.
+   * The declaration every method inherits: on a Portal, the entry of every
+   * verb (kind entry, with a scope on a network transport; a verb's own
+   * invokedBy overrides only the scope); on any component, kind runtime, the
+   * hook the process's own runtime calls every method through (a method's own
+   * declaration replaces it). Never defaulted by a tool and never invented by
+   * a migration.
    */
   invokedBy: DeclaredInvocationSchema.optional(),
   basePath: z.string().optional(),
@@ -2231,16 +2241,17 @@ export function interfaceDesignView<T extends object>(contract: T): T {
 }
 
 /**
- * component_spec.entryFor — the entry a verb of this Portal has: the verb's
- * own invokedBy when it declares one, else the component's, with the verb's
- * scope taking precedence over the component's. None for a non-Portal. Pure.
+ * component_spec.entryFor — the declaration a method of this component has:
+ * the method's own invokedBy when it declares one, else the component's, with
+ * a verb's scope taking precedence over its Portal's entry. A non-Portal
+ * passes on only a runtime declaration (an entry there is
+ * ENTRY_ON_NON_PORTAL, and reaches nothing). Pure.
  */
 export function componentEntryFor(
   component: Pick<ComponentSpec, 'componentType' | 'invokedBy'>,
   method?: DeclaredInvocation,
 ): DeclaredInvocation | undefined {
-  if (component.componentType !== 'Portal') return undefined;
-  const own = component.invokedBy;
+  const own = component.componentType === 'Portal' || component.invokedBy?.kind === 'runtime' ? component.invokedBy : undefined;
   if (method) {
     if (method.kind === 'entry' && own?.kind === 'entry') {
       const scope = method.scope ?? own.scope;

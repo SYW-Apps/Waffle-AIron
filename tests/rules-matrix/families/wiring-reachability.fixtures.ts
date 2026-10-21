@@ -280,6 +280,26 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // ENTRY_CALLER_PLANNED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'ENTRY_CALLER_PLANNED',
+    severity: 'notice',
+    anchoredTo: 'settlement-api',
+    expectFire: true,
+    scenario:
+      'The settlement API keeps its entry while the partner portal that will call it is still planned, so the verb stays reached until that caller is built.',
+    tree: storefront({ portals: [{ id: 'settlement-api', verb: 'settle', path: '/settle', entry: { kind: 'entry', caller: 'The partner portal, planned for the next milestone.', planned: true } }] }),
+  }),
+  defineRuleFixture({
+    code: 'ENTRY_CALLER_PLANNED',
+    expectFire: false,
+    reason: 'An entry whose callers exist states no planned flag, so there is nothing to keep in view.',
+    scenario: 'The settlement API declares the entry its existing partner callers take.',
+    tree: storefront({ portals: [{ id: 'settlement-api', verb: 'settle', path: '/settle', entry: { kind: 'entry', caller: SHOPPERS } }] }),
+  }),
+
+  // -------------------------------------------------------------------------
   // GATEWAY_BYPASSED
   // -------------------------------------------------------------------------
   defineRuleFixture({

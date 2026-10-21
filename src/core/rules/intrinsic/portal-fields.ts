@@ -17,10 +17,11 @@ export const portalFieldsRule: SddRule = {
   judges: 'design',
   scope: 'spec',
   description:
-    "A Portal declares its transport (the retired portalType is read as it in the v5 reading `wairon upgrade` binds); only an InProcess Portal may declare an abi. An Adapter may declare a transport: the one it calls its target Portal over (adapter-transport judges it against the target). Every other non-Portal component carries no transport, and no non-Portal carries an abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
+    "A Portal declares its transport (the retired portalType is read as it in the v5 reading `wairon upgrade` binds); only an InProcess Portal may declare an abi. A Custom transport, the free-form escape hatch, is read as a network transport, and a notice on each Custom Portal says so, naming the local and in-process transports to state instead when its callers are not across a network. An Adapter may declare a transport: the one it calls its target Portal over (adapter-transport judges it against the target). Every other non-Portal component carries no transport, and no non-Portal carries an abi, basePath, auth or Portal-level invokedBy entry (auth is inbound transport auth: it belongs on the Portal that exposes the surface; an entry on a non-Portal is entry-declarations' ENTRY_ON_NON_PORTAL). Intrinsic to one component: no tree required.",
   codes: [
     { code: 'MISSING_PORTAL_TRANSPORT', defaultSeverity: 'error', summary: 'Portal without a transport' },
     { code: 'UNEXPECTED_PORTAL_FIELD', defaultSeverity: 'error', summary: 'Non-Portal component with an abi or basePath, or a transport on one that is not an Adapter, or an abi on a Portal whose transport is not InProcess' },
+    { code: 'CUSTOM_TRANSPORT_AS_NETWORK', defaultSeverity: 'notice', summary: 'A Portal with transport Custom, which is read as a network transport (scopes, the gateway rule, network flows)' },
     { code: 'AUTH_ON_NON_PORTAL', defaultSeverity: 'warning', summary: 'Non-Portal component declaring auth (auth is inbound transport auth, only meaningful on a Portal)' },
   ],
   check(ctx) {
@@ -46,6 +47,17 @@ export const portalFieldsRule: SddRule = {
             'error',
             'UNEXPECTED_PORTAL_FIELD',
             `Portal "${comp.id}" has ${comp.transport ? `transport "${comp.transport}"` : 'no transport'} but declares an abi ("${comp.abi}"). An abi says how a foreign language links a library, so it belongs on an InProcess Portal only — drop it, or make the Portal InProcess.`,
+            comp.id,
+            isDraftCtx,
+          );
+        }
+        if (comp.transport === 'Custom') {
+          // Custom is the free-form escape hatch, read as a network transport:
+          // an assumption about where its callers are, so it is said once.
+          ctx.addIssue(
+            'notice',
+            'CUSTOM_TRANSPORT_AS_NETWORK',
+            `Portal "${comp.id}" has transport "Custom", which is read as a network transport: its entries take a scope, it falls under the gateway rule, and its calls appear in the network flows. If its callers are in the same process or on the same machine, state that transport instead (InProcess, CLI, IPC, NamedPipe or JSONRPC); keep Custom for a network protocol the list does not name.`,
             comp.id,
             isDraftCtx,
           );

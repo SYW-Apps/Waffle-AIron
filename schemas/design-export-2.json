@@ -299,6 +299,9 @@
                       "outside",
                       "network"
                     ]
+                  },
+                  "planned": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
