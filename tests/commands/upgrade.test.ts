@@ -33,7 +33,7 @@ vi.mock('../../src/config/userconfig.js', () => store);
 const prompt = vi.hoisted(() => vi.fn());
 vi.mock('inquirer', () => ({ default: { prompt } }));
 
-import { runUpgrade, runWhatsNew, guardStanding, announceRelease, CHANGELOG_URL } from '../../src/commands/upgrade.js';
+import { runUpgrade, runWhatsNew, guardStanding, announceRelease, CHANGELOG_URL, UPGRADE_REPORT_FILE } from '../../src/commands/upgrade.js';
 
 /** A bound project with a project.yaml, so the guard reads its standing (through the mocked adapter). */
 const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-upgrade-test-project-'));
@@ -157,6 +157,30 @@ describe('cli_runner.runUpgrade', () => {
     expect(adapter.apply).toHaveBeenCalledWith(plan);
     expect(out).toContain('is now on major 6');
     expect(out).toContain('wairon lock');
+  });
+
+  it('an applied plan is written whole to the report file, each decision verbatim on one line, so nothing is copied off the console', async () => {
+    terminal(false);
+    const decision = 'iport: caller of "emit" not modelled — Its stored caller was "The backend subsystem, through the injected port, every time it ' + 'x'.repeat(200) + '"';
+    const plan = planOf(2);
+    plan.steps[0].reported = [decision];
+    adapter.plan.mockReturnValue(plan);
+    adapter.apply.mockReturnValue(committed(plan));
+    const file = path.join(ROOT, UPGRADE_REPORT_FILE);
+    fs.rmSync(file, { force: true });
+    await runUpgrade({ yes: true });
+    const written = fs.readFileSync(file, 'utf8');
+    expect(written.split('\n')).toContain(`- ${decision}`);
+    expect(written).toContain('- **design** `spec_0`: rewrite 0');
+    expect(written).toContain('- Specialists are Orchestrators');
+    expect(out).toContain(file);
+    // A stamp-only plan rewrites nothing, so it writes no report.
+    fs.rmSync(file);
+    const stampOnly = planOf(0);
+    adapter.plan.mockReturnValue(stampOnly);
+    adapter.apply.mockReturnValue(committed(stampOnly));
+    await runUpgrade({ yes: true });
+    expect(fs.existsSync(file)).toBe(false);
   });
 
   it('an interactive run asks, and applies on yes; on no it drops the plan', async () => {

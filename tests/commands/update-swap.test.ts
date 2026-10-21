@@ -56,6 +56,14 @@ describe('the self-update swap', () => {
     expect(fs.readdirSync(dir).sort()).toEqual(['new-wairon.exe', 'wairon.exe', 'wairon.exe.old']);
   });
 
+  it('puts the running binary back when the new one cannot be copied, never leaving no executable', () => {
+    const { dir, exe } = bin();
+    // A copy that fails after the running exe moved aside: the new build is gone.
+    expect(() => swapRunningBinary(path.join(dir, 'missing.exe'), exe)).toThrow();
+    expect(fs.readFileSync(exe, 'utf8')).toBe('old build');
+    expect(fs.readdirSync(dir).sort()).toEqual(['new-wairon.exe', 'wairon.exe']);
+  });
+
   it('cleanStaleBinary removes only the leftovers of the executable named', () => {
     const { dir, exe } = bin();
     fs.writeFileSync(`${exe}.old`, '');

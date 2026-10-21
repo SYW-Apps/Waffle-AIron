@@ -825,6 +825,8 @@ function runOwnersGate(
       issues.push(issue('error', 'MISSING_SYSTEM_SPEC', present
         ? `The L0 System spec (.wai/specs/.index.yaml) cannot be read, so the tree below it cannot be judged — restore it from version control (\`git checkout -- .wai/specs/.index.yaml\`).${pending}`
         : `The L0 System spec (.wai/specs/.index.yaml) is missing.${pending}`));
+      // Every exit folds: the fold's bookkeeping fields never leave validation.
+      foldUnparsedReferences(issues);
       return { result: { valid: false, issues }, codeModel };
     }
 
@@ -852,6 +854,7 @@ function runOwnersGate(
             scopeSubsystem,
           ),
         );
+        foldUnparsedReferences(issues);
         return { result: { valid: false, issues }, codeModel };
       }
     }
@@ -958,6 +961,7 @@ function runOwnersGate(
     // spec_validator.reachModel: the same context, no rule run — the
     // project's own reach model, with its own network declaration.
     if (reachOnly) {
+      foldUnparsedReferences(issues);
       return { result: { valid: true, issues }, codeModel, reach: projectReach(ctx, boundConfig?.network) };
     }
 

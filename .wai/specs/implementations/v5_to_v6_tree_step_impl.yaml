@@ -266,7 +266,10 @@ methods:
         condition: a file still holds a wairon 5 form
         onFalseStep: 24
       - stepNumber: 23
-        description: Refuse the step, naming each file and form, so nothing is committed
+        description: >-
+          Refuse the step, naming each file from the project root (the root bound here is the
+          rehearsal copy, dropped with the refused plan) and each form it holds, so nothing is
+          committed
         type: throw
       - stepNumber: 24
         description: Written
@@ -296,4 +299,4 @@ methods:
         type: return
 status: draft
 createdAt: '2026-10-18T14:14:32.869Z'
-updatedAt: '2026-10-20T18:38:40.158Z'
+updatedAt: '2026-10-20T23:40:08.174Z'

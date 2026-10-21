@@ -1,5 +1,37 @@
 # Changelog
 
+## v6.1.2 (from v6.1.1)
+
+A fix release from the review of 6.1.1 and from upgrading a large family. Nothing to do when
+upgrading: install 6.1.2.
+
+- **`wairon upgrade` keeps who calls a method.** A v5 `invokedBy: { kind: sibling-subsystem }` that
+  no modelled call stands for is now rewritten to `kind: runtime` with its `caller` kept byte for
+  byte, instead of dropped: the method stays reached, as it was, and the report names the call to
+  model instead (`INVOKED_BY_REDUNDANT` then names the declaration to remove). A tree 6.1.1 already
+  upgraded has lost those callers: recover them from version control, or upgrade the pre-upgrade
+  commit again with 6.1.2.
+- **`wairon upgrade` writes its report to `.wai/upgrade-report.md`.** Every rewrite and decision is
+  there in full, one per line, so nothing has to be copied off a wrapped console.
+- The upgrade report for a subsystem export no Portal backs no longer points at
+  `EXPORT_UNCONSUMABLE`, which judges only the L0 table and L1 re-exports.
+- **TypeScript, NestJS and Angular:** 6.1.1 counted a plain import used only as a type as a type
+  import. In a class carrying a decorator, a constructor parameter or property type is emitted as a
+  runtime injection token under decorator metadata, so it is a value use again, and an
+  `UNDECLARED_EXPORT` crossing there is reported as before 6.1.1.
+- **`UNDECLARED_EXPORT` no longer reports dependency injection by class.** A component that declares
+  `dependsOn` on another and constructs or injects the class realizing it (decorated or not) is
+  the dependency made real, not a surface reached across. A component without that dependency
+  taking the class, or anyone taking an owned member's class, is still reported.
+- **`wairon update` (Windows):** when the new build cannot be copied into place after the running
+  one was moved aside, the running one is moved back, so the install is never left without
+  `wairon.exe`; the error says the running wairon is unchanged.
+- Validation no longer returns its internal reference bookkeeping when it stops early (no L0, an
+  unknown subsystem).
+- The MCP refusal for an unstamped project reads as a sentence; the upgrade's own refusal names
+  leftover files from the project root, not from its temporary copy; the printed
+  `subsystem externalize --path` is quoted.
+
 ## v6.1.1 (from v6.1.0)
 
 A fix release for `wairon upgrade`. On a project whose design used a wairon 5 form the

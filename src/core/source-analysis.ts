@@ -2515,13 +2515,33 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
   if (importBindings.size > 0) {
     const used = new Map<string, { type: number; value: number }>();
     for (const [name, fact] of importBindings) if (!fact.namespace) used.set(name, { type: 0, value: 0 });
+    // Under decorator metadata (`emitDecoratorMetadata`, what NestJS and
+    // Angular dependency injection read), a decorated class's constructor
+    // parameter and property types are emitted as runtime values — injection
+    // tokens — so such an annotation is a value use, never erased. Read
+    // conservatively: any class carrying a decorator, on itself or a member.
+    const decorated = (cls: import('typescript').ClassLikeDeclaration): boolean =>
+      (ts.canHaveDecorators(cls) && (ts.getDecorators(cls)?.length ?? 0) > 0)
+      || cls.members.some((m) => ts.canHaveDecorators(m) && (ts.getDecorators(m)?.length ?? 0) > 0);
+    const emittedAsMetadata = (ref: import('typescript').TypeReferenceNode): boolean => {
+      // The annotation a reference sits in: walk up through the type to the declaration it types.
+      let at: import('typescript').Node = ref;
+      while (at.parent && ts.isTypeNode(at.parent)) at = at.parent;
+      const owner = at.parent;
+      if (!owner) return false;
+      const annotates = (ts.isParameter(owner) || ts.isPropertyDeclaration(owner)) && owner.type === at;
+      if (!annotates) return false;
+      const member = ts.isParameter(owner) ? owner.parent : owner;
+      const cls = member?.parent;
+      return !!cls && ts.isClassLike(cls) && decorated(cls);
+    };
     const inTypePosition = (id: import('typescript').Identifier): boolean => {
       let node: import('typescript').Node = id;
       let parent = node.parent;
       // The left-most name of a qualified name (`Ns.Type`) stands for the whole.
       while (parent && ts.isQualifiedName(parent) && parent.left === node) { node = parent; parent = node.parent; }
       if (!parent) return false;
-      if (ts.isTypeReferenceNode(parent)) return parent.typeName === node;
+      if (ts.isTypeReferenceNode(parent)) return parent.typeName === node && !emittedAsMetadata(parent);
       if (ts.isTypeQueryNode(parent)) return parent.exprName === node;
       if (ts.isExpressionWithTypeArguments(parent)) {
         const clause = parent.parent;

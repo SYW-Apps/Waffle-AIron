@@ -294,7 +294,10 @@ methods:
           beside it so a bad release can be stepped back from. On Windows the running exe is renamed
           aside (an exe cannot be overwritten while it runs, but it can be renamed) after the
           leftovers of earlier updates are swept; when one a process still runs from keeps the .old
-          name, it moves aside under a fresh .old-<time> name instead of failing on it
+          name, it moves aside under a fresh .old-<time> name instead of failing on it; when the new
+          build cannot take the slot, the running one is moved back before the error is reported, so
+          the install is never left without an executable, and the error says the running wairon is
+          unchanged
         type: local
       - stepNumber: 15
         description: Done
@@ -3950,7 +3953,9 @@ methods:
         label: done
         description: >-
           Print the projects now on the running major, and each project whose design moved with
-          `wairon lock` to run at its root
+          `wairon lock` to run at its root; a plan that rewrote anything is also written whole to
+          .wai/upgrade-report.md at the family root (every rewrite and every decision verbatim, one
+          per line), so an author works from the file and never copies text off a wrapped console
         type: local
       - stepNumber: 15
         description: Upgraded
@@ -4163,4 +4168,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-20T21:41:40.852Z'
+updatedAt: '2026-10-21T06:01:57.904Z'
