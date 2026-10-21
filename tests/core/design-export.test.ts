@@ -413,9 +413,11 @@ describe('the design export projector', () => {
       expect(portal.component).toBe('billing-portal');
       const get = portal.methods.find((m) => m.method === 'ibilling-portal.getInvoice')!;
       expect(get.detail).toBe('calls-only');
+      // The Portal default, not stated: binding is only what is stated, the rest is open.
+      expect(get.detailStated).toBe(false);
       expect(get.narrative[0]).toMatchObject({ type: 'call', targetComponent: 'billing-orch', targetMethod: 'ibilling-orch.compute' });
       const onChange = portal.methods.find((m) => m.method === 'ibilling-portal.onChange')!;
-      expect(onChange).toMatchObject({ detail: 'intent', calls: ['ibilling-orch.compute'], narrative: [] });
+      expect(onChange).toMatchObject({ detail: 'intent', detailStated: true, calls: ['ibilling-orch.compute'], narrative: [] });
       expect(design.implementations.find((i) => i.key === 'billing-orch-impl')!.technologies).toEqual(['postgres', 'yaml']);
       expect(design.components.find((c) => c.key === 'billing-orch')!.emits).toEqual([{ topic: 'invoices', event: 'invoice.created' }]);
     });

@@ -29,7 +29,7 @@ import {
   scanAllSpecs,
   findOrphanedSpecFiles,
 } from './specs.js';
-import { implementationSourceFiles, type SubsystemSpec } from '../models/specs.js';
+import { implementationSourceFiles, statesCalls, type SubsystemSpec } from '../models/specs.js';
 import { pathExists, fromProjectRoot } from '../utils/fs.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { describeGateParts, type ProjectApproval } from '../models/lock.js';
@@ -373,6 +373,21 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // at the missing part: a component with no code yet stops at 80%.
   if (system && systemScore < 100) {
     output += `${mark.structure('  Completeness per component: 20% its spec, +30% a contract, +30% an implementation, +20% once the source files it names exist.')}\n`;
+  }
+  // What the percentage does not say: how much of the design is binding. A
+  // method that states its calls is binding; one that does not leaves every
+  // route its component depends on open, and the gate shows those as open.
+  let statedMethods = 0;
+  let openMethods = 0;
+  for (const impl of implementations) {
+    const component = components.find((c) => c.id === interfaces.find((i) => i.id === impl.contract)?.component);
+    for (const method of impl.methods) {
+      if (statesCalls(method, impl, component)) statedMethods++;
+      else openMethods++;
+    }
+  }
+  if (system && statedMethods + openMethods > 0) {
+    output += `${mark.structure(`  Detail: ${statedMethods} method(s) state their calls (binding), ${openMethods} leave routes open (the design allows each collaborator their component depends on).`)}\n`;
   }
 
   // Step 7: the project graph — each member the tree reaches prints as a

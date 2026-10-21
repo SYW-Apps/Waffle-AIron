@@ -506,7 +506,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.subsystems
-        endStep: 12
+        endStep: 15
       - stepNumber: 2
         description: isDraftCtx = sub.isDraft().
         type: local
@@ -518,7 +518,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the subsystem's own component entries (sub.publicInterfaces without from or typeDef)
-        endStep: 12
+        endStep: 15
       - stepNumber: 4
         description: 'Branch: is pi.component unset?'
         type: branch
@@ -562,13 +562,34 @@ methods:
           sub.id, or does it start with sub.id + "::"?
         type: branch
         condition: the subsystem does not own the backing component (isSubsystemOwner is false)
-        onFalseStep: 3
+        onFalseStep: 14
       - stepNumber: 12
         label: psbForeignReport
         description: >-
           Report PUBLIC_INTERFACE_FOREIGN_COMPONENT (error; isDraftCtx) naming the subsystem, the
           component, and the subsystem it actually belongs to — a subsystem may only publish its own
           components.
+        type: local
+      - stepNumber: 13
+        description: >-
+          Skip the rest of this entry's checks and continue with the next public interface (mirrors
+          the source's continue).
+        type: jump
+        toStep: 3
+      - stepNumber: 14
+        label: psbNotPortal
+        description: >-
+          Branch: is the backing component something other than a Portal? Nothing can use it: a hop
+          from another subsystem enters through a published Portal, and another project consumes
+          only a Portal's verbs
+        type: branch
+        condition: backing.componentType is not Portal
+        onFalseStep: 3
+      - stepNumber: 15
+        description: >-
+          Report PUBLIC_INTERFACE_NOT_PORTAL (warning; isDraftCtx) naming the subsystem, the
+          component and its type, and the remedy: publish the Portal that dispatches to it, or drop
+          the entry.
         type: local
     symbol: check
     exportedVia: publicSurfaceBindingRule
@@ -1536,4 +1557,4 @@ methods:
     exportedVia: typeRefScopeRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-20T19:12:12.198Z'
+updatedAt: '2026-10-21T21:19:48.122Z'

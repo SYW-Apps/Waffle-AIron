@@ -196,6 +196,43 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // PUBLIC_INTERFACE_NOT_PORTAL
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_NOT_PORTAL',
+    severity: 'warning',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its invoicing orchestrator, which no other subsystem can depend on: a hop across subsystems enters through a published Portal.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{
+        id: 'billing',
+        description: 'Invoicing and payment collection for booked visits.',
+        publicInterfaces: [{ details: 'Invoicing workflow.', component: 'invoice-orchestrator' }],
+      }],
+      components: [{ id: 'invoice-orchestrator', componentType: 'Orchestrator', subsystem: 'billing', description: 'Drives the invoicing workflow.' }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_NOT_PORTAL',
+    expectFire: false,
+    reason: 'The published component is the subsystem\'s Portal, its front door.',
+    scenario: 'The billing subsystem publishes its invoice API portal.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{
+        id: 'billing',
+        description: 'Invoicing and payment collection for booked visits.',
+        publicInterfaces: [{ details: 'Invoice REST API for partner systems.', component: 'invoice-api-portal' }],
+      }],
+      components: [INVOICE_PORTAL],
+      interfaces: [INVOICE_API_INTERFACE],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // PUBLIC_INTERFACE_INVALID_INTERFACE — missing interface behavior
   // -------------------------------------------------------------------------
   defineRuleFixture({

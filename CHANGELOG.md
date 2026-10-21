@@ -2,6 +2,67 @@
 
 ## Unreleased
 
+### Stated detail is binding, unstated detail is open
+
+Detail is never required, and wairon never assumes what was left out: what a method states
+it calls is binding, and where it states nothing, every route its component depends on is
+open, and wairon says so.
+
+- **Declared `calls` are judged like narrative call steps.** `PORTAL_WRITE_SHORTCUT`,
+  `SUPERVISOR_WRITE_SHORTCUT`, `LIFECYCLE_CALLS_WRITE` and the entry-point checks read only
+  narrative steps, so a write declared in `calls` passed them. They now read both and point at
+  "step N" or "a declared call". A design whose declared calls break one of these newly fails.
+- **Agent briefs say what is fixed and what is open.** Each implementer brief has a section
+  with one line per method: binding (make exactly the calls named), or open (the collaborators
+  the narrative names, and every other one its component depends on, which the design allows
+  without saying the method takes it — take one only as needed, and name it in the report).
+- **Status says how much of the design is binding.** Beside the completeness percentage,
+  `wairon status` and `sdd_get_status` count the methods that state their calls and the ones
+  that leave routes open.
+- **Design export 2.1:** each method body carries `detailStated`, and an `invokedBy` may carry
+  `planned`. A minor version: the fields are added, nothing is removed or redefined.
+
+### Callers the design cannot show yet
+
+- **A component-level `invokedBy: { kind: runtime }`.** On any component it is the hook every
+  method inherits (a method's own declaration replaces it), so a component the process's own
+  runtime calls through no longer needs the declaration repeated on each method. Before, it was
+  accepted on a non-Portal and silently ignored. `INVOKED_BY_REDUNDANT` reports it once the
+  narratives reach every method that inherits it, and its caller prose is held to the same floor.
+- **Planned callers: `invokedBy: { kind: entry, caller, planned: true }`.** A Portal whose
+  callers are not built yet keeps its entry, so its verbs stay reached, and the new
+  `ENTRY_CALLER_PLANNED` notice names it until the caller exists and the flag is dropped. It works
+  on a runtime declaration too.
+- **`transport: Custom` says what it assumes.** Custom, the free-form escape hatch, is read as a
+  network transport (scopes, the gateway rule, network flows). A new `CUSTOM_TRANSPORT_AS_NETWORK`
+  notice on each Custom Portal says so and names the local and in-process transports to state
+  when its callers are not across a network. The generated guide now lists Custom.
+- **`PUBLIC_INTERFACE_NOT_PORTAL` (warning).** A subsystem that publishes a component other than
+  a Portal is reported where it publishes it: nothing can use it, since a hop from another
+  subsystem enters through a published Portal and another project consumes only a Portal's
+  verbs. Before, only the dependency on it was refused. **Can fail `--ci`.**
+- **A live Actor's handle is supervision, not data.** `ACTOR_REACHED_WITHOUT_SUPERVISOR` now
+  names the Actor's Supervisor first: depend on it and take the handle from it, since a lookup by
+  id or a runner checked out of a pool needs no data component. A Registry is named only as the
+  by-id alternative, and never one the Supervisor owns. Before, the remedy could point at an owned
+  Registry, which is the Supervisor's private state and `SUPERVISION_STATE_INTRUSION`. A Registry
+  a Supervisor maintains through lifecycle calls (a directory of live handles) no longer draws
+  `REGISTRY_WITHOUT_STORE`.
+
+### Agent files
+
+- **An unstated `rules.materializeAgentFiles` reads as off.** Before, a project that never stated
+  it read it as on while committed wairon-managed agent files were present. Now the next
+  `wairon generate` (or `wairon lock`) removes those files, and says why. Keep them with
+  `rules.materializeAgentFiles: true` in `.wai/project.yaml`.
+- **Per-component agents are retired.** `rules.generateComponentImplementers` is read and
+  ignored, with a warning from `wairon generate` while it is set true. Materialized agent files
+  are one owner per subsystem, which owns its components' code; a component's brief is still
+  composed on demand (`sdd_get_agent_brief`, `wairon agent brief <component>`). A large project
+  no longer generates hundreds of agent files on every lock.
+
+### Fixes
+
 - **`wairon update` on Windows stages the new build first.** The new executable is copied beside the
   running one before anything moves, so a failed copy (a full disk, a scanner holding the file)
   leaves the running wairon untouched; the swap itself is two renames.

@@ -529,20 +529,21 @@ methods:
       - stepNumber: 14
         label: actorRemedy
         description: >-
-          remedy = when some of supervisors maintain Registries, to depend on one of them (named,
-          with the Supervisor that maintains it) and look the Actor up by id there; when supervisors
-          exist but maintain none, to model that lookup as a Registry of live handles the Supervisor
-          keeps through lifecycle-effect methods and depend on it; when there is no Supervisor, to
-          give the Actor a Supervisor that depends on it and maintains such a Registry, and depend
-          on that Registry
+          remedy = when supervisors exist, to depend on one of them (named) and take the Actor's
+          handle from it — a lookup by id, or a runner checked out of a pool, needs no data
+          component — and, when a Supervisor among them maintains a Registry it does not own (a
+          shared directory of live handles), the by-id alternative of depending on that Registry
+          (named, with the Supervisor that maintains it). A Registry the Supervisor owns is its
+          private supervision state and is never named. When there is no Supervisor: to give the
+          Actor one that depends on it, and depend on that Supervisor
         type: local
       - stepNumber: 15
         label: actorReport
         description: >-
           Report ACTOR_REACHED_WITHOUT_SUPERVISOR (error, on edge.from.id; draft context
           edge.draftContext) naming edge.from with its stereotype and the Actor edge.to: a live
-          Actor is found by id through a Registry its Supervisor maintains, or messaged through that
-          Supervisor. The message ends with remedy
+          Actor's handle comes from a Supervisor that supervises it, or from a Registry such a
+          Supervisor maintains. The message ends with remedy
         type: local
     symbol: check
     exportedVia: entrypointDepsRule
@@ -880,7 +881,9 @@ methods:
           ownership = ctx.ownershipIndex(): which owner — a pattern, or a Supervisor keeping its
           supervision state — privately owns each member block, and therefore which blocks stand
           alone. A retired component is never a Store, Registry or Query, so this pass needs no
-          retirement skip
+          retirement skip. handleDirectories = every Registry a Supervisor maintains (the same
+          reading entrypoint-dependencies takes): its directory of live handles, which holds the
+          handles itself
         type: local
       - stepNumber: 2
         label: standalone
@@ -909,12 +912,12 @@ methods:
       - stepNumber: 6
         label: standaloneRegistry
         description: >-
-          Is it a Registry with no Store to write to? A Repository-owned Registry reaches its Store
-          as a sibling member and never arrives here
+          Is it a Registry with no Store to write to, and no Supervisor's directory of live handles?
+          A Repository-owned Registry reaches its Store as a sibling member and never arrives here
         type: branch
         condition: >-
-          comp.componentType is Registry and no id in comp.dependsOn resolves through
-          ctx.componentMap to a Store
+          comp.componentType is Registry, handleDirectories does not hold comp.id, and no id in
+          comp.dependsOn resolves through ctx.componentMap to a Store
         onFalseStep: 8
       - stepNumber: 7
         description: >-
@@ -1626,4 +1629,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-16T17:40:37.695Z'
+updatedAt: '2026-10-21T22:44:45.489Z'

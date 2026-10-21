@@ -1301,7 +1301,7 @@ updatedAt: '2026-06-10T22:00:00Z'
     }
   });
 
-  it('accepts a MessageBus interface backed by an Observer', () => {
+  it('reports a published Observer (PUBLIC_INTERFACE_NOT_PORTAL): events reach it by topic, never through the surface', () => {
     const proj = createTempProject();
     proj.writeSpec('system', 'system', SYS);
     proj.writeSpec('subsystem', 'sub-b', sub('sub-b',
@@ -1310,8 +1310,10 @@ updatedAt: '2026-06-10T22:00:00Z'
     proj.activate();
     try {
       const res = validateProject();
-      expect(res.issues.some(i => i.code.startsWith('PUBLIC_INTERFACE_'))).toBe(false);
-      expect(res.valid).toBe(true);
+      const found = res.issues.filter(i => i.code.startsWith('PUBLIC_INTERFACE_'));
+      expect(found.map(i => i.code)).toEqual(['PUBLIC_INTERFACE_NOT_PORTAL']);
+      expect(found[0].severity).toBe('warning');
+      expect(found[0].message).toContain('"obs-b", a Observer, not a Portal');
     } finally {
       proj.cleanup();
     }

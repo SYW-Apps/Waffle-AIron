@@ -152,6 +152,34 @@ export default [
   }),
 
   // -------------------------------------------------------------------------
+  // CUSTOM_TRANSPORT_AS_NETWORK
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CUSTOM_TRANSPORT_AS_NETWORK',
+    severity: 'notice',
+    anchoredTo: 'lab-feed-portal',
+    expectFire: true,
+    scenario:
+      'The lab feed portal states the free-form Custom transport, which is read as a network transport whatever its callers really are.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'partner-integrations', description: 'Partner clinic and lab integrations.' }],
+      components: [{ id: 'lab-feed-portal', componentType: 'Portal', transport: 'Custom', description: 'Receives lab results over the lab vendor protocol.' }],
+    },
+  }),
+  defineRuleFixture({
+    code: 'CUSTOM_TRANSPORT_AS_NETWORK',
+    expectFire: false,
+    reason: 'A named transport says where its callers are, so nothing is assumed.',
+    scenario: 'The lab feed portal states HTTP, the transport its lab vendors call it over.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{ id: 'partner-integrations', description: 'Partner clinic and lab integrations.' }],
+      components: [{ id: 'lab-feed-portal', componentType: 'Portal', transport: 'HTTP', description: 'Receives lab results from lab vendors over HTTP.' }],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
   // AUTH_ON_NON_PORTAL — the documented gateway example, literally
   // -------------------------------------------------------------------------
   defineRuleFixture({

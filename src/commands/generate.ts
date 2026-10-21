@@ -225,6 +225,10 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
     return;
   }
 
+  if (projectConfig.rules.generateComponentImplementers === true) {
+    logger.warn('rules.generateComponentImplementers is retired and ignored: per-component agents are no longer generated. The owner of each subsystem owns its components\' code, and a component\'s brief is still composed on demand (sdd_get_agent_brief). Remove the setting from .wai/project.yaml.');
+  }
+
   // Nothing outside the project root is written or pruned unless --global asks.
   const reach: WriteReach = { root: getProjectRoot(), global: options.global === true };
   const skippedTargets = announceOutsideTargets(projectConfig, reach);
@@ -242,7 +246,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
       .map((p) => path.dirname(p));
     const removed = pruneStaleAgents(new Set(), candidateDirs, reach);
     if (removed > 0) {
-      logger.info(`Removed ${removed} previously materialized agent file(s) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
+      logger.info(`Removed ${removed} previously materialized agent file(s): rules.materializeAgentFiles is off (left unstated, it reads as off since 6.2) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
     } else {
       // Said at default verbosity: a run that writes no agent file would
       // otherwise print nothing at all and read like it did nothing.

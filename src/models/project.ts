@@ -387,15 +387,12 @@ export const RulesConfigSchema = z.object({
   enforceReproducibility: z.boolean().default(true),
 
   /**
-   * Whether to generate an individual implementer agent PER COMPONENT. Off by
-   * default: one subsystem-owner agent per subsystem owns its components'
-   * implementations, which keeps the generated topology (and the per-session
-   * agent context every session loads) proportional to the number of
-   * subsystems, not components. A large project or subproject with `true` can
-   * emit thousands of agents — reserve it for small trees that genuinely want
-   * per-component isolation.
+   * Retired in 6.2, read and ignored: per-component implementer agents are no
+   * longer generated. One owner per subsystem owns its components' code, and a
+   * component's brief is still composed on demand (sdd_get_agent_brief).
+   * `wairon generate` says so while a project states it true.
    */
-  generateComponentImplementers: z.boolean().default(false),
+  generateComponentImplementers: z.boolean().optional(),
 
   /**
    * Whether `wairon generate` writes per-subsystem owner/architect agent FILES.

@@ -29,7 +29,14 @@ fields:
       The steps as stored, with targetComponent and targetMethod resolved to keys; empty for an
       intent-level method
     optional: false
+  - name: detailStated
+    type: bool
+    description: >-
+      Whether the method or its implementation states its detail, or the method declares its calls.
+      Stated detail is binding; unstated, detail is the component type's default and what the method
+      calls beyond its narrative is open (2.1)
+    optional: false
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:19.761Z'
-updatedAt: '2026-10-04T23:39:22.481Z'
+updatedAt: '2026-10-20T13:54:52.532Z'

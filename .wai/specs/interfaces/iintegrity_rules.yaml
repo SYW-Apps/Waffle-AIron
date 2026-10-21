@@ -124,6 +124,9 @@ methods:
     description: >-
       Rule public-surface-binding. Every declared publicInterface names a backing component, that
       component exists, and the subsystem owns it — a subsystem may only publish its own components.
+      A published component that is not a Portal is reported: nothing can use it, since a hop from
+      another subsystem enters through a published Portal and another project consumes only a
+      Portal's verbs.
     signature: 'publicSurfaceBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -140,6 +143,9 @@ methods:
       - code: PUBLIC_INTERFACE_FOREIGN_COMPONENT
         severity: error
         summary: Subsystem publishing a component it does not own
+      - code: PUBLIC_INTERFACE_NOT_PORTAL
+        severity: warning
+        summary: Subsystem publishing a component that is not a Portal, which nothing can use
   - name: publicSurfaceBoundContract
     description: >-
       Rule public-surface-bound-contract. A publicInterface entry that binds an L3 interface must
@@ -684,4 +690,4 @@ methods:
           carries that name and sits at least as close to the referrer
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-20T19:12:10.663Z'
+updatedAt: '2026-10-21T21:19:39.729Z'

@@ -3,19 +3,22 @@ id: declared_invocation
 name: DeclaredInvocation
 description: >-
   A declared invocation from outside the modelled narrative graph. It sits on an L3 contract method,
-  or on a Portal component, where it is the entry every verb inherits and a verb may override only
-  its scope. It is the typed, reviewable acknowledgment that a real caller exists where no narrative
-  shows one. Kind `entry` says callers outside the design reach a Portal verb over the Portal's
-  transport, with a `scope` on network transports. Kind `runtime` says the process's own runtime
-  invokes it (a composition root, scheduler, signal or framework callback). Unused-detection seeds
-  the method (or every verb of the Portal) as an entrypoint, alongside lifecycle entrypoints,
-  Observers and the implementations of imported extension points; Portals are no longer seeds of
-  their own, so a Portal verb nothing reaches and nobody declared is reported. Honesty guards: the
-  caller prose is mandatory (INVOKED_BY_UNDESCRIBED), a runtime declaration the internal walk
-  already reaches is stale (INVOKED_BY_REDUNDANT), and an entry on a non-Portal is
-  ENTRY_ON_NON_PORTAL. An entry is never redundant, because it also states the verb's scope for the
-  network rules and the flow matrix. When the wiring is internal (the system itself hands the method
-  to a runtime as a callback), prefer a register narrative step on the registering method.
+  or on a component: on a Portal it is the entry every verb inherits, and a verb may override only
+  its scope; on any component, kind runtime is the hook every method inherits, and a method's own
+  declaration replaces it. It is the typed, reviewable acknowledgment that a real caller exists
+  where no narrative shows one. Kind `entry` says callers outside the design reach a Portal verb
+  over the Portal's transport, with a `scope` on network transports. Kind `runtime` says the
+  process's own runtime invokes it (a composition root, scheduler, signal or framework callback). A
+  caller that is planned but not built yet keeps its declaration with `planned`, which still seeds
+  the walk and raises the ENTRY_CALLER_PLANNED notice. Unused-detection seeds the method (or every
+  method of the component) as an entrypoint, alongside lifecycle entrypoints, Observers and the
+  implementations of imported extension points; Portals are no longer seeds of their own, so a
+  Portal verb nothing reaches and nobody declared is reported. Honesty guards: the caller prose is
+  mandatory (INVOKED_BY_UNDESCRIBED), a runtime declaration the internal walk already makes needless
+  is stale (INVOKED_BY_REDUNDANT), and an entry on a non-Portal is ENTRY_ON_NON_PORTAL. An entry is
+  never redundant, because it also states the verb's scope for the network rules and the flow
+  matrix. When the wiring is internal (the system itself hands the method to a runtime as a
+  callback), prefer a register narrative step on the registering method.
 fields:
   - name: kind
     type: InvocationKind
@@ -37,7 +40,13 @@ fields:
       network. A scope on a local or in-process verb, or on a runtime declaration, is
       ENTRY_SCOPE_NOT_NETWORK
     optional: true
+  - name: planned
+    type: bool
+    description: >-
+      The caller is planned, not built yet: the declaration still reaches the method, and
+      ENTRY_CALLER_PLANNED (a notice) says so until the caller exists and the flag is dropped
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 createdAt: '2026-08-11T15:25:27.922Z'
-updatedAt: '2026-10-06T17:39:51.373Z'
+updatedAt: '2026-10-21T21:19:50.484Z'

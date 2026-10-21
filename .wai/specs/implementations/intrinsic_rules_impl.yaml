@@ -13,7 +13,7 @@ methods:
         type: loop
         loopKind: forEach
         over: ctx.components
-        endStep: 13
+        endStep: 15
       - stepNumber: 2
         description: isDraftCtx = ctx.isComponentDraft(comp.id).
         type: local
@@ -21,7 +21,7 @@ methods:
         description: 'Branch: is the component a Portal?'
         type: branch
         condition: comp.componentType is "Portal"
-        onFalseStep: 9
+        onFalseStep: 11
       - stepNumber: 4
         description: 'Branch (Portal only): is its transport missing?'
         type: branch
@@ -39,17 +39,30 @@ methods:
           an InProcess Portal only
         type: branch
         condition: comp.abi is set and comp.transport is not InProcess
-        onFalseStep: 13
+        onFalseStep: 8
       - stepNumber: 7
         description: >-
           Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's transport and
           that abi is for InProcess Portals only.
         type: local
       - stepNumber: 8
+        description: >-
+          Branch (Portal only): Custom, the free-form escape hatch, is read as a network transport,
+          an assumption about where its callers are
+        type: branch
+        condition: comp.transport is Custom
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Report CUSTOM_TRANSPORT_AS_NETWORK (notice; isDraftCtx) naming what the network reading
+          means (scopes, the gateway rule, network flows) and the local and in-process transports to
+          state when its callers are not across a network.
+        type: local
+      - stepNumber: 10
         description: Continue with the next component.
         type: jump
-        toStep: 13
-      - stepNumber: 9
+        toStep: 15
+      - stepNumber: 11
         label: nonPortal
         description: >-
           Branch (non-Portal): is an abi or basePath set, or a transport on anything but an Adapter
@@ -58,25 +71,25 @@ methods:
         condition: >-
           comp.abi or comp.basePath is set, or comp.transport is set on a component that is not an
           Adapter
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 13
+      - stepNumber: 12
         description: >-
           Report UNEXPECTED_PORTAL_FIELD (error; isDraftCtx) naming the component's actual
           componentType and that abi and basePath are Portal-only and transport is a Portal's (or an
           Adapter's, as the one it calls over).
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         label: auth
         description: 'Branch (non-Portal): is auth declared?'
         type: branch
         condition: comp.auth is set
-        onFalseStep: 13
-      - stepNumber: 12
+        onFalseStep: 15
+      - stepNumber: 14
         description: >-
           Report AUTH_ON_NON_PORTAL (warning; isDraftCtx) naming the component's componentType and
           that auth is inbound transport auth, meaningful only on a Portal.
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         label: next
         description: Continue with the next component.
         type: local
@@ -175,4 +188,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-09-14T23:17:12.294Z'
-updatedAt: '2026-10-18T19:02:55.092Z'
+updatedAt: '2026-10-21T21:19:45.730Z'

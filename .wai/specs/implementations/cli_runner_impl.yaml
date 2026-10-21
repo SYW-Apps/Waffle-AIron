@@ -67,7 +67,9 @@ methods:
       - stepNumber: 1
         description: >-
           Read the project configuration: the configured targets and whether agent files are
-          materialized (rules.materializeAgentFiles).
+          materialized (rules.materializeAgentFiles; left unstated, it is off). A configuration that
+          still states the retired rules.generateComponentImplementers true is warned that it is
+          ignored.
         type: call
         targetComponent: cli_core_adapter
         targetMethod: loadProjectConfig
@@ -4168,4 +4170,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-21T06:01:57.904Z'
+updatedAt: '2026-10-21T21:20:22.925Z'

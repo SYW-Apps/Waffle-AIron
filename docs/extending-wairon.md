@@ -606,7 +606,6 @@ works out of the box; the natural configuration:
 ```yaml
 rules:
   requireOwnedPaths: false            # agents own no source paths
-  generateComponentImplementers: false
 ```
 
 Narratives still carry full value: the detail dial (`full | calls-only |
