@@ -458,16 +458,31 @@ function installBinary(tmpFile: string, destPath: string): void {
  */
 export function swapRunningBinary(newBinary: string, destPath: string): void {
   cleanStaleBinary(destPath);
-  const aside = freeAsideName(destPath);
-  fs.renameSync(destPath, aside);
+  // The new build is staged beside the slot first: a copy that fails (a full
+  // disk, a scanner holding the file) leaves the running one untouched, and
+  // what follows is two renames on one volume.
+  const staged = `${destPath}.new`;
   try {
-    fs.copyFileSync(newBinary, destPath);
+    fs.copyFileSync(newBinary, staged);
   } catch (err) {
-    // The new build could not take the slot (a full disk, a scanner holding the
-    // file): the running one goes back, so the install is never left with no
-    // executable at all, and the caller reports the copy's own error.
-    try { fs.rmSync(destPath, { force: true }); } catch { /* nothing was written */ }
+    try { fs.rmSync(staged, { force: true }); } catch { /* nothing was written */ }
+    throw err;
+  }
+  const aside = freeAsideName(destPath);
+  try {
+    fs.renameSync(destPath, aside);
+  } catch (err) {
+    try { fs.rmSync(staged, { force: true }); } catch { /* swept by a later update */ }
+    throw err;
+  }
+  try {
+    fs.renameSync(staged, destPath);
+  } catch (err) {
+    // The new build could not take the slot: the running one goes back, so the
+    // install is never left with no executable at all, and the caller reports
+    // the rename's own error.
     fs.renameSync(aside, destPath);
+    try { fs.rmSync(staged, { force: true }); } catch { /* swept by a later update */ }
     throw err;
   }
   // Gone once no process runs from it; until then the next start's sweep retries.

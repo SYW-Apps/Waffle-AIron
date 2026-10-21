@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **`wairon update` on Windows stages the new build first.** The new executable is copied beside the
+  running one before anything moves, so a failed copy (a full disk, a scanner holding the file)
+  leaves the running wairon untouched; the swap itself is two renames.
+- **`.wai/upgrade-report.md` is written whole or not at all**: it is staged and renamed into place,
+  so a failed write never leaves a partial report.
+
 ## v6.1.2 (from v6.1.1)
 
 A fix release from the review of 6.1.1 and from upgrading a large family. Nothing to do when
