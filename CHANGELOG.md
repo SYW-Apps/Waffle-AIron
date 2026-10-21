@@ -19,6 +19,10 @@ upgrading: install 6.1.2.
   import. In a class carrying a decorator, a constructor parameter or property type is emitted as a
   runtime injection token under decorator metadata, so it is a value use again, and an
   `UNDECLARED_EXPORT` crossing there is reported as before 6.1.1.
+- **`UNDECLARED_EXPORT` no longer reports dependency injection by class.** A component that declares
+  `dependsOn` on another and constructs or injects the class realizing it (decorated or not) is
+  the dependency made real, not a surface reached across. A component without that dependency
+  taking the class, or anyone taking an owned member's class, is still reported.
 - **`wairon update` (Windows):** when the new build cannot be copied into place after the running
   one was moved aside, the running one is moved back, so the install is never left without
   `wairon.exe`; the error says the running wairon is unchanged.

@@ -336,7 +336,7 @@ describe('UNDECLARED_EXPORT — a plain import used only as a type is a type imp
     proj.component('store-a', 'Store');
     proj.contract('store-a', ['load']);
     proj.impl('store-a', `sourcePath: src/user_store.ts\nmethods:\n${intent('load')}`);
-    proj.source('src/user_store.ts', 'export class UserStore {\n  load(): string { return ""; }\n}\n');
+    proj.source('src/user_store.ts', 'export class UserStore {\n  load(): string { return ""; }\n}\nexport class StoreTuning {\n  depth = 1;\n}\n');
     proj.component('orch-a', 'Orchestrator', 'dependsOn: [store-a]');
     proj.contract('orch-a', ['run']);
     proj.impl('orch-a', `sourcePath: src/orch.ts\nmethods:\n${intent('run')}`);
@@ -353,22 +353,49 @@ describe('UNDECLARED_EXPORT — a plain import used only as a type is a type imp
   });
 
   it('fire: a decorated class\'s constructor parameter type is an injection token under decorator metadata, a value use', () => {
-    const proj = inject("import { UserStore } from './user_store';\nfunction Injectable(): ClassDecorator { return () => undefined; }\n@Injectable()\nexport class Orch {\n  constructor(private readonly store: UserStore) {}\n  run(): string { return this.store.load(); }\n}\n");
+    const proj = inject("import { UserStore, StoreTuning } from './user_store';\nfunction Injectable(): ClassDecorator { return () => undefined; }\n@Injectable()\nexport class Orch {\n  constructor(private readonly store: UserStore, private readonly tuning: StoreTuning) {}\n  run(): string { return this.store.load(); }\n}\n");
     proj.activate();
     try {
       const found = byCode(validateProject(), 'UNDECLARED_EXPORT');
       expect(found).toHaveLength(1);
-      expect(found[0].message).toContain('UserStore');
+      // The stray export crosses; the class realizing the declared dependency is the edge made real.
+      expect(found[0].message).toContain('"StoreTuning"');
+      expect(found[0].message).not.toContain('"UserStore"');
     } finally { proj.cleanup(); }
   });
 
-  it('fire: the same binding also constructed (a value use) still crosses', () => {
-    const proj = inject("import { UserStore } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore = new UserStore()) {}\n  run(): string { return this.store.load(); }\n}\n");
+  it('control: without the decorator the same stray type annotation is erased, and nothing crosses', () => {
+    const proj = inject("import { UserStore, StoreTuning } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore, private readonly tuning: StoreTuning) {}\n  run(): string { return this.store.load(); }\n}\n");
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_EXPORT')).toEqual([]);
+    } finally { proj.cleanup(); }
+  });
+
+  it('control: the declared dependent injecting (decorated) or constructing the class realizing its dependency draws none', () => {
+    for (const orch of [
+      "import { UserStore } from './user_store';\nfunction Injectable(): ClassDecorator { return () => undefined; }\n@Injectable()\nexport class Orch {\n  constructor(private readonly store: UserStore) {}\n  run(): string { return this.store.load(); }\n}\n",
+      "import { UserStore } from './user_store';\nexport class Orch {\n  constructor(private readonly store: UserStore = new UserStore()) {}\n  run(): string { return this.store.load(); }\n}\n",
+    ]) {
+      const proj = inject(orch);
+      proj.activate();
+      try {
+        expect(byCode(validateProject(), 'UNDECLARED_EXPORT')).toEqual([]);
+      } finally { proj.cleanup(); }
+    }
+  });
+
+  it('fire: a component that declares no dependency on it constructing the realizing class still crosses', () => {
+    const proj = inject("export class Orch {\n  run(): string { return ''; }\n}\n");
+    proj.component('orch-b', 'Orchestrator');
+    proj.contract('orch-b', ['go']);
+    proj.impl('orch-b', `sourcePath: src/other.ts\nmethods:\n${intent('go')}`);
+    proj.source('src/other.ts', "import { UserStore } from './user_store';\nexport function go(): string { return new UserStore().load(); }\n");
     proj.activate();
     try {
       const found = byCode(validateProject(), 'UNDECLARED_EXPORT');
       expect(found).toHaveLength(1);
-      expect(found[0].message).toContain('UserStore');
+      expect(found[0].message).toContain('"UserStore"');
     } finally { proj.cleanup(); }
   });
 });

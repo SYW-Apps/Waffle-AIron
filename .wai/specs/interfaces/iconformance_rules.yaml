@@ -747,15 +747,19 @@ methods:
       from: below that nothing separates an export from a mention, or a shared word from a shared
       module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns,
       so the owner's file, or another member of the same pattern, importing a member's class is the
-      owns relation made real. And the surface no taker reveals: a public method of a component's
-      REALIZING class — a class holding one of its modelled methods — or a function its realizing
-      file exports, that no contract of the components the file realizes declares (nor a `symbol`,
-      `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or
-      reference in its own file, no name another analyzed file writes, no identifier in a project
-      file the run did not analyze (its tests, a composition root), no star re-export publishing the
-      module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller
-      explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to
-      it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
+      owns relation made real. Nor is a declared dependent taking a class that realizes the
+      component it depends on (a class holding one of its modelled methods): constructing it, or
+      receiving it injected under its class (a decorator-metadata token), is the dependsOn edge made
+      real. Taken by a component with no such dependency it still crosses, an owned member's class
+      above all. And the surface no taker reveals: a public method of a component's REALIZING class
+      — a class holding one of its modelled methods — or a function its realizing file exports, that
+      no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`,
+      `router` or type of it) and that NOTHING in the project uses — no call or reference in its own
+      file, no name another analyzed file writes, no identifier in a project file the run did not
+      analyze (its tests, a composition root), no star re-export publishing the module on — is
+      UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains.
+      Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a
+      function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
       constructors, accessors and fields, static, private, protected, #private and
       underscore-prefixed members, an `override`, a computed name, a language protocol or framework
       lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount,
@@ -1242,4 +1246,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-20T22:11:59.258Z'
+updatedAt: '2026-10-21T07:56:56.283Z'
