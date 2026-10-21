@@ -1,6 +1,40 @@
 # Changelog
 
-## Unreleased
+## v6.2.0 (from v6.1.2)
+
+v6.2 holds a method's stated detail to what it states and says where a design leaves routes
+open, lets the design name callers it cannot show yet (a component's runtime hook, a planned
+caller), and makes agent files strictly opt-in, one owner per subsystem.
+
+Who is affected:
+
+- **Projects that relied on committed agent files without stating it:** a `.wai/project.yaml`
+  that never states `rules.materializeAgentFiles` now reads it as off, so the next `wairon
+  generate` or `wairon lock` removes the wairon-managed agent files. State it `true` first to
+  keep them.
+- **Projects with `rules.generateComponentImplementers: true`:** the setting is ignored (with a
+  warning). Materialized agents are one owner per subsystem; a component's brief is still
+  composed on demand.
+- **Designs a new rule now judges:** a declared `calls` entry is held to the same rules as a
+  narrative call step (`PORTAL_WRITE_SHORTCUT`, `SUPERVISOR_WRITE_SHORTCUT`,
+  `LIFECYCLE_CALLS_WRITE`), and a subsystem publishing a component that is not a Portal is
+  `PUBLIC_INTERFACE_NOT_PORTAL`. Both can newly fail `validate --ci`.
+
+### Upgrading from v6.1.2
+
+1. Install 6.2.0 everywhere the project is checked: every teammate, CI, and the `wairon` your
+   assistant's MCP server starts. No `wairon upgrade` is needed: the tree stays on major 6.
+2. If you keep agent files on disk (`.claude/agents/` and the like) and your
+   `.wai/project.yaml` does not state `rules.materializeAgentFiles`, add
+   `materializeAgentFiles: true` under `rules` now. Remove `generateComponentImplementers` if
+   it is there.
+3. Run `wairon generate` to refresh the guides and skills, then reconnect your assistant's MCP
+   server (in Claude Code, `/mcp`) or start a new session.
+4. Run `wairon validate --ci` and `wairon lock-check`. The approval carries over unless 6.2.0's
+   rules find something in the approved design; then fix what they name (for
+   `PUBLIC_INTERFACE_NOT_PORTAL`: publish the Portal in front of the component, or drop the
+   entry) and run `wairon lock`.
+5. Commit the regenerated files, and `.wai/lock.json` if you re-locked.
 
 ### Stated detail is binding, unstated detail is open
 
