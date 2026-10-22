@@ -339,14 +339,27 @@ export default [
   // -------------------------------------------------------------------------
   defineRuleFixture({
     code: 'PARAM_NAME_MISMATCH',
-    expectFire: false,
-    reason:
-      'The realizing function annotates its first parameter with nothing, and without the declared type a rename cannot be told from a substitution — a guess about somebody\'s signature is worse than silence. Annotating it `string` is the fixture above.',
+    severity: 'warning',
+    anchoredTo: 'consumption_rater_impl',
+    expectFire: true,
     scenario:
-      'The consumption rater\'s contract calls its first argument the connection id, and the function realizing it takes an unannotated parameter called the connection.',
+      'The consumption rater\'s contract calls its first argument the connection id, and the function realizing it takes an unannotated parameter called the connection — nothing decides rename or substitution, but the name differs from the contract\'s either way, so it is told, saying the types could not be compared.',
     tree: raterTree(METERED_VOLUME, [
       'export function rateConsumption(connection, kilolitres: number): number {',
       '  return String(connection).length * kilolitres;',
+      '}',
+      '',
+    ].join('\n')),
+  }),
+  defineRuleFixture({
+    code: 'PARAM_NAME_MISMATCH',
+    expectFire: false,
+    reason: 'An unannotated parameter under the contract\'s own name agrees on the name, whatever its type.',
+    scenario:
+      'The consumption rater\'s contract calls its first argument the connection id, and the function realizing it takes an unannotated parameter under that name.',
+    tree: raterTree(METERED_VOLUME, [
+      'export function rateConsumption(connectionId, kilolitres: number): number {',
+      '  return String(connectionId).length * kilolitres;',
       '}',
       '',
     ].join('\n')),
