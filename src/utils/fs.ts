@@ -793,6 +793,52 @@ function tryCreateLock(lock: string): string | null {
   return record;
 }
 
+/** A breaker's own claim older than this was left by a breaker that crashed: a break takes microseconds. */
+const BREAK_CLAIM_STALE_MS = 2_000;
+
+/** A lock file's text: null when it exists but cannot be read, undefined when it is gone. */
+function readLock(lock: string): string | null | undefined {
+  try {
+    return fs.readFileSync(lock, 'utf8');
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : null;
+  }
+}
+
+/**
+ * Break a lock judged stale, and answer whether it is gone. Breakers take turns
+ * through `<lock>.break`, created exclusively, and remove the lock only while
+ * it still holds what was judged (null: a lock that could not be read). So two
+ * waiters judging the same stale lock never remove the lock the first of them
+ * takes next, and a lock replaced since it was judged is the new holder's.
+ * False when another breaker is at work or the lock cannot be removed: the
+ * caller waits and judges again, within its deadline.
+ */
+export function breakLock(lock: string, judged: string | null): boolean {
+  const claim = `${lock}.break`;
+  let fd: number;
+  try {
+    fd = fs.openSync(claim, 'wx');
+  } catch {
+    try {
+      if (Date.now() - fs.statSync(claim).mtimeMs > BREAK_CLAIM_STALE_MS) fs.unlinkSync(claim);
+    } catch { /* the other breaker finished */ }
+    return false;
+  }
+  fs.closeSync(fd);
+  try {
+    const now = readLock(lock);
+    if (now === undefined) return true;
+    if (now !== judged) return false;
+    fs.unlinkSync(lock);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    try { fs.unlinkSync(claim); } catch { /* the next breaker clears it once stale */ }
+  }
+}
+
 /** Remove the lock only while it is still this holder's: one taken over as stale is the new holder's. */
 function releaseLock(lock: string, record: string): void {
   try {
@@ -830,13 +876,10 @@ export function withFileLock<T>(file: string, change: () => T): T {
   const deadline = Date.now() + LOCK_WAIT_MS;
   let record: string | null;
   while ((record = tryCreateLock(lock)) === null) {
+    // Only the record judged goes: a holder that exits releases its lock, and
+    // the file found there a moment later can be the next holder's, which is live.
     const judged = lockBreakable(lock);
-    if (judged !== null) {
-      // Only the record judged goes: a holder that exits releases its lock, and
-      // the file found there a moment later can be the next holder's, which is live.
-      releaseLock(lock, judged);
-      continue;
-    }
+    if (judged !== null && breakLock(lock, judged)) continue;
     if (Date.now() > deadline) {
       throw new Error(`${file} is being written by another process for over ${LOCK_WAIT_MS / 1000}s (${lock}). Nothing was written; try again.`);
     }
