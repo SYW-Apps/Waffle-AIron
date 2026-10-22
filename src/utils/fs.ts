@@ -802,20 +802,23 @@ function releaseLock(lock: string, record: string): void {
   }
 }
 
-/** Whether the lock is left by a holder that is gone, or is older than any write. */
-function lockBreakable(lock: string): boolean {
+/**
+ * The lock's holder record when it is left by a holder that is gone, or is
+ * older than any write; null when it holds.
+ */
+function lockBreakable(lock: string): string | null {
   let text: string;
   let age: number;
   try {
     text = fs.readFileSync(lock, 'utf8');
     age = Date.now() - fs.statSync(lock).mtimeMs;
   } catch {
-    return false;
+    return null;
   }
-  if (age > LOCK_STALE_MS) return true;
+  if (age > LOCK_STALE_MS) return text;
   const [pid, , host] = text.split('\n');
-  if (!/^\d+$/.test(pid ?? '')) return false;
-  return host === os.hostname() && Number(pid) !== process.pid && !lockHolderAlive(Number(pid));
+  if (!/^\d+$/.test(pid ?? '')) return null;
+  return host === os.hostname() && Number(pid) !== process.pid && !lockHolderAlive(Number(pid)) ? text : null;
 }
 
 /**
@@ -827,8 +830,11 @@ export function withFileLock<T>(file: string, change: () => T): T {
   const deadline = Date.now() + LOCK_WAIT_MS;
   let record: string | null;
   while ((record = tryCreateLock(lock)) === null) {
-    if (lockBreakable(lock)) {
-      try { fs.unlinkSync(lock); } catch { /* another waiter broke it first */ }
+    const judged = lockBreakable(lock);
+    if (judged !== null) {
+      // Only the record judged goes: a holder that exits releases its lock, and
+      // the file found there a moment later can be the next holder's, which is live.
+      releaseLock(lock, judged);
       continue;
     }
     if (Date.now() > deadline) {
