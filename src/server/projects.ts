@@ -318,6 +318,7 @@ export function listProjectRecords(dataDir: string): HostedProjectRecord[] {
  */
 export function removeProjectRecord(dataDir: string, id: string): void {
   if (!load(dataDir).some((r) => r.id === id)) return;
+  let tree: string | undefined;
   update(dataDir, (records) => {
     const rec = records.find((r) => r.id === id);
     if (!rec) return records;
@@ -326,14 +327,19 @@ export function removeProjectRecord(dataDir: string, id: string): void {
       if (members.length > 0) {
         throw new Error(`Project "${id}" still has member record(s) ${members.join(', ')} — remove or detach them first.`);
       }
-      try {
-        fs.rmSync(rec.rootPath, { recursive: true, force: true });
-      } catch {
-        /* best-effort tree removal */
-      }
+      tree = rec.rootPath;
     }
     return records.filter((r) => r.id !== id);
   });
+  // The tree goes once the record is gone, outside the lock: a large tree takes
+  // longer than any lock is held, and a failed write keeps both.
+  if (tree) {
+    try {
+      fs.rmSync(tree, { recursive: true, force: true });
+    } catch {
+      /* best-effort tree removal */
+    }
+  }
 }
 
 // ── Families ────────────────────────────────────────────────────────────────

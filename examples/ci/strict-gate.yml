@@ -32,6 +32,8 @@ name: wairon gate
 
 on:
   pull_request:
+  merge_group:            # a required check must also run for a merge queue
+    types: [checks_requested]
   push:
     branches: [main]
 

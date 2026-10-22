@@ -21,9 +21,10 @@ methods:
     narrative: []
     intent: >-
       A missing id is a no-op. Otherwise, in one store update: for a family root refuses while a
-      member record names it as parent, then deletes the record and recursively removes its isolated
-      tree; for a member record deletes only the record and never touches its directory (it lies
-      inside the parent's tree).
+      member record names it as parent, then deletes the record; for a member record deletes only
+      the record. Once the update is written, and outside its lock, a family root's isolated tree is
+      removed recursively (best effort); a member record's directory lies inside the parent's tree
+      and is never touched. A failed update removes nothing.
     calls:
       - project_store.read
       - project_store.update
@@ -59,4 +60,4 @@ methods:
     symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-10-22T13:48:55.134Z'
+updatedAt: '2026-10-22T19:48:14.211Z'

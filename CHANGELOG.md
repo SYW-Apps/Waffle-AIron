@@ -9,8 +9,9 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   read their whole file, changed it and wrote it back with nothing held in between, so two
   processes writing at once (the server and the admin CLI, say) could each save a set missing
   the other's change. Every change now reads and writes under the file's own lock
-  (`<file>.lock`), through a temporary file of its own; a failed change writes nothing. The
-  credential file is written owner-only (0600) on Linux and macOS, as its design already said;
+  (`<file>.lock`), through a temporary file of its own; a failed change writes nothing, and a
+  registry file that exists but cannot be read or parsed refuses the change instead of being
+  written over as an empty set. The credential file is written owner-only (0600) on Linux and macOS, as its design already said;
   on Windows it keeps the permissions of its folder.
 - **Every hosted store writes through a temporary file of its own.** Two writers no longer share
   one `<file>.tmp`, and on Windows the final rename is retried for a moment while another process

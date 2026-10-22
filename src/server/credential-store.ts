@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { replaceFile, withFileLock } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile, withFileLock } from '../utils/fs.js';
 import type { ApiKeyRecord } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -37,14 +37,14 @@ function save(dataDir: string, records: ApiKeyRecord[]): void {
 
 /**
  * icredential_store.update — read the set fresh and persist what `change`
- * makes of it, holding the file's write lock across both. A change that throws
- * writes nothing. Answers the set written.
+ * makes of it, holding the file's write lock across both. A change that throws,
+ * or a file that exists but cannot be read, writes nothing. Answers the set written.
  */
 export function update(dataDir: string, change: (records: ApiKeyRecord[]) => ApiKeyRecord[]): ApiKeyRecord[] {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   return withFileLock(p, () => {
-    const next = change(load(dataDir));
+    const next = change(readJsonForUpdate(p, []));
     save(dataDir, next);
     return next;
   });
