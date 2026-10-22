@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 // ---------------------------------------------------------------------------
 // cdn-publish.mjs — publish a release to the SYW CDN (cdn.sywapps.com).
 //

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ShareLink } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Share Link Repository (sdd_host): the public share-link records.
@@ -49,9 +50,7 @@ class ShareLinkStore {
   replaceAll(links: ShareLink[]): void {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(links, null, 2) + '\n');
-    fs.renameSync(tmp, p);
+    replaceFile(p, JSON.stringify(links, null, 2) + '\n');
   }
 }
 

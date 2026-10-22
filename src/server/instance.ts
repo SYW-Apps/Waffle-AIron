@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { InstanceIdentity } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Instance Identity Repository (sdd_host)
@@ -70,9 +71,7 @@ class InstanceIdentityStore {
   replace(identity: InstanceIdentity): void {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(identity, null, 2) + '\n');
-    fs.renameSync(tmp, p);
+    replaceFile(p, JSON.stringify(identity, null, 2) + '\n');
   }
 }
 

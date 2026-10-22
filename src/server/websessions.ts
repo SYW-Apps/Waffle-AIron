@@ -33,6 +33,7 @@ import type { WebSession } from './types.js';
 // The reserved session-id prefix lives with the WebSession types so transport
 // code can brand-check a credential without importing this component's file.
 import { WEB_SESSION_PREFIX } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ── file helpers ─────────────────────────────────────────────────────────────
 
@@ -68,9 +69,7 @@ function readSessions(dataDir: string): WebSession[] {
 function persistSessions(dataDir: string, sessions: WebSession[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(sessions, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(sessions, null, 2) + '\n');
 }
 
 /** Mint a fresh, unguessable session id carrying the reserved prefix. */

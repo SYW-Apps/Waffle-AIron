@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectRoot, replaceFile } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { ProjectConfig } from '../models/project.js';
 import { impactHeadline, type PackCandidate, type PackDoctrine, type PackImpact } from '../models/pack-impact.js';
@@ -94,9 +94,7 @@ function storeLoadPackPolicy(dataDir: string): InstancePackPolicy | null {
 function storeReplaceActivePackPolicy(dataDir: string, policy: InstancePackPolicy): void {
   const p = packPolicyPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(policy, null, 2) + '\n');
 }
 
 /** policy_index.getPackPolicy: the active record as stored, or null. */
@@ -198,9 +196,7 @@ export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePol
   const p = exposurePolicyPath(dataDir);
   assertAdminApiMode(policy?.adminApiMode, `The exposure policy for ${p}`);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(policy, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(policy, null, 2) + '\n');
   return policy;
 }
 
@@ -273,9 +269,7 @@ function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProvi
 function writeIdentityProviderRecords(dataDir: string, records: IdentityProviderConfig[]): void {
   const p = identityProvidersPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(records, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(records, null, 2) + '\n');
 }
 
 /**

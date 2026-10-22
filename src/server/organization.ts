@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { replaceFile } from '../utils/fs.js';
 import type {
   OrganizationUnitRecord,
   ProjectPlacement,
@@ -86,9 +87,7 @@ function readState(dataDir: string): OrganizationState {
 function persistState(dataDir: string, state: OrganizationState): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(state, null, 2) + '\n');
 }
 
 /** A unit's local segment: lowercase [a-z0-9-], dot-free ('.' separates the

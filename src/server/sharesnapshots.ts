@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { runWithProjectBinding, runWithProjectRoot } from '../utils/fs.js';
+import { runWithProjectBinding, runWithProjectRoot, replaceFile } from '../utils/fs.js';
 import { listFamilyRecords, resolveProjectRoot } from './projects.js';
 import * as hostCore from './adapters/core.js';
 import * as hostSurfaces from './adapters/surfaces.js';
@@ -36,9 +36,7 @@ class ShareSnapshotStore {
     const p = snapshotPath(this.dataDir, snapshot.id);
     if (fs.existsSync(p)) return; // write-once: a captured share is immutable
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(snapshot, null, 2) + '\n');
-    fs.renameSync(tmp, p);
+    replaceFile(p, JSON.stringify(snapshot, null, 2) + '\n');
   }
 
   read(snapshotId: string): ShareSnapshot | null {

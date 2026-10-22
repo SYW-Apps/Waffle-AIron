@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectPublicSurfaceSnapshot, PublicInterfaceSummary } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Repository (sdd_host)
@@ -67,9 +68,7 @@ function readSnapshots(dataDir: string): ProjectPublicSurfaceSnapshot[] {
 function persistSnapshots(dataDir: string, snapshots: ProjectPublicSurfaceSnapshot[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(snapshots, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(snapshots, null, 2) + '\n');
 }
 
 // ── store: authoritative in-memory holder ──────────────────────────────────

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import type { ProfileFamily } from '../core/extensions.js';
 import * as path from 'path';
-import { runWithProjectRoot, getProjectRoot } from '../utils/fs.js';
+import { runWithProjectRoot, getProjectRoot, replaceFile } from '../utils/fs.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { PackScope } from '../core/extensions.js';
 import type { PackSelection, ProjectConfig } from '../models/project.js';
@@ -145,9 +145,7 @@ function probe(loadRef: string, baseRoot: string, scope: PackScope, displayRef: 
 /** Write a file atomically (tmp + rename), creating parent dirs. */
 function writeFileAtomic(file: string, content: string): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, content);
-  fs.renameSync(tmp, file);
+  replaceFile(file, content);
 }
 
 /** The name stem of a pack ref (basename without a pack extension). */

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { AuditEvent, AuditQuery, AuditRetentionPolicy, HostConfig } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Audit Repository (sdd_host)
@@ -100,9 +101,7 @@ function readEvents(dataDir: string): AuditEvent[] {
 function persistEvents(dataDir: string, events: AuditEvent[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(events, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(events, null, 2) + '\n');
 }
 
 // ── redaction / capture predicates ─────────────────────────────────────────

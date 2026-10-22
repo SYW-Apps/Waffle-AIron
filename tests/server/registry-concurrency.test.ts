@@ -92,14 +92,16 @@ describe('the data file write lock', () => {
     expect(fs.existsSync(`${target}.lock`)).toBe(false);
   });
 
-  it('a fresh lock held on another host is waited for, not judged by a local pid', () => {
+  it('a fresh lock held on another host is waited for, not judged by a local pid, and taken over once stale', () => {
     const dir = dataDir();
     const target = path.join(dir, 'records.json');
     fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\nanother-host\n`);
     const started = Date.now();
-    expect(() => withFileLock(target, () => 'ran')).toThrow(/being written by another process/);
-    expect(Date.now() - started).toBeGreaterThanOrEqual(9_000);
-  }, 20_000);
+    // Its pid names no live process HERE, but it is another host's: it holds
+    // until stale (15 s), within the wait (20 s), so the writer gets through.
+    expect(withFileLock(target, () => 'ran')).toBe('ran');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(14_000);
+  }, 30_000);
 
   it('a change that throws writes nothing and releases the lock', () => {
     const dir = dataDir();

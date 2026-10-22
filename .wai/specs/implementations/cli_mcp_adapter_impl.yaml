@@ -117,8 +117,9 @@ methods:
       - stepNumber: 8
         description: >-
           Build the HOSTED entry: the instance's /mcp endpoint with the caller-resolved bearer and
-          the project selector as headers. A missing credential throws with the login command to
-          run.
+          the project selector as headers. The instance is named by its base URL; one given with the
+          data plane's own /mcp (the address the server prints) is read as its base, never doubled.
+          A missing credential throws with the login command to run.
         type: jump
         toStep: 10
       - stepNumber: 9
@@ -210,4 +211,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-17T14:35:26.914Z'
+updatedAt: '2026-10-22T15:00:13.333Z'
