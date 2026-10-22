@@ -10,7 +10,13 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   processes writing at once (the server and the admin CLI, say) could each save a set missing
   the other's change. Every change now reads and writes under the file's own lock
   (`<file>.lock`), through a temporary file of its own; a failed change writes nothing. The
-  credential file is written owner-only (0600), as its design already said.
+  credential file is written owner-only (0600) on Linux and macOS, as its design already said;
+  on Windows it keeps the permissions of its folder.
+- **Every hosted store writes through a temporary file of its own.** Two writers no longer share
+  one `<file>.tmp`, which on Windows could fail a write with `EPERM` on the rename.
+- **`wairon mcp install --hosted` accepts the address the server prints.** Given
+  `http://host:port/mcp`, it wrote `.../mcp/mcp`, which answers 404; the instance is now read as
+  its base URL either way, and the credential stored by `wairon login` is still found.
 - **The spec-tree write lock names its host.** A holder is judged gone by its process id only on
   its own host; one on another machine or container sharing the volume holds until its lock is
   stale.
@@ -24,6 +30,14 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   is re-measured and runs one instance per data directory; CONTRIBUTING opens with the normal
   contributor path and says how to report a security issue; issue templates for bugs, false
   alarms and experience reports.
+
+### Known limitations
+
+- Only the credential and project registries lock their writes so far. The other hosted stores
+  (permission grants, the organization and its placements, roles, policy, approvals and the
+  rest) can still lose a change when two processes write the same file at the same moment, such
+  as several `wairon host permission set` commands run in parallel. Run such changes one at a
+  time; 6.2.2 gives every store the same lock.
 
 ## v6.2.0 (from v6.1.2)
 

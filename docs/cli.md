@@ -1522,6 +1522,12 @@ streamable HTTP, per-project API-key scoped) and an admin **control plane**
 [hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md) for the architecture, Docker
 self-hosting, auth, and sizing.
 
+Run **one server per data directory**: scale up (a bigger machine), not out.
+Several replicas sharing one data directory over a network volume are not
+supported. The admin CLI (`wairon host …`) may run beside the server on the same
+data directory; until 6.2.2, run changes to permission grants, the organization,
+roles and policy one at a time rather than in parallel.
+
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`
 Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,
 `/readyz`); admin plane on `127.0.0.1:8081` (`/admin/*`). Auth is **on by
