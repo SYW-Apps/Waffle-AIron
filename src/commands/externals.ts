@@ -253,7 +253,7 @@ export async function runExternals(action: string, aliases: string[], options: E
       const pins = pinExternals(aliases.length ? aliases : undefined);
       if (options.json) printJson(pins);
       else printPins(pins);
-      if (pins.some((p) => p.outcome === 'unresolved' || p.outcome === 'unreachable')) process.exitCode = 1;
+      if (pins.some((p) => p.outcome === 'unresolved' || p.outcome === 'unreachable' || p.outcome === 'refused')) process.exitCode = 1;
       return;
     }
     case 'status': {

@@ -430,7 +430,7 @@ const staleServerOutput = {
 const externalPinsOutput = {
   pins: z.array(z.object({
     alias: z.string(),
-    outcome: z.enum(['pinned', 'unchanged', 'unresolved', 'unreachable']),
+    outcome: z.enum(['pinned', 'unchanged', 'unresolved', 'unreachable', 'refused']),
     project: z.string().optional(),
     snapshot: z.string().optional(),
     digest: z.string().optional(),

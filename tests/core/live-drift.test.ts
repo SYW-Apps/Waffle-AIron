@@ -220,8 +220,11 @@ describe('the rename trace a snapshot carries (formerly) moves no digest', () =>
   it('the pin snapshot keeps the trace once the contract itself moves', () => {
     const p = pinned();
     p.setLedgerContract({ postName: 'record', formerly: ['iledger-portal.post'] });
+    // The uses follow the rename first: a pin over it is refused.
+    const narrative = path.join(p.billing, '.wai', 'specs', 'invoicing', 'invoice-poster', '.implementation.yaml');
+    fs.writeFileSync(narrative, fs.readFileSync(narrative, 'utf8').replace('targetMethod: post', 'targetMethod: record'));
     bind(p.billing);
-    pinExternals();
+    expect(pinExternals().map((x) => x.outcome)).toEqual(['pinned']);
     const snapshot = externalsRepository.readSnapshot('ledger')!;
     expect(snapshot.interfaces[0].methods.find((m) => m.name === 'record')?.formerly).toEqual(['post']);
   });

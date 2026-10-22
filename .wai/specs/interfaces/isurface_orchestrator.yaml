@@ -79,7 +79,11 @@ methods:
       parent on disk at PartOf.path, into .wai/externals/<parent id>.yaml and the lock's `parent`
       entry; naming an alias at a part is refused. An alias the project does not declare is refused
       before anything is written; an unresolved or unreachable producer is reported and keeps its
-      previous pin. Never locks.
+      previous pin. So is a pin over a rename: when a member the previous lock entry records as used
+      is gone from the new snapshot — renamed (said with the new name) or removed, not merely
+      exported narrower — the alias is refused and keeps its previous pin, since the uses must
+      follow it first; pinned over, they would point at nothing the lock compares, and a second pin
+      and lock would be owed. Never locks.
     signature: 'pinExternals(aliases?: list<string>): list<ExternalPin>'
     returns: list<ExternalPin>
     params:
@@ -325,4 +329,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:13:22.438Z'
-updatedAt: '2026-10-17T16:35:49.035Z'
+updatedAt: '2026-10-22T09:35:40.097Z'

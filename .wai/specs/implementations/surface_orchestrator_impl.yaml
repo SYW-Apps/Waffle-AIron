@@ -170,46 +170,45 @@ methods:
         targetComponent: surfaces_core_adapter
         targetMethod: resolveExternals
       - stepNumber: 6
-        description: Keep the aliases asked for, or every declared external when none are named
-        type: local
-      - stepNumber: 7
-        description: Is an alias named that the project does not declare?
+        description: >-
+          Keep the aliases asked for, or every declared external when none are named — is an alias
+          named that the project does not declare?
         type: branch
         condition: a named alias is not among the declared externals
-        onFalseStep: 9
-      - stepNumber: 8
+        onFalseStep: 8
+      - stepNumber: 7
         description: >-
           Refuse before anything is written: a named alias that is a member composed live
           (contained, or a `../` sibling checkout) is said to be a member that is never pinned; any
           other is named with the declared ones
         type: throw
         error: UnknownExternalAliasError
-      - stepNumber: 9
+      - stepNumber: 8
         label: read-lock
         description: Read the current externals lock (none yet reads as empty)
         type: call
         targetComponent: externals_repository
         targetMethod: readLock
-      - stepNumber: 10
+      - stepNumber: 9
         description: For each external to pin
         type: loop
         loopKind: forEach
         over: the kept bindings
         endStep: 21
-      - stepNumber: 11
+      - stepNumber: 10
         description: Is its producer resolved?
         type: branch
         condition: the binding's sourceKind is unresolved
         onTrueStep: 20
-        onFalseStep: 12
-      - stepNumber: 12
+        onFalseStep: 11
+      - stepNumber: 11
         description: >-
           Bind the producer's root read-only — for a git producer the cache directory of the bound
           commit — restoring the consumer's binding afterwards. The caller must gate on reach
           itself: a producer root outside the request's reach, missing, unfetchable or holding no
           project is recorded as unreachable with the reason, and its previous pin stays
         type: local
-      - stepNumber: 13
+      - stepNumber: 12
         description: >-
           Project the producer's resolved project export table at the external's audience ceiling
           (project for a family producer, instance for a source.path, git or hosted one), each entry
@@ -218,7 +217,7 @@ methods:
         type: call
         targetComponent: surface_projector
         targetMethod: projectOwnSurface
-      - stepNumber: 14
+      - stepNumber: 13
         description: >-
           Read the loader's diagnostics with the producer's root still bound: a spec file that
           failed to parse leaves its table short, so the producer is recorded unreachable as
@@ -229,11 +228,21 @@ methods:
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: getLoaderIssues
-      - stepNumber: 15
+      - stepNumber: 14
         description: Read the snapshot pinned for the alias now
         type: call
         targetComponent: externals_repository
         targetMethod: readSnapshot
+      - stepNumber: 15
+        description: >-
+          Does a member the current lock entry records as used no longer exist in the new snapshot —
+          renamed or removed in the producer, not merely exported to a narrower audience?
+        type: branch
+        condition: >-
+          a used member the previous lock entry records is missing from the new snapshot and not
+          exported narrower
+        onTrueStep: 20
+        onFalseStep: 16
       - stepNumber: 16
         description: Does the pinned snapshot already say everything the new one says?
         type: branch
@@ -284,9 +293,11 @@ methods:
       - stepNumber: 20
         label: unresolved-pin
         description: >-
-          Record the outcome as unresolved with the external's problem — for a source.hosted
-          external pinned outside a hosted server, "hosted-only producer `<id>`: available only
-          through the hosted server" — and its previous pin stays
+          Record the outcome as unresolved with the external's problem (or as refused, naming each
+          used member the producer renamed — with the new name — or removed, to follow in the uses
+          before pinning) — for a source.hosted external pinned outside a hosted server,
+          "hosted-only producer `<id>`: available only through the hosted server" — and its previous
+          pin stays
         type: local
       - stepNumber: 21
         label: next
@@ -967,4 +978,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-10T23:15:01.940Z'
-updatedAt: '2026-10-20T09:26:00.515Z'
+updatedAt: '2026-10-22T09:37:04.157Z'

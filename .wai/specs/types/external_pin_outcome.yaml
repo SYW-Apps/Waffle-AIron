@@ -15,5 +15,9 @@ values:
     description: 'No producer: see the detail'
   - name: unreachable
     description: The producer's root could not be read, or is out of the request's reach
+  - name: refused
+    description: >-
+      A used member the last pin records is renamed or removed in the producer: follow it in the
+      uses first; the previous pin stays
 createdAt: '2026-10-04T23:33:06.666Z'
-updatedAt: '2026-10-04T23:33:07.150Z'
+updatedAt: '2026-10-22T09:35:37.903Z'
