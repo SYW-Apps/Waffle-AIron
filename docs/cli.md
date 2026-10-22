@@ -781,6 +781,15 @@ releases, and the default `latest` moves.
 On a `pull_request` event the default checkout is the merge commit, so what the
 gate judges is literally the design that would land.
 
+A ready-to-copy strict version — `strict: true`, `validate: true`, pinned to a tag
+— is [`examples/ci/strict-gate.yml`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/ci/strict-gate.yml). The approval is
+only as meaningful as the repository protections around it, because `lockedBy` is a
+claim: protect the default branch, require pull-request review, put a CODEOWNERS
+entry on `.wai/lock.json` and `.wai/specs/` and require code-owner review, and
+require the status checks of both jobs (the approved-design job and your own build).
+A workflow can only fail a job; making it block a merge is a branch-protection
+setting.
+
 After the approval check the job runs `wairon validate --ci` in the same
 directory (`validate: false` turns it off). Point `working-directory` at the
 **family root** — the project that declares the members — so that run is the

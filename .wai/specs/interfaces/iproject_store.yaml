@@ -1,8 +1,10 @@
 id: iproject_store
 name: Project Record Store Interface
 description: >-
-  Contract for the persisted hosted-project record set. Read-through file I/O over the data-dir
-  project registry file.
+  Contract for the persisted project-record set. Read-through file I/O: every read loads the backing
+  file fresh, and every change is an update that reads the set and persists the full replacement
+  under the file's write lock — there is no bare write, which could replace a concurrent writer's
+  change.
 component: project_store
 methods:
   - name: read
@@ -12,11 +14,17 @@ methods:
     signature: 'read(): HostedProjectRecord[]'
     returns: list<HostedProjectRecord>
     effect: read
-  - name: write
-    description: Persist the full project record set to the backing file.
-    signature: 'write(records: HostedProjectRecord[]): void'
-    returns: void
+  - name: update
+    description: >-
+      Read the persisted project records fresh and persist what the change makes of them, holding
+      the backing file's write lock across both, so a writer in another process that reads and
+      writes the same file in between is never lost; a change that throws writes nothing. Answers
+      the set written.
+    signature: >-
+      update(change: (records: HostedProjectRecord[]) => HostedProjectRecord[]):
+      HostedProjectRecord[]
+    returns: list<HostedProjectRecord>
     effect: write
 status: complete
 createdAt: '2026-07-19T08:59:56.882Z'
-updatedAt: '2026-10-04T10:19:23.236Z'
+updatedAt: '2026-10-22T13:51:21.318Z'

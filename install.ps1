@@ -46,6 +46,31 @@ try {
     exit 1
 }
 
+# Verify against the .sha256 published beside the archive; refuse if absent.
+# NOTE: the checksum comes from the same release as the archive, so this detects
+# corruption and tampering in transit, not the identity of the publisher.
+$ShaAsset = $Release.assets | Where-Object { $_.name -eq "$AssetName.sha256" }
+if (-not $ShaAsset) {
+    Remove-Item $TmpZip -Force -ErrorAction SilentlyContinue
+    Write-Error "Checksum file '$AssetName.sha256' is missing from release $Version; refusing to install an unverified archive."
+    exit 1
+}
+try {
+    $ShaText = (Invoke-WebRequest -Uri $ShaAsset.browser_download_url -UseBasicParsing).Content
+    if ($ShaText -is [byte[]]) { $ShaText = [System.Text.Encoding]::UTF8.GetString($ShaText) }
+} catch {
+    Remove-Item $TmpZip -Force -ErrorAction SilentlyContinue
+    Write-Error "Failed to download checksum file: $_"
+    exit 1
+}
+$Expected = ($ShaText.Trim() -split '\s+')[0].ToLower()
+$Actual = (Get-FileHash -Path $TmpZip -Algorithm SHA256).Hash.ToLower()
+if (-not $Expected -or $Expected -ne $Actual) {
+    Remove-Item $TmpZip -Force -ErrorAction SilentlyContinue
+    Write-Error "Checksum mismatch for ${AssetName}: expected '$Expected', got '$Actual'. Refusing to install."
+    exit 1
+}
+
 # Extract
 $TmpDir = Join-Path $env:TEMP "wairon-install"
 if (Test-Path $TmpDir) { Remove-Item $TmpDir -Recurse -Force }

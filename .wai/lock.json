@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "b3dab310b68606164e9f2369312985e96d2725ae8c13155bd3cc8c7a679dc4b1"
+    "digest": "cc0c7480815ebd8bd57003164a8b5e7e23a8675d539deb87f6f39ce886b3252a"
   },
-  "lockedAt": "2026-10-22T10:08:35.331Z",
+  "lockedAt": "2026-10-22T14:10:08.727Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.1.3-dev.4",
+  "validatorVersion": "6.1.3-dev.6",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -404,8 +404,8 @@
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "3b51128323c9a202901e3723b87cdcac371f0312863e9625684cdda584c24a46",
     ".wai/specs/implementations/credential_index_impl.yaml": "6391fd5e9f19a467a51ee1306debee09622ccb0601d3d754e2a7c7ad224fdcf2",
     ".wai/specs/implementations/credential_repository_impl.yaml": "938def6b778e1526b9f7b94eae4d2ea917b7e02eee57c7f8fbdb5a7db74c304d",
-    ".wai/specs/implementations/credential_store_impl.yaml": "dc553bb28a75061ab9dfa13f09283d4aced572c50465e608b71b470efb8d3cdc",
-    ".wai/specs/implementations/credential_write_registry_impl.yaml": "5366ba6e244a418737e028de442d7c8950a40cc2413276bf7651ee02db99ea6e",
+    ".wai/specs/implementations/credential_store_impl.yaml": "00171481964fd9d22d4016badde578d56316de48f0998e19f73005250c82ef76",
+    ".wai/specs/implementations/credential_write_registry_impl.yaml": "b0fa9210c69f8626b0ccca169199cebb13460a13f55d75908920d251d503ef58",
     ".wai/specs/implementations/custom_exporter_impl.yaml": "6280330115de7493f8be303c757c77b54513d130d8735b17000119fc68dfed6a",
     ".wai/specs/implementations/demo_orchestrator_impl.yaml": "0ae57a70a372dc8478077c76169a253f6a562d61090c49795d7c98e6cab95bbd",
     ".wai/specs/implementations/design_exporter_impl.yaml": "da983ce1a803829b25ba17d383c7ea9af3050c77bd48e4d9790ca018d9f0a676",
@@ -574,8 +574,8 @@
     ".wai/specs/implementations/project_repository_impl.yaml": "c6d5a56e27bbb3301ebc76d50ca3427af1975d13b36eaab2718e80894e886d89",
     ".wai/specs/implementations/project_stamp_adapter_impl.yaml": "5129dbcd9be22eafc0d1e5baead1288b916aef97265ec5c35290af94944bce2c",
     ".wai/specs/implementations/project_status_impl.yaml": "952855eb90132ab08883b2da1729c5c42e68e4cd57e80c469ed0483f2a29e6c8",
-    ".wai/specs/implementations/project_store_impl.yaml": "14d43fb41273170a2c2156b74bc1b213332499a2f6b68ea87ef9286ba40b4c18",
-    ".wai/specs/implementations/project_write_registry_impl.yaml": "addd12773fc8528c9164d40dafbbf8e05ac7eb56eead63dc19a9cd62b0bc2e8e",
+    ".wai/specs/implementations/project_store_impl.yaml": "39f43363821a3d9c113ce8aa02a86aca6ae913b49854cdc2e0f8ca269640c47f",
+    ".wai/specs/implementations/project_write_registry_impl.yaml": "88b8db8fdefcd4b540a14c6e1a918e107b6db3c077c75c87ef9a07a11d10055d",
     ".wai/specs/implementations/public_surface_index_impl.yaml": "9c485547e69c99923c024d2def1744d7e74738efbcc99baae72128fc382d3ba6",
     ".wai/specs/implementations/public_surface_registry_impl.yaml": "e100a0dd8e8e870b6401ac55e36ee75cd959c7be6f6c24a48e6d5b65fb88922a",
     ".wai/specs/implementations/public_surface_repository_impl.yaml": "0cd2d2a464edc9aba4e9b8e9ae75640e24cd776d7e8fbed5cfee30b88678a6ab",
@@ -627,7 +627,7 @@
     ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "d37ea00dc697bd20a344575347aa114cbefd9592ecbcc1a18e2ac1fe4f54822f",
     ".wai/specs/implementations/spec_canvas_impl.yaml": "4369b63dce1fe87802e812a386acf056ea7cb118d79efa88e9ea0b58a99ddeb5",
     ".wai/specs/implementations/spec_doc_pages_impl.yaml": "58c8a02e802698b6108a1b81ccb6049f743b66e57620f04f05e2acda265236bf",
-    ".wai/specs/implementations/spec_file_store_impl.yaml": "667a25c1fecbc39232ec27c247fde4d45ba7898780e44ef692b33f50d3d9cff3",
+    ".wai/specs/implementations/spec_file_store_impl.yaml": "968ffd8147afbeb169fb717ec18892eb064a903d786accbeb8d81138e2a0daff",
     ".wai/specs/implementations/spec_index_impl.yaml": "b51c58b8ce4fb5771517c3b593d059def4d470f28877d06e93ccdf95017a6eb6",
     ".wai/specs/implementations/spec_loader_impl.yaml": "f7103f8ee97a6d29fe0d7f61379b8338a3e98996066cf6f4b72baac0f8a66f95",
     ".wai/specs/implementations/spec_maintenance_portal_impl.yaml": "f981b107b64d7d10b5b3cccf25331ec1b42699b0b22e6d0762e9773899f8eb52",
@@ -736,7 +736,7 @@
     ".wai/specs/interfaces/icore_orchestrator.yaml": "8e15537580f73ef133186d8db5f5e802b8ef92c4cf5e629148b281cb78030df1",
     ".wai/specs/interfaces/icredential_index.yaml": "5adf9f578f1f86f96dcc21ff481823e2700010c65364b311b98bd28bec29669d",
     ".wai/specs/interfaces/icredential_repository.yaml": "13622a916aed605a7df3ce9066786a5befc3120bde01f7f5e029fffc42447544",
-    ".wai/specs/interfaces/icredential_store.yaml": "212a5bb70fad1e70b0e449cdfb7a5894be6cf09b714172ed4474c1e480af0a9e",
+    ".wai/specs/interfaces/icredential_store.yaml": "c0133b0b7849e359eaaecb7ff2cf730d8ebac9286acabe561ba12e3a05622ef2",
     ".wai/specs/interfaces/icredential_write_registry.yaml": "53c06f8f2940f7687b7c340e8091461fe636d8a4a4a858ed05287b93c93fa625",
     ".wai/specs/interfaces/icustom_exporter.yaml": "7418732c8924b8bbe83aafd5db7181dc18c3c7447cb70eabdc80980ca7ddd865",
     ".wai/specs/interfaces/idemo_orchestrator.yaml": "662989ed566577e06e77eceb3fb272eb0c8d7272698fb78b7ab5093bf0780353",
@@ -906,7 +906,7 @@
     ".wai/specs/interfaces/iproject_repository.yaml": "9e702fa1c0902694400761a3d37a7b995ca4fbd1eb8ce91888ca6993161e3ade",
     ".wai/specs/interfaces/iproject_stamp_adapter.yaml": "c3b28451219f5e9cb62fa2c67bbb74948c25cbf8dbac16b45416fbfeadfce015",
     ".wai/specs/interfaces/iproject_status.yaml": "faaf7d0e4badf31d6e023f5856e4086cbaf3df3085f9295c3f1a485d58c26da4",
-    ".wai/specs/interfaces/iproject_store.yaml": "edfa766cb059b20f7864ea5965a18a78a5ebe2959ac2c07383179b6976a0f5dc",
+    ".wai/specs/interfaces/iproject_store.yaml": "d2a129606b069cc953a9dd6fa05fa4de9b3c4584c4a1eb9a8fca16d724683882",
     ".wai/specs/interfaces/iproject_write_registry.yaml": "e77958ed754807c47c1cdccb7c4c0614709c43bad3ef7807444075604cf0a26b",
     ".wai/specs/interfaces/ipublic_surface_index.yaml": "91873acd42db38276c57ef1021224739af43b34aa1163628c011509239dc8533",
     ".wai/specs/interfaces/ipublic_surface_registry.yaml": "59abb9a3d98abdce287c1897ee122de2eb15b11d9bb69814d17c645137b20733",
@@ -1716,7 +1716,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "a49643f26096c8e34bb59b8f20670e92011d3129fedf0c49bf648837345abc23",
+    "design": "3976964210a68553649c62c352b2753d6e35c4cda143d62208e6133cf54daf5b",
     "release": "ea2df21d182cacc5b6ded6c549e012e5f6a08f43e9bafb39f99ca5ee297f8050",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1727,7 +1727,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.1.3-dev.4",
+      "validatorVersion": "6.1.3-dev.6",
       "doctrineDigest": "d969c77be21471d978d87fa49a6bd8c8d2adf8c020cd71858f66e40e4bdc21ff",
       "grade": "exact"
     },

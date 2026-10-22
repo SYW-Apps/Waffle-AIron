@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { load, save } from './credential-store.js';
+import { load, update } from './credential-store.js';
 import type { ApiKeyRecord } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -32,38 +32,39 @@ export function findByTokenHash(dataDir: string, tokenHash: string): ApiKeyRecor
 
 /** Persist a new credential (fails if the id already exists). */
 export function createCredential(dataDir: string, record: ApiKeyRecord): void {
-  const records = load(dataDir);
-  if (records.some((r) => r.id === record.id)) {
-    throw new Error(`Credential "${record.id}" already exists.`);
-  }
-  records.push(record);
-  save(dataDir, records);
+  update(dataDir, (records) => {
+    if (records.some((r) => r.id === record.id)) {
+      throw new Error(`Credential "${record.id}" already exists.`);
+    }
+    return [...records, record];
+  });
 }
 
 /** Remove a credential by id (idempotent). */
 export function revokeCredential(dataDir: string, id: string): void {
-  save(dataDir, load(dataDir).filter((r) => r.id !== id));
+  update(dataDir, (records) => records.filter((r) => r.id !== id));
 }
 
 /**
  * Revoke (stamp revokedAt with the current time) every non-revoked credential
- * whose ownerSubject.userId matches ownerUserId, persist the store once, and
+ * whose ownerSubject.userId matches ownerUserId, persist the store once (under its write lock), and
  * return the number of records newly revoked. Idempotent — records already
  * carrying a revokedAt (and records without an owner subject) are skipped and not
  * counted; an owner with no active credentials revokes nothing and returns 0.
  * Backs the identity deactivation flow so authenticate() rejects the user's tokens.
  */
 export function revokeAllForOwner(dataDir: string, ownerUserId: string): number {
-  const records = load(dataDir);
   const now = new Date().toISOString();
   let revoked = 0;
-  for (const rec of records) {
-    if (rec.ownerSubject?.userId === ownerUserId && !rec.revokedAt) {
-      rec.revokedAt = now;
-      revoked += 1;
+  update(dataDir, (records) => {
+    for (const rec of records) {
+      if (rec.ownerSubject?.userId === ownerUserId && !rec.revokedAt) {
+        rec.revokedAt = now;
+        revoked += 1;
+      }
     }
-  }
-  if (revoked > 0) save(dataDir, records);
+    return records;
+  });
   return revoked;
 }
 
@@ -94,11 +95,14 @@ export function listByOwner(dataDir: string, ownerUserId: string): ApiKeyRecord[
  */
 export function renarrowCredential(dataDir: string, id: string, projects: string[]): ApiKeyRecord {
   if (projects.length === 0) throw new Error(`Credential "${id}": a narrowing cannot be empty.`);
-  const records = load(dataDir);
-  const rec = records.find((r) => r.id === id);
-  if (!rec) throw new Error(`Unknown credential "${id}".`);
-  if (rec.revokedAt) throw new Error(`Credential "${id}" is revoked.`);
-  rec.projects = [...projects];
-  save(dataDir, records);
-  return rec;
+  let renarrowed!: ApiKeyRecord;
+  update(dataDir, (records) => {
+    const rec = records.find((r) => r.id === id);
+    if (!rec) throw new Error(`Unknown credential "${id}".`);
+    if (rec.revokedAt) throw new Error(`Credential "${id}" is revoked.`);
+    rec.projects = [...projects];
+    renarrowed = rec;
+    return records;
+  });
+  return renarrowed;
 }

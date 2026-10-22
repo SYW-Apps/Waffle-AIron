@@ -1,5 +1,30 @@
 # Changelog
 
+## v6.2.1 (from v6.2.0)
+
+A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgrading: install
+6.2.1.
+
+- **Hosted registries no longer lose a concurrent write.** The credential and project registries
+  read their whole file, changed it and wrote it back with nothing held in between, so two
+  processes writing at once (the server and the admin CLI, say) could each save a set missing
+  the other's change. Every change now reads and writes under the file's own lock
+  (`<file>.lock`), through a temporary file of its own; a failed change writes nothing. The
+  credential file is written owner-only (0600), as its design already said.
+- **The spec-tree write lock names its host.** A holder is judged gone by its process id only on
+  its own host; one on another machine or container sharing the volume holds until its lock is
+  stale.
+- **The install scripts verify the download.** `install.sh` and `install.ps1` check the archive
+  against the `.sha256` file the release publishes and refuse to install on a mismatch or a
+  missing checksum, as `wairon update` already did.
+- Each release now runs its packaged binary (Windows x64, Linux x64, macOS arm64) before
+  publishing: `--version` must match the tag, and a fresh `init --yes` must pass `validate --ci`.
+- **Docs:** the README says what wairon checks and what it does not; `examples/ci/strict-gate.yml`
+  is a ready-to-copy strict CI gate with the repository protections it needs; the hosting guide
+  is re-measured and runs one instance per data directory; CONTRIBUTING opens with the normal
+  contributor path and says how to report a security issue; issue templates for bugs, false
+  alarms and experience reports.
+
 ## v6.2.0 (from v6.1.2)
 
 v6.2 holds a method's stated detail to what it states and says where a design leaves routes

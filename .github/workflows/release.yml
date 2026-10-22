@@ -11,31 +11,40 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # smoke: true when the runner can execute the built binary natively.
+      # linux-arm64 is cross-built on an x64 runner; macos-x64 is cross-built on
+      # the arm64 macos-latest runner and Rosetta is not guaranteed there, so
+      # both are skipped (the arm64/x64 siblings share the same build recipe).
       matrix:
         include:
           - os: windows-latest
             target: windows-x64
             pkg_target: node20-win-x64
+            smoke: true
             asset_ext: .zip
 
           - os: ubuntu-latest
             target: linux-x64
             pkg_target: node20-linux-x64
+            smoke: true
             asset_ext: .tar.gz
 
           - os: ubuntu-latest
             target: linux-arm64
             pkg_target: node20-linux-arm64
+            smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-x64
             pkg_target: node20-macos-x64
+            smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-arm64
             pkg_target: node20-macos-arm64
+            smoke: true
             asset_ext: .tar.gz
 
     steps:
@@ -102,6 +111,30 @@ jobs:
           $sig = Get-AuthenticodeSignature wairon.exe
           if (-not $sig.SignerCertificate) { throw "no signature present after signing" }
           Write-Host "Signed wairon.exe by $($sig.SignerCertificate.Subject) (status: $($sig.Status))"
+
+      # Run the packaged binary (not just build it): it must report the tag
+      # version, and a fresh `init --yes` project must pass `validate --ci`
+      # (mirrors qa/scripts/release-checklist.sh b2/b3).
+      - name: Smoke test binary
+        if: matrix.smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN=""
+          for f in wairon.exe wairon wairon-bin; do
+            if [ -f "$f" ]; then BIN="$PWD/$f"; break; fi
+          done
+          [ -n "$BIN" ] || { echo "::error::built binary not found"; exit 1; }
+          chmod +x "$BIN" || true
+          EXPECTED="${GITHUB_REF_NAME#v}"
+          ACTUAL="$("$BIN" --version | tr -d '\r' | tail -1 | awk '{print $NF}')"
+          echo "binary reports '$ACTUAL', tag is '$EXPECTED'"
+          [ "$ACTUAL" = "$EXPECTED" ] || { echo "::error::binary version '$ACTUAL' != tag version '$EXPECTED'"; exit 1; }
+          WORK="$(mktemp -d)"
+          cd "$WORK"
+          "$BIN" init --yes
+          [ -d .wai/specs ] || { echo "::error::init --yes created no .wai/specs"; exit 1; }
+          "$BIN" validate --ci
 
       - name: Get version from tag
         id: version

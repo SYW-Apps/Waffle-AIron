@@ -1,6 +1,9 @@
 id: project_write_registry_impl
 name: Project Write Registry Implementation
-description: 'Write path over the project store''s backing file: root allocation and record create/remove.'
+description: >-
+  Write path over the project store's backing file: root allocation and record create/remove. Each
+  change goes through one store update, which reads the set fresh and persists the replacement under
+  the file's write lock, so concurrent writers in other processes are never lost.
 contract: iproject_write_registry
 sourcePath: src/server/projects.ts
 injectedParams:
@@ -9,56 +12,51 @@ methods:
   - name: create
     narrative: []
     intent: >-
-      Validates the id shape (path-traversal safe), refuses an existing id, creates
-      <dataDir>/projects/<id>, and persists an active HostedProjectRecord.
+      Validates the id shape (path-traversal safe); in one store update, refuses an existing id,
+      creates <dataDir>/projects/<id>, and appends an active HostedProjectRecord.
     calls:
-      - project_store.read
-      - project_store.write
+      - project_store.update
     symbol: createProjectRecord
   - name: remove
     narrative: []
     intent: >-
-      Loads the persisted set; for a family root refuses while a member record names it as parent,
-      then deletes the record and recursively removes its isolated tree; for a member record deletes
-      only the record and never touches its directory (it lies inside the parent's tree). A missing
-      id is a no-op.
+      A missing id is a no-op. Otherwise, in one store update: for a family root refuses while a
+      member record names it as parent, then deletes the record and recursively removes its isolated
+      tree; for a member record deletes only the record and never touches its directory (it lies
+      inside the parent's tree).
     calls:
       - project_store.read
-      - project_store.write
+      - project_store.update
     symbol: removeProjectRecord
   - name: register
     narrative: []
     intent: >-
-      Validates the id shape and refuses a malformed one, loads the persisted set, and replaces the
-      record holding the id (keeping its createdAt) or appends a new active record pointing at the
-      given rootPath, then persists the set.
+      Validates the id shape and refuses a malformed one; in one store update, replaces the record
+      holding the id (keeping its createdAt) or appends a new active record pointing at the given
+      rootPath.
     calls:
-      - project_store.read
-      - project_store.write
+      - project_store.update
     symbol: registerProjectRecord
   - name: registerMember
     narrative: []
     intent: >-
       Validates the id shape, requires parentProjectId and a relative memberPath that does not
-      escape its parent, loads the persisted set, refuses an id held by a family root record and a
+      escape its parent; in one store update, refuses an id held by a family root record and a
       parent no record holds, then replaces the member record holding the id (keeping its createdAt,
       replacing parentProjectId and memberPath) or appends a new active member record, never
-      persisting a rootPath and never creating or copying a directory; persists the set.
+      persisting a rootPath and never creating or copying a directory.
     calls:
-      - project_store.read
-      - project_store.write
+      - project_store.update
     symbol: registerMemberRecord
   - name: setStatus
     narrative: []
     intent: >-
-      Refuses a status other than active or disabled and an unknown id; loads the persisted set,
-      sets the record's status — recording the reason as disabledReason when a disabled status comes
-      with one, and clearing it when the record is active again — and persists the set. Touches no
-      directory.
+      Refuses a status other than active or disabled; in one store update, refuses an unknown id and
+      sets the record's status, recording the reason as disabledReason when a disabled status comes
+      with one and clearing it when the record is active again. Touches no directory.
     calls:
-      - project_store.read
-      - project_store.write
+      - project_store.update
     symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-10-02T23:58:12.807Z'
+updatedAt: '2026-10-22T13:48:55.134Z'
