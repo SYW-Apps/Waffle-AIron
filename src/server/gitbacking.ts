@@ -13,6 +13,7 @@ import {
 } from './organization.js';
 import { listProjectRecords, listFamilyRecords } from './projects.js';
 import { resolveGitToken, setSecret } from '../utils/secrets.js';
+import { replaceFile } from '../utils/fs.js';
 import type {
   AuditEvent,
   AuditLevel,
@@ -87,9 +88,7 @@ class GitBackingStore {
   replaceAll(bindings: GitBackingBinding[]): void {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(bindings, null, 2) + '\n');
-    fs.renameSync(tmp, p);
+    replaceFile(p, JSON.stringify(bindings, null, 2) + '\n');
   }
 }
 

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
 import type { Role } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Role Repository (sdd_host)
@@ -94,9 +95,7 @@ function load(dataDir: string): Role[] {
 function replaceAll(dataDir: string, roles: Role[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(roles, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(roles, null, 2) + '\n');
 }
 
 // ── Registry (write path) ──────────────────────────────────────────────────

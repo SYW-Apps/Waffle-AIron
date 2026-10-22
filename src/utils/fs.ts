@@ -748,10 +748,10 @@ export function legacyFolderAt(root: string): string | null {
 // The writes are synchronous end to end, and so is the wait.
 // ---------------------------------------------------------------------------
 
-/** How long a writer waits for another before it gives up. */
-const LOCK_WAIT_MS = 10_000;
 /** A lock older than this is taken over: a read-change-write of one file takes milliseconds. */
-const LOCK_STALE_MS = 30_000;
+const LOCK_STALE_MS = 15_000;
+/** How long a writer waits before it gives up: past the stale age, so a lock a crashed writer left is taken over, never reported. */
+const LOCK_WAIT_MS = 20_000;
 
 function sleepLockWait(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);

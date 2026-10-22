@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ShareAccessEntry } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Share Access Repository (sdd_host): the per-link access log — the raw material
@@ -42,9 +43,7 @@ class ShareAccessStore {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
     const next = [...this.load(), entry];
-    const tmp = `${p}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(next, null, 2) + '\n');
-    fs.renameSync(tmp, p);
+    replaceFile(p, JSON.stringify(next, null, 2) + '\n');
   }
 }
 

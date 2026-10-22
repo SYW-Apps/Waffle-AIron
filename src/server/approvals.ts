@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ApprovalRequest, ApprovalDecision } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Approval Repository (sdd_host)
@@ -64,9 +65,7 @@ function readRequests(dataDir: string): ApprovalRequest[] {
 function persistRequests(dataDir: string, requests: ApprovalRequest[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(requests, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(requests, null, 2) + '\n');
 }
 
 // ── redaction predicate ─────────────────────────────────────────────────────
