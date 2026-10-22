@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
+import { breakLock, installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
 import { SpecWriteConflictError } from '../utils/errors.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 
@@ -278,26 +278,20 @@ function lockBreakable(file: string, key: string): boolean {
 }
 
 /**
- * Remove a breakable lock and answer whether it did. Only the file judged is
- * removed: a holder that exits releases its lock, and the file found there a
- * moment later can be the next holder's, which is live.
+ * Remove a breakable lock and answer whether it is gone. Only the file judged
+ * is removed (breakLock): a holder that exits releases its lock, and the file
+ * found there a moment later can be the next holder's, which is live.
  */
 function breakStaleLock(file: string, key: string): boolean {
-  const judged = readLockText(file);
-  if (!lockBreakable(file, key)) return false;
-  if (judged !== null && readLockText(file) === judged) {
-    try { fs.unlinkSync(file); } catch { /* another waiter broke it first */ }
-  }
-  return true;
-}
-
-/** A lock file's text, or null when there is none to read. */
-function readLockText(file: string): string | null {
+  let judged: string | null;
   try {
-    return fs.readFileSync(file, 'utf8');
-  } catch {
-    return null;
+    judged = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
+    judged = null;
   }
+  if (!lockBreakable(file, key)) return false;
+  return breakLock(file, judged);
 }
 
 /** spec_file_store.unlockTree — release one hold; the last removes the lock file, when this process holds it. */

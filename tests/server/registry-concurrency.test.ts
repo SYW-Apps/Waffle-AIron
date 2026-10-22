@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { withFileLock } from '../../src/utils/fs.js';
+import { breakLock, withFileLock } from '../../src/utils/fs.js';
 import { load as loadCredentials, update as updateCredentials } from '../../src/server/credential-store.js';
 import { listProjectRecords } from '../../src/server/projects.js';
 
@@ -137,6 +137,25 @@ describe('the data file write lock', () => {
     const other = `1\n${Date.now()}\nanother-host\nnew-holder\n`;
     withFileLock(target, () => fs.writeFileSync(`${target}.lock`, other));
     expect(fs.readFileSync(`${target}.lock`, 'utf8')).toBe(other);
+  });
+
+  it('a stale lock is broken only while it still holds what was judged, by one breaker at a time', () => {
+    const dir = dataDir();
+    const lock = path.join(dir, 'records.json.lock');
+    fs.writeFileSync(lock, 'next holder\n');
+    // Judged as one record, now holding another: the next holder's, left in place.
+    expect(breakLock(lock, 'judged holder\n')).toBe(false);
+    expect(fs.existsSync(lock)).toBe(true);
+    // Another breaker at work: this one waits its turn.
+    fs.writeFileSync(`${lock}.break`, '');
+    expect(breakLock(lock, 'next holder\n')).toBe(false);
+    expect(fs.existsSync(lock)).toBe(true);
+    // A claim a crashed breaker left is cleared once old, and the next turn breaks the lock.
+    const old = new Date(Date.now() - 10_000);
+    fs.utimesSync(`${lock}.break`, old, old);
+    expect(breakLock(lock, 'next holder\n')).toBe(false);
+    expect(breakLock(lock, 'next holder\n')).toBe(true);
+    expect(fs.readdirSync(dir)).toEqual([]);
   });
 
   it('a store file that exists but does not parse is never written over as an empty set', () => {
