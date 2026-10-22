@@ -15,6 +15,12 @@
   `tests/examples/wrapper-example.test.ts`, so it stays conformance-true.
   Reference: [`docs/extending-wairon.md`](../docs/extending-wairon.md).
 
+- **[`ci/strict-gate.yml`](ci/strict-gate.yml)** — a ready-to-copy GitHub Actions
+  workflow for the strict merge gate (`wairon lock-check --strict` plus
+  `wairon validate --ci` through the reusable workflow, pinned to a tag), with the
+  repository protections that make the approval meaningful. Reference:
+  [`docs/cli.md`](../docs/cli.md#using-it-in-github-actions).
+
 The `wrapper/demo-project/` doubles as the reference spec tree: a Portal →
 Orchestrator → Repository (Store + Adapter) slice with structured params,
 narratives with control flow, the detail dial, a keyed entity type, and an

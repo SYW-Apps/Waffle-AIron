@@ -1,0 +1,35 @@
+name: Experience report
+description: Tell us how wairon worked for you. Every field is optional - answer what you have.
+labels: [feedback]
+body:
+  - type: textarea
+    id: built
+    attributes:
+      label: What you built or adopted wairon for
+  - type: input
+    id: time-to-pass
+    attributes:
+      label: Time to a first passing design
+      description: Roughly how long from `wairon init` to `wairon validate --ci` passing.
+  - type: textarea
+    id: interruptions
+    attributes:
+      label: False-positive interruptions
+      description: Findings that stopped you although the design was fine (rule codes help).
+  - type: textarea
+    id: maintenance
+    attributes:
+      label: Spec maintenance effort
+      description: How much work keeping the specs in step with the code was, and what made it easier or harder.
+  - type: textarea
+    id: caught
+    attributes:
+      label: Architectural mistakes the gate caught in later changes
+  - type: textarea
+    id: change
+    attributes:
+      label: What you would change
+  - type: input
+    id: version
+    attributes:
+      label: wairon version

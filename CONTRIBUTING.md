@@ -1,5 +1,45 @@
 # Contributing to wairon
 
+## The normal path
+
+**Set up.**
+
+```
+git clone https://github.com/SYW-Apps/Waffle-AIron
+cd Waffle-AIron
+npm ci
+npm run build
+```
+
+**Where a small change belongs.** Code goes in `src/`, its design in the spec tree
+under `.wai/specs/` (changed through the `sdd_*` MCP tools, never by hand — wairon
+checks the code against its own specs), and tests in `tests/`.
+
+**Before you open a PR**, run:
+
+```
+npx tsc --noEmit -p .
+npm run build
+npx vitest run
+npm run test:e2e
+node dist/cli/index.js validate --ci
+node dist/cli/index.js lock-check
+```
+
+**How review works.** Open the PR against `dev`. CI runs the same checks. If your
+change moves a spec, a maintainer re-approves the design (`wairon lock`) and
+commits the lock record; you do not need to lock it yourself.
+
+**Reporting a security issue.** Do not open a public issue for a vulnerability. Use
+GitHub's private vulnerability reporting on this repository (Security tab → Report a
+vulnerability).
+
+Questions and bugs: open an issue (templates are provided).
+
+---
+
+## In depth
+
 The conventions for making a delegated change — never hand-edit `.wai/`, read
 every write back, the lock is the human's, measure before repairing, prove a
 behaviour by revert without `git checkout` — are **not** in this file. They ship
@@ -89,8 +129,8 @@ it.
 | Gate | Baseline |
 |---|---|
 | `npx tsc --noEmit` | clean |
-| `npx vitest run` | 289 files / 4755 tests |
-| `npx vitest run --config vitest.e2e.config.ts` | 7 files / 33 tests |
+| `npx vitest run` | several thousand tests; CI runs them all (7065 tests in 434 files on 2026-10-22) |
+| `npx vitest run --config vitest.e2e.config.ts` (`npm run test:e2e`) | several hundred tests (615 tests in 44 files on 2026-10-22) |
 | `npm run build` | clean |
 | `npm run build:web` | clean (typechecks the SPA) |
 | `node dist/cli/index.js validate` | 0 errors, 0 warnings, 0 notices; register 303 findings / 406 units |
@@ -200,4 +240,5 @@ anything a future contributor or agent should inherit. That home is **this file*
 
 ## Bugs and questions
 
-Actively developed. Open an issue.
+Actively developed. Open an issue; vulnerabilities go through private reporting (see
+the top of this file).

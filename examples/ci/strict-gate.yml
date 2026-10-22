@@ -1,0 +1,45 @@
+# Strict wairon gate: a ready-to-copy workflow for YOUR repository.
+#
+# Copy this file to .github/workflows/wairon-gate.yml, replace <version> (twice)
+# with the version you lock with -- what `wairon --version` prints where you run
+# `wairon lock` -- and check that it is on npm: `npm view @wairon/cli@<version> version`.
+# The reusable workflow is pinned to a TAG (v<version>), never to main or dev, so the
+# check that gates your merges cannot change under you. Details:
+# https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/cli.md#using-it-in-github-actions
+#
+# What the job does, in order:
+#   1. `wairon lock-check --strict` -- the design in the merge commit is the design
+#      that was approved. strict also fails when .wai/lock.json is missing or a member
+#      project was never approved (the reusable workflow defaults to non-strict so that
+#      importing it cannot break a repository that never locked; this starter opts in).
+#   2. installs your project's dependencies (so TypeScript is read with your compiler),
+#      then `wairon validate --ci` -- the design is LEGAL (every error and every
+#      non-draft warning fails). Point working-directory at the family root if you have
+#      members.
+#
+# THE APPROVAL IS ONLY AS MEANINGFUL AS THE REPOSITORY PROTECTIONS AROUND IT.
+# `lockedBy` in .wai/lock.json is a claim, not an attestation: anyone who can run the CLI
+# can write a lock record. Who approved is established by review, so set these up:
+#   - a protected default branch (no direct pushes, no force pushes);
+#   - required pull-request review before merge;
+#   - a CODEOWNERS file that makes the people who approve designs the required owners of
+#     .wai/lock.json and .wai/specs/ (and enable "Require review from Code Owners");
+#   - required status checks for BOTH jobs below ("Approved design / Approved design" and
+#     your own build/test job). A workflow can only fail a job; making a failing job stop
+#     a merge is a branch-protection / ruleset setting.
+
+name: wairon gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  approved-design:
+    uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
+    with:
+      wairon-version: '<version>'
+      strict: true        # a deleted .wai/lock.json fails instead of switching the gate off
+      validate: true      # also runs `wairon validate --ci` after the approval check
+      # working-directory: .   # the family root if you have members
