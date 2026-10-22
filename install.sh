@@ -71,6 +71,36 @@ fetch_latest_version() {
 }
 
 # ---------------------------------------------------------------------------
+# Checksum verification
+# ---------------------------------------------------------------------------
+
+sha256_of() {
+    if command -v sha256sum > /dev/null 2>&1; then
+        sha256sum "$1" | awk '{print tolower($1)}'
+    elif command -v shasum > /dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print tolower($1)}'
+    else
+        error "Required command not found: sha256sum or shasum"
+    fi
+}
+
+# verify_checksum <archive> <expected-sha256-file>
+# The .sha256 file published beside the archive holds "<hex>  <name>"; its first
+# whitespace-separated field is compared to the archive's SHA-256. NOTE: the
+# checksum comes from the same release as the archive, so this detects corruption
+# and tampering in transit, not the identity of the publisher.
+verify_checksum() {
+    EXPECTED=$(awk '{print tolower($1); exit}' "$2")
+    if [ -z "$EXPECTED" ]; then
+        error "Checksum file is empty or unreadable; refusing to install."
+    fi
+    ACTUAL=$(sha256_of "$1")
+    if [ "$EXPECTED" != "$ACTUAL" ]; then
+        error "Checksum mismatch for $(basename "$1"): expected $EXPECTED, got $ACTUAL. Refusing to install."
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Download and install
 # ---------------------------------------------------------------------------
 
@@ -95,6 +125,12 @@ main() {
     TMP_FILE="${TMP_DIR}/${ASSET_NAME}"
 
     curl -fsSL --output "$TMP_FILE" "$DOWNLOAD_URL" || error "Download failed: $DOWNLOAD_URL"
+
+    # Verify against the checksum published beside the archive; refuse if absent
+    info "Verifying checksum..."
+    curl -fsSL --output "${TMP_FILE}.sha256" "${DOWNLOAD_URL}.sha256" \
+        || error "Checksum file missing or unreachable: ${DOWNLOAD_URL}.sha256 — refusing to install an unverified archive."
+    verify_checksum "$TMP_FILE" "${TMP_FILE}.sha256"
 
     # Extract
     tar -xzf "$TMP_FILE" -C "$TMP_DIR"
@@ -157,4 +193,7 @@ main() {
     info "Run: wairon --help  (or: wai --help)"
 }
 
-main
+# WAIRON_INSTALL_SOURCE_ONLY=1 lets tests source the helpers without installing.
+if [ -z "${WAIRON_INSTALL_SOURCE_ONLY:-}" ]; then
+    main
+fi
