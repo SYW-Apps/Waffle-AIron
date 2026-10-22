@@ -55,9 +55,9 @@ function args(argv) {
 
 /** The release channel of a version, as publish-npm.yml names its dist-tags. */
 export function channelOf(version) {
-  if (/-dev\.\d+$/.test(version)) return 'dev';
-  if (/-beta\.\d+$/.test(version)) return 'beta';
-  if (/-preview\.\d+$/.test(version)) return 'preview';
+  if (/^\d+\.\d+\.\d+-dev\.\d+$/.test(version)) return 'dev';
+  if (/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) return 'beta';
+  if (/^\d+\.\d+\.\d+-preview\.\d+$/.test(version)) return 'preview';
   if (/^\d+\.\d+\.\d+$/.test(version)) return 'stable';
   throw new Error(`version "${version}" is neither a release nor a dev, beta or preview build`);
 }

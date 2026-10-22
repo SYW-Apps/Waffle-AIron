@@ -766,24 +766,40 @@ function lockHolderAlive(pid: number): boolean {
   }
 }
 
-/** Create the lock exclusively; false when another holds it. */
-function tryCreateLock(lock: string): boolean {
+/**
+ * Create the lock exclusively; the holder record written into it, or null when
+ * another holds it. A record that cannot be written leaves no lock behind.
+ */
+function tryCreateLock(lock: string): string | null {
   let fd: number;
   try {
     fd = fs.openSync(lock, 'wx');
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST') return false;
+    if (code === 'EEXIST') return null;
     // Windows: a lock just released is still being deleted, or a scanner holds it.
-    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) return false;
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) return null;
     throw e;
   }
+  const record = `${process.pid}\n${Date.now()}\n${os.hostname()}\n${Math.random().toString(36).slice(2)}\n`;
   try {
-    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n${os.hostname()}\n`);
-  } finally {
+    fs.writeSync(fd, record);
+  } catch (e) {
     fs.closeSync(fd);
+    try { fs.unlinkSync(lock); } catch { /* nothing left to clean */ }
+    throw e;
   }
-  return true;
+  fs.closeSync(fd);
+  return record;
+}
+
+/** Remove the lock only while it is still this holder's: one taken over as stale is the new holder's. */
+function releaseLock(lock: string, record: string): void {
+  try {
+    if (fs.readFileSync(lock, 'utf8') === record) fs.unlinkSync(lock);
+  } catch {
+    /* gone already, or the next writer breaks it */
+  }
 }
 
 /** Whether the lock is left by a holder that is gone, or is older than any write. */
@@ -809,7 +825,8 @@ function lockBreakable(lock: string): boolean {
 export function withFileLock<T>(file: string, change: () => T): T {
   const lock = `${file}.lock`;
   const deadline = Date.now() + LOCK_WAIT_MS;
-  while (!tryCreateLock(lock)) {
+  let record: string | null;
+  while ((record = tryCreateLock(lock)) === null) {
     if (lockBreakable(lock)) {
       try { fs.unlinkSync(lock); } catch { /* another waiter broke it first */ }
       continue;
@@ -822,7 +839,37 @@ export function withFileLock<T>(file: string, change: () => T): T {
   try {
     return change();
   } finally {
-    try { fs.unlinkSync(lock); } catch { /* the next writer breaks it */ }
+    releaseLock(lock, record);
+  }
+}
+
+/**
+ * The JSON in `file` for a read-change-write: `absent` when the file does not
+ * exist, and a throw when it exists but cannot be read or parsed, so a change
+ * is never applied to a set read as empty and written over the real one. On
+ * Windows a read refused while another process replaces the file is retried.
+ */
+export function readJsonForUpdate<T>(file: string, absent: T): T {
+  const deadline = Date.now() + RENAME_RETRY_MS;
+  for (;;) {
+    let text: string;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return absent;
+      const busy = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
+      if (process.platform === 'win32' && busy && Date.now() <= deadline) {
+        sleepLockWait(5 + Math.floor(Math.random() * 20));
+        continue;
+      }
+      throw new Error(`${file} cannot be read (${(e as Error).message}). Nothing was written.`);
+    }
+    try {
+      return JSON.parse(text) as T;
+    } catch (e) {
+      throw new Error(`${file} is not valid JSON (${(e as Error).message}). Nothing was written; repair or restore the file.`);
+    }
   }
 }
 

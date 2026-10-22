@@ -32,6 +32,7 @@ describe('channels and aliases', () => {
 
   it('an unknown pre-release suffix is refused, not published as stable', () => {
     expect(() => channelOf('6.2.0-rc.1')).toThrow(/neither a release/);
+    expect(() => channelOf('not-a-version-beta.1')).toThrow(/neither a release/);
   });
 });
 

@@ -19,11 +19,13 @@ methods:
     intent: >-
       Takes the project registry file's write lock (a lock file created exclusively, naming this
       process, the time and the host; one whose holder on this host is gone, or older than any write
-      could take, is taken over; after a bounded wait it throws), reads the set fresh, applies the
-      change, replaces the file with the result atomically (a temporary sibling named for this
-      writer, then renamed over the file) and releases the lock, also when the change throws, which
-      writes nothing.
+      could take, is taken over; after a bounded wait it throws), reads the set fresh (an absent
+      file is the empty set; a file that exists but cannot be read or parsed throws, so a change is
+      never applied to a set read as empty), applies the change, replaces the file with the result
+      atomically (a temporary sibling named for this writer, then renamed over the file) and
+      releases the lock while it is still its own (a lock taken over as stale is the new holder's),
+      also when the change throws, which writes nothing.
     symbol: update
 status: complete
 createdAt: '2026-07-19T09:00:07.147Z'
-updatedAt: '2026-10-22T13:51:32.122Z'
+updatedAt: '2026-10-22T19:48:26.193Z'

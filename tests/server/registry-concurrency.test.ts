@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { withFileLock } from '../../src/utils/fs.js';
-import { load as loadCredentials } from '../../src/server/credential-store.js';
+import { load as loadCredentials, update as updateCredentials } from '../../src/server/credential-store.js';
 import { listProjectRecords } from '../../src/server/projects.js';
 
 // ---------------------------------------------------------------------------
@@ -115,6 +115,24 @@ describe('the data file write lock', () => {
     expect(withFileLock(target, () => 'ran')).toBe('ran');
     expect(Date.now() - started).toBeGreaterThanOrEqual(14_000);
   }, 30_000);
+
+  it('a holder whose lock was taken over as stale leaves the new holder\'s lock in place', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    const other = `1\n${Date.now()}\nanother-host\nnew-holder\n`;
+    withFileLock(target, () => fs.writeFileSync(`${target}.lock`, other));
+    expect(fs.readFileSync(`${target}.lock`, 'utf8')).toBe(other);
+  });
+
+  it('a store file that exists but does not parse is never written over as an empty set', () => {
+    const dir = dataDir();
+    const file = path.join(dir, 'auth', 'credentials.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '[{"id":"kept"');
+    expect(() => updateCredentials(dir, (records) => [...records, { id: 'new' } as never])).toThrow(/not valid JSON/);
+    expect(fs.readFileSync(file, 'utf8')).toBe('[{"id":"kept"');
+    expect(fs.existsSync(`${file}.lock`)).toBe(false);
+  });
 
   it('a change that throws writes nothing and releases the lock', () => {
     const dir = dataDir();
