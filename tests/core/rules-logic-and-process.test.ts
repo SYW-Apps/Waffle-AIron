@@ -229,7 +229,7 @@ describe('entrypoint-dependencies: the process layer', () => {
     expect(found[0].message).toContain('"printer-supervisor"');
   });
 
-  it('points the remedy at the Registry the Supervisor maintains — the real lookup hop', () => {
+  it('never points the remedy at a Registry the Supervisor owns: that is its private supervision state', () => {
     const proj = createTempProject();
     proj.subsystem('pharmacy');
     proj.component('refill-workflow', 'pharmacy', 'Orchestrator', 'dependsOn: [label-printer-actor]');
@@ -238,8 +238,44 @@ describe('entrypoint-dependencies: the process layer', () => {
     proj.component('printer-handle-registry', 'pharmacy', 'Registry');
     const found = byCode(proj.validate(), 'ACTOR_REACHED_WITHOUT_SUPERVISOR');
     expect(found.map(i => i.specId)).toEqual(['refill-workflow']);
+    expect(found[0].message).toContain('depend on its Supervisor ("printer-supervisor") and take the Actor\'s handle from it');
+    expect(found[0].message).not.toContain('printer-handle-registry');
+  });
+
+  it('names a Registry the Supervisor maintains through lifecycle calls as the by-id alternative, and that Registry draws no REGISTRY_WITHOUT_STORE', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('refill-workflow', 'pharmacy', 'Orchestrator', 'dependsOn: [label-printer-actor]');
+    proj.component('label-printer-actor', 'pharmacy', 'Actor');
+    proj.component('printer-supervisor', 'pharmacy', 'Supervisor', 'dependsOn: [label-printer-actor, printer-handle-registry]');
+    proj.component('printer-handle-registry', 'pharmacy', 'Registry');
+    proj.spec('interface', 'iprinter-handle-registry', [
+      'schemaVersion: 1.0.0', 'id: iprinter-handle-registry', 'name: IPrinterHandleRegistry', 'description: c', 'component: printer-handle-registry', 'methods:',
+      '  - {name: enroll, description: Enroll a live printer handle under its id, signature: "enroll(): void", returns: void, effect: lifecycle}',
+    ].join('\n'));
+    proj.spec('interface', 'iprinter-supervisor', [
+      'schemaVersion: 1.0.0', 'id: iprinter-supervisor', 'name: IPrinterSupervisor', 'description: c', 'component: printer-supervisor', 'methods:',
+      '  - {name: startPrinter, description: Start a printer and enroll its handle, signature: "startPrinter(): void", returns: void}',
+    ].join('\n'));
+    proj.spec('implementation', 'impl-printer-supervisor', [
+      'schemaVersion: 1.0.0', 'id: impl-printer-supervisor', 'name: ImplPrinterSupervisor', 'description: impl', 'contract: iprinter-supervisor', 'methods:',
+      '  - name: startPrinter', '    narrative:',
+      '      - { stepNumber: 1, description: Enroll the handle, type: call, targetComponent: printer-handle-registry, targetMethod: enroll }',
+      '      - { stepNumber: 2, description: Done, type: return, outcome: done }',
+    ].join('\n'));
+    const issues = proj.validate();
+    const found = byCode(issues, 'ACTOR_REACHED_WITHOUT_SUPERVISOR');
+    expect(found.map(i => i.specId)).toEqual(['refill-workflow']);
+    expect(found[0].message).toContain('depend on its Supervisor ("printer-supervisor")');
     expect(found[0].message).toContain('"printer-handle-registry", kept by "printer-supervisor"');
-    expect(found[0].message).toContain('look the Actor up by id');
+    expect(byCode(issues, 'REGISTRY_WITHOUT_STORE')).toEqual([]);
+  });
+
+  it('control: a standalone Registry no Supervisor maintains still draws REGISTRY_WITHOUT_STORE', () => {
+    const proj = createTempProject();
+    proj.subsystem('pharmacy');
+    proj.component('printer-handle-registry', 'pharmacy', 'Registry');
+    expect(byCode(proj.validate(), 'REGISTRY_WITHOUT_STORE').map(i => i.specId)).toEqual(['printer-handle-registry']);
   });
 
   it('passes when the consumer also depends on a Supervisor that supervises the Actor', () => {

@@ -1228,6 +1228,29 @@ function narrowerExports(external: ResolvedExternal, missing: string[], read: Su
   return [...out].map(([name, audience]) => ({ name, audience }));
 }
 
+/**
+ * The used members the previous lock entry records that the new snapshot no
+ * longer carries — renamed (said with the new name) or removed — leaving out a
+ * name the producer still exports, only to a narrower audience (pinDetail says that).
+ */
+function goneSincePin(binding: ExternalBinding, snapshot: SurfaceSnapshot, previous: ExternalLockEntry | undefined): string[] {
+  if (!previous) return [];
+  const { missing } = usedDigests(binding.usage, snapshot, binding.external.alias);
+  const recorded = missing.filter((used) => {
+    const at = used.lastIndexOf('.');
+    return ownGet(previous.used ?? {}, used.slice(0, at))?.[used.slice(at + 1)] !== undefined;
+  });
+  if (recorded.length === 0) return [];
+  const narrower = binding.external.audience !== 'project' ? narrowerExports(binding.external, recorded, snapshot) : [];
+  return recorded
+    .filter((used) => !narrower.some((n) => used.startsWith(`${n.name}.`)))
+    .map((used) => {
+      const at = used.lastIndexOf('.');
+      const to = renamedIn(snapshot, used.slice(0, at), used.slice(at + 1));
+      return to ? `"${used}" (renamed to "${renamedName(to)}")` : `"${used}" (removed)`;
+    });
+}
+
 /** A pin's detail with what moved since the replaced pin said first. */
 function withMoved(detail: { detail?: string }, moved: string[]): { detail?: string } {
   if (moved.length === 0) return detail;
@@ -1239,19 +1262,33 @@ function withMoved(detail: { detail?: string }, moved: string[]): { detail?: str
 function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: ExternalPin; changed: boolean } {
   const { external } = binding;
   const unexported = binding.usage?.unexported ?? [];
-  // Step 8: bind the producer's root, when it can be read.
+  // Step 11: bind the producer's root, when it can be read.
   const unreadable = producerUnreadable(external);
   let snapshot: SurfaceSnapshot;
   try {
     if (unreadable) throw new Error(unreadable);
-    // Steps 9-10: project it at the audience ceiling, stamped with that audience.
+    // Steps 12-13: project it at the audience ceiling, stamped with that audience.
     snapshot = projectProducer(external);
   } catch (e) {
     return { pin: { alias: external.alias, outcome: 'unreachable', project: external.project, usedNames: 0, unexported, detail: `${readFailure(e)}; its previous pin stays` }, changed: false };
   }
   const digest = contentDigest(snapshot);
-  // Steps 11-13: the snapshot is rewritten only when its content moved.
+  // Steps 14, 16-17: the snapshot is rewritten only when its content moved.
   const pinned = externalsRepository.readSnapshot(external.alias);
+  // Step 15: a member the last pin recorded as used that the producer renamed or
+  // removed is followed in the uses first — pinned over, the uses would point at
+  // nothing the lock compares, and a second pin and lock would be owed.
+  const gone = goneSincePin(binding, snapshot, ownGet(lock.externals, external.alias));
+  if (gone.length > 0) {
+    return {
+      pin: {
+        alias: external.alias, outcome: 'refused', project: external.project, usedNames: 0,
+        unexported: [...unexported, ...usedDigests(binding.usage, snapshot, external.alias).uncarried],
+        detail: `the producer no longer has ${gone.join(', ')}, which this project uses and the last pin records — follow it in the uses first (\`wairon validate\` names each use), then pin; its previous pin stays`,
+      },
+      changed: false,
+    };
+  }
   // The removals since the replaced pin, carried forward while they stay absent.
   if (pinned) snapshot = withRetired(snapshot, pinned);
   // Rewritten whenever anything the snapshot carries moved — not only its
@@ -1262,7 +1299,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
   // What moved since the replaced pin that no digest reads — a used verb's
   // route above all: a re-pin never rewrites it without a word.
   const moved = pinned && snapshotChanged ? carriedFactChanges(pinned, snapshot) : [];
-  // Step 14: the lock entry — `used` maps each used member to its digest.
+  // Step 18: the lock entry — `used` maps each used member to its digest.
   const { used, missing, uncarried } = usedDigests(binding.usage, snapshot, external.alias);
   // A used name the producer does export — only narrower than this project
   // reads it — is said so, never as gone.
@@ -1302,7 +1339,7 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   if (isPart(loadProjectConfig())) return pinParent(aliases);
   // Step 5: the declared externals, each bound to its producer.
   const bindings = resolveExternals();
-  // Steps 6-8: the aliases asked for — an undeclared one refused before any write.
+  // Steps 6-7: the aliases asked for — an undeclared one refused before any write.
   const declared = bindings.map((b) => b.external.alias);
   const named = aliases && aliases.length > 0 ? aliases : undefined;
   const unknown = (named ?? []).filter((a) => !declared.includes(a));
@@ -1313,14 +1350,14 @@ export function pinExternals(aliases?: string[]): ExternalPin[] {
   }
   if (unknown.length) throw new UnknownExternalAliasError(unknown, declared);
   const kept = named ? bindings.filter((b) => named.includes(b.external.alias)) : bindings;
-  // Step 9: the current lock (none yet reads as empty).
+  // Step 8: the current lock (none yet reads as empty).
   const lock: ExternalsLock = externalsRepository.readLock() ?? { externals: {} };
   const pins: ExternalPin[] = [];
   let lockChanged = false;
-  // Steps 6-17: each external to pin.
+  // Steps 9-21: each external to pin.
   for (const binding of kept) {
     if (binding.external.sourceKind === 'unresolved') {
-      // Step 16: its previous pin stays.
+      // Step 20: its previous pin stays.
       pins.push({ alias: binding.external.alias, outcome: 'unresolved', project: binding.external.project, usedNames: 0, unexported: [], detail: binding.external.problem });
       continue;
     }

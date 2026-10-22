@@ -160,10 +160,11 @@ fields:
   - name: invokedBy
     type: DeclaredInvocation
     description: >-
-      Portal-only: the entry every verb inherits (kind entry, with a scope on a network transport).
-      A verb's own invokedBy overrides only the scope. Never defaulted by a tool and never invented
-      by a migration: a blanket entry on a Portal that is not entered from outside would hide
-      unreached verbs
+      The declaration every method inherits. On a Portal, the entry of every verb (kind entry, with
+      a scope on a network transport); a verb's own invokedBy overrides only the scope. On any
+      component, kind runtime: the hook the process's own runtime calls every method through; a
+      method's own declaration replaces it. Never defaulted by a tool and never invented by a
+      migration: a blanket declaration nobody decided would hide unreached methods
     optional: true
 methods:
   - name: defaultConformanceTier
@@ -233,12 +234,14 @@ methods:
     params:
       - name: method
         type: DeclaredInvocation?
-        description: The verb's own declaration, when it has one
+        description: The method's own declaration, when it has one
     returns: DeclaredInvocation?
     description: >-
-      The entry a verb of this Portal has: the verb's own invokedBy when it declares one, else the
-      component's, with the verb's scope taking precedence. None for a non-Portal. Pure
+      The declaration a method of this component has: the method's own invokedBy when it declares
+      one, else the component's, with a verb's scope taking precedence over its Portal's entry. A
+      non-Portal passes on only a runtime declaration (an entry there is ENTRY_ON_NON_PORTAL, and
+      reaches nothing). Pure
     symbol: componentEntryFor
 sourcePath: src/models/specs.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-18T19:09:01.868Z'
+updatedAt: '2026-10-21T21:19:51.794Z'

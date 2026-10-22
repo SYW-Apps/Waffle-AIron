@@ -1,4 +1,5 @@
 import { SddRule } from '../types.js';
+import { maintainedRegistries } from './entrypoint-dependencies.js';
 
 /**
  * The data blocks that stand outside every pattern. A Store may do so
@@ -9,10 +10,10 @@ export const unownedBlocksRule: SddRule = {
   name: 'unowned-blocks',
   judges: 'design',
   description:
-    'Judges the data blocks no owner (a pattern, or a Supervisor keeping its supervision state) owns. A Store may stand alone deliberately — the sanctioned lightweight form for genuinely simple state, acknowledged with a lint.allow — while the recommended shape stays a Repository; what must never happen is folding the state into a consuming component, where no spec, diagram or conformance check can see it again. A Registry standing alone with no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent store that belongs typed Store) or orphaned. A Query has no standalone form at all: it computes reads over its own Repository\'s Store.',
+    'Judges the data blocks no owner (a pattern, or a Supervisor keeping its supervision state) owns. A Store may stand alone deliberately — the sanctioned lightweight form for genuinely simple state, acknowledged with a lint.allow — while the recommended shape stays a Repository; what must never happen is folding the state into a consuming component, where no spec, diagram or conformance check can see it again. A Registry standing alone with no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent store that belongs typed Store) or orphaned — unless a Supervisor maintains it through lifecycle-effect calls: then it is that Supervisor\'s directory of live handles, which holds the handles itself and writes to no Store. A Query has no standalone form at all: it computes reads over its own Repository\'s Store.',
   codes: [
     { code: 'UNOWNED_STORE', defaultSeverity: 'warning', summary: 'Store not owned by any pattern — recommended shape is a Repository; a deliberate standalone Store needs a lint.allow' },
-    { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned' },
+    { code: 'REGISTRY_WITHOUT_STORE', defaultSeverity: 'warning', summary: 'Standalone Registry with no Store to write to — either mistyped (a fused file-backed store belongs typed Store) or orphaned; a Supervisor\'s directory of live handles excepted' },
     { code: 'UNOWNED_QUERY', defaultSeverity: 'error', summary: 'Query not owned by a Repository — a Query computes reads over its own Repository\'s Store' },
   ],
   check(ctx) {
@@ -20,6 +21,10 @@ export const unownedBlocksRule: SddRule = {
     // member block, and therefore which blocks stand alone. A retired
     // component is never one of these three stereotypes, so no skip is needed.
     const ownership = ctx.ownershipIndex();
+    // The Registries a Supervisor keeps through lifecycle-effect calls: its
+    // directory of live handles, shared with the components that look its
+    // Actors up there. It holds the handles itself and writes to no Store.
+    const handleDirectories = new Set([...maintainedRegistries(ctx).values()].flat());
 
     for (const comp of ctx.components) {
       if (ownership.ownedMembers.has(comp.id)) continue;
@@ -48,7 +53,7 @@ export const unownedBlocksRule: SddRule = {
       // typed Store, where the durability machinery can see it) or orphaned.
       // Repository-owned Registries reach their Store as a sibling member and
       // are exempt from the dependency requirement.
-      if (comp.componentType === 'Registry'
+      if (comp.componentType === 'Registry' && !handleDirectories.has(comp.id)
         && !comp.dependsOn.some(depId => ctx.componentMap.get(depId)?.componentType === 'Store')) {
         ctx.addIssue(
           'warning',

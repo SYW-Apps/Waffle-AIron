@@ -5,8 +5,8 @@ import * as path from 'path';
 import { cleanStaleBinary, swapRunningBinary } from '../../src/commands/update.js';
 
 // ---------------------------------------------------------------------------
-// The Windows self-update swap: the running exe is renamed aside and the new
-// one copied into its slot. An earlier update's leftover that a process still
+// The Windows self-update swap: the new exe is staged beside the running one,
+// which is renamed aside before the staged one takes its slot. An earlier update's leftover that a process still
 // runs from (an MCP server started before that update) cannot be removed and
 // holds the `.old` name; the swap must move aside under a fresh name rather
 // than fail on it. A process holding a file is simulated by a non-empty folder
@@ -62,6 +62,16 @@ describe('the self-update swap', () => {
     expect(() => swapRunningBinary(path.join(dir, 'missing.exe'), exe)).toThrow();
     expect(fs.readFileSync(exe, 'utf8')).toBe('old build');
     expect(fs.readdirSync(dir).sort()).toEqual(['new-wairon.exe', 'wairon.exe']);
+  });
+
+  it('leaves the running binary untouched when the new one cannot be staged beside it', () => {
+    const { dir, exe, fresh } = bin();
+    // The staging slot is held, so the copy fails before anything moves.
+    fs.mkdirSync(`${exe}.new`);
+    fs.writeFileSync(path.join(`${exe}.new`, 'held'), '');
+    expect(() => swapRunningBinary(fresh, exe)).toThrow();
+    expect(fs.readFileSync(exe, 'utf8')).toBe('old build');
+    expect(fs.readdirSync(dir).sort()).toEqual(['new-wairon.exe', 'wairon.exe', 'wairon.exe.new']);
   });
 
   it('cleanStaleBinary removes only the leftovers of the executable named', () => {

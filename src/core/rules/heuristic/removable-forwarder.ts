@@ -94,7 +94,7 @@ export const removableForwarderRule: SddRule = {
       for (const entry of sub.lifecycle ?? []) reachedFromOutside.add(entry.component);
     }
     for (const forwarder of forwarders) {
-      if (ctx.interfaceMethodsOf(forwarder.id).some(m => m.invokedBy)) reachedFromOutside.add(forwarder.id);
+      if (forwarder.invokedBy || ctx.interfaceMethodsOf(forwarder.id).some(m => m.invokedBy)) reachedFromOutside.add(forwarder.id);
     }
 
     // 3. Judge each forwarder that only modelled callers reach.

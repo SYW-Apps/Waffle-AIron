@@ -61,7 +61,7 @@ methods:
       - stepNumber: 9
         description: >-
           Read the project configuration through the project config repository: its enabled targets,
-          stamped on every record, and rules.generateComponentImplementers.
+          stamped on every record.
         type: call
         targetComponent: project_config_repository
         targetMethod: load
@@ -124,30 +124,30 @@ methods:
           and ONE delegating owner per member project this project declares (in `members`, or, in
           the v5 reading `wairon upgrade` binds, a legacy L1 mount) that routes work into the member
           without enumerating its internals and lists the member's agents by reference
-          (delegatesTo); component implementers only when generateComponentImplementers is enabled
-          (or when a per-component brief asks for one). A PART (stage 8) is no member project here:
-          its subsystems are this layer's local subsystems, so each gets an ordinary owner whose
-          fence holds the part's spec files where the part stores them, and whose description names
-          the part — a part fetched from git is read, never owned (its files are the fetch cache's;
-          it is changed in its own repository and taken in with `member update`). Each owner's and
-          implementer's ownedPaths fence holds every code location its specs ALONE name, whether the
-          file exists yet or is PLANNED: the source files its implementations and their methods
-          name, their simPath harnesses and binding modules, and the sourcePaths of its types (an
-          owner's: the types its subsystem owns; an implementer's: the types whose componentClass
-          its component is, and the types only its own contracts use — a type's own file and its
-          methods'). A file the specs of another subsystem (for an implementer, another component)
-          also name is no single fence's — a shared models module, or one types file holding the
-          entity types of two components — and is left out whichever way it is named: a
-          componentClass claims its type's file only when no other component's specs name that file
-          too. A last pass holds the invariant outright: a file that still lands in two
-          implementers' fences (an inferred fallback path meeting a named one) is taken out of both.
-          So no path has two owners; the brief lists such a file as shared. An implementer's
-          readPaths are the system spec, its component, contract and implementation specs, the specs
-          of the types its contracts use and of the types their fields name, its dependencies'
-          contract specs and the files that realize them. A planned path is declared at design time
-          since code linkage left the approval, so the fence of a component with no code yet is
-          already the file the implementer must create. Each record carries the rendered
-          variantGuidance for its variant-tagged components.
+          (delegatesTo); component implementers only when a per-component brief asks for one, never
+          as part of the materialized topology: the owner of each subsystem owns its components'
+          code. A PART (stage 8) is no member project here: its subsystems are this layer's local
+          subsystems, so each gets an ordinary owner whose fence holds the part's spec files where
+          the part stores them, and whose description names the part — a part fetched from git is
+          read, never owned (its files are the fetch cache's; it is changed in its own repository
+          and taken in with `member update`). Each owner's and implementer's ownedPaths fence holds
+          every code location its specs ALONE name, whether the file exists yet or is PLANNED: the
+          source files its implementations and their methods name, their simPath harnesses and
+          binding modules, and the sourcePaths of its types (an owner's: the types its subsystem
+          owns; an implementer's: the types whose componentClass its component is, and the types
+          only its own contracts use — a type's own file and its methods'). A file the specs of
+          another subsystem (for an implementer, another component) also name is no single fence's —
+          a shared models module, or one types file holding the entity types of two components — and
+          is left out whichever way it is named: a componentClass claims its type's file only when
+          no other component's specs name that file too. A last pass holds the invariant outright: a
+          file that still lands in two implementers' fences (an inferred fallback path meeting a
+          named one) is taken out of both. So no path has two owners; the brief lists such a file as
+          shared. An implementer's readPaths are the system spec, its component, contract and
+          implementation specs, the specs of the types its contracts use and of the types their
+          fields name, its dependencies' contract specs and the files that realize them. A planned
+          path is declared at design time since code linkage left the approval, so the fence of a
+          component with no code yet is already the file the implementer must create. Each record
+          carries the rendered variantGuidance for its variant-tagged components.
         type: local
   - name: composeAgentBrief
     narrative:
@@ -183,8 +183,7 @@ methods:
           Resolve the current agent topology (resolveAgentTopology over the live spec tree) and
           locate the record whose id matches agentId; when none does and the id names a component
           (`<component>` or `<component>-implementer`), derive that component's implementer record
-          on demand — the same record rules.generateComponentImplementers would materialize — so a
-          per-component brief is always available without agent files
+          on demand, so a per-component brief is always available without agent files
         type: local
       - stepNumber: 6
         description: Refuse unknown agents
@@ -302,7 +301,14 @@ methods:
           its code takes such a parameter (sdd_write_narrative injectedParams, or sdd_update_spec —
           no re-lock), never guessed at design time, and the ones its implementations already
           declare are listed as possibly design-time guesses, to be removed when the code does not
-          take them (UNUSED_INJECTED_PARAM). An agent that implements nothing gets none of these
+          take them (UNUSED_INJECTED_PARAM). Each method the record implements then gets one line in
+          a '## What the design fixes and what it leaves open' section, ahead of the project
+          guidance: binding where the method states its calls (declared calls, or a narrative whose
+          stated detail is full or calls-only) — the code makes exactly the calls named, a call left
+          out is UNNARRATED_CALL; open otherwise — the collaborators its narrative names, and every
+          other collaborator its component depends on, which the design allows without saying the
+          method takes it: taken only as the method needs, and named in the report
+          (OPEN_ROUTE_CALL). An agent that implements nothing gets none of these
         type: local
       - stepNumber: 14
         description: >-
@@ -327,4 +333,4 @@ methods:
     symbol: loadRegistry
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T18:24:57.956Z'
+updatedAt: '2026-10-21T21:20:10.692Z'

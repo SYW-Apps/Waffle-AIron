@@ -32,9 +32,6 @@ const EXPECTED_CODES: Record<string, string> = {
   // The fixture is a design with no code, as v5.1.0 left it.
   MISSING_SOURCE_PATH: 'design-only fixture, notice',
   SIGNATURE_SOURCE_AVAILABLE: 'optional notice',
-  // The fixture generates one implementer per component and plans no sourcePath yet:
-  // a NOTICE (the planned-sourcePath doctrine), never a warning that fails --ci.
-  NO_OWNED_PATHS: 'design-only fixture: implementers plan no sourcePath yet, notice',
 };
 
 /** Copy the fixture, normalising line endings: the files are exactly what v5.1.0
@@ -201,7 +198,7 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
     }
   });
 
-  it('step 8: validate --ci reports no errors, only the documented findings, and NO_OWNED_PATHS is a notice', async () => {
+  it('step 8: validate --ci reports no errors and only the documented findings', async () => {
     for (const cwd of [dir, billing]) {
       const res = await run(['validate', '--ci'], cwd);
       const { codes, errors } = findings(res.all);
@@ -211,13 +208,10 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
         if (code === 'MEMBER_UNAPPROVED') continue;
         expect(Object.keys(EXPECTED_CODES), `unexpected finding ${code}\n${transcript(res)}`).toContain(code);
       }
-      // U1: an implementer that plans no sourcePath yet is the notice MISSING_SOURCE_PATH
-      // is, never a warning that fails --ci, and the message names the real remedy.
-      expect(warningCodes(res.all), transcript(res)).not.toContain('NO_OWNED_PATHS');
-      if (cwd === dir) {
-        expect(res.all).toMatch(/notice[^\n]*\[NO_OWNED_PATHS\][^\n]*plan a sourcePath/);
-        expect(res.all).not.toContain('tag as meta');
-      }
+      // The fixture states generateComponentImplementers: true, which 6.2 retired: the
+      // topology is one owner per subsystem, each owning its spec folders, so no agent
+      // is left without owned paths (and none is told to tag itself as meta).
+      expect(res.all, transcript(res)).not.toContain('NO_OWNED_PATHS');
       if (res.code !== 0) expect(countCode(res.all, 'UNUSED_COMPONENT')).toBeGreaterThan(0);
     }
   });

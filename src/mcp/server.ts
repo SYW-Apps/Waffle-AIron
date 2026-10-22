@@ -430,7 +430,7 @@ const staleServerOutput = {
 const externalPinsOutput = {
   pins: z.array(z.object({
     alias: z.string(),
-    outcome: z.enum(['pinned', 'unchanged', 'unresolved', 'unreachable']),
+    outcome: z.enum(['pinned', 'unchanged', 'unresolved', 'unreachable', 'refused']),
     project: z.string().optional(),
     snapshot: z.string().optional(),
     digest: z.string().optional(),
@@ -2681,10 +2681,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         transport: z.enum(['HTTP', 'gRPC', 'GraphQL', 'MessageBus', 'CLI', 'NamedPipe', 'IPC', 'JSONRPC', 'InProcess', 'Custom']).optional().describe('Expected on every Portal: how callers reach its verbs, one vocabulary with the endpoint discriminator. Network: HTTP, gRPC, GraphQL, MessageBus, Custom. Local: CLI, NamedPipe, IPC, JSONRPC (JSON-RPC over stdio, e.g. a language server or stdio MCP). InProcess: a library (or FFI/DLL with an abi), whose verbs are its contract methods and bind no endpoint.  On an Adapter, optional: the transport it calls its target Portal over — omit it and it is taken from the Portals its dependsOn names when they share one; a stated one that differs from the target\'s is ADAPTER_TRANSPORT_MISMATCH. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         abi: z.string().optional().describe('Portal-only, InProcess only: how a foreign language links this library — "c" (a C-ABI shared library, DLL or FFI) or "wasm" (a WebAssembly component). Omit for a native API in the project\'s targetLanguage.'),
         invokedBy: z.object({
-          kind: z.enum(['entry']).describe('entry: callers outside the design reach every verb of this Portal over its transport'),
+          kind: z.enum(['entry', 'runtime']).describe('entry (a Portal only): callers outside the design reach every verb of this Portal over its transport. runtime (any component): the process\'s own runtime invokes every method (a composition root, scheduler, framework callback); a method\'s own invokedBy replaces it'),
           caller: z.string().optional().describe('WHO calls it and from where, as reviewable prose (e.g. "Browsers and mobile clients of the shop") — missing or placeholder-thin prose is INVOKED_BY_UNDESCRIBED'),
           scope: z.enum(['outside', 'network']).optional().describe('Network transports only: where the callers come from — outside the innermost declared network (the default) or inside it (sibling services). Refused on a local or in-process transport'),
-        }).strict().optional().describe('Portal-only: the entry every verb inherits, declared ONLY when callers outside the design reach this Portal (a verb may override just the scope). Never defaulted: a blanket entry the author did not decide would hide unreached verbs. Omit it when modelled callers reach the verbs.'),
+          planned: z.boolean().optional().describe('true while the caller is planned, not built yet: the declaration still reaches every method, and ENTRY_CALLER_PLANNED (a notice) says so until the flag is dropped'),
+        }).strict().optional().describe('The declaration every method inherits. On a Portal: the entry, declared ONLY when callers outside the design reach it (a verb may override just the scope). On any component: kind runtime, when the process\'s own runtime calls its methods and no modelled component does. Never defaulted: a blanket entry the author did not decide would hide unreached verbs. Omit it when modelled callers reach the verbs.'),
         basePath: z.string().optional().describe('Portal-only: base path/prefix all the portal\'s endpoints mount under. OMIT IT on any other componentType — passing it there is refused at the write (UNEXPECTED_PORTAL_FIELD), nothing is saved.'),
         dispatch: z.array(z.object({
           capability: z.string().describe('Capability name exactly as dispatched at runtime (e.g. "shadow_module.get")'),
@@ -2814,6 +2815,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
             kind: z.enum(['entry', 'runtime']).describe('entry: callers outside the design reach this Portal verb over the Portal\'s transport (a Portal only; under a Portal-level entry, a verb\'s own overrides just the scope). runtime: the process\'s own runtime invokes it: a composition root, scheduler, signal or shutdown hook, framework callback. The retired kinds external and sibling-subsystem are no longer accepted'),
             caller: z.string().optional().describe('WHO invokes it and when, as reviewable prose — missing or placeholder-thin prose is INVOKED_BY_UNDESCRIBED'),
             scope: z.enum(['outside', 'network']).optional().describe('entry on a network transport only: outside (the default) or network (sibling services inside the innermost declared network)'),
+            planned: z.boolean().optional().describe('true while the caller is planned, not built yet: the method still counts as reached, and ENTRY_CALLER_PLANNED (a notice) says so until the flag is dropped'),
           }).strict().optional().describe('Typed acknowledgment of a real caller OUTSIDE the modeled narrative graph. Unused-detection seeds the method as an entrypoint so reachability propagates through its narrative (unlike lint.allow); a runtime method the internal walk already reaches is flagged stale (INVOKED_BY_REDUNDANT). Prefer a `register` narrative step when the wiring is internal.'),
           findings: z.array(z.object({
             code: z.string().describe('UPPER_SNAKE finding code, unique within the method; a pack\'s codes carry the pack prefix (<PACK>_<CODE>)'),

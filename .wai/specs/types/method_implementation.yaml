@@ -138,6 +138,36 @@ methods:
       something else.
     sourcePath: src/core/narrative-labels.ts
     symbol: resolveNarrativeLabels
+  - name: callClaims
+    signature: 'callClaims(): list<CallClaim>'
+    returns: list<CallClaim>
+    description: >-
+      Everything this method states it calls: its narrative call steps, then its declared calls. A
+      dispatch step names a capability routed through a runtime table, not a method, so it is no
+      claim; a declared reference that is not "<component>.<method>" names no target.
+  - name: claimSite
+    signature: 'claimSite(claim: CallClaim): string'
+    params:
+      - name: claim
+        type: CallClaim
+    returns: string
+    description: >-
+      How a finding points at a claim: "step <n>" for a narrative call step, "a declared call" for a
+      declared one.
+  - name: statesCalls
+    signature: 'statesCalls(implementation: ImplementationSpec, component?: ComponentSpec): bool'
+    params:
+      - name: implementation
+        type: ImplementationSpec
+      - name: component
+        type: ComponentSpec
+        optional: true
+    returns: bool
+    description: >-
+      Whether this method states what it calls: declared calls, or a narrative whose detail, stated
+      on the method or its implementation, is call-level (full or calls-only). Stated, its claims
+      are binding, the whole list; unstated, every other route its component's dependsOn allows is
+      open, never assumed.
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-10-04T23:39:24.080Z'
+updatedAt: '2026-10-20T14:02:38.313Z'

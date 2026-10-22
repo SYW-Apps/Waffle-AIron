@@ -580,14 +580,15 @@ methods:
       - stepNumber: 6
         label: portals
         description: >-
-          Then the Portal-level declarations: for each Portal component of ctx.components in scope
-          that declares its own invokedBy (the entry every verb inherits)
+          Then the component-level declarations: for each component of ctx.components in scope that
+          declares its own invokedBy (a Portal's entry every verb inherits, or any component's
+          runtime hook every method inherits)
         type: loop
         loopKind: forEach
-        over: each Portal comp of ctx.components with comp.invokedBy set and ctx.isSpecInScope(comp.id)
+        over: each comp of ctx.components with comp.invokedBy set and ctx.isSpecInScope(comp.id)
         endStep: 8
       - stepNumber: 7
-        description: The caller prose must say who reaches the Portal and how
+        description: The caller prose must say who reaches the component and how
         type: branch
         condition: passesIntentFloor(comp.invokedBy.caller, comp.id) is false
         onFalseStep: 6
@@ -595,7 +596,7 @@ methods:
         label: portalUndescribed
         description: >-
           Report INVOKED_BY_UNDESCRIBED (warning; draft context when ctx.isComponentDraft(comp.id))
-          on comp.id, naming the Portal and the invokedBy kind
+          on comp.id, naming the component, its type and the invokedBy kind
         type: local
     symbol: check
     exportedVia: invokedByDescriptionRule
@@ -633,10 +634,11 @@ methods:
         endStep: 9
       - stepNumber: 4
         description: >-
-          A Portal verb with an entry is a root: comp.entryFor(m.invokedBy) has kind entry, whatever
-          its scope (a network-scoped entry counts as declared here; the family run proves it)
+          A Portal verb with an entry is a root: decl = comp.entryFor(m.invokedBy) (the method's
+          own, else the component's) has kind entry, whatever its scope (a network-scoped entry
+          counts as declared here; the family run proves it)
         type: branch
-        condition: comp is a Portal and comp.entryFor(m.invokedBy) has kind entry
+        condition: comp is a Portal and decl has kind entry
         onFalseStep: 6
       - stepNumber: 5
         description: >-
@@ -645,19 +647,27 @@ methods:
         type: jump
         toStep: 3
       - stepNumber: 6
-        description: Only a runtime declaration remains to collect
+        description: >-
+          Only a runtime declaration remains to collect: the method's own, or its component's own,
+          which every method inherits
         type: branch
-        condition: m.invokedBy has kind runtime (or a retired kind read as runtime)
+        condition: decl has kind runtime (or a retired kind read as runtime)
         onFalseStep: 3
       - stepNumber: 7
         description: >-
           Add the seed {compId: comp.id, methodName: m.name} to the declared roots; an out-of-scope
-          declaration still seeds the walk but is not judged
+          declaration still seeds the walk but is not judged. A method inheriting its component's
+          declaration (m.invokedBy absent) is tallied for the component instead: one more inheriting
+          method, and one more reached when baseWalk.reachesMethod(comp.id, m.name)
         type: local
       - stepNumber: 8
-        description: A runtime declaration in scope that the internal walk already reaches is stale
+        description: >-
+          A method's own runtime declaration in scope that the internal walk already reaches is
+          stale
         type: branch
-        condition: ctx.isSpecInScope(intf.id) and baseWalk.reachesMethod(comp.id, m.name)
+        condition: >-
+          m.invokedBy is the method's own, ctx.isSpecInScope(intf.id), and
+          baseWalk.reachesMethod(comp.id, m.name)
         onFalseStep: 3
       - stepNumber: 9
         label: declarationsEnd
@@ -668,47 +678,54 @@ methods:
         type: local
       - stepNumber: 10
         description: >-
+          For each component whose own runtime declaration is in scope and whose inheriting methods
+          the internal walk all reaches, report INVOKED_BY_REDUNDANT (warning; draft context from
+          ctx.isComponentDraft) on the component: the declaration is stale. One the walk misses a
+          method of is still needed
+        type: local
+      - stepNumber: 11
+        description: >-
           Phase 2, the full walk: reach = walk(ctx, base roots followed by the declared roots) with
           the default options, so an entered verb's narrative propagates reachability
         type: call
         targetComponent: narrative_graph_projector
         targetMethod: walk
-      - stepNumber: 11
+      - stepNumber: 12
         label: components
         description: Judge each component against the full reach
         type: loop
         loopKind: forEach
         over: the components comp of ctx.components within scope (ctx.isSpecInScope(comp.id))
-        endStep: 17
-      - stepNumber: 12
+        endStep: 18
+      - stepNumber: 13
         description: An unreached component is reported whole, without its methods
         type: branch
         condition: reach.reachesComponent(comp.id) is false
-        onFalseStep: 15
-      - stepNumber: 13
+        onFalseStep: 16
+      - stepNumber: 14
         description: >-
           Report UNUSED_COMPONENT (warning; draft context from ctx.isComponentDraft(comp.id)) on
           comp.id. For a Portal the message names the two remedies: model the caller, or declare its
           entry (invokedBy kind entry on the Portal or the verb, with its scope on a network
           transport)
         type: local
-      - stepNumber: 14
+      - stepNumber: 15
         description: Continue with the next component
         type: jump
-        toStep: 11
-      - stepNumber: 15
+        toStep: 12
+      - stepNumber: 16
         label: methods
         description: Check every contract method of the reached component
         type: loop
         loopKind: forEach
         over: each contract method m of each interface intf in ctx.interfacesByComponent for comp.id
-        endStep: 17
-      - stepNumber: 16
+        endStep: 18
+      - stepNumber: 17
         description: A method no narrative step reaches is unused
         type: branch
         condition: reach.reachesMethod(comp.id, m.name) is false
-        onFalseStep: 15
-      - stepNumber: 17
+        onFalseStep: 16
+      - stepNumber: 18
         label: componentsEnd
         description: >-
           Report UNUSED_METHOD (warning; draft context when ctx.isComponentDraft(comp.id) or
@@ -935,14 +952,14 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          For each invokedBy declaration in scope: each Portal component's own, and each contract
-          method's on an interface whose component resolves
+          For each invokedBy declaration in scope: each component's own, and each contract method's
+          on an interface whose component resolves
         type: loop
         loopKind: forEach
         over: >-
           every invokedBy declaration decl in scope, with the component comp it belongs to and the
           spec it is written on
-        endStep: 6
+        endStep: 8
       - stepNumber: 2
         description: An entry belongs to a Portal verb
         type: branch
@@ -956,18 +973,30 @@ methods:
         type: jump
         toStep: 1
       - stepNumber: 4
+        description: >-
+          A planned caller still reaches the method; the notice keeps it in view until the caller is
+          built
+        type: branch
+        condition: decl.planned is true
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report ENTRY_CALLER_PLANNED (notice) on the spec, sited at the method, naming the caller
+          and that dropping planned is owed once it exists
+        type: local
+      - stepNumber: 6
         description: A scope describes network callers only
         type: branch
         condition: >-
           decl.scope is present and (decl is a runtime declaration or comp.transport.kind() is not
           network)
         onFalseStep: 1
-      - stepNumber: 5
+      - stepNumber: 7
         description: >-
           Report ENTRY_SCOPE_NOT_NETWORK (warning) on the spec, sited at the method, naming the
           transport
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: Continue with the next declaration
         type: local
     symbol: check
@@ -1036,4 +1065,4 @@ methods:
     exportedVia: adapterTransportRule
 status: complete
 createdAt: '2026-09-14T23:16:43.135Z'
-updatedAt: '2026-10-19T18:24:56.697Z'
+updatedAt: '2026-10-21T21:22:07.016Z'

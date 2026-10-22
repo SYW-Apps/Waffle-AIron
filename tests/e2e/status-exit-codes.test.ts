@@ -188,6 +188,8 @@ const HEALTHY_STDOUT = [
   gray('─'.repeat(HEADING.length)),
   '',
   `${bold(colour(34, '● System:'))} ${bold('TestSystem')} ${colour(32, '(100% Complete)')}`,
+  // How much of the design is binding, beside the percentage that cannot say it.
+  gray('  Detail: 0 method(s) state their calls (binding), 1 leave routes open (the design allows each collaborator their component depends on).'),
   `${gray('└── ')}${bold(colour(36, '[Subsystem] sub-a'))} ${colour(32, '(100%)')}`,
   `${gray('    └── ')}${colour(35, '[Component: Orchestrator] comp-a')} ${colour(32, '(100%)')}`,
   `${gray('        ├── ')}${colour(34, 'Interface: icomp-a')} (1 methods)`,

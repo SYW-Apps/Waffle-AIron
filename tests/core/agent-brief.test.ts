@@ -395,6 +395,36 @@ describe('briefs carry a code write fence, and every component has a brief witho
     } finally { proj.cleanup(); }
   });
 
+  it('says per method what the design fixes and what it leaves open', () => {
+    const proj = createTempProject();
+    proj.writeSpec('subsystem', 'alpha', 'schemaVersion: 1.0.0\nid: alpha\nname: Alpha\ndescription: d\nparentSystem: TestSystem');
+    proj.writeSpec('component', 'billing', 'id: billing\nname: Billing\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator\ndependsOn:\n  - ledger\n  - audit');
+    proj.writeSpec('interface', 'ibilling', [
+      'id: ibilling', 'name: IBilling', 'description: d', 'component: billing', 'methods:',
+      '  - name: charge', '    description: Charge an order.', '    signature: "charge(): void"', '    returns: void', '    params: []',
+      '  - name: refund', '    description: Refund an order.', '    signature: "refund(): void"', '    returns: void', '    params: []',
+    ].join('\n'));
+    proj.writeSpec('implementation', 'billing_impl', [
+      'id: billing_impl', 'name: Billing', 'description: d', 'contract: ibilling', 'sourcePath: src/alpha/billing.ts', 'methods:',
+      '  - name: charge', '    detail: full', '    narrative:',
+      '      - stepNumber: 1', '        type: call', '        description: Post the charge', '        targetComponent: ledger', '        targetMethod: post',
+      '  - name: refund', '    narrative:',
+      '      - stepNumber: 1', '        type: call', '        description: Reverse the charge', '        targetComponent: ledger', '        targetMethod: reverse',
+    ].join('\n'));
+    for (const id of ['ledger', 'audit']) {
+      proj.writeSpec('component', id, `id: ${id}\nname: ${id}\ndescription: d\nsubsystem: alpha\ncomponentType: Orchestrator`);
+    }
+    proj.activate();
+    try {
+      const brief = composeAgentBrief('billing');
+      expect(brief.instructions).toContain('## What the design fixes and what it leaves open');
+      // Stated detail: binding.
+      expect(brief.instructions).toContain('- `billing.charge`: binding — make exactly the calls its narrative name (ledger).');
+      // Unstated: the narrative's collaborators, and every other one the component depends on, open.
+      expect(brief.instructions).toContain('- `billing.refund`: open — its narrative names ledger; it may also call audit');
+    } finally { proj.cleanup(); }
+  });
+
   it('a component id composes that component\'s implementer brief with generateComponentImplementers off', () => {
     const proj = billingProject();
     proj.activate();

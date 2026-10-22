@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { invalidateSpecCache } from '../../src/core/specs.js';
-import { resolveAgentTopology } from '../../src/core/agent_resolver.js';
+import { composeAgentBrief, resolveAgentTopology } from '../../src/core/agent_resolver.js';
 
 // ---------------------------------------------------------------------------
 // Owned-path derivation: implementation sourcePaths are authoritative;
@@ -246,23 +246,16 @@ methods:
     } finally { proj.cleanup(); }
   });
 
-  it("a component implementer's fence holds each method's own source file", () => {
+  it("a component's brief fences each method's own source file (composed on demand)", () => {
     const proj = createTempProject();
-    proj.writeFile('.wai/project.yaml', JSON.stringify({
-      schemaVersion: '1.0.0',
-      name: 'test-project',
-      projectType: 'backend',
-      targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
-      rules: { generateComponentImplementers: true },
-      createdAt: '2026-07-03T10:00:00Z',
-      updatedAt: '2026-07-03T10:00:00Z',
-    }));
     writeCliRunner(proj);
     proj.activate();
     try {
-      const implementer = resolveAgentTopology().find((a) => a.id === 'cli_runner-implementer')!;
-      expect(implementer.ownedPaths).toEqual(['src/alpha/cli.ts', 'src/alpha/commands/run.ts']);
-      expect(implementer.writePaths).toEqual(['src/alpha/cli.ts', 'src/alpha/commands/run.ts']);
+      // Per-component agents are never materialized; the brief is composed when asked for.
+      expect(resolveAgentTopology().some((a) => a.id.endsWith('-implementer'))).toBe(false);
+      const brief = composeAgentBrief('cli_runner');
+      expect(brief.agentId).toBe('cli_runner-implementer');
+      expect(brief.ownedPaths).toEqual(['src/alpha/cli.ts', 'src/alpha/commands/run.ts']);
     } finally { proj.cleanup(); }
   });
 });

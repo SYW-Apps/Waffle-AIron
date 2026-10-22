@@ -184,25 +184,24 @@ describe('R3-35/37 — an implemented contract is pinned and compared method by 
     expect(status.uses).toContainEqual(expect.objectContaining({ publicName: 'tile-source', member: 'load_tile', state: 'changed' }));
   });
 
-  it('after the re-pin, the gate findings say "renamed to" from the trace; the re-pin names what it cannot carry', () => {
+  it('a re-pin over the rename is refused naming the new name and what it cannot carry; the live advisory names the rename too', () => {
     const p = pair();
     bind(p.studio);
     pinExternals();
+    const before = externalsRepository.readLock();
     p.rewriteGeo({ sourceMethod: 'fetch_tile', formerSource: ['itile_source_port.load_tile'] });
     bind(p.studio);
     const [pin] = pinExternals();
+    expect(pin.outcome).toBe('refused');
     // The MCP answer's `unexported` and the CLI's line agree: the member the snapshot no longer carries.
     expect(pin.unexported).toContainEqual(expect.objectContaining({ target: 'geo::tile-source', member: 'load_tile' }));
-    expect(pin.detail).toMatch(/tile-source\.load_tile/);
+    expect(pin.detail).toMatch(/"tile-source\.load_tile" \(renamed to "tile-source\.fetch_tile"\)/);
+    // The previous pin stays.
     bind(p.studio);
-    const issues = validateProject({}).issues;
-    const unresolved = codes(issues, 'SIGNATURE_SOURCE_UNRESOLVED');
-    expect(unresolved).toHaveLength(1);
-    expect(unresolved[0].message).toMatch(/renamed to "fetch_tile"/);
-    expect(unresolved[0].message).toMatch(/exported contract's method/);
-    const mismatch = codes(issues, 'IMPLEMENTS_MISMATCH');
-    expect(mismatch.length).toBeGreaterThan(0);
-    expect(mismatch[0].message).toMatch(/renamed from "load_tile"/);
+    expect(externalsRepository.readLock()).toEqual(before);
+    const advised = codes(adviseExternals(), 'EXTERNAL_LIVE_INCOMPATIBLE');
+    expect(advised.length).toBeGreaterThan(0);
+    expect(advised.map((i) => i.message).join('\n')).toMatch(/fetch_tile/);
   });
 });
 

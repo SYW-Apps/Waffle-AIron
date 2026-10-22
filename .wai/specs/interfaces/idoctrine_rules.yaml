@@ -240,8 +240,10 @@ methods:
       Supervisor stays out of presentation; what it may do to the data it reaches is judged per call
       (supervisor-shared-data), and what it owns as its supervision state by the ownership rules. A
       component depending on a live Actor reaches it through the Actor's supervision: by depending
-      on a Supervisor that supervises it, or on a Registry such a Supervisor maintains (owns, or
-      calls with lifecycle-effect methods) — the lookup hop callers really take.
+      on a Supervisor that supervises it and taking the handle from it (a lookup by id, or a runner
+      checked out of a pool, needs no data component), or on a Registry such a Supervisor maintains
+      through lifecycle-effect methods when callers find live Actors by id there. A Registry the
+      Supervisor owns is its private supervision state, so a remedy never names one.
     signature: 'entrypointDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -268,17 +270,17 @@ methods:
         severity: error
         summary: >-
           Component depending on a live Actor it does not supervise, reaching it neither through a
-          Supervisor that supervises it nor through a Registry such a Supervisor maintains — model
-          the real lookup hop
+          Supervisor that supervises it nor through a Registry such a Supervisor maintains — depend
+          on the Supervisor, or on that Registry
   - name: portalWriteShortcut
     description: >-
-      Rule portal-write-shortcut. A Portal narrative call step or dispatch-table binding that
-      reaches a write- or lifecycle-effect method on a Repository or Index directly is the write
-      shortcut: the Portal→data-facade edge is licensed for reads only, and a mutation — a write, or
-      a lifecycle change to what exists — routes through an Orchestrator that owns the workflow. A
-      dispatch step reaches its server only through a table binding, so judging every binding judges
-      each dispatch step that takes it, once, where the route is declared. Methods that carry no
-      effect tag are not judged.
+      Rule portal-write-shortcut. A Portal narrative call step, declared call or dispatch-table
+      binding that reaches a write- or lifecycle-effect method on a Repository or Index directly is
+      the write shortcut: the Portal→data-facade edge is licensed for reads only, and a mutation — a
+      write, or a lifecycle change to what exists — routes through an Orchestrator that owns the
+      workflow. A dispatch step reaches its server only through a table binding, so judging every
+      binding judges each dispatch step that takes it, once, where the route is declared. Methods
+      that carry no effect tag are not judged.
     signature: 'portalWriteShortcut(ctx: RuleContext): void'
     returns: void
     params:
@@ -289,9 +291,10 @@ methods:
       - code: PORTAL_WRITE_SHORTCUT
         severity: error
         summary: >-
-          Portal narrative call or dispatch-table binding reaches a write- or lifecycle-effect
-          method on a Repository/Index directly — reads may shortcut, mutations route through an
-          Orchestrator (judged on effect-tagged facade methods; untagged methods are not yet judged)
+          Portal narrative call step, declared call or dispatch-table binding reaches a write- or
+          lifecycle-effect method on a Repository/Index directly — reads may shortcut, mutations
+          route through an Orchestrator (judged on effect-tagged facade methods; untagged methods
+          are not yet judged)
   - name: patternMembership
     description: >-
       Rule pattern-membership. Only patterns (Repository/FeatureComponent/RouterComponent) own
@@ -362,8 +365,10 @@ methods:
       stays a Repository; what must never happen is folding the state into a consuming component,
       where no spec, diagram or conformance check can see it again. A Registry standing alone with
       no Store to write to is either mistyped (the "file-backed Registry" idiom, a fused persistent
-      store that belongs typed Store) or orphaned. A Query has no standalone form at all: it
-      computes reads over its own Repository's Store.
+      store that belongs typed Store) or orphaned — unless a Supervisor maintains it through
+      lifecycle-effect calls: then it is that Supervisor's directory of live handles, which holds
+      the handles itself and writes to no Store. A Query has no standalone form at all: it computes
+      reads over its own Repository's Store.
     signature: 'unownedBlocks(ctx: RuleContext): void'
     returns: void
     params:
@@ -380,7 +385,7 @@ methods:
         severity: warning
         summary: >-
           Standalone Registry with no Store to write to — either mistyped (a fused file-backed store
-          belongs typed Store) or orphaned
+          belongs typed Store) or orphaned; a Supervisor's directory of live handles excepted
       - code: UNOWNED_QUERY
         severity: error
         summary: Query not owned by a Repository — a Query computes reads over its own Repository's Store
@@ -481,11 +486,12 @@ methods:
     description: >-
       Rule supervisor-shared-data. A Supervisor keeps its own supervision state (the Stores and
       Registries it owns) with full read and write, but data it does not own is shared: a Supervisor
-      narrative call step that reaches a method of a Store, Registry, Repository, Index or Query the
-      Supervisor does not own is legal only when that method declares effect read or lifecycle. A
-      write — or a method that declares no effect — goes through a workflow: the Supervisor depends
-      on the Orchestrator that does it. A read on behalf of a request still passes; in practice the
-      paired write is what forces the workflow out, and the read moves with it.
+      narrative call step or declared call that reaches a method of a Store, Registry, Repository,
+      Index or Query the Supervisor does not own is legal only when that method declares effect read
+      or lifecycle. A write — or a method that declares no effect — goes through a workflow: the
+      Supervisor depends on the Orchestrator that does it. A read on behalf of a request still
+      passes; in practice the paired write is what forces the workflow out, and the read moves with
+      it.
     signature: 'supervisorSharedData(ctx: RuleContext): void'
     returns: void
     params:
@@ -496,17 +502,18 @@ methods:
       - code: SUPERVISOR_WRITE_SHORTCUT
         severity: error
         summary: >-
-          Supervisor narrative call reaches a method of a data component it does not own whose
-          declared effect is neither read nor lifecycle — writes to shared data route through an
-          Orchestrator
+          Supervisor narrative call step or declared call reaches a method of a data component it
+          does not own whose declared effect is neither read nor lifecycle — writes to shared data
+          route through an Orchestrator
   - name: lifecycleEffectClosure
     description: >-
       Rule lifecycle-effect-closure. A lifecycle-effect method may create, destroy, or (un)register
       an entity's existence or membership, never modify its domain fields — and the effect is closed
-      under composition: its narrative may call only read- and lifecycle-effect methods besides its
-      construction and local steps. A call step to a write-effect method from a lifecycle-effect
-      method is a declaration error: the method is a write, or the write belongs to a workflow
-      beside it. Called methods that declare no effect are not judged.
+      under composition: its narrative steps and declared calls may call only read- and
+      lifecycle-effect methods besides its construction and local steps. A call step or declared
+      call to a write-effect method from a lifecycle-effect method is a declaration error: the
+      method is a write, or the write belongs to a workflow beside it. Called methods that declare
+      no effect are not judged.
     signature: 'lifecycleEffectClosure(ctx: RuleContext): void'
     returns: void
     params:
@@ -517,8 +524,8 @@ methods:
       - code: LIFECYCLE_CALLS_WRITE
         severity: error
         summary: >-
-          Lifecycle-effect method whose narrative calls a write-effect method — the lifecycle effect
-          is closed under composition
+          Lifecycle-effect method whose narrative or declared calls call a write-effect method — the
+          lifecycle effect is closed under composition
   - name: libraryCalls
     description: >-
       Rule library-calls. Judges every library call: an edge from any component to an exported
@@ -550,4 +557,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-20T22:21:15.166Z'
+updatedAt: '2026-10-21T22:44:44.003Z'

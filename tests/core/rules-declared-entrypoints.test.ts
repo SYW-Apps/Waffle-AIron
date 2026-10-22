@@ -416,3 +416,126 @@ describe('invokedBy — seeding, propagation, and the declaration audit', () => 
     } finally { proj.cleanup(); }
   });
 });
+
+const COMPONENT_RUNTIME = 'invokedBy: {kind: runtime, caller: The host runtime calls each handler of this component once the process is up.}';
+
+describe('invokedBy on a component — the declaration every method inherits', () => {
+  it('a component-level runtime seeds every method, and reachability propagates', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('worker-orch', 'Orchestrator', `dependsOn: [audit-store]\n${COMPONENT_RUNTIME}`);
+    proj.contract('worker-orch', { onTimer: [], onSignal: [] });
+    proj.impl('worker-orch', ['methods:', '  - name: onTimer', '    narrative:', CALL(1, 'audit-store', 'append'), RETURN(2), '  - name: onSignal', '    narrative:', RETURN(1)].join('\n'));
+    proj.component('audit-store', 'Store', 'durability: ram-projection');
+    proj.contract('audit-store', { append: [] });
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(unusedMessages(res)).toBe('');
+      expect(byCode(res, 'INVOKED_BY_REDUNDANT')).toHaveLength(0);
+      expect(byCode(res, 'INVOKED_BY_UNDESCRIBED')).toHaveLength(0);
+      expect(byCode(res, 'ENTRY_ON_NON_PORTAL')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
+  it('control: without it, the same methods are unused', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('worker-orch', 'Orchestrator');
+    proj.contract('worker-orch', { onTimer: [], onSignal: [] });
+    proj.impl('worker-orch', ['methods:', '  - name: onTimer', '    narrative:', RETURN(1), '  - name: onSignal', '    narrative:', RETURN(1)].join('\n'));
+    proj.activate();
+    try {
+      expect(unusedMessages(validateProject())).toMatch(/worker-orch/);
+    } finally { proj.cleanup(); }
+  });
+
+  it('is stale (INVOKED_BY_REDUNDANT, on the component) only when the internal walk reaches every inheriting method', () => {
+    for (const reachBoth of [true, false]) {
+      const proj = createTempProject();
+      proj.subsystem('sub-a');
+      proj.component('feed-observer', 'Observer', 'dependsOn: [run-orch]');
+      proj.contract('feed-observer', { handle: [] });
+      proj.impl('feed-observer', ['methods:', '  - name: handle', '    narrative:', CALL(1, 'run-orch', 'run'), ...(reachBoth ? [CALL(2, 'run-orch', 'stop'), RETURN(3)] : [RETURN(2)])].join('\n'));
+      proj.component('run-orch', 'Orchestrator', COMPONENT_RUNTIME);
+      proj.contract('run-orch', { run: [], stop: [] });
+      proj.impl('run-orch', ['methods:', '  - name: run', '    narrative:', RETURN(1), '  - name: stop', '    narrative:', RETURN(1)].join('\n'));
+      proj.activate();
+      try {
+        const redundant = byCode(validateProject(), 'INVOKED_BY_REDUNDANT');
+        if (reachBoth) {
+          expect(redundant).toHaveLength(1);
+          expect(redundant[0].specId).toBe('run-orch');
+          expect(redundant[0].message).toMatch(/Component "run-orch" declares a runtime invokedBy for every method/);
+        } else {
+          // stop is reached only through the declaration: it is still needed.
+          expect(redundant).toHaveLength(0);
+        }
+      } finally { proj.cleanup(); }
+    }
+  });
+
+  it('holds a component-level runtime caller to the intent floor, on the component', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('worker-orch', 'Orchestrator', 'invokedBy: {kind: runtime, caller: timer}');
+    proj.contract('worker-orch', { onTimer: [] });
+    proj.impl('worker-orch', ['methods:', '  - name: onTimer', '    narrative:', RETURN(1)].join('\n'));
+    proj.activate();
+    try {
+      const undescribed = byCode(validateProject(), 'INVOKED_BY_UNDESCRIBED');
+      expect(undescribed).toHaveLength(1);
+      expect(undescribed[0].specId).toBe('worker-orch');
+      expect(undescribed[0].message).toMatch(/Orchestrator "worker-orch" declares invokedBy \(runtime\) for every method/);
+    } finally { proj.cleanup(); }
+  });
+
+  it('an entry on a non-Portal component is still ENTRY_ON_NON_PORTAL and reaches nothing', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('worker-orch', 'Orchestrator', 'invokedBy: {kind: entry, caller: Clients outside the design call each handler directly.}');
+    proj.contract('worker-orch', { onTimer: [] });
+    proj.impl('worker-orch', ['methods:', '  - name: onTimer', '    narrative:', RETURN(1)].join('\n'));
+    proj.activate();
+    try {
+      const res = validateProject();
+      expect(byCode(res, 'ENTRY_ON_NON_PORTAL')).toHaveLength(1);
+      expect(unusedMessages(res)).toMatch(/worker-orch/);
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('invokedBy planned — a caller not built yet', () => {
+  for (const at of ['portal', 'verb'] as const) {
+    it(`a planned entry on the ${at} reaches the verb and raises ENTRY_CALLER_PLANNED (a notice)`, () => {
+      const proj = createTempProject();
+      proj.subsystem('sub-a');
+      const entry = 'kind: entry, caller: The admin console planned for the next milestone calls it over its transport., planned: true';
+      proj.component('api-portal', 'Portal', `transport: Custom${at === 'portal' ? `\ninvokedBy: {${entry}}` : ''}`);
+      proj.contract('api-portal', { purge: at === 'verb' ? [`    invokedBy: {${entry}}`] : [] });
+      proj.impl('api-portal', ['methods:', '  - name: purge', '    narrative:', RETURN(1)].join('\n'));
+      proj.activate();
+      try {
+        const res = validateProject();
+        const planned = byCode(res, 'ENTRY_CALLER_PLANNED');
+        expect(planned).toHaveLength(1);
+        expect(planned[0].severity).toBe('notice');
+        expect(planned[0].specId).toBe(at === 'portal' ? 'api-portal' : 'iapi-portal');
+        expect(planned[0].message).toMatch(/planned, not built yet/);
+        expect(unusedMessages(res)).toBe('');
+      } finally { proj.cleanup(); }
+    });
+  }
+
+  it('control: the same entry without planned raises no notice', () => {
+    const proj = createTempProject();
+    proj.subsystem('sub-a');
+    proj.component('api-portal', 'Portal', 'transport: Custom\ninvokedBy: {kind: entry, caller: The admin console calls it over HTTP from the operations network.}');
+    proj.contract('api-portal', { purge: [] });
+    proj.impl('api-portal', ['methods:', '  - name: purge', '    narrative:', RETURN(1)].join('\n'));
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'ENTRY_CALLER_PLANNED')).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+});

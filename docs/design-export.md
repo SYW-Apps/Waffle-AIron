@@ -30,10 +30,10 @@ and stamps it. It also exports a tree that is not approved, stamped with its sta
 ## Compatibility promise
 
 - **`format`** is always `"wairon-design"`.
-- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.0`. 2.0 is the reachability
+- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.1`. 2.0 is the reachability
   model's: `portalType` became `transport`, listener `mounts` are gone, a Portal may carry
   the `invokedBy` entry its verbs inherit, and `invokedBy` kinds are `entry | runtime` with a
-  `scope`.
+  `scope`. 2.1 adds `detailStated` to each method body.
   - **A minor version only adds.** It adds new fields, or new members of a closed set (a
     `role`, an approval state). A consumer must **ignore fields it does not know**. A 1.x
     document validates against `design-export-2.json`.
@@ -219,6 +219,7 @@ Each method body carries:
 |---|---|
 | `method` | The contract method's key. |
 | `detail` | `full`, `calls-only` or `intent`, after the stereotype default is applied. |
+| `detailStated` | Whether the method or its implementation states its detail, or the method declares its calls. Stated detail is binding. Unstated, `detail` is the component type's default and what the method calls beyond its narrative is open: any collaborator its component depends on. |
 | `intent` | The prose that stands in for steps, at `intent` detail. |
 | `calls` | The declared calls, as method keys. |
 | `narrative` | The flat step list as stored. A `call`, `register` or `dispatch` step's target, and a credential source, are keys. Flow steps jump by `stepNumber`. |

@@ -179,9 +179,9 @@ methods:
           symbol, exportedVia and router, simPath, finding declarations, createdAt and updatedAt.
           Keep ext untouched under each pack's key. Then sort every element list and the
           dependencies by key, keep inner lists in declared order, and stamp format `wairon-design`,
-          the formatVersion (2.0: the reachability model's MAJOR, which removed the listener mounts
-          and portalType and narrowed invokedBy to entry and runtime) and the generating wairon
-          version
+          the formatVersion (2.1: 2.0 was the reachability model's MAJOR, which removed the listener
+          mounts and portalType and narrowed invokedBy to entry and runtime; 2.1 adds detailStated
+          to each method body) and the generating wairon version
         type: local
       - stepNumber: 25
         description: Return the design export
@@ -189,4 +189,4 @@ methods:
         outcome: DesignExport
 status: complete
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-07T10:56:39.712Z'
+updatedAt: '2026-10-20T13:54:54.499Z'

@@ -32,7 +32,6 @@ function buildProject(rootDir: string): void {
     name: 'budget-system',
     projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
-    rules: { generateComponentImplementers: true },
     createdAt: now,
     updatedAt: now,
   }));
@@ -93,7 +92,7 @@ describe('wairon execution (real CLI)', () => {
     expect(stdout).not.toContain('ledger_store-implementer');
   });
 
-  it('set-tier writes the dial back to project.yaml and show then differentiates by stereotype', async () => {
+  it('set-tier writes the dial back to project.yaml and show then budgets each agent', async () => {
     rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-exec-set-'));
     buildProject(rootDir);
 
@@ -104,11 +103,12 @@ describe('wairon execution (real CLI)', () => {
     expect(readConfig(rootDir).execution?.tier).toBe('default');
 
     const { stdout } = await runCli(rootDir, 'show');
-    // Mechanical work drops a tier; work carrying decisions does not.
-    expect(stdout).toMatch(/ledger_store-implementer\s+small/);
-    expect(stdout).toMatch(/billing_flow-implementer\s+large/);
+    // The materialized topology is one owner per subsystem; per-component
+    // implementer agents are retired (a component's brief carries its own budget).
+    expect(stdout).toMatch(/dom-a-owner\s+\S+/);
+    expect(stdout).not.toMatch(/-implementer/);
     // The rationale is shown, so the choice is auditable rather than magic.
-    expect(stdout).toContain('specified by its contract and narrative');
+    expect(stdout).toContain('routes work rather than performing it');
   });
 
   it('warns when moving onto a tier that trades quality', async () => {

@@ -148,7 +148,10 @@ function printOutcome(report: TreeUpgradeReport): void {
   if (isStampOnly(report.plan)) return;
   const file = path.join(report.plan.familyRoot, UPGRADE_REPORT_FILE);
   try {
-    fs.writeFileSync(file, reportMarkdown(report.plan));
+    // Written whole or not at all: a failed write never leaves a partial report.
+    const staged = `${file}.tmp`;
+    fs.writeFileSync(staged, reportMarkdown(report.plan));
+    fs.renameSync(staged, file);
     logger.info(`Every rewrite and decision is written to ${file}.`);
   } catch (err) {
     logger.warn(`The upgrade is applied, but its report could not be written to ${file} (${(err as Error).message}); the plan above is the whole of it.`);

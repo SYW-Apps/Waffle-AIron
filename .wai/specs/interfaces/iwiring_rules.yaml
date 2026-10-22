@@ -99,8 +99,9 @@ methods:
       Rule invoked-by-description. An invokedBy declaration names a caller outside the modeled graph
       and silences unused-detection for its method, so the claim must stay reviewable: its "caller"
       prose is held to the intent floor (missing or placeholder-thin prose is reported), stating WHO
-      invokes the method and when. A Portal-level invokedBy (the entry every verb of the Portal
-      inherits) is held to the same floor, on the Portal.
+      invokes the method and when. A component-level invokedBy (a Portal's entry every verb
+      inherits, or any component's runtime hook every method inherits) is held to the same floor, on
+      the component.
     signature: 'invokedByDescription(ctx: RuleContext): void'
     returns: void
     params:
@@ -119,13 +120,15 @@ methods:
       each method of an interface that implements an imported extension point (the producer calls
       it); each MessageBus subscribe verb of a Portal whose topic the tree emits (the emitted topic
       reaches it); each Portal verb with an entry (its own invokedBy of kind entry, or its
-      Portal's); and each method declaring a runtime invokedBy. A Portal is no longer a root of its
-      own and a published component is not either, so a Portal verb that no modelled caller reaches
-      and nobody declared an entry for is reported: the message names the two remedies, modelling
-      the caller or declaring the entry with its scope. A network-scoped entry counts as declared
-      here; the family run proves it. A runtime declaration the INTERNAL walk (without the declared
-      roots) already reaches is stale and is reported. An entry never is, because it also states the
-      verb's scope for the network rules and the flow matrix.
+      Portal's); and each method with a runtime invokedBy, its own or inherited from its
+      component's. A Portal is no longer a root of its own and a published component is not either,
+      so a Portal verb that no modelled caller reaches and nobody declared an entry for is reported:
+      the message names the two remedies, modelling the caller or declaring the entry with its
+      scope. A network-scoped entry counts as declared here; the family run proves it. A runtime
+      declaration the INTERNAL walk (without the declared roots) already reaches is stale and is
+      reported: a method's when the walk reaches that method, a component's when it reaches every
+      method that inherits it. An entry never is, because it also states the verb's scope for the
+      network rules and the flow matrix.
     signature: 'unusedDetection(ctx: RuleContext): void'
     returns: void
     params:
@@ -146,8 +149,8 @@ methods:
       - code: INVOKED_BY_REDUNDANT
         severity: warning
         summary: >-
-          A runtime invokedBy declaration on a method the internal narrative walk already reaches:
-          stale, remove it
+          A runtime invokedBy the internal narrative walk already makes needless (on a method it
+          reaches, or on a component every inheriting method of which it reaches): stale, remove it
   - name: unusedTypes
     description: >-
       Rule unused-types. Flags types no field of any type, no interface method signature, no
@@ -313,11 +316,13 @@ methods:
   - name: entryDeclarations
     description: >-
       Rule entry-declarations. Holds every invokedBy declaration, on a contract method or on a
-      Portal component, to the shape the reachability model gives it. An entry belongs to a Portal
-      verb: a caller outside the design reaches it over the Portal's transport, so kind entry on
-      anything but a Portal is reported. A scope describes where network callers come from, so a
-      scope on a local or in-process verb, or on a runtime declaration, is reported. A prose check
-      of the declaration itself: it neither walks the graph nor reads the family.
+      component, to the shape the reachability model gives it. An entry belongs to a Portal verb: a
+      caller outside the design reaches it over the Portal's transport, so kind entry on anything
+      but a Portal is reported. A scope describes where network callers come from, so a scope on a
+      local or in-process verb, or on a runtime declaration, is reported. A declaration whose caller
+      is planned (planned: true) still reaches the method, and a notice names it until the caller is
+      built. A prose check of the declaration itself: it neither walks the graph nor reads the
+      family.
     signature: 'entryDeclarations(ctx: RuleContext): void'
     returns: void
     params:
@@ -335,6 +340,11 @@ methods:
         summary: >-
           A scope on an entry whose Portal's transport crosses no network (local or in-process), or
           on a runtime declaration
+      - code: ENTRY_CALLER_PLANNED
+        severity: notice
+        summary: >-
+          An invokedBy whose caller is planned (planned: true): it counts as reached until the
+          caller is built
   - name: networkBoundaries
     description: >-
       Rule network-boundaries. It judges what the bound project's own gate can see: its own network
@@ -389,4 +399,4 @@ methods:
         summary: An Adapter states a transport other than the transport of a Portal it calls
 status: complete
 createdAt: '2026-09-14T06:08:14.964Z'
-updatedAt: '2026-10-18T19:03:10.146Z'
+updatedAt: '2026-10-21T21:19:18.230Z'
