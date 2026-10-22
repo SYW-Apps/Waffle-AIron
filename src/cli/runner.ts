@@ -434,7 +434,7 @@ export function mcpInstallCommand(opts: {
   token?: string;
 }): void {
   const hostedToken = opts.hosted
-    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '')) ?? undefined)
+    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '').replace(/\/mcp$/i, '')) ?? undefined)
     : undefined;
   runMcpInstall({
     global: opts.global,

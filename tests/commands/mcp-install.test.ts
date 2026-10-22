@@ -105,6 +105,30 @@ describe('cli_runner.runMcpInstall: a hosted install without --token (real CLI)'
     expect(stdout + stderr).toMatch(/keep it out of version control/);
   }, 180_000);
 
+  it('the data plane URL the server prints (<base>/mcp) is not doubled, and the stored credential is still found', async () => {
+    const home = mkTmp('wairon-mcp-home-');
+    const empty = mkTmp('wairon-mcp-empty-');
+    const url = 'http://127.0.0.1:9';
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    await storeCredential(url, 'wk_stored-by-login');
+
+    await execFileP(
+      process.execPath,
+      [TSX_CLI, WAIRON_CLI, 'mcp', 'install', '--hosted', `${url}/mcp/`, '--project', 'kbase', '--backend', 'claude'],
+      { cwd: empty, env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 180_000 },
+    );
+
+    const settings = JSON.parse(fs.readFileSync(path.join(empty, '.mcp.json'), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(settings.mcpServers.wairon).toEqual({
+      type: 'http',
+      url: `${url}/mcp`,
+      headers: { Authorization: 'Bearer wk_stored-by-login', 'X-Wairon-Project': 'kbase' },
+    });
+  }, 180_000);
+
   it('a LOCAL install in an empty folder still refuses, naming wairon init', async () => {
     const home = mkTmp('wairon-mcp-home-');
     const empty = mkTmp('wairon-mcp-empty-');

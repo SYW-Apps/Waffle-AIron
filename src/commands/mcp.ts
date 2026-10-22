@@ -560,13 +560,22 @@ export function runMcpStatus(): void {
 }
 
 /**
+ * The instance's base URL as given, without trailing slashes or the data
+ * plane's own /mcp: the server prints its data plane as <base>/mcp, and an
+ * operator who pastes that must not get <base>/mcp/mcp.
+ */
+function hostedBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '').replace(/\/mcp$/i, '');
+}
+
+/**
  * The hosted (http) MCP entry: the instance's /mcp endpoint plus the headers the
  * data plane reads — the bearer it authenticates, and the project it binds. The
  * token comes from the flag, else the machine's stored credential for that
  * instance, so `wairon login` once is enough to wire an agent.
  */
 function hostedMcpEntry(options: McpInstallOptions): Record<string, unknown> {
-  const base = options.hostedUrl!.replace(/\/+$/, '');
+  const base = hostedBaseUrl(options.hostedUrl!);
   // The credential is RESOLVED BY THE CALLER, never read here: this adapter's
   // job is the config file, and reaching into the credential store would make
   // it depend on state it has no business knowing about.
