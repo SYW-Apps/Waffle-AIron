@@ -826,6 +826,29 @@ export function withFileLock<T>(file: string, change: () => T): T {
   }
 }
 
+/** How long a rename over a file another process is replacing or reading is retried (Windows only). */
+const RENAME_RETRY_MS = 5_000;
+
+/**
+ * Rename `from` over `to`. On Windows the rename fails with EPERM, EACCES or
+ * EBUSY while another process replaces or reads `to` at the same moment; that
+ * clears within milliseconds, so it is retried for a bounded time.
+ */
+function renameOver(from: string, to: string): void {
+  const deadline = Date.now() + RENAME_RETRY_MS;
+  for (;;) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      const busy = code === 'EPERM' || code === 'EACCES' || code === 'EBUSY';
+      if (process.platform !== 'win32' || !busy || Date.now() > deadline) throw e;
+      sleepLockWait(5 + Math.floor(Math.random() * 20));
+    }
+  }
+}
+
 /**
  * Replace `file` with `text` atomically: a temporary sibling named for this
  * writer (two writers never share one), then a rename over the file.
@@ -834,7 +857,7 @@ export function replaceFile(file: string, text: string, mode?: number): void {
   const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
     fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
-    fs.renameSync(tmp, file);
+    renameOver(tmp, file);
   } catch (e) {
     try { fs.rmSync(tmp, { force: true }); } catch { /* nothing left to clean */ }
     throw e;

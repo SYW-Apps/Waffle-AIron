@@ -68,6 +68,19 @@ describe('concurrent writers in separate processes', () => {
     expect(new Set(ids).size).toBe(60);
   }, 60_000);
 
+  it('four processes replacing one file at once all get through', async () => {
+    const dir = dataDir();
+    const file = script(dir, 'replace-file.mts', [
+      `const m = await import(${url('src/utils/fs.ts')});`,
+      'const { replaceFile } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'for (let i = 0; i < 60; i++) replaceFile(`${dataDir}/shared.json`, JSON.stringify({ who, i }));',
+    ].join('\n'));
+    const runs = await Promise.all(['a', 'b', 'c', 'd'].map((who) => worker(file, [dir, who])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+  }, 60_000);
+
   it('four processes registering project records at once keep every record', async () => {
     const dir = dataDir();
     const file = script(dir, 'register-projects.mts', [
