@@ -81,6 +81,21 @@ describe('concurrent writers in separate processes', () => {
     expect(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
   }, 60_000);
 
+  it('forty short-lived processes creating one credential each keep every record', async () => {
+    // Writers that exit right after their write are what a lock judged by its
+    // holder's pid must not mistake: the file it judged may be the next holder's.
+    const dir = dataDir();
+    const file = script(dir, 'create-one.mts', [
+      `const m = await import(${url('src/server/credentials.ts')});`,
+      'const { createCredential } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'createCredential(dataDir, { id: who, label: who, keyHash: who, projects: ["*"], createdAt: new Date().toISOString() } as never);',
+    ].join('\n'));
+    const runs = await Promise.all(Array.from({ length: 40 }, (_, i) => worker(file, [dir, `k${i}`])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    expect(new Set(loadCredentials(dir).map((r) => r.id)).size).toBe(40);
+  }, 120_000);
+
   it('four processes registering project records at once keep every record', async () => {
     const dir = dataDir();
     const file = script(dir, 'register-projects.mts', [

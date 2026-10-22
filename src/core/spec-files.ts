@@ -277,11 +277,27 @@ function lockBreakable(file: string, key: string): boolean {
   return !holderAlive(holder) || Date.now() - holder.at > LOCK_STALE_MS;
 }
 
-/** Remove a breakable lock and answer whether it did. */
+/**
+ * Remove a breakable lock and answer whether it did. Only the file judged is
+ * removed: a holder that exits releases its lock, and the file found there a
+ * moment later can be the next holder's, which is live.
+ */
 function breakStaleLock(file: string, key: string): boolean {
+  const judged = readLockText(file);
   if (!lockBreakable(file, key)) return false;
-  try { fs.unlinkSync(file); } catch { /* another waiter broke it first */ }
+  if (judged !== null && readLockText(file) === judged) {
+    try { fs.unlinkSync(file); } catch { /* another waiter broke it first */ }
+  }
   return true;
+}
+
+/** A lock file's text, or null when there is none to read. */
+function readLockText(file: string): string | null {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 /** spec_file_store.unlockTree — release one hold; the last removes the lock file, when this process holds it. */
