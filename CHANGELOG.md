@@ -13,7 +13,8 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   credential file is written owner-only (0600) on Linux and macOS, as its design already said;
   on Windows it keeps the permissions of its folder.
 - **Every hosted store writes through a temporary file of its own.** Two writers no longer share
-  one `<file>.tmp`, which on Windows could fail a write with `EPERM` on the rename.
+  one `<file>.tmp`, and on Windows the final rename is retried for a moment while another process
+  replaces or reads the same file; before, parallel writes could fail with `EPERM`.
 - **`wairon mcp install --hosted` accepts the address the server prints.** Given
   `http://host:port/mcp`, it wrote `.../mcp/mcp`, which answers 404; the instance is now read as
   its base URL either way, and the credential stored by `wairon login` is still found.
@@ -36,8 +37,9 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
 - Only the credential and project registries lock their writes so far. The other hosted stores
   (permission grants, the organization and its placements, roles, policy, approvals and the
   rest) can still lose a change when two processes write the same file at the same moment, such
-  as several `wairon host permission set` commands run in parallel. Run such changes one at a
-  time; 6.2.2 gives every store the same lock.
+  as several `wairon host permission set`, `host unit create` or `host project create` commands
+  run in parallel (a project created that way can miss its unit placement). Run such changes
+  one at a time; 6.2.2 gives every store the same lock.
 
 ## v6.2.0 (from v6.1.2)
 
