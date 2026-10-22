@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "cc0c7480815ebd8bd57003164a8b5e7e23a8675d539deb87f6f39ce886b3252a"
+    "digest": "4608211e454cab97e7f01eb42938722279df81c7f089297fca96f08f0dc79661"
   },
-  "lockedAt": "2026-10-22T14:10:08.727Z",
+  "lockedAt": "2026-10-22T17:09:47.091Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.1.3-dev.6",
+  "validatorVersion": "6.1.4-dev.2",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -383,7 +383,7 @@
     ".wai/specs/implementations/cli_core_adapter_impl.yaml": "5f0234c7e30df437e019f30a0144d811591ba80b9d9b0004a4391a9364f85e2b",
     ".wai/specs/implementations/cli_host_adapter_impl.yaml": "6f26233048452428597a4352ccadfe655d79a12bf2c59c46c718caa4e85ee6e0",
     ".wai/specs/implementations/cli_lock_adapter_impl.yaml": "44033ffc8ad2eebd6f00bc18f203349c469aa0a554d20b8ae965c73a17ee47e1",
-    ".wai/specs/implementations/cli_mcp_adapter_impl.yaml": "ddb0c0e206ab16b5e18a58eea36de7dab423da6f88861da20b5077ebac51b912",
+    ".wai/specs/implementations/cli_mcp_adapter_impl.yaml": "850c2b02742e856065f00dba96446acf6220cd86c7cb6793cc81657f47e08f43",
     ".wai/specs/implementations/cli_migration_adapter_impl.yaml": "11c7f1edc58f3bc1515476f0c3324b33acea43524866359d9396bafcd856c6e7",
     ".wai/specs/implementations/cli_network_adapter_impl.yaml": "f7f6e5ea576e3b12f34c6937e1e07ec5a741753841bfd22190ff9910920c7d6c",
     ".wai/specs/implementations/cli_packs_adapter_impl.yaml": "5f95510beb81d051bb309515754661cc716cc2b9284a933f60f108efc2bef758",
@@ -1716,7 +1716,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "3976964210a68553649c62c352b2753d6e35c4cda143d62208e6133cf54daf5b",
+    "design": "41b2f6965cdca0ac6f92e2ddb38d2cd51260cca59fb837af71b849947faf5c8e",
     "release": "ea2df21d182cacc5b6ded6c549e012e5f6a08f43e9bafb39f99ca5ee297f8050",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1727,7 +1727,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.1.3-dev.6",
+      "validatorVersion": "6.1.4-dev.2",
       "doctrineDigest": "d969c77be21471d978d87fa49a6bd8c8d2adf8c020cd71858f66e40e4bdc21ff",
       "grade": "exact"
     },
