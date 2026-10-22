@@ -205,6 +205,42 @@ jobs:
             artifacts/**/*.zip
             artifacts/**/*.sha256
 
+  # The SYW CDN is a second home for a release (docs/cdn-release.md): the same
+  # archives, a version.json manifest and the guides, published as one
+  # immutable release. Nothing depends on this job, so a CDN failure never holds
+  # back the GitHub release or npm; without the publisher secret it is a notice.
+  # A dev build is not published there (the script says so and exits 0).
+  publish-cdn:
+    name: Publish to the SYW CDN
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release to the CDN
+        shell: bash
+        env:
+          SYW_CDN_PUBLISHER_TOKEN: ${{ secrets.SYW_CDN_PUBLISHER_TOKEN }}
+        run: |
+          if [ -z "$SYW_CDN_PUBLISHER_TOKEN" ]; then
+            echo "::notice::No CDN publisher credential (SYW_CDN_PUBLISHER_TOKEN unset) — not published to the CDN."
+            exit 0
+          fi
+          node scripts/cdn-publish.mjs --version "${GITHUB_REF_NAME#v}" --artifacts artifacts --commit "$GITHUB_SHA" --released "$(git log -1 --format=%cI)"
+
   publish-npm:
     name: Publish to npm
     needs: build
