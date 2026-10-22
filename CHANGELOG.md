@@ -97,6 +97,18 @@ open, and wairon says so.
 
 ### Fixes
 
+- **A guard router that tests the whole path is read.** A route written as `req.path === '/orders'`,
+  or as an anchored regular expression tested against the path (`/^\/orders\/([^/]+)$/.exec(req.path)`,
+  `.test`, `path.match(...)`, directly or through a const holding the match), is a route; an honest
+  `GET /orders/{orderId}` served that way was reported `UNROUTED_ENDPOINT`. The finding now names
+  the route forms it reads.
+- **A pin over a rename is refused.** `wairon externals pin` (and `sdd_pin_externals`) refuses an
+  alias while a member the last pin records as used is renamed (the new name is given) or removed
+  in the producer, and keeps the previous pin: follow it in the uses first, then pin once. Before,
+  the pin went through, and a second pin and lock were owed. Outcome `refused`, exit 1.
+- **Contracts for I/O methods are written `async`.** The architect skill now says that in a language
+  with asynchronous I/O a method that waits on I/O returns `async T`, so honest async code does not
+  fail `ASYNC_MISMATCH`.
 - **A renamed parameter is reported even where the types cannot be compared.** A Python
   `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` passed
   silently: nothing decided rename or substitution, so nothing was said about the name. It is now
@@ -107,6 +119,15 @@ open, and wairon says so.
   leaves the running wairon untouched; the swap itself is two renames.
 - **`.wai/upgrade-report.md` is written whole or not at all**: it is staged and renamed into place,
   so a failed write never leaves a partial report.
+
+### Known limitations
+
+- The code-vs-design gate does not report external I/O or libraries a component uses: a file
+  read, `fetch`, an HTTP client or Python `requests` in a component that is not an Adapter, or a
+  helper class no component realizes, passes `validate --ci`. Only a bound technology's packages
+  are compared (`TECH_LEAKAGE_IN_CODE`). The "Never checked" line of `validate` now says so.
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins.
 
 ## v6.1.2 (from v6.1.1)
 

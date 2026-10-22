@@ -2838,7 +2838,7 @@ export interface PinnedExternal {
 }
 
 /** What pinning did for one alias. */
-export type ExternalPinOutcome = 'pinned' | 'unchanged' | 'unresolved' | 'unreachable';
+export type ExternalPinOutcome = 'pinned' | 'unchanged' | 'unresolved' | 'unreachable' | 'refused';
 
 /** external_pin — what pinning did for one alias. */
 export interface ExternalPin {

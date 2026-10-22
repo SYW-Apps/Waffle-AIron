@@ -3178,7 +3178,7 @@ methods:
         targetMethod: pinExternals
       - stepNumber: 5
         description: >-
-          Print one line per alias — pinned, unchanged, unresolved or unreachable, with the
+          Print one line per alias — pinned, unchanged, unresolved, unreachable or refused, with the
           used-name count and each unexported reference (export it from the producer's L0 to pin
           it); a source.hosted external prints "hosted-only producer `<id>`: available only through
           the hosted server" instead of a bare unresolved — or the JSON answer; exit 1 when any
@@ -4170,4 +4170,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-21T21:20:22.925Z'
+updatedAt: '2026-10-22T09:35:46.865Z'

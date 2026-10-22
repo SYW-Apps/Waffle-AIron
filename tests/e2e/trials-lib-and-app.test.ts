@@ -433,15 +433,13 @@ describe('journey: an implemented (role implement) contract is pinned per method
     expect(lc.code, transcript(lc)).toBe(0);
   });
 
-  it('the re-pin names what it cannot carry, and the gate then says "renamed to" from the trace (R3-37, R3-42)', async () => {
+  it('a re-pin over the rename is refused naming the new name (exit 1), and validate names the rename live (R3-37, R3-42)', async () => {
     const pin = await sb.run(['externals', 'pin', 'geo'], p.studio);
-    expect(pin.code, transcript(pin)).toBe(0);
-    expect(pin.stdout).toMatch(/used members the snapshot does not carry cannot be pinned: tile-source\.load_tile/);
+    expect(pin.code, transcript(pin)).toBe(1);
+    expect(pin.stdout).toMatch(/refused/);
+    expect(pin.stdout).toMatch(/"tile-source\.load_tile" \(renamed to "tile-source\.fetch_tile"\), .*follow it in the uses first/);
     const v = await sb.run(['validate'], p.studio);
-    expect(v.code, transcript(v)).toBe(1);
-    expect(v.all).toMatch(/\[SIGNATURE_SOURCE_UNRESOLVED\] .*It was renamed to "fetch_tile" \(the producer's rename trace\) — follow the rename: take it from "geo::tile-source\.fetch_tile"/);
-    expect(v.all).toMatch(/A source is .*an exported contract's method/);
-    expect(v.all).toMatch(/\[IMPLEMENTS_MISMATCH\] .*It was renamed from "load_tile" \(the producer's rename trace\)/);
+    expect(v.all).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\] .*fetch_tile/);
   });
 
   it('following the rename and re-pinning clears the tree and the live gate', async () => {

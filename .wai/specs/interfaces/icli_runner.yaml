@@ -561,15 +561,16 @@ methods:
       --no-pin and --dry-run; refused in one sentence naming the accepted form, checked against the
       producer it reaches, pinned by default; exit 1 on a refusal), pin (pin the named declared
       externals, else all, into .wai/externals/ and .wai/externals.lock.yaml, printing each alias's
-      outcome and its unexported references; exit 1 when an alias could not be pinned — unresolved
-      or unreachable — because its previous pin stays and nothing new was recorded), status (each
-      external's pin compared with its live producer at signature level — unchanged, changed,
-      renamed, removed, unlocked, or unavailable with EXTERNAL_CHECK_UNAVAILABLE — a CI gate on the
-      LIVE producer for teams that want one: exit 1 when any external is incompatible, 2 when
-      nothing is incompatible but something could not be compared (never a pass), 0 otherwise, from
-      external_status.health), and list (the declared externals, how each resolves, and what is
-      pinned — a malformed declaration listed with its problem, never hidden). `--json` prints the
-      structured answer instead of the table, with the same exit code.
+      outcome and its unexported references; exit 1 when an alias could not be pinned — unresolved,
+      unreachable, or refused over a used member the producer renamed or removed — because its
+      previous pin stays and nothing new was recorded), status (each external's pin compared with
+      its live producer at signature level — unchanged, changed, renamed, removed, unlocked, or
+      unavailable with EXTERNAL_CHECK_UNAVAILABLE — a CI gate on the LIVE producer for teams that
+      want one: exit 1 when any external is incompatible, 2 when nothing is incompatible but
+      something could not be compared (never a pass), 0 otherwise, from external_status.health), and
+      list (the declared externals, how each resolves, and what is pinned — a malformed declaration
+      listed with its problem, never hidden). `--json` prints the structured answer instead of the
+      table, with the same exit code.
     signature: 'runExternals(action: string, aliases: list<string>, options?: ExternalsOptions): async void'
     returns: async void
     params:
@@ -985,4 +986,4 @@ methods:
         command's action — a hook the framework calls, not an action endpoint.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-21T21:20:20.531Z'
+updatedAt: '2026-10-22T09:35:45.517Z'
