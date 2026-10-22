@@ -45,9 +45,12 @@ function load(dataDir: string): HostedProjectRecord[] {
   return projectStore.load(dataDir);
 }
 
-/** Persist the set (project_store.write); a member record's derived rootPath is never written. */
-function save(dataDir: string, records: HostedProjectRecord[]): void {
-  projectStore.save(dataDir, records.map((r) => (r.parentProjectId ? withoutRoot(r) : r)));
+/**
+ * Read the set fresh and persist what `change` makes of it (project_store.update),
+ * under the file's write lock; a member record's derived rootPath is never written.
+ */
+function update(dataDir: string, change: (records: HostedProjectRecord[]) => HostedProjectRecord[]): void {
+  projectStore.update(dataDir, (records) => change(records).map((r) => (r.parentProjectId ? withoutRoot(r) : r)));
 }
 
 function withoutRoot(record: HostedProjectRecord): HostedProjectRecord {
@@ -163,20 +166,20 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
   if (!isValidProjectId(id)) {
     throw new Error(`Invalid project id "${id}" (allowed: lowercase letters, digits, hyphen).`);
   }
-  const records = load(dataDir);
-  if (records.some((r) => r.id === id)) {
-    throw new Error(`Project "${id}" already exists.`);
-  }
   const root = projectRoot(dataDir, id);
-  fs.mkdirSync(root, { recursive: true });
   const record: HostedProjectRecord = {
     id,
     rootPath: root,
     status: 'active',
     createdAt: new Date().toISOString(),
   };
-  records.push(record);
-  save(dataDir, records);
+  update(dataDir, (records) => {
+    if (records.some((r) => r.id === id)) {
+      throw new Error(`Project "${id}" already exists.`);
+    }
+    fs.mkdirSync(root, { recursive: true });
+    return [...records, record];
+  });
   return record;
 }
 
@@ -195,16 +198,17 @@ export function registerProjectRecord(
   if (!isValidProjectId(id)) {
     throw new Error(`Invalid project id "${id}" (allowed: lowercase letters, digits, hyphen).`);
   }
-  const records = load(dataDir);
-  const existing = records.find((r) => r.id === id);
-  const record: HostedProjectRecord = {
-    id,
-    rootPath,
-    status: 'active',
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-  };
-  const next = existing ? records.map((r) => (r.id === id ? record : r)) : [...records, record];
-  save(dataDir, next);
+  let record!: HostedProjectRecord;
+  update(dataDir, (records) => {
+    const existing = records.find((r) => r.id === id);
+    record = {
+      id,
+      rootPath,
+      status: 'active',
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    };
+    return existing ? records.map((r) => (r.id === id ? record : r)) : [...records, record];
+  });
   return record;
 }
 
@@ -219,19 +223,22 @@ export function registerProjectRecord(
  */
 export function registerMemberRecord(dataDir: string, record: HostedProjectRecord): HostedProjectRecord {
   const memberPath = validMemberShape(record);
-  const records = load(dataDir);
-  refuseParent(records, record);
-  const existing = records.find((r) => r.id === record.id);
-  const member: HostedProjectRecord = {
-    id: record.id,
-    rootPath: '',
-    status: record.status === 'disabled' ? 'disabled' : existing?.status ?? 'active',
-    createdAt: existing?.createdAt ?? new Date().toISOString(),
-    parentProjectId: record.parentProjectId,
-    memberPath,
-  };
-  const next = existing ? records.map((r) => (r.id === record.id ? member : r)) : [...records, member];
-  save(dataDir, next);
+  let next!: HostedProjectRecord[];
+  let member!: HostedProjectRecord;
+  update(dataDir, (records) => {
+    refuseParent(records, record);
+    const existing = records.find((r) => r.id === record.id);
+    member = {
+      id: record.id,
+      rootPath: '',
+      status: record.status === 'disabled' ? 'disabled' : existing?.status ?? 'active',
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      parentProjectId: record.parentProjectId,
+      memberPath,
+    };
+    next = existing ? records.map((r) => (r.id === record.id ? member : r)) : [...records, member];
+    return next;
+  });
   return withDerivedRoot(next, member);
 }
 
@@ -283,14 +290,17 @@ export function setProjectRecordStatus(dataDir: string, id: string, status: stri
   if (status !== 'active' && status !== 'disabled') {
     throw new Error(`Invalid project status "${status}" (allowed: active, disabled).`);
   }
-  const records = load(dataDir);
-  const existing = records.find((r) => r.id === id);
-  if (!existing) throw new Error(`Unknown project "${id}".`);
-  // The reason a disabled record is disabled (stage 8); active again clears it.
-  const { disabledReason: _was, ...rest } = existing;
-  const record: HostedProjectRecord = { ...rest, status, ...(status === 'disabled' && reason ? { disabledReason: reason } : {}) };
-  const next = records.map((r) => (r.id === id ? record : r));
-  save(dataDir, next);
+  let next!: HostedProjectRecord[];
+  let record!: HostedProjectRecord;
+  update(dataDir, (records) => {
+    const existing = records.find((r) => r.id === id);
+    if (!existing) throw new Error(`Unknown project "${id}".`);
+    // The reason a disabled record is disabled (stage 8); active again clears it.
+    const { disabledReason: _was, ...rest } = existing;
+    record = { ...rest, status, ...(status === 'disabled' && reason ? { disabledReason: reason } : {}) };
+    next = records.map((r) => (r.id === id ? record : r));
+    return next;
+  });
   return withDerivedRoot(next, record);
 }
 
@@ -307,21 +317,23 @@ export function listProjectRecords(dataDir: string): HostedProjectRecord[] {
  * Idempotent for a missing id.
  */
 export function removeProjectRecord(dataDir: string, id: string): void {
-  const records = load(dataDir);
-  const rec = records.find((r) => r.id === id);
-  if (!rec) return;
-  if (!rec.parentProjectId) {
-    const members = records.filter((r) => r.parentProjectId === id).map((r) => r.id);
-    if (members.length > 0) {
-      throw new Error(`Project "${id}" still has member record(s) ${members.join(', ')} — remove or detach them first.`);
+  if (!load(dataDir).some((r) => r.id === id)) return;
+  update(dataDir, (records) => {
+    const rec = records.find((r) => r.id === id);
+    if (!rec) return records;
+    if (!rec.parentProjectId) {
+      const members = records.filter((r) => r.parentProjectId === id).map((r) => r.id);
+      if (members.length > 0) {
+        throw new Error(`Project "${id}" still has member record(s) ${members.join(', ')} — remove or detach them first.`);
+      }
+      try {
+        fs.rmSync(rec.rootPath, { recursive: true, force: true });
+      } catch {
+        /* best-effort tree removal */
+      }
     }
-    try {
-      fs.rmSync(rec.rootPath, { recursive: true, force: true });
-    } catch {
-      /* best-effort tree removal */
-    }
-  }
-  save(dataDir, records.filter((r) => r.id !== id));
+    return records.filter((r) => r.id !== id);
+  });
 }
 
 // ── Families ────────────────────────────────────────────────────────────────

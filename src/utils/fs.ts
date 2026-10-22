@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as yaml from 'js-yaml';
@@ -731,4 +732,111 @@ export function legacyFolderAt(root: string): string | null {
   const waiPath = path.join(root, '.wai');
   const waironPath = path.join(root, '.wairon');
   return !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : null;
+}
+
+// ---------------------------------------------------------------------------
+// The write lock of one data file
+//
+// A registry that reads its whole file, changes it and writes it back loses an
+// update when another process does the same in between: both read the same
+// set, and the second write replaces the first. Every such read-change-write
+// holds `<file>.lock` across all three steps. `wx` creates the lock file
+// exclusively (atomic on every platform, Windows included); the holder writes
+// its pid, the time and its host. A lock is broken when its holder on this host
+// is gone, or when it is older than any write could take — a holder on another
+// host sharing the volume cannot be seen to be gone, so only age breaks it.
+// The writes are synchronous end to end, and so is the wait.
+// ---------------------------------------------------------------------------
+
+/** How long a writer waits for another before it gives up. */
+const LOCK_WAIT_MS = 10_000;
+/** A lock older than this is taken over: a read-change-write of one file takes milliseconds. */
+const LOCK_STALE_MS = 30_000;
+
+function sleepLockWait(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function lockHolderAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/** Create the lock exclusively; false when another holds it. */
+function tryCreateLock(lock: string): boolean {
+  let fd: number;
+  try {
+    fd = fs.openSync(lock, 'wx');
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') return false;
+    // Windows: a lock just released is still being deleted, or a scanner holds it.
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) return false;
+    throw e;
+  }
+  try {
+    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n${os.hostname()}\n`);
+  } finally {
+    fs.closeSync(fd);
+  }
+  return true;
+}
+
+/** Whether the lock is left by a holder that is gone, or is older than any write. */
+function lockBreakable(lock: string): boolean {
+  let text: string;
+  let age: number;
+  try {
+    text = fs.readFileSync(lock, 'utf8');
+    age = Date.now() - fs.statSync(lock).mtimeMs;
+  } catch {
+    return false;
+  }
+  if (age > LOCK_STALE_MS) return true;
+  const [pid, , host] = text.split('\n');
+  if (!/^\d+$/.test(pid ?? '')) return false;
+  return host === os.hostname() && Number(pid) !== process.pid && !lockHolderAlive(Number(pid));
+}
+
+/**
+ * Run `change` holding the write lock of `file`: no other process reads and
+ * writes the file in between. Throws after a bounded wait, writing nothing.
+ */
+export function withFileLock<T>(file: string, change: () => T): T {
+  const lock = `${file}.lock`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  while (!tryCreateLock(lock)) {
+    if (lockBreakable(lock)) {
+      try { fs.unlinkSync(lock); } catch { /* another waiter broke it first */ }
+      continue;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${file} is being written by another process for over ${LOCK_WAIT_MS / 1000}s (${lock}). Nothing was written; try again.`);
+    }
+    sleepLockWait(10 + Math.floor(Math.random() * 20));
+  }
+  try {
+    return change();
+  } finally {
+    try { fs.unlinkSync(lock); } catch { /* the next writer breaks it */ }
+  }
+}
+
+/**
+ * Replace `file` with `text` atomically: a temporary sibling named for this
+ * writer (two writers never share one), then a rename over the file.
+ */
+export function replaceFile(file: string, text: string, mode?: number): void {
+  const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  try {
+    fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try { fs.rmSync(tmp, { force: true }); } catch { /* nothing left to clean */ }
+    throw e;
+  }
 }
