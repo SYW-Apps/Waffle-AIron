@@ -845,38 +845,104 @@ function readRoutes(
   const isPartsRef = (expression: TsExpression): boolean =>
     (ts.isIdentifier(expression) && expression.text === 'parts')
     || (ts.isPropertyAccessExpression(expression) && expression.name.text === 'parts');
-  type RouteConstraint = { verb: string } | { length: number } | { index: number; literal: string };
-  const constraintOf = (conjunct: TsExpression): RouteConstraint | undefined => {
-    if (!ts.isBinaryExpression(conjunct) || conjunct.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) return undefined;
-    const sides: Array<[TsExpression, TsExpression]> = [[conjunct.left, conjunct.right], [conjunct.right, conjunct.left]];
+  type RoutePattern = { segments: string[]; exactLength: boolean };
+  type RouteConstraint = { verb: string } | { length: number } | { index: number; literal: string } | { pattern: RoutePattern };
+  const isPathRef = (expression: TsExpression): boolean => {
+    const at = bareExpression(ts, expression);
+    const name = ts.isIdentifier(at) ? at.text : ts.isPropertyAccessExpression(at) ? at.name.text : undefined;
+    return name === 'path' || name === 'pathname';
+  };
+  // The regular expression a guard tests the path with: a literal, or a const holding one.
+  const regexOf = (expression: TsExpression): RoutePattern | undefined => {
+    let at = bareExpression(ts, expression);
+    if ((ts.isIdentifier(at) || ts.isPropertyAccessExpression(at))) {
+      const initializer = initializerOf(at);
+      if (initializer) at = bareExpression(ts, initializer);
+    }
+    return ts.isRegularExpressionLiteral(at) ? regexRoute(at.text) : undefined;
+  };
+  // A whole-path match: `/re/.test(path)`, `/re/.exec(path)` or `path.match(/re/)`.
+  const matchOf = (expression: TsExpression): RoutePattern | undefined => {
+    const at = bareExpression(ts, expression);
+    if (!ts.isCallExpression(at) || !ts.isPropertyAccessExpression(at.expression) || at.arguments.length !== 1) return undefined;
+    const name = at.expression.name.text;
+    const [argument] = at.arguments;
+    if ((name === 'test' || name === 'exec') && isPathRef(argument)) return regexOf(at.expression.expression);
+    if (name === 'match' && isPathRef(at.expression.expression)) return regexOf(argument);
+    return undefined;
+  };
+  const isNothing = (expression: TsExpression): boolean => {
+    const at = bareExpression(ts, expression);
+    return at.kind === ts.SyntaxKind.NullKeyword || (ts.isIdentifier(at) && at.text === 'undefined');
+  };
+  const constraintsOf = (conjunct: TsExpression, depth = 0): RouteConstraint[] => {
+    const at = bareExpression(ts, conjunct);
+    const matched = matchOf(at);
+    if (matched) return [{ pattern: matched }];
+    // A match held in a const and tested after (`const m = … ? /re/.exec(path) : null; if (m)`):
+    // the const's own conditions guard it too.
+    if (ts.isIdentifier(at) && depth < SETTLE_DEPTH) {
+      const initializer = initializerOf(at);
+      if (!initializer) return [];
+      const held = bareExpression(ts, initializer);
+      if (ts.isConditionalExpression(held) && isNothing(held.whenFalse)) {
+        const inner = constraintsOf(held.whenTrue, depth + 1);
+        return inner.some(constraint => 'pattern' in constraint)
+          ? [...conjunctsOf(held.condition).flatMap(condition => constraintsOf(condition, depth + 1)), ...inner]
+          : [];
+      }
+      return constraintsOf(held, depth + 1);
+    }
+    if (ts.isBinaryExpression(at) && (at.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+      || at.operatorToken.kind === ts.SyntaxKind.ExclamationEqualsToken)) {
+      if (isNothing(at.right)) return constraintsOf(at.left, depth + 1);
+      if (isNothing(at.left)) return constraintsOf(at.right, depth + 1);
+      return [];
+    }
+    if (!ts.isBinaryExpression(at) || at.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken) return [];
+    const sides: Array<[TsExpression, TsExpression]> = [[at.left, at.right], [at.right, at.left]];
     for (const [left, right] of sides) {
       if (ts.isPropertyAccessExpression(left) && left.name.text === 'method') {
         const verb = settle(right);
-        if (verb !== undefined) return { verb };
+        if (verb !== undefined) return [{ verb }];
       }
       if (ts.isPropertyAccessExpression(left) && left.name.text === 'length' && isPartsRef(left.expression) && ts.isNumericLiteral(right)) {
-        return { length: Number(right.text) };
+        return [{ length: Number(right.text) }];
       }
       if (ts.isElementAccessExpression(left) && isPartsRef(left.expression) && ts.isNumericLiteral(left.argumentExpression)) {
         const literal = settle(right);
-        if (literal !== undefined) return { index: Number(left.argumentExpression.text), literal };
+        if (literal !== undefined) return [{ index: Number(left.argumentExpression.text), literal }];
+      }
+      if (isPathRef(left)) {
+        const text = settle(right);
+        const segments = text !== undefined ? templateSegments(text) : undefined;
+        if (segments) return [{ pattern: { segments, exactLength: true } }];
       }
     }
-    return undefined;
+    return [];
   };
   const prefix = strippedPrefix(ts, fn.body, initializerOf, literalOf);
+  // A whole path is compared after whatever prefix the body strips off it, folded in front.
+  const pathPrefix = (strippedAnywhere(ts, fn.body, initializerOf, literalOf) ?? '').split('/').filter(Boolean);
   const routeOf = (conjuncts: TsExpression[]): RouteFact | undefined => {
     let verb: string | undefined;
     let length: number | undefined;
+    let pattern: RoutePattern | undefined;
     const fixed = new Map<number, string>();
     for (const conjunct of conjuncts) {
-      const constraint = constraintOf(conjunct);
-      if (!constraint) continue;
-      if ('verb' in constraint) verb = constraint.verb;
-      else if ('length' in constraint) length = constraint.length;
-      else fixed.set(constraint.index, constraint.literal);
+      for (const constraint of constraintsOf(conjunct)) {
+        if ('verb' in constraint) verb = constraint.verb;
+        else if ('length' in constraint) length = constraint.length;
+        else if ('pattern' in constraint) pattern = constraint.pattern;
+        else fixed.set(constraint.index, constraint.literal);
+      }
     }
     if (verb === undefined) return undefined;
+    if (pattern) {
+      const already = pathPrefix.length > 0 && pathPrefix.every((segment, index) => pattern.segments[index] === segment);
+      const segments = already ? pattern.segments : [...pathPrefix, ...pattern.segments];
+      return { verb, segments, exactLength: pattern.exactLength, fullPath: true };
+    }
     // Without a pinned count the route is as long as the furthest segment it
     // fixes — and may continue past it, which `exactLength: false` says.
     const count = length ?? (fixed.size > 0 ? Math.max(...fixed.keys()) + 1 : 0);
