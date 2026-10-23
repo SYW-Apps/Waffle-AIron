@@ -1,10 +1,11 @@
 id: policy_registry_impl
 name: Policy Registry Implementation
 description: >-
-  Write path for the active hosted instance pack/profile policy and the identity-provider (SSO)
-  configuration collection: stamp updatedAt server-side, persist the affected record/collection
-  durably, and refresh the store. Owns no authorization; pack-policy writes own no updatedBy
-  stamping.
+  Write path for the active hosted instance pack/profile policy, the identity-provider (SSO)
+  configuration collection and the instance exposure policy: stamp updatedAt server-side and
+  persist. Owns no authorization; pack-policy writes own no updatedBy stamping. Every operation is
+  ONE store update of ONE of the three files, read fresh under that file's write lock, so two
+  administrators saving different identity providers at once keep both.
 contract: ipolicy_registry
 sourcePath: src/server/policy.ts
 injectedParams:
@@ -13,46 +14,48 @@ methods:
   - name: setPackPolicy
     narrative: []
     intent: >-
-      Stamp updatedAt to the current server time on the supplied policy — preserving the
+      Stamp updatedAt to the current server time on the supplied policy - preserving the
       orchestrator-supplied updatedBy and the caller's pack/profile lists and enforcement posture
-      verbatim — then persist it as the single active record via write-temp-then-rename, refresh the
-      store with replaceActive, and return the stored policy. A persistence failure leaves the
-      previous record intact and surfaces as a storage error. Authorization is enforced by the
-      orchestrator, not here; the registry owns only server-side stamping and durable replacement of
-      the one active record.
+      verbatim - then, in one store update of pack-policy.json, persist it as the single active
+      record, and return the stored policy. A failure leaves the previous record intact and surfaces
+      as a storage error. Authorization is enforced by the orchestrator, not here; the registry owns
+      only server-side stamping and durable replacement of the one active record.
     calls:
-      - policy_store.replaceActive
+      - policy_store.updatePackPolicy
     symbol: registrySetPackPolicy
   - name: upsertIdentityProvider
     narrative: []
     intent: >-
-      Stamp updatedAt to the current server time on the supplied identity-provider config —
-      preserving its id, provider metadata, and clientSecretRef verbatim — then insert or replace it
-      by id within the identity-provider collection, persist the whole collection as
-      identity-providers.json via write-temp-then-rename, refresh the store's in-memory collection,
-      and return the stored config. The config carries only a clientSecretRef into the host secret
-      mechanism; the registry writes the reference and never a raw client secret. A persistence
-      failure leaves the previous collection intact and surfaces as a storage error.
+      Stamp updatedAt to the current server time on the supplied identity-provider config -
+      preserving its id, provider metadata, and clientSecretRef verbatim - then, in one store update
+      of identity-providers.json, insert or replace it by id within the collection read under the
+      lock; return the stored config. The config carries only a clientSecretRef into the host secret
+      mechanism; the registry writes the reference and never a raw client secret. A failure leaves
+      the previous collection intact and surfaces as a storage error.
+    calls:
+      - policy_store.updateIdentityProviders
     symbol: upsertIdentityProviderRecord
   - name: removeIdentityProvider
     narrative: []
     intent: >-
-      Reject with a not-found error when no identity-provider configuration in the collection has
-      the supplied id; otherwise drop it from the collection, persist the reduced collection as
-      identity-providers.json via write-temp-then-rename, refresh the store's in-memory collection,
-      and return once removed. A persistence failure leaves the previous collection intact and
-      surfaces as a storage error. Authorization is enforced by the orchestrator, not here.
+      In one store update of identity-providers.json: reject with a not-found error when no
+      identity-provider configuration in the collection read under the lock has the supplied id;
+      otherwise drop it. A failure leaves the previous collection intact and surfaces as a storage
+      error. Authorization is enforced by the orchestrator, not here.
+    calls:
+      - policy_store.updateIdentityProviders
     symbol: removeIdentityProviderRecord
   - name: setExposurePolicy
     narrative: []
     detail: intent
     intent: >-
-      Persist the supplied instance exposure policy wholesale to exposure-policy.json under the
-      hosted data root via write-temp-then-rename (a crash never truncates the file), refresh the
-      store, and return the stored policy. No stamping — the exposure posture is a plain settings
+      In one store update of exposure-policy.json, persist the supplied instance exposure policy
+      wholesale and return the stored policy. No stamping - the exposure posture is a plain settings
       object.
+    calls:
+      - policy_store.updateExposurePolicy
     symbol: setExposurePolicyRecord
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-10-04T19:50:52.794Z'
+updatedAt: '2026-10-23T22:21:07.996Z'

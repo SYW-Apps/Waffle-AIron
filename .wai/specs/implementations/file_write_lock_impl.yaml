@@ -1,0 +1,74 @@
+id: file_write_lock_impl
+name: File Write Lock Implementation
+description: >-
+  Generation-numbered exclusive-create lock beside a file, in a module of its own
+  (src/utils/file-lock.ts) imported by the hosted stores, the family transaction and the spec-tree
+  write lock (spec_file_store.lockTree, over the file <root>/.wai/.spec-write, with its own stale
+  60s, wait 30s and unreadable grace 10s; hosted stores use the defaults 15s stale, 20s wait).
+  Synchronous end to end, and so is the wait. Files beside F: F.lock.<g> is the lock of generation g
+  (created exclusively, holding a lock_holder record: pid, takenAt, host, pidNamespace, plus a
+  random nonce); F.lock.<g>.end marks generation g over (created exclusively, by the holder at
+  release or by a reclaimer that judged the holder gone). Nothing is deleted by path while a
+  decision rests on it, which is what makes a reclaim identity-safe, and breakLock no longer exists.
+contract: ifile_write_lock
+sourcePath: src/utils/file-lock.ts
+methods:
+  - name: run
+    narrative: []
+    intent: >-
+      ACQUIRE, until a bounded deadline (past the stale age, so a lock a crashed writer left is
+      reclaimed, never reported): list only the names F.lock.<digits> and F.lock.<digits>.end -
+      every other name is ignored; m is the highest generation that has a lock file (0 when none).
+      (a) m > 0 and F.lock.m.end absent: generation m is live. Judge it with its lock_holder record:
+      when the holder is local to this process (holder.isLocalTo(here): same host AND same PID
+      namespace) and its pid is gone (only ESRCH means gone; a permission refusal or a rejected id
+      leaves it unknown, so alive), or its file is older than the stale age, or its file is empty or
+      unparseable and older than the unreadable grace (judged by age, like a junk lock; a holder
+      between creating and writing takes milliseconds), RECLAIM it: create F.lock.m.end exclusively
+      (EEXIST means somebody ended it first, the same outcome) and list again. A holder that is NOT
+      local (another host, another PID namespace, or a record naming none where this platform has
+      namespaces) is judged by age only, never by a pid probe. Otherwise sleep a short jittered
+      interval and list again. (b) m = 0, or generation m is ended: create F.lock.<m+1> exclusively
+      (EEXIST: another process won it, list again), write the holder record into it, then LIST ONCE
+      MORE: when a lock file of a generation above m+1 exists, this name was free only because a
+      later generation's cleanup had removed it and this process was stalled between listing and
+      creating - create F.lock.<m+1>.end and list again, never hold it. Otherwise the lock is held.
+      CLEANUP, best effort: remove every file of a generation below m+1, and a leftover legacy
+      F.lock (the pre-6.2 single-file format, ignored by the acquire) once it is older than the
+      stale age; a removal Windows refuses because another process has the file open (EPERM, EACCES,
+      EBUSY) or that fails otherwise is ignored - cleanup never fails or delays an acquire. RUN the
+      change; just before the change renames the data file over F (the final write of a
+      read-modify-write), the holder checks whether its own generation has an .end it did not
+      create: if so it does not rename, the write is abandoned with an error naming the reclaim (the
+      lock was taken from this holder as stale), and the caller retries or fails. That check narrows
+      the stalled-holder window to the rename itself; it does not close it. RELEASE, also when the
+      change throws: create F.lock.<g>.end exclusively (EEXIST means a reclaimer ended the
+      generation already) - nothing is deleted, so the highest generation always remains on disk and
+      a name is never recreated while a higher one exists. INTERLEAVING ARGUMENT. Facts: (1) a
+      generation's lock name is created exclusively, so at most one process holds it; (2) a process
+      acts on a generation only by creating that generation's own marker or by creating the next
+      name, never by deleting what it read, so a late action of a stalled process names a
+      generation, not a file at a path; (3) the highest lock file is never removed, so no name at or
+      below the highest can be recreated and pass the re-list. Old defect (a breaker B judged lock S
+      stale, claimed, read S and stalled past the claim's 2s staleness; breaker C removed the claim
+      and S; D took a fresh lock; B resumed and unlinked D's lock) - here: B's whole action is to
+      create F.lock.m.end for the generation m it judged. Resuming after any pause, that either
+      finds the marker present (EEXIST, nothing happens), or ends generation m, which it judged and
+      which is still the one it judged because names are not reused; D holds m+1 or later and B
+      cannot touch it. Three racing processes H (holder of m, slow), R (reclaimer), D (acquirer): if
+      H releases while R judges, both create F.lock.m.end and exactly one gets EEXIST - either way m
+      is over once, and D creates m+1 exclusively against any other acquirer; if R ends m while H is
+      alive (H slower than the stale age) H and D overlap - the one hazard no timeout lock can
+      remove, narrowed by H's own .end check before its rename, bounded by the stale age being
+      orders of magnitude above a write, and exact when the holder's pid is gone; if X is stalled
+      after listing 'm ended' while Y takes m+1, ends it and Z takes m+2 and cleans below it, X's
+      exclusive create of F.lock.m+1 succeeds but its re-list finds m+2 and X abandons it. After the
+      bounded wait it throws, naming the file (for the spec-tree lock: the holder's pid, and when
+      remote its host and namespace, and `wairon doctor`, as today), and the change never runs. The
+      spec-tree write lock layers its own re-entrancy hold count and inspection on top and keeps its
+      user-facing waits and messages.
+    symbol: withFileLock
+detail: intent
+status: complete
+createdAt: '2026-10-23T22:17:04.361Z'
+updatedAt: '2026-10-23T22:34:34.007Z'

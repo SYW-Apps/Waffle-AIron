@@ -1472,19 +1472,21 @@ methods:
         description: The contract methods a write removes, each as `<interface>.<method>`
   - name: renameSpecId
     description: >-
-      Rename one contract or one implementation on its own — the id a component rename keeps when it
-      is not derived from the component's — and every reference to it. The spec moves to the new id
-      and file beside its owner, its old id appended to its rename trace (previousIds). A contract's
-      references are rewritten: every implementation's contract, and the interface of every L1 and
-      L0 export entry naming it, an entry that derived its public name from the old id (no `as`)
-      getting `as: <that name>` first so the published surface and every consumer's pin stay.
-      Findings keyed on the spec follow it: lint allows anchored on it and the debt register's
-      entries, rewritten in place with every comment kept. Refuses, before the first write: a kind
-      other than interface or implementation, a spec that does not exist (spec-missing), one in
-      another project (chained-spec — rename it from that project's own root), a new id outside the
-      id grammar (an interface id begins with i), and a new id a spec of its kind holds (id-taken)
-      or retired (id-retired). A dry run answers what the rename would move, rewrite and keep,
-      refused exactly as the rename would be, and writes nothing.
+      Rename one contract, one implementation or one type group on its own — the id a component
+      rename keeps when it is not derived from the component's — and every reference to it. The spec
+      moves to the new id and file beside its owner, its old id appended to its rename trace
+      (previousIds). A contract's references are rewritten: every implementation's contract, and the
+      interface of every L1 and L0 export entry naming it, an entry that derived its public name
+      from the old id (no `as`) getting `as: <that name>` first so the published surface and every
+      consumer's pin stay. A group's references are its types' `group` and its child groups'
+      `parent`, rewritten to the new id; its folder is renamed with it and no type id, export entry
+      or pin changes. Findings keyed on the spec follow it: lint allows anchored on it and the debt
+      register's entries, rewritten in place with every comment kept. Refuses, before the first
+      write: a kind other than interface, implementation or group, a spec that does not exist
+      (spec-missing), one in another project (chained-spec — rename it from that project's own
+      root), a new id outside the id grammar (an interface id begins with i), and a new id a spec of
+      its kind holds (id-taken) or retired (id-retired). A dry run answers what the rename would
+      move, rewrite and keep, refused exactly as the rename would be, and writes nothing.
     signature: 'renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
     returns: SpecIdRename
     params:
@@ -1503,29 +1505,39 @@ methods:
         optional: true
   - name: moveSpec
     description: >-
-      Move a component or a type to another subsystem of the bound project with everything that
-      follows it. A component takes the members it owns, its contracts and their implementations:
-      each is re-saved under its new owner, so its file lands in the new subsystem's folder and the
-      one it left is removed. Ids do not change, so references by id stay; what names the OLD
-      subsystem follows: the old subsystem's export entries for a moved component move to the new
-      subsystem's publicInterfaces, its lifecycle entrypoints naming one move too, and an L0
-      re-export from the old subsystem that names a moved component — by its component or its
-      contract — or type is re-pointed at the new one. A type takes its file, its L1 export entries
-      and every type reference qualified by its old subsystem, in either spelling and wherever it
-      stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes
-      `list<new.type>`); a type moves to system level (no subsystem) or from it, and the L0 export
-      table follows: an entry publishing a project-level type (no `from`) moved into a subsystem
-      re-exports it `from` that subsystem, whose L1 gains the type's export entry; a type made
-      system-level is published by the L0 directly — its entries lose `from` (keeping the public
-      name) and its L1 entries go. A type's move is placement, not an edit: every file it touches
-      keeps its updatedAt, and a folder the moved file leaves empty is pruned, so moving it back
-      leaves the tree byte-identical. The report names the files written and the references
-      respelled or re-pointed. Refuses, before the first write: a kind other than component or type,
-      a spec that does not exist, one in another project, a target subsystem the bound tree does not
-      have or the one it already lives in, a component another pattern owns (move its owner), and a
-      type id the target already holds. A dry run answers the plan and writes nothing. The caller's
-      gate judges the moved components before this runs.
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      Move a component, a type or a type group to another subsystem of the bound project with
+      everything that follows it. A component takes the members it owns, its contracts and their
+      implementations: each is re-saved under its new owner, so its file lands in the new
+      subsystem's folder and the one it left is removed. Ids do not change, so references by id
+      stay; what names the OLD subsystem follows: the old subsystem's export entries for a moved
+      component move to the new subsystem's publicInterfaces, its lifecycle entrypoints naming one
+      move too, and an L0 re-export from the old subsystem that names a moved component — by its
+      component or its contract — or type is re-pointed at the new one. A type takes its file, its
+      L1 export entries and every type reference qualified by its old subsystem, in either spelling
+      and wherever it stands in a type expression (`old::type` becomes `new::type`, `list<old.type>`
+      becomes `list<new.type>`); a type moves to system level (no subsystem) or from it, and the L0
+      export table follows: an entry publishing a project-level type (no `from`) moved into a
+      subsystem re-exports it `from` that subsystem, whose L1 gains the type's export entry; a type
+      made system-level is published by the L0 directly — its entries lose `from` (keeping the
+      public name) and its L1 entries go. A type's move is placement, not an edit: every file it
+      touches keeps its updatedAt, and a folder the moved file leaves empty is pruned, so moving it
+      back leaves the tree byte-identical. A GROUP moves as a folder: its index, its types and its
+      child groups land under the destination home's types folder (the shared one when `subsystem`
+      is omitted), beneath `parent` when one is given and at the top of the home when not; the
+      group's `subsystem` and `parent` fields are restated, ids (the group's, its types', its
+      children's) do not change, no export entry or type reference is touched, and, like a type's,
+      the move is placement: updatedAt is kept and the emptied folder pruned. The report names the
+      files written and the references respelled or re-pointed. Refuses, before the first write: a
+      kind other than component, type or group, a spec that does not exist, one in another project,
+      a target subsystem the bound tree does not have or the one it already lives in (a group may
+      stay in its home and take a new `parent`), a component another pattern owns (move its owner),
+      a type id the target already holds, and, for a group, a `parent` that does not exist, lives in
+      another home than the destination, or is the group itself or one of its descendants
+      (GROUP_CYCLE). A dry run answers the plan and writes nothing. The caller's gate judges the
+      moved components before this runs.
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, parent?:
+      string): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -1541,6 +1553,12 @@ methods:
       - name: dryRun
         type: bool
         description: Answer what the move would do and write nothing
+        optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, top-level in the
+          destination home
         optional: true
   - name: rehearsalCopy
     description: >-
@@ -1579,4 +1597,4 @@ methods:
         description: Write the plan; false plans without writing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T19:48:00.076Z'
+updatedAt: '2026-10-23T22:25:52.777Z'

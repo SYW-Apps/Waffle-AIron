@@ -1040,7 +1040,17 @@ methods:
         targetMethod: getProjectNetwork
     detail: calls-only
     symbol: getProjectNetwork
+  - name: getDevStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Forward the session the router decoded from the request to
+          web_project_orchestrator.devStatus, and hand back its result for the router to encode
+        type: call
+        targetComponent: web_project_orchestrator
+        targetMethod: devStatus
+    symbol: getDevStatus
 detail: calls-only
 status: complete
 createdAt: '2026-07-11T11:36:51.270Z'
-updatedAt: '2026-10-06T19:24:56.779Z'
+updatedAt: '2026-10-23T22:29:57.968Z'

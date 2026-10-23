@@ -329,6 +329,19 @@ methods:
     signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
     returns: list<DuplicateTypeSpec>
     params: []
+  - name: holdsDesign
+    description: >-
+      Forward 1:1 to the Spec Index: whether the tree holds anything to approve (a subsystem, a
+      type, an L0 export entry or a direct member project).
+    signatureFrom: spec_index.holdsDesign
+    guarantees:
+      - idempotent
+    effect: read
+  - name: loadGroupSpecs
+    description: 'Forward 1:1 to the Spec Index: every type group of the tree.'
+    signatureFrom: spec_index.loadGroupSpecs
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T19:47:19.919Z'
+updatedAt: '2026-10-23T22:19:01.906Z'

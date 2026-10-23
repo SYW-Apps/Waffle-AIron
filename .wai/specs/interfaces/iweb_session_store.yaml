@@ -7,20 +7,21 @@ component: web_session_store
 methods:
   - name: load
     description: >-
-      Load all persisted browser sessions into the authoritative store representation and return
-      them.
+      Read web-sessions.json fresh (no in-memory copy). A missing file yields an empty set; an
+      unreadable file or structurally invalid JSON fails with a storage error naming the path.
     signature: 'load(): list<WebSession>'
     returns: list<WebSession>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Replace the store contents with the supplied complete session set after persistence has
-      succeeded.
-    signature: 'replaceAll(sessions: list<WebSession>): void'
-    returns: void
-    params:
-      - name: sessions
-        type: list<WebSession>
+      Read the browser-session set fresh and persist what the change makes of it, holding the file's
+      write lock (file_write_lock) across both, so a writer in another process that reads and writes
+      the same file in between is never lost (a sign-in is not erased by another process's touch or
+      prune); a change that throws writes nothing; a file that exists but cannot be read or parsed
+      throws. Answers the set written.
+    signature: 'update(change: (sessions: WebSession[]) => WebSession[]): WebSession[]'
+    returns: list<WebSession>
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -36,4 +37,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-11T11:32:40.618Z'
-updatedAt: '2026-10-04T22:35:01.475Z'
+updatedAt: '2026-10-23T22:22:27.458Z'

@@ -1,6 +1,8 @@
 id: ishare_access_store
 name: Share Access Store Interface
-description: Private storage contract for the per-link access-log entries. Append-only; loaded fresh per call.
+description: >-
+  Private storage contract for the per-link access-log entries. Append-only; loaded fresh per call;
+  an append is one locked read-modify-write of share-access.json.
 component: share_access_store
 methods:
   - name: load
@@ -9,7 +11,11 @@ methods:
     returns: list<ShareAccessEntry>
     params: []
   - name: append
-    description: Append one entry and persist the collection via write-temp-then-rename.
+    description: >-
+      Append one entry as one locked read-modify-write: read the collection fresh, add the entry and
+      persist it via write-temp-then-rename, holding the file's write lock (file_write_lock) across
+      both so two processes appending at once keep both entries. A file that exists but cannot be
+      read or parsed throws and nothing is written.
     signature: 'append(entry: ShareAccessEntry): void'
     returns: void
     params:
@@ -19,4 +25,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-17T22:29:31.826Z'
-updatedAt: '2026-10-04T10:19:30.146Z'
+updatedAt: '2026-10-23T22:21:21.053Z'

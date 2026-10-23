@@ -1,6 +1,8 @@
 id: instance_backup_adapter_impl
 name: Data Dir Backup Adapter Implementation
-description: 'src/server/upgrade.ts: a recursive copy beside the data directory.'
+description: >-
+  src/server/upgrade.ts: a recursive copy beside the data directory, and the removal of a disposable
+  development data directory with its backups.
 contract: iinstance_backup_adapter
 sourcePath: src/server/upgrade.ts
 injectedParams:
@@ -15,8 +17,19 @@ methods:
       that fails removes what it wrote and refuses with the cause, so no upgrade runs without a
       complete backup.
     symbol: copyDataDir
+  - name: discard
+    narrative: []
+    detail: intent
+    intent: >-
+      Remove the data directory recursively, then every sibling named `<the directory's
+      name>.backup-*` beside it (the copies an earlier start of the same development data directory
+      took), and answer the paths removed in the order removed. An absent directory or backup is not
+      an error. A removal that fails (a file held open, a permission refusal) throws naming the
+      path, so a development start that could not start fresh says so instead of serving stale
+      state.
+    symbol: discardDataDir
 previousIds:
   - data_dir_backup_adapter_impl
 status: draft
 createdAt: '2026-10-18T14:27:59.122Z'
-updatedAt: '2026-10-18T16:16:38.738Z'
+updatedAt: '2026-10-23T22:28:31.865Z'

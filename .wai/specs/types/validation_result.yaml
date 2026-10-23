@@ -63,6 +63,16 @@ fields:
       The code reading in a few words, per language — its grade and what it did not check — for the
       closing verdict line: a pass says how much it read
     optional: true
+  - name: validatorVersion
+    type: string
+    description: >-
+      The wairon release of the process that ran the validation (WAIRON_VERSION,
+      src/config/defaults.ts), set by validateProject, validateAsComplete and validateFamily alike
+      (a family run's members each carry their own run's). `wairon validate --json` and
+      sdd_validate_tree (structured content and the hint line) report it so a reading can be dated;
+      it is not an input of the gate identity and never a finding. Distinct from
+      analysis.analyzer.validatorVersion, which stays the code analyzer's identity.
+    optional: false
 methods:
   - name: changesTo
     signature: 'changesTo(after: ValidationResult): FindingChanges'
@@ -97,4 +107,4 @@ methods:
     symbol: ciBlockingIssues
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-17T15:42:25.296Z'
+updatedAt: '2026-10-23T22:14:13.268Z'

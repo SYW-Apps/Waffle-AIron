@@ -1,6 +1,8 @@
 id: iinstance_backup_adapter
 name: Data Dir Backup Adapter Contract
-description: A whole copy of the data directory.
+description: >-
+  A whole copy of the data directory, and - for the disposable local development data directory only
+  - its removal.
 component: instance_backup_adapter
 methods:
   - name: copy
@@ -15,8 +17,17 @@ methods:
       - name: toMajor
         type: int
     effect: io
+  - name: discard
+    description: >-
+      Delete the data directory and every `<dataDir>.backup-*` folder beside it, and answer the
+      paths removed. Only the local development server's data directory is ever discarded: a hosted
+      data directory is never deleted, whatever its major.
+    signature: 'discard(): list<string>'
+    returns: list<string>
+    params: []
+    effect: io
 previousIds:
   - idata_dir_backup_adapter
 status: draft
 createdAt: '2026-10-18T14:27:53.220Z'
-updatedAt: '2026-10-18T14:31:14.092Z'
+updatedAt: '2026-10-23T22:28:30.893Z'

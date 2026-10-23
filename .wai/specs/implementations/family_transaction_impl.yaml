@@ -78,34 +78,44 @@ methods:
         targetComponent: migration_core_adapter
         targetMethod: lockTree
       - stepNumber: 2
+        description: >-
+          When the changes swap host-store files (the member upgrade, a hosted detach or adopt),
+          hold each affected store's file write lock (the shared file-lock module,
+          src/utils/file-lock.ts, imported directly as the spec-tree lock is - sdd_migrations may
+          not depend on sdd_host's component) for the stage and the swap, taken in ONE fixed order -
+          sorted by absolute path, nested, smallest outermost - so two multi-store holders can never
+          wait on each other; a concurrent store update then waits for the swap instead of being
+          overwritten by it, and the swap never replaces a file under a writer
+        type: local
+      - stepNumber: 3
         description: Stage every owner; nothing live moves inside this region
         type: try
-        endStep: 3
+        endStep: 4
         catches:
           - error: StagingError
-            step: 11
-      - stepNumber: 3
+            step: 12
+      - stepNumber: 4
         label: staged
         description: 'Stage the transaction: journals, staged files, backups, base and volume checks'
         type: call
         targetComponent: family_transaction
         targetMethod: stage
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Swap every owner and reach the commit point; any failure before the commit point is
           recorded restores everything
         type: try
-        endStep: 6
+        endStep: 7
         catches:
           - error: SwapError
-            step: 15
-      - stepNumber: 5
+            step: 16
+      - stepNumber: 6
         label: swapped
         description: Swap the staged files in
         type: call
         targetComponent: family_transaction
         targetMethod: swap
-      - stepNumber: 6
+      - stepNumber: 7
         label: commit-point
         description: >-
           Record the coordinator's journal in phase committed — the commit point: from here recovery
@@ -113,83 +123,83 @@ methods:
         type: call
         targetComponent: transaction_repository
         targetMethod: saveJournal
-      - stepNumber: 7
+      - stepNumber: 8
         description: Remove every owner's transaction directory, the coordinator's last
         type: call
         targetComponent: transaction_repository
         targetMethod: close
-      - stepNumber: 8
+      - stepNumber: 9
         description: Drop the rehearsal
         type: call
         targetComponent: transaction_repository
         targetMethod: dropRehearsal
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Release every owner's write lock — and remove an owner's .wai the swap emptied (a demoted
           or internalized member), which its prune could not while the lock file stood in it
         type: call
         targetComponent: migration_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 10
+      - stepNumber: 11
         description: 'Committed: answer the changes now live'
         type: return
         outcome: committed
-      - stepNumber: 11
+      - stepNumber: 12
         label: staging-failed
         description: 'Nothing live moved: remove every owner''s transaction directory'
         type: call
         targetComponent: transaction_repository
         targetMethod: close
-      - stepNumber: 12
+      - stepNumber: 13
         description: Drop the rehearsal
         type: call
         targetComponent: transaction_repository
         targetMethod: dropRehearsal
-      - stepNumber: 13
+      - stepNumber: 14
         description: Release every owner's write lock
         type: call
         targetComponent: migration_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 14
+      - stepNumber: 15
         description: 'Failed before the swap: the family is untouched'
         type: return
         outcome: failed, restored (nothing live changed), naming what failed
-      - stepNumber: 15
+      - stepNumber: 16
         label: swap-failed
         description: Put every owner back from its backups
         type: call
         targetComponent: family_transaction
         targetMethod: restore
-      - stepNumber: 16
+      - stepNumber: 17
         description: Was everything restored?
         type: branch
         condition: restore answered no unrestored file
-        onFalseStep: 21
-      - stepNumber: 17
+        onFalseStep: 22
+      - stepNumber: 18
         description: Remove every owner's transaction directory
         type: call
         targetComponent: transaction_repository
         targetMethod: close
-      - stepNumber: 18
+      - stepNumber: 19
         description: Drop the rehearsal
         type: call
         targetComponent: transaction_repository
         targetMethod: dropRehearsal
-      - stepNumber: 19
+      - stepNumber: 20
         description: Release every owner's write lock
         type: call
         targetComponent: migration_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 20
+      - stepNumber: 21
         description: 'Failed and restored: the family is byte-identical to before'
         type: return
         outcome: failed, restored, naming the swap that failed
-      - stepNumber: 21
+      - stepNumber: 22
         description: Release every owner's write lock
         type: call
         targetComponent: migration_core_adapter
         targetMethod: unlockTree
-      - stepNumber: 22
+      - stepNumber: 23
         label: left-for-doctor
         description: >-
           Failed and not fully restored: the journals stay, naming the files, and `wairon doctor
@@ -498,4 +508,4 @@ methods:
         targetMethod: saveJournal
 status: complete
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-10-09T17:38:44.690Z'
+updatedAt: '2026-10-23T22:34:17.879Z'

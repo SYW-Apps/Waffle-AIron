@@ -1,0 +1,25 @@
+kind: value-object
+id: dev_status
+name: DevStatus
+description: >-
+  What the web app learns about the local development server's start: whether it is one, and what
+  did not load. The banner and the Findings panel's header read it; it is a live read, so it follows
+  the files as the developer fixes them.
+subsystem: sdd_host
+fields:
+  - name: devMode
+    type: bool
+    description: >-
+      Whether this server is the local development server; false on a hosted instance, which has no
+      such problems to show
+    optional: false
+  - name: problems
+    type: list<DevStartProblem>
+    description: >-
+      Every member of the served project's family that could not be registered, each with its
+      reason; empty when the whole family loaded
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-23T22:28:13.712Z'
+updatedAt: '2026-10-23T22:31:45.719Z'

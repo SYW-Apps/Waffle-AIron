@@ -61,79 +61,55 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 9
         description: >-
+          Load the type groups: each exported type carries its group key and the document carries
+          the group tree as typeGroups, sorted by key, parents named by key; a project with no
+          groups emits neither
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: loadGroupSpecs
+      - stepNumber: 10
+        description: >-
           Read the resolved project export table: each public name bound to its canonical target,
           with audience, version and stability
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveProjectExports
-      - stepNumber: 10
+      - stepNumber: 11
         description: For each subsystem, its own export table
         type: loop
         loopKind: forEach
         over: the loaded subsystems
-        endStep: 11
-      - stepNumber: 11
+        endStep: 12
+      - stepNumber: 12
         description: Read the subsystem's resolved L1 export table
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: resolveSubsystemExports
-      - stepNumber: 12
+      - stepNumber: 13
+        description: >-
+          Take the dependency section from the dependencies method: externals bound to their lock
+          pins, then the direct project members, sorted by alias
+        type: call
+        targetComponent: design_exporter
+        targetMethod: dependencies
+      - stepNumber: 14
         description: Read the project configuration for the project's effective id
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: loadProjectConfig
-      - stepNumber: 13
-        description: >-
-          Read the project's externals, each bound to its producer, with the public names this
-          project's references use
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveExternals
-      - stepNumber: 14
-        description: >-
-          Read the project graph: the bound project's direct project members, each node whose parent
-          is the bound root, with its alias and its id — an in-tree subdirectory member and a legacy
-          mount included. A part is not among them: its subsystems are this project's own
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: projectFamily
       - stepNumber: 15
-        description: For each direct member, the names it publishes
-        type: loop
-        loopKind: forEach
-        over: the direct project members
-        endStep: 16
-      - stepNumber: 16
-        description: >-
-          Read that member's resolved L0 export table by its namespace: each bound key of an item it
-          exports (the component, the interface it narrows to, the type) maps to `<alias>::<public
-          name>`, the stable name a consumer resolves; and take from the graph's cross-project
-          references every public name of that member the bound project's references reach, in every
-          position — the member dependency's `uses` is those names together with the ones the
-          projection wrote, never only the latter
-        type: call
-        targetComponent: surfaces_core_adapter
-        targetMethod: resolveProjectExports
-      - stepNumber: 17
-        description: >-
-          Read the externals lock for each dependency's pinned digest; a lock that is absent or
-          cannot be read pins nothing, and the digest is then left out (the field is optional)
-        type: call
-        targetComponent: externals_repository
-        targetMethod: readLock
-      - stepNumber: 18
         description: Compute the tree's StateId, the source's content identity
         type: call
         targetComponent: surfaces_core_adapter
         targetMethod: computeStateId
-      - stepNumber: 19
+      - stepNumber: 16
         description: >-
           Build the source: the project id, the StateId as `sha256:<digest>`, approval = the
           lock-check state the caller handed in (unjudged when none), and approved = that state is
           locked — the same verdict lock-check and status give, never recomputed here from per-spec
           digests
         type: local
-      - stepNumber: 20
+      - stepNumber: 17
         description: >-
           Key every element — a subsystem, component, interface and implementation by its id, a type
           by `subsystem::id` when a subsystem owns it and by its bare id otherwise, a contract
@@ -145,7 +121,7 @@ methods:
           system-level), and the canonical text of that resolved parse; a position the grammar
           cannot read keeps its text and no expression
         type: local
-      - stepNumber: 21
+      - stepNumber: 18
         description: >-
           Project the L0 into DesignProject (boundaries and requirements as text, the resolved
           project export table as DesignExportEntry rows with each entry's derived export kind and
@@ -155,7 +131,7 @@ methods:
           and dispatch table, its patterns and external links, previousIds as formerly), every
           reference as a key
         type: local
-      - stepNumber: 22
+      - stepNumber: 19
         description: >-
           Project each interface (methods with params and returns as DesignTypeRefs, the derived
           signature, signatureType when it names a signature type, effect, guarantees, invokedBy,
@@ -163,16 +139,9 @@ methods:
           name, sourcePath, per method its effective detail, intent, calls and narrative steps with
           targets and credential sources as keys) and each type (fields, pure methods, a signature's
           params and returns, enum values in order, holds, invariants, componentClass, persistence
-          mapping, previousIds as formerly)
+          mapping, previousIds as formerly, and its group key)
         type: local
-      - stepNumber: 23
-        description: >-
-          List the dependencies: each externals binding (alias, project id, role, the used public
-          names sorted), then each direct member not already listed (role member, the public names
-          this projection's references reached in it), each with the digest its lock entry pins when
-          it has one
-        type: local
-      - stepNumber: 24
+      - stepNumber: 20
         description: >-
           Leave out what is not this project's design: a member project's specs (ids carrying its
           namespace; the member is a dependency, never inlined), lint allows, conformance tiers,
@@ -183,10 +152,56 @@ methods:
           mounts and portalType and narrowed invokedBy to entry and runtime; 2.1 adds detailStated
           to each method body) and the generating wairon version
         type: local
-      - stepNumber: 25
+      - stepNumber: 21
         description: Return the design export
         type: return
         outcome: DesignExport
+  - name: dependencies
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the project's externals, each bound to its producer, with the public names this
+          project's references use
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveExternals
+      - stepNumber: 2
+        description: >-
+          Read the project graph: the bound project's direct project members, each node whose parent
+          is the bound root, parts excluded (a part's specs are this project's own)
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 3
+        description: For each direct member, the names it publishes
+        type: loop
+        loopKind: forEach
+        over: the direct project members
+        endStep: 4
+      - stepNumber: 4
+        description: >-
+          Read that member's resolved L0 export table by its namespace: each bound key of an item it
+          exports
+        type: call
+        targetComponent: surfaces_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 5
+        description: >-
+          Read the externals lock for each dependency's pinned digest; a lock that is absent or
+          cannot be read pins nothing
+        type: call
+        targetComponent: externals_repository
+        targetMethod: readLock
+      - stepNumber: 6
+        description: >-
+          List the dependencies: each externals binding (alias, project id, role, the used public
+          names sorted), then each direct member the same way, sorted by alias
+        type: local
+      - stepNumber: 7
+        description: Return the dependency list
+        type: return
+        outcome: dependencies
+    symbol: dependencies
 status: complete
 createdAt: '2026-10-04T13:54:26.399Z'
-updatedAt: '2026-10-20T13:54:54.499Z'
+updatedAt: '2026-10-23T22:27:45.975Z'

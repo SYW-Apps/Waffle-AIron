@@ -3521,16 +3521,16 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Guard: only a contract or an implementation is renamed here — a component, a type, a
-          method, a field and a parameter each have their own rename
+          Guard: only a contract, an implementation or a type group is renamed here — a component, a
+          type, a method, a field and a parameter each have their own rename
         type: branch
-        condition: the kind is neither interface nor implementation
+        condition: the kind is none of interface, implementation and group
         onFalseStep: 3
       - stepNumber: 2
         label: invalid-kind
         description: Refuse, naming the tool that renames that kind
         type: throw
-        error: 'invalid-kind: only an interface or an implementation is renamed on its own'
+        error: 'invalid-kind: only an interface, an implementation or a group is renamed on its own'
       - stepNumber: 3
         description: For a contract, load the contract to rename
         type: call
@@ -3654,15 +3654,15 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: 'Guard: only a component or a type moves between subsystems'
+        description: 'Guard: only a component, a type or a type group moves between subsystems'
         type: branch
-        condition: the kind is neither component nor type
+        condition: the kind is none of component, type and group
         onFalseStep: 3
       - stepNumber: 2
         label: invalid-kind
         description: Refuse, naming what can move
         type: throw
-        error: 'invalid-kind: only a component or a type moves to another subsystem'
+        error: 'invalid-kind: only a component, a type or a type group moves to another subsystem'
       - stepNumber: 3
         description: 'Read the bound tree''s subsystems: the target must be one of the bound project''s own'
         type: call
@@ -3922,4 +3922,4 @@ methods:
         outcome: applied
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T19:49:36.943Z'
+updatedAt: '2026-10-23T22:26:05.317Z'

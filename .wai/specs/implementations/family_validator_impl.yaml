@@ -216,17 +216,20 @@ methods:
         targetMethod: approvals
       - stepNumber: 5
         description: >-
-          Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED and each
-          drifted one as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity
-          upgrade (re-lock once), saying for a release the member's approval was re-validated under
-          that the new release finds N issue(s) in its approved design (naming them), naming the
-          inputs that moved when its entry carries them, and quoting what its approval owes when it
-          carries an `owed` sentence (a moved id, an external to pin) instead of calling it changed;
-          a member whose approval carried over by re-validation is approved and gets none. A
-          referenced project member that could not be opened (offline, its checkout absent, out of
-          reach) is EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate and its composition did
-          not run, never a pass. Parts get none of these: a part has no lock of its own, its
-          approval is the declaring project's. The root's own lock is not a family finding
+          Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED — or, when
+          its entry says approvable is false (nothing below its L0 to approve), as
+          MEMBER_NOTHING_APPROVABLE (notice) saying there is nothing to approve there yet, never
+          prescribing a lock that refuses — and each drifted one as MEMBER_DRIFTED, saying so when
+          the drift is only the stage-5 identity upgrade (re-lock once), saying for a release the
+          member's approval was re-validated under that the new release finds N issue(s) in its
+          approved design (naming them), naming the inputs that moved when its entry carries them,
+          and quoting what its approval owes when it carries an `owed` sentence (a moved id, an
+          external to pin) instead of calling it changed; a member whose approval carried over by
+          re-validation is approved and gets none. A referenced project member that could not be
+          opened (offline, its checkout absent, out of reach) is EXTERNAL_CHECK_UNAVAILABLE once,
+          naming why — its gate and its composition did not run, never a pass. Parts get none of
+          these: a part has no lock of its own, its approval is the declaring project's. The root's
+          own lock is not a family finding
         type: local
       - stepNumber: 6
         description: >-
@@ -1163,4 +1166,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-18T19:08:54.890Z'
+updatedAt: '2026-10-23T22:15:04.612Z'

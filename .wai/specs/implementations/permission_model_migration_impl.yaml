@@ -72,9 +72,9 @@ methods:
         targetMethod: isLegacyBuiltin
       - stepNumber: 11
         description: >-
-          Rewrite the users file raw without stored grants (apply mode); read API keys raw, revoking
-          keys owned by the retired literals, turning stored grants into the projects narrowing, and
-          binding each ownerless key to a synthesized service owner
+          Rewrite the users file raw without stored grants (apply mode); read API keys raw, deleting
+          (revoking) keys owned by the retired literals, turning stored grants into the projects
+          narrowing, and binding each ownerless key to a synthesized service owner
         type: local
       - stepNumber: 12
         description: In apply mode, hand each synthesized owner the key's legacy authority as grid assignments
@@ -157,4 +157,4 @@ methods:
     symbol: migratePermissionModel
 status: complete
 createdAt: '2026-09-25T22:56:53.266Z'
-updatedAt: '2026-10-19T06:17:27.385Z'
+updatedAt: '2026-10-23T22:13:56.974Z'

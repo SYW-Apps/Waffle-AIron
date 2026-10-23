@@ -15,7 +15,9 @@ fields:
     description: The kind of spec restated.
     optional: false
   - name: spec
-    type: SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec
+    type: >-
+      SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec |
+      GroupSpec
     description: The spec as the caller stated it, before anything is carried into it
     optional: false
   - name: fields
@@ -96,4 +98,4 @@ methods:
     symbol: applyRestatement
 sourcePath: src/core/authoring.ts
 createdAt: '2026-09-24T22:20:24.425Z'
-updatedAt: '2026-10-09T00:25:02.685Z'
+updatedAt: '2026-10-23T22:18:51.020Z'

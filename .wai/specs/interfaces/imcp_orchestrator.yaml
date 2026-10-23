@@ -521,8 +521,9 @@ methods:
         optional: true
   - name: renameSpec
     description: >-
-      The sdd_rename_spec workflow: rename one contract or one implementation on its own through the
-      core client adapter and answer with what moved and what was rewritten; a dry run answers the
+      The sdd_rename_spec workflow: rename one contract, one implementation or one type group on its
+      own through the core client adapter and answer with what moved and what was rewritten (a
+      group's rename retargets its types' group and its children's parent); a dry run answers the
       plan and writes nothing
     signature: 'renameSpec(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
     returns: SpecIdRename
@@ -542,14 +543,16 @@ methods:
         optional: true
   - name: moveSpec
     description: >-
-      The sdd_move_spec workflow: move a component or a type — and, with `together`, more specs of
-      the same kind as one move, a connected cluster no single move could take without crossing an
-      edge — to another subsystem through the authoring client adapter, gated, and answer with what
-      moved, what was rewritten and the gate's notices; a dry run answers the plan for all of them
-      and writes nothing
+      The sdd_move_spec workflow: move a component, a type or a type group — and, with `together`,
+      more specs of the same kind as one move, a connected cluster no single move could take without
+      crossing an edge — to another subsystem through the authoring client adapter, gated, and
+      answer with what moved, what was rewritten and the gate's notices; a dry run answers the plan
+      for all of them and writes nothing. A group moves with its folder (types and child groups) to
+      another subsystem's types folder or, with `parent`, under another group of the destination
+      home; a parent of another home or one that closes a loop is refused.
     signature: >-
       moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
-      list<string>): SpecMove
+      list<string>, parent?: string): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -570,6 +573,30 @@ methods:
         type: list<string>
         description: More specs of the same kind moving with it
         optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, top-level in the
+          destination home
+        optional: true
+  - name: addGroup
+    description: >-
+      The sdd_add_group workflow: define a type group (id, name, description, parent, home
+      subsystem) through the authoring client adapter and answer with the receipt. An UPSERT:
+      re-defining an id restates name, description and parent, an omitted description or parent
+      clears it and is reported. The parent, the shared home of a group and its parent, and the
+      absence of a parent loop are judged by the gate before anything reaches disk. A group carries
+      no lifecycle status, so the receipt states none.
+    signature: 'addGroup(spec: GroupSpec, dryRun?: bool): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: spec
+        type: GroupSpec
+        description: The group as the tool's arguments describe it
+      - name: dryRun
+        type: bool
+        description: Answer the receipt the write would give and write nothing
+        optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-19T19:48:05.702Z'
+updatedAt: '2026-10-23T22:25:25.739Z'

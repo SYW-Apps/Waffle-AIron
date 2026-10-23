@@ -111,7 +111,17 @@ fields:
       verdict the identity decided, and which `wairon lock` clears by replacing the stamp with the
       running release. Never decides the state on its own.
     optional: true
+  - name: approvable
+    type: bool
+    description: >-
+      Whether the project's own tree holds anything to approve, judged at its own root by the shared
+      predicate spec_loader.holdsDesign (a subsystem, a type anywhere, an L0 export entry or a
+      direct member project). False only for an L0 with nothing below it: `wairon lock` refuses
+      there, so a parent's MEMBER_UNAPPROVED would prescribe a lock that cannot be taken (the family
+      finding is then MEMBER_NOTHING_APPROVABLE, a notice). Absent when the member's tree could not
+      be read.
+    optional: true
 methods: []
 sourcePath: src/models/lock.ts
 createdAt: '2026-09-30T05:47:31.984Z'
-updatedAt: '2026-10-09T00:16:44.909Z'
+updatedAt: '2026-10-23T22:14:56.749Z'

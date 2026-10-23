@@ -6,21 +6,19 @@ description: >-
 component: role_store
 methods:
   - name: load
-    description: >-
-      Load the persisted role collection from roles.json under the hosted data root and hold it as
-      the authoritative in-memory representation.
+    description: Read roles.json fresh (no in-memory copy); an absent or empty file yields an empty collection.
     signature: 'load(): list<Role>'
     returns: list<Role>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Atomically swap the in-memory role collection to the supplied complete set after the registry
-      has persisted it.
-    signature: 'replaceAll(roles: list<Role>): void'
-    returns: void
-    params:
-      - name: roles
-        type: list<Role>
+      Read the role collection fresh and persist what the change makes of it, holding the file's
+      write lock (file_write_lock) across both, so a writer in another process that reads and writes
+      the same file in between is never lost; a change that throws writes nothing; a file that
+      exists but cannot be read or parsed throws. Answers the collection written.
+    signature: 'update(change: (roles: Role[]) => Role[]): Role[]'
+    returns: list<Role>
+    effect: write
 status: complete
 createdAt: '2026-07-15T20:27:29.060Z'
-updatedAt: '2026-10-04T10:19:26.101Z'
+updatedAt: '2026-10-23T22:22:10.527Z'

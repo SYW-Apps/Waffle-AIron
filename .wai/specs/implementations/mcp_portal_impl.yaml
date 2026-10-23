@@ -413,6 +413,14 @@ methods:
         targetComponent: mcp_orchestrator
         targetMethod: moveSpec
     symbol: sdd_move_spec
+  - name: addGroup
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the addGroup workflow
+        type: call
+        targetComponent: mcp_orchestrator
+        targetMethod: addGroup
+    symbol: sdd_add_group
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:34:04.451Z'
+updatedAt: '2026-10-23T22:20:13.606Z'

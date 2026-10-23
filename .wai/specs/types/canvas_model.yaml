@@ -72,7 +72,10 @@ fields:
     type: list<any>
     description: >-
       The type nodes of the types/ERD view: each type's id, name, kind, fields, methods, the
-      interface methods that use it, and its database binding.
+      interface methods that use it, its database binding, and its group placement — `group` (the
+      group id, absent for an ungrouped type) and `groupPath` (the ids from the top-level group down
+      to its group, so a client draws or folds containers without walking the tree). Both are
+      presentation: type ids stay bare and global and no edge changes with the grouping.
     optional: false
   - name: typeEdges
     type: list<any>
@@ -90,7 +93,16 @@ fields:
     type: list<any>
     description: 'The validator''s findings for the issue overlay: {severity, code, message, specId?}.'
     optional: false
+  - name: typeGroups
+    type: list<any>
+    description: >-
+      The group tree of the types view, one entry per group: {id, name, description?, parent?,
+      subsystem?, groupPath, typeCount, descendantTypeCount}. Parents come before their children. A
+      client with this list draws collapsible group containers under each subsystem (a subsystem's
+      own groups, then the shared types' groups) and sums counts for a folded container without
+      loading its types. Absent when the tree has no groups.
+    optional: true
 methods: []
 sourcePath: src/core/canvas.ts
 createdAt: '2026-09-20T16:41:02.457Z'
-updatedAt: '2026-10-09T01:02:47.766Z'
+updatedAt: '2026-10-23T22:22:12.235Z'

@@ -1,36 +1,35 @@
 id: share_link_registry_impl
 name: Share Link Registry Implementation
-description: Write path for share-link records through the store.
+description: >-
+  Write path for share-link records through the store: each operation is ONE store update on the
+  collection read fresh under share-links.json's write lock.
 contract: ishare_link_registry
 sourcePath: src/server/sharelinks.ts
 methods:
   - name: create
     narrative: []
     intent: >-
-      Loads the collection, stamps a fresh id + createdAt on the record (persisting its tokenHash
-      only, never a raw token), appends it, and replaces the collection atomically through the
-      store; returns the stored record.
+      In one store update: stamp a fresh id + createdAt on the record (persisting its tokenHash
+      only, never a raw token) and append it to the collection read under the lock; return the
+      stored record.
     calls:
-      - share_link_store.load
-      - share_link_store.replaceAll
+      - share_link_store.update
   - name: update
     narrative: []
     intent: >-
-      Loads the collection, replaces the record matching the given id in place (preserving
-      id/createdAt/tokenHash), and swaps the collection atomically; returns the updated record. A
-      missing id is a not-found error.
+      In one store update: replace the record matching the given id in the collection read under the
+      lock in place (preserving id/createdAt/tokenHash); return the updated record. A missing id is
+      a not-found error.
     calls:
-      - share_link_store.load
-      - share_link_store.replaceAll
+      - share_link_store.update
   - name: remove
     narrative: []
     intent: >-
-      Loads the collection, drops the record with the given id, and swaps atomically; an absent id
-      is a silent no-op.
+      In one store update: drop the record with the given id from the collection read under the
+      lock; an absent id is a silent no-op.
     calls:
-      - share_link_store.load
-      - share_link_store.replaceAll
+      - share_link_store.update
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:18.391Z'
-updatedAt: '2026-09-19T21:26:58.791Z'
+updatedAt: '2026-10-23T22:20:40.975Z'

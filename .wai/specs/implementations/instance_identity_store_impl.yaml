@@ -1,23 +1,29 @@
 id: instance_identity_store_impl
 name: Instance Identity Store Implementation
 description: >-
-  Authoritative in-memory singleton InstanceIdentity record loaded from and swapped as instance.json
-  under the hosted data root.
+  Read-through file I/O over the singleton InstanceIdentity record at instance.json under the hosted
+  data root: load parses the file fresh; update holds the file's write lock across a fresh read and
+  the replacement.
 contract: iinstance_identity_store
 sourcePath: src/server/instance.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted instance identity from instance.json under the hosted data root and hold it
-      as the authoritative in-memory record; an absent file resolves to null (the instance has never
-      been seeded) without creating anything.
-  - name: replace
+      Read the persisted instance identity fresh from instance.json under the hosted data root (no
+      in-memory copy); an absent file resolves to null (the instance has never been seeded) without
+      creating anything.
+  - name: update
     narrative: []
     intent: >-
-      Swap the in-memory record to the supplied identity; the registry has already persisted it
-      durably.
+      Under instance.json's write lock (file_write_lock.run), read the record fresh (null when the
+      file is absent; a file that exists but cannot be read or parsed throws and nothing is
+      written), apply the change to what was read, replace the file atomically via
+      write-temp-then-rename and release the lock, also when the change throws. Answers the identity
+      written - for a seed that lost the race, the identity the winner wrote.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-16T00:24:37.545Z'
-updatedAt: '2026-07-16T07:27:54.809Z'
+updatedAt: '2026-10-23T22:23:31.361Z'

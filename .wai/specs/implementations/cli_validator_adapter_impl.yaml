@@ -134,6 +134,16 @@ methods:
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
       - stepNumber: 14
+        label: design-held
+        description: >-
+          Ask the shared predicate whether the tree holds design (a subsystem, a type anywhere, an
+          L0 export entry or a direct member project): the closing 'nothing to check yet: the spec
+          tree is empty' line is said only when it does not, never beside type findings or for a
+          types-only project, whose types and export table were checked like any design
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: holdsDesign
+      - stepNumber: 15
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
@@ -142,9 +152,11 @@ methods:
           section, "Externals, compared live (advisory: the pin gates)", each naming the moved
           member, the specs that use it and the fix (adapt, then `wairon externals pin <alias>`),
           and the not-compared ones with the command that compares them; say out loud how much
-          conformance debt the project's register carries, and exit non-zero when errors were
-          reported — or, under --ci, when warnings were. Notices and advisory findings never fail
-          the run, under --ci or without it.
+          conformance debt the project's register carries; print the running wairon version
+          (ValidationResult.validatorVersion) on the closing verdict line, so a pasted reading dates
+          itself; and exit non-zero when errors were reported — or, under --ci, when warnings were.
+          Notices and advisory findings never fail the run, under --ci or without it. The 'the spec
+          tree is empty' wording is used only when step 14 answered false.
         type: local
     symbol: runValidate
   - name: computeGateStateId
@@ -184,4 +196,4 @@ methods:
         targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-15T16:03:36.520Z'
+updatedAt: '2026-10-23T22:13:47.419Z'

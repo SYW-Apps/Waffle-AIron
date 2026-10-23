@@ -74,8 +74,26 @@ methods:
         type: string
       - name: id
         type: string
+  - name: devStatus
+    description: >-
+      Local development server only: what did not load of the served project's family, for the web
+      app's banner. Resolve the session to a Principal (an expired or absent session is
+      unauthenticated); on a host that is not the development server answer devMode false with no
+      problems - there is nothing to show on a hosted instance, which refuses to start on a family
+      it cannot register instead. On the development server read the members the dev project (id
+      'local') declares on disk, nested included, LIVE through the project repository, and answer
+      one DevStartProblem per member that cannot be registered (an unreadable project.yaml, an id
+      that is no project id, a missing directory, a path escaping its parent) with its reason. A
+      live read of the declarations, never a stored list: fixing a member on disk clears its problem
+      on the next read, with no restart. A read; not audited.
+    signature: 'devStatus(sessionId: string): DevStatus'
+    returns: DevStatus
+    params:
+      - name: sessionId
+        type: string
+    effect: read
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-13T20:36:24.967Z'
-updatedAt: '2026-10-17T15:47:04.076Z'
+updatedAt: '2026-10-23T22:29:51.955Z'

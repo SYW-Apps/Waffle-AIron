@@ -116,37 +116,45 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Creates the lock file beside the tree (<root>/.wai/.spec-write.lock) exclusively — the one
-      filesystem operation every platform, Windows included, makes atomic — writing the holder's
-      pid, the time and its host name into it. A process that already holds the lock counts one more
-      hold and returns at once (reentrant, keyed by the lock file's path as the platform compares
-      paths), so a write tool that calls another write path never waits on itself. When another
-      holder has the file, it waits in short synchronous sleeps: a lock whose holder process on this
-      host is gone, older than any write could take, this process's own with no hold counted, or one
-      no holder can be read from that is older than a ten-second grace (a holder caught between
-      creating and filling it takes milliseconds) is removed and taken over. A holder on another
-      host (a volume shared across machines or containers) cannot be seen to be gone — its pid means
-      nothing here — so it holds until its lock is older than any write; a file an older wairon
-      wrote, naming no host, is read as this host's. After a bounded wait it throws, naming the
-      holder's pid and pointing at `wairon doctor`, so a stuck writer never hangs the session. A
-      root holding no .wai folder has no tree to guard: nothing is created.
+      Takes the tree's write lock through the generation lock primitive (file_write_lock's module,
+      src/utils/file-lock.ts) over <root>/.wai/.spec-write - the lock of generation g is
+      <root>/.wai/.spec-write.lock.<g>, ended by <root>/.wai/.spec-write.lock.<g>.end - with this
+      lock's own parameters: stale 60s, wait 30s, unreadable grace 10s. The holder record
+      (lock_holder) carries the pid, the time, the host name and, where the platform has PID
+      namespaces, a trailing `pidns=<id>` line. A process that already holds the lock counts one
+      more hold and returns at once (reentrant, keyed by the lock file's path as the platform
+      compares paths), so a write tool that calls another write path never waits on itself. When
+      another holder has it, it waits in short synchronous sleeps; a generation is reclaimed (its
+      .end created, nothing deleted) when its holder is LOCAL (lock_holder.isLocalTo: same host AND
+      same PID namespace) and its process is gone (only ESRCH), when it is older than the stale age,
+      this process's own with no hold counted, or when no holder can be read from it and it is older
+      than the ten-second grace. A REMOTE holder - another host, another PID namespace on a shared
+      volume, or, on a platform with namespaces, a record naming none - is judged by age alone.
+      After the bounded wait it throws, naming the holder's pid (and, when remote, its host and
+      namespace) and pointing at `wairon doctor`, exactly as before. A root holding no .wai folder
+      has no tree to guard: nothing is created. The gitignore line the tree adds for the old single
+      lock file covers the generation files too (`.spec-write.lock*`).
   - name: unlockTree
     sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Counts one hold down; the last hold removes the lock file, and only when this process on this
-      host wrote it — a lock taken over by another process after this one was judged gone is never
-      removed by the late original holder. Releasing a lock this process does not hold does nothing.
+      Counts one hold down; the last hold releases the generation by creating its .end marker - and
+      only when this process wrote the holder record (local to this process, naming its pid), so a
+      lock reclaimed and retaken by another process is never ended by the late original holder (a
+      generation already ended is left as it is). Nothing is unlinked at release; the next acquire's
+      best-effort cleanup removes older generations. Releasing a lock this process does not hold
+      does nothing.
   - name: inspectLock
     sourcePath: src/core/spec-files.ts
     narrative: []
     detail: intent
     intent: >-
-      Reads <root>/.wai/.spec-write.lock when it is there: the holder's pid and time when they can
-      be read, the file's age, whether the holder is alive (a holder on another host is taken as
-      alive), and whether the next write would break it by the same rule lockTree waits by. Writes
-      and removes nothing; none when the file is absent.
+      Reads the highest generation under <root>/.wai/.spec-write.lock.<g> when it is live (no .end):
+      the holder's pid and time when they can be read, the file's age, whether the holder is alive
+      (a REMOTE holder - another host or PID namespace - is taken as alive), and whether the next
+      write would reclaim it by the same rule lockTree waits by. An ended highest generation, or
+      none, is no lock. Writes and removes nothing.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-22T13:49:13.322Z'
+updatedAt: '2026-10-23T22:34:39.258Z'

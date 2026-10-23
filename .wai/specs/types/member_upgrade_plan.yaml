@@ -26,8 +26,8 @@ fields:
   - name: narrowings
     type: list<PlannedNarrowing>
     description: >-
-      Every non-revoked API key with a member-qualified entry, rewritten to the member's record id
-      (an entry naming no member dropped; the key revoked when none is left)
+      Every API key with a member-qualified entry, rewritten to the member's record id (an entry
+      naming no member dropped; the key revoked - deleted - when none is left)
     optional: false
   - name: refusals
     type: list<MigrationFinding>
@@ -47,4 +47,4 @@ fields:
 methods: []
 sourcePath: src/server/members.ts
 createdAt: '2026-10-01T16:27:23.715Z'
-updatedAt: '2026-10-19T06:16:14.479Z'
+updatedAt: '2026-10-23T22:13:50.084Z'

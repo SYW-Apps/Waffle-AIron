@@ -7,21 +7,22 @@ component: project_relation_store
 methods:
   - name: load
     description: >-
-      Load the persisted cross-project relation set from the relations.json file under the hosted
-      data root and hold it as the authoritative in-memory representation, returning it.
+      Read relations.json fresh (no in-memory copy). A missing file yields an empty set; an
+      unreadable file or structurally invalid JSON fails with a storage error naming the path.
     signature: 'load(): list<ProjectRelationRecord>'
     returns: list<ProjectRelationRecord>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Atomically swap the in-memory relation set to the supplied complete set after the registry has
-      persisted it.
-    signature: 'replaceAll(relations: list<ProjectRelationRecord>): void'
-    returns: void
-    params:
-      - name: relations
-        type: list<ProjectRelationRecord>
-        description: The complete relation set that replaces the stored one
+      Read the relation set fresh and persist what the change makes of it, holding the file's write
+      lock (file_write_lock) across both, so a writer in another process that reads and writes the
+      same file in between is never lost; a change that throws writes nothing; a file that exists
+      but cannot be read or parsed throws. Answers the set written.
+    signature: >-
+      update(change: (relations: ProjectRelationRecord[]) => ProjectRelationRecord[]):
+      ProjectRelationRecord[]
+    returns: list<ProjectRelationRecord>
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -37,4 +38,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:52.453Z'
-updatedAt: '2026-10-04T22:34:59.463Z'
+updatedAt: '2026-10-23T22:22:01.080Z'

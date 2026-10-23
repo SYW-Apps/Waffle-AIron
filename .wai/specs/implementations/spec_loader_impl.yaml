@@ -355,8 +355,22 @@ methods:
         type: call
         targetComponent: spec_index
         targetMethod: loadDuplicateTypeSpecs
+  - name: holdsDesign
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: holdsDesign
+  - name: loadGroupSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward 1:1 to the index read face
+        type: call
+        targetComponent: spec_index
+        targetMethod: loadGroupSpecs
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T19:47:22.099Z'
+updatedAt: '2026-10-23T22:19:14.405Z'

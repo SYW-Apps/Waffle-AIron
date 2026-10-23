@@ -1083,8 +1083,9 @@ methods:
       - stepNumber: 6
         label: empty-design
         description: >-
-          Ask whether there is anything to approve: a tree that holds the L0 and nothing below it,
-          and was never approved, has no design yet
+          Ask whether there is anything approvable: a tree that holds the L0 and nothing below it
+          (no subsystem, no type, no export entry, no member project), and was never approved, has
+          no design yet. Types and the L0 export table count as design.
         type: call
         targetComponent: cli_lock_adapter
         targetMethod: holdsNoDesign
@@ -1097,10 +1098,10 @@ methods:
       - stepNumber: 8
         label: nothing-to-approve
         description: >-
-          Say there is nothing designed to approve yet — the tree holds the L0 and nothing below it,
-          which `validate` calls nothing to check yet — and to add a subsystem first, then lock.
-          Write no record (approving an empty design approves nothing) and exit 0: it is not a
-          failure
+          Say there is nothing approvable yet — the tree holds the L0 and nothing below it, which
+          `validate` and `status` word the same way — without prescribing a remedy (a subsystem, a
+          type or an export entry each makes the tree lockable). Write no record (approving an empty
+          design approves nothing) and exit 0: it is not a failure
         type: return
         outcome: nothing to approve
       - stepNumber: 9
@@ -2925,18 +2926,23 @@ methods:
       - stepNumber: 4
         label: config
         description: >-
-          Build the ephemeral data dir (per bound root) and the loopback, auth-off, development-mode
-          host configuration
+          Build the ephemeral data dir (per bound root; it is disposable - the registration below
+          discards it when it is unversioned or from another major) and the loopback, auth-off,
+          development-mode host configuration
         type: local
       - stepNumber: 5
         description: >-
-          Register the bound project root as the single dev project via the host adapter, and
-          announce it as `project <id> at <root>`
+          Register the bound project root as the single dev project via the host adapter, which also
+          registers the readable part of its family; announce it as `project <id> at <root>`, say
+          when the data dir was reset, and print one line per member that could not be registered
+          with its reason - a problem is never a reason to refuse to start
         type: call
         targetComponent: cli_host_adapter
         targetMethod: registerLocalDevProject
       - stepNumber: 6
-        description: Start the server via the host adapter
+        description: >-
+          Start the server via the host adapter; the web UI shows the same member problems in its
+          banner and every validation finding in its Findings panel
         type: call
         targetComponent: cli_host_adapter
         targetMethod: startHostServer
@@ -4170,4 +4176,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-22T09:35:46.865Z'
+updatedAt: '2026-10-23T22:29:37.057Z'

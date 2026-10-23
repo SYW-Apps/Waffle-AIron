@@ -7,20 +7,20 @@ component: share_link_store
 methods:
   - name: load
     description: >-
-      Load the persisted share-link collection; a missing file yields an empty set, a malformed file
-      fails with a storage error naming the path.
+      Read share-links.json fresh (no in-memory copy). A missing file yields an empty set; a
+      malformed file fails with a storage error naming the path.
     signature: 'load(): list<ShareLink>'
     returns: list<ShareLink>
     params: []
-  - name: replaceAll
-    description: Swap the persisted collection wholesale via write-temp-then-rename.
-    signature: 'replaceAll(links: list<ShareLink>): void'
-    returns: void
-    params:
-      - name: links
-        type: list<ShareLink>
-    guarantees:
-      - atomic
+  - name: update
+    description: >-
+      Read the share-link set fresh and persist what the change makes of it, holding the file's
+      write lock (file_write_lock) across both, so a writer in another process that reads and writes
+      the same file in between is never lost; a change that throws writes nothing; a file that
+      exists but cannot be read or parsed throws. Answers the set written.
+    signature: 'update(change: (links: ShareLink[]) => ShareLink[]): ShareLink[]'
+    returns: list<ShareLink>
+    effect: write
 status: complete
 createdAt: '2026-07-17T22:29:08.769Z'
-updatedAt: '2026-10-04T10:19:31.380Z'
+updatedAt: '2026-10-23T22:22:16.072Z'

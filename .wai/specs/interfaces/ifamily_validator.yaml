@@ -96,7 +96,14 @@ methods:
       warnings, and they stay warnings in stage 5 (decision #11): `--ci` at the parent fails until
       the member is locked or its severity is lowered, and a parent that wants its own lock to
       refuse sets composition.requireApprovedMembers. A member drifted only by the stage-5 identity
-      upgrade says so in the message. Each finding's severity is the root's rules.sddRuleSeverity
+      upgrade says so in the message. A never-approved member whose own tree holds nothing below its
+      L0 (ProjectApproval.approvable is false: no subsystem, no type, no L0 export entry, no member
+      project) is MEMBER_NOTHING_APPROVABLE (notice) instead of MEMBER_UNAPPROVED: the lock
+      MEMBER_UNAPPROVED prescribes refuses for such a member, so the parent says there is nothing to
+      approve there yet. A notice rather than a suppression keeps the empty member visible in the
+      family run; it never fails `--ci`, and once the member holds a type, an export entry or a
+      subsystem, MEMBER_UNAPPROVED applies as before. A types-only member is approvable, so its
+      MEMBER_UNAPPROVED is honest. Each finding's severity is the root's rules.sddRuleSeverity
       override, else the default.
     signature: 'checkMembers(family: ProjectFamily): list<ValidationIssue>'
     returns: list<ValidationIssue>
@@ -133,6 +140,9 @@ methods:
         summary: >-
           A family-only re-export of another project's name that no project of the family reaches:
           dead
+      - code: MEMBER_NOTHING_APPROVABLE
+        severity: notice
+        summary: A member of the family has never been locked and holds nothing below its L0 to approve yet
   - name: checkPolicies
     description: >-
       The governance checks over the root's graph (governance stage). Every selected project that
@@ -435,4 +445,4 @@ methods:
         description: Its gate identity as computed now, with its parts
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-18T19:08:35.599Z'
+updatedAt: '2026-10-23T22:14:55.452Z'

@@ -220,6 +220,10 @@ methods:
     description: >-
       The bound project's canvas model as data, forwarded to the spec tree portal — what the web
       app's canvas and a share snapshot mount — carrying the relation health passed in.
+      Partial-tolerant: a spec that fails to load or validate is carried as a finding (naming no
+      spec when none can carry it) and the rest of the tree is drawn; the model is built over
+      whatever loaded, and a tree that yields nothing at all answers an empty model holding one
+      error finding with the cause.
     signature: 'buildCanvasDataModel(relations?: list<ProjectRelations>): CanvasModel'
     returns: CanvasModel
     params:
@@ -293,4 +297,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:50:17.546Z'
-updatedAt: '2026-10-19T06:11:20.639Z'
+updatedAt: '2026-10-23T22:30:29.554Z'
