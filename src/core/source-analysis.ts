@@ -2582,24 +2582,30 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const used = new Map<string, { type: number; value: number }>();
     for (const [name, fact] of importBindings) if (!fact.namespace) used.set(name, { type: 0, value: 0 });
     // Under decorator metadata (`emitDecoratorMetadata`, what NestJS and
-    // Angular dependency injection read), a decorated class's constructor
-    // parameter and property types are emitted as runtime values — injection
-    // tokens — so such an annotation is a value use, never erased. Read
-    // conservatively: any class carrying a decorator, on itself or a member.
-    const decorated = (cls: import('typescript').ClassLikeDeclaration): boolean =>
-      (ts.canHaveDecorators(cls) && (ts.getDecorators(cls)?.length ?? 0) > 0)
-      || cls.members.some((m) => ts.canHaveDecorators(m) && (ts.getDecorators(m)?.length ?? 0) > 0);
+    // Angular dependency injection read), the types of a DECORATED declaration
+    // are emitted as runtime values — injection tokens — so such an annotation
+    // is a value use, never erased. Matched to the declaration the annotation
+    // sits in: a property's type needs the property's own decorator; a
+    // constructor parameter's, a decorator on the class or on any constructor
+    // parameter; a method parameter's, a decorator on the method or on any of
+    // its parameters. A decorator elsewhere in the class emits nothing for it.
+    const hasDecorator = (node: import('typescript').Node): boolean =>
+      ts.canHaveDecorators(node) && (ts.getDecorators(node)?.length ?? 0) > 0;
     const emittedAsMetadata = (ref: import('typescript').TypeReferenceNode): boolean => {
       // The annotation a reference sits in: walk up through the type to the declaration it types.
       let at: import('typescript').Node = ref;
       while (at.parent && ts.isTypeNode(at.parent)) at = at.parent;
       const owner = at.parent;
       if (!owner) return false;
-      const annotates = (ts.isParameter(owner) || ts.isPropertyDeclaration(owner)) && owner.type === at;
-      if (!annotates) return false;
-      const member = ts.isParameter(owner) ? owner.parent : owner;
-      const cls = member?.parent;
-      return !!cls && ts.isClassLike(cls) && decorated(cls);
+      if (ts.isPropertyDeclaration(owner)) {
+        return owner.type === at && ts.isClassLike(owner.parent) && hasDecorator(owner);
+      }
+      if (!ts.isParameter(owner) || owner.type !== at) return false;
+      const fn = owner.parent;
+      if (!fn || !fn.parent || !ts.isClassLike(fn.parent)) return false;
+      if (ts.isConstructorDeclaration(fn)) return hasDecorator(fn.parent) || fn.parameters.some(hasDecorator);
+      if (ts.isMethodDeclaration(fn) || ts.isSetAccessorDeclaration(fn)) return hasDecorator(fn) || fn.parameters.some(hasDecorator);
+      return false;
     };
     const inTypePosition = (id: import('typescript').Identifier): boolean => {
       let node: import('typescript').Node = id;

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -118,6 +118,31 @@ describe('the data file write lock', () => {
     fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\n${os.hostname()}\n`);
     expect(withFileLock(target, () => 'ran')).toBe('ran');
     expect(fs.existsSync(`${target}.lock`)).toBe(false);
+  });
+
+  it('a fresh lock whose pid the platform rejects (out of range) is not taken as gone: it holds until stale', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    // process.kill refuses this id with an error that is not ESRCH: the holder is unknown, so alive.
+    fs.writeFileSync(`${target}.lock`, `99999999999\n${Date.now()}\n${os.hostname()}\n`);
+    // Time is simulated (each wait advances the clock one second) so the test need not sit out the 15 s.
+    const realNow = Date.now.bind(Date);
+    let skew = 0;
+    let waits = 0;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
+    const waitSpy = vi.spyOn(Atomics, 'wait').mockImplementation(() => {
+      waits++;
+      skew += 1_000;
+      return 'timed-out';
+    });
+    try {
+      expect(withFileLock(target, () => 'ran')).toBe('ran');
+    } finally {
+      waitSpy.mockRestore();
+      nowSpy.mockRestore();
+    }
+    // Broken only by age (past 15 s), never at once as a dead holder.
+    expect(waits).toBeGreaterThanOrEqual(14);
   });
 
   it('a fresh lock held on another host is waited for, not judged by a local pid, and taken over once stale', () => {

@@ -433,8 +433,11 @@ export function mcpInstallCommand(opts: {
   project?: string;
   token?: string;
 }): void {
+  // `wairon login` stores the URL as typed (trailing slashes stripped), so a
+  // login with the /mcp URL lives under that key: try the base, then as entered.
+  const entered = opts.hosted ? String(opts.hosted).replace(/\/+$/, '') : '';
   const hostedToken = opts.hosted
-    ? (opts.token ?? storedCredentialFor(String(opts.hosted).replace(/\/+$/, '').replace(/\/mcp$/i, '')) ?? undefined)
+    ? (opts.token ?? storedCredentialFor(entered.replace(/\/mcp$/i, '')) ?? storedCredentialFor(entered) ?? undefined)
     : undefined;
   runMcpInstall({
     global: opts.global,

@@ -287,9 +287,16 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
+  // The ports actually bound (a configured 0 means the OS picked one).
+  let bound;
+  try {
+    bound = await handle.listening;
+  } catch (e) {
+    throw new WaironError(`Could not listen: ${e instanceof Error ? e.message : String(e)}`);
+  }
   logger.success('wairon hosting server started.');
-  logger.info(`  data plane:  ${chalk.cyan(`http://${cfg.host}:${cfg.port}/mcp`)}   (auth ${cfg.authEnabled ? chalk.green('ON') : chalk.yellow('OFF')})`);
-  logger.info(`  admin plane: ${chalk.cyan(`http://${cfg.adminHost}:${cfg.adminPort}/admin`)}`);
+  logger.info(`  data plane:  ${chalk.cyan(`http://${cfg.host}:${bound.port}/mcp`)}   (auth ${cfg.authEnabled ? chalk.green('ON') : chalk.yellow('OFF')})`);
+  logger.info(`  admin plane: ${chalk.cyan(`http://${cfg.adminHost}:${bound.adminPort}/admin`)}`);
   logger.info(`  data dir:    ${chalk.gray(cfg.dataDir)}`);
   logger.blank();
   logger.info('Press Ctrl+C to stop.');

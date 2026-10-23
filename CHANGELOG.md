@@ -4,6 +4,34 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## Unreleased
+
+- **CDN releases are published per platform plus an index.** The SYW CDN sits behind a 100 MB
+  request limit and the five archives are about 204 MB together, so the single publish request
+  of 6.1.4 was refused. Each platform is now its own exact release (`<version>-<target>`, no
+  aliases), verified by a public download, followed by the index release `<version>` whose
+  `version.json` (schema 2) names every archive by its exact URL and which alone moves
+  `latest` / `v<major>` / `beta` / `preview` (never over a newer version). The publisher also
+  refuses an incomplete archive set and any request over a 90,000,000-byte budget before
+  sending. A new `cdn-republish.yml` workflow republishes an existing tag with the fixed
+  publisher (a rerun of the original tag run would use the original script). See
+  `docs/cdn-release.md`.
+- **The code-versus-design check reads decorators per declaration.** An import used only as a
+  type counts as a runtime use under decorator metadata only when the annotated declaration
+  emits it: a property with its own decorator, a constructor parameter of a class that is
+  decorated or has a decorated constructor parameter, or a parameter of a decorated method. A
+  decorator on an unrelated method no longer turns a type-only import into an
+  `UNDECLARED_EXPORT`, and a class whose only decorator sits on a constructor parameter is no
+  longer missed.
+- **One file realizing two components:** a method whose implementation names its class
+  (`exportedVia`) is credited only to that class, so a caller importing the other component's
+  class gets its `UNDECLARED_EXPORT`.
+- **`wairon mcp install --hosted <url>/mcp`** finds a credential that `wairon login` stored
+  under the `/mcp` address too.
+- **Write locks:** a lock whose recorded process id cannot be checked (a corrupt record) is
+  treated as held until it is stale, not broken at once.
+- **`wairon host serve --port 0`** binds a free port and prints the one it bound.
+
 ## v6.1.4 (from v6.1.3)
 
 A fix release from an outside review of 6.1.2/6.1.3. Nothing to do when upgrading: install

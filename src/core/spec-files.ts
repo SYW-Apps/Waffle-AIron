@@ -152,14 +152,14 @@ function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-/** Whether a process of that id is alive on this machine (a permission refusal means it is). */
+/** Whether a process of that id is alive on this machine (only "no such process" means gone; any other refusal leaves it unknown, so alive). */
 function processAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) return false;
   try {
     process.kill(pid, 0);
     return true;
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM';
+    return (e as NodeJS.ErrnoException).code !== 'ESRCH';
   }
 }
 
