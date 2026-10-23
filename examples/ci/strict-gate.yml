@@ -37,6 +37,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read          # the gate only reads the repository
+
 jobs:
   approved-design:
     uses: SYW-Apps/Waffle-AIron/.github/workflows/lock-check.yml@v<version>
