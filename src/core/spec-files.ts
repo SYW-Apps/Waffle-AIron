@@ -280,15 +280,16 @@ function lockBreakable(file: string, key: string): boolean {
 /**
  * Remove a breakable lock and answer whether it is gone. Only the file judged
  * is removed (breakLock): a holder that exits releases its lock, and the file
- * found there a moment later can be the next holder's, which is live.
+ * found there a moment later can be the next holder's, which is live. A lock
+ * file that cannot be opened is not judged at all: a live holder's can be
+ * refused for a moment too, so the writer waits and judges it again.
  */
 function breakStaleLock(file: string, key: string): boolean {
-  let judged: string | null;
+  let judged: string;
   try {
     judged = fs.readFileSync(file, 'utf8');
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return true;
-    judged = null;
+    return (e as NodeJS.ErrnoException).code === 'ENOENT';
   }
   if (!lockBreakable(file, key)) return false;
   return breakLock(file, judged);
