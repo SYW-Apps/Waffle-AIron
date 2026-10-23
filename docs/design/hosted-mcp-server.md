@@ -456,9 +456,12 @@ proxy forwards upgrades the pill returns to **"Live"** on its own.
 - **GCE VM (durable FS):** run the container with `/data` on a **separate
   persistent disk** (not the boot disk) so you snapshot/resize it independently;
   add a daily snapshot schedule. Terminate TLS at an HTTPS LB or Caddy.
-- **Cloud Run:** viable **only** with a persistent volume for `/data` (Filestore
-  NFS / GCS FUSE) — the FS must survive restarts. Keep it to a single instance
-  (`--max-instances=1`): see the one-instance-per-data-directory rule in §7.
+- **Cloud Run:** not recommended for a writable `/data`; prefer the GCE VM. A
+  deploy starts the new revision while the old one still serves, and
+  `--max-instances=1` can be exceeded for a moment, so two instances can write
+  one data directory, which the one-instance-per-data-directory rule in §7
+  forbids. GCS FUSE is not supported for `/data` at all: it does not give the
+  exclusive file creation and atomic rename the stores' write locks rely on.
 - Never expose `:8080` (or `:8081`) publicly without TLS + auth.
 
 ### 5.6 Updating and rollback

@@ -18,7 +18,9 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   replaces or reads the same file; before, parallel writes could fail with `EPERM`.
 - **`wairon mcp install --hosted` accepts the address the server prints.** Given
   `http://host:port/mcp`, it wrote `.../mcp/mcp`, which answers 404; the instance is now read as
-  its base URL either way, and the credential stored by `wairon login` is still found.
+  its base URL either way, and the credential stored by `wairon login <base URL>` is found. A
+  credential stored under the `/mcp` address is not: the install says so and names
+  `wairon login <base URL>` (or pass `--token`).
 - **The spec-tree write lock names its host.** A holder is judged gone by its process id only on
   its own host; one on another machine or container sharing the volume holds until its lock is
   stale.

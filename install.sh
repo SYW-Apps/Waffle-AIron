@@ -122,6 +122,7 @@ main() {
     info "Downloading $ASSET_NAME..."
 
     TMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TMP_DIR"' EXIT
     TMP_FILE="${TMP_DIR}/${ASSET_NAME}"
 
     curl -fsSL --output "$TMP_FILE" "$DOWNLOAD_URL" || error "Download failed: $DOWNLOAD_URL"
