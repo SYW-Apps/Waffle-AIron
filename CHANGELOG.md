@@ -1,9 +1,13 @@
 # Changelog
 
-## v6.2.1 (from v6.2.0)
+The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped as
+6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
+npm and the tags carry.
 
-A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgrading: install
-6.2.1.
+## v6.1.4 (from v6.1.3)
+
+A fix release from an outside review of 6.1.2/6.1.3. Nothing to do when upgrading: install
+6.1.4.
 
 - **Hosted registries no longer lose a concurrent write.** The credential and project registries
   read their whole file, changed it and wrote it back with nothing held in between, so two
@@ -42,9 +46,9 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   rest) can still lose a change when two processes write the same file at the same moment, such
   as several `wairon host permission set`, `host unit create` or `host project create` commands
   run in parallel (a project created that way can miss its unit placement). Run such changes
-  one at a time; 6.2.2 gives every store the same lock.
+  one at a time; a later release gives every store the same lock.
 
-## v6.2.0 (from v6.1.2)
+## v6.1.3 (from v6.1.2)
 
 v6.2 holds a method's stated detail to what it states and says where a design leaves routes
 open, lets the design name callers it cannot show yet (a component's runtime hook, a planned
@@ -66,7 +70,7 @@ Who is affected:
 
 ### Upgrading from v6.1.2
 
-1. Install 6.2.0 everywhere the project is checked: every teammate, CI, and the `wairon` your
+1. Install 6.1.3 everywhere the project is checked: every teammate, CI, and the `wairon` your
    assistant's MCP server starts. No `wairon upgrade` is needed: the tree stays on major 6.
 2. If you keep agent files on disk (`.claude/agents/` and the like) and your
    `.wai/project.yaml` does not state `rules.materializeAgentFiles`, add
@@ -74,7 +78,7 @@ Who is affected:
    it is there.
 3. Run `wairon generate` to refresh the guides and skills, then reconnect your assistant's MCP
    server (in Claude Code, `/mcp`) or start a new session.
-4. Run `wairon validate --ci` and `wairon lock-check`. The approval carries over unless 6.2.0's
+4. Run `wairon validate --ci` and `wairon lock-check`. The approval carries over unless 6.1.3's
    rules find something in the approved design; then fix what they name (for
    `PUBLIC_INTERFACE_NOT_PORTAL`: publish the Portal in front of the component, or drop the
    entry) and run `wairon lock`.
