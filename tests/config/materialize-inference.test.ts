@@ -8,7 +8,7 @@ import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
 // ---------------------------------------------------------------------------
 // rules.materializeAgentFiles is what the project states, and nothing else:
 // left unstated it reads as the schema's false, whatever agent files sit on
-// disk (6.2 dropped the inference from committed agent files). A save never
+// disk (6.1.3 dropped the inference from committed agent files). A save never
 // writes the defaulted false down as a choice nobody made.
 // ---------------------------------------------------------------------------
 

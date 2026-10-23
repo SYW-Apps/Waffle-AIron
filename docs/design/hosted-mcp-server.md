@@ -605,7 +605,7 @@ spec-tree lock names its host so a holder on another machine is never judged
 gone by a local process id — so several processes sharing one data directory
 on one machine (the server and the admin CLI) are safe for those registries and
 the spec tree. The other stores (permission grants, the organization, roles,
-policy and the rest) take no write lock until 6.2.2: change them one at a time
+policy and the rest) take no write lock yet: change them one at a time
 (see the Hosting section of `docs/cli.md`). Across hosts, those
 locks rely on exclusive file creation being atomic on the shared filesystem,
 and each instance keeps its own in-memory caches; no multi-host deployment has

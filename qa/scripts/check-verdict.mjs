@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // The release QA gate's CI check (see docs/release-qa.md).
 //
-//   node qa/scripts/check-verdict.mjs [--dir qa/verdicts] [--head HEAD]
+//   node qa/scripts/check-verdict.mjs [--dir qa/verdicts] [--head HEAD] [--expect <version>]
 //
 // Run in a git checkout of the pull request's HEAD with full history. Passes when
 // at least one verdict file in --dir satisfies all four:
-//   1. its front matter says `result: PASS`;
+//   1. its front matter says `result: PASS` (and, with --expect, names that version);
 //   2. the release it names ships its notes: release-notes/<version>.md, with at
 //      least one highlight (a `- ` or `* ` line), which `wairon whatsnew` shows;
 //   3. its `rc` commit is an ancestor of --head;
@@ -29,6 +29,9 @@ const opt = (name, dflt) => (argv.includes(`--${name}`) ? argv[argv.indexOf(`--$
 const dir = opt('dir', 'qa/verdicts');
 const notesDir = opt('notes', 'release-notes');
 const head = opt('head', 'HEAD');
+// The version this merge will tag (from the tags and the bump in the pull request title):
+// a verdict for any other version does not clear it.
+const expect = opt('expect', null);
 
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const gitOk = (...args) => { try { git(...args); return true; } catch { return false; } };
@@ -74,6 +77,9 @@ function releaseNotesProblem(version) {
 function problem(file) {
   const v = frontMatter(fs.readFileSync(file, 'utf8'));
   if (v.result !== 'PASS') return `result is "${v.result ?? 'missing'}", not PASS`;
+  if (expect && v.version !== expect) {
+    return `it is for ${v.version}, but this merge tags ${expect} (put [minor] or [major] in the pull request title for a bigger bump, or rename the release)`;
+  }
   const notesProblem = releaseNotesProblem(v.version);
   if (notesProblem) return notesProblem;
   if (!/^[0-9a-f]{40}$/.test(v.rc ?? '')) return 'rc is not a full 40-character commit sha';

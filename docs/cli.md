@@ -1525,7 +1525,7 @@ self-hosting, auth, and sizing.
 Run **one server per data directory**: scale up (a bigger machine), not out.
 Several replicas sharing one data directory over a network volume are not
 supported. The admin CLI (`wairon host …`) may run beside the server on the same
-data directory; until 6.2.2, run changes to permission grants, the organization,
+data directory; until a later release locks them too, run changes to permission grants, the organization,
 roles and policy one at a time rather than in parallel.
 
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`

@@ -246,7 +246,7 @@ async function generateLayer(options: GenerateOptions = {}): Promise<void> {
       .map((p) => path.dirname(p));
     const removed = pruneStaleAgents(new Set(), candidateDirs, reach);
     if (removed > 0) {
-      logger.info(`Removed ${removed} previously materialized agent file(s): rules.materializeAgentFiles is off (left unstated, it reads as off since 6.2) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
+      logger.info(`Removed ${removed} previously materialized agent file(s): rules.materializeAgentFiles is off (left unstated, it reads as off since 6.1.3) — agents are served as live briefs (sdd_get_agent_brief); opt back in with rules.materializeAgentFiles: true.`);
     } else {
       // Said at default verbosity: a run that writes no agent file would
       // otherwise print nothing at all and read like it did nothing.

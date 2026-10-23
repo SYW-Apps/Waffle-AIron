@@ -208,7 +208,7 @@ describe('e2e upgrade: a project written and locked by v5.1.0, upgraded by the C
         if (code === 'MEMBER_UNAPPROVED') continue;
         expect(Object.keys(EXPECTED_CODES), `unexpected finding ${code}\n${transcript(res)}`).toContain(code);
       }
-      // The fixture states generateComponentImplementers: true, which 6.2 retired: the
+      // The fixture states generateComponentImplementers: true, which 6.1.3 retired: the
       // topology is one owner per subsystem, each owning its spec folders, so no agent
       // is left without owned paths (and none is told to tag itself as meta).
       expect(res.all, transcript(res)).not.toContain('NO_OWNED_PATHS');

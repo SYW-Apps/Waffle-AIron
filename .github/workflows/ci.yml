@@ -123,8 +123,27 @@ jobs:
         with:
           node-version: '20'
 
+      # The version auto-tag will give this merge: the bump is read from the
+      # pull request title (a default merge message carries it), live, so a
+      # retitled pull request is judged by its new title on a re-run.
+      - name: The version this merge tags
+        id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          TITLE="$(gh pr view "$PR" --json title --jq .title)"
+          case "$TITLE" in
+            *'[major]'*) BUMP=major ;;
+            *'[minor]'*) BUMP=minor ;;
+            *) BUMP=patch ;;
+          esac
+          VERSION="$(bash scripts/next-version.sh stable "$BUMP")"
+          echo "This merge tags v${VERSION} (${BUMP}, from the title \"${TITLE}\")."
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: A passing verdict covers this head
-        run: node qa/scripts/check-verdict.mjs
+        run: node qa/scripts/check-verdict.mjs --expect "${{ steps.next.outputs.version }}"
 
   docker-build:
     name: Build Docker image (no push)

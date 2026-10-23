@@ -387,7 +387,7 @@ export const RulesConfigSchema = z.object({
   enforceReproducibility: z.boolean().default(true),
 
   /**
-   * Retired in 6.2, read and ignored: per-component implementer agents are no
+   * Retired in 6.1.3, read and ignored: per-component implementer agents are no
    * longer generated. One owner per subsystem owns its components' code, and a
    * component's brief is still composed on demand (sdd_get_agent_brief).
    * `wairon generate` says so while a project states it true.
