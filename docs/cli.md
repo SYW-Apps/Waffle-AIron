@@ -781,6 +781,15 @@ releases, and the default `latest` moves.
 On a `pull_request` event the default checkout is the merge commit, so what the
 gate judges is literally the design that would land.
 
+A ready-to-copy strict version — `strict: true`, `validate: true`, pinned to a tag
+— is [`examples/ci/strict-gate.yml`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/ci/strict-gate.yml). The approval is
+only as meaningful as the repository protections around it, because `lockedBy` is a
+claim: protect the default branch, require pull-request review, put a CODEOWNERS
+entry on `.wai/lock.json` and `.wai/specs/` and require code-owner review, and
+require the status checks of both jobs (the approved-design job and your own build).
+A workflow can only fail a job; making it block a merge is a branch-protection
+setting.
+
 After the approval check the job runs `wairon validate --ci` in the same
 directory (`validate: false` turns it off). Point `working-directory` at the
 **family root** — the project that declares the members — so that run is the
@@ -1512,6 +1521,12 @@ streamable HTTP, per-project API-key scoped) and an admin **control plane**
 (project & key lifecycle, state-scoped lock). See the
 [hosted server guide](https://github.com/SYW-Apps/Waffle-AIron/blob/main/docs/design/hosted-mcp-server.md) for the architecture, Docker
 self-hosting, auth, and sizing.
+
+Run **one server per data directory**: scale up (a bigger machine), not out.
+Several replicas sharing one data directory over a network volume are not
+supported. The admin CLI (`wairon host …`) may run beside the server on the same
+data directory; until 6.2.2, run changes to permission grants, the organization,
+roles and policy one at a time rather than in parallel.
 
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`
 Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,

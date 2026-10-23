@@ -456,8 +456,12 @@ proxy forwards upgrades the pill returns to **"Live"** on its own.
 - **GCE VM (durable FS):** run the container with `/data` on a **separate
   persistent disk** (not the boot disk) so you snapshot/resize it independently;
   add a daily snapshot schedule. Terminate TLS at an HTTPS LB or Caddy.
-- **Cloud Run:** viable **only** with a persistent volume for `/data` (Filestore
-  NFS / GCS FUSE) — the FS must survive restarts.
+- **Cloud Run:** not recommended for a writable `/data`; prefer the GCE VM. A
+  deploy starts the new revision while the old one still serves, and
+  `--max-instances=1` can be exceeded for a moment, so two instances can write
+  one data directory, which the one-instance-per-data-directory rule in §7
+  forbids. GCS FUSE is not supported for `/data` at all: it does not give the
+  exclusive file creation and atomic rename the stores' write locks rely on.
 - Never expose `:8080` (or `:8081`) publicly without TLS + auth.
 
 ### 5.6 Updating and rollback
@@ -540,17 +544,33 @@ escape `projects/`.
 
 ## 7. Sizing (grounded in wairon's own tree)
 
-Measured on this repo (a real, non-trivial system): **74 spec files, ~80 KB of
-spec YAML, ~1.1 MB total `.wai/`** including generated agents, context, and
-diagram canvases.
+Measured on this repo on 2026-10-22 (a real, large system; a developer Windows
+laptop, so treat the timings as an order of magnitude, not a benchmark):
+**1,694 spec files, ~6.1 MB of spec YAML** under `.wai/specs` (6,408,897 bytes),
+and 1,701 files / ~11 MB in the whole `.wai/` including generated context and
+diagram canvases. (An earlier revision of this guide measured 74 spec files and
+~80 KB; the tree has grown about 20× since.)
+
+`node dist/cli/index.js validate` on this tree, three runs: **17.3 s, 20.5 s and
+44.6 s (median 20.5 s; the first run was cold)**, peak working set about
+**1.17 GB** (sampled from the process while it ran). That is the CLI's full
+conformance run, which also reads this repository's source code against the
+specs; it is the upper bound for one validation of a tree this size, not what a
+hosted request costs for a small project. Hosted validate/lock time and memory
+were not measured separately.
 
 | Project size | Spec files | Specs | Full `.wai/` |
 |---|---|---|---|
 | Small (1 subsystem) | 10–25 | 10–40 KB | ~0.3–0.8 MB |
-| Medium (wairon-scale) | ~75 | ~80 KB | ~1–2 MB |
+| Medium | ~75 | ~80 KB | ~1–2 MB |
 | Large (monorepo) | 200–600 | 0.2–0.6 MB | 3–10 MB |
+| wairon itself (measured) | ~1,700 | ~6.1 MB | ~11 MB |
 
-**Budget ~10 MB / project** (≈10× typical, with headroom). Fleet:
+The first three rows are estimates carried over from the earlier measurement;
+only the last row is measured.
+
+**Budget ~10 MB / project** for ordinary projects (a project the size of
+wairon's own tree needs more: plan on its measured ~11 MB plus growth). Fleet:
 
 | Projects | Data @ ~10 MB | Recommended `/data` disk |
 |---|---|---|
@@ -558,13 +578,16 @@ diagram canvases.
 | 1,000 | ~10 GB | 50 GB |
 | 10,000 | ~100 GB | 500 GB |
 
-- **Inodes, not bytes, are the practical limit** — ~75 files/project. For huge
+- **Inodes, not bytes, are the practical limit** — tens to hundreds of files per ordinary project (wairon's own tree is ~1,700). For huge
   counts of tiny projects, format `/data` with a denser inode ratio
   (`mkfs.ext4 -i 8192`).
-- Ops are CPU-light (YAML parse + in-memory graph validation, milliseconds);
-  the driver is *concurrency of validate/lock*, not project count at rest.
-- **Memory:** base Node ~80–150 MB; each cached `SpecWorkspace` ~1–3 MB. Cold
-  projects cost only disk.
+- Ops are YAML parse + in-memory graph validation: quick for small projects,
+  but they grow with the tree (about 20 s for wairon's own 1,694-spec tree on
+  the machine above). The driver is *concurrency of validate/lock*, not project
+  count at rest.
+- **Memory:** base Node ~80–150 MB; each cached `SpecWorkspace` ~1–3 MB for a
+  small project (a tree the size of wairon's own took ~1.2 GB peak for a full
+  CLI validate). Cold projects cost only disk.
 
 ### GCP VM tiers
 
@@ -573,7 +596,20 @@ diagram canvases.
 | Dev / small team | ≤ ~50 | `e2-small` (or Cloud Run) | 2 shared / 2 GB | 10 GB `pd-balanced` |
 | Team | ≤ ~500 | `e2-standard-2` | 2 / 8 GB | 30 GB `pd-balanced`, daily snapshot |
 | Org | ≤ ~5,000 | `e2-standard-4` | 4 / 16 GB | 100 GB `pd-ssd`, separate disk + snapshots |
-| Large / multi-replica | 5,000+ | 2× `e2-standard-4` behind HTTPS LB | 4 / 16 GB each | 500 GB shared FS (Filestore/NFS) |
+| Large | 5,000+ | one larger machine (e.g. `e2-standard-8`) | 8 / 32 GB | 500 GB `pd-ssd`, separate disk + snapshots |
+
+**Run one instance per data directory, and scale up, not out.** Several
+replicas on a shared volume (Filestore/NFS) are not supported. The credential
+and project registries hold a lock file across each read-and-rewrite, and the
+spec-tree lock names its host so a holder on another machine is never judged
+gone by a local process id — so several processes sharing one data directory
+on one machine (the server and the admin CLI) are safe for those registries and
+the spec tree. The other stores (permission grants, the organization, roles,
+policy and the rest) take no write lock until 6.2.2: change them one at a time
+(see the Hosting section of `docs/cli.md`). Across hosts, those
+locks rely on exclusive file creation being atomic on the shared filesystem,
+and each instance keeps its own in-memory caches; no multi-host deployment has
+been tested. Replicas on shared storage stay unsupported until one is.
 
 Start at **`e2-standard-2` + a dedicated 30 GB `pd-balanced` data disk**; both
 resize without a rebuild.

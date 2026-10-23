@@ -49,6 +49,26 @@ off by default, on with `rules.materializeAgentFiles: true`.
 
 ---
 
+## What wairon checks — and what it does not
+
+| Layer | What is checked | What is not |
+|-------|-----------------|-------------|
+| **Specs** | The design rules `wairon validate` / `sdd_validate_tree` enforce: reference integrity, contract↔implementation symmetry, narrative-call resolution and control flow, stereotype dependency rules, technology fencing, cycles, reachability | Whether the design is a good one for your problem |
+| **Code against the design** | **TypeScript** is read by the compiler (grade `exact`): methods, params, returns where annotated, public members, imports, calls, routes, data types. **Python** and other languages are read by pattern readers (grade `pattern`): methods, params, returns where annotated, public members, imports, calls through declared receivers — **not** routes or data types. A language with only a pattern table checks methods only (grade `generic` is the floor). `validate` prints the grade and the unchecked list per language | At any grade: calls inside helpers and to collaborators a narrative never names; libraries and platform I/O a component uses (a file read, fetch, an HTTP client) — only a bound technology's packages are compared, so I/O outside an Adapter passes. This is a known limitation |
+| **Behaviour** | Tests and code review. A deleted business rule passes the gate while the signatures and calls remain | Anything about what the code does at run time |
+| **Agent guidance** | Generated briefs and file fences instruct the AI tool which files are its own | They are guidance, not enforcement: they do not restrict the tool's filesystem permissions |
+
+The approval record's `lockedBy` is a claim, not an attestation — anyone who
+can run the CLI can write a lock record. Who approved comes from your repository's
+review protections: a protected default branch with required review, and a
+CODEOWNERS entry requiring review of `.wai/lock.json` and `.wai/specs/`.
+`wairon lock-check` then proves the merged design is the one that was approved.
+A ready-to-copy strict gate and the full protection list are in
+[`examples/ci/strict-gate.yml`](https://github.com/SYW-Apps/Waffle-AIron/blob/main/examples/ci/strict-gate.yml); see also
+[docs/cli.md](docs/cli.md#using-it-in-github-actions).
+
+---
+
 ## The SDD spec tree
 
 A complete system is specified top-down across six levels:

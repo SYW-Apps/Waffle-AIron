@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ProjectRelationRecord } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Project Relation Repository (sdd_host)
@@ -66,9 +67,7 @@ function readRelations(dataDir: string): ProjectRelationRecord[] {
 function persistRelations(dataDir: string, relations: ProjectRelationRecord[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(relations, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(relations, null, 2) + '\n');
 }
 
 // ── store: authoritative in-memory holder ──────────────────────────────────

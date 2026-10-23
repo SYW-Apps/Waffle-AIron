@@ -1,5 +1,49 @@
 # Changelog
 
+## v6.2.1 (from v6.2.0)
+
+A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgrading: install
+6.2.1.
+
+- **Hosted registries no longer lose a concurrent write.** The credential and project registries
+  read their whole file, changed it and wrote it back with nothing held in between, so two
+  processes writing at once (the server and the admin CLI, say) could each save a set missing
+  the other's change. Every change now reads and writes under the file's own lock
+  (`<file>.lock`), through a temporary file of its own; a failed change writes nothing, and a
+  registry file that exists but cannot be read or parsed refuses the change instead of being
+  written over as an empty set. The credential file is written owner-only (0600) on Linux and macOS, as its design already said;
+  on Windows it keeps the permissions of its folder.
+- **Every hosted store writes through a temporary file of its own.** Two writers no longer share
+  one `<file>.tmp`, and on Windows the final rename is retried for a moment while another process
+  replaces or reads the same file; before, parallel writes could fail with `EPERM`.
+- **`wairon mcp install --hosted` accepts the address the server prints.** Given
+  `http://host:port/mcp`, it wrote `.../mcp/mcp`, which answers 404; the instance is now read as
+  its base URL either way, and the credential stored by `wairon login <base URL>` is found. A
+  credential stored under the `/mcp` address is not: the install says so and names
+  `wairon login <base URL>` (or pass `--token`).
+- **The spec-tree write lock names its host.** A holder is judged gone by its process id only on
+  its own host; one on another machine or container sharing the volume holds until its lock is
+  stale.
+- **The install scripts verify the download.** `install.sh` and `install.ps1` check the archive
+  against the `.sha256` file the release publishes and refuse to install on a mismatch or a
+  missing checksum, as `wairon update` already did.
+- Each release now runs its packaged binary (Windows x64, Linux x64, macOS arm64) before
+  publishing: `--version` must match the tag, and a fresh `init --yes` must pass `validate --ci`.
+- **Docs:** the README says what wairon checks and what it does not; `examples/ci/strict-gate.yml`
+  is a ready-to-copy strict CI gate with the repository protections it needs; the hosting guide
+  is re-measured and runs one instance per data directory; CONTRIBUTING opens with the normal
+  contributor path and says how to report a security issue; issue templates for bugs, false
+  alarms and experience reports.
+
+### Known limitations
+
+- Only the credential and project registries lock their writes so far. The other hosted stores
+  (permission grants, the organization and its placements, roles, policy, approvals and the
+  rest) can still lose a change when two processes write the same file at the same moment, such
+  as several `wairon host permission set`, `host unit create` or `host project create` commands
+  run in parallel (a project created that way can miss its unit placement). Run such changes
+  one at a time; 6.2.2 gives every store the same lock.
+
 ## v6.2.0 (from v6.1.2)
 
 v6.2 holds a method's stated detail to what it states and says where a design leaves routes

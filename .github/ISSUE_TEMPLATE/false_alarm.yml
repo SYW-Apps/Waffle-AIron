@@ -1,0 +1,50 @@
+name: False alarm
+description: wairon reported a finding on a design or on code that is correct.
+labels: [false-positive]
+body:
+  - type: input
+    id: rule
+    attributes:
+      label: Rule code
+      description: The finding's code, e.g. UNUSED_COMPONENT. `wairon rules list` shows the registry.
+    validations:
+      required: true
+  - type: textarea
+    id: message
+    attributes:
+      label: Message
+      description: The finding exactly as wairon printed it.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: why-correct
+    attributes:
+      label: Why the design or code is correct
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Minimal spec
+      description: The smallest spec (YAML) that still produces the finding.
+      render: yaml
+  - type: textarea
+    id: code
+    attributes:
+      label: Minimal code
+      description: The smallest code snippet involved, if the finding is a code-against-design one.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: wairon version
+      description: Output of `wairon --version`.
+    validations:
+      required: true
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: The target language, and the grade the code was read at if shown (exact, pattern, generic).
+      placeholder: TypeScript (exact)

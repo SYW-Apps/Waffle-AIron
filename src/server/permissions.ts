@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { PermissionAssignment, UnitIdRemap } from './types.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Permission Repository (sdd_host)
@@ -66,9 +67,7 @@ function load(dataDir: string): PermissionAssignment[] {
 function replaceAll(dataDir: string, assignments: PermissionAssignment[]): void {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(assignments, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  replaceFile(p, JSON.stringify(assignments, null, 2) + '\n');
 }
 
 // ── Registry (write path) ──────────────────────────────────────────────────

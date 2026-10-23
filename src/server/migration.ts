@@ -13,6 +13,7 @@ import {
 import { listProjectRecords } from './projects.js';
 import { isLegacyBuiltin } from './auth.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
+import { replaceFile } from '../utils/fs.js';
 import type {
   ApprovalRequest,
   AuditEvent,
@@ -118,9 +119,7 @@ function readRaw<T>(file: string): T | null {
 
 function writeRaw(file: string, value: unknown): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n');
-  fs.renameSync(tmp, file);
+  replaceFile(file, JSON.stringify(value, null, 2) + '\n');
 }
 
 function slugify(name: string): string {

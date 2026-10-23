@@ -1,0 +1,177 @@
+import { describe, it, expect, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { spawn } from 'child_process';
+import { breakLock, withFileLock } from '../../src/utils/fs.js';
+import { load as loadCredentials, update as updateCredentials } from '../../src/server/credential-store.js';
+import { listProjectRecords } from '../../src/server/projects.js';
+
+// ---------------------------------------------------------------------------
+// The hosted registries under concurrent writers in SEPARATE processes: each
+// read-change-write holds the file's write lock, so no writer's record is lost
+// (an external review reproduced the lost update on the unlocked stores). Real
+// processes, real files; nothing mocked.
+// ---------------------------------------------------------------------------
+
+const REPO = path.resolve(__dirname, '../..');
+const TSX = path.join(REPO, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const temps: string[] = [];
+afterEach(() => {
+  for (const t of temps.splice(0)) fs.rmSync(t, { recursive: true, force: true });
+});
+
+function dataDir(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'registry-concurrency-'));
+  temps.push(dir);
+  return dir;
+}
+
+/** Run one worker script in its own node process; resolves with its exit code and output. */
+function worker(script: string, args: string[]): Promise<{ code: number | null; out: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [TSX, script, ...args], { cwd: REPO });
+    let out = '';
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('close', (code) => resolve({ code, out }));
+  });
+}
+
+/**
+ * A worker script in the scratch folder, importing the module under test by
+ * absolute URL (outside the repo it loads as CommonJS, so its exports may sit on default).
+ */
+function script(dir: string, name: string, body: string): string {
+  const file = path.join(dir, name);
+  fs.writeFileSync(file, body);
+  return file;
+}
+
+const url = (rel: string): string => JSON.stringify(new URL(`file:///${path.join(REPO, rel).replace(/\\/g, '/')}`).href);
+
+describe('concurrent writers in separate processes', () => {
+  it('four processes creating credentials at once keep every record', async () => {
+    const dir = dataDir();
+    const file = script(dir, 'create-credentials.mts', [
+      `const m = await import(${url('src/server/credentials.ts')});`,
+      'const { createCredential } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'for (let i = 0; i < 15; i++) {',
+      '  createCredential(dataDir, { id: `${who}-${i}`, label: who, keyHash: `${who}${i}`, projects: ["*"], createdAt: new Date().toISOString() } as never);',
+      '}',
+    ].join('\n'));
+    const runs = await Promise.all(['a', 'b', 'c', 'd'].map((who) => worker(file, [dir, who])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    const ids = loadCredentials(dir).map((r) => r.id);
+    expect(ids).toHaveLength(60);
+    expect(new Set(ids).size).toBe(60);
+  }, 60_000);
+
+  it('four processes replacing one file at once all get through', async () => {
+    const dir = dataDir();
+    const file = script(dir, 'replace-file.mts', [
+      `const m = await import(${url('src/utils/fs.ts')});`,
+      'const { replaceFile } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'for (let i = 0; i < 60; i++) replaceFile(`${dataDir}/shared.json`, JSON.stringify({ who, i }));',
+    ].join('\n'));
+    const runs = await Promise.all(['a', 'b', 'c', 'd'].map((who) => worker(file, [dir, who])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    expect(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'))).toEqual([]);
+  }, 60_000);
+
+  it('forty short-lived processes creating one credential each keep every record', async () => {
+    // Writers that exit right after their write are what a lock judged by its
+    // holder's pid must not mistake: the file it judged may be the next holder's.
+    const dir = dataDir();
+    const file = script(dir, 'create-one.mts', [
+      `const m = await import(${url('src/server/credentials.ts')});`,
+      'const { createCredential } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'createCredential(dataDir, { id: who, label: who, keyHash: who, projects: ["*"], createdAt: new Date().toISOString() } as never);',
+    ].join('\n'));
+    const runs = await Promise.all(Array.from({ length: 40 }, (_, i) => worker(file, [dir, `k${i}`])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    expect(new Set(loadCredentials(dir).map((r) => r.id)).size).toBe(40);
+  }, 120_000);
+
+  it('four processes registering project records at once keep every record', async () => {
+    const dir = dataDir();
+    const file = script(dir, 'register-projects.mts', [
+      `const m = await import(${url('src/server/projects.ts')});`,
+      'const { registerProjectRecord } = m.default ?? m;',
+      'const [dataDir, who] = process.argv.slice(2);',
+      'for (let i = 0; i < 15; i++) registerProjectRecord(dataDir, `${who}-${i}`, `/roots/${who}-${i}`);',
+    ].join('\n'));
+    const runs = await Promise.all(['a', 'b', 'c', 'd'].map((who) => worker(file, [dir, who])));
+    for (const r of runs) expect(r.code, r.out).toBe(0);
+    expect(listProjectRecords(dir)).toHaveLength(60);
+  }, 60_000);
+});
+
+describe('the data file write lock', () => {
+  it('a lock its holder left behind on this host, once gone, is taken over', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    // A pid no live process has, written the way a holder writes the lock.
+    fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\n${os.hostname()}\n`);
+    expect(withFileLock(target, () => 'ran')).toBe('ran');
+    expect(fs.existsSync(`${target}.lock`)).toBe(false);
+  });
+
+  it('a fresh lock held on another host is waited for, not judged by a local pid, and taken over once stale', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\nanother-host\n`);
+    const started = Date.now();
+    // Its pid names no live process HERE, but it is another host's: it holds
+    // until stale (15 s), within the wait (20 s), so the writer gets through.
+    expect(withFileLock(target, () => 'ran')).toBe('ran');
+    expect(Date.now() - started).toBeGreaterThanOrEqual(14_000);
+  }, 30_000);
+
+  it('a holder whose lock was taken over as stale leaves the new holder\'s lock in place', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    const other = `1\n${Date.now()}\nanother-host\nnew-holder\n`;
+    withFileLock(target, () => fs.writeFileSync(`${target}.lock`, other));
+    expect(fs.readFileSync(`${target}.lock`, 'utf8')).toBe(other);
+  });
+
+  it('a stale lock is broken only while it still holds what was judged, by one breaker at a time', () => {
+    const dir = dataDir();
+    const lock = path.join(dir, 'records.json.lock');
+    fs.writeFileSync(lock, 'next holder\n');
+    // Judged as one record, now holding another: the next holder's, left in place.
+    expect(breakLock(lock, 'judged holder\n')).toBe(false);
+    expect(fs.existsSync(lock)).toBe(true);
+    // Another breaker at work: this one waits its turn.
+    fs.writeFileSync(`${lock}.break`, '');
+    expect(breakLock(lock, 'next holder\n')).toBe(false);
+    expect(fs.existsSync(lock)).toBe(true);
+    // A claim a crashed breaker left is cleared once old, and the next turn breaks the lock.
+    const old = new Date(Date.now() - 10_000);
+    fs.utimesSync(`${lock}.break`, old, old);
+    expect(breakLock(lock, 'next holder\n')).toBe(false);
+    expect(breakLock(lock, 'next holder\n')).toBe(true);
+    expect(fs.readdirSync(dir)).toEqual([]);
+  });
+
+  it('a store file that exists but does not parse is never written over as an empty set', () => {
+    const dir = dataDir();
+    const file = path.join(dir, 'auth', 'credentials.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '[{"id":"kept"');
+    expect(() => updateCredentials(dir, (records) => [...records, { id: 'new' } as never])).toThrow(/not valid JSON/);
+    expect(fs.readFileSync(file, 'utf8')).toBe('[{"id":"kept"');
+    expect(fs.existsSync(`${file}.lock`)).toBe(false);
+  });
+
+  it('a change that throws writes nothing and releases the lock', () => {
+    const dir = dataDir();
+    const target = path.join(dir, 'records.json');
+    expect(() => withFileLock(target, () => { throw new Error('refused'); })).toThrow('refused');
+    expect(fs.existsSync(`${target}.lock`)).toBe(false);
+  });
+});

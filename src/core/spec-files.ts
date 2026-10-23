@@ -1,7 +1,8 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
+import { breakLock, installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
 import { SpecWriteConflictError } from '../utils/errors.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 
@@ -82,8 +83,10 @@ export function removeSpecFile(specPath: string, specsRoot: string): boolean {
 // the second write silently replaced the first, and both answered "Updated".
 // So every write into a .wai tree is serialized here: `wx` creates the lock
 // file exclusively, which every platform — Windows included — makes atomic.
-// The holder writes its pid and the time; a lock whose holder is gone, older
-// than any write could take, or unreadable past a short grace, is broken.
+// The holder writes its pid, the time and its host; a lock whose holder is
+// gone, older than any write could take, or unreadable past a short grace, is
+// broken. Only a holder on this host can be seen to be gone: one on another
+// host sharing the volume holds until its lock is stale.
 // Holds are counted per process, so a write path that calls another never
 // waits on itself.
 //
@@ -160,15 +163,34 @@ function processAlive(pid: number): boolean {
   }
 }
 
-/** The holder a lock file names, or null when it cannot be read (absent, foreign, or a holder mid-write). */
-function lockHolder(file: string): { pid: number; at: number } | null {
+/**
+ * The holder a lock file names, or null when it cannot be read (absent,
+ * foreign, or a holder mid-write). `host` is the machine it was taken on; a
+ * file an older wairon wrote names none and is read as this machine's.
+ */
+function lockHolder(file: string): { pid: number; at: number; host?: string } | null {
   try {
-    const [pid, at] = fs.readFileSync(file, 'utf8').split('\n');
+    const [pid, at, host] = fs.readFileSync(file, 'utf8').split('\n');
     if (!/^\d+$/.test(pid ?? '') || !/^\d+$/.test(at ?? '')) return null;
-    return { pid: Number(pid), at: Number(at) };
+    return { pid: Number(pid), at: Number(at), ...(host ? { host } : {}) };
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether the holder runs on this machine. A process id means nothing on
+ * another host (or in another container's process namespace on a shared
+ * volume), so only a local holder's liveness can be checked; a remote one
+ * holds until its lock is stale.
+ */
+function holderIsLocal(holder: { host?: string }): boolean {
+  return holder.host === undefined || holder.host === os.hostname();
+}
+
+/** Whether the holder is a live process: a remote holder is taken as live. */
+function holderAlive(holder: { pid: number; host?: string }): boolean {
+  return holderIsLocal(holder) ? processAlive(holder.pid) : true;
 }
 
 /**
@@ -230,7 +252,7 @@ function tryCreateLock(file: string): boolean {
     throw e;
   }
   try {
-    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n`);
+    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n${os.hostname()}\n`);
   } catch (e) {
     // A lock this process could not fill is no lock: never leave it behind.
     fs.closeSync(fd);
@@ -251,15 +273,26 @@ function tryCreateLock(file: string): boolean {
 function lockBreakable(file: string, key: string): boolean {
   const holder = lockHolder(file);
   if (holder === null) return lockAge(file) > LOCK_UNREADABLE_GRACE_MS;
-  if (holder.pid === process.pid) return (lockHolds.get(key) ?? 0) === 0;
-  return !processAlive(holder.pid) || Date.now() - holder.at > LOCK_STALE_MS;
+  if (holderIsLocal(holder) && holder.pid === process.pid) return (lockHolds.get(key) ?? 0) === 0;
+  return !holderAlive(holder) || Date.now() - holder.at > LOCK_STALE_MS;
 }
 
-/** Remove a breakable lock and answer whether it did. */
+/**
+ * Remove a breakable lock and answer whether it is gone. Only the file judged
+ * is removed (breakLock): a holder that exits releases its lock, and the file
+ * found there a moment later can be the next holder's, which is live. A lock
+ * file that cannot be opened is not judged at all: a live holder's can be
+ * refused for a moment too, so the writer waits and judges it again.
+ */
 function breakStaleLock(file: string, key: string): boolean {
+  let judged: string;
+  try {
+    judged = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT';
+  }
   if (!lockBreakable(file, key)) return false;
-  try { fs.unlinkSync(file); } catch { /* another waiter broke it first */ }
-  return true;
+  return breakLock(file, judged);
 }
 
 /** spec_file_store.unlockTree — release one hold; the last removes the lock file, when this process holds it. */
@@ -273,7 +306,8 @@ export function unlockTree(root: string): void {
     return;
   }
   lockHolds.delete(key);
-  if (lockHolder(file)?.pid !== process.pid) return;
+  const holder = lockHolder(file);
+  if (holder === null || holder.pid !== process.pid || !holderIsLocal(holder)) return;
   removeLockFile(file);
 }
 
@@ -300,7 +334,7 @@ export function inspectLock(root: string): TreeLockState | null {
   const file = path.join(root, '.wai', LOCK_FILE);
   if (!fs.existsSync(file)) return null;
   const holder = lockHolder(file);
-  const state: TreeLockState['holder'] = holder === null ? 'unreadable' : processAlive(holder.pid) ? 'live' : 'gone';
+  const state: TreeLockState['holder'] = holder === null ? 'unreadable' : holderAlive(holder) ? 'live' : 'gone';
   return {
     file,
     ...(holder !== null ? { pid: holder.pid } : {}),
