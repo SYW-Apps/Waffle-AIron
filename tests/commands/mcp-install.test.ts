@@ -129,6 +129,31 @@ describe('cli_runner.runMcpInstall: a hosted install without --token (real CLI)'
     });
   }, 180_000);
 
+  it('a credential stored under the /mcp URL as entered at login is found by the same URL at install', async () => {
+    const home = mkTmp('wairon-mcp-home-');
+    const empty = mkTmp('wairon-mcp-empty-');
+    const url = 'http://127.0.0.1:9';
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    // `wairon login <base>/mcp` keeps the URL as typed, so the key carries /mcp.
+    await storeCredential(`${url}/mcp`, 'wk_stored-under-mcp');
+
+    await execFileP(
+      process.execPath,
+      [TSX_CLI, WAIRON_CLI, 'mcp', 'install', '--hosted', `${url}/mcp`, '--project', 'kbase', '--backend', 'claude'],
+      { cwd: empty, env: { ...process.env, HOME: home, USERPROFILE: home }, timeout: 180_000 },
+    );
+
+    const settings = JSON.parse(fs.readFileSync(path.join(empty, '.mcp.json'), 'utf8')) as {
+      mcpServers: Record<string, unknown>;
+    };
+    expect(settings.mcpServers.wairon).toEqual({
+      type: 'http',
+      url: `${url}/mcp`,
+      headers: { Authorization: 'Bearer wk_stored-under-mcp', 'X-Wairon-Project': 'kbase' },
+    });
+  }, 180_000);
+
   it('a LOCAL install in an empty folder still refuses, naming wairon init', async () => {
     const home = mkTmp('wairon-mcp-home-');
     const empty = mkTmp('wairon-mcp-empty-');

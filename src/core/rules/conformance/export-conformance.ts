@@ -601,16 +601,34 @@ export const exportConformanceRule: SddRule = {
       // crosses, an owned member's class above all.
       const realizedBy = new Map<string, Set<string>>();
       const bodies = facts.functionBodies ?? {};
+      const realize = (container: string, id: string): void => {
+        let ids = realizedBy.get(container);
+        if (!ids) realizedBy.set(container, (ids = new Set<string>()));
+        ids.add(id);
+      };
       for (const id of owners) {
-        const modelled = new Set(ctx.interfaceMethodsOf(id).map(m => m.name));
-        for (const impl of realization.implementationsOf(id)) for (const m of impl.methods ?? []) modelled.add(m.symbol ?? m.name);
+        // A method whose implementation names the class it lives in (its
+        // `exportedVia`) is read through THAT class only; a file realizing
+        // several components holds same-named methods in several classes, and
+        // the name alone would credit every one of them to every owner. Only a
+        // method naming no class falls back to the name.
+        const named = new Set<string>();
+        const modelled = new Set<string>();
+        for (const impl of realization.implementationsOf(id)) {
+          for (const m of impl.methods ?? []) {
+            const symbol = m.symbol ?? m.name;
+            if (!m.exportedVia) { modelled.add(symbol); continue; }
+            named.add(m.name);
+            if (!Object.prototype.hasOwnProperty.call(bodies, symbol)) continue;
+            for (const body of bodies[symbol]) if (body.container === m.exportedVia && !body.nested) realize(body.container, id);
+          }
+        }
+        for (const m of ctx.interfaceMethodsOf(id)) if (!named.has(m.name)) modelled.add(m.name);
         for (const name of modelled) {
           if (!Object.prototype.hasOwnProperty.call(bodies, name)) continue;
           for (const body of bodies[name]) {
             if (body.container === undefined || body.nested) continue;
-            let ids = realizedBy.get(body.container);
-            if (!ids) realizedBy.set(body.container, (ids = new Set<string>()));
-            ids.add(id);
+            realize(body.container, id);
           }
         }
       }

@@ -239,8 +239,8 @@ jobs:
             artifacts/**/*.sha256
 
   # The SYW CDN is a second home for a release (docs/cdn-release.md): the same
-  # archives, a version.json manifest and the guides, published as one
-  # immutable release. Nothing depends on this job, so a CDN failure never holds
+  # archives (one exact release per platform), a version.json index and the guides
+  # published separately (docs/cdn-release.md). Nothing depends on this job, so a CDN failure never holds
   # back the GitHub release or npm; without the publisher secret it is a notice.
   # A dev build is not published there (the script says so and exits 0).
   publish-cdn:

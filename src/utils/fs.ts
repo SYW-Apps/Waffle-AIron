@@ -762,7 +762,9 @@ function lockHolderAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM';
+    // Only "no such process" means gone; a permission refusal or an id the
+    // platform rejects (out of range) leaves the holder unknown, so alive.
+    return (e as NodeJS.ErrnoException).code !== 'ESRCH';
   }
 }
 

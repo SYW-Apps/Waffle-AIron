@@ -1,6 +1,7 @@
 import * as http from 'http';
 import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
+import type { AddressInfo } from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
@@ -660,6 +661,12 @@ export async function routeAdmin(cfg: HostConfig, req: IncomingMessage, res: Ser
 
 export interface HostServerHandle {
   close(): void;
+  /**
+   * Resolves with the ports the two listeners are bound to once both accept
+   * connections (so a configured port of 0 lets the OS pick, with no
+   * free-port-then-bind race); rejects with the listen error (EADDRINUSE …).
+   */
+  readonly listening: Promise<{ port: number; adminPort: number }>;
 }
 
 // ihost_server.init — the lifecycle entrypoint's contract name, realized by
@@ -756,6 +763,30 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   dataServer.on('upgrade', (req, socket) => {
     getRealtimeHub().handleUpgrade(cfg, req, socket);
   });
+  // A listen failure rejects `listening`. A caller that never asked for it keeps
+  // the old behaviour (the error is thrown, so a busy port still stops the
+  // process); one that did gets the error where it can name what failed.
+  let listeningRead = false;
+  const listening = new Promise<{ port: number; adminPort: number }>((resolve, reject) => {
+    let up = 0;
+    const onUp = () => {
+      if (++up === 2) {
+        resolve({
+          port: (dataServer.address() as AddressInfo).port,
+          adminPort: (adminServer.address() as AddressInfo).port,
+        });
+      }
+    };
+    const onError = (err: Error) => {
+      reject(err);
+      if (!listeningRead) process.nextTick(() => { throw err; });
+    };
+    dataServer.once('listening', onUp);
+    adminServer.once('listening', onUp);
+    dataServer.once('error', onError);
+    adminServer.once('error', onError);
+  });
+  listening.catch(() => { /* surfaced through the handle, or thrown above */ });
   dataServer.listen(cfg.port, cfg.host);
   adminServer.listen(cfg.adminPort, cfg.adminHost);
 
@@ -767,6 +798,10 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   backupSchedule.start(cfg);
 
   return {
+    get listening() {
+      listeningRead = true;
+      return listening;
+    },
     close() {
       backupSchedule.stop();
       getRealtimeHub().closeAll();

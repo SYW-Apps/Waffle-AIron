@@ -144,4 +144,11 @@ describe('4 — inspectLock names a present lock and its holder', () => {
     fs.writeFileSync(lockFile(root), `${process.ppid}\n${Date.now()}\n`);
     expect(inspectLock(root)).toMatchObject({ pid: process.ppid, holder: 'live', breaks: false });
   });
+
+  it('an out-of-range pid is unknown, not gone: the lock is held until it is stale', () => {
+    root = project();
+    // process.kill rejects this id with an error that is not ESRCH.
+    fs.writeFileSync(lockFile(root), `99999999999\n${Date.now()}\n`);
+    expect(inspectLock(root)).toMatchObject({ pid: 99999999999, holder: 'live', breaks: false });
+  });
 });

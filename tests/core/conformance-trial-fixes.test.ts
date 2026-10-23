@@ -372,6 +372,39 @@ describe('UNDECLARED_EXPORT — a plain import used only as a type is a type imp
     } finally { proj.cleanup(); }
   });
 
+  // The annotation counts as a value use only where the decorator sits on the
+  // declaration it types (decorator metadata is emitted per decorated declaration).
+  const DEC = 'function Dec(): any { return () => undefined; }\n';
+  const TUNING = "import { StoreTuning } from './user_store';\n" + DEC;
+  const crossesWith = (orchSource: string): boolean => {
+    const proj = inject(orchSource);
+    proj.activate();
+    try {
+      return byCode(validateProject(), 'UNDECLARED_EXPORT').some(i => i.message.includes('"StoreTuning"'));
+    } finally { proj.cleanup(); }
+  };
+
+  it('control: an undecorated class with a decorated METHOD does not make an undecorated property\'s type a value use', () => {
+    expect(crossesWith(`${TUNING}export class Orch {\n  private readonly tuning!: StoreTuning;\n  @Dec()\n  run(): string { return ''; }\n}\n`)).toBe(false);
+  });
+
+  it('fire: a property carrying its own decorator is emitted as metadata, a value use', () => {
+    expect(crossesWith(`${TUNING}export class Orch {\n  @Dec()\n  private readonly tuning!: StoreTuning;\n  run(): string { return ''; }\n}\n`)).toBe(true);
+  });
+
+  it('fire: an undecorated class whose constructor parameter carries a decorator is emitted as metadata, a value use', () => {
+    expect(crossesWith(`${TUNING}export class Orch {\n  constructor(@Dec() private readonly tuning: StoreTuning) {}\n  run(): string { return ''; }\n}\n`)).toBe(true);
+  });
+
+  it('control: a constructor parameter of an undecorated class with only a decorated method is erased', () => {
+    expect(crossesWith(`${TUNING}export class Orch {\n  constructor(private readonly tuning: StoreTuning) {}\n  @Dec()\n  run(): string { return ''; }\n}\n`)).toBe(false);
+  });
+
+  it('a method parameter is a value use only when its method is decorated', () => {
+    expect(crossesWith(`${TUNING}export class Orch {\n  @Dec()\n  run(tuning: StoreTuning): string { return ''; }\n}\n`)).toBe(true);
+    expect(crossesWith(`${TUNING}export class Orch {\n  @Dec()\n  other(): void {}\n  run(tuning: StoreTuning): string { return ''; }\n}\n`)).toBe(false);
+  });
+
   it('control: the declared dependent injecting (decorated) or constructing the class realizing its dependency draws none', () => {
     for (const orch of [
       "import { UserStore } from './user_store';\nfunction Injectable(): ClassDecorator { return () => undefined; }\n@Injectable()\nexport class Orch {\n  constructor(private readonly store: UserStore) {}\n  run(): string { return this.store.load(); }\n}\n",
@@ -444,6 +477,45 @@ describe('MISSING_INTEGRATION_SIM — a component with no code yet has nothing t
       const found = byCode(validateProject(), 'MISSING_INTEGRATION_SIM');
       expect(found).toHaveLength(1);
       expect(found[0].specId).toBe('impl-orch-b');
+    } finally { proj.cleanup(); }
+  });
+});
+
+describe('UNDECLARED_EXPORT — one file realizing two components: a class is credited to the component it is named for', () => {
+  // Two classes in ONE file both hold a `run`. The first component's
+  // implementation names its class (exportedVia: Alpha); the second names none.
+  const twoClasses = (callerDependsOn: string, callerSource: string) => {
+    const proj = createTempProject();
+    proj.component('comp-x', 'Orchestrator');
+    proj.contract('comp-x', ['run']);
+    proj.impl('comp-x', `sourcePath: src/two.ts\nmethods:\n${intent('run')}\n    exportedVia: Alpha`);
+    proj.component('comp-y', 'Orchestrator');
+    proj.contract('comp-y', ['run']);
+    proj.impl('comp-y', `sourcePath: src/two.ts\nmethods:\n${intent('run')}`);
+    proj.source('src/two.ts', 'export class Alpha {\n  run(): void {}\n}\nexport class Beta {\n  run(): void {}\n}\n');
+    proj.component('comp-c', 'Orchestrator', `dependsOn: [${callerDependsOn}]`);
+    proj.contract('comp-c', ['go']);
+    proj.impl('comp-c', `sourcePath: src/c.ts\nmethods:\n${intent('go')}`);
+    proj.source('src/c.ts', callerSource);
+    return proj;
+  };
+  const useBeta = "import { Beta } from './two';\nexport function go(): void { new Beta().run(); }\n";
+
+  it('fire: a caller depending only on the first component importing the second\'s class still crosses', () => {
+    const proj = twoClasses('comp-x', useBeta);
+    proj.activate();
+    try {
+      const found = byCode(validateProject(), 'UNDECLARED_EXPORT');
+      expect(found).toHaveLength(1);
+      expect(found[0].message).toContain('"Beta"');
+    } finally { proj.cleanup(); }
+  });
+
+  it('control: a caller depending on the component whose class it is draws none', () => {
+    const proj = twoClasses('comp-y', useBeta);
+    proj.activate();
+    try {
+      expect(byCode(validateProject(), 'UNDECLARED_EXPORT')).toEqual([]);
     } finally { proj.cleanup(); }
   });
 });

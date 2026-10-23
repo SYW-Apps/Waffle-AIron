@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "1a283c58c8ac957a6bc765e9f2b5c6f020f279f33c293425bdb19c9251a13d0e"
+    "digest": "4d44d4f8d4a4eb2d51b3af7a71d5f0eb4c8e175df300140130ed9c9b509594ad"
   },
-  "lockedAt": "2026-10-22T20:52:13.653Z",
+  "lockedAt": "2026-10-23T21:06:27.906Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.1.4-dev.4",
+  "validatorVersion": "6.1.4-dev.13",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -1569,7 +1569,7 @@
     ".wai/specs/types/skill_freshness.yaml": "f2d4a9f68e95c5846028dacde122d79299c0a61bb604d9434e65a314d28933fa",
     ".wai/specs/types/skill_resource_descriptor.yaml": "807e385bc1db0d4065871e4a2fca7d273bbf8dd2e00c666e821e3c06638f0015",
     ".wai/specs/types/skills_export_result.yaml": "51a302c20ce6a8eebe6359c4aacfbb92d04dce4779fc53a839c08288e7be05e3",
-    ".wai/specs/types/source_file_facts.yaml": "a85cd0ca368cbf581fec0bbbc0f26fbd270588da3ff89e63e5c365b3ade228d9",
+    ".wai/specs/types/source_file_facts.yaml": "923f5141877f6c36fabc828cbd94a42e19118b4952a9b871130f2b5570cd49a1",
     ".wai/specs/types/source_file_status.yaml": "b0a5ba488e6b2b3d88c2ccd7e7fed579e3b87caf875cc42a93be0a8ce4684dae",
     ".wai/specs/types/spec_change.yaml": "9f3a157b97515f5eb4621a2e9d6f8129eb34ecfd9fe2df32f16259df3eba8471",
     ".wai/specs/types/spec_change_kind.yaml": "77df632e38c3dd0d1b47b3b1059b0a3097ef87785e7ef3ebb741cb47e6610ddc",
@@ -1716,7 +1716,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "2794b72165b61e1df9e457ae58297364cbba670aac45b699c56b812d2ff99ea1",
+    "design": "d853778fa0e0f68d706ca584ebc70dfe9ddc94e2632c6b5fbf976afee42c5f32",
     "release": "ea2df21d182cacc5b6ded6c549e012e5f6a08f43e9bafb39f99ca5ee297f8050",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1727,7 +1727,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.1.4-dev.4",
+      "validatorVersion": "6.1.4-dev.13",
       "doctrineDigest": "d969c77be21471d978d87fa49a6bd8c8d2adf8c020cd71858f66e40e4bdc21ff",
       "grade": "exact"
     },
