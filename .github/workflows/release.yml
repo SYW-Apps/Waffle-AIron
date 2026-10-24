@@ -23,31 +23,31 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
-            pkg_target: node20-win-x64
+            pkg_target: node24-win-x64
             smoke: true
             asset_ext: .zip
 
           - os: ubuntu-latest
             target: linux-x64
-            pkg_target: node20-linux-x64
+            pkg_target: node24-linux-x64
             smoke: true
             asset_ext: .tar.gz
 
           - os: ubuntu-latest
             target: linux-arm64
-            pkg_target: node20-linux-arm64
+            pkg_target: node24-linux-arm64
             smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-x64
-            pkg_target: node20-macos-x64
+            pkg_target: node24-macos-x64
             smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-arm64
-            pkg_target: node20-macos-arm64
+            pkg_target: node24-macos-arm64
             smoke: true
             asset_ext: .tar.gz
 
@@ -57,7 +57,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -297,7 +297,7 @@ jobs:
     name: Verify published CLI
     needs: publish-npm
     runs-on: ubuntu-latest
-    container: node:20
+    container: node:24
     steps:
       - name: Install the just-published version from the registry
         shell: bash
