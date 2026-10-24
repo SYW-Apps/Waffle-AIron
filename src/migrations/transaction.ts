@@ -157,7 +157,7 @@ function lockHostStores(rehearsal: Rehearsal, changes: FileChange[]): FileLockHa
   const files = [
     ...new Set(
       changes
-        .filter((c) => !c.path.startsWith('.wai/') && !whole.has(path.resolve(c.project)))
+        .filter((c) => !c.path.startsWith('.wai/') && !c.path.startsWith('.wairon/') && !whole.has(path.resolve(c.project)))
         .map((c) => path.resolve(c.project, c.path))
         .filter((file) => fs.existsSync(path.dirname(file))),
     ),
@@ -187,12 +187,14 @@ function lockOwners(owners: string[]): string[] {
   return taken;
 }
 
-/** Remove the tree lock's generation files from a .wai that holds nothing but them (and empty folders). */
+/** Remove the tree lock (its folder, or the old single file) from a .wai that holds no other file (empty folders aside). */
 function dropLockFilesOfEmptiedWai(wai: string): void {
   try {
-    const files = listFilesRecursive(wai, '');
-    if (files.length === 0 || !files.every((file) => path.basename(file).startsWith('.spec-write.lock.'))) return;
-    for (const file of files) fs.rmSync(file, { force: true });
+    const inLock = (file: string): boolean => path.relative(wai, file).split(path.sep)[0].startsWith('.spec-write.lock');
+    if (!listFilesRecursive(wai, '').every(inLock)) return;
+    for (const name of fs.readdirSync(wai)) {
+      if (name.startsWith('.spec-write.lock')) fs.rmSync(path.join(wai, name), { recursive: true, force: true });
+    }
   } catch {
     // Gone already, or not removable now: the prune below leaves the folder.
   }

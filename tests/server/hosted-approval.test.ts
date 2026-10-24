@@ -94,7 +94,7 @@ function dirHash(dir: string): string {
   const walk = (d: string): void => {
     for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
       // The tree write lock's generation files stay on disk by design: not content.
-      if (e.name.startsWith('.spec-write.lock.')) continue;
+      if (e.name.startsWith('.spec-write.lock')) continue;
       const p = path.join(d, e.name);
       if (e.isDirectory()) walk(p);
       else h.update(path.relative(dir, p)).update(fs.readFileSync(p));

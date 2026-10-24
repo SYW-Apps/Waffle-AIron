@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
 import { acquireFileLock, inspectFileLock, releaseFileLock, SPEC_TREE_LOCK_LIMITS, type FileLockHandle, type FileLockOptions } from '../utils/file-lock.js';
-import type { LockHolder } from '../utils/lock-holder.js';
+import { currentHolder, holderIsLocal, parseHolder, pidAlive, type LockHolder } from '../utils/lock-holder.js';
 import { SpecWriteConflictError } from '../utils/errors.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 
@@ -108,13 +108,16 @@ export function removeSpecFile(specPath: string, specsRoot: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * The lock of a project's tree: generation files `.wai/.spec-write.lock.<g>`
- * and `.wai/.spec-write.lock.<g>.end` (src/utils/file-lock.ts). Not spec
+ * The lock of a project's tree: generation files `.wai/.spec-write.lock/tree.lock.<g>`
+ * and `.wai/.spec-write.lock/tree.lock.<g>.end` (src/utils/file-lock.ts), inside
+ * the folder `.wai/.spec-write.lock/` (every ignore rule a tree has for the
+ * old lock file covers a folder of that name). Not spec
  * documents: the tree walk never lists them. LOCK_FILE is the name that keys
  * this process's holds and the guard's skip of the lock itself.
  */
-const LOCK_BASE = '.spec-write';
-const LOCK_FILE = `${LOCK_BASE}.lock`;
+const LOCK_FILE = '.spec-write.lock';
+/** The lock's name inside the folder: the generation files are tree.lock.<g>. */
+const LOCK_BASE = 'tree';
 /** The tree lock's wait (how long a writer waits before it gives up, naming the holder) and unreadable grace (a writer caught between creating and filling its lock file takes milliseconds, never this long). */
 const { waitMs: LOCK_WAIT_MS, graceMs: LOCK_UNREADABLE_GRACE_MS } = SPEC_TREE_LOCK_LIMITS;
 /** The holds this process has on each lock file, by normalized path. */
@@ -183,39 +186,55 @@ function treeLockOptions(key: string): FileLockOptions {
 export function lockTree(root: string): void {
   const dir = path.join(root, '.wai');
   if (!fs.existsSync(dir)) return;
-  const file = path.join(dir, LOCK_BASE);
+  const file = path.join(dir, LOCK_FILE, LOCK_BASE);
   const key = normalized(path.join(dir, LOCK_FILE));
   const held = lockHolds.get(key) ?? 0;
   if (held > 0) {
     lockHolds.set(key, held + 1);
     return;
   }
-  ignoreLockFiles(dir);
+  claimLockFolder(path.join(dir, LOCK_FILE), key);
   lockHandles.set(key, acquireFileLock(file, treeLockOptions(key)));
   lockHolds.set(key, 1);
 }
 
-/** The line .wai/.gitignore carries so the write lock's generation files are never committed. */
-export const LOCK_IGNORE_LINE = '.spec-write.lock*';
-
 /**
- * Keep the lock's files out of git: a .wai/.gitignore that exists gains the
- * line when it lacks it (a tree from before 6.2 ignored only the single
- * `.spec-write.lock`, while every generation now leaves a file behind);
- * anything else in it is kept. A tree without one is not given one here:
- * `wairon init` writes it, and taking a lock must add no file to every tree it
- * guards (a refused family migration leaves the family byte-identical).
- * Best effort: a read-only tree still locks.
+ * Make sure `.wai/.spec-write.lock` is a folder, created when absent and never
+ * removed. A single lock FILE of that name is what a pre-6.2 wairon left: one
+ * whose holder is gone, or that is older than the stale age (or unreadable past
+ * the grace), is reclaimed (removed, then the folder made); a fresh one is
+ * held, waited for, and after the wait the usual spec-tree-locked error names it.
  */
-export function ignoreLockFiles(waiDir: string): void {
-  const file = path.join(waiDir, '.gitignore');
-  try {
-    if (!fs.existsSync(file)) return;
-    const held = fs.readFileSync(file, 'utf8');
-    if (held.split(/\r?\n/).some((l) => l.trim() === LOCK_IGNORE_LINE)) return;
-    fs.writeFileSync(file, `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${LOCK_IGNORE_LINE}\n`);
-  } catch {
-    /* the lock itself does not depend on it */
+function claimLockFolder(folder: string, key: string): void {
+  const limits = SPEC_TREE_LOCK_LIMITS;
+  const deadline = Date.now() + limits.waitMs;
+  for (;;) {
+    let stat: fs.Stats | null = null;
+    try { stat = fs.lstatSync(folder); } catch { /* absent */ }
+    if (stat?.isDirectory()) return;
+    if (stat === null) {
+      try { fs.mkdirSync(folder, { recursive: true }); } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+      }
+      continue;
+    }
+    const age = Date.now() - stat.mtimeMs;
+    let holder: LockHolder | null = null;
+    try { holder = parseHolder(fs.readFileSync(folder, 'utf8')); } catch { /* unreadable */ }
+    const here = currentHolder(Date.now());
+    const reclaim = age > limits.staleMs
+      || (holder === null ? age > limits.graceMs : holderIsLocal(holder, here) && holder.pid !== here.pid && !pidAlive(holder.pid))
+      || (holder !== null && holder.pid === here.pid && (lockHolds.get(key) ?? 0) === 0);
+    if (reclaim) {
+      try { fs.unlinkSync(folder); } catch { /* raced or busy: look again */ }
+    } else if (Date.now() > deadline) {
+      throw (treeLockOptions(key).timeoutError as NonNullable<FileLockOptions['timeoutError']>)({
+        file: path.join(folder, LOCK_BASE), lockFile: folder, waitMs: limits.waitMs, holder,
+        remote: holder !== null && !holderIsLocal(holder, here),
+      });
+    } else {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10 + Math.floor(Math.random() * 20));
+    }
   }
 }
 
@@ -256,7 +275,7 @@ export interface TreeLockState {
  * the next write would reclaim is named so, never ended here.
  */
 export function inspectLock(root: string): TreeLockState | null {
-  const file = path.join(root, '.wai', LOCK_BASE);
+  const file = path.join(root, '.wai', LOCK_FILE, LOCK_BASE);
   const key = normalized(path.join(root, '.wai', LOCK_FILE));
   const found = inspectFileLock(file, treeLockOptions(key));
   if (found === null) return null;
@@ -339,13 +358,19 @@ function heldAbove(root: string): boolean {
   return false;
 }
 
+/** Whether `file` is the lock or lies inside it (the lock's folder, or a pre-6.2 single file). */
+function insideLock(root: string, file: string): boolean {
+  const rel = path.relative(path.join(root, '.wai'), path.resolve(file)).split(path.sep);
+  return rel[0] === LOCK_FILE;
+}
+
 /** The guard: the tree's lock around one write (unless already held), and the read-then-write check. */
 function enterWrite(file: string): () => void {
   const root = treeRootOf(file);
   if (root === null) return () => undefined;
   const key = normalized(path.join(root, '.wai', LOCK_FILE));
   // The lock file itself is never written through the helper.
-  if (normalized(file) === key || path.basename(file).startsWith(LOCK_FILE + '.')) return () => undefined;
+  if (normalized(file) === key || insideLock(root, file)) return () => undefined;
   // A tree inside one this process holds (a part, a member folder a family
   // commit swaps) is covered by that hold: no lock file is made inside it,
   // so a commit that empties the folder never leaves its .wai behind.

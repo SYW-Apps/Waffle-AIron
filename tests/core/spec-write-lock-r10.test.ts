@@ -43,8 +43,10 @@ function project(): string {
 // The next lock generation of the tree: one past the highest generation that has ended (the setup's own writes took and released the first ones).
 // Written without an .end marker beside it, it is the live lock.
 const lockFile = (dir: string): string => {
-  const ended = fs.readdirSync(path.join(dir, '.wai')).map((n) => /^\.spec-write\.lock\.(\d+)\.end$/.exec(n)).filter((m) => m !== null).map((m) => Number(m![1]));
-  return path.join(dir, '.wai', `.spec-write.lock.${Math.max(0, ...ended) + 1}`);
+  const lockDir = path.join(dir, '.wai', '.spec-write.lock');
+  fs.mkdirSync(lockDir, { recursive: true });
+  const ended = fs.readdirSync(lockDir).map((n) => /^tree\.lock\.(\d+)\.end$/.exec(n)).filter((m) => m !== null).map((m) => Number(m![1]));
+  return path.join(lockDir, `tree.lock.${Math.max(0, ...ended) + 1}`);
 };
 
 afterEach(() => {

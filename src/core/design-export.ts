@@ -583,6 +583,14 @@ function composeDependencies(
   ].sort((a, b) => compareOrdinal(a.alias, b.alias));
 }
 
+/** The dependency list with the public names the projection wrote folded into each one's uses. */
+function foldUsedNames(listed: DesignDependency[], used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency[] {
+  return listed.map((d) => {
+    const extra = used.get(d.alias);
+    return extra === undefined ? d : { ...d, uses: [...new Set([...d.uses, ...extra])].sort(compareOrdinal) };
+  });
+}
+
 /**
  * idesign_exporter.dependencies — the project's dependencies as the export lists
  * them, sorted by alias: each externals binding bound to the digest the externals
@@ -656,7 +664,7 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
     .sort(byKey);
   const typeSections = types.map((t) => typeSection(t, keys)).sort(byKey);
   // Step 13: the dependency section, with the public names the projection above wrote.
-  const dependencySection = composeDependencies(resolveExternals(), members, readLockOrNull(), keys.used);
+  const dependencySection = foldUsedNames(dependencies(), keys.used);
   const typeGroups = groups.map(typeGroupSection).sort(byKey);
 
   const design: DesignExport = {

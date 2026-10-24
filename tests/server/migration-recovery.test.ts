@@ -34,7 +34,7 @@ function digests(root: string): Record<string, string> {
   const walk = (dir: string): void => {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       // The tree write lock's generation files stay on disk by design: not content.
-      if (entry.name.startsWith('.spec-write.lock.')) continue;
+      if (entry.name.startsWith('.spec-write.lock')) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) walk(full);
       else out[path.relative(root, full)] = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex');

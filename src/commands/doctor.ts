@@ -258,7 +258,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // error pointing at --fix; silent when there is none.
   reportPendingTransactions(tally);
 
-  // Write lock: a .wai/.spec-write.lock that is present, with its holder;
+  // Write lock: a live generation in .wai/.spec-write.lock/, with its holder;
   // silent when there is none.
   reportTreeLock(tally);
 
@@ -1124,7 +1124,7 @@ function reportPendingTransactions(tally: Tally): void {
   }
 }
 
-/** Plain doctor: the spec tree's write lock, when its file is present — who holds it, and whether the next write waits or breaks it. */
+/** Plain doctor: the spec tree's write lock, when a live generation is present in .wai/.spec-write.lock/ — who holds it, and whether the next write waits or breaks it. */
 function reportTreeLock(tally: Tally): void {
   let lock: TreeLockState | null;
   try {

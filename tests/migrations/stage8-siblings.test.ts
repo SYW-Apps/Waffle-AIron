@@ -32,7 +32,7 @@ const hook = vi.hoisted(() => ({
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   const wrap = <A extends unknown[], R>(op: string, fn: (...args: A) => R) => (...args: A): R => {
-    const injected = String(args[0]).includes('.spec-write.lock.') ? undefined : hook.before?.(op);
+    const injected = String(args[0]).includes('.spec-write.lock') ? undefined : hook.before?.(op);
     if (injected) throw injected;
     return fn(...args);
   };

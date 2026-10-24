@@ -2249,11 +2249,6 @@ const SPEC_SCHEMAS = {
   group: GroupSpecSchema,
 } as const;
 
-/** A group's home: the subsystem whose types folder holds it, '' for the shared types folder. */
-export const groupHomeOf = (group: GroupSpec): string => group.subsystem ?? '';
-
-
-
 /** What a write did at one path of a stored spec. */
 export type SpecChangeKind = 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated' | 'reordered';
 
@@ -5793,7 +5788,7 @@ export class SpecWorkspace {
     const typeIds = index.types.filter((t) => t.group === id).map((t) => t.id);
     const childIds = index.groups.filter((g) => g.parent === id).map((g) => g.id);
     this.moveGroupFolder(file, newIndex);
-    const rewrite = (target: string | undefined, key: 'group' | 'parent', kind: SpecDocumentKind): void => {
+    const retarget = (target: string | undefined, key: 'group' | 'parent', kind: SpecDocumentKind): void => {
       if (!target) return;
       const doc = readSpecFile(target) as Record<string, unknown> | null;
       if (!doc) return;
@@ -5810,11 +5805,11 @@ export class SpecWorkspace {
     const after = this.scanAll();
     const retargeted: string[] = [];
     for (const typeId of typeIds) {
-      rewrite(after.paths.type[typeId], 'group', 'type');
+      retarget(after.paths.type[typeId], 'group', 'type');
       retargeted.push(typeId);
     }
     for (const childId of childIds) {
-      rewrite(after.paths.group[childId], 'parent', 'group');
+      retarget(after.paths.group[childId], 'parent', 'group');
       retargeted.push(childId);
     }
     registryInvalidateCache();

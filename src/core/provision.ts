@@ -2646,7 +2646,7 @@ function deleteMemberWai(memberDir: string): string[] {
   const wai = path.join(memberDir, '.wai');
   if (!fs.existsSync(wai)) return [];
   const deleted = listFilesRecursive(wai, '')
-    .filter((f) => !path.relative(wai, f).split(path.sep).includes('transactions') && !path.basename(f).startsWith('.spec-write.lock'))
+    .filter((f) => { const segs = path.relative(wai, f).split(path.sep); return !segs.includes('transactions') && segs[0] !== '.spec-write.lock'; })
     .map((f) => {
       const rel = toPosixPath(path.relative(wai, f));
       // What is left under specs/ once its subsystems and types moved is its L0, whose pieces were placed above.

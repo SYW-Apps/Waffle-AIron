@@ -68,7 +68,7 @@ describe('journey: two sessions write one spec at the same moment (tinkerer-r9 M
       expect(stored.description, `round ${round}`).toBe(`WRITTEN BY SESSION A, round ${round}`);
       expect(stored.name, `round ${round}`).toBe(`Written by session B, round ${round}`);
     }
-    expect(fs.readdirSync(path.join(dir, '.wai')).filter((n) => /^\.spec-write\.lock\.\d+$/.test(n) && !fs.existsSync(path.join(dir, '.wai', n + '.end')))).toEqual([]);
+    expect(fs.readdirSync(path.join(dir, '.wai', '.spec-write.lock')).filter((n) => /^tree\.lock\.\d+$/.test(n) && !fs.existsSync(path.join(dir, '.wai', '.spec-write.lock', n + '.end')))).toEqual([]);
   }, 240_000);
 });
 

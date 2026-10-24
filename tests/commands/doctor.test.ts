@@ -235,9 +235,11 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
     buildProject(rootDir);
     process.chdir(rootDir);
     // The fixture's own writes left generations behind: the remote holder takes the next one.
-    const highest = Math.max(0, ...fs.readdirSync(path.join(rootDir, '.wai')).map((n) => /^\.spec-write\.lock\.(\d+)/.exec(n)?.[1]).filter(Boolean).map(Number));
+    const lockDir = path.join(rootDir, '.wai', '.spec-write.lock');
+    fs.mkdirSync(lockDir, { recursive: true });
+    const highest = Math.max(0, ...fs.readdirSync(lockDir).map((n) => /^tree\.lock\.(\d+)/.exec(n)?.[1]).filter(Boolean).map(Number));
     fs.writeFileSync(
-      path.join(rootDir, '.wai', `.spec-write.lock.${highest + 1}`),
+      path.join(lockDir, `tree.lock.${highest + 1}`),
       serializeHolder({ pid: 4242, takenAt: Date.now(), host: 'other-machine', pidNamespace: 'pidns=[4026599999]' }, 'nonce'),
     );
 

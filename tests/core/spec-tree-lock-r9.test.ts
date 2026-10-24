@@ -85,13 +85,15 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
     const dir = tree();
     const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
     const deadPid = Number(gone.stdout);
-    fs.writeFileSync(path.join(dir, '.wai', '.spec-write.lock.1'), `${deadPid}\n${Date.now()}\n`);
+    const lockDir = path.join(dir, '.wai', '.spec-write.lock');
+    fs.mkdirSync(lockDir, { recursive: true });
+    fs.writeFileSync(path.join(lockDir, 'tree.lock.1'), `${deadPid}\n${Date.now()}\n`);
     const started = Date.now();
     lockTree(dir);
     expect(Date.now() - started).toBeLessThan(5_000);
     // The dead holder's generation was ended, and this process holds the next one.
-    expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock.1'))).toBe(false);
-    expect(fs.readFileSync(path.join(dir, '.wai', '.spec-write.lock.2'), 'utf8').split('\n')[0]).toBe(String(process.pid));
+    expect(fs.existsSync(path.join(lockDir, 'tree.lock.1'))).toBe(false);
+    expect(fs.readFileSync(path.join(lockDir, 'tree.lock.2'), 'utf8').split('\n')[0]).toBe(String(process.pid));
     unlockTree(dir);
     expect(inspectLock(dir)).toBeNull();
   });
