@@ -287,9 +287,16 @@ export async function runServe(options: HostOptions = {}): Promise<void> {
   } catch (e) {
     throw new WaironError(e instanceof Error ? e.message : String(e));
   }
+  // The ports actually bound (a configured 0 means the OS picked one).
+  let bound;
+  try {
+    bound = await handle.listening;
+  } catch (e) {
+    throw new WaironError(`Could not listen: ${e instanceof Error ? e.message : String(e)}`);
+  }
   logger.success('wairon hosting server started.');
-  logger.info(`  data plane:  ${chalk.cyan(`http://${cfg.host}:${cfg.port}/mcp`)}   (auth ${cfg.authEnabled ? chalk.green('ON') : chalk.yellow('OFF')})`);
-  logger.info(`  admin plane: ${chalk.cyan(`http://${cfg.adminHost}:${cfg.adminPort}/admin`)}`);
+  logger.info(`  data plane:  ${chalk.cyan(`http://${cfg.host}:${bound.port}/mcp`)}   (auth ${cfg.authEnabled ? chalk.green('ON') : chalk.yellow('OFF')})`);
+  logger.info(`  admin plane: ${chalk.cyan(`http://${cfg.adminHost}:${bound.adminPort}/admin`)}`);
   logger.info(`  data dir:    ${chalk.gray(cfg.dataDir)}`);
   logger.blank();
   logger.info('Press Ctrl+C to stop.');
@@ -353,7 +360,8 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   // dev session is reused, not churned) while isolating unrelated projects.
   const hash = crypto.createHash('sha256').update(cwd).digest('hex').slice(0, 16);
   const dataDir = path.join(os.tmpdir(), 'wairon-dev', hash);
-  fs.mkdirSync(dataDir, { recursive: true });
+  // The directory is not created here: registering the project resets a stale one first (a dev data dir is
+  // disposable, never backed up or migrated), and nothing may be written into it before that.
 
   const port = options.port ? Number(options.port) : 8080;
   // A permissive-but-loopback exposure: the web UI on, TLS not required (plain http
@@ -384,8 +392,9 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   // Register the cwd as the single local project 'local' (idempotent upsert). Its
   // rootPath is the cwd itself, so resolveProjectRoot('local') → the cwd, and the
   // whole hosted graph pipeline resolves against the developer's own .wai/ tree.
-  // The host admits this registration only for the dev-mode config built above.
-  localAdmin.registerLocalDevProject(cfg, 'local', cwd);
+  // The host admits this registration only for the dev-mode config built above. It also resets a stale
+  // data dir and registers every readable member of the family; an unreadable member never stops the start.
+  const registration = localAdmin.registerLocalDevProject(cfg, 'local', cwd);
 
   let handle;
   try {
@@ -399,6 +408,15 @@ export async function runDev(options: HostOptions = {}): Promise<void> {
   logger.info(`  open:      ${chalk.cyan(url)}`);
   logger.info(`  project:   ${projectId ?? path.basename(cwd)} at ${chalk.gray(cwd)}  ${chalk.gray('(served as "local")')}`);
   logger.info(`  data dir:  ${chalk.gray(dataDir)}  ${chalk.gray('(ephemeral)')}`);
+  if (registration.reset) logger.info(chalk.gray('  (a stale development data dir was discarded and the start is fresh)'));
+  const unreadable = registration.members.filter((m) => m.action === 'unreadable');
+  if (unreadable.length > 0) {
+    logger.blank();
+    logger.warn(`${unreadable.length} member(s) of the family could not be loaded (the rest is served):`);
+    for (const m of unreadable) {
+      logger.warn(`  ${m.qualifier}${m.record.memberPath ? chalk.gray(` (${m.record.memberPath})`) : ''}: ${m.reason ?? 'it cannot be read'}`);
+    }
+  }
   logger.blank();
   logger.info('An agent edits specs; refresh the page to see the live graph. Press Ctrl+C to stop.');
 
@@ -735,7 +753,6 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
               r.role ? `legacy role ${r.role}` : '',
               r.label ? `label "${r.label}"` : '',
               r.expiresAt ? `expires ${r.expiresAt}` : '',
-              r.revokedAt ? `revoked ${r.revokedAt}` : '',
             ].filter(Boolean);
             logger.info(`  ${r.id}  ${owner}  projects ${r.projects.join(',')}${extras.length ? `  ${extras.join('  ')}` : ''}`);
           }

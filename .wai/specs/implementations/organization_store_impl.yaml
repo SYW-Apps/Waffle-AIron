@@ -1,28 +1,29 @@
 id: organization_store_impl
 name: Organization Store Implementation
 description: >-
-  Authoritative in-memory holder of the hosted organization units and project placements,
-  file-backed as two collections under one file in the server data root (organization.json).
+  Read-through file I/O over organization units and project placements, one file
+  (organization.json): load parses it fresh; update holds the file's write lock across a fresh read
+  of BOTH collections and the replacement of both.
 contract: iorganization_store
 sourcePath: src/server/organization.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read both persisted collections — organization units and project placements — from the
-      organization.json file under the hosted data root and hold them as the authoritative in-memory
-      representation, returning them together as an OrganizationState. A missing file yields two
-      empty collections; an unreadable file or structurally invalid JSON fails with a storage error
-      naming the path, so a lost placement never silently detaches a project from its organization
-      unit and a lost unit never silently orphans its children.
-  - name: replaceAll
+      Read organization.json fresh (no in-memory copy), returning the units and placements. A
+      missing file yields the empty state; an unreadable file or structurally invalid JSON fails
+      with a storage error naming the path.
+  - name: update
     narrative: []
     intent: >-
-      Swap both authoritative in-memory collections to the supplied complete unit and placement sets
-      in one assignment, only ever called by the owned registry after durable persistence has
-      succeeded. Never partially applies, so concurrent hierarchy and membership queries through the
-      index always observe a consistent pair of collections.
+      Under organization.json's write lock (file_write_lock.run), read the state fresh - absent is
+      the empty state, a file that exists but cannot be read or parsed throws and nothing is written
+      - apply the change (units and placements together), replace the file atomically via
+      write-temp-then-rename and release the lock, also when the change throws. Answers the state
+      written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:07:41.234Z'
-updatedAt: '2026-07-09T22:13:32.678Z'
+updatedAt: '2026-10-23T22:23:35.096Z'

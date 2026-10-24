@@ -12,7 +12,7 @@ import { routerTree } from '../helpers/conformance-r7-trees.js';
 // A guard router that tests the WHOLE path rather than its split segments: an
 // anchored regular expression (`/re/.exec(req.path)`, `.test`, `path.match`),
 // held in a const and tested after, or the path compared with a string. The
-// 6.2.0 QA gate found an honest `GET /orders/{orderId}` served this way
+// 6.1.3 QA gate found an honest `GET /orders/{orderId}` served this way
 // reported as UNROUTED_ENDPOINT.
 // ---------------------------------------------------------------------------
 

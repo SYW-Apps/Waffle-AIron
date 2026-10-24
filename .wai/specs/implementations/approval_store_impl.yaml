@@ -1,28 +1,30 @@
 id: approval_store_impl
 name: Approval Store Implementation
 description: >-
-  Authoritative in-memory holder of the redacted approval-request set, file-backed under the server
-  data root (approvals.json).
+  Read-through file I/O over the redacted approval-request set at approvals.json under the server
+  data root: load parses the file fresh per call; update holds the file's write lock across a fresh
+  read and the replacement.
 contract: iapproval_store
 sourcePath: src/server/approvals.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted approval-request set from the approvals file (approvals.json) under the
-      server data root and hold it as the authoritative in-memory representation, returning the
-      loaded requests. A missing file yields an empty set; an unreadable file or structurally
-      invalid JSON fails with a storage error naming the path — the store never silently drops
-      persisted approvals, because a lost pending request would silently deny a legitimate action or
-      strand an approved one.
-  - name: replaceAll
+      Read and parse approvals.json fresh from disk (no in-memory copy), returning the requests. A
+      missing file yields an empty set; an unreadable file or structurally invalid JSON fails with a
+      storage error naming the path - the store never silently drops persisted approvals, because a
+      lost pending request would silently deny a legitimate action or strand an approved one.
+  - name: update
     narrative: []
     intent: >-
-      Swap the authoritative in-memory request set to the supplied complete set in one assignment,
-      only ever called by the owned registry after durable persistence has succeeded. Never
-      partially applies, so concurrent status and decision queries through the index always observe
-      a consistent request set.
+      Under approvals.json's write lock (file_write_lock.run), read the set fresh - an absent file
+      is the empty set, a file that exists but cannot be read or parsed throws and nothing is
+      written - apply the change, replace the file with the result atomically (a temporary sibling
+      named for this writer, then renamed over the file), and release the lock, also when the change
+      throws, which writes nothing. Answers the set written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-09T19:30:56.124Z'
-updatedAt: '2026-07-09T19:33:03.735Z'
+updatedAt: '2026-10-23T22:18:19.269Z'

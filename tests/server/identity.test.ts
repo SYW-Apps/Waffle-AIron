@@ -262,8 +262,8 @@ describe('identity orchestrator (sdd_host)', () => {
     );
     const tokenBySubject = mintOwnedToken('subj-42', []);
     identity.setUserStatus(cfg, MASTER, 'rec-42', 'inactive');
-    const rec = persistedByHash(hashToken(tokenBySubject));
-    expect(rec?.revokedAt).toBeTruthy();
+    // Revoked means deleted: the record is gone.
+    expect(persistedByHash(hashToken(tokenBySubject))).toBeUndefined();
   });
 
   // 3rd-review B1: the mint deactivation guard must resolve the owner by the
@@ -673,11 +673,11 @@ describe('identity orchestrator (sdd_host)', () => {
     const count = revokeAllForOwner(dataDir, 'owner-1');
     expect(count).toBe(2);
 
-    // owner-1's tokens no longer authenticate and carry a revokedAt timestamp.
+    // owner-1's tokens no longer authenticate and their records are gone.
     expect(authenticate(dataDir, owned1).authenticated).toBe(false);
     expect(authenticate(dataDir, owned2).authenticated).toBe(false);
     const owner1Recs = listCredentials(dataDir, '*').filter((r) => r.ownerSubject?.userId === 'owner-1');
-    expect(owner1Recs.every((r) => typeof r.revokedAt === 'string')).toBe(true);
+    expect(owner1Recs).toEqual([]);
 
     // A different owner's token and an unowned token are untouched.
     expect(authenticate(dataDir, otherOwner).authenticated).toBe(true);
@@ -688,7 +688,7 @@ describe('identity orchestrator (sdd_host)', () => {
     mintOwnedToken('owner-x');
 
     expect(revokeAllForOwner(dataDir, 'owner-x')).toBe(1);
-    // A second pass revokes nothing — already-revoked records are skipped.
+    // A second pass revokes nothing — the records are already gone.
     expect(revokeAllForOwner(dataDir, 'owner-x')).toBe(0);
     // An owner with no credentials at all revokes nothing.
     expect(revokeAllForOwner(dataDir, 'nobody')).toBe(0);

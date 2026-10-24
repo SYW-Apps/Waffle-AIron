@@ -12,6 +12,7 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadGroupSpecs,
   clearLoaderIssues,
   getLoaderIssues,
   scanAllSpecs,
@@ -232,6 +233,12 @@ export interface ValidationResult {
   valid: boolean;
   issues: ValidationIssue[];
   /**
+   * The wairon release of the process that ran the validation (WAIRON_VERSION),
+   * set by validateProject, validateAsComplete and validateFamily alike, so a
+   * reading can be dated. Not an input of the gate identity, never a finding.
+   */
+  validatorVersion: string;
+  /**
    * One line, never a finding. The owner's gate: present when the project
    * declares externals, saying they were judged against their pins and the
    * advisory live comparison reads their live producers. A family run: present when externals were left out
@@ -334,6 +341,7 @@ export function validateRegistry(registry: Registry, rules: RulesConfig): Valida
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
+    validatorVersion: WAIRON_VERSION,
   };
 }
 
@@ -428,6 +436,7 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
+    validatorVersion: WAIRON_VERSION,
   };
 }
 
@@ -553,7 +562,7 @@ export function validateProject(
   const run = runOwnersGate(options, projectType);
   // Step 53: how the code was read, one line beside the hint.
   const unrouted = run.unroutedPortals ?? [];
-  return { ...run.result, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };
+  return { ...run.result, validatorVersion: WAIRON_VERSION, codeReading: codeReadingOf(run.codeModel, unrouted), ...codeCompactOf(run.codeModel, unrouted) };
 }
 
 /** What the code half CHECKS at each reading, in the order a summary names them. */
@@ -830,7 +839,7 @@ function runOwnersGate(
         : `The L0 System spec (.wai/specs/.index.yaml) is missing.${pending}`));
       // Every exit folds: the fold's bookkeeping fields never leave validation.
       foldUnparsedReferences(issues);
-      return { result: { valid: false, issues }, codeModel };
+      return { result: { valid: false, issues, validatorVersion: WAIRON_VERSION }, codeModel };
     }
 
     // A --subsystem scope that names no loaded subsystem is almost always a typo
@@ -858,7 +867,7 @@ function runOwnersGate(
           ),
         );
         foldUnparsedReferences(issues);
-        return { result: { valid: false, issues }, codeModel };
+        return { result: { valid: false, issues, validatorVersion: WAIRON_VERSION }, codeModel };
       }
     }
 
@@ -913,6 +922,9 @@ function runOwnersGate(
     // specs already hold canonical text, so the stored spellings are visible
     // only here.
     const typeSpellings = typeSpellingFacts();
+    // Step 47: the type group tree and the files the groups and grouped types were read from.
+    const groups = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+    const specPaths = scanAllSpecs().paths;
 
     const ctx = buildRuleContext({
       system,
@@ -921,6 +933,9 @@ function runOwnersGate(
       interfaces,
       implementations,
       types,
+      groups,
+      groupFiles: specPaths.group,
+      typeFiles: specPaths.type,
       rules,
       projectType,
       scopeSubsystem,
@@ -965,7 +980,7 @@ function runOwnersGate(
     // project's own reach model, with its own network declaration.
     if (reachOnly) {
       foldUnparsedReferences(issues);
-      return { result: { valid: true, issues }, codeModel, reach: projectReach(ctx, boundConfig?.network) };
+      return { result: { valid: true, issues, validatorVersion: WAIRON_VERSION }, codeModel, reach: projectReach(ctx, boundConfig?.network) };
     }
 
     // Run the composed sequence against the context.
@@ -990,6 +1005,7 @@ function runOwnersGate(
       result: {
         valid: issues.every((i) => i.severity !== 'error'),
         issues,
+        validatorVersion: WAIRON_VERSION,
         ...(hint ? { hint } : {}),
       },
       codeModel,
@@ -1115,6 +1131,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
     return {
       result: {
         valid: true,
+        validatorVersion: WAIRON_VERSION,
         issues: [issue('warning', 'PART_UNPINNED', `Part of "${parentId}"; validate from the parent${why}. To judge it alone, run \`wairon externals pin\` here while the parent is on disk${config.partOf!.path ? ` (at ${config.partOf!.path})` : ''}.`)],
       },
       codeModel: buildCodeModel([], [], root, [], []),
@@ -1213,7 +1230,7 @@ function judgePartAlone(config: ProjectConfig, scopeSubsystem: string | undefine
   foldUnparsedReferences(kept);
   kept.push(issue('notice', 'PART_JUDGED_ALONE', `This part of "${parentId}" was judged alone against its pinned excerpt (${excerpt.digest}); `
     + `${skipped.length > 0 ? `the whole-system rules ${skipped.map((r) => r.name).join(', ')} were skipped` : 'no rule was skipped'}. The full verdict is the parent's: validate from "${parentId}".`));
-  return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept }, codeModel, unroutedPortals: portalsWithoutRouter(ctx) };
+  return { result: { valid: kept.every((i) => i.severity !== 'error'), issues: kept, validatorVersion: WAIRON_VERSION }, codeModel, unroutedPortals: portalsWithoutRouter(ctx) };
 }
 
 /**
@@ -1287,7 +1304,7 @@ export function validateDesign(options?: ValidationOptions): ValidationResult {
   const sequence = ruleSequence();
   const doctrineDigest = analyzerDigest(sequence, { rules: options?.rules ?? projectRules() });
   // Step 3.
-  return { ...result, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
+  return { ...result, validatorVersion: WAIRON_VERSION, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
 }
 
 export function validateAsComplete(options?: ValidationOptions): ValidationResult {
@@ -1296,7 +1313,7 @@ export function validateAsComplete(options?: ValidationOptions): ValidationResul
   // it — never removed from the issues; the lock partitions with designOnly.
   const sequence = ruleSequence();
   const doctrineDigest = analyzerDigest(sequence, { rules: options?.rules ?? projectRules() });
-  return { ...result, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
+  return { ...result, validatorVersion: WAIRON_VERSION, analysis: codeAnalysisOf(result, sequence, codeModel, doctrineDigest) };
 }
 
 /** The bound project's rule tuning, when its configuration reads. */
@@ -1348,7 +1365,7 @@ function codeAnalysisOf(
  * validator, which keeps the owner's gate a pure function of one project.
  */
 export function validateFamily(options: ValidationOptions): ValidationResult {
-  return familyValidator.run(options);
+  return { ...familyValidator.run(options), validatorVersion: WAIRON_VERSION };
 }
 
 /**

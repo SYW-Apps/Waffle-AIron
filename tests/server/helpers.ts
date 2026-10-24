@@ -227,3 +227,35 @@ export function seedExportedSurface(root: string, exports: SeededExport[]): void
   system.publicInterfaces = l0;
   fs.writeFileSync(indexPath, yaml.dump(system));
 }
+
+/**
+ * The ports a driver subprocess bound. The driver (dataplane-content.driver.ts)
+ * listens on port 0 and prints one `DRIVER_LISTENING {"port":…,"adminPort":…}`
+ * line on stdout once both listeners are up, so no port is ever picked in the
+ * test and bound later (a free-port probe races with parallel tests). Spawn the
+ * child with a piped stdout; this keeps draining it.
+ */
+export function awaitDriverPorts(
+  child: import('node:child_process').ChildProcess,
+  timeoutMs = 30_000,
+): Promise<{ port: number; adminPort: number }> {
+  return new Promise((resolve, reject) => {
+    let buf = '';
+    const timer = setTimeout(() => done(new Error(`driver never reported its ports (stdout so far: ${buf.slice(0, 500)})`)), timeoutMs);
+    const done = (err?: Error, ports?: { port: number; adminPort: number }) => {
+      clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(ports!);
+    };
+    child.stdout!.on('data', (d) => {
+      buf += String(d);
+      const m = /DRIVER_LISTENING (\{.*\})/.exec(buf);
+      if (m) {
+        const ports = JSON.parse(m[1]!) as { port: number; adminPort: number };
+        buf = '';
+        done(undefined, ports);
+      }
+    });
+    child.once('exit', (code) => done(new Error(`driver exited (${code}) before listening; stdout: ${buf.slice(0, 500)}`)));
+  });
+}

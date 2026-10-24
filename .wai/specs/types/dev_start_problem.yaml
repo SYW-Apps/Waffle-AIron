@@ -1,0 +1,31 @@
+kind: value-object
+id: dev_start_problem
+name: DevStartProblem
+description: >-
+  One thing that kept part of the project's family from loading in `wairon dev`, with the reason in
+  words a person acts on. A dev start never stops on it: the readable family is served, and each
+  such problem is printed at startup and shown in the web UI's banner until the cause is fixed (it
+  is read live from the family's declarations, so fixing the member clears it without a restart).
+subsystem: sdd_host
+fields:
+  - name: member
+    type: string
+    description: >-
+      The member the problem is about, as the family declares it: its qualifier (the top id plus one
+      alias per hop)
+    optional: false
+  - name: path
+    type: string
+    description: The member's path as declared in its parent, when it declares one
+    optional: true
+  - name: reason
+    type: string
+    description: >-
+      Why it cannot be registered: the declaration's own problem, a path that escapes its parent, a
+      missing directory, a project.yaml that cannot be read or fails its schema, or an id that is no
+      project id
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-23T22:28:11.334Z'
+updatedAt: '2026-10-23T22:31:44.895Z'

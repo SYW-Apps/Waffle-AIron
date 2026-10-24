@@ -176,6 +176,14 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: buildCanvasDataModel
+      - stepNumber: 2
+        description: >-
+          When the model is empty (no subsystem, no component, no finding), read the L0 through the
+          spec tree portal: a tree with an L0 is drawn as it is, and one with none says the project
+          holds no system spec instead of drawing an empty page
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSystemSpec
   - name: packEntryRef
     narrative:
       - stepNumber: 1
@@ -221,4 +229,4 @@ methods:
         targetMethod: describeProject
 status: complete
 createdAt: '2026-07-04T12:53:08.391Z'
-updatedAt: '2026-10-18T14:29:37.166Z'
+updatedAt: '2026-10-24T11:32:15.553Z'

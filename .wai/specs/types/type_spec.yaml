@@ -48,7 +48,12 @@ fields:
     optional: true
   - name: group
     type: string
-    description: Optional logical group id
+    description: >-
+      The type group (group_spec) this type sits in; absent for a type in no group. The group must
+      exist (TYPE_GROUP_UNKNOWN) and the type's file sits in the group's folder
+      (TYPE_GROUP_MISPLACED). Setting or changing it through sdd_add_type or sdd_update_spec
+      retargets the type: the registry saves the file into the new group's folder. A grouping never
+      changes the type's id or any reference to it.
     optional: true
   - name: fields
     type: list<any>
@@ -237,4 +242,4 @@ methods:
     symbol: typeDesignView
 sourcePath: src/models/specs.ts
 createdAt: '2026-07-06T21:22:25.911Z'
-updatedAt: '2026-10-19T18:22:40.549Z'
+updatedAt: '2026-10-23T22:18:45.960Z'

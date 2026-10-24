@@ -1555,6 +1555,57 @@ methods:
     detail: full
     symbol: check
     exportedVia: typeRefScopeRule
+  - name: typeGroups
+    sourcePath: src/core/rules/integrity/type-groups.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Index the groups by id from ctx.groups (an absent list is no groups), and the type ids
+          each group holds
+        type: local
+      - stepNumber: 2
+        description: For each type that names a group
+        type: loop
+        loopKind: forEach
+        over: ctx.types, in scope, that name a group
+        endStep: 3
+      - stepNumber: 3
+        description: >-
+          When the named group is not among the groups, report TYPE_GROUP_UNKNOWN on the type,
+          quoting the missing group's id so a typo reads as one
+        type: local
+      - stepNumber: 4
+        description: For each group
+        type: loop
+        loopKind: forEach
+        over: the groups, in scope
+        endStep: 6
+      - stepNumber: 5
+        description: >-
+          When it names a parent, report GROUP_PARENT_UNKNOWN if the parent is not a declared group,
+          and GROUP_PARENT_CROSS_HOME if it is one but lives in another home (a subsystem's types
+          folder against the shared one, or two subsystems'), naming both homes
+        type: local
+      - stepNumber: 6
+        description: >-
+          Follow the parent chain with group_spec.cycles; report GROUP_CYCLE once per cycle, on the
+          group with the smallest id, naming every group in it
+        type: local
+      - stepNumber: 7
+        description: >-
+          Compare the file each group was read from with the folder its chain names
+          (group_spec.chain under its home's types folder), and each grouped type's file with its
+          group's folder; report TYPE_GROUP_MISPLACED for each that differs, saying `wairon doctor
+          --fix` moves it. A group whose chain is broken or cyclic is not compared: its errors are
+          already reported
+        type: local
+      - stepNumber: 8
+        description: Nothing more to judge
+        type: return
+        outcome: findings reported
+    detail: full
+    symbol: check
+    exportedVia: typeGroupsRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-21T21:19:48.122Z'
+updatedAt: '2026-10-23T22:26:11.676Z'

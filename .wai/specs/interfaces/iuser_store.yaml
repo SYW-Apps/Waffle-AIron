@@ -6,19 +6,21 @@ description: >-
 component: user_store
 methods:
   - name: load
-    description: Load all persisted hosted user records into the authoritative store representation.
+    description: >-
+      Read users.json fresh (no in-memory copy). A missing file yields an empty set; an unreadable
+      file or structurally invalid JSON fails with a storage error naming the path.
     signature: 'load(): list<HostedUserRecord>'
     returns: list<HostedUserRecord>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Replace the store contents with the supplied complete user-record set after persistence has
-      succeeded.
-    signature: 'replaceAll(records: list<HostedUserRecord>): void'
-    returns: void
-    params:
-      - name: records
-        type: list<HostedUserRecord>
+      Read the hosted-user set fresh and persist what the change makes of it, holding the file's
+      write lock (file_write_lock) across both, so a writer in another process that reads and writes
+      the same file in between is never lost; a change that throws writes nothing; a file that
+      exists but cannot be read or parsed throws. Answers the set written.
+    signature: 'update(change: (records: HostedUserRecord[]) => HostedUserRecord[]): HostedUserRecord[]'
+    returns: list<HostedUserRecord>
+    effect: write
 status: complete
 createdAt: '2026-07-08T20:16:02.168Z'
-updatedAt: '2026-10-04T10:19:45.552Z'
+updatedAt: '2026-10-23T22:22:21.263Z'

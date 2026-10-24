@@ -35,7 +35,7 @@ const hook = vi.hoisted(() => ({
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
   const wrap = <A extends unknown[], R>(op: string, fn: (...args: A) => R) => (...args: A): R => {
-    const injected = hook.before?.(op);
+    const injected = String(args[0]).includes('.spec-write.lock') ? undefined : hook.before?.(op);
     if (injected) throw injected;
     return fn(...args);
   };
@@ -107,6 +107,9 @@ describe('stage 7 — a hosted detach relocates the member atomic-or-nothing', (
     const out: Record<string, string> = {};
     const walk = (at: string): void => {
       for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
+        // The tree write lock's folder (.wai/.spec-write.lock/, created when absent, never removed) is not content.
+        // So do the host stores' (<file>.lock.<n>, <file>.lock.<n>.end).
+        if (entry.name === '.spec-write.lock' || /\.lock\.\d+(\.end)?$/.test(entry.name)) continue;
         const full = path.join(at, entry.name);
         const rel = path.relative(dir, full).split(path.sep).join('/');
         if (rel.startsWith('audit') || rel.startsWith('web-sessions')) continue;

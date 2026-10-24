@@ -97,6 +97,7 @@ describe('every authoring write tool refuses a member project\'s spec from the r
       sdd_move_methods: [{ from: `${key}::payment_store`, to: 'order_flow', methods: ['put'] }],
       sdd_set_endpoints: [{ interface: `${key}::ipayment_store`, endpoints: [{ method: 'put', transport: 'CLI', command: 'put' }] }],
       sdd_add_type: [{ kind: 'value-object', id: 'intruder', name: 'I', subsystem: `${key}::payments`, fields: [] }],
+      sdd_add_group: [{ id: 'intruder_g', name: 'I', subsystem: `${key}::payments` }],
       sdd_write_narrative: [{ id: 'intruder_impl', name: 'I', description: 'i', contract: `${key}::ipayment_store`, methods: [] }],
       sdd_define_interface: [{ id: 'iintruder', name: 'I', description: 'i', component: `${key}::payment_store`, methods: [] }],
       sdd_add_component: [{ id: 'intruder', name: 'I', description: 'i', subsystem: `${key}::payments`, componentType: 'Orchestrator' }],
@@ -231,6 +232,7 @@ describe('a bare id a member holds is the bound project\'s own: writes never lan
       sdd_set_public_interfaces: [{ subsystem: ids.sub, publicInterfaces: [] }],
       sdd_add_component: [{ id: 'intruder', name: 'I', description: 'i', subsystem: ids.sub, componentType: 'Orchestrator' }],
       sdd_add_type: [{ kind: 'value-object', id: 'intruder_t', name: 'I', subsystem: ids.sub, fields: [] }],
+      sdd_add_group: [{ id: 'intruder_g', name: 'I', subsystem: ids.sub }],
       sdd_define_interface: [{ id: 'iintruder', name: 'I', description: 'i', component: ids.store, methods: [] }],
       sdd_write_narrative: [{ id: 'intruder_impl', name: 'I', description: 'i', contract: ids.iface, methods: [] }],
     });

@@ -212,6 +212,12 @@ methods:
           diff's baseline reads each member as THAT approval recorded it
         optional: true
     effect: io
+  - name: loadGroupSpecs
+    description: Loads the type groups (the layout tree the design export carries as typeGroups).
+    signature: 'loadGroupSpecs(): list<group_spec>'
+    returns: list<group_spec>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-07-10T23:14:05.167Z'
-updatedAt: '2026-10-09T16:50:52.504Z'
+updatedAt: '2026-10-23T22:22:53.079Z'

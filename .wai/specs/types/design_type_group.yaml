@@ -1,0 +1,35 @@
+kind: value-object
+id: design_type_group
+name: DesignTypeGroup
+description: >-
+  One type group in the design export: the layout tree a project's types are organized in.
+  Presentation only (type ids stay bare and global, no reference resolves through a group), exported
+  so a generator can mirror the folders or a reader can group the type list. Sorted by key; parents
+  are named by key, which is a key in this list.
+subsystem: sdd_surfaces
+fields:
+  - name: key
+    type: string
+    description: The group's id, the key every DesignType.group and every parent refers to
+    optional: false
+  - name: name
+    type: string
+    description: The display name
+    optional: false
+  - name: description
+    type: string
+    description: What the group's types have in common
+    optional: true
+  - name: parent
+    type: string
+    description: The key of the parent group; absent for a top-level group
+    optional: true
+  - name: subsystem
+    type: string
+    description: The key of the subsystem whose types folder homes the group; absent for the shared folder
+    optional: true
+methods: []
+sourcePath: src/models/design-export.ts
+symbol: DesignTypeGroup
+createdAt: '2026-10-23T22:22:33.042Z'
+updatedAt: '2026-10-23T22:22:33.795Z'

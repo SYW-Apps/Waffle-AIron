@@ -5,7 +5,7 @@ import { pathExists } from '../utils/fs.js';
 import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
-import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, loadSubsystemSpecs, readLockRecord } from '../core/index.js';
+import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, holdsDesign, readLockRecord } from '../core/index.js';
 import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -294,6 +294,8 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   // Whether there was a design to check at all: an empty tree passes, but
   // "all checks passed" over nothing would claim more than was checked.
   let treeChecked = false;
+  // The running release, printed on the verdict line so a pasted reading dates itself.
+  let validatorVersion: string = WAIRON_VERSION;
   // The per-language code reading, for the closing lines.
   let codeCompact = '';
 
@@ -383,8 +385,9 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     waivedWarnings += tally.waived;
     noticeTotal += tally.notices;
     warningTotal += tally.warnings;
-    treeChecked = part || loadSubsystemSpecs().length > 0;
-    if (!treeChecked) logger.info(chalk.gray('The spec tree holds the L0 and nothing below it yet: no subsystem, component or contract to check.'));
+    validatorVersion = sddResult.validatorVersion ?? validatorVersion;
+    treeChecked = part || holdsDesign();
+    if (!treeChecked) logger.info(chalk.gray('The spec tree holds the L0 and nothing below it yet: no subsystem, type, export entry or member project to check.'));
     renderAdvisory(advised);
     // A member judged here is judged by its own gate only: its `network`
     // entries count as declared. The proofs that need the whole family run
@@ -456,24 +459,25 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
   }
 
   const failOnWarnings = !!options.ci && hasFatalWarnings;
+  const via = ` (wairon ${validatorVersion})`;
 
   if (hasErrors || failOnWarnings) {
     if (options.ci && failOnWarnings && !hasErrors) {
-      logger.error('Validation failed: warnings are treated as errors in --ci mode.');
+      logger.error(`Validation failed: warnings are treated as errors in --ci mode.${via}`);
     } else {
-      logger.error('Validation failed. Fix the errors above.');
+      logger.error(`Validation failed. Fix the errors above.${via}`);
       logger.info(chalk.cyan('Tip: If you need to temporarily bypass an architectural rule, you can override its severity level in your `.wai/project.yaml` config (e.g. `rules.sddRuleSeverity.CIRCULAR_DEPENDENCY: warning`).'));
     }
     process.exit(1);
   } else {
     if (!treeChecked) {
-      logger.success('Nothing to check yet: the spec tree is empty, and the project configuration is valid.');
+      logger.success(`Nothing to check yet: the spec tree is empty, and the project configuration is valid.${via}`);
     } else if (options.ci) {
-      logger.success(`All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail)${waivedWarnings > 0 ? ` — ${waivedWarnings} draft-related warning(s) waived` : ''}.`);
+      logger.success(`All checks passed (CI mode — warnings treated as errors, draft-related warnings excepted; notices never fail)${waivedWarnings > 0 ? ` — ${waivedWarnings} draft-related warning(s) waived` : ''}.${via}`);
     } else if (warningTotal > 0) {
-      logger.warn(`Passed with ${warningTotal} warning(s) — not a failure here, but \`wairon validate --ci\` fails on them${waivedWarnings > 0 ? ` (except the ${waivedWarnings} draft-related one(s))` : ''}.`);
+      logger.warn(`Passed with ${warningTotal} warning(s) — not a failure here, but \`wairon validate --ci\` fails on them${waivedWarnings > 0 ? ` (except the ${waivedWarnings} draft-related one(s))` : ''}.${via}`);
     } else {
-      logger.success('All checks passed.');
+      logger.success(`All checks passed.${via}`);
     }
   }
 }

@@ -3,7 +3,12 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
-import { lockTree, unlockTree } from '../../src/core/spec-files.js';
+import { inspectLock, lockTree, unlockTree } from '../../src/core/spec-files.js';
+import { ownPidNamespace } from '../../src/utils/lock-holder.js';
+
+/** The namespace line this process writes into a lock record (Linux), so a hand-written record reads as local. */
+const NS = ownPidNamespace();
+const nsTail = NS !== undefined ? `\nnonce\npidns=${NS}\n` : '';
 
 // ---------------------------------------------------------------------------
 // Round-9 tinkerer (EDGE): two MCP servers writing one spec within ~40 ms lost
@@ -71,7 +76,7 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
     const codes = await race(dir, [writerScript(dir, 60, false), writerScript(dir, 60, false)]);
     expect(codes).toEqual([0, 0]);
     expect(Number(fs.readFileSync(path.join(dir, '.wai', 'specs', 'counter.yaml'), 'utf8'))).toBe(120);
-    expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock'))).toBe(false);
+    expect(inspectLock(dir)).toBeNull();
   }, 120_000);
 
   it('the same two writers WITHOUT the lock lose writes — the race the lock closes', async () => {
@@ -85,22 +90,26 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
     const dir = tree();
     const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
     const deadPid = Number(gone.stdout);
-    fs.writeFileSync(path.join(dir, '.wai', '.spec-write.lock'), `${deadPid}\n${Date.now()}\n`);
+    const lockDir = path.join(dir, '.wai', '.spec-write.lock');
+    fs.mkdirSync(lockDir, { recursive: true });
+    fs.writeFileSync(path.join(lockDir, 'tree.lock.1'), `${deadPid}\n${Date.now()}\n${nsTail}`);
     const started = Date.now();
     lockTree(dir);
     expect(Date.now() - started).toBeLessThan(5_000);
-    expect(fs.readFileSync(path.join(dir, '.wai', '.spec-write.lock'), 'utf8').split('\n')[0]).toBe(String(process.pid));
+    // The dead holder's generation was ended, and this process holds the next one.
+    expect(fs.existsSync(path.join(lockDir, 'tree.lock.1'))).toBe(false);
+    expect(fs.readFileSync(path.join(lockDir, 'tree.lock.2'), 'utf8').split('\n')[0]).toBe(String(process.pid));
     unlockTree(dir);
-    expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock'))).toBe(false);
+    expect(inspectLock(dir)).toBeNull();
   });
 
-  it('is reentrant within one process, and the last release removes the file', () => {
+  it('is reentrant within one process, and the last release ends the generation', () => {
     const dir = tree();
     lockTree(dir);
     lockTree(dir);
     unlockTree(dir);
-    expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock'))).toBe(true);
+    expect(inspectLock(dir)).not.toBeNull();
     unlockTree(dir);
-    expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock'))).toBe(false);
+    expect(inspectLock(dir)).toBeNull();
   });
 });

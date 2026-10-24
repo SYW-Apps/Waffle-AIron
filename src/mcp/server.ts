@@ -29,7 +29,7 @@ import {
   TypeSpecSchema,
   storedMethodSignature,
 } from '../models/specs.js';
-import { EndpointSchema, transportKind, transportRequiresEndpoint, type Endpoint, type EndpointTransport, type Transport, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
+import { EndpointSchema, transportKind, transportRequiresEndpoint, type Endpoint, type EndpointTransport, type Transport, type PublicInterface, type SubsystemSpec, type SystemSpec, type TypeSpec, type GroupSpec, type InterfaceSpec, type ImplementationSpec } from '../models/specs.js';
 import type { ComponentSpec, Technology } from '../models/specs.js';
 import type { SpecDeletion, SpecRestatement, SpecWriteReceipt } from '../core/authoring.js';
 import type { ProjectSystemRead, SpecChange, SpecChangeReport } from '../core/specs.js';
@@ -51,6 +51,7 @@ import {
   loadInterfaceSpec,
   loadImplementationSpec,
   loadTypeSpec,
+  loadGroupSpecs,
   resolveChainingParent,
   createMember,
   moveMember,
@@ -687,7 +688,7 @@ function renderDeletion(deletion: SpecDeletion): string {
 }
 
 /** The kinds a spec write addresses, as the receipt and the change report name them. */
-const SPEC_KINDS = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type'] as const;
+const SPEC_KINDS = ['system', 'subsystem', 'component', 'interface', 'implementation', 'type', 'group'] as const;
 type SpecKind = typeof SPEC_KINDS[number];
 
 /**
@@ -703,6 +704,7 @@ function specKindsHolding(id: string): SpecKind[] {
     interface: !!loadInterfaceSpec(id),
     implementation: !!loadImplementationSpec(id),
     type: !!loadTypeSpec(id),
+    group: loadGroupSpecs().some((g) => g.id === id),
   };
   return SPEC_KINDS.filter((k) => held[k]);
 }
@@ -1078,7 +1080,14 @@ function pendingBanner(): string[] {
   }
 }
 
+const getStatusOutput = {
+  validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
+  report: z.string().describe('The whole status answer, exactly the text block: the tree with its completeness, the approval verdict, any banner and the Externals section. A client that reads only the structured content would otherwise see nothing but the release.'),
+  ...staleServerOutput,
+};
+
 const validateTreeOutput = {
+  validatorVersion: z.string().describe('The wairon release of the running server process (ValidationResult.validatorVersion), so a verdict pasted into a thread can be dated.'),
   valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
   errors: z.array(z.object(validationIssueOutput)).describe('Every finding of severity error.'),
   warnings: z.array(z.object(validationIssueOutput)).describe('Every finding of severity warning.'),
@@ -1473,6 +1482,7 @@ const SPEC_WRITE_TOOLS = new Set([
   'sdd_set_endpoints',
   'sdd_write_narrative',
   'sdd_add_type',
+  'sdd_add_group',
   'sdd_delete_spec',
   'sdd_update_spec',
   'sdd_move_methods',
@@ -2627,12 +2637,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ kind: 'interface' | 'implementation'; id: string; newId: string; dryRun?: boolean }>(server,
+  reg<{ kind: 'interface' | 'implementation' | 'group'; id: string; newId: string; dryRun?: boolean }>(server,
     'sdd_rename_spec',
     {
-      description: 'Rename ONE contract (kind interface) or ONE implementation on its own — the ids sdd_rename_component keeps when they are not derived from the component\'s (i<id>, <id>_impl) — and rewrite every reference to it in the bound tree: every implementation\'s contract and every L1 and L0 export entry\'s interface (an entry whose public name derived from the old id gets `as: <that name>` first, so the published surface and every consumer\'s pin stay), lint allows and debt-register entries keyed on it. The spec moves to its new id and file beside its owner, its old id in its rename trace (previousIds). Refuses, writing nothing: another kind (invalid-kind, naming the tool that renames it), a spec that does not exist (spec-missing) or lives in another project (chained-spec), a new id outside the grammar — a contract id begins with i — (invalid-id), and one taken or retired (id-taken, id-retired). With dryRun it answers what it would move, rewrite and keep, and writes nothing.',
+      description: 'Rename ONE contract (kind interface), ONE implementation or ONE type group (kind group) on its own — the ids sdd_rename_component keeps when they are not derived from the component\'s (i<id>, <id>_impl) — and rewrite every reference to it in the bound tree: every implementation\'s contract and every L1 and L0 export entry\'s interface (an entry whose public name derived from the old id gets `as: <that name>` first, so the published surface and every consumer\'s pin stay), lint allows and debt-register entries keyed on it. A GROUP rename moves the group\'s folder to the new id and retargets the `group` of every type in it and the `parent` of every child group; type ids never change, and the answer\'s `renamed` entry records the old id. The spec moves to its new id and file beside its owner, its old id in its rename trace (previousIds). Refuses, writing nothing: another kind (invalid-kind, naming the tool that renames it), a spec that does not exist (spec-missing) or lives in another project (chained-spec), a new id outside the grammar — a contract id begins with i — (invalid-id), and one taken or retired (id-taken, id-retired). With dryRun it answers what it would move, rewrite and keep, and writes nothing.',
       inputSchema: {
-        kind: z.enum(['interface', 'implementation']).describe('interface (a contract) or implementation'),
+        kind: z.enum(['interface', 'implementation', 'group']).describe('interface (a contract), implementation or group (a type group)'),
         id: z.string().describe('The spec to rename'),
         newId: z.string().describe('Its new id: a lowercase identifier with no namespace separator (a contract\'s begins with i)'),
         dryRun: z.boolean().optional().describe('Answer what the rename would do — refused exactly as the real rename would be — and write nothing'),
@@ -2648,22 +2658,23 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ kind: 'component' | 'type'; id: string; subsystem?: string; dryRun?: boolean; together?: string[] }>(server,
+  reg<{ kind: 'component' | 'type' | 'group'; id: string; subsystem?: string; dryRun?: boolean; together?: string[]; parent?: string }>(server,
     'sdd_move_spec',
     {
-      description: 'Move a component or a type to another subsystem of the bound project with everything that follows it. A component takes the members it owns, its contracts and their implementations (their files move to the new subsystem\'s folder in the nested layout); ids never change, so references by id stay, and what names the OLD subsystem follows: its export entries and lifecycle entrypoints for the moved components, and an L0 re-export from it. A type takes its file, its L1 export entries and every reference qualified by the old subsystem, in either spelling and wherever it stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes `list<new.type>`); omit subsystem to make a type system-level. Several specs of the same kind move as ONE move with `together` — a connected cluster (a subsystem split) whose edges no single move could keep inside one subsystem: every one is planned, the components are judged together in their new subsystem, and all are written or none. Gated like every write: a move that would create a forbidden doctrine edge, or a cross-subsystem edge into a non-Portal, is refused with the rule\'s own words — naming the collaborators left behind as the `together` list that takes them along — and a curable boundary finding (a direct cross-subsystem edge into a Portal, which a client Adapter or a trustedLink would license) is named among the notices. Refuses, writing nothing: a kind other than component or type, a spec that does not exist or lives in another project, a subsystem the bound tree does not have or the one it already lives in, a component a pattern owns (move its owner), a type id the target already holds. With dryRun it answers the plan and the notices, and writes nothing.',
+      description: 'Move a component, a type or a type group to another subsystem of the bound project with everything that follows it. A component takes the members it owns, its contracts and their implementations (their files move to the new subsystem\'s folder in the nested layout); ids never change, so references by id stay, and what names the OLD subsystem follows: its export entries and lifecycle entrypoints for the moved components, and an L0 re-export from it. A type takes its file, its L1 export entries and every reference qualified by the old subsystem, in either spelling and wherever it stands in a type expression (`old::type` becomes `new::type`, `list<old.type>` becomes `list<new.type>`); omit subsystem to make a type system-level. A GROUP moves with its whole folder (its types and child groups) either to another subsystem\'s types folder (`subsystem`) or under another parent group (`parent`; omitted, it becomes top-level in the destination home); every type in it keeps its id, and a parent that does not exist, lives in another home or would close a loop is refused. Several specs of the same kind move as ONE move with `together` — a connected cluster (a subsystem split) whose edges no single move could keep inside one subsystem: every one is planned, the components are judged together in their new subsystem, and all are written or none. Gated like every write: a move that would create a forbidden doctrine edge, or a cross-subsystem edge into a non-Portal, is refused with the rule\'s own words — naming the collaborators left behind as the `together` list that takes them along — and a curable boundary finding (a direct cross-subsystem edge into a Portal, which a client Adapter or a trustedLink would license) is named among the notices. Refuses, writing nothing: a kind other than component, type or group, a spec that does not exist or lives in another project, a subsystem the bound tree does not have or the one it already lives in, a component a pattern owns (move its owner), a type id the target already holds. With dryRun it answers the plan and the notices, and writes nothing.',
       inputSchema: {
-        kind: z.enum(['component', 'type']).describe('component or type'),
+        kind: z.enum(['component', 'type', 'group']).describe('component, type or group'),
         id: z.string().describe('The spec to move (a type by its bare id, or as <subsystem>::<id>)'),
         subsystem: z.string().optional().describe('The subsystem it moves to; omitted for a type made system-level'),
         dryRun: z.boolean().optional().describe('Answer what the move would do — refused exactly as the move would be — and write nothing'),
         together: z.array(z.string()).optional().describe('More specs of the same kind that move with it to the same subsystem, as one move judged together — the collaborators a single move\'s refusal names'),
+        parent: z.string().optional().describe('kind group only: the parent group the moved group goes under (a group of the destination home); omitted, the group becomes top-level in the destination home'),
       },
     },
-    ({ kind, id, subsystem, dryRun, together }) => {
+    ({ kind, id, subsystem, dryRun, together, parent }) => {
       try {
         // mcp_orchestrator.moveSpec: through the authoring seam, which judges the moved components together first.
-        return json(moveSpec(kind, id, subsystem, dryRun, together));
+        return json(moveSpec(kind, id, subsystem, dryRun, together, parent));
       } catch (e) {
         return errMessage(e);
       }
@@ -3159,6 +3170,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   };
   const typeInputFields = Object.keys(typeInput);
 
+  // The fields sdd_add_group expresses: a re-definition replaces these and carries the rest.
+  const groupInputFields = ['id', 'name', 'description', 'parent', 'subsystem'];
+
   type ParamInput = { name: string; type: string; description?: string; optional?: boolean };
   reg<{ kind: 'entity' | 'value-object' | 'signature' | 'enum'; id: string; name: string; description?: string; subsystem?: string; group?: string; fields?: { name: string; type: string; description?: string; optional?: boolean; key?: 'primary' | 'unique' | 'foreign'; references?: string }[]; methods?: { name: string; signature?: string; params?: ParamInput[]; returns: string; description?: string; sourcePath?: string; symbol?: string }[]; componentClass?: string; invariants?: { id: string; description: string }[]; database?: string; table?: string; linkedEntity?: string; sourcePath?: string; symbol?: string; params?: ParamInput[]; returns?: string; values?: { name: string; description?: string }[]; holds?: string; dryRun?: boolean }>(server,
     'sdd_add_type',
@@ -3214,6 +3228,44 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
+  reg<{ id: string; name: string; description?: string; parent?: string; subsystem?: string; dryRun?: boolean }>(server,
+    'sdd_add_group',
+    {
+      description: 'Define a type group: a folder of types that organizes a large type surface (a shared contracts library holding hundreds of types) without changing any type\'s identity — type ids stay bare and project-global, and no reference resolves through a group. A group may name a `parent` group, making the groups a tree whose folders mirror the parent chain (types/<root>/<child>/); the parent must exist and share the group\'s home. `subsystem` places the group (and its parent chain) in that subsystem\'s types folder instead of the project\'s shared one; omit it for the shared folder. A type joins a group by naming it (`group` on sdd_add_type, or sdd_update_spec on the type) and moves between groups the same way — its file follows. A define is an UPSERT like every create tool: re-defining an id restates its name, description and parent (an omitted description or parent is CLEARED and reported); moving a group under another parent or subsystem is sdd_move_spec kind group, a rename is sdd_rename_spec kind group, a delete is sdd_delete_spec kind group (refused while types or child groups remain, unless forced). Gated like any write: a parent that does not exist, lives in another home or would close a loop is refused, writing nothing. The answer carries a write receipt as structured content beside the sentence. A group carries no lifecycle status.',
+      inputSchema: {
+        id: z.string().describe('Lowercase identifier for the group; also its folder name'),
+        name: z.string().describe('Human-readable display name'),
+        description: z.string().optional().describe('What the group\'s types have in common'),
+        parent: z.string().optional().describe('The id of the group this one sits under; omit for a top-level group. It must exist and share this group\'s home'),
+        subsystem: z.string().optional().describe('The subsystem whose types folder homes the group; omit for the project\'s shared types folder'),
+        dryRun: z.boolean().optional().describe('Answer the receipt the write would give — every judgement run, a refusal exactly as the write would give it — and write nothing'),
+      },
+      outputSchema: specWriteReceiptOutput,
+    },
+    ({ id, name, description, parent, subsystem, dryRun }) => {
+      try {
+        // mcp_orchestrator.addGroup step 1: the restatement of the group.
+        const spec = {
+          kind: 'group',
+          id,
+          name,
+          ...(description ? { description } : {}),
+          ...(parent ? { parent } : {}),
+          ...(subsystem ? { subsystem } : {}),
+        } as unknown as GroupSpec;
+        // Step 2: through the seam (parent, home and loop judged before anything reaches disk).
+        const receipt = writeSpec({ kind: 'group', spec, fields: groupInputFields, ...(dryRun ? { dryRun: true } : {}) });
+        // Step 3: the receipt.
+        return writeReceipt(
+          `${dryRun ? 'DRY RUN — nothing was written. Would have ' : 'Successfully '}${receipt.replacedExisting ? 're-authored' : 'defined'} type group "${name}" (${id}).`,
+          receipt,
+        );
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
   reg<{ subsystem?: string; recursive?: boolean; family?: boolean }>(server,
     'sdd_validate_tree',
     {
@@ -3258,10 +3310,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const memberLine = parent
           ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.`
           : undefined;
-        const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading].filter((h): h is string => !!h).join(' ');
+        const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading, `Validated by wairon ${result.validatorVersion}.`].filter((h): h is string => !!h).join(' ');
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
+          validatorVersion: result.validatorVersion,
           valid: result.valid,
           errors: all.filter((i) => i.severity === 'error'),
           warnings: all.filter((i) => i.severity === 'warning'),
@@ -3284,7 +3337,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     {
       description: 'Get/read the parsed JSON contents of a specific spec from the spec tree. Returns structural contents without file system path searching. An `alias::name` id resolves through the bound project\'s alias table exactly as a write resolves it: a member\'s spec reads under its key, and an EXTERNAL\'s spec reads from the pinned snapshot this project holds of it — the pinned contract entry or exported type as the spec, a read-only "pinnedSnapshot" marker beside it (it is written from the producer\'s own root). A system read by `alias::system` (or `alias::<its L0 name>`) answers that MEMBER project\'s own L0 — its export table included — with a read-only "memberProject" marker beside it, and is refused, naming why, for a part, an external (naming the names its pin exports) or an unknown prefix; a bare id answers this project\'s L0 only by one of its names, so no read answers one project\'s L0 under another\'s id. Pass "methods" to read only the named methods of a contract, an implementation or a type — a 45-method spec fetched whole to look at one of them is the read side of the same waste a restatement is on the write side; the answer then carries a "partialResult" marker naming what was left out, and must never be re-authored from. For a variant-tagged COMPONENT the result also carries a derived, read-only "variantGuidance" (the variant\'s base, its implementation guidance, and the same-variant sibling components to implement alike) — it is resolved from the variant registry, not part of the spec, so never write it back. A contract\'s methods come back in their STORED form — a method that takes its signature from a source carries its signatureFrom, not the params the loader resolves into it — so the answer can be re-authored from as it is; the resolved params, returns and text of each such method come back as a derived, read-only "resolvedSignatures" marker. The structured content carries the same answer with the derived markers KEPT SEPARATE from the stored spec ({kind, id, spec, partialResult?, variantGuidance?, resolvedSignatures?}), so nothing derived can be mistaken for something stored; the text block folds them in as it always has.',
       inputSchema: {
-        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).optional().describe('The kind of specification. Omit it to infer the kind from the id: the read is refused, naming the candidate kinds, when the id names specs at more than one level (an interface and an implementation sharing an id, say), or at none'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type', 'group']).optional().describe('The kind of specification. Omit it to infer the kind from the id: the read is refused, naming the candidate kinds, when the id names specs at more than one level (an interface and an implementation sharing an id, say), or at none'),
         id: z.string().describe('The identifier of the spec to fetch (the L0 system spec is a singleton — pass "system", its name or the project id; a member project\'s L0 is read as "<alias>::system")'),
         methods: z.array(z.string().min(1)).optional().describe('Return only these methods by name; every other field of the spec comes back unchanged. Only an interface, an implementation or a type declares methods — asking for one elsewhere is refused, as is a name the spec does not declare (the answer names the ones it does). Omit it for the whole spec.'),
       },
@@ -3395,6 +3448,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
           case 'interface':      result = loadInterfaceSpec(id); break;
           case 'implementation': result = loadImplementationSpec(id); break;
           case 'type':           result = loadTypeSpec(id); break;
+          case 'group':          result = loadGroupSpecs().find((g) => g.id === id) ?? null; break;
         }
         if (!result) return pinnedAnswer(kind) ?? errText(unparsedSpecSentence(kind, id, getLoaderIssues()) ?? `Spec of kind "${kind}" with ID "${id}" does not exist.`);
         // A contract answers in STORED form, its sourced methods' resolved
@@ -3469,12 +3523,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; dryRun?: boolean; force?: boolean; search?: string[] }>(server,
+  reg<{ kind: 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group'; id: string; dryRun?: boolean; force?: boolean; search?: string[] }>(server,
     'sdd_delete_spec',
     {
       description: 'Delete a spec and everything it contains — a contract with its implementations, a component with its contracts and owned members, a subsystem with its components and types — pruning the folders left empty. Refused, naming every reference, while a spec that stays still references what would go (the invalid references the deletion would introduce); force: true deletes anyway and leaves them for validate to report. Refused outright, the dry run included: a spec of another project (a member\'s spec read through this tree, `alias::name`, is deleted from that member\'s own root — the refusal names its folder), an id no spec of the kind holds (the refusal names what it might have meant: another kind holding it, the `<subsystem>::<id>` form of a type, the ids the kind holds), and the L0. dryRun answers the same plan and removes nothing. Like a rename, it reports `published` — every public name of this project a consumer reaches what goes through — and `breaks`: the consumers in reach (family members included, and checkouts in the `search` folders) whose specs reach one of those. The structured answer lists every spec removed, every reference, the published names, the consumers it breaks, and the tests that encode a removed method (when the project declares test roots).',
       inputSchema: {
-        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type']).describe('The kind of spec to delete'),
+        kind: z.enum(['subsystem', 'component', 'interface', 'implementation', 'type', 'group']).describe('The kind of spec to delete (a group takes only itself: it is refused while types or child groups still name it, unless forced)'),
         id: z.string().describe('The ID of the spec to delete'),
         dryRun: z.boolean().optional().describe('Answer with the plan — every spec that would be removed, every reference that would be left — and remove nothing'),
         force: z.boolean().optional().describe('Delete even though specs that stay still reference what goes, leaving those references for validate to report. Without it such a deletion is refused'),
@@ -3501,12 +3555,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type'; id: string; delta: Record<string, any>; dryRun?: boolean; search?: string[] }>(server,
+  reg<{ kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group'; id: string; delta: Record<string, any>; dryRun?: boolean; search?: string[] }>(server,
     'sdd_update_spec',
     {
       description: 'Patch an existing spec (system, subsystem, component, interface, implementation or type) with a granular delta, and answer with exactly what changed — and, under NO EFFECT, every path the delta named that the write did not act on. Type positions use the neutral type grammar: an alias (string[], T | null, Promise<T>) is stored canonical and listed under `respellings`; a position with no canonical spelling (number, an inline object, a literal union) is refused, naming the replacement. A delta edits what a spec says, never which spec it is: its id, createdAt, a component\'s or a type\'s subsystem, a contract\'s component and an implementation\'s contract are refused, naming the tool that owns the change. A component or contract write is judged in its tree too: a doctrine edge (a Portal depending on a Store) or a route another method binds is refused, as validate would report it. dryRun takes the same path as the write — the gate and the writer\'s parse included — and is refused exactly when the write would be; it only skips the disk.',
       inputSchema: {
-        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type']).describe('The spec kind to update (system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports)'),
+        kind: z.enum(['system', 'subsystem', 'component', 'interface', 'implementation', 'type', 'group']).describe('The spec kind to update (group = a type group: name, description, parent, subsystem; system = the singleton L0 — vision, boundaries, globalRequirements, databases, and publicInterfaces: the project export table, each entry a re-export {from, component, interface, typeDef, as, name, type, details, audience: project|department|instance|partner|external} — from alone re-exports everything a subsystem exports)'),
         id: z.string().describe('The ID of the spec to update (namespaced if needed)'),
         delta: z.record(z.any()).describe('The fields to merge. LISTS UPSERT by identity at every depth: naming one element leaves the others, and a named element merges field by field — a field left out, or null, keeps its stored value (a method named without "narrative" keeps its steps). Identity is name or id by default; dispatch by capability, lifecycle by phase+component+method, emits/subscribesTo by topic+event, trustedLinks by subsystem, publicInterfaces by component+interface (a re-export by from+item+interface+as), lint.allow by code+at, findings by code, boundaries by name, globalRequirements by description, cases by value, catches by error. Plain-value lists (owns, dependsOn, guarantees, technologies, requirements written as text) append what they lack and keep what they hold. Restating a list with exactly its stored elements in another order REORDERS it. Remove an element with "action": "delete" (or "remove": true) beside its identity, a plain value as {"value": …, "action": "delete"}; [] clears a list; {"unset": ["basePath"]} removes an optional field (null means no change). NARRATIVE steps are addressed by stepNumber, applied in ascending order against the numbering earlier entries of the same delta left: "action": "insert" shifts later steps up, "delete" shifts them down — refused when a jump still targets the step, when a restated label or description does not match it, or for a loop/try/parallel header whose body stands. Stored jumps relocate; a jump the delta writes names the final numbering; "captureJumps": true on an insert lands entry jumps on the new step. Every jump field has a *Label twin (toLabel, onFalseLabel, endLabel, a case or catch "label") resolved after the merge. Retyping a step rebuilds it for its new type and names the fields dropped. lint: {"allow": [{code, at, covers, reason}]} silences a warning or notice on this spec: "at" is the site the finding reports and is required when it reports one, "covers" lists an aggregating finding\'s units; errors never silence. Local ids are qualified as the loader qualifies them. A key that is not a field at its depth is named back under NO EFFECT: read that list.'),
         dryRun: z.boolean().optional().describe('Ask what this delta WOULD do: the whole write runs — the gate and the writer\'s parse included — and answers the report it would produce, marked DRY RUN, with not one byte written.'),
@@ -3538,11 +3592,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls.',
+      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries the whole report (the text block, as `report`) and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
       },
+      outputSchema: getStatusOutput,
     },
     ({ subsystem, recursive }) => {
       // The tool's flag at the edge: recursive false is a member depth of 0, the default every level.
@@ -3595,7 +3650,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 5-6: the externals compared with their live producers, offline
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
-        return text(`${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}`);
+        const text = `${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`;
+        return structured(text, { validatorVersion: report.validatorVersion, report: text });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }

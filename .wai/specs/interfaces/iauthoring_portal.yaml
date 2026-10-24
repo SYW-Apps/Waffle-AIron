@@ -107,15 +107,17 @@ methods:
         optional: true
   - name: moveSpec
     description: >-
-      Move a component or a type to another subsystem through the gate, with everything that follows
-      it: its owned members, contracts and implementations, the export entries and lifecycle
-      entrypoints naming it, and every reference qualified by the old subsystem. `together` names
-      more specs of the same kind that move with it in the same call — a connected cluster whose
-      edges no single move could keep inside one subsystem — judged together by the gate and planned
-      by one dry run. Routed to the gated workflow.
+      Move a component, a type or a type group to another subsystem through the gate, with
+      everything that follows it: its owned members, contracts and implementations, the export
+      entries and lifecycle entrypoints naming it, and every reference qualified by the old
+      subsystem. `together` names more specs of the same kind that move with it in the same call — a
+      connected cluster whose edges no single move could keep inside one subsystem — judged together
+      by the gate and planned by one dry run. A group moves with its folder: to another subsystem's
+      types folder, or under `parent` (a group of the destination home; omitted, top-level there).
+      Routed to the gated workflow.
     signature: >-
       moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
-      list<string>): SpecMove
+      list<string>, parent?: string): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -138,6 +140,12 @@ methods:
           More specs of the same kind moving with it to the same subsystem, judged with it as one
           move
         optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, top-level in the
+          destination home
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:41:27.211Z'
-updatedAt: '2026-10-09T11:30:40.014Z'
+updatedAt: '2026-10-23T22:25:31.905Z'

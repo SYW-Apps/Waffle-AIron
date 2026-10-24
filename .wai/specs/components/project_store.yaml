@@ -6,8 +6,9 @@ description: >-
 subsystem: sdd_host
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - file_write_lock
 durability: read-through
 status: complete
 createdAt: '2026-07-19T08:59:49.280Z'
-updatedAt: '2026-07-19T11:31:01.838Z'
+updatedAt: '2026-10-23T22:23:21.344Z'

@@ -1,0 +1,72 @@
+# Recovery workflow: republish an existing release tag to the SYW CDN.
+#
+# Use it when the publish-cdn job of release.yml failed or published a partial set
+# (for example the v6.1.4 publish, which sent all five archives in one request and
+# was refused by Cloudflare's 100 MB request limit). Re-running the original tag
+# run does NOT help: GitHub reruns use the workflow and the source revision of that
+# run, so they would run the original, broken publisher again (the CDN integration
+# guide says the same: use a reviewed recovery workflow that selects the fixed
+# publisher and the original release's already-built artifacts; do not move the tag
+# or rebuild).
+#
+# Dispatch it from the branch that holds the fixed scripts/cdn-publish.mjs (the ref
+# you pick in "Use workflow from"). It downloads the tag's already-built archives
+# from its GitHub release and publishes them per platform plus the index release.
+# The CDN accepts an identical republish, and an alias is not moved over a newer
+# version, so running it again, or for an older tag, is safe.
+name: Republish a release to the SYW CDN
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'The release tag to republish, e.g. v6.1.4'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  republish-cdn:
+    name: Republish ${{ inputs.tag }} to the SYW CDN
+    runs-on: ubuntu-latest
+    steps:
+      # The ref this workflow was dispatched from: the FIXED publisher and the
+      # release-notes/<version>.md it carries. Full history, for the tag's commit time.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Republish to the CDN
+        shell: bash
+        env:
+          SYW_CDN_PUBLISHER_TOKEN: ${{ secrets.SYW_CDN_PUBLISHER_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SYW_CDN_PUBLISHER_TOKEN" ]; then
+            echo "::notice::No CDN publisher credential (SYW_CDN_PUBLISHER_TOKEN unset) — not published to the CDN."
+            exit 0
+          fi
+          if ! echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-(beta|preview)\.[0-9]+)?$'; then
+            echo "::error::'$TAG' is not a stable, beta or preview release tag (dev builds are not published to the CDN)."
+            exit 1
+          fi
+          git rev-parse --verify --quiet "refs/tags/$TAG" > /dev/null || { echo "::error::tag $TAG not found"; exit 1; }
+          VERSION="${TAG#v}"
+          # The archives and their .sha256 files are attached to the tag's GitHub release.
+          mkdir -p artifacts
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir artifacts --pattern '*.tar.gz' --pattern '*.zip' --pattern '*.sha256'
+          ls -l artifacts
+          # The tagged commit's time and sha, so the bytes match what the original run would have sent.
+          node scripts/cdn-publish.mjs --version "$VERSION" --artifacts artifacts \
+            --commit "$(git rev-list -n 1 "refs/tags/$TAG")" \
+            --released "$(git log -1 --format=%cI "refs/tags/$TAG")"

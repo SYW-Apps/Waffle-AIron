@@ -186,7 +186,7 @@ Both `wairon` and `wai` are registered as commands.
 
 ### npm
 
-wairon is also published to npm as `@wairon/cli` (Node 18+):
+wairon is also published to npm as `@wairon/cli` (Node.js 22.23.4+, 24.22.1+ or 26.12.1+):
 
 ```sh
 npm install --save-dev @wairon/cli    # per project; run it with npx wairon
@@ -337,7 +337,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 
 ## Technology Stack
 
-TypeScript + Node 18+, Commander (CLI), Inquirer (prompts), Zod (schema
+TypeScript + Node.js 22.23.4+ / 24.22.1+ / 26.12.1+, Commander (CLI), Inquirer (prompts), Zod (schema
 validation), js-yaml, the MCP SDK, and Vitest. Bundled with tsup.
 
 ---

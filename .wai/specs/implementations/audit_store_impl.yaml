@@ -1,27 +1,30 @@
 id: audit_store_impl
 name: Audit Store Implementation
 description: >-
-  Authoritative in-memory holder of the redacted audit-event set, file-backed under the server data
-  root (audit-events.json).
+  Read-through file I/O over the redacted audit-event set at audit-events.json under the server data
+  root: load parses the file fresh per call; update holds the file's write lock across a fresh read
+  and the replacement.
 contract: iaudit_store
 sourcePath: src/server/audit.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted audit-event set from the audit file under the server data root and hold it
-      as the authoritative in-memory representation, returning the loaded events. A missing file
-      yields an empty set; an unreadable file or structurally invalid JSON fails with a storage
-      error naming the path — the store never silently drops persisted audit history, because the
-      audit trail is the record of who did what.
-  - name: replaceAll
+      Read and parse audit-events.json fresh from disk (no in-memory copy), returning the events. A
+      missing file yields an empty set; an unreadable file or structurally invalid JSON fails with a
+      storage error naming the path - the store never silently drops persisted audit history,
+      because the audit trail is the record of who did what.
+  - name: update
     narrative: []
     intent: >-
-      Swap the authoritative in-memory event set to the supplied complete set in one assignment,
-      only ever called by the owned registry after durable persistence has succeeded. Never
-      partially applies, so concurrent admin queries through the index always observe a consistent
-      event set.
+      Under audit-events.json's write lock (file_write_lock.run), read the set fresh - an absent
+      file is the empty set, a file that exists but cannot be read or parsed throws and nothing is
+      written - apply the change, replace the file atomically (a temporary sibling named for this
+      writer, then renamed over the file) and release the lock, also when the change throws, which
+      writes nothing. Answers the set written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:39.898Z'
-updatedAt: '2026-07-09T17:43:50.898Z'
+updatedAt: '2026-10-23T22:23:26.251Z'

@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ProjectRelationRecord } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Project Relation Repository (sdd_host)
@@ -63,11 +64,13 @@ function readRelations(dataDir: string): ProjectRelationRecord[] {
   }
 }
 
-/** Persist the complete relation set atomically (write temp, then rename). */
-function persistRelations(dataDir: string, relations: ProjectRelationRecord[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(relations, null, 2) + '\n');
+/** The set as read under the write lock: absent is empty; unreadable or malformed throws and nothing is written. */
+function readCurrent(p: string): ProjectRelationRecord[] {
+  const parsed = readJsonForUpdate<unknown>(p, []);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Relation store at ${p} contains malformed JSON: expected a JSON array of project relations`);
+  }
+  return parsed as ProjectRelationRecord[];
 }
 
 // ── store: authoritative in-memory holder ──────────────────────────────────
@@ -82,11 +85,20 @@ class ProjectRelationStore {
     return this.relations;
   }
 
-  /** Swap the in-memory set to a complete replacement in one assignment. Only
-   *  called by the registry after durable persistence has succeeded, so index
-   *  reads always observe a consistent set. */
-  replaceAll(relations: ProjectRelationRecord[]): void {
-    this.relations = relations;
+  /**
+   * iproject_relation_store.update — under relations.json's write lock, read the
+   * set fresh, apply the change and replace the file atomically; a change that
+   * throws writes nothing. Answers the set written.
+   */
+  update(change: (relations: ProjectRelationRecord[]) => ProjectRelationRecord[]): ProjectRelationRecord[] {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    this.relations = withFileLock(p, () => {
+      const next = change(readCurrent(p));
+      replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
+    return this.relations;
   }
 
   /** The current authoritative set (shared by reference with the index). */
@@ -98,7 +110,7 @@ class ProjectRelationStore {
 // ── registry: write path ────────────────────────────────────────────────────
 
 class ProjectRelationRegistry {
-  constructor(private readonly dataDir: string, private readonly store: ProjectRelationStore) {}
+  constructor(private readonly store: ProjectRelationStore) {}
 
   /**
    * Create or update one cross-project relation. On create, stamp a random id;
@@ -118,16 +130,16 @@ class ProjectRelationRegistry {
       id: hasId ? record.id : crypto.randomUUID(),
       status: hasStatus ? record.status : 'active',
     };
-    const relations = this.store.all();
-    const idx = relations.findIndex((r) => r.id === stored.id);
-    const next = [...relations];
-    if (idx === -1) {
-      next.push(stored);
-    } else {
-      next[idx] = stored;
-    }
-    persistRelations(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((relations) => {
+      const idx = relations.findIndex((r) => r.id === stored.id);
+      const next = [...relations];
+      if (idx === -1) {
+        next.push(stored);
+      } else {
+        next[idx] = stored;
+      }
+      return next;
+    });
     return stored;
   }
 
@@ -138,14 +150,13 @@ class ProjectRelationRegistry {
    * persistence failures leave the previous set intact.
    */
   remove(id: string): void {
-    const relations = this.store.all();
-    const idx = relations.findIndex((r) => r.id === id);
-    if (idx === -1) {
-      throw new Error(`Project relation "${id}" not found.`);
-    }
-    const next = relations.filter((_, i) => i !== idx);
-    persistRelations(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((relations) => {
+      const idx = relations.findIndex((r) => r.id === id);
+      if (idx === -1) {
+        throw new Error(`Project relation "${id}" not found.`);
+      }
+      return relations.filter((_, i) => i !== idx);
+    });
   }
 }
 
@@ -181,16 +192,12 @@ export function upsertProjectRelation(
   dataDir: string,
   record: ProjectRelationRecord,
 ): ProjectRelationRecord {
-  const store = new ProjectRelationStore(dataDir);
-  store.load();
-  return new ProjectRelationRegistry(dataDir, store).upsert(record);
+  return new ProjectRelationRegistry(new ProjectRelationStore(dataDir)).upsert(record);
 }
 
 /** Remove one cross-project relation by id (not-found error when absent; atomic). */
 export function removeProjectRelation(dataDir: string, id: string): void {
-  const store = new ProjectRelationStore(dataDir);
-  store.load();
-  new ProjectRelationRegistry(dataDir, store).remove(id);
+  new ProjectRelationRegistry(new ProjectRelationStore(dataDir)).remove(id);
 }
 
 /** List cross-project relations filtered by source project, target project, or status. */

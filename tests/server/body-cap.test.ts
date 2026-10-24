@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as net from 'node:net';
-import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -89,32 +88,22 @@ describe('data plane /mcp body cap (integration)', () => {
   let dataPort: number;
   const handles: HostServerHandle[] = [];
 
-  function freePort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const srv = net.createServer();
-      srv.on('error', reject);
-      srv.listen(0, '127.0.0.1', () => {
-        const p = (srv.address() as AddressInfo).port;
-        srv.close(() => resolve(p));
-      });
-    });
-  }
-
   beforeEach(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-bodycap-'));
-    dataPort = await freePort();
-    const adminPort = await freePort();
     // authEnabled: false → boots without an admin token; the body cap runs
     // before auth anyway, so this exercises the pre-auth reject path.
     const cfg: HostConfig = {
       host: '127.0.0.1',
-      port: dataPort,
+      port: 0,
       adminHost: '127.0.0.1',
-      adminPort,
+      adminPort: 0,
       dataDir,
       authEnabled: false,
     };
-    handles.push(startHostServer(cfg));
+    // Port 0 + the bound port read back: no free-port probe to race other tests.
+    const handle = startHostServer(cfg);
+    handles.push(handle);
+    dataPort = (await handle.listening).port;
   });
 
   afterEach(() => {
@@ -164,5 +153,28 @@ describe('data plane /mcp body cap (integration)', () => {
       });
     });
     expect(response).toMatch(/^HTTP\/1\.1 413/);
+  });
+});
+
+describe('startHostServer: a listen failure is the handle\'s to report', () => {
+  it('a port already in use rejects `listening` with EADDRINUSE instead of an uncaught error', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-listen-fail-'));
+    const taken = net.createServer();
+    await new Promise<void>((resolve) => taken.listen(0, '127.0.0.1', () => resolve()));
+    const busy = (taken.address() as net.AddressInfo).port;
+    const handle = startHostServer({
+      host: '127.0.0.1', port: busy, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: false,
+    });
+    try {
+      await expect(handle.listening).rejects.toMatchObject({ code: 'EADDRINUSE' });
+    } finally {
+      handle.close();
+      await new Promise<void>((resolve) => taken.close(() => resolve()));
+      try {
+        fs.rmSync(dataDir, { recursive: true, force: true });
+      } catch {
+        /* windows file locks */
+      }
+    }
   });
 });

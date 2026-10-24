@@ -1,22 +1,29 @@
 id: iaudit_store
 name: Audit Store Interface
-description: Private store contract for redacted hosted audit events.
+description: >-
+  Private store contract for redacted hosted audit events: read-through file I/O over
+  audit-events.json. Every read parses the file fresh; every change is an update under the file's
+  write lock - there is no bare write.
 component: audit_store
 methods:
   - name: load
-    description: Load persisted audit events into the authoritative store representation.
+    description: >-
+      Read the persisted audit events fresh from audit-events.json (no in-memory copy). A missing
+      file yields an empty set; an unreadable file or structurally invalid JSON fails with a storage
+      error naming the path.
     signature: 'load(): list<AuditEvent>'
     returns: list<AuditEvent>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Replace the store contents with the supplied complete audit-event set after persistence has
-      succeeded.
-    signature: 'replaceAll(events: list<AuditEvent>): void'
-    returns: void
-    params:
-      - name: events
-        type: list<AuditEvent>
+      Read the audit events fresh and persist what the change makes of them, holding the file's
+      write lock (file_write_lock) across both, so a writer in another process that reads and writes
+      the same file in between is never lost; a change that throws writes nothing; a file that
+      exists but cannot be read or parsed throws, so a change is never applied to a set read as
+      empty. Answers the set written.
+    signature: 'update(change: (events: AuditEvent[]) => AuditEvent[]): AuditEvent[]'
+    returns: list<AuditEvent>
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -32,4 +39,4 @@ lint:
         one the code does not make.
 status: complete
 createdAt: '2026-07-08T20:16:41.322Z'
-updatedAt: '2026-10-04T22:34:55.070Z'
+updatedAt: '2026-10-23T22:21:28.925Z'

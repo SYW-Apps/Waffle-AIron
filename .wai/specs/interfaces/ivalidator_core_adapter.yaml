@@ -302,6 +302,15 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: holdsDesign
+    description: >-
+      Forward to spec_tree_portal.holdsDesign: whether the tree holds anything to approve, which the
+      family run asks before it judges a member's approval and the gate asks before it calls a tree
+      empty
+    signatureFrom: spec_tree_portal.holdsDesign
+  - name: loadGroupSpecs
+    description: 'Forward to spec_tree_portal.loadGroupSpecs: the type group tree the type-groups rule judges'
+    signatureFrom: spec_tree_portal.loadGroupSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T08:36:45.169Z'
+updatedAt: '2026-10-24T11:34:06.485Z'

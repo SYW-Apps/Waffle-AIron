@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as http from 'node:http';
-import * as net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -22,18 +21,6 @@ import { getExposurePolicyRecord } from '../../src/server/policy.js';
 // ---------------------------------------------------------------------------
 
 const MASTER = 'master-credential-secret-value';
-
-/** Grab a currently-free TCP port (best-effort; standard test pattern). */
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const port = (srv.address() as AddressInfo).port;
-      srv.close(() => resolve(port));
-    });
-  });
-}
 
 function writePolicyFile(dataDir: string, policy: Partial<HostExposurePolicy>): void {
   fs.writeFileSync(path.join(dataDir, 'exposure-policy.json'), JSON.stringify(policy));
@@ -188,10 +175,11 @@ describe('exposure gating: data plane unaffected (startHostServer)', () => {
     writePolicyFile(dataDir, { adminApiMode: 'public' as HostExposurePolicy['adminApiMode'] });
     ensureInstanceIdentity(dataDir); // not a first boot: the data directory an older major wrote keeps its stamp
     fs.writeFileSync(path.join(dataDir, 'version.json'), JSON.stringify({ major: 5 }));
-    const port = await freePort();
-    const adminPort = await freePort();
-    const cfg: HostConfig = { host: '127.0.0.1', port, adminHost: '127.0.0.1', adminPort, dataDir, authEnabled: true };
-    handles.push(startHostServer(cfg));
+    // Port 0 + the bound ports read back: no free-port probe to race other tests.
+    const cfg: HostConfig = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    const handle = startHostServer(cfg);
+    handles.push(handle);
+    const { adminPort } = await handle.listening;
     expect(getExposurePolicyRecord(dataDir)?.adminApiMode).toBe('enabled');
     const res = await fetch(`http://127.0.0.1:${adminPort}/admin/projects`, { headers: { Authorization: `Bearer ${MASTER}` } });
     await res.text();
@@ -200,10 +188,11 @@ describe('exposure gating: data plane unaffected (startHostServer)', () => {
 
   it('adminApiMode "disabled": admin plane 404s but /healthz on the data plane is still 200', async () => {
     writePolicyFile(dataDir, { adminApiMode: 'disabled' });
-    const port = await freePort();
-    const adminPort = await freePort();
-    const cfg: HostConfig = { host: '127.0.0.1', port, adminHost: '127.0.0.1', adminPort, dataDir, authEnabled: true };
-    handles.push(startHostServer(cfg));
+    // Port 0 + the bound ports read back: no free-port probe to race other tests.
+    const cfg: HostConfig = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true };
+    const handle = startHostServer(cfg);
+    handles.push(handle);
+    const { port, adminPort } = await handle.listening;
 
     // Admin plane: everything 404s.
     const adminRes = await fetch(`http://127.0.0.1:${adminPort}/admin/projects`, {

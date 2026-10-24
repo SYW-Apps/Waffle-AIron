@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { PermissionAssignment, UnitIdRemap } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Permission Repository (sdd_host)
@@ -60,14 +61,28 @@ function load(dataDir: string): PermissionAssignment[] {
 }
 
 /**
- * Swap the authoritative grid to the supplied complete set in one atomic
- * write-temp-then-rename, so a crash never truncates the file and readers never
- * observe a half-written state. Only called by the registry after a mutation.
+ * ipermission_store.update — under permissions.json's write lock, read the grid
+ * fresh (absent is empty; unreadable or malformed throws and nothing is written),
+ * apply the change and replace the file atomically, so a crash never truncates
+ * the file and a writer in another process is never lost. A change that answers
+ * the array it was given writes nothing. Answers the set written.
  */
-function replaceAll(dataDir: string, assignments: PermissionAssignment[]): void {
+function update(
+  dataDir: string,
+  change: (assignments: PermissionAssignment[]) => PermissionAssignment[],
+): PermissionAssignment[] {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(assignments, null, 2) + '\n');
+  return withFileLock(p, () => {
+    const current = readJsonForUpdate<unknown>(p, []);
+    if (!Array.isArray(current)) {
+      throw new Error(`Malformed permission store at ${p}: expected a JSON array of assignments.`);
+    }
+    const before = JSON.stringify(current);
+    const next = change(current as PermissionAssignment[]);
+    if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 // ── Registry (write path) ──────────────────────────────────────────────────
@@ -80,7 +95,8 @@ function replaceAll(dataDir: string, assignments: PermissionAssignment[]): void 
  * is exactly what permission rules treat as non-deciding.
  */
 function registrySet(dataDir: string, assignment: PermissionAssignment): PermissionAssignment {
-  const assignments = load(dataDir);
+  let result!: PermissionAssignment;
+  update(dataDir, (assignments) => {
   const key = assignmentKey(assignment);
   const idx = assignments.findIndex((a) => assignmentKey(a) === key);
 
@@ -90,11 +106,9 @@ function registrySet(dataDir: string, assignment: PermissionAssignment): Permiss
       id: idx === -1 ? assignment.id || randomUUID() : assignments[idx].id,
       createdAt: idx === -1 ? new Date().toISOString() : assignments[idx].createdAt,
     };
-    if (idx !== -1) {
-      assignments.splice(idx, 1);
-      replaceAll(dataDir, assignments);
-    }
-    return cleared;
+    result = cleared;
+    if (idx === -1) return assignments;
+    return assignments.filter((_, i) => i !== idx);
   }
 
   const stored: PermissionAssignment =
@@ -102,19 +116,18 @@ function registrySet(dataDir: string, assignment: PermissionAssignment): Permiss
       ? { ...assignment, id: assignment.id || randomUUID(), createdAt: new Date().toISOString() }
       : { ...assignment, id: assignments[idx].id, createdAt: assignments[idx].createdAt };
 
-  if (idx === -1) assignments.push(stored);
-  else assignments[idx] = stored;
-
-  replaceAll(dataDir, assignments);
-  return stored;
+  result = stored;
+  return idx === -1 ? [...assignments, stored] : assignments.map((a, i) => (i === idx ? stored : a));
+  });
+  return result;
 }
 
 /** Remove one assignment by id and persist atomically; an absent id is a no-op. */
 function registryRemove(dataDir: string, assignmentId: string): void {
-  const assignments = load(dataDir);
-  const remaining = assignments.filter((a) => a.id !== assignmentId);
-  if (remaining.length === assignments.length) return;
-  replaceAll(dataDir, remaining);
+  update(dataDir, (assignments) => {
+    const remaining = assignments.filter((a) => a.id !== assignmentId);
+    return remaining.length === assignments.length ? assignments : remaining;
+  });
 }
 
 /**
@@ -125,16 +138,16 @@ function registryRemove(dataDir: string, assignmentId: string): void {
 function registryRemapScope(dataDir: string, remap: UnitIdRemap[]): void {
   if (remap.length === 0) return;
   const lookup = new Map(remap.map((r) => [r.oldId, r.newId]));
-  const assignments = load(dataDir);
-  let changed = false;
-  const rewritten = assignments.map((a) => {
-    const next = a.scopeId ? lookup.get(a.scopeId) : undefined;
-    if (!next) return a;
-    changed = true;
-    return { ...a, scopeId: next };
+  update(dataDir, (assignments) => {
+    let changed = false;
+    const rewritten = assignments.map((a) => {
+      const next = a.scopeId ? lookup.get(a.scopeId) : undefined;
+      if (!next) return a;
+      changed = true;
+      return { ...a, scopeId: next };
+    });
+    return changed ? rewritten : assignments;
   });
-  if (!changed) return;
-  replaceAll(dataDir, rewritten);
 }
 
 /**
@@ -145,10 +158,10 @@ function registryRemapScope(dataDir: string, remap: UnitIdRemap[]): void {
 function registryRemoveForScopes(dataDir: string, scopeIds: string[]): void {
   if (scopeIds.length === 0) return;
   const doomed = new Set(scopeIds);
-  const assignments = load(dataDir);
-  const remaining = assignments.filter((a) => !(a.scopeId && doomed.has(a.scopeId)));
-  if (remaining.length === assignments.length) return;
-  replaceAll(dataDir, remaining);
+  update(dataDir, (assignments) => {
+    const remaining = assignments.filter((a) => !(a.scopeId && doomed.has(a.scopeId)));
+    return remaining.length === assignments.length ? assignments : remaining;
+  });
 }
 
 // ── Index (read path) ──────────────────────────────────────────────────────

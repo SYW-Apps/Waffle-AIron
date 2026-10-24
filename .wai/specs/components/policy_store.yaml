@@ -6,10 +6,11 @@ description: >-
 subsystem: sdd_host
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - file_write_lock
 durability: read-through
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T21:59:02.612Z'
-updatedAt: '2026-10-04T19:51:06.799Z'
+updatedAt: '2026-10-23T22:22:50.818Z'

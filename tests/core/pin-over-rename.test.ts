@@ -7,7 +7,7 @@ import { pinExternals } from '../../src/core/surfaces.js';
 import { buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
 
 // ---------------------------------------------------------------------------
-// A pin over a rename is refused. The 6.2.0 QA gate pinned an external whose
+// A pin over a rename is refused. The 6.1.3 QA gate pinned an external whose
 // producer had renamed a used verb BEFORE following the rename in the uses:
 // the pin went through with an info line, and once the uses were followed a
 // second pin and a second lock were owed. The pin now refuses that alias,

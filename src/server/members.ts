@@ -100,7 +100,7 @@ export interface MemberUpgradePlan {
   members: PlannedMemberRecord[];
   /** The no-widening proof: every subject x capability x member, before and after. */
   reach: ReachComparison[];
-  /** Every non-revoked API key with a member-qualified entry, rewritten to record ids (an entry naming no member dropped, the key revoked when none is left). */
+  /** Every API key with a member-qualified entry, rewritten to record ids (an entry naming no member dropped, the key revoked when none is left). */
   narrowings: PlannedNarrowing[];
   /** What blocks the whole plan. */
   refusals: MigrationFinding[];
@@ -146,7 +146,6 @@ export function plan(dataDir: string): MemberUpgradePlan {
   }
   // Steps 11-13.
   const narrowings = listCredentials(dataDir, '*')
-    .filter((key) => !key.revokedAt)
     .map((key) => narrowing(key, members))
     .filter((n): n is PlannedNarrowing => n !== null);
   const result: MemberUpgradePlan = { members, reach, narrowings, refusals, changes: [] };
@@ -572,7 +571,7 @@ function rekey(dataDir: string, world: PermissionWorld, users: HostedUserRecordL
   remapScope(dataDir, [{ oldId, newId }, ...subsystemRemap]);
   remapUnitReferences(dataDir, [{ oldId, newId }, ...subsystemRemap], []);
   // Steps 10-11: the key entries naming the old id.
-  const keys = listCredentials(dataDir, oldId).filter((k) => k.projects.includes(oldId) && !k.revokedAt);
+  const keys = listCredentials(dataDir, oldId).filter((k) => k.projects.includes(oldId));
   for (const k of keys) renarrowCredential(dataDir, k.id, [...new Set(k.projects.map((e) => (e === oldId ? newId : e)))]);
   // Step 12: the old record; its children are relocated under the new id as the loop reaches them.
   removeProjectRecord(dataDir, oldId);

@@ -301,15 +301,18 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
   } & Record<string, unknown>)[]>(keysPath);
   if (keys) {
     let changed = false;
+    // A revoked key is a deleted record: a legacy record still carrying revokedAt goes with the retired owners' keys.
+    const deleted = new Set<string>();
     for (const key of keys) {
-      if (key.revokedAt) continue;
+      if (key.revokedAt) {
+        found('keys', `key "${key.id}" was revoked in place — deleted`);
+        deleted.add(key.id);
+        continue;
+      }
 
       if (isLegacyBuiltin(key.ownerSubject?.userId)) {
-        found('keys', `key "${key.id}" is owned by the retired literal "${key.ownerSubject?.userId}" — revoked; re-mint for the seeded UUID subject`);
-        if (apply) {
-          key.revokedAt = new Date().toISOString();
-          changed = true;
-        }
+        found('keys', `key "${key.id}" is owned by the retired literal "${key.ownerSubject?.userId}" — revoked (deleted); re-mint for the seeded UUID subject`);
+        deleted.add(key.id);
         continue;
       }
 
@@ -357,7 +360,7 @@ export function migratePermissionModel(dataDir: string, apply: boolean): Migrati
         }
       }
     }
-    if (apply && changed) writeRaw(keysPath, keys);
+    if (apply && (changed || deleted.size > 0)) writeRaw(keysPath, keys.filter((key) => !deleted.has(key.id)));
   }
 
   // 5. Web sessions: grants → projects narrowing; legacy-builtin sessions are

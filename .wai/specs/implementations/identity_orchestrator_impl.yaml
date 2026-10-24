@@ -380,7 +380,8 @@ methods:
       - stepNumber: 2
         description: >-
           Return the caller's OWN minted credential records through the credential repository,
-          redacted — hashed token only, with id/project/label/createdAt/revokedAt
+          redacted — hashed token only, with id/project/label/createdAt/expiresAt (every stored
+          record is live: a revoked token is deleted)
         type: call
         targetComponent: credential_repository
         targetMethod: listByOwner
@@ -393,8 +394,9 @@ methods:
       Authenticate the caller credential to the calling principal, list the principal's own
       credential records through the credential repository (listByOwner on the principal's subject
       user id), and return them redacted: each carries the hashed token (never plaintext) with its
-      id, authorized project, label, createdAt and revokedAt, so the client can show a user their
-      agent tokens and offer revoke. A read; not audited.
+      id, authorized project, label, createdAt and expiresAt, so the client can show a user their
+      agent tokens and offer revoke. There is no revoked state to show: a revoked token is deleted,
+      and the token.revoke / token.revoke.self audit events are its history. A read; not audited.
   - name: revokeSelfToken
     narrative:
       - stepNumber: 1
@@ -556,8 +558,8 @@ methods:
         onFalseStep: 12
       - stepNumber: 10
         description: >-
-          Revoke every non-revoked credential owned by the user so existing tokens can no longer
-          authenticate, capturing the revoked count
+          Delete every credential owned by the user so existing tokens can no longer authenticate,
+          capturing the removed count
         type: call
         targetComponent: credential_repository
         targetMethod: revokeAllForOwner
@@ -1143,4 +1145,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-19T22:14:02.974Z'
+updatedAt: '2026-10-23T22:13:14.327Z'

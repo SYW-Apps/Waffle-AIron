@@ -21,5 +21,7 @@ values:
     description: An L4 implementation, with its L5 narratives
   - name: type
     description: 'A type: entity, value-object, signature or enum'
+  - name: group
+    description: 'A type group: a folder of types, nestable under a parent group (group_spec)'
 createdAt: '2026-10-04T23:11:07.188Z'
-updatedAt: '2026-10-04T23:11:07.584Z'
+updatedAt: '2026-10-23T22:18:50.262Z'

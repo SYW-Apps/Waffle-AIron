@@ -329,6 +329,32 @@ methods:
     signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
     returns: list<DuplicateTypeSpec>
     params: []
+  - name: holdsDesign
+    description: >-
+      Forward 1:1 to the Spec Index: whether the tree holds anything to approve (a subsystem, a
+      type, an L0 export entry or a direct member project).
+    signatureFrom: spec_index.holdsDesign
+    guarantees:
+      - idempotent
+    effect: read
+  - name: loadGroupSpecs
+    description: 'Forward 1:1 to the Spec Index: every type group of the tree.'
+    signatureFrom: spec_index.loadGroupSpecs
+    guarantees:
+      - idempotent
+    effect: read
+  - name: renameGroup
+    description: >-
+      Forward 1:1 to the registry write face: rename a type group, its folder, its types' group and
+      its child groups' parent following.
+    signatureFrom: spec_registry.renameGroup
+    effect: write
+  - name: moveGroup
+    description: >-
+      Forward 1:1 to the registry write face: write a type group at a new placement, its folder
+      moving along.
+    signatureFrom: spec_registry.moveGroup
+    effect: write
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-19T19:47:19.919Z'
+updatedAt: '2026-10-24T11:34:59.450Z'

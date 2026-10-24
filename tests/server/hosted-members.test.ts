@@ -312,14 +312,19 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(JSON.parse(narrowed[0].metadata!)).toMatchObject({ before: ['platform::billing'], after: ['billing'] });
   });
 
-  it('an entry naming no member is dropped; a key left with no entry is revoked; a revoked key is skipped without aborting the start', () => {
+  it('an entry naming no member is dropped; a key left with no entry is revoked (its record deleted); a legacy revokedAt record is ignored without aborting the start', () => {
     mintUserToken(dataDir, { id: 'k-mixed', userId: 'u-q', projects: ['platform::billing', 'platform::ghost', 'docs'] });
     mintUserToken(dataDir, { id: 'k-ghost', userId: 'u-q', projects: ['platform::ghost'] });
     mintUserToken(dataDir, { id: 'k-plain', userId: 'u-q', projects: ['platform'] });
-    createCredential(dataDir, {
-      id: 'k-revoked', keyHash: 'h-revoked', projects: ['platform::billing'], createdAt: new Date().toISOString(),
-      revokedAt: new Date().toISOString(), ownerSubject: subjectOf('u-q'),
-    });
+    // A record an older release left revoked in place: the credential store leaves it out of every read.
+    const credentialsFile = path.join(dataDir, 'auth', 'credentials.json');
+    fs.writeFileSync(credentialsFile, JSON.stringify([
+      ...(JSON.parse(fs.readFileSync(credentialsFile, 'utf8')) as object[]),
+      {
+        id: 'k-revoked', keyHash: 'h-revoked', projects: ['platform::billing'], createdAt: new Date().toISOString(),
+        revokedAt: new Date().toISOString(), ownerSubject: subjectOf('u-q'),
+      },
+    ]));
     const dry = upgradeMemberRecords({ dataDir }, false);
     expect(dry.plan.narrowings.map((n) => [n.keyId, n.after, n.revokes])).toEqual([
       ['k-mixed', ['billing', 'docs'], false],
@@ -332,8 +337,9 @@ describe('the member upgrade: plan-first, idempotent, refusing', () => {
     expect(keys.find((k) => k.id === 'k-mixed')!.projects).toEqual(['billing', 'docs']);
     expect(keys.some((k) => k.id === 'k-ghost')).toBe(false); // revoked: it named nothing the data plane resolves
     expect(keys.find((k) => k.id === 'k-plain')!.projects).toEqual(['platform']);
-    // The revoked key is untouched: still revoked, still naming what it named.
-    expect(keys.find((k) => k.id === 'k-revoked')!.projects).toEqual(['platform::billing']);
+    // The legacy revoked record never shows, and the next write dropped it from the file.
+    expect(keys.some((k) => k.id === 'k-revoked')).toBe(false);
+    expect(fs.readFileSync(credentialsFile, 'utf8')).not.toContain('k-revoked');
     const narrowed = queryAuditEvents(dataDir, { action: 'token.narrowed' });
     expect(narrowed.map((e) => e.target).sort()).toEqual(['k-ghost', 'k-mixed']);
     const ghost = narrowed.find((e) => e.target === 'k-ghost')!;

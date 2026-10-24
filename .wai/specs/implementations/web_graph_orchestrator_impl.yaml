@@ -196,7 +196,10 @@ methods:
       - stepNumber: 7
         description: >-
           Build the canvas model over the bound spec tree through the host core adapter, handing it
-          the relations so each consumption edge carries its health
+          the relations so each consumption edge carries its health. The build does not fail the
+          read: whatever loaded is drawn and each part that failed to load or validate is carried as
+          a finding (one naming no spec when no spec can carry it); a tree that yields nothing at
+          all is answered as an empty model holding one error finding with the cause
         type: call
         targetComponent: host_core_adapter
         targetMethod: buildCanvasDataModel
@@ -364,4 +367,4 @@ methods:
     symbol: getWebProjectNetwork
 status: complete
 createdAt: '2026-07-11T11:36:12.720Z'
-updatedAt: '2026-10-06T19:24:57.820Z'
+updatedAt: '2026-10-23T22:30:26.657Z'

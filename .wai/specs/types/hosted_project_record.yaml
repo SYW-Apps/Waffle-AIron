@@ -15,7 +15,14 @@ subsystem: sdd_host
 fields:
   - name: id
     type: string
-    description: URL-safe project id (validated against path traversal)
+    description: >-
+      The project id, in exactly the project-id grammar of a project's own id (one shared
+      definition, PROJECT_ID_RE in src/models/project.ts): lowercase letters, digits, '-', '_' and
+      '.', starting and ending with a letter or digit, at most 64 characters, never a Windows device
+      name (con, prn, aux, nul, comN, lptN - with or without an extension-like suffix) and never
+      'super'. A record id is the project's id as written - never mapped, sanitized or rewritten -
+      so a family whose members have ids like waffler_core hosts and runs under `wairon dev` as it
+      validates.
     optional: false
   - name: rootPath
     type: string
@@ -66,12 +73,34 @@ methods:
     signature: 'isValidId(id: unknown): boolean'
     returns: bool
     description: >-
-      Whether a value is a valid record id: a path-safe id (lowercase letters, digits and hyphens,
-      starting with a letter or digit, at most 64 characters), so a crafted id can never escape the
-      projects directory. Every record write applies it, and a workflow that must refuse a bad id
-      before queuing an approval asks it first.
+      Whether a value is a valid record id: a string matching the project-id grammar (see the id
+      field - lowercase letters, digits, '-', '_' and '.', alphanumeric at both ends, at most 64
+      characters, no Windows device name, not 'super'). It is the SAME definition project ids are
+      validated with, never a second grammar. Path safety holds by construction: no separator, no
+      ':' and no leading or trailing '.', so a record id is never absolute, never '.' or '..' and
+      can never escape the projects directory; a Windows device name is excluded for the same
+      reason; a '.' or '_' inside an id is an ordinary character wherever the id is used - a
+      directory name under the projects directory and in a mirrored backup tree, a URL path segment
+      (always percent-decoded whole, never split), a query value, a key in the persisted registries
+      (joined with '|' and '::', neither of which the grammar allows) - and no hosted code splits an
+      id on '.' or '_' (a '.' separates only the segments of a QUALIFIED ORGANIZATION UNIT id, which
+      is a different grammar). Every record write applies it, and a workflow that must refuse a bad
+      id before queuing an approval asks it first.
     sourcePath: src/server/projects.ts
     symbol: isValidProjectId
+  - name: invalidIdProblem
+    signature: 'invalidIdProblem(id: string): string'
+    params:
+      - name: id
+        type: string
+        description: The id isValidId refused
+    returns: string
+    description: >-
+      Why a value is no valid record id, in the project-id grammar's own words (the same grammar
+      isValidId applies): the sentence a refusal names after the id, so the hosted lifecycle, the
+      record writes and the CLI refuse a bad id with one wording.
+    sourcePath: src/server/projects.ts
+    symbol: invalidProjectIdProblem
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-04T23:38:34.071Z'
+updatedAt: '2026-10-24T11:34:19.306Z'

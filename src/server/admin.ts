@@ -12,6 +12,7 @@ import { effectiveProjectId } from '../models/project.js';
 import { authenticateMaster, authenticateCredential, signViewToken } from './auth.js';
 import { authorize } from './authorization.js';
 import { placeProject, listOrganizationUnits } from './organization.js';
+import { resetDevDataDir } from './upgrade.js';
 import {
   hashToken,
   createCredential,
@@ -21,6 +22,8 @@ import {
 import {
   createProjectRecord,
   registerProjectRecord,
+  registerMemberRecord,
+  planMemberRecords,
   listProjectRecords,
   removeProjectRecord,
   existingProjectRoot,
@@ -42,8 +45,10 @@ import { listSecretKeys, resolveGitToken, resolveSecret } from '../utils/secrets
 import type { ProducerConfig } from '../producers/index.js';
 import type {
   ApiKeyRecord,
+  DevFamilyRegistration,
   HostConfig,
   HostedProjectRecord,
+  PlannedMemberRecord,
   Principal,
   PrincipalSubject,
   DisplayRole,
@@ -174,17 +179,36 @@ export function destroyProject(cfg: HostConfig, credential: string | null, id: s
 
 /**
  * Register the local development server's single project at the developer's
- * own working directory (upsert by id). `wairon dev` runs with auth off and no
- * credential exists, so the workflow admits only a development-mode host
- * configuration and refuses every other.
+ * own working directory (upsert by id), and the readable part of its family.
+ * `wairon dev` runs with auth off and no credential exists, so the workflow
+ * admits only a development-mode host configuration and refuses every other.
+ * The data directory is disposable: a stale one is reset first, and a member
+ * that cannot be read is answered with its reason, never refused.
  */
-export function registerLocalDevProject(cfg: HostConfig, id: string, rootPath: string): HostedProjectRecord {
+export function registerLocalDevProject(cfg: HostConfig, id: string, rootPath: string): DevFamilyRegistration {
   // Step 1–2: only a development-mode configuration may register a project at a caller-named directory
   if (!cfg.devMode) {
     throw new Error('Registering a project at a working directory is reserved for the local development server.');
   }
-  // Step 3–4: register the record and return it
-  return registerProjectRecord(cfg.dataDir, id, rootPath);
+  // Step 3: discard a stale data directory (never backed up, never migrated) before anything is written into it
+  const reset = resetDevDataDir(cfg);
+  // Step 4: register the project record at the working directory
+  const project = registerProjectRecord(cfg.dataDir, id, rootPath);
+  // Step 5: the members the project declares on disk, each as the record it should hold or as unreadable
+  const planned = planMemberRecords(cfg.dataDir, id);
+  // Steps 6–7: every readable member gets its record (parents come first in the plan); no reach screening, no audit.
+  // A record the registry refuses (a clash the plan could not see) is answered as unreadable too: the start never stops.
+  const members = planned.map((member): PlannedMemberRecord => {
+    if (member.action === 'unreadable' || member.action === 'retire') return member;
+    try {
+      registerMemberRecord(cfg.dataDir, member.record);
+      return member;
+    } catch (e) {
+      return { ...member, action: 'unreadable', reason: `its record was refused: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  });
+  // Step 8
+  return { project, members, reset };
 }
 
 export function listProjects(cfg: HostConfig, credential: string | null): HostedProjectRecord[] {

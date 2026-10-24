@@ -1453,7 +1453,13 @@ methods:
       when the caller may read that record, and the app hands the engine an open-project hook so
       exactly those nodes open the member's own project page (a member the caller may not read is
       drawn unlinked). Each consumption edge carries its relation's health, read within the caller's
-      reach; unavailable is never shown as ok.
+      reach; unavailable is never shown as ok. The model is PARTIAL-TOLERANT: a tree that fails to
+      load or validate in part still answers 200 with whatever loaded and every finding, including
+      those that name no spec. CLIENT CONTRACT: the app mounts whatever arrives, never an error page
+      in place of a drawable graph; shows the engine's Findings panel with every finding, each
+      clickable to focus its node; and on the local development server (getDevStatus reports
+      devMode) mounts the engine with its issues overlay ON by default, a reader's own toggle
+      winning.
     signature: 'serveProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -1600,6 +1606,25 @@ methods:
       path: /web/projects/network
     guarantees:
       - idempotent
+  - name: getDevStatus
+    description: >-
+      Local development server only: what did not load of the served project's family (unreadable or
+      invalid members, each with its reason), for the web app's startup banner. Forwards to
+      web_project_orchestrator.devStatus. The route is mounted only under devMode, like the dev
+      login, and is absent from the hosted UI. CLIENT CONTRACT: when the answer holds problems the
+      app shows a banner above the project - one line per problem naming the member and its reason -
+      that stays until the problem is fixed on disk and the status is read again (on focus and on
+      every realtime change nudge); a failed read of this status shows no banner and never blocks
+      the app.
+    signature: 'getDevStatus(sessionId: string): DevStatus'
+    returns: DevStatus
+    params:
+      - name: sessionId
+        type: string
+    endpoint:
+      transport: HTTP
+      method: GET
+      path: /web/dev/status
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-19T22:11:39.693Z'
+updatedAt: '2026-10-23T22:30:21.309Z'

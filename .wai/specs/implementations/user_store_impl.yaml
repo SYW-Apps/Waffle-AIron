@@ -1,8 +1,8 @@
 id: user_store_impl
 name: User Store Implementation
 description: >-
-  Authoritative in-memory holder of the hosted-user set, file-backed under the server data root
-  (users.json), mirroring the credential repository's storage convention.
+  Read-through file I/O over the hosted-user set at users.json under the server data root: load
+  parses the file fresh; update holds the file's write lock across a fresh read and the replacement.
 contract: iuser_store
 sourcePath: src/server/users.ts
 injectedParams:
@@ -11,20 +11,20 @@ methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted hosted-user set from the users file under the server data root and hold it
-      as the authoritative in-memory representation, returning the loaded records. A missing file
-      yields an empty set (first boot is not an error); an unreadable file or structurally invalid
-      JSON fails with a storage error naming the offending path so the operator can repair or remove
-      it — the store never silently discards persisted users.
+      Read users.json fresh (no in-memory copy), returning the records. A missing file yields an
+      empty set; an unreadable file or structurally invalid JSON fails with a storage error naming
+      the path.
     symbol: loadStore
-  - name: replaceAll
+  - name: update
     narrative: []
     intent: >-
-      Swap the authoritative in-memory user set to the supplied complete record set in one
-      assignment, only ever called by the owned registry after durable persistence has succeeded.
-      Never partially applies; the previous set stays intact if the swap cannot complete, so readers
-      via the index never observe a half-written state.
+      Under users.json's write lock (file_write_lock.run), read the set fresh - absent is empty, a
+      file that exists but cannot be read or parsed throws and nothing is written - apply the
+      change, replace the file atomically via write-temp-then-rename and release the lock, also when
+      the change throws. Answers the set written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:29:51.432Z'
-updatedAt: '2026-09-23T21:20:14.125Z'
+updatedAt: '2026-10-23T22:24:17.669Z'

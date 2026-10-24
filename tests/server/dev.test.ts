@@ -163,7 +163,7 @@ describe('registerLocalDevProject (sdd_host)', () => {
   });
 
   it('persists a local record at the given cwd (not under dataDir/projects); resolveProjectRoot returns it', () => {
-    const rec = registerLocalDevProject(devCfg(), 'local', cwd);
+    const rec = registerLocalDevProject(devCfg(), 'local', cwd).project;
     expect(rec.id).toBe('local');
     expect(rec.rootPath).toBe(cwd);
     expect(rec.status).toBe('active');
@@ -172,7 +172,7 @@ describe('registerLocalDevProject (sdd_host)', () => {
 
     // Persisted, and idempotent (a second call upserts — no duplicate, createdAt preserved).
     expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
-    const again = registerLocalDevProject(devCfg(), 'local', cwd);
+    const again = registerLocalDevProject(devCfg(), 'local', cwd).project;
     expect(again.createdAt).toBe(rec.createdAt);
     expect(listProjectRecords(dataDir).filter((r) => r.id === 'local')).toHaveLength(1);
 

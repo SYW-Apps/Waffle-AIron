@@ -29,7 +29,8 @@ dependsOn:
   - landscape_orchestrator
   - project_repository
   - host_server
+  - local_dev_registration
 transport: InProcess
 status: complete
 createdAt: '2026-09-25T22:39:10.822Z'
-updatedAt: '2026-10-18T14:29:07.091Z'
+updatedAt: '2026-10-23T22:31:31.960Z'

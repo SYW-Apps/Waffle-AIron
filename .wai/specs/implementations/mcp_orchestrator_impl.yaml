@@ -410,9 +410,9 @@ methods:
         description: >-
           Refuse, naming the candidate kinds when several levels hold the id (pass kind to choose
           one) or saying that no level holds it — unless no level holds it and the id is an
-          external's `alias::name`: then the pin's own kind answers (step 18), a contract entry or a
-          type, so a pinned read never needs a kind; or the id is a MEMBER's `alias::system` (or
-          `alias::<its L0 name>`): then the system read of step 6 answers it
+          external's `alias::name`: then the pin's own kind answers (the not-found step), a contract
+          entry or a type, so a pinned read never needs a kind; or the id is a MEMBER's
+          `alias::system` (or `alias::<its L0 name>`): then the system read of step 6 answers it
         type: return
         outcome: kind not inferable
       - stepNumber: 5
@@ -434,7 +434,9 @@ methods:
             step: 14
           - value: type
             step: 16
-        defaultStep: 18
+          - value: group
+            step: 18
+        defaultStep: 20
       - stepNumber: 6
         description: >-
           Read the L0 the id names through the core client adapter — the one place that decides it:
@@ -450,7 +452,7 @@ methods:
       - stepNumber: 7
         description: Join the shared answer path
         type: jump
-        toStep: 17
+        toStep: 19
       - stepNumber: 8
         description: Read the L1 subsystem spec by id
         type: call
@@ -459,7 +461,7 @@ methods:
       - stepNumber: 9
         description: Join the shared answer path
         type: jump
-        toStep: 17
+        toStep: 19
       - stepNumber: 10
         description: Read the L2 component spec by id
         type: call
@@ -468,7 +470,7 @@ methods:
       - stepNumber: 11
         description: Join the shared answer path
         type: jump
-        toStep: 17
+        toStep: 19
       - stepNumber: 12
         description: Read the L3 interface spec by id
         type: call
@@ -477,7 +479,7 @@ methods:
       - stepNumber: 13
         description: Join the shared answer path
         type: jump
-        toStep: 17
+        toStep: 19
       - stepNumber: 14
         description: Read the L4 implementation spec by id
         type: call
@@ -486,13 +488,22 @@ methods:
       - stepNumber: 15
         description: Join the shared answer path
         type: jump
-        toStep: 17
+        toStep: 19
       - stepNumber: 16
         description: Read the type spec by id
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadTypeSpec
       - stepNumber: 17
+        description: Join the shared answer path
+        type: jump
+        toStep: 19
+      - stepNumber: 18
+        description: Read the type group by id, from the group tree
+        type: call
+        targetComponent: mcp_core_adapter
+        targetMethod: loadGroupSpecs
+      - stepNumber: 19
         label: found-check
         description: >-
           Decide whether a spec of that kind holds that id — the loaders resolve an `alias::name` id
@@ -500,9 +511,9 @@ methods:
           under its key
         type: branch
         condition: the load found nothing
-        onTrueStep: 21
-        onFalseStep: 18
-      - stepNumber: 18
+        onTrueStep: 23
+        onFalseStep: 20
+      - stepNumber: 20
         label: not-found
         description: >-
           No spec of this tree holds it: when the id is `alias::name` and the alias names an
@@ -513,14 +524,14 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: readPinnedSpec
-      - stepNumber: 19
+      - stepNumber: 21
         description: >-
           When no pin holds it either, read the loader's findings: a spec of that kind and id whose
           file exists but fails to parse is not missing, and must not be answered as missing
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: getLoaderIssues
-      - stepNumber: 20
+      - stepNumber: 22
         description: >-
           Answer the pinned read when the pin holds the name — the pinned entry as the spec, the
           pinnedSnapshot marker beside it (alias, producer, snapshot file, StateId), read-only: an
@@ -530,22 +541,22 @@ methods:
           reason, so the author repairs the file rather than recreating it; else refuse a read of a
           spec that does not exist, naming the kind and the id asked for
         type: return
-      - stepNumber: 21
+      - stepNumber: 23
         description: Decide whether the spec read carries variant guidance
         type: branch
         condition: the spec is a component that declares a variant
-        onFalseStep: 25
-      - stepNumber: 22
+        onFalseStep: 27
+      - stepNumber: 24
         description: Load the variant registry through the core client adapter
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadProjectVariants
-      - stepNumber: 23
+      - stepNumber: 25
         description: Read every component, for the same-variant siblings
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadComponentSpecs
-      - stepNumber: 24
+      - stepNumber: 26
         description: >-
           Resolve the component's variant guidance — the variant's base, its implementation
           guidance, and the same-variant sibling components — through the core client adapter, and
@@ -553,7 +564,7 @@ methods:
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveVariantGuidance
-      - stepNumber: 25
+      - stepNumber: 27
         description: >-
           When the read was narrowed to named methods, refuse the filter outright when the spec
           declares no methods at all, or when a name it does not declare is asked for — naming the
@@ -970,7 +981,39 @@ methods:
         type: return
         outcome: answered
     symbol: sdd_delete_spec
+  - name: addGroup
+    narrative:
+      - stepNumber: 1
+        description: >-
+          State the restatement: the group as the tool's arguments give it (id, name, description,
+          parent, home subsystem), the fields this tool's input can express, and the caller's dry
+          run
+        type: local
+      - stepNumber: 2
+        description: >-
+          Write it through the authoring client adapter as a spec of kind group; the gate refuses an
+          unknown parent, a parent of another home and a loop before anything reaches disk, and
+          names what an omission cleared; a group carries no lifecycle status, so the receipt states
+          none
+        type: call
+        targetComponent: mcp_authoring_adapter
+        targetMethod: writeSpec
+      - stepNumber: 3
+        description: Answer with the receipt
+        type: return
+        outcome: written
+    symbol: sdd_add_group
 conformance: anchored
+lint:
+  allow:
+    - code: EXCESSIVE_NARRATIVE_STEPS
+      reason: >-
+        getSpec is the read tool's kind table: one inference block (three steps), one switch, and
+        seven arms of two steps each — the level's own loader on the core client adapter, then the
+        jump back to the one found-check — followed by the shared not-found, variant and narrowing
+        answer path. Its 27 steps are that table plus one shared tail; every arm is the same
+        two-step shape, so splitting it would only move the switch into a helper that the tool calls
+        once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-20T21:58:57.288Z'
+updatedAt: '2026-10-24T11:43:10.454Z'

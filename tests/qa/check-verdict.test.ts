@@ -28,8 +28,8 @@ describe('qa/scripts/check-verdict.mjs', () => {
   };
   const verdict = (rc: string, result = 'PASS'): void =>
     write('qa/verdicts/6.0.0.md', `---\nversion: 6.0.0\nrc: ${rc}\ndate: 2026-01-01\nresult: ${result}\n---\nbody\n`);
-  const check = (): { code: number | null; out: string } => {
-    const r = spawnSync(process.execPath, [SCRIPT], { cwd: repo, encoding: 'utf8' });
+  const check = (...args: string[]): { code: number | null; out: string } => {
+    const r = spawnSync(process.execPath, [SCRIPT, ...args], { cwd: repo, encoding: 'utf8' });
     return { code: r.status, out: `${r.stdout}${r.stderr}` };
   };
 
@@ -58,6 +58,13 @@ describe('qa/scripts/check-verdict.mjs', () => {
     commit('verdict + docs');
     const r = check();
     expect(r.code, r.out).toBe(0);
+  });
+
+  it('fails when the verdict is for another version than the merge tags, and names both', () => {
+    expect(check('--expect', '6.0.0').code).toBe(0);
+    const r = check('--expect', '5.9.1');
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('it is for 6.0.0, but this merge tags 5.9.1');
   });
 
   it('fails when the verdict says FAIL', () => {

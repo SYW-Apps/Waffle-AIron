@@ -88,6 +88,7 @@ function walk(ids: Ids): { tool: string; args: Record<string, unknown>; kind: st
     { tool: 'sdd_set_public_interfaces', args: { subsystem: ids.sub, publicInterfaces: [] }, kind: 'subsystem', id: ids.sub },
     { tool: 'sdd_add_component', args: { id: 'probe', name: 'P', description: 'p', subsystem: ids.sub, componentType: 'Orchestrator' }, kind: 'subsystem', id: ids.sub },
     { tool: 'sdd_add_type', args: { kind: 'value-object', id: 'probe_t', name: 'P', subsystem: ids.sub, fields: [] }, kind: 'subsystem', id: ids.sub },
+    { tool: 'sdd_add_group', args: { id: 'probe_g', name: 'P', subsystem: ids.sub }, kind: 'subsystem', id: ids.sub },
     { tool: 'sdd_define_interface', args: { id: 'iprobe', name: 'P', description: 'p', component: ids.comp, methods: [] }, kind: 'component', id: ids.comp },
     { tool: 'sdd_write_narrative', args: { id: 'probe_impl', name: 'P', description: 'p', contract: ids.iface, methods: [] }, kind: 'interface', id: ids.iface },
   ];

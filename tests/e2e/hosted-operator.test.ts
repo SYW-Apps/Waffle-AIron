@@ -3,7 +3,6 @@ import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as net from 'net';
 import { execFileSync, spawn, type ChildProcess } from 'child_process';
 import { assertDistBuilt, DIST_CLI, rmrfWithRetry } from './helpers.js';
 
@@ -18,17 +17,6 @@ import { assertDistBuilt, DIST_CLI, rmrfWithRetry } from './helpers.js';
 
 const MASTER = 'e2e-master-credential-0123456789abcdef';
 const PROJECT = 'kbase';
-
-async function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.once('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const port = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(port));
-    });
-  });
-}
 
 describe('hosted operator journey (built server)', () => {
   let base: string;
@@ -90,16 +78,17 @@ describe('hosted operator journey (built server)', () => {
       expect(keys[user]).toMatch(/^wk_/);
     }
 
-    port = await freePort();
-    const adminPort = await freePort();
     server = spawn(process.execPath, [
-      DIST_CLI, 'serve', '--host', '127.0.0.1', '--port', String(port),
-      '--admin-host', '127.0.0.1', '--admin-port', String(adminPort), '--data-dir', dataDir,
+      DIST_CLI, 'serve', '--host', '127.0.0.1', '--port', '0',
+      '--admin-host', '127.0.0.1', '--admin-port', '0', '--data-dir', dataDir,
     ], { env, cwd: base, stdio: ['ignore', 'pipe', 'pipe'] });
     server.stdout!.on('data', (d) => { log += String(d); });
     server.stderr!.on('data', (d) => { log += String(d); });
     for (let i = 0; i < 200 && !log.includes('hosting server started'); i++) await new Promise((r) => setTimeout(r, 100));
     expect(log).toContain('hosting server started');
+    // Both planes listen on port 0 (no free-port probe to race other tests); the start banner names the bound data-plane port.
+    port = Number(/data plane:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/.exec(log)?.[1]);
+    expect(port).toBeGreaterThan(0);
     // The server upgrades its data dir at start (there is no `host doctor` any more) and records the running major.
     const version = JSON.parse(fs.readFileSync(path.join(dataDir, 'version.json'), 'utf8')) as Record<string, unknown>;
     expect(JSON.stringify(version)).toContain(String(WAIRON_MAJOR));
