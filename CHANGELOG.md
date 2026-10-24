@@ -74,6 +74,15 @@ Two things to know:
 - A lock holder that stalls longer than the lock's stale age (15 s for hosted stores, 60 s for
   the spec tree) can be taken over while it still works. Its final write is refused when that
   happened, which narrows the window to the write itself but does not close it.
+- A member project's own `wairon validate` does not show the network findings judged at the
+  family root (`EXPORT_BEYOND_NETWORK`, `GATEWAY_BYPASSED`); it only says they are judged
+  there. Run `wairon validate` at the family root to read them before changing a member's export
+  audience.
+- The code-vs-design gate does not report external I/O or libraries a component uses: I/O
+  outside an Adapter passes `validate --ci`. The "Never checked" line of `validate` says so.
+  (Carried from 6.1.3.)
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins. (Carried from 6.1.3.)
 
 ### Also in this release
 
