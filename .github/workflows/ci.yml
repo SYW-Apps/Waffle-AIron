@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, dev, beta]
 
+# The token reads the repository only; a job that needs more says so itself.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Typecheck, Test, Build & Conformance
@@ -109,6 +113,10 @@ jobs:
     name: Release QA verdict
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    # Reads the pull request's title for the version bump.
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       # The pull request's own head (not the synthetic merge commit), with the
