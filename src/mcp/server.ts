@@ -1082,6 +1082,7 @@ function pendingBanner(): string[] {
 
 const getStatusOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
+  report: z.string().describe('The whole status answer, exactly the text block: the tree with its completeness, the approval verdict, any banner and the Externals section. A client that reads only the structured content would otherwise see nothing but the release.'),
   ...staleServerOutput,
 };
 
@@ -3591,7 +3592,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries validatorVersion, the wairon release of the running server, and the text ends with `wairon <version>`.',
+      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries the whole report (the text block, as `report`) and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
@@ -3649,7 +3650,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 5-6: the externals compared with their live producers, offline
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
-        return structured(`${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`, { validatorVersion: report.validatorVersion });
+        const text = `${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`;
+        return structured(text, { validatorVersion: report.validatorVersion, report: text });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }

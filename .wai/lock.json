@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "056c7c61a2910a20e1b348f32101a1f859029378e36cf46e71c47f56638e6910"
+    "digest": "3b7ef48abd2d01f363ada922705d93f012092399e580dee0e3ac82c1e594afc1"
   },
-  "lockedAt": "2026-10-24T11:53:29.960Z",
+  "lockedAt": "2026-10-24T14:50:41.845Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.1.5-dev.1",
+  "validatorVersion": "6.1.5-dev.3",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -833,7 +833,7 @@
     ".wai/specs/interfaces/imcp_network_adapter.yaml": "f0d782520c80cd33dd2082154a1e49cf67498ef29db40f546e3166995be0a451",
     ".wai/specs/interfaces/imcp_network_orchestrator.yaml": "5bca3607a52e2ac60541fc11d15acc8e3a0917c6133e493ce9cf544ecb4e934b",
     ".wai/specs/interfaces/imcp_orchestrator.yaml": "e0a65b4f08ced873092a895b48f42b126afaa2bfe3434f928abe762c7b761889",
-    ".wai/specs/interfaces/imcp_portal.yaml": "1163b19933fdf1c6ae9291561f1e53d79605b3fbd9e1aa6c8e7e0fd9c290c8cf",
+    ".wai/specs/interfaces/imcp_portal.yaml": "57950e26b4bc68ed0fcf3f8de80ff70cc7e3c2e515e93a73a422e52c1c4eaea7",
     ".wai/specs/interfaces/imcp_server.yaml": "1fb907de878d0d17564cdd42db9c6b209e65bcadfb8578e25b652777faf5bdcc",
     ".wai/specs/interfaces/imcp_skills_adapter.yaml": "204be7334485a7c651c90565566f89234be833eebf10b23f42d5bdae21ef5f84",
     ".wai/specs/interfaces/imcp_surfaces_adapter.yaml": "909e51a8847baffce8afab5faa11d7eda2d1f065e62652c0e350b4876ee9f4e7",
@@ -1728,7 +1728,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "f41532550de42361490a2443731bf7d9b845f8e77f3a805b58e6e7495dca0c35",
+    "design": "1aac62fa6c06a7f88e28f272bbbed5ace98c82963bdf13ea3da4da1b0af3bbd2",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1739,7 +1739,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.1.5-dev.1",
+      "validatorVersion": "6.1.5-dev.3",
       "doctrineDigest": "d01f95d331513a34a66c890f92261f9af2edee7727ca86497f45ffb053daf50d",
       "grade": "exact"
     },
