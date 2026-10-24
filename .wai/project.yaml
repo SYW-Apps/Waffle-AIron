@@ -186,6 +186,10 @@ rules:
       - web/src/views/Audit.tsx
       - web/src/views/CanvasRouter.tsx
       - web/src/views/CanvasView.tsx
+      # The `wairon dev` banner over GET /web/dev/status (which project the local
+      # server registered, and a start that discarded stale data): a SPA view like
+      # its siblings here, which are not spec'd as View components.
+      - web/src/views/DevBanner.tsx
       - web/src/views/Environment.tsx
       - web/src/views/Health.tsx
       - web/src/views/Home.tsx

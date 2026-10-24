@@ -199,9 +199,14 @@ export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | n
   return parsed;
 }
 
-/** Persist the instance exposure policy wholesale via write-temp-then-rename
- *  and return it. No stamping — the exposure posture is a plain settings object. */
+/** policy_repository.setExposurePolicy: forwards to the policy registry. */
 export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
+  return registrySetExposurePolicy(dataDir, policy);
+}
+
+/** policy_registry.setExposurePolicy. Persist the instance exposure policy wholesale via write-temp-then-rename
+ *  and return it. No stamping — the exposure posture is a plain settings object. */
+function registrySetExposurePolicy(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
   const p = exposurePolicyPath(dataDir);
   assertAdminApiMode(policy?.adminApiMode, `The exposure policy for ${p}`);
   return updateExposurePolicy(dataDir, () => policy);
@@ -333,8 +338,16 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
   }
 }
 
+/** policy_repository.upsertIdentityProvider: forwards to the policy registry. */
+export function upsertIdentityProviderRecord(
+  dataDir: string,
+  config: IdentityProviderConfig,
+): IdentityProviderConfig {
+  return registryUpsertIdentityProvider(dataDir, config);
+}
+
 /**
- * policy_registry.upsertIdentityProvider → policy_repository.upsertIdentityProvider.
+ * policy_registry.upsertIdentityProvider.
  * Create or update one identity-provider configuration by id: stamp updatedAt
  * server-side, whitelist-project the config to the persisted type (dropping any
  * field outside it so a raw client secret can never be written, preserving
@@ -342,7 +355,7 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
  * persist the whole collection via write-temp-then-rename, and return the stored
  * config. A persistence failure leaves the previous collection intact.
  */
-export function upsertIdentityProviderRecord(
+function registryUpsertIdentityProvider(
   dataDir: string,
   config: IdentityProviderConfig,
 ): IdentityProviderConfig {
@@ -354,14 +367,19 @@ export function upsertIdentityProviderRecord(
   return stored;
 }
 
+/** policy_repository.removeIdentityProvider: forwards to the policy registry. */
+export function removeIdentityProviderRecord(dataDir: string, id: string): void {
+  registryRemoveIdentityProvider(dataDir, id);
+}
+
 /**
- * policy_registry.removeIdentityProvider → policy_repository.removeIdentityProvider.
+ * policy_registry.removeIdentityProvider.
  * Remove one identity-provider configuration by id, rejecting an unknown id with a
  * not-found error; otherwise persist the reduced collection via
  * write-temp-then-rename. A persistence failure leaves the previous collection
  * intact.
  */
-export function removeIdentityProviderRecord(dataDir: string, id: string): void {
+function registryRemoveIdentityProvider(dataDir: string, id: string): void {
   updateIdentityProviders(dataDir, (records) => {
     const next = records.filter((c) => c.id !== id);
     if (next.length === records.length) {

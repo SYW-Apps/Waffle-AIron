@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
-import { acquireFileLock, inspectFileLock, releaseFileLock, SPEC_TREE_LOCK_LIMITS, type FileLockHandle, type FileLockOptions } from '../utils/file-lock.js';
+import { acquireFileLock, inspectFileLock, releaseFileLock, type FileLockHandle, type FileLockLimits, type FileLockOptions } from '../utils/file-lock.js';
 import { currentHolder, holderIsLocal, parseHolder, pidAlive, type LockHolder } from '../utils/lock-holder.js';
 import { SpecWriteConflictError } from '../utils/errors.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
@@ -119,6 +119,8 @@ const LOCK_FILE = '.spec-write.lock';
 /** The lock's name inside the folder: the generation files are tree.lock.<g>. */
 const LOCK_BASE = 'tree';
 /** The tree lock's wait (how long a writer waits before it gives up, naming the holder) and unreadable grace (a writer caught between creating and filling its lock file takes milliseconds, never this long). */
+/** The spec-tree write lock's limits: a holder runs a whole authoring call, so they are longer than a hosted store's. */
+const SPEC_TREE_LOCK_LIMITS: FileLockLimits = { staleMs: 60_000, waitMs: 30_000, graceMs: 10_000 };
 const { waitMs: LOCK_WAIT_MS, graceMs: LOCK_UNREADABLE_GRACE_MS } = SPEC_TREE_LOCK_LIMITS;
 /** The holds this process has on each lock file, by normalized path. */
 const lockHolds = new Map<string, number>();

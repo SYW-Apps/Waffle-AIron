@@ -1,7 +1,9 @@
 kind: enum
 id: renamed_spec_kind
 name: RenamedSpecKind
-description: The spec kinds a component rename moves to a new id.
+description: >-
+  The spec kinds a rename moves to a new id: a component rename's component, contract and
+  implementation, and a type group renamed on its own.
 fields: []
 methods: []
 sourcePath: src/core/provision.ts
@@ -12,5 +14,9 @@ values:
     description: Its contract
   - name: implementation
     description: Its implementation
+  - name: group
+    description: >-
+      A type group (sdd_rename_spec on a group): its folder, its types' group and its child groups'
+      parent follow
 createdAt: '2026-10-04T23:34:04.853Z'
-updatedAt: '2026-10-04T23:34:05.275Z'
+updatedAt: '2026-10-24T11:33:50.804Z'

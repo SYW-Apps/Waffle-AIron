@@ -168,6 +168,38 @@ methods:
     signature: 'lockTree(): void'
     returns: void
     effect: io
+  - name: renameGroup
+    description: >-
+      Rename a type group: its folder moves to the new id, its own document takes the new id, and
+      the group of every type naming it and the parent of every child group are rewritten to it —
+      each document keeping every other key, so a rename retargets and edits nothing else. Answers
+      the ids of the types and groups whose reference it rewrote. A group the tree does not hold is
+      refused.
+    signature: 'renameGroup(id: string, newId: string): list<string>'
+    returns: list<string>
+    params:
+      - name: id
+        type: string
+        description: The group's current id
+      - name: newId
+        type: string
+        description: Its new id, already checked free and well formed by the caller
+    effect: write
+  - name: moveGroup
+    description: >-
+      Write a type group at a new placement (another home subsystem, another parent, or both): its
+      folder moves along with its types and the groups beneath it, then the home of each group
+      beneath it is restated in place. Placement, not an edit: updatedAt is kept.
+    signature: 'moveGroup(spec: group_spec, beneath: list<string>): void'
+    returns: void
+    params:
+      - name: spec
+        type: group_spec
+        description: The group as it is placed after the move
+      - name: beneath
+        type: list<string>
+        description: The groups beneath it whose home is restated (none when the home did not change)
+    effect: write
 status: complete
 createdAt: '2026-07-18T22:57:53.350Z'
-updatedAt: '2026-10-09T12:16:30.715Z'
+updatedAt: '2026-10-24T11:34:55.833Z'

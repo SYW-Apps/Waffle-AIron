@@ -123,6 +123,15 @@ methods:
         targetMethod: adviseExternals
       - stepNumber: 13
         description: >-
+          Find the parent this project is a member of, if any, through the core portal: a member
+          judged here is judged by its own gate only, so one line says its network entries count as
+          declared and the proofs that need the whole family run at the root — a green member run is
+          never read as a proven one
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: resolveChainingParent
+      - stepNumber: 14
+        description: >-
           The approval line: read the bound project's own approval entry (depth 0). When its
           approval was taken under another wairon release, say so in one line beside the findings —
           carried: `approved under <old>, re-validated under <new>: still approved`; not carried:
@@ -133,7 +142,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
-      - stepNumber: 14
+      - stepNumber: 15
         label: design-held
         description: >-
           Ask the shared predicate whether the tree holds design (a subsystem, a type anywhere, an
@@ -143,7 +152,7 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: holdsDesign
-      - stepNumber: 15
+      - stepNumber: 16
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
@@ -196,4 +205,4 @@ methods:
         targetMethod: adviseExternals
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-23T22:13:47.419Z'
+updatedAt: '2026-10-24T11:32:13.504Z'

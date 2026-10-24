@@ -27,9 +27,8 @@ import {
   loadGroupSpecs,
   loadGroupSpec,
   getGroupPath,
-  saveGroupSpec,
   renameGroup,
-  restateGroupHomes,
+  moveGroup,
   groupChain,
   loadDuplicateTypeSpecs,
   getTypePath,
@@ -3761,7 +3760,7 @@ function renameGroupSpec(id: string, newId: string, dryRun?: boolean): SpecIdRen
   if (dryRun) return { kind: 'group', renamed, rewritten: direct, carried: [], keptPublicNames: [], dryRun: true };
   const done = renameGroup(id, newId);
   invalidateSpecCache();
-  return { kind: 'group', renamed, rewritten: done.retargeted, carried: [], keptPublicNames: [] };
+  return { kind: 'group', renamed, rewritten: done, carried: [], keptPublicNames: [] };
 }
 
 /**
@@ -3806,8 +3805,7 @@ function moveGroupSpec(id: string, target: string | undefined, parent: string | 
   };
   if (dryRun) return { ...report, files: [`${shown(oldFile)} → (${types.length} type${types.length === 1 ? '' : 's'} and ${groups.length} child group${groups.length === 1 ? '' : 's'} move with it)`], dryRun: true };
   // The folder moves with the group's restated placement; a move is placement, so updatedAt is kept.
-  saveGroupSpec(placed, { preserveUpdatedAt: true });
-  if (to !== from) restateGroupHomes(groups, target);
+  moveGroup(placed, to !== from ? groups : []);
   invalidateSpecCache();
   return { ...report, files: [`${shown(oldFile)} → ${shown(getGroupPath(id))}`] };
 }

@@ -526,7 +526,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the selected projects that loaded
-        endStep: 15
+        endStep: 16
       - stepNumber: 4
         description: >-
           Bind the project's own root for the next calls, restoring the caller's binding afterwards
@@ -613,11 +613,20 @@ methods:
           decided
         type: local
       - stepNumber: 14
+        description: >-
+          Ask whether the project's own tree holds anything approvable (a subsystem, a type
+          anywhere, an L0 export entry or a direct member project), carried on its entry as
+          approvable: a never-approved tree holding nothing is reported as nothing to approve yet,
+          never as unlocked
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: holdsDesign
+      - stepNumber: 15
         description: For a member, read its parent's lock record from the parent's directory
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
           1, in the v5 reading `wairon upgrade` binds) its `children` entry; matches when that
@@ -625,7 +634,7 @@ methods:
           never approved now), unpinned when the parent has no record or names no pin for the alias.
           The root's own entry carries no pin
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the entries, root first
         type: return
         outcome: ProjectApproval[]
@@ -1166,4 +1175,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-23T22:15:04.612Z'
+updatedAt: '2026-10-24T11:37:17.974Z'

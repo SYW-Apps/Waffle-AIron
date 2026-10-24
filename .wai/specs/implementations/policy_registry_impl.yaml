@@ -34,7 +34,7 @@ methods:
       the previous collection intact and surfaces as a storage error.
     calls:
       - policy_store.updateIdentityProviders
-    symbol: upsertIdentityProviderRecord
+    symbol: registryUpsertIdentityProvider
   - name: removeIdentityProvider
     narrative: []
     intent: >-
@@ -44,7 +44,7 @@ methods:
       error. Authorization is enforced by the orchestrator, not here.
     calls:
       - policy_store.updateIdentityProviders
-    symbol: removeIdentityProviderRecord
+    symbol: registryRemoveIdentityProvider
   - name: setExposurePolicy
     narrative: []
     detail: intent
@@ -54,8 +54,8 @@ methods:
       object.
     calls:
       - policy_store.updateExposurePolicy
-    symbol: setExposurePolicyRecord
+    symbol: registrySetExposurePolicy
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:44.803Z'
-updatedAt: '2026-10-23T22:21:07.996Z'
+updatedAt: '2026-10-24T11:33:06.796Z'

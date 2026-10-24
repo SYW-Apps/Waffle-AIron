@@ -506,6 +506,23 @@ methods:
         type: call
         targetComponent: transaction_repository
         targetMethod: saveJournal
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/migrations/transaction.ts -> src/utils/file-lock.ts
+      reason: >-
+        A family transaction holds the hosted stores' write locks across its whole apply
+        (lockHostStores), so it takes the same generation lock primitive the stores take
+        (src/utils/file-lock.ts, file_write_lock): one safety-critical protocol every holder must
+        follow. Like src/utils/fs.ts it is shared infrastructure below the subsystems; a second copy
+        would be two implementations of one protocol that can drift apart, and routing a lock
+        through sdd_host's portal would make the migrations depend on the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/migrations/transaction.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: the transaction uses the shared lock
+        primitive directly, which no sdd_host portal publishes because it is not a capability of the
+        hosted server.
 status: complete
 createdAt: '2026-09-30T20:29:10.401Z'
-updatedAt: '2026-10-23T22:34:17.879Z'
+updatedAt: '2026-10-24T11:33:12.340Z'

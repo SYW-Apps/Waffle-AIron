@@ -216,7 +216,7 @@ methods:
         description: Is the data directory at the running major?
         type: branch
         condition: a major is recorded and equals the running major
-        onTrueStep: 7
+        onTrueStep: 8
         onFalseStep: 5
       - stepNumber: 5
         description: >-
@@ -226,10 +226,18 @@ methods:
         targetComponent: instance_backup_adapter
         targetMethod: discard
       - stepNumber: 6
+        description: >-
+          Stamp the fresh directory with the running major: it is current from its first byte, so a
+          registration written before the server's own bootstrap never reads as an unversioned
+          directory awaiting migration
+        type: call
+        targetComponent: instance_version_store
+        targetMethod: write
+      - stepNumber: 7
         description: The start begins fresh
         type: return
         outcome: discarded
-      - stepNumber: 7
+      - stepNumber: 8
         description: Leave it as it is
         type: return
         outcome: current
@@ -238,4 +246,4 @@ previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-10-23T22:28:45.741Z'
+updatedAt: '2026-10-24T11:32:17.492Z'

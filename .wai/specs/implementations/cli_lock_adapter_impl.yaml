@@ -777,6 +777,17 @@ methods:
         description: Approvable
         type: return
         outcome: ok
+lint:
+  allow:
+    - code: UNDECLARED_EXPORT
+      at: src/commands/lock.ts
+      covers:
+        - NOTHING_TO_APPROVE
+      reason: >-
+        A message constant, not a capability: the one sentence lock, lock-check and status say of a
+        tree with nothing approvable yet. The runner prints it beside its own 'Nothing was written.'
+        when holdsNoDesign (a declared method) answers true; sharing the text keeps the three
+        surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-23T22:13:06.717Z'
+updatedAt: '2026-10-24T11:33:09.579Z'

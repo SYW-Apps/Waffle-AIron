@@ -34,8 +34,6 @@ export interface FileLockLimits {
 
 /** The hosted stores' limits. */
 export const HOSTED_LOCK_LIMITS: FileLockLimits = { staleMs: 15_000, waitMs: 20_000, graceMs: 5_000 };
-/** The spec-tree write lock's limits. */
-export const SPEC_TREE_LOCK_LIMITS: FileLockLimits = { staleMs: 60_000, waitMs: 30_000, graceMs: 10_000 };
 
 /** The points of an acquire at which a test can stall a process (see FileLockOptions.at). */
 export type LockPoint = 'listed' | 'judged' | 'created' | 'relisted';

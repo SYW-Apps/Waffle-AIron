@@ -88,6 +88,19 @@ methods:
       id before queuing an approval asks it first.
     sourcePath: src/server/projects.ts
     symbol: isValidProjectId
+  - name: invalidIdProblem
+    signature: 'invalidIdProblem(id: string): string'
+    params:
+      - name: id
+        type: string
+        description: The id isValidId refused
+    returns: string
+    description: >-
+      Why a value is no valid record id, in the project-id grammar's own words (the same grammar
+      isValidId applies): the sentence a refusal names after the id, so the hosted lifecycle, the
+      record writes and the CLI refuse a bad id with one wording.
+    sourcePath: src/server/projects.ts
+    symbol: invalidProjectIdProblem
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.571Z'
-updatedAt: '2026-10-23T22:25:46.871Z'
+updatedAt: '2026-10-24T11:34:19.306Z'

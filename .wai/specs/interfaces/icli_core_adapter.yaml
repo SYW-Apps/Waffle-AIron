@@ -629,6 +629,21 @@ methods:
         description: The family's relation health to carry; omitted, none
         optional: true
     effect: read
+  - name: loadGroupSpecs
+    description: >-
+      Forward to spec_tree_portal.loadGroupSpecs: the type group tree, which doctor's
+      group-placement repair reads
+    signatureFrom: spec_tree_portal.loadGroupSpecs
+  - name: loadTypeSpecs
+    description: >-
+      Forward to spec_tree_portal.loadTypeSpecs: every type of the bound tree, for doctor's
+      group-placement repair
+    signatureFrom: spec_tree_portal.loadTypeSpecs
+  - name: scanAllSpecs
+    description: >-
+      Forward to spec_tree_portal.scanAllSpecs: the scan with each spec's file, which doctor's
+      group-placement repair compares with the folder each type and group should sit in
+    signatureFrom: spec_tree_portal.scanAllSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-20T09:29:24.759Z'
+updatedAt: '2026-10-24T11:34:00.291Z'

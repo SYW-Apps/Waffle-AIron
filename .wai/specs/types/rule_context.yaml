@@ -245,8 +245,20 @@ fields:
   - name: groups
     type: list<group_spec>
     description: >-
-      The loaded type groups, each with its parent and the folder its file was read from; read by
-      the type-groups rule
+      The loaded type groups, each with its parent; read by the type-groups rule. Absent on a
+      candidate run, which judges no layout
+    optional: true
+  - name: groupFiles
+    type: map<string, string>
+    description: >-
+      The file each type group was read from, by group id: what the type-groups rule compares the
+      folder chain with. Absent with groups
+    optional: true
+  - name: typeFiles
+    type: map<string, string>
+    description: >-
+      The file each grouped type was read from, by type id: the type-groups rule reports a type
+      whose folder is not its group's. Absent with groups
     optional: true
 methods:
   - name: isComponentDraft
@@ -485,4 +497,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-23T22:18:49.517Z'
+updatedAt: '2026-10-24T11:33:49.523Z'

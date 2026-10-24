@@ -1595,6 +1595,104 @@ methods:
       - name: apply
         type: bool
         description: Write the plan; false plans without writing
+  - name: renameGroup
+    description: >-
+      The group half of renameSpecId: rename a type group on its own — its folder, its types'
+      `group` and its child groups' `parent` follow the new id, and no type id, export entry or pin
+      changes. Refuses before the first write a group that does not exist or is another project's, a
+      new id outside the id grammar or carrying `::`, an unchanged id, and an id a group holds. A
+      dry run answers the rename and the specs it would rewrite and writes nothing.
+    signature: 'renameGroup(id: string, newId: string, dryRun?: bool): SpecIdRename'
+    returns: SpecIdRename
+    params:
+      - name: id
+        type: string
+        description: The group to rename
+      - name: newId
+        type: string
+        description: Its new id
+      - name: dryRun
+        type: bool
+        description: Answer what the rename would do and write nothing
+        optional: true
+  - name: moveGroup
+    description: >-
+      The group half of moveSpec: move a type group as a folder — its index, its types and the
+      groups beneath it — to another home (none: the shared types folder) and under another parent
+      (none: the top of the home). Ids do not change and no reference is touched; the group's
+      subsystem and parent are restated and every group beneath it takes the new home. Placement,
+      not an edit: updatedAt is kept and the emptied folder pruned. Refuses before the first write a
+      group that does not exist or is another project's, the placement it already has, and a
+      placement the type-groups rule would refuse (a missing parent, a parent in another home, a
+      cycle). A dry run answers the plan and writes nothing.
+    signature: 'moveGroup(id: string, target: string?, parent: string?, dryRun: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: id
+        type: string
+        description: The group to move
+      - name: target
+        type: string?
+        description: The home it moves to; none for the shared types folder
+      - name: parent
+        type: string?
+        description: The group it goes under; none for the top of its home
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+  - name: moveComponent
+    description: >-
+      The component half of moveSpec: move a component to another subsystem of the bound project
+      with the members it owns, its contracts and their implementations, each re-saved under its new
+      owner so its file lands in the new subsystem's folder and the one it left is removed. The old
+      subsystem's export entries and lifecycle entrypoints naming a moved component move to the new
+      subsystem, and an L0 re-export from the old subsystem naming one is re-pointed. Refuses before
+      the first write a component that does not exist, is another project's, or is owned by a
+      pattern (move its owner), and the subsystem it already lives in. A dry run answers the plan
+      and writes nothing.
+    signature: >-
+      moveComponent(id: string, target: string?, subsystems: list<SubsystemSpec>, dryRun: bool):
+      SpecMove
+    returns: SpecMove
+    params:
+      - name: id
+        type: string
+        description: The component to move
+      - name: target
+        type: string?
+        description: The subsystem it moves to, already checked to be one of the bound project's own
+      - name: subsystems
+        type: list<SubsystemSpec>
+        description: The bound project's own subsystems, as moveSpec read them
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
+  - name: moveType
+    description: >-
+      The type half of moveSpec: move a type to another subsystem of the bound project, or to system
+      level (no subsystem) or from it. Its file moves, its L1 export entries move with it, and every
+      type reference qualified by its old subsystem — in either spelling, wherever it stands in a
+      type expression — is respelled to name the new one; the L0 export table follows (a
+      project-level entry gains or loses `from`, keeping the public name). Placement, not an edit:
+      every file it touches keeps its updatedAt and an emptied folder is pruned, so moving it back
+      leaves the tree byte-identical. Refuses before the first write a type that does not exist or
+      is another project's, the place it already lives, and a target that already holds a type of
+      that id. A dry run answers the plan and writes nothing.
+    signature: 'moveType(id: string, target: string?, subsystems: list<SubsystemSpec>, dryRun: bool): SpecMove'
+    returns: SpecMove
+    params:
+      - name: id
+        type: string
+        description: The type to move
+      - name: target
+        type: string?
+        description: The subsystem it moves to; none for system level
+      - name: subsystems
+        type: list<SubsystemSpec>
+        description: The bound project's own subsystems, as moveSpec read them
+      - name: dryRun
+        type: bool
+        description: Answer what the move would do and write nothing
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-23T22:25:52.777Z'
+updatedAt: '2026-10-24T11:43:07.671Z'

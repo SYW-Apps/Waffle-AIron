@@ -5779,7 +5779,7 @@ export class SpecWorkspace {
    * parent of every child group follow the new id. Each rewritten document
    * keeps everything but that key (a rename retargets, it edits nothing else).
    */
-  renameGroup(id: string, newId: string): { files: string[]; retargeted: string[] } {
+  renameGroup(id: string, newId: string): string[] {
     const index = this.scanAll();
     const file = index.paths.group[id];
     const group = index.groups.find((g) => g.id === id);
@@ -5813,7 +5813,17 @@ export class SpecWorkspace {
       retargeted.push(childId);
     }
     registryInvalidateCache();
-    return { files: [`${file} → ${newIndex}`], retargeted };
+    return retargeted;
+  }
+
+  /**
+   * spec_registry.moveGroup — write a group at its new placement, its folder
+   * (its types and the groups beneath it) moving along, then restate the home
+   * of each group beneath it. Placement, not an edit: updatedAt is kept.
+   */
+  moveGroup(spec: GroupSpec, beneath: string[]): void {
+    this.saveGroupSpec(spec, { preserveUpdatedAt: true });
+    this.restateGroupHomes(beneath, spec.subsystem);
   }
 
   // -------------------------------------------------------------------------
@@ -9244,8 +9254,12 @@ export function restateGroupHomes(ids: string[], subsystem: string | undefined):
 }
 
 /** Rename a group with its folder, its types' group and its children's parent. */
-export function renameGroup(id: string, newId: string): { files: string[]; retargeted: string[] } {
+export function renameGroup(id: string, newId: string): string[] {
   return current().renameGroup(id, newId);
+}
+
+export function moveGroup(spec: GroupSpec, beneath: string[]): void {
+  current().moveGroup(spec, beneath);
 }
 
 export function deleteGroupSpec(id: string): boolean {

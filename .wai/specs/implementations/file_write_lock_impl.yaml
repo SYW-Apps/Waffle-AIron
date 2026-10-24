@@ -69,6 +69,23 @@ methods:
       user-facing waits and messages.
     symbol: withFileLock
 detail: intent
+lint:
+  allow:
+    - code: UNDECLARED_EXPORT
+      at: src/utils/file-lock.ts
+      covers:
+        - acquireFileLock
+        - inspectFileLock
+        - releaseFileLock
+      reason: >-
+        The acquire, inspect and release halves of run, for the two holders whose change spans many
+        writes: the spec-tree write lock (spec_file_store, held for a whole authoring call, and read
+        by doctor through inspectLock) and the family transaction (every hosted store's lock held
+        across its apply). Both reach this module across a subsystem boundary under their own
+        UNDECLARED_DEPENDENCY and IMPORT_BYPASSES_PORTAL allows, so no narrative can name a call
+        into it; declaring the halves as contract methods would leave them reported unused for the
+        same reason. They are the same protocol as run, documented in run's intent, not a second
+        capability.
 status: complete
 createdAt: '2026-10-23T22:17:04.361Z'
-updatedAt: '2026-10-23T22:34:34.007Z'
+updatedAt: '2026-10-24T11:38:30.334Z'

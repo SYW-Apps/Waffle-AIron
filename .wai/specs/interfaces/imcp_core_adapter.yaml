@@ -388,6 +388,11 @@ methods:
     signature: 'getLoaderIssues(): list<ValidationIssue>'
     returns: list<ValidationIssue>
     params: []
+  - name: loadGroupSpecs
+    description: >-
+      Forward to spec_tree_portal.loadGroupSpecs: the type group tree, which the status tool reports
+      per group and sdd_add_group checks a new group against
+    signatureFrom: spec_tree_portal.loadGroupSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-20T19:12:22.466Z'
+updatedAt: '2026-10-24T11:34:03.379Z'
