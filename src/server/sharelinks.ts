@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ShareLink } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Share Link Repository (sdd_host): the public share-link records.
@@ -47,10 +48,25 @@ class ShareLinkStore {
     return parsed as ShareLink[];
   }
 
-  replaceAll(links: ShareLink[]): void {
+  /**
+   * ishare_link_store.update (symbol updateLinks) — under share-links.json's
+   * write lock, read the set fresh (absent is empty; unreadable or malformed
+   * throws and nothing is written), apply the change and replace the file
+   * atomically. Answers the set written.
+   */
+  updateLinks(change: (links: ShareLink[]) => ShareLink[]): ShareLink[] {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    replaceFile(p, JSON.stringify(links, null, 2) + '\n');
+    return withFileLock(p, () => {
+      const current = readJsonForUpdate<unknown>(p, []);
+      if (!Array.isArray(current)) {
+        throw new Error(`Malformed share-link store at ${p}: expected a JSON array of links.`);
+      }
+      const before = JSON.stringify(current);
+      const next = change(current as ShareLink[]);
+      if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
   }
 }
 
@@ -60,33 +76,33 @@ class ShareLinkRegistry {
   constructor(private readonly store: ShareLinkStore) {}
 
   create(link: ShareLink): ShareLink {
-    const links = this.store.load();
     const stored: ShareLink = {
       ...link,
       id: link.id || crypto.randomUUID(),
       createdAt: link.createdAt || new Date().toISOString(),
     };
-    this.store.replaceAll([...links, stored]);
+    this.store.updateLinks((links) => [...links, stored]);
     return stored;
   }
 
   update(link: ShareLink): ShareLink {
-    const links = this.store.load();
-    const idx = links.findIndex((l) => l.id === link.id);
-    if (idx === -1) throw new Error(`Share link "${link.id}" not found.`);
-    // Preserve identity-bearing fields; apply the rest.
-    const merged: ShareLink = { ...links[idx], ...link, id: links[idx].id, createdAt: links[idx].createdAt, tokenHash: links[idx].tokenHash };
-    const next = [...links];
-    next[idx] = merged;
-    this.store.replaceAll(next);
+    let merged!: ShareLink;
+    this.store.updateLinks((links) => {
+      const idx = links.findIndex((l) => l.id === link.id);
+      if (idx === -1) throw new Error(`Share link "${link.id}" not found.`);
+      merged = { ...links[idx], ...link, id: links[idx].id, createdAt: links[idx].createdAt, tokenHash: links[idx].tokenHash };
+      const next = [...links];
+      next[idx] = merged;
+      return next;
+    });
     return merged;
   }
 
   remove(id: string): void {
-    const links = this.store.load();
-    const next = links.filter((l) => l.id !== id);
-    if (next.length === links.length) return;
-    this.store.replaceAll(next);
+    this.store.updateLinks((links) => {
+      const next = links.filter((l) => l.id !== id);
+      return next.length === links.length ? links : next;
+    });
   }
 }
 

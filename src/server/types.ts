@@ -443,8 +443,6 @@ export interface ApiKeyRecord {
   label?: string;
   /** Optional ISO-8601 expiration timestamp. */
   expiresAt?: string;
-  /** ISO-8601 revocation timestamp when revoked instead of hard-deleted. */
-  revokedAt?: string;
 }
 
 /** A hosted human or service-principal account bound to an identity subject.

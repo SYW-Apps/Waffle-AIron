@@ -108,7 +108,8 @@ describe('stage 7 — a hosted detach relocates the member atomic-or-nothing', (
     const walk = (at: string): void => {
       for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
         // The tree write lock's generation files stay on disk by design: not content.
-        if (entry.name.startsWith('.spec-write.lock.')) continue;
+        // So do the host stores' (<file>.lock.<n>, <file>.lock.<n>.end).
+        if (/\.lock\.\d+(\.end)?$/.test(entry.name)) continue;
         const full = path.join(at, entry.name);
         const rel = path.relative(dir, full).split(path.sep).join('/');
         if (rel.startsWith('audit') || rel.startsWith('web-sessions')) continue;

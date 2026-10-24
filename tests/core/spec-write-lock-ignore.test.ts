@@ -34,11 +34,11 @@ describe('the spec tree lock keeps its files out of git', () => {
     expect(left.every((f) => f.startsWith('.spec-write.lock'))).toBe(true);
   });
 
-  it('creates .wai/.gitignore when absent, and leaves one that already covers the files untouched', () => {
+  it('creates no .wai/.gitignore when absent (a lock adds no file to a tree), and leaves one that already covers the files untouched', () => {
     const fresh = tree();
     lockTree(fresh);
     unlockTree(fresh);
-    expect(ignore(fresh)).toContain(`${LOCK_IGNORE_LINE}\n`);
+    expect(fs.existsSync(path.join(fresh, '.wai', '.gitignore'))).toBe(false);
 
     const covered = tree(`${LOCK_IGNORE_LINE}\n`);
     lockTree(covered);

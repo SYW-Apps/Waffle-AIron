@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectPublicSurfaceSnapshot, PublicInterfaceSummary } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Public Surface Repository (sdd_host)
@@ -65,10 +66,12 @@ function readSnapshots(dataDir: string): ProjectPublicSurfaceSnapshot[] {
 }
 
 /** Persist the complete snapshot set atomically (write temp, then rename). */
-function persistSnapshots(dataDir: string, snapshots: ProjectPublicSurfaceSnapshot[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(snapshots, null, 2) + '\n');
+function readCurrent(p: string): ProjectPublicSurfaceSnapshot[] {
+  const parsed = readJsonForUpdate<unknown>(p, []);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Public surface store at ${p} contains malformed JSON: expected a JSON array of public surface snapshots`);
+  }
+  return parsed as ProjectPublicSurfaceSnapshot[];
 }
 
 // ── store: authoritative in-memory holder ──────────────────────────────────
@@ -86,8 +89,15 @@ class PublicSurfaceStore {
   /** Swap the in-memory set to a complete replacement in one assignment. Only
    *  called by the registry after durable persistence has succeeded, so index
    *  reads always observe a consistent set. */
-  replaceAll(snapshots: ProjectPublicSurfaceSnapshot[]): void {
-    this.snapshots = snapshots;
+  update(change: (snapshots: ProjectPublicSurfaceSnapshot[]) => ProjectPublicSurfaceSnapshot[]): ProjectPublicSurfaceSnapshot[] {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    this.snapshots = withFileLock(p, () => {
+      const next = change(readCurrent(p));
+      replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
+    return this.snapshots;
   }
 
   /** The current authoritative set (shared by reference with the index). */
@@ -99,7 +109,7 @@ class PublicSurfaceStore {
 // ── registry: write path ────────────────────────────────────────────────────
 
 class PublicSurfaceRegistry {
-  constructor(private readonly dataDir: string, private readonly store: PublicSurfaceStore) {}
+  constructor(private readonly store: PublicSurfaceStore) {}
 
   /**
    * Replace the snapshot for its projectId (one snapshot per project): stamp
@@ -115,12 +125,10 @@ class PublicSurfaceRegistry {
       ...snapshot,
       exportedAt: new Date().toISOString(),
     };
-    const next = [
-      ...this.store.all().filter((s) => s.projectId !== stored.projectId),
+    this.store.update((snapshots) => [
+      ...snapshots.filter((s) => s.projectId !== stored.projectId),
       stored,
-    ];
-    persistSnapshots(this.dataDir, next);
-    this.store.replaceAll(next);
+    ]);
     return stored;
   }
 }
@@ -159,9 +167,7 @@ export function replacePublicSurfaceSnapshot(
   dataDir: string,
   snapshot: ProjectPublicSurfaceSnapshot,
 ): ProjectPublicSurfaceSnapshot {
-  const store = new PublicSurfaceStore(dataDir);
-  store.load();
-  return new PublicSurfaceRegistry(dataDir, store).replaceSnapshot(snapshot);
+  return new PublicSurfaceRegistry(new PublicSurfaceStore(dataDir)).replaceSnapshot(snapshot);
 }
 
 /** Return the latest public-surface snapshot for a project, or null when absent. */

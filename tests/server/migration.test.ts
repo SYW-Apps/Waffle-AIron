@@ -95,6 +95,14 @@ describe('permission-model migration (sdd_host)', () => {
         ownerSubject: { userId: LEGACY_SUPERADMIN_USER_ID, kind: 'human', issuer: 'local' },
         createdAt: '2025-01-01',
       },
+      // A record an older release left revoked in place: deleted by the migration.
+      {
+        id: 'k-revoked-legacy',
+        keyHash: hashToken('wk_revoked_legacy'),
+        projects: ['*'],
+        revokedAt: '2025-06-01',
+        createdAt: '2025-01-01',
+      },
     ]);
     // Sessions: one carrying grants, one belonging to the retired literal.
     write('web-sessions.json', [
@@ -193,8 +201,10 @@ describe('permission-model migration (sdd_host)', () => {
     expect(legacySession.projects).toEqual(['proj-a']);
     expect((legacySession as { grants?: unknown }).grants).toBeUndefined();
 
-    // The builtin-owned key no longer authenticates (revoked, not deleted).
+    // The builtin-owned key no longer authenticates: revoked means its record is deleted.
     expect(authenticate(dataDir, 'wk_builtin_owned').authenticated).toBe(false);
+    expect(fs.readFileSync(path.join(dataDir, 'auth', 'credentials.json'), 'utf8')).not.toContain('k-builtin');
+    expect(fs.readFileSync(path.join(dataDir, 'auth', 'credentials.json'), 'utf8')).not.toContain('revokedAt');
 
     // The unplaced project was placed into the synthesized root unit.
     expect(getOrganizationUnit(dataDir, 'unassigned')).not.toBeNull();

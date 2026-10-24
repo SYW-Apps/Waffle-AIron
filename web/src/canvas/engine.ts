@@ -1081,8 +1081,33 @@ export function mountCanvas(host, model, opts = {}) {
     if (!db || !db.tables || !db.tables.length) return true;
     return db.tables.indexOf(t.id) >= 0 || db.tables.indexOf(t.table || t.id) >= 0;
   }
+  // A type-group scope is the home it lives in, then the group chain beneath it, joined by GSEP
+  // ('home@@platform@@runtime'); a trailing '~' means the types sitting exactly at that level
+  // (the ungrouped ones of a home, or a group's own types beside its child groups).
+  var GSEP = '@@';
+  function splitScope(sid) {
+    var i = sid ? sid.indexOf(GSEP) : -1;
+    if (i < 0) return { home: sid, chain: [], own: false };
+    var chain = sid.slice(i + GSEP.length).split(GSEP);
+    var own = chain[chain.length - 1] === '~';
+    if (own) chain.pop();
+    return { home: sid.slice(0, i), chain: chain, own: own };
+  }
+  function underChain(t, chain, own) {
+    var gp = t.groupPath || [];
+    if (gp.length < chain.length) return false;
+    for (var i = 0; i < chain.length; i++) if (gp[i] !== chain[i]) return false;
+    return own ? gp.length === chain.length : true;
+  }
   function typesInScope() {
     var sid = state.view.id;
+    if (sid && sid.indexOf(GSEP) >= 0 && state.view.kind === 'types') {
+      var gs = splitScope(sid);
+      return MODEL.types.filter(function (t) {
+        var inHome = gs.home === SHARED_KEY ? !t.subsystem : (t.subsystem === gs.home || (t.subsystem && t.subsystem.indexOf(gs.home + '::') === 0));
+        return inHome && underChain(t, gs.chain, gs.own);
+      });
+    }
     if (state.view.kind === 'databases') {
       return MODEL.types.filter(function (t) {
         if (!databaseAllowsType(t)) return false;
@@ -1179,9 +1204,19 @@ export function mountCanvas(host, model, opts = {}) {
     return pos;
   }
 
-  // Collapse the in-scope types into one node per child subsystem, with
-  // aggregated cross-cluster reference edges — the whole system as a small,
-  // fast, navigable map. Returns null if it wouldn't reduce to >1 cluster.
+  // A group cluster's caption: the group's name, or "(ungrouped)" / "(own types)" for the '~' level.
+  function groupLabel(key) {
+    var sc = splitScope(key);
+    if (key.indexOf(GSEP) < 0) return key;
+    if (sc.own) return sc.chain.length ? '(own types)' : '(ungrouped)';
+    var id = sc.chain[sc.chain.length - 1];
+    var g = (MODEL.typeGroups || []).filter(function (x) { return x.id === id; })[0];
+    return g ? g.name : id;
+  }
+  // Collapse the in-scope types into one node per child subsystem (or, in a scope
+  // the subsystem tier cannot split, per group), with aggregated cross-cluster
+  // reference edges — the whole system as a small, fast, navigable map. Returns
+  // null if it wouldn't reduce to >1 cluster.
   function buildTypeClusters(list) {
     var scopeId = state.view.id;
     function keyOf(t) {
@@ -1198,7 +1233,25 @@ export function mountCanvas(host, model, opts = {}) {
       if (!groups[k]) { groups[k] = 0; order.push(k); }
       groups[k]++;
     });
-    if (order.length < 2) return null;
+    // Subsystem tier first; a scope it cannot split (one home, or a project with no
+    // subsystem at all) clusters by the group chain instead: the home's top-level
+    // groups and its ungrouped types, a group opening into its child groups and its own types.
+    if (order.length < 2) {
+      var sc = splitScope(scopeId);
+      var home = sc.home || SHARED_KEY;
+      var depth = sc.chain.length;
+      groups = {}; order = []; clusterOf = {};
+      var anyGroup = false;
+      list.forEach(function (t) {
+        var gp = t.groupPath || [];
+        if (gp.length > depth) anyGroup = true;
+        var k = gp.length > depth ? home + GSEP + sc.chain.concat([gp[depth]]).join(GSEP) : home + GSEP + sc.chain.concat(['~']).join(GSEP);
+        clusterOf[t.id] = k;
+        if (!groups[k]) { groups[k] = 0; order.push(k); }
+        groups[k]++;
+      });
+      if (!anyGroup || order.length < 2) return null;
+    }
     var agg = {};
     MODEL.typeEdges.forEach(function (e) {
       var a = clusterOf[e.from], b = clusterOf[e.to];
@@ -1208,7 +1261,7 @@ export function mountCanvas(host, model, opts = {}) {
     var out = [], keys = order.slice().sort();
     var per = Math.max(1, Math.ceil(Math.sqrt(keys.length)));
     keys.forEach(function (k, i) {
-      var nm = subById[k] ? subById[k].name : k;
+      var nm = subById[k] ? subById[k].name : groupLabel(k);
       out.push({
         data: { id: 'TC~' + k, label: nm + '\n' + groups[k] + ' types', w: 210, h: 66, tw: 192, clusterKey: k },
         position: { x: (i % per) * 300, y: Math.floor(i / per) * 150 }, classes: 'typeCluster',

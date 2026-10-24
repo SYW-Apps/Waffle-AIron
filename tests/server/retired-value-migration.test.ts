@@ -170,13 +170,11 @@ describe('a data directory with none of these values, or none of these files', (
 });
 
 describe('the start upgrade runs the step', () => {
-  it('rewrites the retired values of an older data directory and stamps the running major; a revoked qualified key does not abort the start', () => {
+  it('rewrites the retired values of an older data directory and stamps the running major; a key naming no member does not abort the start', () => {
     ensureInstanceIdentity(dataDir);
     fs.writeFileSync(file('version.json'), JSON.stringify({ major: 5 }));
     seedOld();
-    createCredential(dataDir, {
-      id: 'k-revoked', keyHash: 'h', projects: ['platform::billing'], createdAt: NOW, revokedAt: NOW, ownerSubject: subjectOf('u-q'),
-    });
+    // A record an older release left revoked in place: the credential store leaves it out of every read.
     createCredential(dataDir, { id: 'k-ghost', keyHash: 'h2', projects: ['platform::ghost'], createdAt: NOW, ownerSubject: subjectOf('u-q') });
 
     const report = upgradeInstance({ dataDir });
@@ -186,8 +184,8 @@ describe('the start upgrade runs the step', () => {
     expect(getExposurePolicyRecord(dataDir)?.adminApiMode).toBe('enabled');
     expect(getUserById(dataDir, 'u-suspended')?.status).toBe('inactive');
     expect(getApprovalRequestById(dataDir, 'r-pending')?.status).toBe('denied');
-    // The revoked key is untouched; the key naming no member is revoked (removed).
-    expect(listCredentials(dataDir, '*').map((k) => k.id)).toEqual(['k-revoked']);
+    // The key naming no member is revoked (its record removed).
+    expect(listCredentials(dataDir, '*').map((k) => k.id)).toEqual([]);
     expect(queryAuditEvents(dataDir, { action: 'approval.request.closed' })).toHaveLength(2);
   });
 

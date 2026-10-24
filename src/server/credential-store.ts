@@ -20,10 +20,25 @@ function storePath(dataDir: string): string {
   return path.join(dataDir, 'auth', 'credentials.json');
 }
 
-/** icredential_store.read — the persisted records, fresh from disk; an absent or malformed file is the empty set. */
+/**
+ * A record as an older release stored it: a revoked credential used to stay in
+ * the file with a revokedAt stamp. The model no longer has the field; this local
+ * type is the one place that still sees it.
+ */
+type StoredRecord = ApiKeyRecord & { revokedAt?: string };
+
+/** A legacy record carrying revokedAt is a revoked credential: it no longer exists. */
+function withoutRevoked(records: StoredRecord[]): ApiKeyRecord[] {
+  return records.filter((r) => !r.revokedAt);
+}
+
+/**
+ * icredential_store.read — the persisted records, fresh from disk, leaving out
+ * any legacy record carrying revokedAt; an absent or malformed file is the empty set.
+ */
 export function load(dataDir: string): ApiKeyRecord[] {
   try {
-    return JSON.parse(fs.readFileSync(storePath(dataDir), 'utf8')) as ApiKeyRecord[];
+    return withoutRevoked(JSON.parse(fs.readFileSync(storePath(dataDir), 'utf8')) as StoredRecord[]);
   } catch {
     return [];
   }
@@ -45,7 +60,7 @@ export function update(dataDir: string, change: (records: ApiKeyRecord[]) => Api
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   return withFileLock(p, () => {
-    const next = change(readJsonForUpdate(p, []));
+    const next = change(withoutRevoked(readJsonForUpdate<StoredRecord[]>(p, [])));
     save(dataDir, next);
     return next;
   });

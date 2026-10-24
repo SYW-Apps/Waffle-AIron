@@ -17,6 +17,8 @@ export {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  // The type group tree the type-groups rule judges.
+  loadGroupSpecs,
   dryRunSerializeSpecs,
   loadProjectExtensions,
   loadProjectConfig,

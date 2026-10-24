@@ -3066,10 +3066,128 @@ export const GroupSpecSchema = z.object({
   id: SpecIdSchema,
   name: z.string(),
   description: z.string().optional(),
+  /** The group this one sits under (the groups form a tree); absent for a top-level group. Same home as this group. */
+  parent: SpecIdSchema.optional(),
+  /** The subsystem whose types folder homes the group; absent for the shared types folder. */
+  subsystem: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
 export type GroupSpec = z.infer<typeof GroupSpecSchema>;
+
+/** One group or grouped-type file that does not sit where its parent chain or group names it. */
+export interface MisplacedGroupFile {
+  kind: 'group' | 'type';
+  id: string;
+  /** The file as it sits. */
+  file: string;
+  /** The folder the file belongs in; absent when the folder cannot be named (a top-level group in a folder of another name). */
+  expectedDir?: string;
+  /** What is off, in a sentence for a finding. */
+  reason: string;
+}
+
+const slashes = (p: string): string => p.split('\\').join('/');
+/** Whether following parent from a group, through the groups handed in, reaches it again. */
+const leadsToItself = (group: GroupSpec, all: readonly GroupSpec[]): boolean => {
+  const seen = new Set<string>();
+  let at = group.parent;
+  while (at !== undefined && !seen.has(at)) {
+    if (at === group.id) return true;
+    seen.add(at);
+    at = all.find((g) => g.id === at)?.parent;
+  }
+  return false;
+};
+const dirOf = (p: string): string => { const q = slashes(p); const i = q.lastIndexOf('/'); return i < 0 ? '' : q.slice(0, i); };
+const baseOf = (p: string): string => { const q = slashes(p); return q.slice(q.lastIndexOf('/') + 1); };
+const sameFolder = (a: string, b: string): boolean => slashes(a).toLowerCase() === slashes(b).toLowerCase();
+
+/**
+ * The group and grouped-type files that sit outside the folder their parent
+ * chain or group names — type-groups' layout judgement, which `wairon doctor
+ * --fix` repairs by moving the file. A group sits in a folder named for its id,
+ * inside its parent's folder (a top-level group inside a `types` folder); a
+ * type sits beside its group's index. A group whose chain is broken or cyclic is
+ * not compared (its errors are reported), and neither are the types in it.
+ */
+export function misplacedGroupFiles(groups: readonly GroupSpec[], groupFiles: Readonly<Record<string, string>>, typeFiles: Readonly<Record<string, string>>, types: ReadonlyArray<Pick<TypeSpec, 'id' | 'group'>>): MisplacedGroupFile[] {
+  const out: MisplacedGroupFile[] = [];
+  const sound = new Set<string>();
+  for (const g of groups) {
+    if (groupFiles[g.id] === undefined || leadsToItself(g, groups) || (g.parent !== undefined && !groups.some((p) => p.id === g.parent))) continue;
+    sound.add(g.id);
+  }
+  for (const g of groups) {
+    const file = groupFiles[g.id];
+    if (!sound.has(g.id) || file === undefined) continue;
+    const folder = dirOf(file);
+    const parentFile = g.parent !== undefined ? groupFiles[g.parent] : undefined;
+    if (baseOf(folder) !== g.id) {
+      out.push({ kind: 'group', id: g.id, file, expectedDir: parentFile ? `${dirOf(dirOf(parentFile))}/${g.parent}/${g.id}` : undefined, reason: `group "${g.id}" sits in a folder named "${baseOf(folder)}", not "${g.id}"` });
+    } else if (parentFile !== undefined) {
+      const wanted = `${dirOf(parentFile)}/${g.id}`;
+      if (!sameFolder(folder, wanted)) out.push({ kind: 'group', id: g.id, file, expectedDir: wanted, reason: `group "${g.id}" sits in ${folder}, not inside its parent "${g.parent}" (${dirOf(parentFile)})` });
+    } else if (baseOf(dirOf(folder)) !== 'types') {
+      out.push({ kind: 'group', id: g.id, file, reason: `top-level group "${g.id}" sits in ${folder}, not directly in a types folder` });
+    }
+  }
+  for (const t of types) {
+    const file = typeFiles[t.id];
+    if (t.group === undefined || file === undefined || !sound.has(t.group)) continue;
+    const wanted = dirOf(groupFiles[t.group]);
+    if (!sameFolder(dirOf(file), wanted)) out.push({ kind: 'type', id: t.id, file, expectedDir: wanted, reason: `type "${t.id}" sits in ${dirOf(file)}, not in the folder of its group "${t.group}" (${wanted})` });
+  }
+  return out;
+}
+
+/** The ids from the top-level group down to a group, following parent through the groups handed in (a cycle is cut). */
+const chainOf = (group: GroupSpec, all: readonly GroupSpec[]): string[] => {
+  const chain = [group.id];
+  let at = group;
+  while (at.parent !== undefined) {
+    const up = all.find((g) => g.id === at.parent);
+    if (!up || chain.includes(up.id)) break;
+    chain.unshift(up.id);
+    at = up;
+  }
+  return chain;
+};
+
+/** The placement problems of a group (or the placement it is about to take) against the groups of the tree. */
+export interface GroupPlacementProblem {
+  code: 'GROUP_PARENT_UNKNOWN' | 'GROUP_PARENT_CROSS_HOME' | 'GROUP_CYCLE';
+  message: string;
+}
+
+const homeLabel = (home: string): string => (home === '' ? 'the shared types folder' : `subsystem "${home}"`);
+
+/**
+ * Whether a group may sit where it says it sits: its parent exists, shares its
+ * home, and does not lead back to it. The one judgement the type-groups rule,
+ * the authoring gate and a group move share. Pure over the groups handed in
+ * (the candidate replaces a stored group of its id).
+ */
+export function groupPlacementProblem(candidate: Pick<GroupSpec, 'id' | 'parent' | 'subsystem'>, all: readonly GroupSpec[]): GroupPlacementProblem | null {
+  if (candidate.parent === undefined || candidate.parent === '') return null;
+  const others = all.filter((g) => g.id !== candidate.id);
+  const self = { ...candidate, kind: 'group', name: candidate.id, createdAt: '', updatedAt: '' } as GroupSpec;
+  if (candidate.parent === candidate.id) {
+    return { code: 'GROUP_CYCLE', message: `group "${candidate.id}" names itself as its parent` };
+  }
+  const parent = others.find((g) => g.id === candidate.parent);
+  if (!parent) {
+    return { code: 'GROUP_PARENT_UNKNOWN', message: `group "${candidate.id}" names the parent "${candidate.parent}", which no group declares — define it first (sdd_add_group), or omit parent` };
+  }
+  if (leadsToItself(self, [...others, self])) {
+    const loop = [...chainOf(self, [...others, self])];
+    return { code: 'GROUP_CYCLE', message: `group "${candidate.id}" would sit under its own descendant "${candidate.parent}" (${loop.join(' > ')}) — the parent chain must end at a top-level group` };
+  }
+  if ((parent.subsystem ?? '') !== (candidate.subsystem ?? '')) {
+    return { code: 'GROUP_PARENT_CROSS_HOME', message: `group "${candidate.id}" lives in ${homeLabel(candidate.subsystem ?? '')} but its parent "${parent.id}" lives in ${homeLabel(parent.subsystem ?? '')} — a group and its parent share one home; move one of the two` };
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // spec_index.subtreeOf / spec_index.referencesTo — what a deletion takes, and
@@ -3079,7 +3197,7 @@ export type GroupSpec = z.infer<typeof GroupSpecSchema>;
 
 /** sdd_core::SpecRef — one spec addressed by its kind and id. */
 export interface SpecRef {
-  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+  kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group';
   id: string;
 }
 
@@ -3099,6 +3217,8 @@ export interface SpecTreeIndex {
   interfaces: ReadonlyArray<InterfaceSpec>;
   implementations: ReadonlyArray<ImplementationSpec>;
   types: ReadonlyArray<TypeSpec>;
+  /** The type groups; absent where an index holds none (a group is layout, never design). */
+  groups?: ReadonlyArray<GroupSpec>;
 }
 
 /**
@@ -3153,6 +3273,10 @@ export function specIndexSubtreeOf(index: SpecTreeIndex, kind: SpecRef['kind'], 
       if (type) add({ kind, id: type.id });
       break;
     }
+    case 'group':
+      // A group takes only itself: its types and child groups stay, and name it (referencesTo).
+      if ((index.groups ?? []).some((g) => g.id === id)) add({ kind, id });
+      break;
     default:
       break;
   }
@@ -3238,9 +3362,16 @@ export function specIndexReferencesTo(index: SpecTreeIndex, targets: ReadonlyArr
       for (const entry of method.calls ?? []) component(note, `methods.${method.name}.calls`, parseDeclaredCall(entry)?.compId);
     }
   }
+  // A type naming a target group, and a child group naming one as its parent.
+  const groups = ids('group');
+  for (const g of index.groups ?? []) {
+    if (inTargets('group', g.id)) continue;
+    if (g.parent !== undefined && groups.has(g.parent)) holder('group', g.id)('parent', { kind: 'group', id: g.parent });
+  }
   for (const type of index.types) {
     if (inTargets('type', type.id)) continue;
     const note = holder('type', type.id);
+    if (type.group !== undefined && groups.has(type.group)) note('group', { kind: 'group', id: type.group });
     if (type.subsystem !== undefined && subsystems.has(type.subsystem)) note('subsystem', { kind: 'subsystem', id: type.subsystem });
     for (const field of type.fields ?? []) types(note, `fields.${field.name}`, fieldTypeRefs(type, field.type));
     types(note, 'signature', signatureTypeRefs(type));

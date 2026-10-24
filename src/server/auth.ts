@@ -154,9 +154,8 @@ function resolvePermissionSubject(
   };
 }
 
-/** True once a credential record is past its expiresAt or has a revokedAt set. */
-function isExpiredOrRevoked(rec: ApiKeyRecord): boolean {
-  if (rec.revokedAt) return true;
+/** True once a credential record is past its expiresAt (a revoked credential no longer exists). */
+function isExpired(rec: ApiKeyRecord): boolean {
   if (rec.expiresAt && Date.parse(rec.expiresAt) <= Date.now()) return true;
   return false;
 }
@@ -188,7 +187,7 @@ function resolveTokenPrincipal(dataDir: string, token: string | null): Principal
   if (!token) return UNAUTHENTICATED;
   const rec = findByTokenHash(dataDir, hashToken(token));
   if (!rec) return UNAUTHENTICATED;
-  if (isExpiredOrRevoked(rec)) return UNAUTHENTICATED;
+  if (isExpired(rec)) return UNAUTHENTICATED;
   return principalFromRecord(dataDir, rec);
 }
 

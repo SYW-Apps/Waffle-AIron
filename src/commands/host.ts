@@ -753,7 +753,6 @@ export async function runHostKey(action: string, options: HostOptions = {}): Pro
               r.role ? `legacy role ${r.role}` : '',
               r.label ? `label "${r.label}"` : '',
               r.expiresAt ? `expires ${r.expiresAt}` : '',
-              r.revokedAt ? `revoked ${r.revokedAt}` : '',
             ].filter(Boolean);
             logger.info(`  ${r.id}  ${owner}  projects ${r.projects.join(',')}${extras.length ? `  ${extras.join('  ')}` : ''}`);
           }

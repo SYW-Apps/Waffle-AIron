@@ -24,6 +24,13 @@ import {
   assertContainedProjectPath,
   loadTypeSpecs,
   loadTypeSpec,
+  loadGroupSpecs,
+  loadGroupSpec,
+  getGroupPath,
+  saveGroupSpec,
+  renameGroup,
+  restateGroupHomes,
+  groupChain,
   loadDuplicateTypeSpecs,
   getTypePath,
   deleteSpec,
@@ -74,9 +81,11 @@ import { rekeyAnchor, type CarriedRekey, type IdentityRename } from '../models/i
 import {
   SpecIdSchema,
   PUBLIC_NAME_RE,
+  groupPlacementProblem,
   SURFACE_AUDIENCES,
   nameKey,
   type ComponentSpec,
+  type GroupSpec,
   type ImplementationSpec,
   type InterfaceSpec,
   type ProjectFamily,
@@ -3243,7 +3252,7 @@ function patchSubsystemIndex(indexPath: string, mutate: (spec: any) => void): vo
 // ---------------------------------------------------------------------------
 
 /** The spec kinds a component rename moves to a new id. */
-export type RenamedSpecKind = 'component' | 'interface' | 'implementation';
+export type RenamedSpecKind = 'component' | 'interface' | 'implementation' | 'group';
 
 /** One spec a component rename moved to a new id (spec_rename). */
 export interface SpecRename {
@@ -3644,11 +3653,12 @@ export interface SpecMove {
  * Every refusal happens before the first write; a dry run writes nothing.
  */
 export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, dryRun?: boolean): SpecIdRename {
-  // Steps 1-2: the two kinds renamed here.
-  if (kind !== 'interface' && kind !== 'implementation') {
+  // Steps 1-2: the kinds renamed here.
+  if (kind !== 'interface' && kind !== 'implementation' && kind !== 'group') {
     const owner = kind === 'component' ? 'sdd_rename_component' : kind === 'type' ? 'sdd_rename_type' : 'no tool yet';
-    throw new WaironError(`invalid-kind: sdd_rename_spec renames a contract (kind interface) or an implementation on its own; a ${kind} is renamed with ${owner}.`);
+    throw new WaironError(`invalid-kind: sdd_rename_spec renames a contract (kind interface), an implementation or a type group on its own; a ${kind} is renamed with ${owner}.`);
   }
+  if (kind === 'group') return renameGroupSpec(id, newId, dryRun);
   // Steps 3-5: the spec exists and is the bound project's own — refused with the
   // boundary's one sentence when it is another project's or missing — and the new id fits.
   const spec: InterfaceSpec | ImplementationSpec = writeTarget<InterfaceSpec | ImplementationSpec>(kind, id, 'sdd_rename_spec', `sdd_rename_spec ${kind} ${localOf(id)} <new id>`,
@@ -3708,10 +3718,10 @@ export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, 
  * change, so references by id stay; what names the OLD subsystem follows. A
  * dry run answers the plan and writes nothing; every refusal happens first.
  */
-export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean): SpecMove {
-  // Steps 1-2: the two kinds that move between subsystems.
-  if (kind !== 'component' && kind !== 'type') {
-    throw new WaironError(`invalid-kind: sdd_move_spec moves a component or a type to another subsystem; a ${kind} ${kind === 'interface' || kind === 'implementation' ? 'follows its component (sdd_move_methods moves behaviour between components)' : 'does not move'}.`);
+export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean, parent?: string): SpecMove {
+  // Steps 1-2: the kinds that move between subsystems.
+  if (kind !== 'component' && kind !== 'type' && kind !== 'group') {
+    throw new WaironError(`invalid-kind: sdd_move_spec moves a component, a type or a type group to another subsystem; a ${kind} ${kind === 'interface' || kind === 'implementation' ? 'follows its component (sdd_move_methods moves behaviour between components)' : 'does not move'}.`);
   }
   // Step 3: the bound project's own subsystems.
   const subsystems = loadSubsystemSpecs().filter((s) => !s.id.includes('::'));
@@ -3720,7 +3730,86 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
     throw new WaironError(`subsystem-missing: this project has no subsystem "${target}"${target.includes('::') ? ' — a spec never moves into another project' : ''}. Known subsystems: ${subsystems.map((s) => s.id).join(', ') || 'none'}.`);
   }
   // Step 4.
+  if (kind === 'group') return moveGroupSpec(id, target, parent, dryRun === true);
+  if (parent !== undefined && parent !== '') throw new WaironError(`invalid-parent: parent names the group a moved GROUP goes under; a ${kind} does not take one.`);
   return kind === 'component' ? moveComponentSpec(id, target, subsystems, dryRun === true) : moveTypeSpec(id, target, subsystems, dryRun === true);
+}
+
+/** The spec ids a group's folder carries along: its types and every group beneath it. */
+function groupMembers(id: string): { types: string[]; groups: string[] } {
+  const groups = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+  const below = groups.filter((g) => g.id !== id && groupChain(g, groups).includes(id)).map((g) => g.id);
+  const inside = new Set([id, ...below]);
+  return { types: loadTypeSpecs().filter((t) => t.group !== undefined && inside.has(t.group)).map((t) => t.id), groups: below };
+}
+
+/** Rename a type group on its own: its folder, its types' group and its children's parent follow; no type id changes. */
+function renameGroupSpec(id: string, newId: string, dryRun?: boolean): SpecIdRename {
+  // The group exists and is the bound project's own.
+  writeTarget<GroupSpec>('group', id, 'sdd_rename_spec', `sdd_rename_spec group ${localOf(id)} <new id>`, () => loadGroupSpec(id));
+  if (!SpecIdSchema.safeParse(newId).success || newId.includes('::')) {
+    throw new WaironError(`invalid-id: "${newId}" is not a lowercase identifier with no namespace separator.`);
+  }
+  if (newId === id) throw new WaironError(`name-unchanged: group "${id}" already has that id — nothing to do.`);
+  if (loadGroupSpecs().some((g) => g.id === newId)) throw new WaironError(`id-taken: a group already has the id "${newId}".`);
+  const direct = [
+    ...loadTypeSpecs().filter((t) => t.group === id).map((t) => t.id),
+    ...loadGroupSpecs().filter((g) => g.parent === id).map((g) => g.id),
+  ];
+  const renamed: SpecRename[] = [{ kind: 'group', from: id, to: newId }];
+  // A dry run stops here: the group's types and child groups are the specs whose reference is rewritten.
+  if (dryRun) return { kind: 'group', renamed, rewritten: direct, carried: [], keptPublicNames: [], dryRun: true };
+  const done = renameGroup(id, newId);
+  invalidateSpecCache();
+  return { kind: 'group', renamed, rewritten: done.retargeted, carried: [], keptPublicNames: [] };
+}
+
+/**
+ * Move a type group with its whole folder (its index, its types and the groups
+ * beneath it) to another home or under another parent: ids never change, so no
+ * reference is touched; the group's subsystem and parent are restated, and
+ * every group beneath it takes the new home. Placement, not an edit: updatedAt
+ * is kept and a folder the move empties is pruned.
+ */
+function moveGroupSpec(id: string, target: string | undefined, parent: string | undefined, dryRun: boolean): SpecMove {
+  const call = `sdd_move_spec group ${localOf(id)} <subsystem>`;
+  const group = writeTarget<GroupSpec>('group', id, 'sdd_move_spec', call, () => loadGroupSpec(id));
+  const from = group.subsystem ?? '';
+  const to = target ?? '';
+  const newParent = parent === undefined || parent === '' ? undefined : parent;
+  if (to === from && (newParent ?? '') === (group.parent ?? '')) {
+    throw new WaironError(`same-subsystem: group "${id}" already lives ${from ? `in "${from}"` : 'in the shared types folder'}${group.parent ? ` under "${group.parent}"` : ' at the top'} — nothing to move.`);
+  }
+  // The destination placement is judged as the type-groups rule judges it.
+  const all = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+  const placed: GroupSpec = { ...group, subsystem: target, parent: newParent };
+  if (target === undefined) delete (placed as { subsystem?: string }).subsystem;
+  if (newParent === undefined) delete (placed as { parent?: string }).parent;
+  const problem = groupPlacementProblem(placed, all);
+  if (problem) throw new WaironError(`${problem.code}: ${problem.message}. Nothing was written.`);
+  const { types, groups } = groupMembers(id);
+  const root = getProjectRoot();
+  const shown = (file: string): string => toPosixPath(path.relative(root, file));
+  const oldFile = getGroupPath(id);
+  const report: SpecMove = {
+    kind: 'group',
+    id,
+    from,
+    to,
+    moved: [{ kind: 'group', id }, ...groups.map((g) => ({ kind: 'group' as const, id: g })), ...types.map((t) => ({ kind: 'type' as const, id: t }))],
+    rewritten: [],
+    notices: [],
+    references: [
+      `group ${id}: ${group.parent ? `parent ${group.parent}` : 'top-level'} → ${newParent ? `parent ${newParent}` : 'top-level'}`,
+      ...(to !== from ? [`group ${id}: home ${from || '(shared types folder)'} → ${to || '(shared types folder)'}`] : []),
+    ],
+  };
+  if (dryRun) return { ...report, files: [`${shown(oldFile)} → (${types.length} type${types.length === 1 ? '' : 's'} and ${groups.length} child group${groups.length === 1 ? '' : 's'} move with it)`], dryRun: true };
+  // The folder moves with the group's restated placement; a move is placement, so updatedAt is kept.
+  saveGroupSpec(placed, { preserveUpdatedAt: true });
+  if (to !== from) restateGroupHomes(groups, target);
+  invalidateSpecCache();
+  return { ...report, files: [`${shown(oldFile)} → ${shown(getGroupPath(id))}`] };
 }
 
 /** Steps 5-12 of moveSpec: a component with the members it owns, its contracts and implementations. */

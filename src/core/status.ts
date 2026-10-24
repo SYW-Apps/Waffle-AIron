@@ -27,6 +27,8 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadGroupSpecs,
+  groupChain,
   getLoaderIssues,
   scanAllSpecs,
   findOrphanedSpecFiles,
@@ -356,6 +358,35 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
   }
 
   const typeOwners = new Set(loadTypeSpecs().map((t) => t.subsystem).filter((id): id is string => typeof id === 'string'));
+  // Step 11: the types counted per home (a subsystem, or the shared types) and per type group,
+  // nested groups under their parent with the subtree's total. Shown when the tree has groups,
+  // or holds no component at all (a tree of types alone shows what it holds instead of nothing).
+  const ownTypes = loadTypeSpecs().filter((t) => !t.id.includes('::'));
+  const ownGroups = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+  const showTypeCounts = ownGroups.length > 0 || components.length === 0;
+  /** The type-count lines of one home (a subsystem id, '' for the shared types), already indented; empty when it holds none or the counts are not shown. */
+  const typeCountLines = (home: string, indent: string): string[] => {
+    const types = ownTypes.filter((t) => (t.subsystem ?? '') === home);
+    if (!showTypeCounts || types.length === 0) return [];
+    const groups = ownGroups.filter((g) => (g.subsystem ?? '') === home);
+    const known = new Set(groups.map((g) => g.id));
+    const inSubtree = (g: string): number => types.filter((t) => t.group !== undefined && known.has(t.group) && groupChain(groups.find((x) => x.id === t.group)!, groups).includes(g)).length;
+    const direct = (g: string): number => types.filter((t) => t.group === g).length;
+    const ungrouped = types.filter((t) => t.group === undefined || !known.has(t.group)).length;
+    const roots = groups.filter((g) => g.parent === undefined || !known.has(g.parent)).sort((a, b) => (a.id < b.id ? -1 : 1));
+    const lines: string[] = [];
+    const walk = (g: (typeof groups)[number], prefix: string, last: boolean): void => {
+      const kids = groups.filter((c) => c.parent === g.id).sort((a, b) => (a.id < b.id ? -1 : 1));
+      const total = inSubtree(g.id);
+      const own = direct(g.id);
+      const count = kids.length > 0 ? `${own} here, ${total} in all` : `${own}`;
+      lines.push(`${mark.structure(prefix + (last ? '└── ' : '├── '))}${mark.layer('type', `[Group] ${g.id}`)} (${count} type${total === 1 ? '' : 's'})`);
+      kids.forEach((c, i) => walk(c, prefix + (last ? '    ' : '│   '), i === kids.length - 1));
+    };
+    roots.forEach((g, i) => walk(g, indent + '    ', i === roots.length - 1 && ungrouped === 0));
+    if (ungrouped > 0 && groups.length > 0) lines.push(`${mark.structure(indent + '    └── ')}(in no group) ${ungrouped} type${ungrouped === 1 ? '' : 's'}`);
+    return [`${mark.structure(indent + '└── ')}${mark.layer('type', '[Types]')} ${types.length} type${types.length === 1 ? '' : 's'}${home === '' ? ' (shared)' : ''}`, ...lines];
+  };
   const getSubsystemScore = (subId: string): number => {
     const sub = subsystems.find(s => s.id === subId);
     if (!sub) return 0;
@@ -430,9 +461,10 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
     output += `${mark.structure(indent + subPrefix)}${mark.layer('subsystem', `[Subsystem] ${label}`)}${partMark.has(sub.id) ? mark.structure(partMark.get(sub.id)!) : ''}${subStatusStr} ${mark.score(subScore, `(${subScore}%)`)}\n`;
 
     const subComps = components.filter(c => c.subsystem === sub.id);
+    const typeLines = typeCountLines(sub.id, subIndent);
     for (let j = 0; j < subComps.length; j++) {
       const comp = subComps[j];
-      const isLastComp = j === subComps.length - 1;
+      const isLastComp = j === subComps.length - 1 && typeLines.length === 0;
       const compPrefix = isLastComp ? '└── ' : '├── ';
       const compIndent = isLastComp ? '    ' : '│   ';
 
@@ -482,6 +514,7 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
         output += `${mark.structure(subIndent + compIndent + '└── ')}${mark.missing('Implementation: Missing (-30%)')}\n`;
       }
     }
+    for (const line of typeLines) output += `${line}\n`;
   };
 
   /** A project's own subsystems, then each member it declares as a `[Project]` holding its own. */
@@ -524,6 +557,8 @@ function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<St
     });
   };
   renderProject('', '');
+  // The shared types (no subsystem), counted beside the subsystems.
+  for (const line of typeCountLines('', '')) output += `${line}\n`;
   // Step 9: members the graph declares but no project stands behind, and the
   // root's own state to close the report.
   // A part is no project of its own (stage 8): its state is this project's.

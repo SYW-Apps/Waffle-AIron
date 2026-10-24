@@ -73,19 +73,16 @@ export function Tokens() {
                 key: 'status',
                 header: '',
                 width: '1%',
-                cell: (t) =>
-                  t.revokedAt ? (
-                    <Badge tone="neutral">revoked</Badge>
-                  ) : (
-                    <ConfirmButton
-                      label="Revoke"
-                      title="Revoke token"
-                      message="Revoke this token? Any agent using it loses access immediately."
-                      confirmLabel="Revoke"
-                      action={() => revoke(t.id)}
-                      onError={toast.bad}
-                    />
-                  ),
+                cell: (t) => (
+                  <ConfirmButton
+                    label="Revoke"
+                    title="Revoke token"
+                    message="Revoke this token? Any agent using it loses access immediately."
+                    confirmLabel="Revoke"
+                    action={() => revoke(t.id)}
+                    onError={toast.bad}
+                  />
+                ),
               },
             ]}
           />

@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ShareAccessEntry } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Share Access Repository (sdd_host): the per-link access log — the raw material
@@ -39,11 +40,23 @@ class ShareAccessStore {
     return parsed as ShareAccessEntry[];
   }
 
-  append(entry: ShareAccessEntry): void {
+  /**
+   * ishare_access_store.update — under share-access.json's write lock, read the
+   * log fresh (absent is empty; unreadable or malformed throws and nothing is
+   * written), apply the change and replace the file atomically. Answers the log written.
+   */
+  update(change: (entries: ShareAccessEntry[]) => ShareAccessEntry[]): ShareAccessEntry[] {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    const next = [...this.load(), entry];
-    replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return withFileLock(p, () => {
+      const current = readJsonForUpdate<unknown>(p, []);
+      if (!Array.isArray(current)) {
+        throw new Error(`Malformed share-access store at ${p}: expected a JSON array.`);
+      }
+      const next = change(current as ShareAccessEntry[]);
+      replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
   }
 }
 
@@ -56,7 +69,7 @@ class ShareAccessRegistry {
       id: entry.id || crypto.randomUUID(),
       at: entry.at || new Date().toISOString(),
     };
-    this.store.append(stored);
+    this.store.update((entries) => [...entries, stored]);
     return stored;
   }
 }

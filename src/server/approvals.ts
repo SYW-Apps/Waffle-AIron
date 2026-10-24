@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ApprovalRequest, ApprovalDecision } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Approval Repository (sdd_host)
@@ -61,11 +62,13 @@ function readRequests(dataDir: string): ApprovalRequest[] {
   }
 }
 
-/** Persist the complete request set atomically (write temp, then rename). */
-function persistRequests(dataDir: string, requests: ApprovalRequest[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(requests, null, 2) + '\n');
+/** The set as read under the write lock: absent is empty; unreadable or malformed throws and nothing is written. */
+function readCurrent(p: string): ApprovalRequest[] {
+  const parsed = readJsonForUpdate<unknown>(p, []);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Approval store at ${p} contains malformed JSON: expected a JSON array of approval requests`);
+  }
+  return parsed as ApprovalRequest[];
 }
 
 // ── redaction predicate ─────────────────────────────────────────────────────
@@ -91,11 +94,22 @@ class ApprovalStore {
     return this.requests;
   }
 
-  /** Swap the in-memory set to a complete replacement in one assignment. Only
-   *  called by the registry after durable persistence has succeeded, so index
-   *  reads always observe a consistent set. */
-  replaceAll(requests: ApprovalRequest[]): void {
-    this.requests = requests;
+  /**
+   * iapproval_store.update — under approvals.json's write lock, read the set
+   * fresh, apply the change and replace the file atomically; a change that
+   * throws, or one that answers the array it was given, writes nothing. Answers the set written.
+   */
+  update(change: (requests: ApprovalRequest[]) => ApprovalRequest[]): ApprovalRequest[] {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    this.requests = withFileLock(p, () => {
+      const current = readCurrent(p);
+      const before = JSON.stringify(current);
+      const next = change(current);
+      if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
+    return this.requests;
   }
 
   /** The current authoritative set (shared by reference with the index). */
@@ -107,14 +121,14 @@ class ApprovalStore {
 // ── registry: write path ────────────────────────────────────────────────────
 
 class ApprovalRegistry {
-  constructor(private readonly dataDir: string, private readonly store: ApprovalStore) {}
+  constructor(private readonly store: ApprovalStore) {}
 
   /**
    * Stamp the new request's id (random), createdAt, and status pending —
    * preserving the caller-supplied redacted summary and payload, and rejecting a
-   * payload that smells like a raw secret or bearer token — then append it via
-   * write-temp-then-rename and refresh the store. Persistence failures leave the
-   * previous set intact and surface as storage errors.
+   * payload that smells like a raw secret or bearer token — then append it to the
+   * set read under the store's lock. Persistence failures leave the previous set
+   * intact and surface as storage errors.
    */
   create(request: ApprovalRequest): ApprovalRequest {
     if (request.payload !== undefined && looksLikeSecret(request.payload)) {
@@ -129,139 +143,133 @@ class ApprovalRegistry {
       createdAt: new Date().toISOString(),
       status: 'pending',
     };
-    const next = [...this.store.all(), stored];
-    persistRequests(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((requests) => [...requests, stored]);
     return stored;
   }
 
   /**
    * Locate the request by the decision's requestId (not-found error when absent)
-   * and reject any request that is not currently pending or whose expiresAt has
-   * already passed — a past-expiry pending request is flipped to expired and
-   * rejected rather than decided. Otherwise stamp decidedBy, decidedAt, and
-   * decisionReason and set status approved or denied, persist, then refresh the
-   * store. Authorization — including the self-approval check — is the
-   * orchestrator's job, not here.
+   * in the set read under the lock, and reject any request that is not currently
+   * pending or whose expiresAt has already passed — a past-expiry pending request
+   * is flipped to expired and rejected rather than decided. Otherwise stamp
+   * decidedBy, decidedAt, and decisionReason and set status approved or denied.
+   * Authorization — including the self-approval check — is the orchestrator's job.
    */
   decide(decision: ApprovalDecision): ApprovalRequest {
-    const requests = this.store.all();
-    const idx = requests.findIndex((r) => r.id === decision.requestId);
-    if (idx === -1) {
-      throw new Error(`Approval request "${decision.requestId}" not found.`);
-    }
-    const current = requests[idx];
-    if (current.status !== 'pending') {
-      throw new Error(
-        `Approval request "${current.id}" is ${current.status}, not pending; it cannot be decided.`,
-      );
-    }
-    // Past-expiry: flip to expired and reject rather than deciding.
-    if (
-      current.expiresAt !== undefined &&
-      Date.parse(current.expiresAt) <= Date.parse(decision.decidedAt)
-    ) {
-      const expired: ApprovalRequest = { ...current, status: 'expired' };
+    let expiredAt: string | undefined;
+    let decided: ApprovalRequest | undefined;
+    this.store.update((requests) => {
+      const idx = requests.findIndex((r) => r.id === decision.requestId);
+      if (idx === -1) {
+        throw new Error(`Approval request "${decision.requestId}" not found.`);
+      }
+      const current = requests[idx];
+      if (current.status !== 'pending') {
+        throw new Error(
+          `Approval request "${current.id}" is ${current.status}, not pending; it cannot be decided.`,
+        );
+      }
       const next = [...requests];
-      next[idx] = expired;
-      persistRequests(this.dataDir, next);
-      this.store.replaceAll(next);
+      // Past-expiry: flip to expired and reject rather than deciding.
+      if (
+        current.expiresAt !== undefined &&
+        Date.parse(current.expiresAt) <= Date.parse(decision.decidedAt)
+      ) {
+        expiredAt = current.expiresAt;
+        next[idx] = { ...current, status: 'expired' };
+        return next;
+      }
+      decided = {
+        ...current,
+        status: decision.approved ? 'approved' : 'denied',
+        decidedBy: decision.decidedBy,
+        decidedAt: decision.decidedAt,
+        decisionReason: decision.reason,
+      };
+      next[idx] = decided;
+      return next;
+    });
+    if (expiredAt !== undefined) {
       throw new Error(
-        `Approval request "${current.id}" expired at ${current.expiresAt} and can no longer be decided.`,
+        `Approval request "${decision.requestId}" expired at ${expiredAt} and can no longer be decided.`,
       );
     }
-    const decided: ApprovalRequest = {
-      ...current,
-      status: decision.approved ? 'approved' : 'denied',
-      decidedBy: decision.decidedBy,
-      decidedAt: decision.decidedAt,
-      decisionReason: decision.reason,
-    };
-    const next = [...requests];
-    next[idx] = decided;
-    persistRequests(this.dataDir, next);
-    this.store.replaceAll(next);
-    return decided;
+    return decided as ApprovalRequest;
   }
 
-  /**
-   * Locate the request by id (not-found error when absent) and transition it to
-   * completed only from an approved status (any other status is a validation
-   * error), setting the executionSummary when one is given, then persist and
-   * refresh the store.
-   */
+  /** Transition an approved request (found by id in the set read under the lock) to completed, setting the executionSummary when given. */
   markCompleted(id: string, executionSummary?: string): ApprovalRequest {
-    const requests = this.store.all();
-    const idx = requests.findIndex((r) => r.id === id);
-    if (idx === -1) {
-      throw new Error(`Approval request "${id}" not found.`);
-    }
-    const current = requests[idx];
-    if (current.status !== 'approved') {
-      throw new Error(
-        `Approval request "${id}" is ${current.status}, not approved; ` +
-          `only an approved request can be completed.`,
-      );
-    }
-    const completed: ApprovalRequest = {
-      ...current,
-      status: 'completed',
-      ...(executionSummary !== undefined ? { executionSummary } : {}),
-    };
-    const next = [...requests];
-    next[idx] = completed;
-    persistRequests(this.dataDir, next);
-    this.store.replaceAll(next);
-    return completed;
+    let completed: ApprovalRequest | undefined;
+    this.store.update((requests) => {
+      const idx = requests.findIndex((r) => r.id === id);
+      if (idx === -1) {
+        throw new Error(`Approval request "${id}" not found.`);
+      }
+      const current = requests[idx];
+      if (current.status !== 'approved') {
+        throw new Error(
+          `Approval request "${id}" is ${current.status}, not approved; ` +
+            `only an approved request can be completed.`,
+        );
+      }
+      completed = {
+        ...current,
+        status: 'completed',
+        ...(executionSummary !== undefined ? { executionSummary } : {}),
+      };
+      const next = [...requests];
+      next[idx] = completed;
+      return next;
+    });
+    return completed as ApprovalRequest;
   }
 
   /**
-   * Locate the request by id (not-found error when absent) and transition it to
-   * cancelled only from an approved status (any other status is a validation
-   * error), recording the reason as its executionSummary, then persist and
-   * refresh the store. Used when the approved workflow refused because the
+   * Transition an approved request to cancelled, recording the reason as its
+   * executionSummary. Used when the approved workflow refused because the
    * request no longer describes what would be done; a cancelled request is
    * final and is never executed.
    */
   cancel(id: string, reason: string): ApprovalRequest {
-    const requests = this.store.all();
-    const idx = requests.findIndex((r) => r.id === id);
-    if (idx === -1) {
-      throw new Error(`Approval request "${id}" not found.`);
-    }
-    const current = requests[idx];
-    if (current.status !== 'approved') {
-      throw new Error(
-        `Approval request "${id}" is ${current.status}, not approved; only an approved request can be cancelled.`,
-      );
-    }
-    const cancelled: ApprovalRequest = { ...current, status: 'cancelled', executionSummary: reason };
-    const next = [...requests];
-    next[idx] = cancelled;
-    persistRequests(this.dataDir, next);
-    this.store.replaceAll(next);
-    return cancelled;
+    let cancelled: ApprovalRequest | undefined;
+    this.store.update((requests) => {
+      const idx = requests.findIndex((r) => r.id === id);
+      if (idx === -1) {
+        throw new Error(`Approval request "${id}" not found.`);
+      }
+      const current = requests[idx];
+      if (current.status !== 'approved') {
+        throw new Error(
+          `Approval request "${id}" is ${current.status}, not approved; only an approved request can be cancelled.`,
+        );
+      }
+      cancelled = { ...current, status: 'cancelled', executionSummary: reason };
+      const next = [...requests];
+      next[idx] = cancelled;
+      return next;
+    });
+    return cancelled as ApprovalRequest;
   }
 
   /**
    * Flip every pending request whose expiresAt is at or before the supplied
    * now-timestamp to expired and return the count flipped. A set with no overdue
-   * pending requests changes nothing, rewrites nothing, and returns zero.
+   * pending requests changes nothing and returns zero.
    */
   expirePending(now: string): number {
     const nowMs = Date.parse(now);
     let changed = 0;
-    const next = this.store.all().map((r) => {
-      if (r.status === 'pending' && r.expiresAt !== undefined && Date.parse(r.expiresAt) <= nowMs) {
-        changed++;
-        return { ...r, status: 'expired' as const };
-      }
-      return r;
+    this.store.update((requests) => {
+      changed = 0;
+      const next = requests.map((r) => {
+        if (r.status === 'pending' && r.expiresAt !== undefined && Date.parse(r.expiresAt) <= nowMs) {
+          changed++;
+          return { ...r, status: 'expired' as const };
+        }
+        return r;
+      });
+      return changed > 0 ? next : requests;
     });
-    if (changed > 0) {
-      persistRequests(this.dataDir, next);
-      this.store.replaceAll(next);
-    }
     return changed;
   }
 }
@@ -308,15 +316,13 @@ class ApprovalIndex {
 /** Create a new pending approval request through the repository facade (atomic). */
 export function createApprovalRequest(dataDir: string, request: ApprovalRequest): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
-  store.load();
-  return new ApprovalRegistry(dataDir, store).create(request);
+  return new ApprovalRegistry(store).create(request);
 }
 
 /** Record an approval or denial decision on a pending request (atomic). */
 export function decideApprovalRequest(dataDir: string, decision: ApprovalDecision): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
-  store.load();
-  return new ApprovalRegistry(dataDir, store).decide(decision);
+  return new ApprovalRegistry(store).decide(decision);
 }
 
 /** Return one approval request by id, or null when absent. */
@@ -343,20 +349,17 @@ export function listApprovalRequests(
  *  recording what the workflow changed when it reports it (a project:init). */
 export function markApprovalCompleted(dataDir: string, id: string, executionSummary?: string): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
-  store.load();
-  return new ApprovalRegistry(dataDir, store).markCompleted(id, executionSummary);
+  return new ApprovalRegistry(store).markCompleted(id, executionSummary);
 }
 
 /** Cancel an approved request that can no longer execute, recording why (atomic). */
 export function cancelApprovalRequest(dataDir: string, id: string, reason: string): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
-  store.load();
-  return new ApprovalRegistry(dataDir, store).cancel(id, reason);
+  return new ApprovalRegistry(store).cancel(id, reason);
 }
 
 /** Expire pending requests at or past their expiresAt; returns the count expired (atomic). */
 export function expirePendingApprovals(dataDir: string, now: string): number {
   const store = new ApprovalStore(dataDir);
-  store.load();
-  return new ApprovalRegistry(dataDir, store).expirePending(now);
+  return new ApprovalRegistry(store).expirePending(now);
 }

@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { InstanceIdentity } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Instance Identity Repository (sdd_host)
@@ -32,6 +33,16 @@ function storePath(dataDir: string): string {
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
+function checkIdentity(parsed: unknown, p: string): InstanceIdentity {
+  const rec = parsed as Partial<InstanceIdentity> | null;
+  if (!rec || typeof rec !== 'object' || !rec.superadminUserId || !rec.localDevUserId) {
+    throw new Error(
+      `Malformed instance identity at ${p}: expected { superadminUserId, localDevUserId, createdAt }.`,
+    );
+  }
+  return rec as InstanceIdentity;
+}
+
 class InstanceIdentityStore {
   constructor(private readonly dataDir: string) {}
 
@@ -57,21 +68,26 @@ class InstanceIdentityStore {
     } catch (err) {
       throw new Error(`Malformed instance identity at ${p}: ${(err as Error).message}`);
     }
-    const rec = parsed as Partial<InstanceIdentity> | null;
-    if (!rec || typeof rec !== 'object' || !rec.superadminUserId || !rec.localDevUserId) {
-      throw new Error(
-        `Malformed instance identity at ${p}: expected { superadminUserId, localDevUserId, createdAt }.`,
-      );
-    }
-    return rec as InstanceIdentity;
+    return checkIdentity(parsed, p);
   }
 
-  /** Swap the persisted record in one atomic write-temp-then-rename, so a crash
-   *  never truncates the file. Only called by the registry's create-once seed. */
-  replace(identity: InstanceIdentity): void {
+  /**
+   * iinstance_identity_store.update — under instance.json's write lock, read the
+   * record fresh (null when absent; unreadable or malformed throws and nothing is
+   * written) and persist what the change makes of it atomically; a change that
+   * keeps the record it was given writes nothing. Answers the identity written.
+   */
+  update(change: (identity: InstanceIdentity | null) => InstanceIdentity): InstanceIdentity {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    replaceFile(p, JSON.stringify(identity, null, 2) + '\n');
+    return withFileLock(p, () => {
+      const raw = readJsonForUpdate<unknown>(p, null);
+      const current = raw === null ? null : checkIdentity(raw, p);
+      const before = JSON.stringify(current);
+      const next = change(current);
+      if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
   }
 }
 
@@ -88,15 +104,12 @@ class InstanceIdentityRegistry {
    * the new record. Throws on an unwritable data root; it never partially seeds.
    */
   seed(now: string): InstanceIdentity {
-    const existing = this.store.load();
-    if (existing) return existing;
-    const identity: InstanceIdentity = {
+    // Decided inside the update, under the lock: a second process seeding at once finds the first's record.
+    return this.store.update((existing) => existing ?? {
       superadminUserId: randomUUID(),
       localDevUserId: randomUUID(),
       createdAt: now,
-    };
-    this.store.replace(identity);
-    return identity;
+    });
   }
 }
 

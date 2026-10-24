@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as files from './family-files.js';
 import * as core from './adapters/core.js';
 import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
+import { acquireFileLock, releaseFileLock, type FileLockHandle } from '../utils/file-lock.js';
 import { transactionRepository as repository } from './transaction-store.js';
 import type {
   FileChange,
@@ -125,12 +126,50 @@ export function commit(rehearsal: Rehearsal, changes: FileChange[], verb: string
     repository.dropRehearsal(rehearsal.id);
     return { committed: false, written: [], failure: `lock: ${errorText(e)}`, restored: true, unrestored: [] };
   }
+  // Step 2: every affected host-store file's write lock, for the stage and the swap.
+  let storeLocks: FileLockHandle[];
+  try {
+    storeLocks = lockHostStores(rehearsal, changes);
+  } catch (e) {
+    unlockOwners(locked, rehearsal.familyRoot);
+    repository.dropRehearsal(rehearsal.id);
+    return { committed: false, written: [], failure: `lock: ${errorText(e)}`, restored: true, unrestored: [] };
+  }
   try {
     return commitLocked(rehearsal, changes, verb, owners);
   } finally {
     // Steps 9, 13, 19 and 21: released on every way out.
+    for (const handle of [...storeLocks].reverse()) releaseFileLock(handle);
     unlockOwners(locked, rehearsal.familyRoot);
   }
+}
+
+/**
+ * Step 2: when the changes swap host-store files (a scope that names areas, so
+ * the owner is a data directory, not a project copied whole), take each file's
+ * write lock in ONE fixed order - sorted by absolute path, nested, smallest
+ * outermost - so two multi-store holders never wait on each other. A concurrent
+ * store update then waits for the swap instead of being overwritten by it.
+ */
+function lockHostStores(rehearsal: Rehearsal, changes: FileChange[]): FileLockHandle[] {
+  if (rehearsal.areas === undefined) return [];
+  const whole = new Set((rehearsal.whole ?? []).map((w) => path.resolve(w)));
+  const files = [
+    ...new Set(
+      changes
+        .filter((c) => !c.path.startsWith('.wai/') && !whole.has(path.resolve(c.project)))
+        .map((c) => path.resolve(c.project, c.path))
+        .filter((file) => fs.existsSync(path.dirname(file))),
+    ),
+  ].sort();
+  const taken: FileLockHandle[] = [];
+  try {
+    for (const file of files) taken.push(acquireFileLock(file));
+  } catch (e) {
+    for (const handle of [...taken].reverse()) releaseFileLock(handle);
+    throw e;
+  }
+  return taken;
 }
 
 /** Take each owner's tree lock in path order (one order for every committer, so two never wait on each other); the roots taken. */

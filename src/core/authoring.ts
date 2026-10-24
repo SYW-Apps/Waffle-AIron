@@ -4,6 +4,7 @@ import {
   InterfaceSpecSchema,
   MethodImplementationSchema,
   MethodSignatureSchema,
+  GroupSpecSchema,
   SubsystemSpecSchema,
   SystemSpecSchema,
   TypeMethodSchema,
@@ -14,6 +15,7 @@ import {
   type StoredInterfaceSpec,
   type StoredTypeSpec,
   type ComponentSpec,
+  type GroupSpec,
   type ImplementationSpec,
   type InterfaceSpec,
   type MethodImplementation,
@@ -21,6 +23,7 @@ import {
   type SubsystemSpec,
   type SystemSpec,
   type TypeSpec,
+  groupPlacementProblem,
   specIndexRetiredBy,
   specIndexReferencesTo,
   specIndexSubtreeOf,
@@ -99,7 +102,7 @@ import { getProjectRoot, runWithProjectRoot } from '../utils/fs.js';
 // ---------------------------------------------------------------------------
 
 /** One spec of any level, as stored and as restated. */
-type Spec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
+type Spec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec | GroupSpec;
 
 /**
  * sdd_authoring::SpecRestatement — a whole spec as a create tool states it,
@@ -249,6 +252,7 @@ export function componentCandidateGate(
   return {
     gate: (kind, merged) => {
       refuseUnknownOwner(kind, merged as { subsystem?: string }, storedOwner);
+      refuseGroupPlacement(kind, merged);
       // The merge is over the spec as STORED, so a sourced method carries only
       // its source: params or returns beside it are ones the delta stated.
       const restated = kind === 'interface' ? restatedSources((merged as { methods?: unknown }).methods) : [];
@@ -271,6 +275,17 @@ export function componentCandidateGate(
       return [...notices, ...judgeInTree(kind, merged as ComponentSpec | InterfaceSpec, options)];
     },
   };
+}
+
+/**
+ * A group whose parent does not exist, lives in another home or would close a
+ * loop is refused before anything reaches disk (the type-groups rule's three
+ * errors, asked of the merged group against the groups of the tree).
+ */
+function refuseGroupPlacement(kind: WritableSpecKind, merged: unknown): void {
+  if (kind !== 'group') return;
+  const problem = groupPlacementProblem(merged as GroupSpec, scanAllSpecs({ memberDepth: 0 }).groups);
+  if (problem) throw new Error(`${problem.code}: ${problem.message}. Nothing was written.`);
 }
 
 /** A method as the name check reads it: its name and its parameters' names. */
@@ -445,7 +460,7 @@ function storedForm(kind: WritableSpecKind, spec: Spec | null): Spec | null {
  * missing subsystem must still be repairable by the update that fixes it.
  */
 function refuseUnknownOwner(kind: WritableSpecKind, merged: { subsystem?: string }, storedOwner?: string): void {
-  if (kind !== 'component' && kind !== 'type') return;
+  if (kind !== 'component' && kind !== 'type' && kind !== 'group') return;
   const owner = merged.subsystem;
   if (!owner || owner === storedOwner) return;
   if (loadSpec('subsystem', owner)) return;
@@ -507,6 +522,7 @@ const MISSING_PARENT: Partial<Record<WritableSpecKind, (parentId: string) => str
   interface: (id) => `Component "${id}" does not exist.`,
   implementation: (id) => `Interface contract "${id}" does not exist.`,
   type: (id) => `Owning subsystem "${id}" does not exist — name a subsystem the tree has, or omit subsystem for a system-level value object.`,
+  group: (id) => `Home subsystem "${id}" does not exist — name a subsystem the tree has, or omit subsystem for a group in the shared types folder.`,
 };
 
 /** How a re-authoring notice names the spec, and what a removed member drags with it. */
@@ -517,6 +533,7 @@ const REWRITE_LABEL: Record<WritableSpecKind, string> = {
   interface: 'Interface',
   implementation: 'Implementation',
   type: 'Type',
+  group: 'Type group',
 };
 
 /**
@@ -537,7 +554,8 @@ export function restatementParent(restatement: SpecRestatement): SpecParent | nu
     case 'component':      return { kind: 'subsystem', id: spec.subsystem };
     case 'interface':      return { kind: 'component', id: spec.component };
     case 'implementation': return { kind: 'interface', id: spec.contract };
-    case 'type':           return typeof spec.subsystem === 'string' && spec.subsystem !== '' ? { kind: 'subsystem', id: spec.subsystem } : null;
+    case 'type':
+    case 'group':          return typeof spec.subsystem === 'string' && spec.subsystem !== '' ? { kind: 'subsystem', id: spec.subsystem } : null;
     default:               return null;
   }
 }
@@ -622,6 +640,7 @@ const SPEC_SCHEMA = {
   interface: InterfaceSpecSchema,
   implementation: ImplementationSpecSchema,
   type: TypeSpecSchema,
+  group: GroupSpecSchema,
 } as const;
 
 /**
@@ -1015,6 +1034,8 @@ export function writeSpec(restatement: SpecRestatement): SpecWriteReceipt {
   if (names.length) throw new Error(nameRefusal(restatement.kind, id, names));
   // ...and the legacy mount form, before anything is judged or written.
   refuseMountForm(restatement.kind, application.spec);
+  // A group's parent, home and loop, judged against the groups of the tree.
+  refuseGroupPlacement(restatement.kind, application.spec);
   // Steps 13-14: the intrinsic judgement, for the one kind judged at the boundary.
   const gateNotices = restatement.kind === 'component' ? judgeComponent(application.spec as ComponentSpec, bound) : [];
   // Step 14: the doctrine edges, boundary edges and route collisions it introduces in its tree.
@@ -1093,6 +1114,7 @@ const CREATE_TOOL: Record<WritableSpecKind, string> = {
   interface: 'sdd_define_interface',
   implementation: 'sdd_write_narrative',
   type: 'sdd_add_type',
+  group: 'sdd_add_group',
 };
 
 /** One implementation method entry a contract method's removal takes with it. */
@@ -1354,7 +1376,7 @@ export function deleteSpec(kind: WritableSpecKind, id: string, dryRun?: boolean,
 function missingRefusal(kind: WritableSpecKind, id: string, index: SpecIndex, sentence: string | undefined): string {
   const pools: Record<string, ReadonlyArray<{ id: string; subsystem?: string }>> = {
     subsystem: index.subsystems, component: index.components, interface: index.interfaces,
-    implementation: index.implementations, type: index.types,
+    implementation: index.implementations, type: index.types, group: index.groups,
   };
   const hints: string[] = [];
   const elsewhere = Object.keys(pools).filter((k) => k !== kind && pools[k].some((s) => s.id === id));
@@ -1376,7 +1398,8 @@ function specOf(index: SpecIndex, ref: SpecRef): Spec | null {
     : ref.kind === 'component' ? index.components
       : ref.kind === 'interface' ? index.interfaces
         : ref.kind === 'implementation' ? index.implementations
-          : ref.kind === 'type' ? index.types : [];
+          : ref.kind === 'type' ? index.types
+            : ref.kind === 'group' ? index.groups : [];
   return (pool.find((s) => s.id === ref.id) as Spec | undefined) ?? null;
 }
 
@@ -1638,7 +1661,7 @@ export function moveMethods(
  * curable boundary finding rides along as a notice. A type carries no edges
  * and is moved without judgement.
  */
-export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean, together?: string[]): SpecMove {
+export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: boolean, together?: string[], parent?: string): SpecMove {
   // The addressed spec first, then each one moving with it, once each.
   const ids = [...new Set([id, ...(together ?? [])])];
   // Steps 1-3: every spec, and the subsystem they move to, are the bound project's own.
@@ -1649,8 +1672,8 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   if (foreign !== undefined) throw new Error(foreign);
   // Steps 4 and 12: types carry no edges — each is planned first, so one refused type refuses them all.
   if (kind !== 'component') {
-    for (const sid of ids) coreMoveSpec(kind, sid, subsystem, true);
-    return rehearsedMove(kind, id, ids, subsystem, dryRun === true, []);
+    for (const sid of ids) coreMoveSpec(kind, sid, subsystem, true, parent);
+    return rehearsedMove(kind, id, ids, subsystem, dryRun === true, [], parent);
   }
   // Step 5: the settings the move is judged with.
   const bound = candidateOptions();
@@ -1684,7 +1707,7 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   // Step 11: a curable boundary finding rides along.
   const notices = noticesFrom(verdict);
   // Steps 13-25: rehearsed, then (unless a dry run) written, with the gate's notices.
-  return rehearsedMove(kind, id, owners, subsystem, dryRun === true, notices);
+  return rehearsedMove(kind, id, owners, subsystem, dryRun === true, notices, parent);
 }
 
 /** A finding of the rehearsal: its severity, code and spec, and its message with the copy's folder read as the project's. */
@@ -1697,7 +1720,7 @@ interface RehearsedFinding { severity: string; key: string; text: string }
  * or write it for real. The report carries the files and references the move
  * writes, and the design errors and warnings it brings.
  */
-function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsystem: string | undefined, dryRun: boolean, notices: string[]): SpecMove {
+function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsystem: string | undefined, dryRun: boolean, notices: string[], parent?: string): SpecMove {
   const root = getProjectRoot();
   // Step 13.
   const copy = rehearsalCopy();
@@ -1716,7 +1739,7 @@ function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsys
         }));
       // Steps 15-17.
       const before = judged();
-      const written = ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false));
+      const written = ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false, parent));
       const after = judged();
       // Step 19: what the result reports that the tree does not, counted by code and spec.
       const seen = new Map<string, number>();
@@ -1748,7 +1771,7 @@ function rehearsedMove(kind: WritableSpecKind, id: string, ids: string[], subsys
     );
   }
   // Steps 24-25: written for real, one move after another — the set was judged and rehearsed whole.
-  const report = foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false)), false);
+  const report = foldMoves(ids.map((sid) => coreMoveSpec(kind, sid, subsystem, false, parent)), false);
   return { ...report, notices: [...report.notices, ...notices], findings };
 }
 

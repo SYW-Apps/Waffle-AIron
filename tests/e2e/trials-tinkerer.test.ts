@@ -484,6 +484,8 @@ describe('tinkerer: the CI gate fails closed where the docs say it must', () => 
       files: {
         'child2/.wai/project.yaml': projectYaml('child2'),
         'child2/.wai/specs/.index.yaml': yaml.dump({ schemaVersion: '1.0.0', name: 'child2', vision: 'A member project nobody has approved yet.', createdAt: TS, updatedAt: TS }),
+        // A subsystem: a member holding only its L0 has nothing approvable (MEMBER_NOTHING_APPROVABLE, a notice).
+        'child2/.wai/specs/subsystems/core.yaml': yaml.dump({ id: 'core', name: 'core', description: 'Its one subsystem.', parentSystem: 'child2', publicInterfaces: [], trustedLinks: [], status: 'draft', createdAt: TS, updatedAt: TS }),
       },
     });
     writeFile(dir, '.wai/project.yaml', projectYaml('straywai', { members: { child2: 'child2' } }));

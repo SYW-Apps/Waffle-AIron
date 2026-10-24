@@ -35,8 +35,12 @@ import {
   diagnoseProjectPacks,
   // The family a --fix cascades into, and the plain report summarises per member.
   projectFamily,
+  loadTypeSpecs,
+  loadGroupSpecs,
+  scanAllSpecs,
 } from './adapters/core.js';
-import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot } from '../utils/fs.js';
+import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot, renamePath, ensureDir } from '../utils/fs.js';
+import { misplacedGroupFiles } from '../models/specs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
 import { activeTargetTypes, isPart } from '../models/project.js';
@@ -647,6 +651,10 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // spellings.
   repairProjectSpecs('');
 
+  // The type groups: a group folder or a grouped type's file outside the folder
+  // its parent chain or group names is moved there (TYPE_GROUP_MISPLACED).
+  repairGroupPlacement('');
+
   // The members: the repairs above wrote this project only. Cascade into each
   // member below it, the way the family run validates them.
   repairMembers();
@@ -759,6 +767,67 @@ function repairProjectSpecs(who: string): void {
   }
 }
 
+/**
+ * Move every type group folder and grouped type file that sits outside the
+ * folder its parent chain or group names (TYPE_GROUP_MISPLACED) to that folder.
+ * Shallowest groups first, so moving a parent carries its children along; a
+ * group whose chain is broken, or whose destination is taken, is left for a
+ * hand. Only file locations change: nothing resolves through a folder, so no
+ * spec is rewritten and the approval is untouched.
+ */
+function repairGroupPlacement(who: string): void {
+  const at = whoPrefix(who);
+  try {
+    const own = <T extends { id: string }>(spec: T): boolean => !spec.id.includes('::');
+    const groups = loadGroupSpecs().filter(own);
+    if (groups.length === 0) return;
+    const paths = scanAllSpecs().paths;
+    const misplaced = misplacedGroupFiles(groups, paths.group, paths.type, loadTypeSpecs().filter(own));
+    if (misplaced.length === 0) return;
+    // Folders already renamed: a later path under one is remapped to where it went.
+    const renamed: Array<[string, string]> = [];
+    const remap = (p: string): string => {
+      for (const [from, to] of renamed) {
+        if (p === from || p.startsWith(from + path.sep)) return to + p.slice(from.length);
+      }
+      return p;
+    };
+    const depth = (id: string): number => {
+      let n = 0;
+      for (let g = groups.find((x) => x.id === id); g?.parent !== undefined && n < groups.length; g = groups.find((x) => x.id === g!.parent)) n++;
+      return n;
+    };
+    const ordered = [...misplaced].sort((a, b) => (a.kind === b.kind ? (a.kind === 'group' ? depth(a.id) - depth(b.id) : 0) : (a.kind === 'group' ? -1 : 1)));
+    const moves: string[] = [];
+    for (const m of ordered) {
+      if (m.expectedDir === undefined) continue;
+      // The folder it belongs in was computed from where its group or parent sat; if that moved first, so did this.
+      const expected = remap(path.normalize(m.expectedDir));
+      if (m.kind === 'group') {
+        const from = path.dirname(remap(path.normalize(m.file)));
+        if (from === expected || pathExists(expected)) continue;
+        ensureDir(path.dirname(expected));
+        renamePath(from, expected);
+        renamed.push([from, expected]);
+        moves.push(`group ${m.id}: ${path.relative(getProjectRoot(), from)} → ${path.relative(getProjectRoot(), expected)}`);
+      } else {
+        const from = remap(path.normalize(m.file));
+        const to = path.join(expected, path.basename(from));
+        if (path.dirname(from) === expected || pathExists(to)) continue;
+        ensureDir(expected);
+        renamePath(from, to);
+        moves.push(`type ${m.id}: ${path.relative(getProjectRoot(), from)} → ${path.relative(getProjectRoot(), to)}`);
+      }
+    }
+    if (moves.length > 0) {
+      console.log(`  ${icon('ok')} ${at}Moved ${moves.length} type group file(s) to the folder their parent chain names:`);
+      for (const move of moves) console.log(`      ${move}`);
+    }
+  } catch (e) {
+    console.log(`  ${icon('error')} ${at}Type-group placement repair failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
 /** A member project below the bound root: the alias it is declared under, its directory, and whether it lies inside the root. */
 interface MemberProject {
   alias: string;
@@ -797,6 +866,7 @@ function repairMembers(): void {
     runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return;
       repairProjectSpecs(member.alias);
+      repairGroupPlacement(member.alias);
       repairMemberSurfaces(member.alias);
     });
   }
@@ -1067,6 +1137,15 @@ function reportTreeLock(tally: Tally): void {
   const age = `${Math.round(lock.ageMs / 1000)}s old`;
   if (lock.holder === 'live' && !lock.breaks) {
     line(tally, 'warn', `${rel} is held by process ${lock.pid} (${age}): a spec write is under way, and every other write waits for it. Run doctor again once it finishes.`);
+    return;
+  }
+  if (lock.holder === 'remote') {
+    // Another host or PID namespace: its liveness cannot be probed from here, so only the stale age frees it.
+    const where = [
+      lock.identity?.host !== undefined && lock.identity.host !== '' ? `host ${lock.identity.host}` : '',
+      lock.identity?.pidNamespace !== undefined ? `PID namespace ${lock.identity.pidNamespace}` : '',
+    ].filter(Boolean).join(', ');
+    line(tally, 'warn', `${rel} is present (${age}) and its holder is on another host or PID namespace${where ? ` (${where})` : ''}, so its liveness cannot be checked from here: it is taken over only once it is older than the stale age${lock.breaks ? ' (it is now, so the next spec write takes it over)' : ', until then every other write waits'}. Nothing is lost — it is a lock, not a spec.`);
     return;
   }
   const why = lock.holder === 'unreadable'

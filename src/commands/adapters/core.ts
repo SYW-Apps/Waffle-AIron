@@ -69,4 +69,7 @@ export {
   projectFamily,
   resolveProjectExports,
   loadTypeSpecs,
+  // `wairon doctor --fix` moves a misplaced type group folder or grouped type file (TYPE_GROUP_MISPLACED).
+  loadGroupSpecs,
+  scanAllSpecs,
 } from '../../core/index.js';

@@ -364,7 +364,6 @@ export interface ApiKeyRecord {
   label?: string;
   ownerSubject?: PrincipalSubject;
   expiresAt?: string;
-  revokedAt?: string;
 }
 
 export interface ApprovalRequest {

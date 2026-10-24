@@ -12,6 +12,7 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadGroupSpecs,
   clearLoaderIssues,
   getLoaderIssues,
   scanAllSpecs,
@@ -921,6 +922,9 @@ function runOwnersGate(
     // specs already hold canonical text, so the stored spellings are visible
     // only here.
     const typeSpellings = typeSpellingFacts();
+    // Step 47: the type group tree and the files the groups and grouped types were read from.
+    const groups = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+    const specPaths = scanAllSpecs().paths;
 
     const ctx = buildRuleContext({
       system,
@@ -929,6 +933,9 @@ function runOwnersGate(
       interfaces,
       implementations,
       types,
+      groups,
+      groupFiles: specPaths.group,
+      typeFiles: specPaths.type,
       rules,
       projectType,
       scopeSubsystem,

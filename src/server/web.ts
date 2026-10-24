@@ -2701,11 +2701,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var rows = toks.map(function (t) {
         var proj = (t.projects || []).join(', ');
         var created = t.createdAt ? String(t.createdAt).slice(0, 10) : '';
-        var status = t.revokedAt ? '<span class="pill bad">revoked</span>' : '<span class="pill ok">active</span>';
-        var action = t.revokedAt ? '' : '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
-        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + status + '</td><td>' + action + '</td></tr>';
+        var action = '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
+        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + action + '</td></tr>';
       }).join('');
-      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
       Array.prototype.forEach.call(host.querySelectorAll('button[data-tok]'), function (btn) {
         btn.addEventListener('click', function () {
           btn.disabled = true; btn.textContent = 'Revoking…';

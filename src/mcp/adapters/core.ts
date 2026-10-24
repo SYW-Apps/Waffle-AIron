@@ -15,6 +15,7 @@ export {
   loadInterfaceSpec,
   loadImplementationSpec,
   loadTypeSpec,
+  loadGroupSpecs,
   resolveChainingParent,
   createMember,
   moveMember,

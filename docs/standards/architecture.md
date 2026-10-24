@@ -42,6 +42,9 @@ The labels L0–L5 walk down containment first, then refinement:
   .index.yaml                      ← L0  system: vision, boundaries, global requirements
   types/                           ← shared value objects (Money, Address, Email …)
     money.yaml
+    <group>/                       ← an optional type group: a folder of types (see §6)
+      .index.yaml                  ←   the group (id, name, parent); its types sit beside it
+      <child-group>/               ←   a child group: the folders mirror the parent chain
   <subsystem>/                     ← L1  a bounded context / service
     .index.yaml                    ← L1  public interface(s) the service exposes
     types/                         ← entities/aggregates owned by THIS subsystem (e.g. order.yaml)
@@ -415,6 +418,22 @@ contract** (its L1 public interface) or hold a **local projection/DTO** (an
 anti-corruption view) — they do not share or redefine the owning aggregate. An L3
 interface references types by id, so signatures stay structured (which also makes
 data-model/ER diagrams derivable — see §14).
+
+### Type groups: organizing a large type surface
+
+A shared contracts library can hold hundreds of types. A **type group** is a named folder of
+types (`sdd_add_group`), and groups form a **tree**: a group may name a `parent`, and its folder
+sits inside its parent's (`types/<root>/<child>/`). A type joins a group by naming it (`group`),
+and moves between groups by changing it — its file follows. Groups are **layout and
+presentation, never design**: type ids stay bare and project-global, no reference resolves
+through a group, and grouping or re-parenting changes nothing a consumer spells. A group lives in
+the shared `types/` folder or in one subsystem's `types/` (its *home*), and a group and its
+parent share one home. The `type-groups` rule judges the tree: a type naming a group no spec
+declares (`TYPE_GROUP_UNKNOWN`), a parent that does not exist (`GROUP_PARENT_UNKNOWN`) or lives
+in another home (`GROUP_PARENT_CROSS_HOME`), a parent chain that loops (`GROUP_CYCLE`) are
+errors; a file outside the folder its chain names is `TYPE_GROUP_MISPLACED`, a warning
+`wairon doctor --fix` repairs by moving the file. The design export carries the tree as
+`typeGroups`; the canvas folds a large type surface by group.
 
 ### Type expressions: one neutral grammar
 

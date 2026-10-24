@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { HostedUserRecord, UnitIdRemap } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // User Repository (sdd_host)
@@ -59,10 +60,19 @@ function loadStore(dataDir: string): HostedUserRecord[] {
  * write-temp-then-rename, so a crash never truncates the file and readers never
  * observe a half-written state. Only called by the registry after a mutation.
  */
-function replaceAll(dataDir: string, records: HostedUserRecord[]): void {
+function update(dataDir: string, change: (records: HostedUserRecord[]) => HostedUserRecord[]): HostedUserRecord[] {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(records, null, 2) + '\n');
+  return withFileLock(p, () => {
+    const current = readJsonForUpdate<unknown>(p, []);
+    if (!Array.isArray(current)) {
+      throw new Error(`Malformed hosted-user store at ${p}: expected a JSON array of user records.`);
+    }
+    const before = JSON.stringify(current);
+    const next = change(current as HostedUserRecord[]);
+    if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 // ── Registry (write path) ──────────────────────────────────────────────────
@@ -76,17 +86,16 @@ function replaceAll(dataDir: string, records: HostedUserRecord[]): void {
  * authoritative type wins and no updatedAt is written.
  */
 function registryUpsert(dataDir: string, record: HostedUserRecord): HostedUserRecord {
-  const records = loadStore(dataDir);
-  const idx = records.findIndex((r) => r.id === record.id);
-  let stored: HostedUserRecord;
-  if (idx === -1) {
-    stored = { ...record, createdAt: new Date().toISOString() };
-    records.push(stored);
-  } else {
+  let stored!: HostedUserRecord;
+  update(dataDir, (records) => {
+    const idx = records.findIndex((r) => r.id === record.id);
+    if (idx === -1) {
+      stored = { ...record, createdAt: new Date().toISOString() };
+      return [...records, stored];
+    }
     stored = { ...record, createdAt: records[idx].createdAt };
-    records[idx] = stored;
-  }
-  replaceAll(dataDir, records);
+    return records.map((r, i) => (i === idx ? stored : r));
+  });
   return stored;
 }
 
@@ -99,14 +108,15 @@ function registrySetStatus(dataDir: string, id: string, status: string): HostedU
   if (!VALID_STATUSES.includes(status)) {
     throw new Error(`Invalid user status "${status}" (allowed: ${VALID_STATUSES.join(', ')}).`);
   }
-  const records = loadStore(dataDir);
-  const idx = records.findIndex((r) => r.id === id);
-  if (idx === -1) {
-    throw new Error(`Hosted user "${id}" not found.`);
-  }
-  const stored: HostedUserRecord = { ...records[idx], status };
-  records[idx] = stored;
-  replaceAll(dataDir, records);
+  let stored!: HostedUserRecord;
+  update(dataDir, (records) => {
+    const idx = records.findIndex((r) => r.id === id);
+    if (idx === -1) {
+      throw new Error(`Hosted user "${id}" not found.`);
+    }
+    stored = { ...records[idx], status };
+    return records.map((r, i) => (i === idx ? stored : r));
+  });
   return stored;
 }
 
@@ -127,7 +137,7 @@ function registryRemapUnitReferences(
   if (remap.length === 0 && removedScopeIds.length === 0) return;
   const lookup = new Map(remap.map((r) => [r.oldId, r.newId]));
   const removed = new Set(removedScopeIds);
-  const records = loadStore(dataDir);
+  update(dataDir, (records) => {
   let changed = false;
 
   const rewritten = records.map((record) => {
@@ -160,8 +170,8 @@ function registryRemapUnitReferences(
     return next;
   });
 
-  if (!changed) return;
-  replaceAll(dataDir, rewritten);
+  return changed ? rewritten : records;
+  });
 }
 
 // ── Index (read path) ──────────────────────────────────────────────────────

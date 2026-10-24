@@ -199,20 +199,21 @@ export function lockTree(root: string): void {
 export const LOCK_IGNORE_LINE = '.spec-write.lock*';
 
 /**
- * Keep the lock's files out of git: .wai/.gitignore is created when absent and
- * gains the line when it lacks it (a tree from before 6.2 ignored only the
- * single `.spec-write.lock`, while every generation now leaves a file behind);
- * anything else in it is kept. Best effort: a read-only tree still locks.
+ * Keep the lock's files out of git: a .wai/.gitignore that exists gains the
+ * line when it lacks it (a tree from before 6.2 ignored only the single
+ * `.spec-write.lock`, while every generation now leaves a file behind);
+ * anything else in it is kept. A tree without one is not given one here:
+ * `wairon init` writes it, and taking a lock must add no file to every tree it
+ * guards (a refused family migration leaves the family byte-identical).
+ * Best effort: a read-only tree still locks.
  */
 export function ignoreLockFiles(waiDir: string): void {
   const file = path.join(waiDir, '.gitignore');
   try {
-    const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
-    if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === LOCK_IGNORE_LINE)) return;
-    const body = held === null
-      ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${LOCK_IGNORE_LINE}\n`
-      : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${LOCK_IGNORE_LINE}\n`;
-    fs.writeFileSync(file, body);
+    if (!fs.existsSync(file)) return;
+    const held = fs.readFileSync(file, 'utf8');
+    if (held.split(/\r?\n/).some((l) => l.trim() === LOCK_IGNORE_LINE)) return;
+    fs.writeFileSync(file, `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${LOCK_IGNORE_LINE}\n`);
   } catch {
     /* the lock itself does not depend on it */
   }
