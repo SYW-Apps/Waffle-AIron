@@ -768,7 +768,7 @@ With inputs (all optional):
       strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
       validate: true                    # also run `wairon validate --ci` there (default: true)
       install: auto                     # the project's dependencies before validate: auto | none | <command> (default: auto)
-      node-version: '20'                # (default: '20')
+      node-version: '24'                # (default: '24')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
 ```
 
@@ -829,7 +829,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm install --global @wairon/cli@<version>   # the version you lock with (wairon --version)
       - run: wairon lock-check --strict
       - run: npm ci                                    # the project's dependencies: the gate reads your code with your TypeScript (5 or 6)

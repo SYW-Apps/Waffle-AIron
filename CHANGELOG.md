@@ -8,8 +8,10 @@ npm and the tags carry.
 
 Upgrading: nothing in a spec tree has to change.
 
-1. Install 6.2.0. Installed through npm, it runs on your own Node.js: update that to 24.22.1,
-   22.23.4 or 26.12.1 or later first (the October 2026 Node.js security release).
+1. Install 6.2.0. Installed through npm, it runs on your own Node.js, and it now requires a
+   release with the October 2026 Node.js security fixes: 22.23.4+, 24.22.1+ or 26.12.1+
+   (`engines`: `^22.23.4 || ^24.22.1 || >=26.12.1`; Node.js 18 and 20 get no fix). Update
+   Node.js first. The release binaries and the Docker image carry their own Node.js 24.22.1.
 2. Run `wairon generate` to refresh the guides and skills (`wairon doctor` reports them stale
    until you do), then reconnect your assistant's MCP server so it runs the new release.
 3. Commit the regenerated files.
@@ -57,8 +59,9 @@ Two things to know:
   of life). 24.22.1 carries the October 2026 Node.js security release, including
   CVE-2026-111497 in the bundled Brotli decoder, which wairon reaches through `fetch` (sign-in
   discovery, remote servers, git sources, producers). The Docker image already runs 24.22.1.
-  **Installed through npm, wairon runs on your own Node.js: update it to 24.22.1, 22.23.4 or
-  26.12.1 or later.**
+  **Installed through npm, wairon runs on your own Node.js, and its `engines` now names only
+  the fixed releases (22.23.4+, 24.22.1+, 26.12.1+).** The reusable `lock-check.yml` workflow
+  installs the CLI on Node.js 24 by default (it was 20).
 - **The canvas escapes every name it shows.** The breadcrumbs, the flow view's crumb and its call
   links put spec names into the page unescaped, and attribute values did not escape quotes. On a
   hosted server, anyone who could edit a design could put markup into another user's view.
