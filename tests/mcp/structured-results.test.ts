@@ -313,6 +313,10 @@ describe('the tools answer with data, and still with the same sentence', () => {
     const status = await call('sdd_get_status', {});
     expect(status.structuredContent.validatorVersion).toBe(WAIRON_VERSION);
     expect(textOf(status).trimEnd().split(String.fromCharCode(10)).pop()).toBe(`wairon ${WAIRON_VERSION}`);
+    // The structured twin is the whole answer, not the release alone: a client
+    // that reads structuredContent instead of the text sees the tree and the approval.
+    expect(status.structuredContent.report).toBe(textOf(status));
+    expect(status.structuredContent.report).toContain('Approval:');
   }, 60_000);
 
   // -------------------------------------------------------------------------

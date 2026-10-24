@@ -6,7 +6,14 @@ npm and the tags carry.
 
 ## v6.2.0 (from v6.1.4)
 
-Upgrading: install 6.2.0. Nothing in a spec tree has to change. Two things to know:
+Upgrading: nothing in a spec tree has to change.
+
+1. Install 6.2.0.
+2. Run `wairon generate` to refresh the guides and skills (`wairon doctor` reports them stale
+   until you do), then reconnect your assistant's MCP server so it runs the new release.
+3. Commit the regenerated files.
+
+Two things to know:
 
 - Do not run two wairon versions on one tree at the same time. The spec-tree write lock now keeps its files
   in a folder, `.wai/.spec-write.lock/`; an older wairon that finds that folder refuses to write
@@ -37,7 +44,8 @@ Upgrading: install 6.2.0. Nothing in a spec tree has to change. Two things to kn
   nothing approvable is reported as a notice (`MEMBER_NOTHING_APPROVABLE`).
 - **The running version is in every reading.** `sdd_get_status` and `sdd_validate_tree` carry
   `validatorVersion`, and `wairon validate` prints it on its closing line, so a pasted result
-  says which release produced it.
+  says which release produced it. `sdd_get_status` now answers in structured content too: the
+  whole report (`report`) beside the version.
 - **`wairon surface diff` reports a reordered type's fields** (a field-order row), which matters
   to positional bindings even when no field was added or removed.
 - **The generated guides name `wairon dev`** as the way to browse a design locally.

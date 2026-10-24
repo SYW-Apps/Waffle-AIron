@@ -1525,8 +1525,10 @@ self-hosting, auth, and sizing.
 Run **one server per data directory**: scale up (a bigger machine), not out.
 Several replicas sharing one data directory over a network volume are not
 supported. The admin CLI (`wairon host …`) may run beside the server on the same
-data directory; until a later release locks them too, run changes to permission grants, the organization,
-roles and policy one at a time rather than in parallel.
+data directory, and its changes may run in parallel: every hosted store locks its writes. Each
+store keeps its latest lock files (`<file>.lock.<n>` and `<file>.lock.<n>.end`) beside its file
+between writes. They are not leftovers: the lock numbers its next generation from them, so do not
+delete them.
 
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`
 Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,

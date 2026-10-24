@@ -149,12 +149,14 @@ methods:
       Tool: the spec tree as a structure, with each level's completeness (types counted per
       subsystem and per type group); each member prints as a project holding its own subsystems.
       Optionally narrowed to one subsystem, and optionally descending into members. The structured
-      content carries `validatorVersion` (the running server's wairon release,
-      StatusReport.validatorVersion) beside the text, which also ends with `wairon <version>`. On a
-      stale server the answer LEADS with the staleness — whether the build on disk changed and
-      whether spec writes are refused because its schemas changed — so the first call of a session
-      surfaces it before anything is written; an unfinished family-migration transaction under the
-      bound root leads likewise, one notice line each, pointing at `wairon doctor --fix`.
+      content carries the whole answer as `report` (exactly the text block, so a client that reads
+      only the structured content sees the tree and the approval verdict, not just a release) and
+      `validatorVersion` (the running server's wairon release, StatusReport.validatorVersion); the
+      text also ends with `wairon <version>`. On a stale server the answer LEADS with the staleness
+      — whether the build on disk changed and whether spec writes are refused because its schemas
+      changed — so the first call of a session surfaces it before anything is written; an unfinished
+      family-migration transaction under the bound root leads likewise, one notice line each,
+      pointing at `wairon doctor --fix`.
     signature: 'getStatus(subsystem?: string, recursive?: bool): string'
     returns: string
     params:
@@ -1381,4 +1383,4 @@ methods:
       method: tools/call sdd_add_group
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-23T22:20:36.056Z'
+updatedAt: '2026-10-24T14:23:42.227Z'
