@@ -68,7 +68,11 @@ methods:
       through the app's open-project hook; a node without one is drawn unlinked. Each consumption
       edge carries its relation's health (ok, drifted, incompatible, unavailable) from the same
       comparison the Relations tab shows, read within the same reach — the caller's listed projects
-      — so a member or producer out of that reach is unavailable, never ok.
+      — so a member or producer out of that reach is unavailable, never ok. The answer is a model
+      whenever ANYTHING loaded: a tree that fails to load or validate in part is drawn partially,
+      with what failed carried as findings (a finding naming no spec when no spec can carry it), and
+      only a tree that yields nothing at all answers an empty model holding that one error finding.
+      A failed build is never an HTTP error in place of a graph.
     signature: 'getProjectCanvasModel(sessionId: string, projectId: string): CanvasModel'
     returns: CanvasModel
     params:
@@ -135,4 +139,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-11T11:33:03.119Z'
-updatedAt: '2026-10-06T13:14:49.261Z'
+updatedAt: '2026-10-23T22:30:25.237Z'

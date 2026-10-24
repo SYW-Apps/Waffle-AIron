@@ -367,8 +367,7 @@ describe('identity SSO orchestrator (sdd_host)', () => {
     await expect(identity.completeSsoLogin(cfg, s2, 'code-2')).rejects.toThrow(ForbiddenError);
 
     // … and no fresh (active) credential was minted for the refused login.
-    const active = listCredentials(dataDir, '*').filter((r) => !r.revokedAt);
-    expect(active).toHaveLength(0);
+    expect(listCredentials(dataDir, '*')).toHaveLength(0);
   });
 
   // ── state integrity ────────────────────────────────────────────────────────

@@ -45,6 +45,7 @@ import type { PackImpact } from '../models/pack-impact.js';
 import type { ExternalStatus } from '../models/index.js';
 import { readExternalSource } from '../models/project.js';
 import type {
+  DevStatus,
   ApiKeyRecord,
   ApprovalDecision,
   ApprovalRequest,
@@ -531,6 +532,15 @@ export function getProjectCanvas(cfg: HostConfig, sessionId: string, projectId: 
  */
 export function getProjectCanvasModel(cfg: HostConfig, sessionId: string, projectId: string): unknown {
   return getWebProjectCanvasModel(cfg, sessionId, projectId); // step 1 (delegate)
+}
+
+/**
+ * Return what did not load of the local development server's family, by
+ * delegating to the web project orchestrator (a live read; devMode false on a
+ * hosted instance).
+ */
+export function getDevStatus(cfg: HostConfig, sessionId: string): DevStatus {
+  return webproject.devStatus(cfg, sessionId); // step 1 (delegate)
 }
 
 /**
@@ -2691,11 +2701,10 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       var rows = toks.map(function (t) {
         var proj = (t.projects || []).join(', ');
         var created = t.createdAt ? String(t.createdAt).slice(0, 10) : '';
-        var status = t.revokedAt ? '<span class="pill bad">revoked</span>' : '<span class="pill ok">active</span>';
-        var action = t.revokedAt ? '' : '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
-        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + status + '</td><td>' + action + '</td></tr>';
+        var action = '<button class="mini danger" data-tok="' + esc(t.id) + '">Revoke</button>';
+        return '<tr><td>' + esc(t.id) + '</td><td>' + esc(proj) + '</td><td>' + esc(created) + '</td><td>' + action + '</td></tr>';
       }).join('');
-      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      host.innerHTML = '<table class="grid"><thead><tr><th>Token ID</th><th>Project</th><th>Created</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
       Array.prototype.forEach.call(host.querySelectorAll('button[data-tok]'), function (btn) {
         btn.addEventListener('click', function () {
           btn.disabled = true; btn.textContent = 'Revoking…';
@@ -2725,7 +2734,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
     if (canManage) {
       html += '<div class="formcard"><h3>Create a project</h3>';
       html += '<div class="frow">'
-        + fcol('Project ID', '<input id="npId" placeholder="lowercase letters, digits, hyphen" />')
+        + fcol('Project ID', '<input id="npId" placeholder="billing, my_service.v2 (lowercase letters, digits, - _ .)" />')
         + fcol('Organization unit', '<input id="npUnit" placeholder="required owner unit id" />')
         + fcol('Profiles (comma-sep, optional)', '<input id="npProfiles" placeholder="e.g. backend, strict" />')
         + '</div>';
@@ -3585,6 +3594,13 @@ export async function handleWebRequest(
     if (req.method === 'GET' && parts.length === 2 && parts[1] === 'canvas-model') {
       const projectId = url.searchParams.get('projectId') ?? '';
       return sendJson(res, 200, getProjectCanvasModel(cfg, sessionId, projectId));
+    }
+
+    // GET /web/dev/status → what did not load of the dev server's family (unreadable
+    // members, each with its reason). DEV MODE ONLY: under a hosted instance the
+    // route does not exist.
+    if (cfg.devMode === true && req.method === 'GET' && parts.length === 3 && parts[1] === 'dev' && parts[2] === 'status') {
+      return sendJson(res, 200, getDevStatus(cfg, sessionId));
     }
 
     // GET /web/projects/externals?projectId= → one authorized project's relation

@@ -39,9 +39,11 @@ import {
   type DesignParam,
   type DesignSubsystem,
   type DesignType,
+  type DesignTypeGroup,
   type DesignTypeRef,
   type ExternalBinding,
   type ExternalsLock,
+  type GroupSpec,
   type ImplementationSpec,
   type ProjectFamily,
   type InterfaceSpec,
@@ -62,6 +64,7 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadGroupSpecs,
   resolveProjectExports,
   resolveSubsystemExports,
   loadProjectConfig,
@@ -268,7 +271,7 @@ function projectSection(system: SystemSpec, table: ResolvedExport[], keys: KeyTa
 }
 
 /** Step 23: one externals binding as a DesignDependency, with the digest its lock entry pins. */
-function dependency(binding: ExternalBinding, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
+function dependency(binding: ExternalBinding, lock: ExternalsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
   const alias = binding.external.alias;
   const digest = ownGet(lock?.externals, alias)?.digest;
   return {
@@ -276,12 +279,12 @@ function dependency(binding: ExternalBinding, lock: ExternalsLock | null, keys: 
     projectId: binding.external.project,
     role: binding.external.role,
     ...(digest !== undefined ? { digest } : {}),
-    uses: [...new Set([...(binding.usage?.used ?? []).map((u) => u.publicName), ...(keys.used.get(alias) ?? [])])].sort(compareOrdinal),
+    uses: [...new Set([...(binding.usage?.used ?? []).map((u) => u.publicName), ...(used.get(alias) ?? [])])].sort(compareOrdinal),
   };
 }
 
 /** Step 23: one direct project member not among the externals, as a DesignDependency (role member). */
-function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null, keys: KeyTable): DesignDependency {
+function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null, used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency {
   const digest = ownGet(lock?.externals, member.alias)?.digest;
   return {
     alias: member.alias,
@@ -289,7 +292,7 @@ function memberDependency(member: MemberPublicNames, lock: ExternalsLock | null,
     role: 'member',
     ...(digest !== undefined ? { digest } : {}),
     // Every public name a reference reaches (the graph's), and every one the projection wrote.
-    uses: [...new Set([...(member.referenced ?? []), ...(keys.used.get(member.alias) ?? [])])].sort(compareOrdinal),
+    uses: [...new Set([...(member.referenced ?? []), ...(used.get(member.alias) ?? [])])].sort(compareOrdinal),
   };
 }
 
@@ -515,8 +518,20 @@ function typeSection(t: TypeSpec, keys: KeyTable): DesignType {
     ...(t.database !== undefined ? { database: t.database } : {}),
     ...(t.table !== undefined ? { table: t.table } : {}),
     ...(t.linkedEntity !== undefined ? { linkedEntity: keys.typeKey(t.linkedEntity, owner) ?? keys.external(t.linkedEntity) } : {}),
+    ...(t.group !== undefined && t.group !== '' ? { group: t.group } : {}),
     formerly: [...(t.previousIds ?? [])],
     ...(t.ext !== undefined ? { ext: t.ext } : {}),
+  };
+}
+
+/** One type group as DesignTypeGroup: layout only, its parent named by key. */
+function typeGroupSection(g: GroupSpec): DesignTypeGroup {
+  return {
+    key: g.id,
+    name: g.name,
+    ...(g.description !== undefined ? { description: g.description } : {}),
+    ...(g.parent !== undefined ? { parent: g.parent } : {}),
+    ...(g.subsystem !== undefined ? { subsystem: g.subsystem } : {}),
   };
 }
 
@@ -545,6 +560,49 @@ function projectIdOf(system: SystemSpec): string {
   }
 }
 
+/** The externals lock, for each dependency's pinned digest; one that is absent or cannot be read pins nothing. */
+function readLockOrNull(): ExternalsLock | null {
+  try {
+    return externalsRepository.readLock();
+  } catch {
+    return null;
+  }
+}
+
+/** The dependency list: each externals binding, then each direct member not among them, sorted by alias. */
+function composeDependencies(
+  bindings: ExternalBinding[],
+  members: MemberPublicNames[],
+  lock: ExternalsLock | null,
+  used: ReadonlyMap<string, ReadonlySet<string>>,
+): DesignDependency[] {
+  const externalAliases = new Set(bindings.map((b) => b.external.alias));
+  return [
+    ...bindings.map((b) => dependency(b, lock, used)),
+    ...members.filter((m) => !externalAliases.has(m.alias)).map((m) => memberDependency(m, lock, used)),
+  ].sort((a, b) => compareOrdinal(a.alias, b.alias));
+}
+
+/** The dependency list with the public names the projection wrote folded into each one's uses. */
+function foldUsedNames(listed: DesignDependency[], used: ReadonlyMap<string, ReadonlySet<string>>): DesignDependency[] {
+  return listed.map((d) => {
+    const extra = used.get(d.alias);
+    return extra === undefined ? d : { ...d, uses: [...new Set([...d.uses, ...extra])].sort(compareOrdinal) };
+  });
+}
+
+/**
+ * idesign_exporter.dependencies — the project's dependencies as the export lists
+ * them, sorted by alias: each externals binding bound to the digest the externals
+ * lock pins for it, then each direct project member with the public names it
+ * publishes. Read-only; no other section of the export depends on it. The names
+ * are the ones the project graph and the externals usage report; exportDesign
+ * additionally folds in the names its own projection wrote.
+ */
+export function dependencies(): DesignDependency[] {
+  return composeDependencies(resolveExternals(), directMembers(projectFamily()), readLockOrNull(), new Map());
+}
+
 /**
  * idesign_exporter.exportDesign — project the bound project's whole design,
  * resolved, into one DesignExport. The approval verdict is the one the CALLER
@@ -562,6 +620,8 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
   const interfaces = loadInterfaceSpecs().filter(isOwn);
   const implementations = loadImplementationSpecs().filter(isOwn);
   const types = loadTypeSpecs().filter(isOwn);
+  // Step 9: the type groups, the layout tree the types sit in.
+  const groups = loadGroupSpecs().filter(isOwn);
 
   // Steps 9-11: the resolved project table and each subsystem's own.
   const projectTable = resolveProjectExports();
@@ -569,17 +629,8 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
 
   // Steps 12-13: the project's id and its externals.
   const projectId = projectIdOf(system);
-  const bindings = resolveExternals();
   // Steps 14-16: its direct project members and the names each publishes.
   const members = directMembers(projectFamily());
-  // Step 17: the externals lock, for each dependency's pinned digest; one
-  // that is absent or cannot be read pins nothing.
-  let lock: ExternalsLock | null = null;
-  try {
-    lock = externalsRepository.readLock();
-  } catch {
-    lock = null;
-  }
   // Step 18: the content identity.
   const stateId = computeStateId();
 
@@ -612,11 +663,9 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
     })
     .sort(byKey);
   const typeSections = types.map((t) => typeSection(t, keys)).sort(byKey);
-  const externalAliases = new Set(bindings.map((b) => b.external.alias));
-  const dependencies = [
-    ...bindings.map((b) => dependency(b, lock, keys)),
-    ...members.filter((m) => !externalAliases.has(m.alias)).map((m) => memberDependency(m, lock, keys)),
-  ].sort((a, b) => compareOrdinal(a.alias, b.alias));
+  // Step 13: the dependency section, with the public names the projection above wrote.
+  const dependencySection = foldUsedNames(dependencies(), keys.used);
+  const typeGroups = groups.map(typeGroupSection).sort(byKey);
 
   const design: DesignExport = {
     format: DESIGN_FORMAT,
@@ -624,12 +673,13 @@ export function exportDesign(approval?: DesignApproval): DesignExport {
     generator: WAIRON_VERSION,
     source,
     project,
-    dependencies,
+    dependencies: dependencySection,
     subsystems: subsystemSections,
     components: componentSections,
     interfaces: interfaceSections,
     implementations: implementationSections,
     types: typeSections,
+    ...(typeGroups.length > 0 ? { typeGroups } : {}),
   };
 
   // Steps 24-25: what is left out was never projected; sorted keys throughout, and the export.

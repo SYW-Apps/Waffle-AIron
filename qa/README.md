@@ -36,7 +36,7 @@ mkdir -p "$QA_FINDINGS_DIR"
 ```bash
 git checkout dev && git pull
 git rev-parse HEAD            # this is the RC: write it down
-npm ci && npm run build
+npm ci && npm run build:web && npm run build    # build:web too: the web app ships rebuilt
 ```
 
 From here only QA fixes land on dev. Note that sha: it goes into the verdict.

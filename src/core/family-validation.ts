@@ -26,6 +26,7 @@ import {
   loadProjectExtensions,
   packManifest,
   loadSubsystemSpecs,
+  holdsDesign,
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
@@ -100,6 +101,8 @@ const FAMILY_SEVERITY: Record<string, IssueSeverity> = {
   PROJECT_ID_COLLISION: 'error',
   PROJECT_DEPENDENCY_CYCLE: 'warning',
   MEMBER_UNAPPROVED: 'warning',
+  // A never-approved member whose own tree holds nothing below its L0: nothing to lock there yet.
+  MEMBER_NOTHING_APPROVABLE: 'notice',
   MEMBER_DRIFTED: 'warning',
   PROJECT_ID_DEFAULTED: 'notice',
   PROJECT_ID_AMBIGUOUS: 'warning',
@@ -407,6 +410,7 @@ export function run(options: ValidationOptions): ValidationResult {
   return {
     valid: issues.every((i) => i.severity !== 'error'),
     issues,
+    validatorVersion: WAIRON_VERSION,
     projects,
     ...(hint ? { hint } : {}),
     ...(composed.length ? { composed } : {}),
@@ -772,6 +776,11 @@ function cycleFindings(family: ProjectFamily, config: ProjectConfig | null): (Va
 
 /** Step 4: a present member's approval state as a family finding; null when it is approved. */
 function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): ValidationIssue | null {
+  if (entry.state === 'never' && entry.approvable === false) {
+    return finding(config, 'MEMBER_NOTHING_APPROVABLE',
+      `The member ${named(entry.key)} has never been locked, and its tree holds nothing below its L0 to approve yet (no subsystem, no type, no export entry, no member project): there is nothing approvable there yet.`,
+      entry.key);
+  }
   if (entry.state === 'never') {
     return finding(config, 'MEMBER_UNAPPROVED',
       `The member ${named(entry.key)} has never been locked: nobody has approved its design. Lock it at its own root (\`wairon lock\`).`,
@@ -813,7 +822,7 @@ function approvalFinding(entry: ProjectApproval, config: ProjectConfig | null): 
 /**
  * ifamily_validator.checkMembers — the family checks over the root's graph:
  * MEMBER_NOT_FOUND, PROJECT_ID_COLLISION, a member's defaulted or missing id,
- * PROJECT_DEPENDENCY_CYCLE, MEMBER_UNAPPROVED and MEMBER_DRIFTED. Each at the
+ * PROJECT_DEPENDENCY_CYCLE, MEMBER_UNAPPROVED, MEMBER_NOTHING_APPROVABLE and MEMBER_DRIFTED. Each at the
  * root's sddRuleSeverity override, else the code's default.
  */
 export function checkMembers(family: ProjectFamily): ValidationIssue[] {
@@ -925,6 +934,8 @@ function approvalAt(node: Pick<ProjectNode, 'namespace' | 'mountAlias' | 'parent
       ...(node.parent !== undefined ? { parent: node.parent } : {}),
       ...(node.id !== undefined ? { projectId: node.id } : {}),
       state: 'never',
+      // Judged at its own root by the shared predicate: false only for an L0 with nothing below it.
+      approvable: holdsDesign(),
     };
     // Step 7: none is never; a matching identity is approved — for a format-2
     // record, matching the identity recomputed under its own algorithm

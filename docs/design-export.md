@@ -30,10 +30,11 @@ and stamps it. It also exports a tree that is not approved, stamped with its sta
 ## Compatibility promise
 
 - **`format`** is always `"wairon-design"`.
-- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.1`. 2.0 is the reachability
+- **`formatVersion`** is `MAJOR.MINOR` and is currently `2.2`. 2.0 is the reachability
   model's: `portalType` became `transport`, listener `mounts` are gone, a Portal may carry
   the `invokedBy` entry its verbs inherit, and `invokedBy` kinds are `entry | runtime` with a
-  `scope`. 2.1 adds `detailStated` to each method body.
+  `scope`. 2.1 adds `detailStated` to each method body. 2.2 adds the type group tree
+  (`typeGroups`) and each type's `group`.
   - **A minor version only adds.** It adds new fields, or new members of a closed set (a
     `role`, an approval state). A consumer must **ignore fields it does not know**. A 1.x
     document validates against `design-export-2.json`.
@@ -104,6 +105,7 @@ binds no exported name stays as written; the validator reports it.
 | `project` | The L0 of the exported project. |
 | `dependencies` | The other projects this project depends on. They are listed, never inlined. |
 | `subsystems`, `components`, `interfaces`, `implementations`, `types` | The design itself, one list per level. |
+| `typeGroups` | The type group tree, sorted by key. Omitted when the project has no groups. See [`typeGroups`](#typegroups-design_type_group). |
 
 ### `source` (`design_source`)
 
@@ -236,7 +238,21 @@ A type carries:
 - `invariants`;
 - `componentClass`, a key;
 - `database`, `table` and `linkedEntity`;
+- `group`, the key of the type group it sits in (absent for an ungrouped type);
 - `formerly` and `ext`.
+
+### `typeGroups` (`design_type_group`)
+
+Type groups are a tree of folders over a project's types: layout and presentation only. A type's
+id stays bare and global whatever group it sits in, and no reference resolves through a group, so
+a generator can mirror the folders or a reader can group the type list, and ignore both without
+losing any meaning. Sorted by key; each entry carries:
+
+- `key`, the group's id (every `type.group` and every `parent` refers to a key in this list);
+- `name` and `description`;
+- `parent`, the key of the group it sits under (absent for a top-level group);
+- `subsystem`, the key of the subsystem whose types folder homes it (absent for the shared types
+  folder). A group and its parent share one home.
 
 ## What is left out, and why
 

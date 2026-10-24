@@ -17,6 +17,7 @@ import { typeExpressionsRule } from './integrity/type-expressions.js';
 import { enumTypesRule } from './integrity/enum-types.js';
 import { namedScalarTypesRule } from './integrity/named-scalar-types.js';
 import { renameTracesRule } from './integrity/rename-traces.js';
+import { typeGroupsRule } from './integrity/type-groups.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
 import { implementsContractsRule } from './integrity/implements-contracts.js';
@@ -161,6 +162,8 @@ export const SDD_RULES: SddRule[] = [
   typeExpressionsRule,
   enumTypesRule,
   namedScalarTypesRule,
+  // The type groups: the layout tree types sit in, and the files that follow it.
+  typeGroupsRule,
   // The rename traces: a former key a consumer resolves must name one element.
   renameTracesRule,
   // Contracts and the targets narratives name, in four questions with one

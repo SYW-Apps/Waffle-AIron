@@ -1,24 +1,27 @@
 id: iinstance_identity_store
 name: Instance Identity Store Interface
 description: >-
-  Private contract for the authoritative in-memory singleton InstanceIdentity record, loaded from
-  and swapped as one backing file (instance.json under the hosted data root).
+  Private contract for the singleton InstanceIdentity record: read-through file I/O over
+  instance.json under the hosted data root; the only change is an update under the file's write
+  lock.
 component: instance_identity_store
 methods:
   - name: load
     description: >-
-      Load the persisted instance identity from instance.json under the hosted data root and hold it
-      as the authoritative in-memory record; resolves null when the instance has never been seeded.
+      Read the persisted instance identity fresh from instance.json (no in-memory copy); null when
+      the instance has never been seeded.
     signature: 'load(): InstanceIdentity?'
     returns: InstanceIdentity?
     params: []
-  - name: replace
-    description: Swap the in-memory record to the supplied identity after the registry has persisted it.
-    signature: 'replace(identity: InstanceIdentity): void'
-    returns: void
-    params:
-      - name: identity
-        type: InstanceIdentity
+  - name: update
+    description: >-
+      Read the identity fresh (null when absent) and persist what the change makes of it, holding
+      the file's write lock (file_write_lock) across both, so two processes seeding at once cannot
+      each write a different identity: the second finds the first's record and the change keeps it.
+      A change that throws writes nothing. Answers the identity written.
+    signature: 'update(change: (identity: InstanceIdentity?) => InstanceIdentity): InstanceIdentity'
+    returns: InstanceIdentity
+    effect: write
 status: complete
 createdAt: '2026-07-16T00:24:07.724Z'
-updatedAt: '2026-10-04T10:18:56.911Z'
+updatedAt: '2026-10-23T22:21:40.529Z'

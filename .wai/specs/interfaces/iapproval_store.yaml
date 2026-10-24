@@ -1,22 +1,30 @@
 id: iapproval_store
 name: Approval Store Interface
-description: Private store contract for redacted hosted approval requests.
+description: >-
+  Private store contract for redacted hosted approval requests: read-through file I/O over
+  approvals.json. Every read parses the file fresh; there is no bare write - every change is an
+  update that reads the set and persists the replacement under the file's write lock, so a writer in
+  another process is never lost.
 component: approval_store
 methods:
   - name: load
-    description: Load persisted approval requests into the authoritative store representation.
+    description: >-
+      Read the persisted approval-request set fresh from approvals.json under the server data root
+      (no in-memory copy). A missing file yields an empty set; an unreadable file or structurally
+      invalid JSON fails with a storage error naming the path.
     signature: 'load(): list<ApprovalRequest>'
     returns: list<ApprovalRequest>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Replace the store contents with the supplied complete approval-request set after persistence
-      has succeeded.
-    signature: 'replaceAll(requests: list<ApprovalRequest>): void'
-    returns: void
-    params:
-      - name: requests
-        type: list<ApprovalRequest>
+      Read the approval-request set fresh and persist what the change makes of it, holding
+      approvals.json's write lock (file_write_lock) across both, so a writer in another process that
+      reads and writes the same file in between is never lost; a change that throws writes nothing;
+      a file that exists but cannot be read or parsed throws, so a change is never applied to a set
+      read as empty. Answers the set written.
+    signature: 'update(change: (requests: ApprovalRequest[]) => ApprovalRequest[]): ApprovalRequest[]'
+    returns: list<ApprovalRequest>
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -32,4 +40,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T19:30:32.368Z'
-updatedAt: '2026-10-04T22:34:52.924Z'
+updatedAt: '2026-10-23T22:18:11.836Z'

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { WAIRON_MAJOR, WAIRON_VERSION } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // What a tool answers WITH, as data rather than as a sentence.
@@ -54,6 +54,7 @@ const STRUCTURED_TOOLS = [
   'sdd_delete_spec',
   'sdd_get_spec',
   'sdd_validate_tree',
+  'sdd_get_status',
 ];
 
 describe('the tools answer with data, and still with the same sentence', () => {
@@ -303,6 +304,19 @@ describe('the tools answer with data, and still with the same sentence', () => {
     expect(report.errors.length + report.warnings.length).toBeGreaterThan(0);
     // The text block is still the same JSON payload.
     expect(JSON.parse(textOf(result))).toEqual(report);
+  }, 60_000);
+
+  it('sdd_validate_tree and sdd_get_status carry the running release (structured, and in the hint / closing line)', async () => {
+    const validated = await call('sdd_validate_tree', {});
+    expect(validated.structuredContent.validatorVersion).toBe(WAIRON_VERSION);
+    expect(validated.structuredContent.hint).toContain(`wairon ${WAIRON_VERSION}`);
+    const status = await call('sdd_get_status', {});
+    expect(status.structuredContent.validatorVersion).toBe(WAIRON_VERSION);
+    expect(textOf(status).trimEnd().split(String.fromCharCode(10)).pop()).toBe(`wairon ${WAIRON_VERSION}`);
+    // The structured twin is the whole answer, not the release alone: a client
+    // that reads structuredContent instead of the text sees the tree and the approval.
+    expect(status.structuredContent.report).toBe(textOf(status));
+    expect(status.structuredContent.report).toContain('Approval:');
   }, 60_000);
 
   // -------------------------------------------------------------------------

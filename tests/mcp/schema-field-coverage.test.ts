@@ -12,6 +12,7 @@ import {
   InterfaceSpecSchema,
   ImplementationSpecSchema,
   TypeSpecSchema,
+  GroupSpecSchema,
   TypeMethodSchema,
   MethodSignatureSchema,
   MethodImplementationSchema,
@@ -143,6 +144,13 @@ const KINDS: Record<string, KindSpec> = {
       previousIds: 'the rename trace — written only by the rename tools, unset to release the ids it holds',
     },
     method: { schema: TypeMethodSchema, updateSpecOnly: {} },
+  },
+  // A type group: every authored field is expressed by sdd_add_group; `kind` is the document discriminator, always `group`.
+  group: {
+    tool: 'sdd_add_group',
+    schema: GroupSpecSchema,
+    derived: ['kind'],
+    updateSpecOnly: {},
   },
 };
 

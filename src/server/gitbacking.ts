@@ -13,7 +13,8 @@ import {
 } from './organization.js';
 import { listProjectRecords, listFamilyRecords } from './projects.js';
 import { resolveGitToken, setSecret } from '../utils/secrets.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 import type {
   AuditEvent,
   AuditLevel,
@@ -84,11 +85,24 @@ class GitBackingStore {
     return parsed as GitBackingBinding[];
   }
 
-  /** Swap the persisted collection wholesale via write-temp-then-rename. */
-  replaceAll(bindings: GitBackingBinding[]): void {
+  /**
+   * igit_backing_store.update — under git-backing.json's write lock, read the
+   * collection fresh (absent is empty; unreadable or malformed throws and
+   * nothing is written), apply the change and replace the file atomically.
+   * Answers the collection written.
+   */
+  update(change: (bindings: GitBackingBinding[]) => GitBackingBinding[]): GitBackingBinding[] {
     const p = storePath(this.dataDir);
     fs.mkdirSync(path.dirname(p), { recursive: true });
-    replaceFile(p, JSON.stringify(bindings, null, 2) + '\n');
+    return withFileLock(p, () => {
+      const current = readJsonForUpdate<unknown>(p, []);
+      if (!Array.isArray(current)) {
+        throw new Error(`Malformed git-backing store at ${p}: expected a JSON array of bindings.`);
+      }
+      const next = change(current as GitBackingBinding[]);
+      replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
   }
 }
 
@@ -106,7 +120,6 @@ class GitBackingRegistry {
     if (binding.scopeKind === 'instance' && binding.scopeId) {
       throw new Error("An 'instance' backing binding names no scopeId.");
     }
-    const bindings = this.store.load();
     const stored: GitBackingBinding = {
       ...binding,
       id: binding.id || crypto.randomUUID(),
@@ -115,30 +128,18 @@ class GitBackingRegistry {
     // One binding per scope — a re-bind is a replacement, never a duplicate.
     const sameScope = (b: GitBackingBinding): boolean =>
       b.scopeKind === stored.scopeKind && (b.scopeId ?? '') === (stored.scopeId ?? '');
-    const next = [...bindings.filter((b) => !sameScope(b) && b.id !== stored.id), stored];
-    this.store.replaceAll(next);
+    this.store.update((bindings) => [...bindings.filter((b) => !sameScope(b) && b.id !== stored.id), stored]);
     return stored;
   }
 
   /** Remove one binding by id (absent = no-op). The repo itself is untouched. */
   removeBinding(bindingId: string): void {
-    const bindings = this.store.load();
-    const next = bindings.filter((b) => b.id !== bindingId);
-    if (next.length === bindings.length) return;
-    this.store.replaceAll(next);
+    this.store.update((bindings) => bindings.filter((b) => b.id !== bindingId));
   }
 
   /** Record lastSyncAt after a successful sweep (absent id = no-op). */
   touchSync(bindingId: string, syncedAt: string): void {
-    const bindings = this.store.load();
-    let changed = false;
-    const next = bindings.map((b) => {
-      if (b.id !== bindingId) return b;
-      changed = true;
-      return { ...b, lastSyncAt: syncedAt };
-    });
-    if (!changed) return;
-    this.store.replaceAll(next);
+    this.store.update((bindings) => bindings.map((b) => (b.id === bindingId ? { ...b, lastSyncAt: syncedAt } : b)));
   }
 }
 

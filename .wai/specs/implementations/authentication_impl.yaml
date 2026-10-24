@@ -205,12 +205,14 @@ methods:
         type: return
         outcome: unauthenticated
       - stepNumber: 5
-        description: Check the record's expiresAt and revokedAt fields
+        description: >-
+          Check the record's expiresAt field (a revoked credential is deleted, so a found record is
+          never revoked)
         type: local
       - stepNumber: 6
-        description: If the record is expired or revoked, reject
+        description: If the record is expired, reject
         type: branch
-        condition: the record is expired or revoked
+        condition: the record is expired
         onTrueStep: 7
         onFalseStep: 8
       - stepNumber: 7
@@ -392,12 +394,14 @@ methods:
         type: return
         outcome: unauthenticated
       - stepNumber: 17
-        description: Check the record's expiresAt and revokedAt fields
+        description: >-
+          Check the record's expiresAt field (a revoked credential is deleted, so a found record is
+          never revoked)
         type: local
       - stepNumber: 18
-        description: If the record is expired or revoked, reject
+        description: If the record is expired, reject
         type: branch
-        condition: the record is expired or revoked
+        condition: the record is expired
         onTrueStep: 19
         onFalseStep: 20
       - stepNumber: 19
@@ -479,4 +483,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-10-03T17:49:22.666Z'
+updatedAt: '2026-10-23T22:12:46.257Z'

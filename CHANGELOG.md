@@ -1,9 +1,134 @@
 # Changelog
 
-## v6.2.1 (from v6.2.0)
+The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped as
+6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
+npm and the tags carry.
 
-A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgrading: install
-6.2.1.
+## v6.2.0 (from v6.1.4)
+
+Upgrading: nothing in a spec tree has to change.
+
+1. Install 6.2.0. Installed through npm, it runs on your own Node.js, and it now requires a
+   release with the October 2026 Node.js security fixes: 22.23.4+, 24.22.1+ or 26.12.1+
+   (`engines`: `^22.23.4 || ^24.22.1 || >=26.12.1`; Node.js 18 and 20 get no fix). Update
+   Node.js first. The release binaries and the Docker image carry their own Node.js 24.22.1.
+2. Run `wairon generate` to refresh the guides and skills (`wairon doctor` reports them stale
+   until you do), then reconnect your assistant's MCP server so it runs the new release.
+3. Commit the regenerated files.
+
+Two things to know:
+
+- Do not run two wairon versions on one tree at the same time. The spec-tree write lock now keeps its files
+  in a folder, `.wai/.spec-write.lock/`; an older wairon that finds that folder refuses to write
+  (it never writes past it), so finish or close sessions of the old version before the new one
+  writes. A lock file a crashed older session left behind (`.wai/.spec-write.lock`) is taken over
+  once it is stale.
+- The local `wairon dev` server's data folder is disposable: a folder an older version wrote is
+  deleted and started fresh, never migrated. Nothing of a project's own lives there.
+
+### New
+
+- **Type groups form a tree.** A group may name a `parent` group (`sdd_add_group`, or
+  `sdd_update_spec` with `kind: group`), and the folders under `types/` follow the parent chain.
+  Groups are layout and presentation only: type ids stay bare and global and nothing resolves
+  through a group. `sdd_rename_spec` and `sdd_move_spec` take `kind: group` (a group moves with
+  its whole folder), the canvas clusters types by group, `sdd_get_status` / `wairon status`
+  count types per group, and the design export (format 2.2) carries the tree. New checks:
+  `TYPE_GROUP_UNKNOWN`, `GROUP_PARENT_UNKNOWN`, `GROUP_PARENT_CROSS_HOME`, `GROUP_CYCLE` and
+  `TYPE_GROUP_MISPLACED`; `wairon doctor --fix` moves a misplaced group folder or type file to
+  where its group puts it.
+- **`wairon dev` always starts.** It no longer refuses a tree with errors: the canvas shows what
+  could be read and a findings panel lists every finding, so the problems are visible where they
+  are. Data an older version left in its folder is discarded instead of failing the start, and a
+  banner says which project the server registered.
+- **A project of only types is a design.** Its types and its L0 export table are approved by
+  `wairon lock` like any other design; `status`, `validate` and `lock-check` no longer call it
+  empty. A tree with truly nothing approvable says so in one sentence, and a member project with
+  nothing approvable is reported as a notice (`MEMBER_NOTHING_APPROVABLE`).
+- **The running version is in every reading.** `sdd_get_status` and `sdd_validate_tree` carry
+  `validatorVersion`, and `wairon validate` prints it on its closing line, so a pasted result
+  says which release produced it. `sdd_get_status` now answers in structured content too: the
+  whole report (`report`) beside the version.
+- **`wairon surface diff` reports a reordered type's fields** (a field-order row), which matters
+  to positional bindings even when no field was added or removed.
+- **The generated guides name `wairon dev`** as the way to browse a design locally.
+
+### Fixed
+
+- **The release binaries run Node.js 24.22.1** (they embedded Node 20.18.0, which is past its end
+  of life). 24.22.1 carries the October 2026 Node.js security release, including
+  CVE-2026-111497 in the bundled Brotli decoder, which wairon reaches through `fetch` (sign-in
+  discovery, remote servers, git sources, producers). The Docker image already runs 24.22.1.
+  **Installed through npm, wairon runs on your own Node.js, and its `engines` now names only
+  the fixed releases (22.23.4+, 24.22.1+, 26.12.1+).** The reusable `lock-check.yml` workflow
+  installs the CLI on Node.js 24 by default (it was 20).
+- **The canvas escapes every name it shows.** The breadcrumbs, the flow view's crumb and its call
+  links put spec names into the page unescaped, and attribute values did not escape quotes. On a
+  hosted server, anyone who could edit a design could put markup into another user's view.
+- **Every hosted store locks its writes.** Permission grants, the organization and its
+  placements, roles, policy, approvals, audit, sessions, share links and the rest now read and
+  write under the file's lock, as the credential and project registries did in 6.1.4, so two
+  processes changing the same store at once no longer lose a change. A family migration holds the
+  stores' locks for its whole run. The lock is generation-numbered, so taking over a stale lock
+  can never end a lock another process took meanwhile.
+- **Hosted record ids are project ids.** A project whose id contains `.` or `_` (valid project
+  ids) can now be registered on the hosted server and by `wairon dev`; before, the record grammar
+  allowed only letters, digits and `-`, and such a member was refused.
+- **Revoked credentials are deleted**, not kept with a revocation time; records an older version
+  kept that way are dropped when the file is next read.
+- **Decorator metadata is read from the project's `tsconfig.json`.** A type-only import counts as
+  a runtime use only when the nearest `tsconfig.json` turns decorator metadata on.
+
+### Known limitations
+
+- Two CLI-side files are not locked yet: the remote binding (`wairon login`, `mcp install
+  --hosted`) and the user configuration. Two of those commands run at the same moment can lose
+  one change; run them one at a time.
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores, 60 s for
+  the spec tree) can be taken over while it still works. Its final write is refused when that
+  happened, which narrows the window to the write itself but does not close it.
+- A member project's own `wairon validate` does not show the network findings judged at the
+  family root (`EXPORT_BEYOND_NETWORK`, `GATEWAY_BYPASSED`); it only says they are judged
+  there. Run `wairon validate` at the family root to read them before changing a member's export
+  audience.
+- The code-vs-design gate does not report external I/O or libraries a component uses: I/O
+  outside an Adapter passes `validate --ci`. The "Never checked" line of `validate` says so.
+  (Carried from 6.1.3.)
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins. (Carried from 6.1.3.)
+
+### Also in this release
+
+- **CDN releases are published per platform plus an index.** The SYW CDN sits behind a 100 MB
+  request limit and the five archives are about 204 MB together, so the single publish request
+  of 6.1.4 was refused. Each platform is now its own exact release (`<version>-<target>`, no
+  aliases), verified by a public download, followed by the index release `<version>` whose
+  `version.json` (schema 2) names every archive by its exact URL and which alone moves
+  `latest` / `v<major>` / `beta` / `preview` (never over a newer version). The publisher also
+  refuses an incomplete archive set and any request over a 90,000,000-byte budget before
+  sending. A new `cdn-republish.yml` workflow republishes an existing tag with the fixed
+  publisher (a rerun of the original tag run would use the original script). See
+  `docs/cdn-release.md`.
+- **The code-versus-design check reads decorators per declaration.** An import used only as a
+  type counts as a runtime use under decorator metadata only when the annotated declaration
+  emits it: a property with its own decorator, a constructor parameter of a class that is
+  decorated or has a decorated constructor parameter, or a parameter of a decorated method. A
+  decorator on an unrelated method no longer turns a type-only import into an
+  `UNDECLARED_EXPORT`, and a class whose only decorator sits on a constructor parameter is no
+  longer missed.
+- **One file realizing two components:** a method whose implementation names its class
+  (`exportedVia`) is credited only to that class, so a caller importing the other component's
+  class gets its `UNDECLARED_EXPORT`.
+- **`wairon mcp install --hosted <url>/mcp`** finds a credential that `wairon login` stored
+  under the `/mcp` address too.
+- **Write locks:** a lock whose recorded process id cannot be checked (a corrupt record) is
+  treated as held until it is stale, not broken at once.
+- **`wairon host serve --port 0`** binds a free port and prints the one it bound.
+
+## v6.1.4 (from v6.1.3)
+
+A fix release from an outside review of 6.1.2/6.1.3. Nothing to do when upgrading: install
+6.1.4.
 
 - **Hosted registries no longer lose a concurrent write.** The credential and project registries
   read their whole file, changed it and wrote it back with nothing held in between, so two
@@ -42,9 +167,9 @@ A fix release from an outside review of 6.1.2/6.2.0. Nothing to do when upgradin
   rest) can still lose a change when two processes write the same file at the same moment, such
   as several `wairon host permission set`, `host unit create` or `host project create` commands
   run in parallel (a project created that way can miss its unit placement). Run such changes
-  one at a time; 6.2.2 gives every store the same lock.
+  one at a time; a later release gives every store the same lock.
 
-## v6.2.0 (from v6.1.2)
+## v6.1.3 (from v6.1.2)
 
 v6.2 holds a method's stated detail to what it states and says where a design leaves routes
 open, lets the design name callers it cannot show yet (a component's runtime hook, a planned
@@ -66,7 +191,7 @@ Who is affected:
 
 ### Upgrading from v6.1.2
 
-1. Install 6.2.0 everywhere the project is checked: every teammate, CI, and the `wairon` your
+1. Install 6.1.3 everywhere the project is checked: every teammate, CI, and the `wairon` your
    assistant's MCP server starts. No `wairon upgrade` is needed: the tree stays on major 6.
 2. If you keep agent files on disk (`.claude/agents/` and the like) and your
    `.wai/project.yaml` does not state `rules.materializeAgentFiles`, add
@@ -74,7 +199,7 @@ Who is affected:
    it is there.
 3. Run `wairon generate` to refresh the guides and skills, then reconnect your assistant's MCP
    server (in Claude Code, `/mcp`) or start a new session.
-4. Run `wairon validate --ci` and `wairon lock-check`. The approval carries over unless 6.2.0's
+4. Run `wairon validate --ci` and `wairon lock-check`. The approval carries over unless 6.1.3's
    rules find something in the approved design; then fix what they name (for
    `PUBLIC_INTERFACE_NOT_PORTAL`: publish the Portal in front of the component, or drop the
    entry) and run `wairon lock`.

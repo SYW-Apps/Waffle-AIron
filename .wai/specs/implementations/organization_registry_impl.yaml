@@ -2,23 +2,31 @@ id: organization_registry_impl
 name: Organization Registry Implementation
 description: >-
   Write path for hosted organization units and project placements: id/timestamp stamping,
-  parent/unit referential validation, unit-tree cycle rejection, durable persistence, and store
-  refresh. Performs no authorization.
+  parent/unit referential validation, unit-tree cycle rejection and durable persistence. Performs no
+  authorization. Every operation is ONE store update: the unit and placement sets are read fresh
+  under organization.json's write lock, every validation runs on that fresh state as part of the
+  change, and the replacement is written before the lock is released - so a unit created or a
+  placement made by a writer in another process is never lost and never validated against a stale
+  view.
 contract: iorganization_registry
 sourcePath: src/server/organization.ts
 methods:
   - name: placeProject
     narrative: []
     intent: >-
-      Stamp the new placement's id and createdAt on create (preserving both on update) and validate
-      that the target unitId resolves to an existing organization unit — failing with a validation
-      error otherwise. Then rewrite the persisted placement collection via write-temp-then-rename,
-      refresh the store, and return the stored placement. Persistence failures leave the previous
-      collections intact. Authorization is enforced by the orchestrator, not here.
+      In one store update: validate that the target unitId resolves to an existing organization unit
+      in the state read under the lock - failing with a validation error otherwise - stamp the new
+      placement's id and createdAt on create (preserving both on update), and write the placement
+      collection with the units untouched. Return the stored placement. A failure leaves the
+      previous collections intact. Authorization is enforced by the orchestrator, not here.
+    calls:
+      - organization_store.update
   - name: createUnit
     narrative:
       - stepNumber: 1
-        description: Read the authoritative unit set (shared in-memory state loaded by the facade)
+        description: >-
+          Everything up to the persist step is the change of the ONE store update below: it reads
+          the unit set the update hands over (fresh, under the file's write lock)
         type: local
       - stepNumber: 2
         description: The slug must match the lowercase dot-free slug shape ('.' separates the qualified path)
@@ -61,30 +69,32 @@ methods:
         description: Stamp createdAt and default the status to active
         type: local
       - stepNumber: 10
-        description: Persist units and placements together durably (write-temp-then-rename)
+        description: Return the new units and placements as the change's result
         type: local
       - stepNumber: 11
-        description: Refresh the store to the persisted state
+        description: 'Persist: the store writes the change''s result under the lock it still holds and answers'
         type: call
         targetComponent: organization_store
-        targetMethod: replaceAll
+        targetMethod: update
       - stepNumber: 12
         description: Return the stored unit — authorization is the orchestrator's job, not here
         type: return
         outcome: the stored unit
     detail: intent
     intent: >-
-      Compute the unit's qualified id from its parentId path plus slug (a root unit's id is its
-      slug), verify the parent resolves to an existing unit when set, and reject a collision — an
-      existing unit already holding that qualified id, or a sibling already using the slug — with a
-      validation error. Stamp createdAt and default status to active, then rewrite the persisted
-      unit collection via write-temp-then-rename, refresh the store with replaceAll, and return the
-      stored unit. Persistence failures leave the previous collections intact. Authorization is
-      enforced by the orchestrator, not here.
+      In one store update: compute the unit's qualified id from its parentId path plus slug (a root
+      unit's id is its slug), verify the parent resolves to an existing unit when set, and reject a
+      collision - an existing unit already holding that qualified id, or a sibling already using the
+      slug - with a validation error, all against the state read under the lock. Stamp createdAt and
+      default status to active, add the unit, and return the stored unit. A failure leaves the
+      previous collections intact. Authorization is enforced by the orchestrator, not here.
   - name: updateUnit
     narrative:
       - stepNumber: 1
-        description: Read the authoritative unit set and locate the record by id
+        description: >-
+          Everything up to the persist step is the change of the ONE store update below: read the
+          unit set the update hands over (fresh, under the file's write lock) and locate the record
+          by id
         type: local
       - stepNumber: 2
         description: The unit must exist
@@ -112,28 +122,31 @@ methods:
           record, preserving id, slug, parentId, createdAt, and createdBy
         type: local
       - stepNumber: 7
-        description: Persist units and placements together durably
+        description: Return the new units and placements as the change's result
         type: local
       - stepNumber: 8
-        description: Refresh the store to the persisted state
+        description: 'Persist: the store writes the change''s result under the lock it still holds and answers'
         type: call
         targetComponent: organization_store
-        targetMethod: replaceAll
+        targetMethod: update
       - stepNumber: 9
         description: Return the stored unit
         type: return
         outcome: the stored unit
     detail: intent
     intent: >-
-      Load the existing unit by id (validation error when absent) and apply only metadata changes —
-      name, kind, status, visibility, exposeTo — while preserving id, slug, parentId, createdAt, and
-      createdBy; reject any attempt to change slug or parentId, which are moves via reparentUnit.
-      Rewrite the persisted unit collection via write-temp-then-rename, refresh the store, and
-      return the stored unit.
+      In one store update: load the existing unit by id from the state read under the lock
+      (validation error when absent) and apply only metadata changes - name, kind, status,
+      visibility, exposeTo - while preserving id, slug, parentId, createdAt, and createdBy; reject
+      any attempt to change slug or parentId, which are moves via reparentUnit. Return the stored
+      unit.
   - name: reparentUnit
     narrative:
       - stepNumber: 1
-        description: Read the authoritative unit set and locate the moving unit by id
+        description: >-
+          Everything up to the persist step is the change of the ONE store update below: read the
+          unit set the update hands over (fresh, under the file's write lock) and locate the moving
+          unit by id
         type: local
       - stepNumber: 2
         description: The moving unit must exist
@@ -202,13 +215,15 @@ methods:
           persist together, so referential integrity holds atomically
         type: local
       - stepNumber: 15
-        description: Persist units and placements together durably
+        description: Return the new units and placements as the change's result
         type: local
       - stepNumber: 16
-        description: Refresh the store to the persisted state
+        description: >-
+          Persist units and placements together: the store writes the change's result under the lock
+          it still holds and answers
         type: call
         targetComponent: organization_store
-        targetMethod: replaceAll
+        targetMethod: update
       - stepNumber: 17
         description: >-
           Return the old→new UnitIdRemap for every moved unit — the caller rewrites EXTERNAL
@@ -217,29 +232,32 @@ methods:
         outcome: the old→new unit-id remap
     detail: intent
     intent: >-
-      Resolve the unit and its full descendant subtree, reject the move when newParentId is the unit
-      itself or one of its descendants (cycle) or does not resolve, and recompute every moved unit's
-      qualified id from the new parent path (an empty newParentId promotes to a root). Reject the
-      move if any recomputed id collides with a unit outside the moving subtree. Rewrite the renamed
-      subtree AND every exposeTo[] entry across all units that referenced a moved id into the
-      persisted unit collection via write-temp-then-rename, refresh the store, and return the
-      old->new UnitIdRemap for every moved unit. Persistence failures leave the previous collections
-      intact.
+      In one store update: resolve the unit and its full descendant subtree in the state read under
+      the lock, reject the move when newParentId is the unit itself or one of its descendants
+      (cycle) or does not resolve, and recompute every moved unit's qualified id from the new parent
+      path (an empty newParentId promotes to a root). Reject the move if any recomputed id collides
+      with a unit outside the moving subtree. Rewrite the renamed subtree AND every exposeTo[] entry
+      across all units that referenced a moved id, and every placement's unitId, in the one result,
+      and return the old->new UnitIdRemap for every moved unit. A failure leaves the previous
+      collections intact.
   - name: deleteUnit
     narrative: []
     detail: intent
     intent: >-
-      Reject the delete when the unit still has child units or project placements. Remove the unit
-      from the collection and strip its id from every other unit's exposeTo[] list, rewrite via
-      write-temp-then-rename, and refresh the store; deleting an absent unit is a no-op.
+      In one store update: reject the delete when the unit still has child units or project
+      placements in the state read under the lock. Remove the unit and strip its id from every other
+      unit's exposeTo[] list; deleting an absent unit is a no-op.
+    calls:
+      - organization_store.update
   - name: deletePlacement
     narrative: []
     detail: intent
     intent: >-
-      Remove the placement with the given id from the placement collection — the placed project
-      itself is untouched — rewrite via write-temp-then-rename, and refresh the store; an absent
-      placement is a no-op.
+      In one store update: remove the placement with the given id from the placement collection -
+      the placed project itself is untouched; an absent placement is a no-op.
+    calls:
+      - organization_store.update
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:07:46.272Z'
-updatedAt: '2026-07-19T00:01:40.761Z'
+updatedAt: '2026-10-23T22:19:58.649Z'

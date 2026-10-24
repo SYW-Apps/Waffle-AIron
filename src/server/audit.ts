@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { AuditEvent, AuditQuery, AuditRetentionPolicy, HostConfig } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Audit Repository (sdd_host)
@@ -97,11 +98,11 @@ function readEvents(dataDir: string): AuditEvent[] {
   }
 }
 
-/** Persist the complete event set atomically (write temp, then rename). */
-function persistEvents(dataDir: string, events: AuditEvent[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(events, null, 2) + '\n');
+/** The set as read under the write lock: absent is empty; unreadable or malformed throws and nothing is written. */
+function readCurrent(p: string): AuditEvent[] {
+  const parsed = readJsonForUpdate<unknown>(p, []);
+  if (!Array.isArray(parsed)) throw new Error(`Audit store at ${p} contains malformed JSON: expected a JSON array of audit events`);
+  return parsed as AuditEvent[];
 }
 
 // ── redaction / capture predicates ─────────────────────────────────────────
@@ -150,11 +151,22 @@ class AuditStore {
     return this.events;
   }
 
-  /** Swap the in-memory set to a complete replacement in one assignment. Only
-   *  called by the registry after durable persistence has succeeded, so index
-   *  reads always observe a consistent set. */
-  replaceAll(events: AuditEvent[]): void {
-    this.events = events;
+  /**
+   * iaudit_store.update — under audit-events.json's write lock, read the set
+   * fresh, apply the change and replace the file atomically; a change that
+   * throws writes nothing. Answers the set written.
+   */
+  update(change: (events: AuditEvent[]) => AuditEvent[]): AuditEvent[] {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    this.events = withFileLock(p, () => {
+      const current = readCurrent(p);
+      const before = JSON.stringify(current);
+      const next = change(current);
+      if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
+    return this.events;
   }
 
   /** The current authoritative set (shared by reference with the index). */
@@ -166,7 +178,7 @@ class AuditStore {
 // ── registry: policy-filtered write path ───────────────────────────────────
 
 class AuditRegistry {
-  constructor(private readonly dataDir: string, private readonly store: AuditStore) {}
+  constructor(private readonly store: AuditStore) {}
 
   append(event: AuditEvent, policy: AuditRetentionPolicy): void {
     // (1) Capture filter — drop without touching disk (silent, successful no-op).
@@ -202,35 +214,31 @@ class AuditRegistry {
       metadata,
     };
 
-    const next = [...this.store.all(), stamped];
-    persistEvents(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((events) => [...events, stamped]);
   }
 
   prune(policy: AuditRetentionPolicy, now: string): number {
     const nowMs = Date.parse(now);
-    const kept: AuditEvent[] = [];
     let removed = 0;
-
-    for (const event of this.store.all()) {
-      const windowDays = retentionWindowDays(event, policy);
-      // No positive window means "keep forever" for this event.
-      if (windowDays === undefined || !(windowDays > 0)) {
-        kept.push(event);
-        continue;
+    this.store.update((events) => {
+      removed = 0;
+      const kept: AuditEvent[] = [];
+      for (const event of events) {
+        const windowDays = retentionWindowDays(event, policy);
+        // No positive window means "keep forever" for this event.
+        if (windowDays === undefined || !(windowDays > 0)) {
+          kept.push(event);
+          continue;
+        }
+        const ageMs = nowMs - Date.parse(event.timestamp);
+        if (ageMs > windowDays * DAY_MS) {
+          removed++;
+        } else {
+          kept.push(event);
+        }
       }
-      const ageMs = nowMs - Date.parse(event.timestamp);
-      if (ageMs > windowDays * DAY_MS) {
-        removed++;
-      } else {
-        kept.push(event);
-      }
-    }
-
-    if (removed > 0) {
-      persistEvents(this.dataDir, kept);
-      this.store.replaceAll(kept);
-    }
+      return removed > 0 ? kept : events;
+    });
     return removed;
   }
 }
@@ -293,8 +301,7 @@ function matchesQuery(event: AuditEvent, q: AuditQuery): boolean {
  */
 export function appendAuditEvent(dataDir: string, event: AuditEvent, policy: AuditRetentionPolicy): void {
   const store = new AuditStore(dataDir);
-  store.load();
-  new AuditRegistry(dataDir, store).append(event, policy);
+  new AuditRegistry(store).append(event, policy);
 }
 
 /** Return redacted audit events matching an admin query filter, newest-first. */
@@ -314,6 +321,5 @@ export function countAuditEvents(dataDir: string, query: AuditQuery): number {
 /** Apply the retention policy and delete expired events; returns removed count. */
 export function pruneAuditEvents(dataDir: string, policy: AuditRetentionPolicy, now: string): number {
   const store = new AuditStore(dataDir);
-  store.load();
-  return new AuditRegistry(dataDir, store).prune(policy, now);
+  return new AuditRegistry(store).prune(policy, now);
 }

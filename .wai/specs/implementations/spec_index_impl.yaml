@@ -707,6 +707,45 @@ methods:
           type
         type: return
         outcome: DuplicateTypeSpec[]
+  - name: holdsDesign
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read the subsystems and the types the scan holds (every layout: flat, per subsystem, in
+          type groups). Either non-empty ends the walk: the tree holds design.
+        type: local
+      - stepNumber: 2
+        description: >-
+          Read the bound root's L0 and count its publicInterfaces entries; one or more is design (a
+          types-only project is its export table over its types).
+        type: local
+      - stepNumber: 3
+        description: >-
+          Read the scanned project roots and count the direct members that are project members (not
+          parts: a part's specs are this project's own subsystems, step 1). One or more is design —
+          the pins they carry are to approve.
+        type: local
+      - stepNumber: 4
+        description: >-
+          Answer true when any of steps 1-3 found design, false only for an L0 with nothing below
+          it.
+        type: return
+        outcome: whether the tree holds design
+    symbol: holdsDesign
+  - name: loadGroupSpecs
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Answer the groups the scan keyed from documents of kind group (every layout: the shared
+          types folder, a subsystem's types folder, nested group folders). The chain of folders is
+          not consulted: parent is a field, and whether the folder agrees with it is the type-groups
+          rule's question.
+        type: local
+      - stepNumber: 2
+        description: Answer the groups
+        type: return
+        outcome: the groups
+    symbol: loadGroupSpecs
 status: complete
 createdAt: '2026-07-18T22:57:53.605Z'
-updatedAt: '2026-10-19T19:47:23.379Z'
+updatedAt: '2026-10-23T22:19:10.438Z'

@@ -1,6 +1,6 @@
 import { authenticateSession } from './auth.js';
 import { visibleScopes, actionableProjectIds, isInstanceAdmin } from './authorization.js';
-import { listProjectRecords } from './projects.js';
+import { listProjectRecords, planMemberRecords } from './projects.js';
 import { listProjectPlacements } from './organization.js';
 import {
   destroyProject as adminDestroyProject,
@@ -8,6 +8,7 @@ import {
 import { initializeProjectWithProfile } from './policy.js';
 import { lockProject as lifecycleLockProject } from './projectlifecycle.js';
 import type {
+  DevStatus,
   GovernedProjectCreation,
   HostConfig,
   HostedProjectRecord,
@@ -124,4 +125,32 @@ export function lockProject(cfg: HostConfig, sessionId: string, projectId: strin
  */
 export function destroyProject(cfg: HostConfig, sessionId: string, id: string): void {
   adminDestroyProject(cfg, sessionId, id); // step 1 (forward)
+}
+
+/** The record the local development server serves its project as (registered at start). */
+const DEV_PROJECT_ID = 'local';
+
+/**
+ * iweb_project_orchestrator.devStatus — what did not load of the development
+ * server's family, for the web app's banner. A live read of the members the
+ * served project declares on disk (nothing is persisted), so fixing a member
+ * clears its problem without a restart. A hosted instance, or a caller that is
+ * not signed in, answers devMode false with no problems.
+ */
+export function devStatus(cfg: HostConfig, sessionId: string): DevStatus {
+  // Step 1.
+  const principal = authenticateSession(cfg.dataDir, sessionId);
+  // Steps 2-3.
+  if (!principal.authenticated || cfg.devMode !== true) return { devMode: false, problems: [] };
+  // Step 4.
+  const members = planMemberRecords(cfg.dataDir, DEV_PROJECT_ID);
+  // Steps 5-6.
+  const problems = members
+    .filter((m) => m.action === 'unreadable')
+    .map((m) => ({
+      member: m.qualifier,
+      ...(m.record.memberPath ? { path: m.record.memberPath } : {}),
+      reason: m.reason ?? 'it cannot be read',
+    }));
+  return { devMode: true, problems };
 }

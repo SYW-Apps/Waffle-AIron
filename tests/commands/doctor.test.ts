@@ -19,6 +19,7 @@ import { runLock } from '../../src/commands/lock.js';
 import * as subsystemAdapter from '../../src/commands/adapters/core.js';
 import * as validateAdapter from '../../src/commands/validate.js';
 import { computeGateStateId } from '../../src/core/validation.js';
+import { serializeHolder } from '../../src/utils/lock-holder.js';
 
 // ---------------------------------------------------------------------------
 // `wairon doctor` (cli_runner_impl.runDoctor) — the report phase's Project
@@ -227,6 +228,28 @@ describe('cli_runner_impl.runDoctor — report phase (in-process, through the CL
 
     expect(vi.mocked(validateAdapter.computeGateStateId)).toHaveBeenCalled();
     expect(vi.mocked(subsystemAdapter.readLockState)).toHaveBeenCalled();
+  });
+
+  it('tree lock held from another host or PID namespace: names where the holder is and that only the stale age frees it', async () => {
+    rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-doctor-remote-lock-'));
+    buildProject(rootDir);
+    process.chdir(rootDir);
+    // The fixture's own writes left generations behind: the remote holder takes the next one.
+    const lockDir = path.join(rootDir, '.wai', '.spec-write.lock');
+    fs.mkdirSync(lockDir, { recursive: true });
+    const highest = Math.max(0, ...fs.readdirSync(lockDir).map((n) => /^tree\.lock\.(\d+)/.exec(n)?.[1]).filter(Boolean).map(Number));
+    fs.writeFileSync(
+      path.join(lockDir, `tree.lock.${highest + 1}`),
+      serializeHolder({ pid: 4242, takenAt: Date.now(), host: 'other-machine', pidNamespace: 'pidns=[4026599999]' }, 'nonce'),
+    );
+
+    const logSpy = vi.spyOn(console, 'log');
+    await runDoctor({});
+    const out = printed(logSpy);
+    expect(out).toContain('another host or PID namespace');
+    expect(out).toContain('host other-machine');
+    expect(out).toContain('older than the stale age');
+    expect(out).not.toContain('has held it longer than any write takes');
   });
 });
 

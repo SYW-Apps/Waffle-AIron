@@ -7,6 +7,8 @@ import {
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
+  loadGroupSpecs,
+  groupChain,
   resolveProjectExports,
   graph,
 } from './specs.js';
@@ -167,6 +169,25 @@ export interface CanvasModel {
     database?: string;
     table?: string;
     linkedEntity?: string;
+    /** The type group this type sits in (absent for an ungrouped type); presentation only, the type id stays bare and global. */
+    group?: string;
+    /** The group ids from the top-level group down to `group`, so a client folds containers without walking the tree. */
+    groupPath?: string[];
+  }[];
+  /**
+   * The type group tree, parents before children: each group with the types it
+   * holds directly (typeCount) and through its descendants (descendantTypeCount).
+   * Absent when the tree has no groups.
+   */
+  typeGroups?: {
+    id: string;
+    name: string;
+    description?: string;
+    parent?: string;
+    subsystem?: string;
+    groupPath: string[];
+    typeCount: number;
+    descendantTypeCount: number;
   }[];
   /** Type → type references derived from field type strings (ERD edges). */
   typeEdges: { from: string; to: string; field: string; card: '1' | '0..1' | '*' }[];
@@ -477,6 +498,11 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
 
   // Types + ERD reference edges (field type strings → defined types)
   const typeSpecs = loadTypeSpecs();
+  // Step 7: the type group tree. A type naming a group no spec declares is drawn ungrouped
+  // (the type-groups rule reports it); a broken or cyclic chain is cut where it breaks.
+  const groupSpecs = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+  const knownGroups = new Set(groupSpecs.map((g) => g.id));
+  const pathOfGroup = new Map(groupSpecs.map((g) => [g.id, groupChain(g, groupSpecs)] as const));
   // Usage trace: every interface method whose params/returns reference a type.
   const usedByFor = (t: (typeof typeSpecs)[number]): { component: string; method: string }[] => {
     const qualified = t.subsystem && !t.id.startsWith(`${t.subsystem}::`) ? `${t.subsystem}::${t.id}` : t.id;
@@ -518,7 +544,20 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     ...(t.database ? { database: t.database } : {}),
     ...(t.table ? { table: t.table } : {}),
     ...(t.linkedEntity ? { linkedEntity: t.linkedEntity } : {}),
+    ...(t.group && knownGroups.has(t.group) ? { group: t.group, groupPath: pathOfGroup.get(t.group)! } : {}),
   }));
+  const typeGroups: NonNullable<CanvasModel['typeGroups']> = [...groupSpecs]
+    .sort((a, b) => (pathOfGroup.get(a.id)!.length - pathOfGroup.get(b.id)!.length) || (a.id < b.id ? -1 : 1))
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      ...(g.description ? { description: g.description } : {}),
+      ...(g.parent ? { parent: g.parent } : {}),
+      ...(g.subsystem ? { subsystem: g.subsystem } : {}),
+      groupPath: pathOfGroup.get(g.id)!,
+      typeCount: modelTypes.filter((t) => t.group === g.id).length,
+      descendantTypeCount: modelTypes.filter((t) => t.groupPath?.includes(g.id)).length,
+    }));
   // Multiplicity is read from the field's parsed type expression, never by
   // pattern: a list, set or map holds many (type_expression.isMany); an
   // optional field or a `T?` type is 0..1; anything else is 1.
@@ -620,6 +659,7 @@ export function buildCanvasModel(issues: ValidationIssue[] = [], relations?: Pro
     edges,
     ...(canvasRelations !== undefined ? { relations: canvasRelations } : {}),
     types: modelTypes,
+    ...(typeGroups.length > 0 ? { typeGroups } : {}),
     typeEdges,
     dataEdges,
     issues: issues.map(i => ({
@@ -847,6 +887,9 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
 #panel .issue.notice { border-left-color:var(--accent); }
 #panel .issue .sev { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
+#panel .issue[data-find-kind] { cursor:pointer; }
+#panel .issue[data-find-kind]:hover { background:var(--hover-bg); }
+#panel .issue .where { font-size:10px; color:var(--dim); margin-left:6px; }
 
 /* Presentation mode = the canvas page, focused: the header chrome and legend
    are hidden, but the details panel stays TOGGLE-ABLE (the current settings are
@@ -1177,7 +1220,12 @@ var MODEL = __MODEL_JSON__;
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
-    showIssues: typeof saved.showIssues === 'boolean' ? saved.showIssues : false,
+    // The overlay's first-visit default is the host's showIssues option (off for a standalone file or a
+    // shared page, on for the local development server); once the reader has used the toggle, theirs wins.
+    issuesChosen: saved.issuesChosen === true || saved.showIssues === true,
+    showIssues: (saved.issuesChosen === true || saved.showIssues === true) && typeof saved.showIssues === 'boolean'
+      ? saved.showIssues
+      : (typeof opts !== 'undefined' && !!opts && opts.showIssues === true),
     query: '',
     selected: null,
     selectedKind: null,
@@ -1218,6 +1266,7 @@ var MODEL = __MODEL_JSON__;
         externals: state.externals,
         dataCoupling: state.dataCoupling,
         showIssues: state.showIssues,
+        issuesChosen: state.issuesChosen,
       }));
     } catch (e) { /* non-fatal */ }
   }
@@ -1523,7 +1572,7 @@ var MODEL = __MODEL_JSON__;
 
   function renderLegend() {
     var t = THEMES[state.theme];
-    var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
+    var sw = function (c) { return '<span class="sw" style="background:' + esc(c.fill) + ';border-color:' + esc(c.stroke) + '"></span>'; };
     document.getElementById('legend').innerHTML =
       sw({ fill: t.subFill, stroke: t.subStroke }) + 'Subsystem&nbsp; ' +
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
@@ -2055,8 +2104,33 @@ var MODEL = __MODEL_JSON__;
     if (!db || !db.tables || !db.tables.length) return true;
     return db.tables.indexOf(t.id) >= 0 || db.tables.indexOf(t.table || t.id) >= 0;
   }
+  // A type-group scope is the home it lives in, then the group chain beneath it, joined by GSEP
+  // ('home@@platform@@runtime'); a trailing '~' means the types sitting exactly at that level
+  // (the ungrouped ones of a home, or a group's own types beside its child groups).
+  var GSEP = '@@';
+  function splitScope(sid) {
+    var i = sid ? sid.indexOf(GSEP) : -1;
+    if (i < 0) return { home: sid, chain: [], own: false };
+    var chain = sid.slice(i + GSEP.length).split(GSEP);
+    var own = chain[chain.length - 1] === '~';
+    if (own) chain.pop();
+    return { home: sid.slice(0, i), chain: chain, own: own };
+  }
+  function underChain(t, chain, own) {
+    var gp = t.groupPath || [];
+    if (gp.length < chain.length) return false;
+    for (var i = 0; i < chain.length; i++) if (gp[i] !== chain[i]) return false;
+    return own ? gp.length === chain.length : true;
+  }
   function typesInScope() {
     var sid = state.view.id;
+    if (sid && sid.indexOf(GSEP) >= 0 && state.view.kind === 'types') {
+      var gs = splitScope(sid);
+      return MODEL.types.filter(function (t) {
+        var inHome = gs.home === SHARED_KEY ? !t.subsystem : (t.subsystem === gs.home || (t.subsystem && t.subsystem.indexOf(gs.home + '::') === 0));
+        return inHome && underChain(t, gs.chain, gs.own);
+      });
+    }
     if (state.view.kind === 'databases') {
       return MODEL.types.filter(function (t) {
         if (!databaseAllowsType(t)) return false;
@@ -2153,9 +2227,19 @@ var MODEL = __MODEL_JSON__;
     return pos;
   }
 
-  // Collapse the in-scope types into one node per child subsystem, with
-  // aggregated cross-cluster reference edges — the whole system as a small,
-  // fast, navigable map. Returns null if it wouldn't reduce to >1 cluster.
+  // A group cluster's caption: the group's name, or "(ungrouped)" / "(own types)" for the '~' level.
+  function groupLabel(key) {
+    var sc = splitScope(key);
+    if (key.indexOf(GSEP) < 0) return key;
+    if (sc.own) return sc.chain.length ? '(own types)' : '(ungrouped)';
+    var id = sc.chain[sc.chain.length - 1];
+    var g = (MODEL.typeGroups || []).filter(function (x) { return x.id === id; })[0];
+    return g ? g.name : id;
+  }
+  // Collapse the in-scope types into one node per child subsystem (or, in a scope
+  // the subsystem tier cannot split, per group), with aggregated cross-cluster
+  // reference edges — the whole system as a small, fast, navigable map. Returns
+  // null if it wouldn't reduce to >1 cluster.
   function buildTypeClusters(list) {
     var scopeId = state.view.id;
     function keyOf(t) {
@@ -2172,7 +2256,25 @@ var MODEL = __MODEL_JSON__;
       if (!groups[k]) { groups[k] = 0; order.push(k); }
       groups[k]++;
     });
-    if (order.length < 2) return null;
+    // Subsystem tier first; a scope it cannot split (one home, or a project with no
+    // subsystem at all) clusters by the group chain instead: the home's top-level
+    // groups and its ungrouped types, a group opening into its child groups and its own types.
+    if (order.length < 2) {
+      var sc = splitScope(scopeId);
+      var home = sc.home || SHARED_KEY;
+      var depth = sc.chain.length;
+      groups = {}; order = []; clusterOf = {};
+      var anyGroup = false;
+      list.forEach(function (t) {
+        var gp = t.groupPath || [];
+        if (gp.length > depth) anyGroup = true;
+        var k = gp.length > depth ? home + GSEP + sc.chain.concat([gp[depth]]).join(GSEP) : home + GSEP + sc.chain.concat(['~']).join(GSEP);
+        clusterOf[t.id] = k;
+        if (!groups[k]) { groups[k] = 0; order.push(k); }
+        groups[k]++;
+      });
+      if (!anyGroup || order.length < 2) return null;
+    }
     var agg = {};
     MODEL.typeEdges.forEach(function (e) {
       var a = clusterOf[e.from], b = clusterOf[e.to];
@@ -2182,7 +2284,7 @@ var MODEL = __MODEL_JSON__;
     var out = [], keys = order.slice().sort();
     var per = Math.max(1, Math.ceil(Math.sqrt(keys.length)));
     keys.forEach(function (k, i) {
-      var nm = subById[k] ? subById[k].name : k;
+      var nm = subById[k] ? subById[k].name : groupLabel(k);
       out.push({
         data: { id: 'TC~' + k, label: nm + '\\n' + groups[k] + ' types', w: 210, h: 66, tw: 192, clusterKey: k },
         position: { x: (i % per) * 300, y: Math.floor(i / per) * 150 }, classes: 'typeCluster',
@@ -3070,7 +3172,7 @@ var MODEL = __MODEL_JSON__;
   // ResizeObserver never fires for them — renderCrumbs nudges a reflow here.
   var headerReflowHook = null;
   function crumbBtnHtml(p, cur) {
-    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + esc(p.kind) + '" data-ci="' + esc(p.id || '') + '">' + esc(p.label) + '</button>';
   }
   function renderCrumbs() {
     var el = document.getElementById('crumbs');
@@ -3081,7 +3183,7 @@ var MODEL = __MODEL_JSON__;
         + '<button class="crumb crumbmore" id="crumbMoreBtn" title="Show the collapsed ancestor path">\\u2026</button>'
         + '<span class="menu" id="crumbMenu">'
         + path.slice(0, path.length - 1).map(function (p) {
-          return '<button data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+          return '<button data-ck="' + esc(p.kind) + '" data-ci="' + esc(p.id || '') + '">' + esc(p.label) + '</button>';
         }).join('')
         + '</span></span>'
         + '<span class="sep">\\u203A</span>'
@@ -3422,7 +3524,7 @@ var MODEL = __MODEL_JSON__;
   document.getElementById('dataCouplingToggle').checked = state.dataCoupling;
   document.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
   document.getElementById('issuesToggle').checked = state.showIssues;
-  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; persist(); rebuild(false); renderPanel(); });
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; state.issuesChosen = true; persist(); rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
   // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
   // scope, so a subsystem's own types (plus shared ones) show scoped.
@@ -4021,7 +4123,7 @@ var MODEL = __MODEL_JSON__;
   }
   function renderFlowCrumb() {
     document.getElementById('flowCrumb').innerHTML = flowStack.map(function (f, i) {
-      var s = f.comp + '.' + f.method + '()';
+      var s = esc(f.comp + '.' + f.method + '()');
       return i === flowStack.length - 1 ? s : '<span class="dimc">' + s + ' → </span>';
     }).join('');
     document.getElementById('flowBack').style.display = flowStack.length > 1 ? '' : 'none';
@@ -4426,8 +4528,8 @@ var MODEL = __MODEL_JSON__;
       var callHtml = '';
       if (s.call) {
         var callable = openable(s.call.component, s.call.method);
-        callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
-          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>'
+        callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + esc(s.call.component) + '" data-dm="' + esc(s.call.method) + '">'
+          + esc(s.call.component + '.' + s.call.method + '()') + (callable ? ' \\u21B4' : '') + '</span>'
           + (s.detach ? ' <span style="opacity:.72">\\u21E2 detached \\u2014 fire &amp; forget</span>' : '');
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
@@ -4443,7 +4545,7 @@ var MODEL = __MODEL_JSON__;
       })(drills[i]);
     }
   }
-  function escText(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  function escText(s) { return esc(s); }
   function renderFlowModal() {
     renderFlowCrumb();
     renderFlowGraph();
@@ -4551,7 +4653,12 @@ var MODEL = __MODEL_JSON__;
 
   // ---- detail sidebar -------------------------------------------------------------
   var panel = document.getElementById('panel');
-  function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  // Spec text (names, ids, prose) is written by whoever may edit the design, so
+  // every piece of it built into HTML goes through esc — quotes included, since
+  // much of it lands inside attribute values.
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   function chip(label, kind, target) {
     return '<span class="chip" data-kind="' + kind + '" data-id="' + esc(target) + '">' + esc(label) + '</span>';
   }
@@ -4613,6 +4720,46 @@ var MODEL = __MODEL_JSON__;
     reveal.removeClass('defocus');
   }
 
+  // The Findings panel: EVERY finding of the model, errors first, then warnings, then notices - including one
+  // naming no spec (a spec that failed to load, a project-level finding), which no node carries. A finding that
+  // names a drawn spec focuses that node on click (opening the view that holds it).
+  function findingKind(specId) {
+    if (!specId) return null;
+    if (compById[specId]) return 'component';
+    if (subById[specId]) return 'subsystem';
+    for (var t = 0; t < MODEL.types.length; t++) if (MODEL.types[t].id === specId) return 'type';
+    return null;
+  }
+  function findingsHtml() {
+    var rank = { error: 0, warning: 1, notice: 2 };
+    var sorted = MODEL.issues.slice().sort(function (a, b) {
+      var ra = rank[a.severity] === undefined ? 3 : rank[a.severity];
+      var rb = rank[b.severity] === undefined ? 3 : rank[b.severity];
+      return ra - rb;
+    });
+    return sorted.map(function (i) {
+      var kind = findingKind(i.specId);
+      var where = kind ? '' : '<span class="where">' + (i.specId ? esc(i.specId) + ' \u00B7 ' : '') + 'project</span>';
+      return '<div class="issue ' + esc(i.severity) + '"' + (kind ? ' data-find-kind="' + kind + '" data-find-id="' + esc(i.specId) + '"' : '') + '>'
+        + '<code>' + esc(i.code) + '</code><span class="sev">' + esc(i.severity) + '</span>' + where + '<br>' + esc(i.message) + '</div>';
+    }).join('');
+  }
+  function focusFinding(kind, id) {
+    if (kind !== 'type' && !nodeForRef(kind, id).length) {
+      var scope;
+      if (kind === 'component') {
+        scope = compById[id] && compById[id].subsystem ? { kind: 'subsystem', id: compById[id].subsystem } : { kind: 'system', id: null };
+      } else {
+        var cut = id.lastIndexOf('::');
+        scope = cut >= 0 ? { kind: 'subsystem', id: id.slice(0, cut) } : { kind: 'system', id: null };
+      }
+      state.view = scope;
+      state.typesRenderAll = false;
+      rebuild(true);
+      notifyViewChange();
+    }
+    select(kind, id, true);
+  }
   function select(kind, id, focus) {
     // Selecting a type from a component view (param chip, "Used by" chip…)
     // switches into the ERD first, keeping the current subsystem scope.
@@ -4693,7 +4840,7 @@ var MODEL = __MODEL_JSON__;
   }
 
   function renderPanel() {
-    var head = '', body = '';
+    var head = '', body = '', rootPanel = false;
     // With nothing selected, describe the CURRENT VIEW SCOPE rather than the
     // root system — so drilling into a subsystem/component shows that scope's
     // details, and the breadcrumb still walks back up to the parent.
@@ -4932,8 +5079,9 @@ var MODEL = __MODEL_JSON__;
         + openApiButton(projectExposesApi(), '');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
       body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
-      if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
+      rootPanel = true;
     }
+    if (MODEL.issues.length) body += section('Findings', MODEL.issues.length, findingsHtml(), rootPanel);
     panel.innerHTML = '<div class="head">' + head + '</div><div class="body">' + body + '</div>';
 
     var navs = panel.querySelectorAll('[data-kind]');
@@ -4946,6 +5094,12 @@ var MODEL = __MODEL_JSON__;
         });
         n.addEventListener('mouseleave', function () { cy.nodes().removeClass('hoverhl'); });
       })(navs[i]);
+    }
+    var finds = panel.querySelectorAll('[data-find-kind]');
+    for (var fi = 0; fi < finds.length; fi++) {
+      (function (f) {
+        f.addEventListener('click', function () { focusFinding(f.getAttribute('data-find-kind'), f.getAttribute('data-find-id')); });
+      })(finds[fi]);
     }
     var opens = panel.querySelectorAll('[data-open-kind]');
     for (var k = 0; k < opens.length; k++) {

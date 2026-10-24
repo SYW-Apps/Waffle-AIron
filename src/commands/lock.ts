@@ -15,6 +15,7 @@ import {
   findOrphanedSpecFiles,
   loadComponentSpecs,
   loadSubsystemSpecs,
+  holdsDesign,
   loadInterfaceSpecs,
   loadImplementationSpecs,
   loadTypeSpecs,
@@ -311,7 +312,7 @@ export function checkApproval(strict: boolean): ApprovalCheck {
     default:
       // Steps 24-25: a tree holding the L0 and nothing below it has no design
       // to approve — said as `wairon lock` says it, which writes no record here.
-      if (members.length === 0 && loadSubsystemSpecs().length === 0) {
+      if (!holdsDesign()) {
         return {
           state: 'unlocked',
           approved: !strict,
@@ -345,9 +346,8 @@ export function carriedLine(release: ReleaseVerdict): string {
  * What `lock`, `lock-check` and `status` say of a tree that holds the L0 and
  * nothing below it and was never approved: there is no design to approve yet.
  */
-const NOTHING_TO_APPROVE =
-  'Nothing designed to approve yet: the spec tree holds the L0 and nothing below it (no subsystem, no member project). '
-  + 'Add a subsystem first (an assistant adds one with sdd_add_subsystem), then run `wairon lock`.';
+export const NOTHING_TO_APPROVE =
+  'Nothing approvable yet: the spec tree holds the L0 and nothing below it (no subsystem, no type, no export entry, no member project).';
 
 /**
  * cli_lock_adapter.holdsNoDesign — whether there is nothing to approve: no
@@ -356,11 +356,10 @@ const NOTHING_TO_APPROVE =
  */
 export function holdsNoDesign(): boolean {
   // Steps 1-3.
-  const subsystems = loadSubsystemSpecs();
-  const members = familyApprovals(1).filter((a) => a.parent === '' && a.key !== '' && a.as !== 'part');
+  const held = holdsDesign();
   const record = readLockRecord();
   // Step 4.
-  return subsystems.length === 0 && members.length === 0 && record === null;
+  return !held && record === null;
 }
 
 /**

@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+# The token reads the repository only; a job that needs more says so itself.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build ${{ matrix.target }}
@@ -19,31 +23,31 @@ jobs:
         include:
           - os: windows-latest
             target: windows-x64
-            pkg_target: node20-win-x64
+            pkg_target: node24-win-x64
             smoke: true
             asset_ext: .zip
 
           - os: ubuntu-latest
             target: linux-x64
-            pkg_target: node20-linux-x64
+            pkg_target: node24-linux-x64
             smoke: true
             asset_ext: .tar.gz
 
           - os: ubuntu-latest
             target: linux-arm64
-            pkg_target: node20-linux-arm64
+            pkg_target: node24-linux-arm64
             smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-x64
-            pkg_target: node20-macos-x64
+            pkg_target: node24-macos-x64
             smoke: false
             asset_ext: .tar.gz
 
           - os: macos-latest
             target: macos-arm64
-            pkg_target: node20-macos-arm64
+            pkg_target: node24-macos-arm64
             smoke: true
             asset_ext: .tar.gz
 
@@ -53,7 +57,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -239,8 +243,8 @@ jobs:
             artifacts/**/*.sha256
 
   # The SYW CDN is a second home for a release (docs/cdn-release.md): the same
-  # archives, a version.json manifest and the guides, published as one
-  # immutable release. Nothing depends on this job, so a CDN failure never holds
+  # archives (one exact release per platform), a version.json index and the guides
+  # published separately (docs/cdn-release.md). Nothing depends on this job, so a CDN failure never holds
   # back the GitHub release or npm; without the publisher secret it is a notice.
   # A dev build is not published there (the script says so and exits 0).
   publish-cdn:
@@ -293,7 +297,7 @@ jobs:
     name: Verify published CLI
     needs: publish-npm
     runs-on: ubuntu-latest
-    container: node:20
+    container: node:24
     steps:
       - name: Install the just-published version from the registry
         shell: bash

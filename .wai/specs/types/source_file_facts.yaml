@@ -330,10 +330,16 @@ fields:
     description: >-
       The value import bindings of the file whose every reference is in a type position (a type
       reference, typeof, an implements clause): a type import whatever its spelling. A name also
-      constructed, called, extended, passed or re-exported anywhere is not listed, nor one
-      annotating a constructor parameter or property of a class carrying a decorator: under
-      decorator metadata that annotation is emitted as a runtime value, an injection token. Exact
-      grade only; UNDECLARED_EXPORT does not count such a binding as taking the export.
+      constructed, called, extended, passed or re-exported anywhere is not listed, nor, WHEN THE
+      FILE'S PROJECT EMITS DECORATOR METADATA, one whose annotation that metadata emits as a runtime
+      value, an injection token: a property carrying its own decorator, a constructor parameter of a
+      class that is decorated or has a decorated constructor parameter, or a parameter of a method
+      that is decorated or has a decorated parameter. A decorator elsewhere in the class emits
+      nothing for that annotation. Metadata applies when the nearest tsconfig.json of the file
+      (extends chains followed) resolves compilerOptions.emitDecoratorMetadata to true, and also
+      when no tsconfig is found or it cannot be read; when that tsconfig leaves it off, decorated
+      annotations are ordinary type positions and are listed here. Exact grade only;
+      UNDECLARED_EXPORT does not count such a binding as taking the export.
     optional: true
 methods:
   - name: resolveImport
@@ -453,4 +459,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-20T23:40:13.862Z'
+updatedAt: '2026-10-23T22:16:03.926Z'

@@ -1,0 +1,29 @@
+kind: value-object
+id: dev_family_registration
+name: DevFamilyRegistration
+description: >-
+  What registering the local development project answered: its record, every member the family
+  declares as the registration found it (the readable ones now registered, the unreadable ones with
+  their reason), and whether a stale development data directory was discarded first.
+subsystem: sdd_host
+fields:
+  - name: project
+    type: HostedProjectRecord
+    description: The registered record of the developer's own working directory
+    optional: false
+  - name: members
+    type: list<PlannedMemberRecord>
+    description: >-
+      Every declared member, members of members included; action 'unreadable' with its reason for
+      each that could not be registered, any other action for a member whose record now stands
+    optional: false
+  - name: reset
+    type: bool
+    description: >-
+      True when the development data directory was unversioned, written by another major, or
+      unreadable, and was deleted (with its old backups) before starting fresh
+    optional: false
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-23T22:28:16.051Z'
+updatedAt: '2026-10-23T22:31:46.579Z'

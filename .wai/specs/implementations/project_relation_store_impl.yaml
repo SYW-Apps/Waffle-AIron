@@ -1,27 +1,28 @@
 id: project_relation_store_impl
 name: Project Relation Store Implementation
 description: >-
-  Authoritative in-memory holder of the cross-project relation set, file-backed under the server
-  data root (relations.json).
+  Read-through file I/O over the cross-project relation set at relations.json under the server data
+  root: load parses the file fresh; update holds the file's write lock across a fresh read and the
+  replacement.
 contract: iproject_relation_store
 sourcePath: src/server/relations.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted cross-project relation set from the relations.json file under the hosted
-      data root and hold it as the authoritative in-memory representation, returning it. A missing
-      file yields an empty set; an unreadable file or structurally invalid JSON fails with a storage
-      error naming the path, so a lost relation never silently drops a declared cross-project
-      dependency.
-  - name: replaceAll
+      Read relations.json fresh (no in-memory copy), returning the set. A missing file yields an
+      empty set; an unreadable file or structurally invalid JSON fails with a storage error naming
+      the path, so a lost relation never silently drops a declared cross-project dependency.
+  - name: update
     narrative: []
     intent: >-
-      Swap the authoritative in-memory relation set to the supplied complete set in one assignment,
-      only ever called by the owned registry after durable persistence has succeeded. Never
-      partially applies, so concurrent relation queries through the index always observe a
-      consistent set.
+      Under relations.json's write lock (file_write_lock.run), read the set fresh - absent is empty,
+      a file that exists but cannot be read or parsed throws and nothing is written - apply the
+      change, replace the file atomically via write-temp-then-rename and release the lock, also when
+      the change throws. Answers the set written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-09T22:07:58.775Z'
-updatedAt: '2026-07-09T22:13:36.183Z'
+updatedAt: '2026-10-23T22:23:43.931Z'

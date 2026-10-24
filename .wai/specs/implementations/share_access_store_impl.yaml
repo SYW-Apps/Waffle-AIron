@@ -1,6 +1,8 @@
 id: share_access_store_impl
 name: Share Access Store Implementation
-description: Disk-backed append-only access log at &lt;dataDir&gt;/share-access.json, loaded fresh per call.
+description: >-
+  Disk-backed append-only access log at <dataDir>/share-access.json, loaded fresh per call; each
+  append is one locked read-modify-write.
 contract: ishare_access_store
 sourcePath: src/server/shareaccesslog.ts
 methods:
@@ -12,10 +14,14 @@ methods:
   - name: append
     narrative: []
     intent: >-
-      Loads the current entries, appends the new one, and swaps the file via write-temp-then-rename
-      (atomic). Append-only — existing entries are never rewritten, so the log is a faithful audit
-      trail.
+      Under share-access.json's write lock (file_write_lock.run): read the current entries fresh (an
+      absent file is empty; a file that exists but cannot be read or parsed throws and nothing is
+      written), append the new one, and swap the file via write-temp-then-rename (atomic).
+      Append-only - existing entries are never rewritten, so the log is a faithful audit trail; two
+      appends in different processes both survive.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:26:06.104Z'
-updatedAt: '2026-07-18T10:10:40.404Z'
+updatedAt: '2026-10-23T22:21:22.429Z'

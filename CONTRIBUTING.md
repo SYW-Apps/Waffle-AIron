@@ -32,7 +32,7 @@ commits the lock record; you do not need to lock it yourself.
 
 **Reporting a security issue.** Do not open a public issue for a vulnerability. Use
 GitHub's private vulnerability reporting on this repository (Security tab → Report a
-vulnerability).
+vulnerability). [SECURITY.md](SECURITY.md) says what to include and which versions get fixes.
 
 Questions and bugs: open an issue (templates are provided).
 

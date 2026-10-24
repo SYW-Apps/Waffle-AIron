@@ -174,6 +174,9 @@ header input[type="search"]::placeholder { color:var(--dim); }
 #panel .issue.notice { border-left-color:var(--accent); }
 #panel .issue .sev { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
+#panel .issue[data-find-kind] { cursor:pointer; }
+#panel .issue[data-find-kind]:hover { background:var(--hover-bg); }
+#panel .issue .where { font-size:10px; color:var(--dim); margin-left:6px; }
 
 /* Presentation mode = the canvas page, focused: the header chrome and legend
    are hidden, but the details panel stays TOGGLE-ABLE (the current settings are

@@ -150,8 +150,8 @@ methods:
       - stepNumber: 1
         description: Forward to the admin orchestrator
         type: call
-        targetComponent: admin_orchestrator
-        targetMethod: registerLocalDevProject
+        targetComponent: local_dev_registration
+        targetMethod: register
   - name: listGlobalPacks
     narrative:
       - stepNumber: 1
@@ -274,4 +274,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-09-25T22:40:16.874Z'
-updatedAt: '2026-10-18T14:28:56.076Z'
+updatedAt: '2026-10-23T22:31:24.495Z'

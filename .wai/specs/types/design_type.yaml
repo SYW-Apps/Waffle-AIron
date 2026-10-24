@@ -71,7 +71,13 @@ fields:
   - name: ext
     type: map<string, any>
     optional: true
+  - name: group
+    type: string
+    description: >-
+      The key of the type group the type sits in (a key of DesignExport.typeGroups); absent for an
+      ungrouped type. Added in a minor format version: consumers that do not know it ignore it.
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:30.105Z'
-updatedAt: '2026-10-04T23:39:20.064Z'
+updatedAt: '2026-10-23T22:22:36.887Z'

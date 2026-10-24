@@ -1468,7 +1468,7 @@ interface ExactFacts {
   reexportOnly: boolean;
 }
 
-function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFacts {
+function walkExact(ts: TsModule, sourceText: string, fileName: string, decoratorMetadata = true): ExactFacts {
   const sf = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, /*setParentNodes*/ true);
   const declared = new Set<string>();
   const anchors = new Set<string>();
@@ -2582,24 +2582,32 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string): ExactFac
     const used = new Map<string, { type: number; value: number }>();
     for (const [name, fact] of importBindings) if (!fact.namespace) used.set(name, { type: 0, value: 0 });
     // Under decorator metadata (`emitDecoratorMetadata`, what NestJS and
-    // Angular dependency injection read), a decorated class's constructor
-    // parameter and property types are emitted as runtime values — injection
-    // tokens — so such an annotation is a value use, never erased. Read
-    // conservatively: any class carrying a decorator, on itself or a member.
-    const decorated = (cls: import('typescript').ClassLikeDeclaration): boolean =>
-      (ts.canHaveDecorators(cls) && (ts.getDecorators(cls)?.length ?? 0) > 0)
-      || cls.members.some((m) => ts.canHaveDecorators(m) && (ts.getDecorators(m)?.length ?? 0) > 0);
+    // Angular dependency injection read), the types of a DECORATED declaration
+    // are emitted as runtime values — injection tokens — so such an annotation
+    // is a value use, never erased. Matched to the declaration the annotation
+    // sits in: a property's type needs the property's own decorator; a
+    // constructor parameter's, a decorator on the class or on any constructor
+    // parameter; a method parameter's, a decorator on the method or on any of
+    // its parameters. A decorator elsewhere in the class emits nothing for it.
+    const hasDecorator = (node: import('typescript').Node): boolean =>
+      ts.canHaveDecorators(node) && (ts.getDecorators(node)?.length ?? 0) > 0;
     const emittedAsMetadata = (ref: import('typescript').TypeReferenceNode): boolean => {
+      // The project's own tsconfig turns metadata off: a decorated annotation is an ordinary type position.
+      if (!decoratorMetadata) return false;
       // The annotation a reference sits in: walk up through the type to the declaration it types.
       let at: import('typescript').Node = ref;
       while (at.parent && ts.isTypeNode(at.parent)) at = at.parent;
       const owner = at.parent;
       if (!owner) return false;
-      const annotates = (ts.isParameter(owner) || ts.isPropertyDeclaration(owner)) && owner.type === at;
-      if (!annotates) return false;
-      const member = ts.isParameter(owner) ? owner.parent : owner;
-      const cls = member?.parent;
-      return !!cls && ts.isClassLike(cls) && decorated(cls);
+      if (ts.isPropertyDeclaration(owner)) {
+        return owner.type === at && ts.isClassLike(owner.parent) && hasDecorator(owner);
+      }
+      if (!ts.isParameter(owner) || owner.type !== at) return false;
+      const fn = owner.parent;
+      if (!fn || !fn.parent || !ts.isClassLike(fn.parent)) return false;
+      if (ts.isConstructorDeclaration(fn)) return hasDecorator(fn.parent) || fn.parameters.some(hasDecorator);
+      if (ts.isMethodDeclaration(fn) || ts.isSetAccessorDeclaration(fn)) return hasDecorator(fn) || fn.parameters.some(hasDecorator);
+      return false;
     };
     const inTypePosition = (id: import('typescript').Identifier): boolean => {
       let node: import('typescript').Node = id;
@@ -3185,6 +3193,55 @@ function checkerOptions(ts: TsModule, projectRoot: string): import('typescript')
     tsBuildInfoFile: undefined,
     maxNodeModuleJsDepth: 0,
   };
+}
+
+/** The answer for one tsconfig.json, by its path: its modification time and whether metadata applies. */
+const decoratorMetadataByConfig = new Map<string, { mtimeMs: number; applies: boolean }>();
+
+/**
+ * Whether decorator metadata (`emitDecoratorMetadata`) applies to a file
+ * (source_analysis_adapter.buildCodeModel step 6): the nearest tsconfig.json
+ * at or above the file's directory, up to the project root, read through the
+ * compiler's own config reader — which follows `extends` — and metadata is on
+ * only if the resolved option is true. No tsconfig, one that cannot be parsed
+ * or whose `extends` cannot be resolved, or a solution-style one (references,
+ * and no files/include of its own) keeps it ON: the rule is only relaxed by a
+ * project that visibly turns it off. Remembered per config path and mtime.
+ */
+function decoratorMetadataApplies(ts: TsModule, file: string, projectRoot: string): boolean {
+  const root = path.resolve(projectRoot);
+  let dir = path.dirname(path.resolve(file));
+  let configFile: string | null = null;
+  for (;;) {
+    if (path.relative(root, dir).startsWith('..')) break;
+    const candidate = path.join(dir, 'tsconfig.json');
+    if (isFile(candidate)) { configFile = candidate; break; }
+    if (dir === root) break;
+    const up = path.dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  if (configFile === null) return true;
+  let mtimeMs = 0;
+  try { mtimeMs = fs.statSync(configFile).mtimeMs; } catch { return true; }
+  const cached = decoratorMetadataByConfig.get(configFile);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.applies;
+  let applies = true;
+  try {
+    const read = ts.readConfigFile(configFile, ts.sys.readFile);
+    if (!read.error && read.config) {
+      const raw = read.config as { files?: unknown; include?: unknown; references?: unknown };
+      const solutionStyle = Array.isArray(raw.references) && raw.files === undefined && raw.include === undefined;
+      const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, path.dirname(configFile), undefined, configFile);
+      // A diagnostic about the config itself (an extends that is not found, a syntax error) leaves it unresolved; "no inputs found" (18003) is only the file list.
+      const unresolved = parsed.errors.some((e) => e.code !== 18003);
+      if (!solutionStyle && !unresolved) applies = parsed.options.emitDecoratorMetadata === true;
+    }
+  } catch {
+    applies = true;
+  }
+  decoratorMetadataByConfig.set(configFile, { mtimeMs, applies });
+  return applies;
 }
 
 /** A class of the project, as implementor resolution reads it. */
@@ -4267,7 +4324,7 @@ export function buildCodeModel(
     if (language === 'typescript' || language === 'javascript') {
       if (ts) {
         try {
-          const facts = walkExact(ts, text, absolute);
+          const facts = walkExact(ts, text, absolute, decoratorMetadataApplies(ts, absolute, projectRoot));
           chaseReexports(ts, facts, absolute, projectRoot, new Set([absolute]), exactCache, localPackages);
           analyzed = {
             analysisGrade: 'exact',

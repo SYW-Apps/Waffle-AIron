@@ -1,0 +1,27 @@
+id: ifile_write_lock
+name: File Write Lock Interface
+description: >-
+  Contract for the cross-process write lock of one data file: run a change while no other process
+  holds the same file's lock, so a store's read, change and write of the whole file are one step.
+  Bounded wait: a lock not obtained in time throws and the change never runs.
+component: file_write_lock
+methods:
+  - name: run
+    description: >-
+      Run the change holding the write lock of the file. Mutual exclusion is by generation (the lock
+      of generation g is a name used once, ended by a marker, never deleted by path while it could
+      be judged), so a reclaim of a stale lock can end only the generation it judged and never a
+      lock a new holder took in between. The holder is judged gone only when it is local (same host
+      and PID namespace, lock_holder.isLocalTo) and its pid is gone, or by age; stale and wait
+      limits are parameters of the lock (hosted stores 15s/20s, the spec-tree lock 60s/30s). The
+      lock is released also when the change throws, which writes nothing; just before the data file
+      is renamed into place the holder checks that its generation was not reclaimed, and abandons
+      the write with an error naming the reclaim if it was (this narrows, not closes, the
+      stalled-holder window). After a bounded wait it throws and the change never runs. Answers what
+      the change answers.
+    signature: 'run(file: string, change: () => any): any'
+    returns: any
+    effect: io
+status: complete
+createdAt: '2026-10-23T22:16:47.851Z'
+updatedAt: '2026-10-24T11:38:40.170Z'

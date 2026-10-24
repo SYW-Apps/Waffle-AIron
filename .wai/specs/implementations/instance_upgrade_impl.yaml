@@ -71,14 +71,16 @@ methods:
         targetComponent: instance_upgrade
         targetMethod: upgradeTrees
       - stepNumber: 12
-        description: Was any tree refused or failed?
+        description: Was any tree refused or failed, in a host that is not the local development server?
         type: branch
-        condition: a hosted tree was not upgraded
+        condition: a hosted tree was not upgraded and the host is not in development mode
         onFalseStep: 14
       - stepNumber: 13
         description: >-
           Stop the start, naming each project and why, and the backup when one was taken; each tree
-          already upgraded stays upgraded, its family committed whole
+          already upgraded stays upgraded, its family committed whole. A development-mode host never
+          reaches this step: its failed trees stay in the report, which the start prints, and the
+          web UI shows what did not load
         type: throw
         error: StartAborted
       - stepNumber: 14
@@ -191,8 +193,57 @@ methods:
         description: Answer every tree upgraded or refused
         type: return
         outcome: list<HostedTreeUpgrade>
+  - name: resetDevDataDir
+    narrative:
+      - stepNumber: 1
+        description: 'Refuse unless the host is in development mode: a hosted data directory is never reset'
+        type: branch
+        condition: the host configuration is not in development mode
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Refuse: only the local development server''s disposable data directory may be reset'
+        type: throw
+        error: Error
+      - stepNumber: 3
+        description: >-
+          Read the major that wrote the data directory; none recorded reads as unversioned, and a
+          version file that does not parse reads as not current
+        type: call
+        targetComponent: instance_version_store
+        targetMethod: read
+      - stepNumber: 4
+        description: Is the data directory at the running major?
+        type: branch
+        condition: a major is recorded and equals the running major
+        onTrueStep: 8
+        onFalseStep: 5
+      - stepNumber: 5
+        description: >-
+          Delete the data directory and its old backups: it is disposable, so it is never backed up
+          and never migrated
+        type: call
+        targetComponent: instance_backup_adapter
+        targetMethod: discard
+      - stepNumber: 6
+        description: >-
+          Stamp the fresh directory with the running major: it is current from its first byte, so a
+          registration written before the server's own bootstrap never reads as an unversioned
+          directory awaiting migration
+        type: call
+        targetComponent: instance_version_store
+        targetMethod: write
+      - stepNumber: 7
+        description: The start begins fresh
+        type: return
+        outcome: discarded
+      - stepNumber: 8
+        description: Leave it as it is
+        type: return
+        outcome: current
+    detail: full
 previousIds:
   - data_dir_upgrade_impl
 status: draft
 createdAt: '2026-10-18T14:29:29.842Z'
-updatedAt: '2026-10-19T06:17:44.146Z'
+updatedAt: '2026-10-24T11:32:17.492Z'

@@ -20,6 +20,17 @@ methods:
         optional: true
     guarantees:
       - idempotent
+  - name: dependencies
+    description: >-
+      The project's dependencies as the design export lists them, sorted by alias: each externals
+      binding (alias, project id, role, the public names this project's references use) bound to the
+      digest the externals lock pins for it (a lock that is absent or unreadable pins nothing), then
+      each direct project member with the public names it publishes. A member project is a
+      dependency and never inlined. Read-only; the export's other sections never depend on it.
+    signature: 'dependencies(): list<design_dependency>'
+    returns: list<design_dependency>
+    params: []
+    effect: read
 status: complete
 createdAt: '2026-10-04T13:53:56.292Z'
-updatedAt: '2026-10-04T17:32:47.222Z'
+updatedAt: '2026-10-23T22:27:19.262Z'

@@ -16,7 +16,7 @@ verdict" job unless a passing verdict covers the code being merged (stage 5).
 ## The stages
 
 1. **Freeze a release candidate (RC).** The RC is one commit on dev. After it, only QA fixes land on
-   dev; features wait. Build it (`npm ci && npm run build`) and write its full sha down: the verdict
+   dev; features wait. Build it (`npm ci && npm run build:web && npm run build`: the release pipelines rebuild the web app, so the RC must too) and write its full sha down: the verdict
    names it.
 2. **Automated checks (free, no LLM).** All must be green before any LLM is started:
    - CI green on the RC commit (typecheck, unit tests, e2e journeys, conformance, lock-check).
@@ -121,7 +121,10 @@ Fixes and the CHANGELOG describe behaviour, not the tricks that exposed it.
 result and the known limitations. The "Release QA verdict" job (`.github/workflows/ci.yml`, pull
 requests into main only) fails unless some verdict in `qa/verdicts/` has all of:
 
-1. `result: PASS`;
+1. `result: PASS`, for the version this merge tags: the next stable version after the latest tag,
+   bumped by `[major]` or `[minor]` in the pull request title (a patch otherwise), which a default
+   merge message carries to auto-tag. A "Release 6.2.0" titled without `[minor]` on a 6.1.x line
+   fails here instead of shipping as 6.1.x;
 2. the release it names ships its notes: `release-notes/<version>.md` exists and holds at least one
    highlight (a `- ` line), which `wairon whatsnew` and the first command after an update show;
 3. its `rc` commit is an ancestor of the pull request head;

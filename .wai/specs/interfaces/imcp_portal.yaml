@@ -108,15 +108,18 @@ methods:
     description: >-
       Tool: validate and answer with every finding, split into errors, warnings and notices (three
       separate lists, in the structured content and the text block alike). Notices never make the
-      tree invalid. At a project that declares members it is the family run — every selected
-      project's own gate verbatim under its project key, the composition of each project's externals
-      against their live producers, and the family checks — unless `recursive` is false, which asks
-      for the owner's gate alone; at any other project it is the owner's gate, unless `family` is
-      true. The hosted data plane serves this same tool, so a hosted verdict is the same function's:
-      a member-qualified credential binds the member root and gets the member's own gate (its family
-      run composes only within the credential's reach). Optionally narrowed to one subsystem, or to
-      one member by its key. An unfinished family-migration transaction under the bound root adds a
-      notice naming it and pointing at `wairon doctor --fix` (the pending-transaction banner).
+      tree invalid. The structured content and the hint line carry `validatorVersion`, the wairon
+      release of the running server process (ValidationResult.validatorVersion), so a verdict pasted
+      into a thread can be dated and a stale server told from a current one. At a project that
+      declares members it is the family run — every selected project's own gate verbatim under its
+      project key, the composition of each project's externals against their live producers, and the
+      family checks — unless `recursive` is false, which asks for the owner's gate alone; at any
+      other project it is the owner's gate, unless `family` is true. The hosted data plane serves
+      this same tool, so a hosted verdict is the same function's: a member-qualified credential
+      binds the member root and gets the member's own gate (its family run composes only within the
+      credential's reach). Optionally narrowed to one subsystem, or to one member by its key. An
+      unfinished family-migration transaction under the bound root adds a notice naming it and
+      pointing at `wairon doctor --fix` (the pending-transaction banner).
     signature: 'validateTree(subsystem?: string, recursive?: bool, family?: bool): ValidationResult'
     returns: ValidationResult
     params:
@@ -143,13 +146,17 @@ methods:
       - imcp_portal.sdd_validate_tree
   - name: getStatus
     description: >-
-      Tool: the spec tree as a structure, with each level's completeness; each member prints as a
-      project holding its own subsystems. Optionally narrowed to one subsystem, and optionally
-      descending into members. On a stale server the answer LEADS with the staleness — whether the
-      build on disk changed and whether spec writes are refused because its schemas changed — so the
-      first call of a session surfaces it before anything is written; an unfinished family-migration
-      transaction under the bound root leads likewise, one notice line each, pointing at `wairon
-      doctor --fix`.
+      Tool: the spec tree as a structure, with each level's completeness (types counted per
+      subsystem and per type group); each member prints as a project holding its own subsystems.
+      Optionally narrowed to one subsystem, and optionally descending into members. The structured
+      content carries the whole answer as `report` (exactly the text block, so a client that reads
+      only the structured content sees the tree and the approval verdict, not just a release) and
+      `validatorVersion` (the running server's wairon release, StatusReport.validatorVersion); the
+      text also ends with `wairon <version>`. On a stale server the answer LEADS with the staleness
+      — whether the build on disk changed and whether spec writes are refused because its schemas
+      changed — so the first call of a session surfaces it before anything is written; an unfinished
+      family-migration transaction under the bound root leads likewise, one notice line each,
+      pointing at `wairon doctor --fix`.
     signature: 'getStatus(subsystem?: string, recursive?: bool): string'
     returns: string
     params:
@@ -1265,20 +1272,22 @@ methods:
       method: tools/call sdd_surface_diff
   - name: renameSpec
     description: >-
-      Tool: rename one contract (interface) or one implementation on its own — the ids a component
-      rename keeps when they are not derived from the component's (i<id>, <id>_impl) — and rewrite
-      every reference to it: an implementation's contract, an export entry's interface (a public
-      name derived from the old id is kept with `as`), lint allows and debt-register entries keyed
-      on it. The spec moves to its new id and file, its old id in its rename trace. Refuses, writing
-      nothing: another kind, a spec that does not exist or lives in another project, a new id
-      outside the grammar (an interface id begins with i), taken or retired. With dryRun it answers
-      what it would do and writes nothing.
+      Tool: rename one contract (interface), one implementation or one type group on its own — the
+      ids a component rename keeps when they are not derived from the component's (i<id>, <id>_impl)
+      — and rewrite every reference to it: an implementation's contract, an export entry's interface
+      (a public name derived from the old id is kept with `as`), lint allows and debt-register
+      entries keyed on it. A GROUP rename moves the group's folder to the new id, retargets the
+      `group` of every type in it and the `parent` of every child group, and keeps the old id in its
+      rename trace; type ids never change. The spec moves to its new id and file, its old id in its
+      rename trace. Refuses, writing nothing: another kind, a spec that does not exist or lives in
+      another project, a new id outside the grammar (an interface id begins with i), taken or
+      retired. With dryRun it answers what it would do and writes nothing.
     signature: 'renameSpec(kind: WritableSpecKind, id: string, newId: string, dryRun?: bool): SpecIdRename'
     returns: SpecIdRename
     params:
       - name: kind
         type: WritableSpecKind
-        description: interface or implementation
+        description: interface, implementation or group
       - name: id
         type: string
         description: The spec to rename
@@ -1294,26 +1303,30 @@ methods:
       method: tools/call sdd_rename_spec
   - name: moveSpec
     description: >-
-      Tool: move a component or a type to another subsystem with everything that follows it — and,
-      with `together`, more specs of the same kind in the same call: a connected cluster whose edges
-      no single move could keep inside one subsystem, judged together and planned by one dry run. A
-      component takes the members it owns, its contracts and their implementations (their files move
-      to the new subsystem's folder); ids do not change, so references by id stay, and what names
-      the old subsystem follows — its export entries and lifecycle entrypoints for the moved
-      components, an L0 re-export from it. A type takes its file, its L1 export entries and every
-      reference qualified by the old subsystem, in either spelling (`old::type`, `old.type`) and
-      wherever it stands in a type expression; omit subsystem to make a type system-level. Gated: a
-      move that would create a forbidden doctrine edge or a cross-subsystem edge into a non-Portal
-      is refused with the rule's words — naming the collaborators to move `together` — and a curable
-      boundary finding is named as a notice. With dryRun it answers the plan and writes nothing.
+      Tool: move a component, a type or a type group to another subsystem with everything that
+      follows it — and, with `together`, more specs of the same kind in the same call: a connected
+      cluster whose edges no single move could keep inside one subsystem, judged together and
+      planned by one dry run. A component takes the members it owns, its contracts and their
+      implementations (their files move to the new subsystem's folder); ids do not change, so
+      references by id stay, and what names the old subsystem follows — its export entries and
+      lifecycle entrypoints for the moved components, an L0 re-export from it. A type takes its
+      file, its L1 export entries and every reference qualified by the old subsystem, in either
+      spelling (`old::type`, `old.type`) and wherever it stands in a type expression; omit subsystem
+      to make a type system-level. A GROUP moves with its whole folder (its types and child groups)
+      either to another subsystem's types folder (`subsystem`) or under another parent group
+      (`parent`; omitted, it becomes top-level in the destination home); every type in it keeps its
+      id, and a parent that would close a loop is refused. Gated: a move that would create a
+      forbidden doctrine edge or a cross-subsystem edge into a non-Portal is refused with the rule's
+      words — naming the collaborators to move `together` — and a curable boundary finding is named
+      as a notice. With dryRun it answers the plan and writes nothing.
     signature: >-
       moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, together?:
-      list<string>): SpecMove
+      list<string>, parent?: string): SpecMove
     returns: SpecMove
     params:
       - name: kind
         type: WritableSpecKind
-        description: component or type
+        description: component, type or group
       - name: id
         type: string
         description: The spec to move
@@ -1331,9 +1344,43 @@ methods:
           More specs of the same kind that move with it to the same subsystem, judged with it as one
           move
         optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, the group becomes
+          top-level in the destination home
+        optional: true
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_move_spec
+  - name: addGroup
+    description: >-
+      Tool: define a type group, a folder of types that organizes a large type surface without
+      changing any type's identity (type ids stay bare and global). A group may name a `parent`
+      group, making the groups a tree whose folders mirror the parent chain; the parent must exist
+      and share the group's home. `subsystem` places the group (and its parent chain) in that
+      subsystem's types folder instead of the project's shared one; omit it for the shared folder. A
+      type joins a group by naming it (`group` on sdd_add_type or sdd_update_spec on the type), and
+      moves between groups the same way — the type's file follows. A define is an UPSERT like every
+      create tool: re-defining an id restates its name, description and parent (an omitted
+      description or parent is cleared and reported); moving a group under a different parent or
+      subsystem is sdd_move_spec kind group, a rename is sdd_rename_spec kind group, a delete is
+      sdd_delete_spec kind group (refused while types or child groups remain unless forced). Gated
+      like any write: a parent that does not exist or that would close a loop is refused. The answer
+      carries the write receipt as structured content beside the sentence.
+    signature: 'addGroup(spec: GroupSpec, dryRun?: bool): SpecWriteReceipt'
+    returns: SpecWriteReceipt
+    params:
+      - name: spec
+        type: GroupSpec
+        description: 'The group: id, name, description, parent and the subsystem that homes it'
+      - name: dryRun
+        type: bool
+        description: Answer the receipt the write would give and write nothing
+        optional: true
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_add_group
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T19:48:09.696Z'
+updatedAt: '2026-10-24T14:23:42.227Z'

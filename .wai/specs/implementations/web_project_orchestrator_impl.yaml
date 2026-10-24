@@ -97,7 +97,43 @@ methods:
         outcome: GovernedProjectCreation
     detail: full
     symbol: createProject
+  - name: devStatus
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Resolve the browser session to a Principal (an expired or absent session yields an
+          unauthenticated principal)
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateSession
+      - stepNumber: 2
+        description: >-
+          Not authenticated, or not the development server? A hosted instance has no dev start to
+          report
+        type: branch
+        condition: the principal is not authenticated or the host is not in development mode
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: Answer devMode false with no problems
+        type: return
+        outcome: not the development server
+      - stepNumber: 4
+        description: >-
+          Read the members the development project declares on disk, live and nested included, each
+          as the record it should hold or as unreadable with its reason
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 5
+        description: Keep the unreadable ones as problems - member qualifier, declared path, reason
+        type: local
+      - stepNumber: 6
+        description: Answer devMode true with the problems
+        type: return
+        outcome: dev status
+    detail: full
 detail: calls-only
 status: complete
 createdAt: '2026-07-13T20:36:25.016Z'
-updatedAt: '2026-10-20T09:15:07.284Z'
+updatedAt: '2026-10-23T22:29:52.995Z'

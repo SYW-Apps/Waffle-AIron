@@ -768,7 +768,7 @@ With inputs (all optional):
       strict: true                      # fail when nothing was approved — use it once you have locked (default: false)
       validate: true                    # also run `wairon validate --ci` there (default: true)
       install: auto                     # the project's dependencies before validate: auto | none | <command> (default: auto)
-      node-version: '20'                # (default: '20')
+      node-version: '24'                # (default: '24')
       runs-on: ubuntu-latest            # (default: ubuntu-latest)
 ```
 
@@ -829,7 +829,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - run: npm install --global @wairon/cli@<version>   # the version you lock with (wairon --version)
       - run: wairon lock-check --strict
       - run: npm ci                                    # the project's dependencies: the gate reads your code with your TypeScript (5 or 6)
@@ -1483,12 +1483,12 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 49 tools:
+The local server offers 50 tools:
 
 | Group | Tools |
 |-------|-------|
 | Topology (read) | `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig` |
-| Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints` (dry run), `sdd_write_narrative`, `sdd_add_type` (dry run), `sdd_update_spec` (dry run, search), `sdd_delete_spec` (dry run, force, search) |
+| Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints` (dry run), `sdd_write_narrative`, `sdd_add_type` (dry run), `sdd_add_group` (dry run), `sdd_update_spec` (dry run, search), `sdd_delete_spec` (dry run, force, search) |
 | Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
 | Renames and moves (in this tree) — each with `dryRun` | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_param`, `sdd_rename_type`, `sdd_rename_field`, `sdd_rename_spec` (a contract or an implementation on its own), `sdd_move_methods`, `sdd_move_spec` (a component or a type to another subsystem) |
 | Members | `sdd_add_member`, `sdd_move_member` |
@@ -1525,8 +1525,10 @@ self-hosting, auth, and sizing.
 Run **one server per data directory**: scale up (a bigger machine), not out.
 Several replicas sharing one data directory over a network volume are not
 supported. The admin CLI (`wairon host …`) may run beside the server on the same
-data directory; until 6.2.2, run changes to permission grants, the organization,
-roles and policy one at a time rather than in parallel.
+data directory, and its changes may run in parallel: every hosted store locks its writes. Each
+store keeps its latest lock files (`<file>.lock.<n>` and `<file>.lock.<n>.end`) beside its file
+between writes. They are not leftovers: the lock numbers its next generation from them, so do not
+delete them.
 
 ### `wairon serve [--host <h>] [--port <p>] [--admin-host <h>] [--admin-port <p>] [--data-dir <path>] [--no-auth]`
 Start the hosting server. Data plane on `0.0.0.0:8080` (`POST /mcp`, `/healthz`,

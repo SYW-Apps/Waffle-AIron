@@ -38,9 +38,10 @@ export const DESIGN_FORMAT = 'wairon-design';
  * One major is emitted at a time, and a design change is never a format change.
  * 2.0 is the reachability model's: listener mounts and portalType removed,
  * transport, abi and the Portal-level invokedBy added, invokedBy kinds
- * narrowed to entry and runtime with a scope.
+ * narrowed to entry and runtime with a scope. 2.1 added detailStated to each
+ * method body; 2.2 adds the type group tree (typeGroups) and each type's group.
  */
-export const DESIGN_FORMAT_VERSION = '2.1';
+export const DESIGN_FORMAT_VERSION = '2.2';
 
 /**
  * design_approval — the approval state a design export is stamped with: the
@@ -276,10 +277,22 @@ export const DesignTypeSchema = z.object({
   database: z.string().optional(),
   table: z.string().optional(),
   linkedEntity: z.string().optional(),
+  /** The key of the type group this type sits in (a key in DesignExport.typeGroups); absent for an ungrouped type. */
+  group: z.string().optional(),
   formerly: z.array(z.string()),
   ext: ExtSchema.optional(),
 }).passthrough();
 export type DesignType = z.infer<typeof DesignTypeSchema>;
+
+/** design_type_group — one type group of the layout tree; presentation only, parents named by key. */
+export const DesignTypeGroupSchema = z.object({
+  key: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  parent: z.string().optional(),
+  subsystem: z.string().optional(),
+}).passthrough();
+export type DesignTypeGroup = z.infer<typeof DesignTypeGroupSchema>;
 
 /** design_export — one project's whole design, resolved: the one documented integration point. */
 export const DesignExportSchema = z.object({
@@ -294,5 +307,7 @@ export const DesignExportSchema = z.object({
   interfaces: z.array(DesignInterfaceSchema),
   implementations: z.array(DesignImplementationSchema),
   types: z.array(DesignTypeSchema),
+  /** The type group tree, sorted by key; omitted when the project has no groups. */
+  typeGroups: z.array(DesignTypeGroupSchema).optional(),
 }).passthrough();
 export type DesignExport = z.infer<typeof DesignExportSchema>;

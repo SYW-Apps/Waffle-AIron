@@ -497,6 +497,30 @@ methods:
         type: string
         description: 'The system id asked for: a name of this L0, or `alias::name`'
     effect: read
+  - name: holdsDesign
+    description: >-
+      Whether the bound tree holds anything to approve: a subsystem, a type anywhere, an L0 export
+      entry or a direct member project. The one predicate behind lock's, lock-check's, status's and
+      validate's 'nothing to approve / empty tree' wording. Passthrough read of the spec repository.
+    signature: 'holdsDesign(): bool'
+    returns: bool
+    params: []
+    effect: read
+    invokedBy:
+      kind: entry
+      caller: the lock and validate CLI adapters and the MCP status tool, through the in-process core
+  - name: loadGroupSpecs
+    description: >-
+      Every type group of the tree with its parent (the group tree). Passthrough read of the spec
+      repository; the status report, the design export and the canvas model read the groups from
+      here.
+    signature: 'loadGroupSpecs(): list<group_spec>'
+    returns: list<group_spec>
+    params: []
+    effect: read
+    invokedBy:
+      kind: entry
+      caller: the status, export and canvas surfaces over the in-process core
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T06:12:29.456Z'
+updatedAt: '2026-10-23T22:19:06.920Z'

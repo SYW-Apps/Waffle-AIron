@@ -5,6 +5,7 @@ import {
   InterfaceSpec,
   ImplementationSpec,
   TypeSpec,
+  GroupSpec,
   RulesConfig,
   SurfaceSnapshot,
   MethodSignature,
@@ -435,6 +436,17 @@ export interface RuleContext {
   interfaces: InterfaceSpec[];
   implementations: ImplementationSpec[];
   types: TypeSpec[];
+  /**
+   * The loaded type groups (the layout tree types sit in), each with its parent;
+   * read by the type-groups rule. Absent on a candidate run, which judges no layout.
+   */
+  groups?: GroupSpec[];
+  /**
+   * The file each group and each grouped type was read from, by id: what the
+   * type-groups rule compares the folder chain with. Absent with groups.
+   */
+  groupFiles?: Record<string, string>;
+  typeFiles?: Record<string, string>;
 
   rules?: RulesConfig;
   projectType: string;

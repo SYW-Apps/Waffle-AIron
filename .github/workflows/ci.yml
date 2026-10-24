@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main, dev, beta]
 
+# The token reads the repository only; a job that needs more says so itself.
+permissions:
+  contents: read
+
 jobs:
   check:
     name: Typecheck, Test, Build & Conformance
@@ -17,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -91,7 +95,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -109,6 +113,10 @@ jobs:
     name: Release QA verdict
     if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    # Reads the pull request's title for the version bump.
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       # The pull request's own head (not the synthetic merge commit), with the
@@ -121,10 +129,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+
+      # The version auto-tag will give this merge: the bump is read from the
+      # pull request title (a default merge message carries it), live, so a
+      # retitled pull request is judged by its new title on a re-run.
+      - name: The version this merge tags
+        id: next
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          TITLE="$(gh pr view "$PR" --json title --jq .title)"
+          case "$TITLE" in
+            *'[major]'*) BUMP=major ;;
+            *'[minor]'*) BUMP=minor ;;
+            *) BUMP=patch ;;
+          esac
+          VERSION="$(bash scripts/next-version.sh stable "$BUMP")"
+          echo "This merge tags v${VERSION} (${BUMP}, from the title \"${TITLE}\")."
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: A passing verdict covers this head
-        run: node qa/scripts/check-verdict.mjs
+        run: node qa/scripts/check-verdict.mjs --expect "${{ steps.next.outputs.version }}"
 
   docker-build:
     name: Build Docker image (no push)

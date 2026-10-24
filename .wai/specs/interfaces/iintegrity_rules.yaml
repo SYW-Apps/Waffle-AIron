@@ -688,6 +688,46 @@ methods:
         summary: >-
           A written type reference matches several types, or binds to a type while another type
           carries that name and sits at least as close to the referrer
+  - name: typeGroups
+    description: >-
+      Rule type-groups. Type groups are a tree of folders (group_spec.parent) over a project's
+      types. A type naming a group that no group spec declares is reported (TYPE_GROUP_UNKNOWN); so
+      is a group naming a parent that does not exist (GROUP_PARENT_UNKNOWN) and a parent chain that
+      leads back to its own group (GROUP_CYCLE, once per cycle, naming the groups in it). A group
+      and its parent share one home (the shared types folder or one subsystem's): a parent that
+      exists but lives in another home is its own error, GROUP_PARENT_CROSS_HOME, separate from
+      GROUP_PARENT_UNKNOWN because the fix differs (move one of the two, not create a group) and the
+      message can name both homes. Layout is judged last and softer: a group whose file does not sit
+      inside its parent's folder, and a type whose file does not sit in its group's folder, are
+      TYPE_GROUP_MISPLACED (a warning that `wairon doctor --fix` repairs by moving the file; nothing
+      resolves through the folder, so the design is unaffected). Type ids stay global and bare, so
+      no rule here concerns a type's id.
+    signature: 'typeGroups(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: TYPE_GROUP_UNKNOWN
+        severity: error
+        summary: A type names a group that no group spec declares
+      - code: GROUP_PARENT_UNKNOWN
+        severity: error
+        summary: A group names a parent group that does not exist
+      - code: GROUP_CYCLE
+        severity: error
+        summary: A group's parent chain leads back to the group itself
+      - code: TYPE_GROUP_MISPLACED
+        severity: warning
+        summary: >-
+          A group or type file does not sit in the folder its parent chain or group names; doctor
+          --fix moves it
+      - code: GROUP_PARENT_CROSS_HOME
+        severity: error
+        summary: >-
+          A group's parent exists but lives in another home (shared folder vs a subsystem's, or two
+          subsystems'); a group and its parent share one home
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-21T21:19:39.729Z'
+updatedAt: '2026-10-23T22:26:10.364Z'

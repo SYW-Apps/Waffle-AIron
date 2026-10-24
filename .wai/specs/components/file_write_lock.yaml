@@ -1,0 +1,19 @@
+id: file_write_lock
+name: File Write Lock
+description: >-
+  The cross-process write lock of one data file, shared by every hosted store that reads its whole
+  file, changes it and writes it back. Pure file-system mechanism: it holds no domain state and
+  knows nothing of what the file contains. Mutual exclusion is by generation: the lock of generation
+  g is the file <file>.lock.<g>, created exclusively; the generation is over once
+  <file>.lock.<g>.end exists, created exclusively by its holder at release or by a reclaimer that
+  judged the holder gone. A name, once used, is never recreated while a higher generation exists,
+  and nothing is ever deleted by path while it could be judged, so a stalled process can only ever
+  perform an action that is harmless by construction (see the implementation for the interleaving
+  argument).
+subsystem: sdd_host
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-23T22:16:13.870Z'
+updatedAt: '2026-10-23T22:25:04.284Z'

@@ -2170,7 +2170,7 @@ export interface SaveSpecOptions {
  */
 export interface SpecWriteHooks {
   gate?(
-    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group',
     merged: Record<string, any>,
   ): string[] | void;
   /**
@@ -2186,17 +2186,68 @@ export interface SpecWriteHooks {
    * indistinguishable from a refusal.
    */
   assess?(
-    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type',
+    kind: 'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group',
     merged: Record<string, any>,
   ): string[];
 }
 
-/** The kinds `updateSpec` addresses — every level of the tree. */
+/** The kinds `updateSpec` addresses — every level of the tree, and the type group tree beside it. */
 export type WritableSpecKind =
-  'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type';
+  'system' | 'subsystem' | 'component' | 'interface' | 'implementation' | 'type' | 'group';
 
 /** One stored spec of any level — what the kind-generic load answers and save takes. */
-type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec;
+type StoredSpec = SystemSpec | SubsystemSpec | ComponentSpec | InterfaceSpec | ImplementationSpec | TypeSpec | GroupSpec;
+
+/**
+ * group_spec.chain — the ids from the top-level group down to `group`,
+ * following `parent` through `all`. A parent that is not in `all` ends the walk
+ * at the last known group, and a walk that meets a group twice ends where it
+ * would have repeated, so a cycle is cut rather than followed. Pure over the
+ * groups handed in; the folder of a group is this chain's ids joined under its
+ * home's types folder.
+ */
+export function groupChain(group: GroupSpec, all: readonly GroupSpec[]): string[] {
+  const byId = new Map(all.map((g) => [g.id, g] as const));
+  const chain: string[] = [group.id];
+  const seen = new Set<string>([group.id]);
+  let at: GroupSpec = group;
+  while (at.parent !== undefined) {
+    const up = byId.get(at.parent);
+    if (up === undefined || seen.has(up.id)) break;
+    chain.unshift(up.id);
+    seen.add(up.id);
+    at = up;
+  }
+  return chain;
+}
+
+/**
+ * group_spec.cycles — whether following `parent` from `group`, through `all`,
+ * reaches `group` again. Pure over the groups handed in.
+ */
+export function groupCycles(group: GroupSpec, all: readonly GroupSpec[]): boolean {
+  const byId = new Map(all.map((g) => [g.id, g] as const));
+  const seen = new Set<string>();
+  let at: string | undefined = group.parent;
+  while (at !== undefined && !seen.has(at)) {
+    if (at === group.id) return true;
+    seen.add(at);
+    at = byId.get(at)?.parent;
+  }
+  return false;
+}
+
+
+/** The zod schema of each writable kind: what a delta's keys are checked against and a write is parsed with. */
+const SPEC_SCHEMAS = {
+  system: SystemSpecSchema,
+  subsystem: SubsystemSpecSchema,
+  component: ComponentSpecSchema,
+  interface: InterfaceSpecSchema,
+  implementation: ImplementationSpecSchema,
+  type: TypeSpecSchema,
+  group: GroupSpecSchema,
+} as const;
 
 /** What a write did at one path of a stored spec. */
 export type SpecChangeKind = 'set' | 'added' | 'removed' | 'cleared' | 'renumbered' | 'relocated' | 'reordered';
@@ -4086,6 +4137,25 @@ export class SpecWorkspace {
     return this.cachedRoots;
   }
 
+  /**
+   * ispec_index.holdsDesign — whether the bound root holds anything to
+   * approve: a subsystem, a type (flat, grouped or in a subsystem), an L0
+   * export entry, or a direct member project (a part's specs are this root's
+   * own subsystems and types). False only for an L0 with nothing below it.
+   */
+  holdsDesign(): boolean {
+    // Step 1: the root's own subsystems and types, whatever their layout.
+    const scan = this.scanAll();
+    const bound = this.cachedRoots.find((r) => r.namespace === '');
+    const own = new Set(bound?.specIds ?? []);
+    if (scan.subsystems.some((s) => own.has(s.id)) || scan.types.some((t) => own.has(t.id))) return true;
+    // Step 2: the L0's export table.
+    if ((bound?.system?.publicInterfaces ?? []).length > 0) return true;
+    // Step 3: a direct member project, read into the scan or only referenced.
+    if (this.cachedRoots.some((r) => r.parent === '' && r.mountAlias !== undefined)) return true;
+    return (bound?.referenced ?? []).length > 0;
+  }
+
   // -------------------------------------------------------------------------
   // Stage 8: a spec's home
   // -------------------------------------------------------------------------
@@ -4817,7 +4887,7 @@ export class SpecWorkspace {
     return path.join(this.paths.specsTypesDir(), `${localId}.yaml`);
   }
 
-  getGroupPath(id: string, subsystemId?: string): string {
+  getGroupPath(id: string, subsystemId?: string, parentId?: string): string {
     const index = this.scanAll();
     const { localId: plainId } = splitNamespace(id);
     if (index.paths.group[id]) return index.paths.group[id];
@@ -4840,6 +4910,12 @@ export class SpecWorkspace {
         const remainingSubsystem = parts[parts.length - 1];
         return workspaceFor(childProj).getGroupPath(id, remainingSubsystem);
       }
+    }
+
+    // A child group sits inside its parent's folder: the folder chain mirrors the parent chain.
+    if (parentId !== undefined && parentId !== '') {
+      const parentIndex = index.paths.group[parentId];
+      if (parentIndex) return path.join(path.dirname(parentIndex), id.split('::').pop()!, '.index.yaml');
     }
 
     let localId = id;
@@ -5539,7 +5615,13 @@ export class SpecWorkspace {
     const notices: string[] = [];
     const existing = this.loadTypeSpec(spec.id);
     const group = spec.group || (existing ? existing.group : undefined);
-    const p = this.getTypePath(spec.id, spec.subsystem, group);
+    const stored = this.getTypePath(spec.id, spec.subsystem, group);
+    // A type that joins another group takes its file along: beside the group's index, as a new type is placed.
+    const regrouped = existing !== null && existing !== undefined && spec.group !== undefined && spec.group !== '' && spec.group !== existing.group;
+    const groupIndex = regrouped ? this.scanAll().paths.group[spec.group!] : undefined;
+    const target = groupIndex ? path.join(path.dirname(groupIndex), `${spec.id.split('::').pop()}.yaml`) : undefined;
+    const relocating = target !== undefined && path.resolve(target) !== path.resolve(stored) && !fs.existsSync(target);
+    const p = relocating ? target! : stored;
     this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
@@ -5571,6 +5653,10 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id), 'type');
+    if (relocating && fs.existsSync(stored)) {
+      this.removeHome(stored, 'type');
+      notices.push(`type "${spec.id}" moved to group "${spec.group}": its file is now ${path.relative(this.rootDir, p)}.`);
+    }
     registryInvalidateCache();
     return notices;
   }
@@ -5596,13 +5682,21 @@ export class SpecWorkspace {
   }
 
   saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
-    const p = this.getGroupPath(spec.id);
+    const existing = this.loadGroupSpec(spec.id);
+    let p = this.getGroupPath(spec.id, spec.subsystem, spec.parent);
+    // A group given another parent or home takes its whole folder along (its types and child groups).
+    if (existing && ((existing.parent ?? '') !== (spec.parent ?? '') || (existing.subsystem ?? '') !== (spec.subsystem ?? ''))) {
+      const target = this.plannedGroupIndex(spec);
+      if (path.resolve(target) !== path.resolve(p)) {
+        this.moveGroupFolder(p, target);
+        p = target;
+      }
+    }
     this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
     const specToWrite = this.prepareGroupForWrite(spec);
 
-    const existing = this.loadGroupSpec(spec.id);
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
     }
@@ -5616,6 +5710,120 @@ export class SpecWorkspace {
     if (!this.removeHome(p, 'group')) return false;
     registryInvalidateCache();
     return true;
+  }
+
+  /** The types folder a home keeps its groups and grouped types in: a nested subsystem's own, else the project's shared one. */
+  typesFolderOf(home?: string): string {
+    if (home) {
+      const subPath = this.getSubsystemPath(home);
+      if (subPath.endsWith('.index.yaml')) return path.join(path.dirname(subPath), 'types');
+    }
+    return this.paths.specsTypesDir();
+  }
+
+  /** Where a group's index belongs: under its parent's folder, else at the top of its home's types folder. */
+  plannedGroupIndex(spec: Pick<GroupSpec, 'id' | 'parent' | 'subsystem'>): string {
+    const parentIndex = spec.parent ? this.scanAll().paths.group[spec.parent] : undefined;
+    if (parentIndex) return path.join(path.dirname(parentIndex), spec.id, '.index.yaml');
+    return path.join(this.typesFolderOf(spec.subsystem), spec.id, '.index.yaml');
+  }
+
+  /** Move a group's folder (its index, its types and its child groups) to where another index would sit; refuses to clobber or to move a folder into itself. */
+  private moveGroupFolder(fromIndex: string, toIndex: string): void {
+    const fromDir = path.dirname(fromIndex);
+    const toDir = path.dirname(toIndex);
+    this.assertHomeWritable(fromIndex);
+    this.assertHomeWritable(toIndex);
+    if (path.normalize(fromDir) === path.normalize(toDir)) return;
+    const rel = path.relative(fromDir, toDir);
+    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
+      throw new Error(`Refusing to move the group folder ${fromDir} into itself (${toDir}).`);
+    }
+    if (fs.existsSync(toDir) && fs.readdirSync(toDir).length > 0) {
+      throw new Error(`Refusing to move the group folder ${fromDir}: ${toDir} already holds files.`);
+    }
+    if (fs.existsSync(toDir)) fs.rmdirSync(toDir);
+    ensureDir(path.dirname(toDir));
+    renamePath(fromDir, toDir);
+    // The folder the group left, and each parent that leaves empty, goes too.
+    let at = path.dirname(fromDir);
+    const root = path.resolve(this.paths.specsDir());
+    while (path.resolve(at) !== root && path.resolve(at).startsWith(root) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
+      fs.rmdirSync(at);
+      at = path.dirname(at);
+    }
+    registryInvalidateCache();
+  }
+
+  /**
+   * Restate the home (subsystem) of groups whose folder moved with their
+   * ancestor, in place: only that key of each document changes, so a move
+   * stays placement (updatedAt and everything else kept).
+   */
+  restateGroupHomes(ids: string[], subsystem: string | undefined): void {
+    const index = this.scanAll();
+    for (const id of ids) {
+      const file = index.paths.group[id];
+      if (!file) continue;
+      const doc = readSpecFile(file) as Record<string, unknown> | null;
+      if (!doc || doc.subsystem === subsystem) continue;
+      if (subsystem === undefined) delete doc.subsystem;
+      else doc.subsystem = subsystem;
+      this.writeHome(file, doc, 'group');
+    }
+    registryInvalidateCache();
+  }
+
+  /**
+   * Rename a group: its folder, the group of every type naming it and the
+   * parent of every child group follow the new id. Each rewritten document
+   * keeps everything but that key (a rename retargets, it edits nothing else).
+   */
+  renameGroup(id: string, newId: string): string[] {
+    const index = this.scanAll();
+    const file = index.paths.group[id];
+    const group = index.groups.find((g) => g.id === id);
+    if (!file || !group) throw new Error(`No group "${id}".`);
+    const newIndex = path.join(path.dirname(path.dirname(file)), newId, '.index.yaml');
+    const typeIds = index.types.filter((t) => t.group === id).map((t) => t.id);
+    const childIds = index.groups.filter((g) => g.parent === id).map((g) => g.id);
+    this.moveGroupFolder(file, newIndex);
+    const retarget = (target: string | undefined, key: 'group' | 'parent', kind: SpecDocumentKind): void => {
+      if (!target) return;
+      const doc = readSpecFile(target) as Record<string, unknown> | null;
+      if (!doc) return;
+      doc[key] = newId;
+      this.writeHome(target, doc, kind);
+    };
+    // The renamed group's own document, now beside the new id.
+    const doc = readSpecFile(newIndex) as Record<string, unknown> | null;
+    if (doc) {
+      doc.id = newId;
+      this.writeHome(newIndex, doc, 'group');
+    }
+    registryInvalidateCache();
+    const after = this.scanAll();
+    const retargeted: string[] = [];
+    for (const typeId of typeIds) {
+      retarget(after.paths.type[typeId], 'group', 'type');
+      retargeted.push(typeId);
+    }
+    for (const childId of childIds) {
+      retarget(after.paths.group[childId], 'parent', 'group');
+      retargeted.push(childId);
+    }
+    registryInvalidateCache();
+    return retargeted;
+  }
+
+  /**
+   * spec_registry.moveGroup — write a group at its new placement, its folder
+   * (its types and the groups beneath it) moving along, then restate the home
+   * of each group beneath it. Placement, not an edit: updatedAt is kept.
+   */
+  moveGroup(spec: GroupSpec, beneath: string[]): void {
+    this.saveGroupSpec(spec, { preserveUpdatedAt: true });
+    this.restateGroupHomes(beneath, spec.subsystem);
   }
 
   // -------------------------------------------------------------------------
@@ -5637,6 +5845,7 @@ export class SpecWorkspace {
       case 'interface':      return this.loadInterfaceSpec(id);
       case 'implementation': return this.loadImplementationSpec(id);
       case 'type':           return this.loadTypeSpec(id);
+      case 'group':          return this.loadGroupSpec(id);
     }
   }
 
@@ -5656,14 +5865,7 @@ export class SpecWorkspace {
     } catch {
       return [];
     }
-    const schema = {
-      system: SystemSpecSchema,
-      subsystem: SubsystemSpecSchema,
-      component: ComponentSpecSchema,
-      interface: InterfaceSpecSchema,
-      implementation: ImplementationSpecSchema,
-      type: TypeSpecSchema,
-    }[kind];
+    const schema = SPEC_SCHEMAS[kind];
     // The retired reachability forms are read in the v5 reading, never stripped: a
     // portalType becomes the transport it names, and a listener's mounts are
     // carried by the writer until the migration rewrites them.
@@ -5697,6 +5899,7 @@ export class SpecWorkspace {
       case 'interface':      return this.saveInterfaceSpec(spec as InterfaceSpec, opts);
       case 'implementation': return this.saveImplementationSpec(spec as ImplementationSpec, opts);
       case 'type':           return this.saveTypeSpec(spec as TypeSpec, opts);
+      case 'group':          this.saveGroupSpec(spec as GroupSpec, opts); return [];
     }
   }
 
@@ -5710,6 +5913,7 @@ export class SpecWorkspace {
       case 'interface':      return this.deleteInterfaceSpec(id);
       case 'implementation': return this.deleteImplementationSpec(id);
       case 'type':           return this.deleteTypeSpec(id);
+      case 'group':          return this.deleteGroupSpec(id);
     }
   }
 
@@ -6198,21 +6402,15 @@ export class SpecWorkspace {
    * write reach). Throws the save's own refusal; writes nothing.
    */
   private stageWrite(kind: WritableSpecKind, spec: Record<string, any>, id: string): void {
-    const schema = {
-      system: SystemSpecSchema,
-      subsystem: SubsystemSpecSchema,
-      component: ComponentSpecSchema,
-      interface: InterfaceSpecSchema,
-      implementation: ImplementationSpecSchema,
-      type: TypeSpecSchema,
-    }[kind];
+    const schema = SPEC_SCHEMAS[kind];
     const document = parseOrThrow(schema, this.prepareForKind(kind, spec as StoredSpec), kind, id);
     const home = kind === 'system' ? this.paths.specsSystem()
       : kind === 'subsystem' ? this.getSubsystemPath(spec.id)
         : kind === 'component' ? this.getComponentPath(spec.id, spec.subsystem)
           : kind === 'interface' ? this.getInterfacePath(spec.id, spec.component)
             : kind === 'implementation' ? this.getImplementationPath(spec.id, spec.contract)
-              : this.getTypePath(spec.id, spec.subsystem, spec.group);
+              : kind === 'group' ? this.getGroupPath(spec.id, spec.subsystem)
+                : this.getTypePath(spec.id, spec.subsystem, spec.group);
     this.assertHomeWritable(home);
     this.assertHomeInReach(home, kind, document);
   }
@@ -6433,14 +6631,7 @@ export class SpecWorkspace {
     // stripped by the spec schema on write — leaving "Successfully updated",
     // an unchanged tree, and a clean validate. `dependson` for `dependsOn` was
     // reported exactly this way: the edit never happened and nothing said so.
-    const deltaSchema = {
-      system: SystemSpecSchema,
-      subsystem: SubsystemSpecSchema,
-      component: ComponentSpecSchema,
-      interface: InterfaceSpecSchema,
-      implementation: ImplementationSpecSchema,
-      type: TypeSpecSchema,
-    }[kind];
+    const deltaSchema = SPEC_SCHEMAS[kind];
     const knownKeys = new Set(Object.keys(deltaSchema.shape));
     // `unset` is a delta-only verb, not a spec field.
     knownKeys.add('unset');
@@ -8711,6 +8902,11 @@ export function listProjectRoots(): ScannedProjectRoot[] {
   return current().listProjectRoots();
 }
 
+/** ispec_loader.holdsDesign / ispec_tree_portal.holdsDesign — forwarded 1:1 to the index. */
+export function holdsDesign(): boolean {
+  return current().holdsDesign();
+}
+
 export function saveTypeSpec(spec: TypeSpec): string[] {
   return current().saveTypeSpec(spec);
 }
@@ -9048,8 +9244,22 @@ export function loadGroupSpec(id: string): GroupSpec | null {
   return current().loadGroupSpec(id);
 }
 
-export function saveGroupSpec(spec: GroupSpec): void {
-  current().saveGroupSpec(spec);
+export function saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
+  current().saveGroupSpec(spec, opts);
+}
+
+/** Restate the home of groups whose folder moved with an ancestor; only that key changes. */
+export function restateGroupHomes(ids: string[], subsystem: string | undefined): void {
+  current().restateGroupHomes(ids, subsystem);
+}
+
+/** Rename a group with its folder, its types' group and its children's parent. */
+export function renameGroup(id: string, newId: string): string[] {
+  return current().renameGroup(id, newId);
+}
+
+export function moveGroup(spec: GroupSpec, beneath: string[]): void {
+  current().moveGroup(spec, beneath);
 }
 
 export function deleteGroupSpec(id: string): boolean {

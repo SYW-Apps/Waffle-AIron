@@ -41,6 +41,8 @@ function snapshot(dir: string): Record<string, string> {
   const out: Record<string, string> = {};
   const walk = (d: string): void => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      // The tree write lock's generation files stay on disk by design: not content.
+      if (e.name.startsWith('.spec-write.lock')) continue;
       const full = path.join(d, e.name);
       if (e.isDirectory()) walk(full);
       else out[path.relative(dir, full).replace(/\\/g, '/')] = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex');

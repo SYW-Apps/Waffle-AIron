@@ -1,0 +1,68 @@
+id: local_dev_registration_impl
+name: Local Dev Registration Implementation
+description: >-
+  Local development registration: guard the configuration, reset a stale disposable data directory,
+  register the working directory as the dev project and every readable member of its family, and
+  answer what could not be registered with its reason.
+contract: ilocal_dev_registration
+sourcePath: src/server/admin.ts
+injectedParams:
+  - cfg
+methods:
+  - name: register
+    narrative:
+      - stepNumber: 1
+        description: Admit only a development-mode host configuration
+        type: branch
+        condition: the host configuration is not in development mode
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: >-
+          Refuse: registration at a caller-named directory is reserved for the local development
+          server
+        type: throw
+        error: Error
+      - stepNumber: 3
+        description: >-
+          Discard the disposable development data directory when it is unversioned, from another
+          major or would need any instance migration, so the start begins fresh - never backed up,
+          never migrated
+        type: call
+        targetComponent: instance_upgrade
+        targetMethod: resetDevDataDir
+      - stepNumber: 4
+        description: Register the project record at the working directory
+        type: call
+        targetComponent: project_repository
+        targetMethod: register
+      - stepNumber: 5
+        description: >-
+          Read the members the registered project declares on disk, nested included, each as the
+          record it should hold or as unreadable with its reason
+        type: call
+        targetComponent: project_repository
+        targetMethod: declaredMembers
+      - stepNumber: 6
+        description: >-
+          For every declared member that can be read, register its record; an unreadable one is kept
+          in the answer with its reason and registers nothing
+        type: loop
+        loopKind: forEach
+        over: declared members whose action is not unreadable
+        endStep: 7
+      - stepNumber: 7
+        description: >-
+          Upsert the member record, no reach screening and no audit: the development server has no
+          users and no grants
+        type: call
+        targetComponent: project_repository
+        targetMethod: registerMember
+      - stepNumber: 8
+        description: Return the record, every declared member as found and whether the data directory was reset
+        type: return
+        outcome: dev family registration
+    symbol: registerLocalDevProject
+status: complete
+createdAt: '2026-10-23T22:31:21.357Z'
+updatedAt: '2026-10-23T22:32:15.600Z'

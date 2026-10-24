@@ -9,11 +9,16 @@ import { startHostServer } from '../../src/server/http.js';
 // The test process talks to it over real HTTP with real minted credentials.
 // ---------------------------------------------------------------------------
 
-startHostServer({
+// Both planes listen on port 0 (the OS picks free ports) and the bound ports are
+// printed once up, so the test never probes for a free port and binds it later.
+const handle = startHostServer({
   host: '127.0.0.1',
-  port: Number(process.env.DRIVER_PORT),
+  port: 0,
   adminHost: '127.0.0.1',
-  adminPort: Number(process.env.DRIVER_ADMIN_PORT),
+  adminPort: 0,
   dataDir: process.env.DRIVER_DATA_DIR!,
   authEnabled: true,
+});
+void handle.listening.then((ports) => {
+  console.log(`DRIVER_LISTENING ${JSON.stringify(ports)}`);
 });

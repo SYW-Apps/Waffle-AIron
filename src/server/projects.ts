@@ -4,7 +4,8 @@ import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import { resolveContainedProjectPath, loadProjectConfig, loadSubsystemSpecs } from './adapters/core.js';
-import { declaredMembers, effectiveProjectId } from '../models/project.js';
+import { declaredMembers, effectiveProjectId, PROJECT_ID_RE } from '../models/project.js';
+import { identifierProblem } from '../models/identifiers.js';
 import * as projectStore from './project-store.js';
 import type {
   HostedProjectRecord,
@@ -33,11 +34,18 @@ import type {
 // The server start rewrites the qualified entries an older major stored.
 // ---------------------------------------------------------------------------
 
-/** Path-safe project ids only, so a crafted id can never escape projects/. */
-const ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-
+/**
+ * A hosted record id IS a project id: the one project-id grammar (PROJECT_ID_RE), never mapped or
+ * narrowed. Path-safe by construction (alphanumeric ends, no separators, no device names), so a
+ * crafted id can never escape projects/.
+ */
 export function isValidProjectId(id: unknown): id is string {
-  return typeof id === 'string' && ID_RE.test(id);
+  return typeof id === 'string' && PROJECT_ID_RE.test(id);
+}
+
+/** Why an id is no hosted record id, in the project-id grammar's own words. */
+export function invalidProjectIdProblem(id: string): string {
+  return identifierProblem(id, 'project-id') ?? "a project id is lowercase letters, digits, '-', '_' and '.', starting and ending with a letter or digit, at most 64 characters, and never super or a Windows device name";
 }
 
 /** The records as stored (project_store.read): a member record carries no rootPath. */
@@ -164,7 +172,7 @@ export function partSubsystemIds(dataDir: string, id: string, alias: string): st
 /** Allocate an isolated root, create its directory, and persist the record. */
 export function createProjectRecord(dataDir: string, id: string): HostedProjectRecord {
   if (!isValidProjectId(id)) {
-    throw new Error(`Invalid project id "${id}" (allowed: lowercase letters, digits, hyphen).`);
+    throw new Error(`Invalid project id "${id}": ${invalidProjectIdProblem(id)}.`);
   }
   const root = projectRoot(dataDir, id);
   const record: HostedProjectRecord = {
@@ -196,7 +204,7 @@ export function registerProjectRecord(
   rootPath: string,
 ): HostedProjectRecord {
   if (!isValidProjectId(id)) {
-    throw new Error(`Invalid project id "${id}" (allowed: lowercase letters, digits, hyphen).`);
+    throw new Error(`Invalid project id "${id}": ${invalidProjectIdProblem(id)}.`);
   }
   let record!: HostedProjectRecord;
   update(dataDir, (records) => {
@@ -245,7 +253,7 @@ export function registerMemberRecord(dataDir: string, record: HostedProjectRecor
 /** A member record's id and path shape: a valid id, a parent, and a relative path within it. Answers the normalized path. */
 function validMemberShape(record: HostedProjectRecord): string {
   if (!isValidProjectId(record.id)) {
-    throw new Error(`Invalid project id "${record.id}" (allowed: lowercase letters, digits, hyphen).`);
+    throw new Error(`Invalid project id "${record.id}": ${invalidProjectIdProblem(record.id)}.`);
   }
   if (!record.parentProjectId || record.memberPath === undefined) {
     throw new Error(`Member record "${record.id}" needs a parentProjectId and a memberPath.`);
@@ -456,10 +464,10 @@ function memberIdAt(dir: string): { id: string } | { reason: string } {
     const config = runWithProjectRoot(dir, () => loadProjectConfig());
     id = config ? effectiveProjectId(config) : null;
   } catch (e) {
-    return { reason: `its .wai/project.yaml cannot be read or fails its schema: ${e instanceof Error ? e.message : String(e)}` };
+    return { reason: `its .wai/project.yaml cannot be read or fails its schema: ${(e instanceof Error ? e.message : String(e)).replace(/\s+/g, ' ').trim()}` };
   }
   if (id === null) return { reason: 'its .wai/project.yaml declares no project id, and its name yields none' };
-  if (!isValidProjectId(id)) return { reason: `its project id "${id}" is not a valid hosted record id (lowercase letters, digits, hyphen)` };
+  if (!isValidProjectId(id)) return { reason: `its project id "${id}" is not a valid hosted record id: ${invalidProjectIdProblem(id)}` };
   return { id };
 }
 
@@ -538,6 +546,11 @@ function planOne(
     dir = resolveContainedProjectPath(parentDir, decl.path);
   } catch (e) {
     return unreadable(`its path "${decl.path}" does not stay within its parent: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // A project.yaml that cannot be parsed at all is a member nobody can read, never a part: say why.
+  if (fs.existsSync(aiPathsAt(dir).projectConfig()) && rawConfigAt(dir) === null) {
+    const unparsed = memberIdAt(dir);
+    return unreadable('reason' in unparsed ? unparsed.reason : 'its .wai/project.yaml cannot be read');
   }
   // A part is part of its parent's record (stage 8): a record its member held as a project is retired.
   if (fs.existsSync(dir) && !holdsProjectContent(dir)) {

@@ -1,8 +1,9 @@
 id: role_registry_impl
 name: Role Registry Implementation
 description: >-
-  Write path for permission roles: id/timestamp stamping, duplicate-id rejection, durable
-  persistence, and store refresh. No authorization.
+  Write path for permission roles: id/timestamp stamping and duplicate-id rejection. No
+  authorization. Every operation is ONE store update on the collection read fresh under roles.json's
+  write lock, so the duplicate-id check runs on the current collection.
 contract: irole_registry
 sourcePath: src/server/roles.ts
 injectedParams:
@@ -11,36 +12,32 @@ methods:
   - name: create
     narrative: []
     intent: >-
-      Stamp the role's id (a slug derived from the name when absent) and createdAt, reject a
-      duplicate id with a validation error, rewrite the persisted role collection via
-      write-temp-then-rename, refresh the store with replaceAll, and return the stored role.
-      Persistence failures leave the previous collection intact. Authorization is enforced by the
-      orchestrator, not here.
+      In one store update: stamp the role's id (a slug derived from the name when absent) and
+      createdAt, reject a duplicate id found in the collection read under the lock with a validation
+      error, and append it; return the stored role. A failure leaves the previous collection intact.
+      Authorization is enforced by the orchestrator, not here.
     calls:
-      - role_store.load
-      - role_store.replaceAll
+      - role_store.update
     symbol: registryCreate
   - name: update
     narrative: []
     intent: >-
-      Load the existing role by id (validation error when absent), apply
-      name/description/permissions while preserving id/createdAt/createdBy, rewrite via
-      write-temp-then-rename, refresh the store, and return the stored role.
+      In one store update: find the existing role by id in the collection read under the lock
+      (validation error when absent), apply name/description/permissions while preserving
+      id/createdAt/createdBy; return the stored role.
     calls:
-      - role_store.load
-      - role_store.replaceAll
+      - role_store.update
     symbol: registryUpdate
   - name: delete
     narrative: []
     intent: >-
-      Remove the role with the given id from the collection, rewrite via write-temp-then-rename, and
-      refresh the store; an absent role is a no-op. Clearing role bindings that reference it is the
+      In one store update: remove the role with the given id from the collection read under the
+      lock; an absent role is a no-op. Clearing role bindings that reference it is the
       orchestrator's responsibility.
     calls:
-      - role_store.load
-      - role_store.replaceAll
+      - role_store.update
     symbol: registryDelete
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:40.375Z'
-updatedAt: '2026-10-04T19:41:10.544Z'
+updatedAt: '2026-10-23T22:20:38.999Z'

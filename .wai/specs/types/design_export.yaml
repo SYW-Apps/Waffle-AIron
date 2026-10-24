@@ -58,7 +58,15 @@ fields:
   - name: types
     type: list<DesignType>
     optional: false
+  - name: typeGroups
+    type: list<design_type_group>
+    description: >-
+      The type group tree, sorted by key; each entry names its parent by key, and each DesignType
+      names its group by key. Omitted when the project has no groups. A MINOR addition:
+      formatVersion moves 2.1 -> 2.2 (DESIGN_FORMAT_VERSION in src/models/design-export.ts);
+      consumers ignore what they do not know.
+    optional: true
 methods: []
 sourcePath: src/models/design-export.ts
 createdAt: '2026-10-04T13:53:37.463Z'
-updatedAt: '2026-10-20T13:54:53.550Z'
+updatedAt: '2026-10-23T22:26:12.999Z'

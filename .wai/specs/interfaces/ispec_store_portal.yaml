@@ -98,9 +98,11 @@ methods:
         description: The spec id (namespaced if needed)
   - name: moveSpec
     description: >-
-      Forward to core_orchestrator.moveSpec: move a component or a type to another subsystem with
-      everything that follows it
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      Forward to core_orchestrator.moveSpec: move a component, a type or a type group to another
+      subsystem with everything that follows it (a group also under another `parent` group)
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, parent?:
+      string): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -116,6 +118,12 @@ methods:
       - name: dryRun
         type: bool
         description: Answer the plan and write nothing
+        optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, top-level in the
+          destination home
         optional: true
   - name: rehearsalCopy
     description: >-
@@ -134,4 +142,4 @@ methods:
         description: The copy's root
 status: complete
 createdAt: '2026-09-25T17:33:00.554Z'
-updatedAt: '2026-10-09T17:09:29.029Z'
+updatedAt: '2026-10-23T22:25:37.724Z'

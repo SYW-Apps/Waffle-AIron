@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import * as net from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createProjectRecord } from '../../src/server/projects.js';
-import { mintUserToken, allow } from './helpers.js';
+import { awaitDriverPorts, mintUserToken, allow } from './helpers.js';
 
 // ---------------------------------------------------------------------------
 // Hosted data-plane spec-CONTENT round-trip (sdd_host).
@@ -42,17 +41,6 @@ interface RpcResponse {
   error?: { code?: number; message?: string };
 }
 
-/** An OS-assigned free TCP port (bound, read, released). */
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.listen(0, '127.0.0.1', () => {
-      const p = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(p));
-    });
-    srv.on('error', reject);
-  });
-}
 
 /** Recursively snapshot every file under dir as relpath → exact bytes. */
 function snapshotFiles(dir: string, base = dir): Map<string, Buffer> {
@@ -191,8 +179,6 @@ describe('hosted data-plane spec-content round-trip (end-to-end)', () => {
     allow(dataDir, 'u-author', 'project:write', 'project', 'proj-b');
     token = mintUserToken(dataDir, { id: 'author', userId: 'u-author', projects: ['proj-a', 'proj-b'] });
 
-    port = await freePort();
-    const adminPort = await freePort();
     child = spawn(process.execPath, ['--import', TSX_LOADER, DRIVER], {
       // cwd is the throwaway data dir on purpose: were any code path ever to
       // fall back to process.cwd() instead of the request-bound project root,
@@ -202,12 +188,12 @@ describe('hosted data-plane spec-content round-trip (end-to-end)', () => {
       env: {
         ...process.env,
         WAIRON_ADMIN_TOKEN: 'test-admin-token-0123456789abcdef',
-        DRIVER_PORT: String(port),
-        DRIVER_ADMIN_PORT: String(adminPort),
         DRIVER_DATA_DIR: dataDir,
       },
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'ignore'],
     });
+    // The driver listens on port 0 and reports what it bound (no probe-then-bind race).
+    ({ port } = await awaitDriverPorts(child));
 
     // Wait until the data plane answers HTTP at all (an unauthenticated probe
     // gets a 401 once the listener is up).

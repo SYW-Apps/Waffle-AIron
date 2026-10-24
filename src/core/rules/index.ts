@@ -5,6 +5,7 @@ import {
   InterfaceSpec,
   ImplementationSpec,
   TypeSpec,
+  GroupSpec,
   RulesConfig,
   MethodSignature,
   ComplexityRuleConfig,
@@ -243,6 +244,10 @@ export interface BuildContextOptions {
   interfaces: InterfaceSpec[];
   implementations: ImplementationSpec[];
   types: TypeSpec[];
+  /** The loaded type groups with the files they and the grouped types were read from (see RuleContext.groups); absent on a candidate run. */
+  groups?: GroupSpec[];
+  groupFiles?: Record<string, string>;
+  typeFiles?: Record<string, string>;
   rules?: RulesConfig;
   projectType: string;
   scopeSubsystem?: string;
@@ -1074,6 +1079,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     ...(family
       ? { projectLanguages: new Map(family.nodes.filter((n) => n.targetLanguage).map((n) => [n.namespace, normalizeLanguage(n.targetLanguage!)] as const)) }
       : {}),
+    ...(opts.groups ? { groups: opts.groups, groupFiles: opts.groupFiles ?? {}, typeFiles: opts.typeFiles ?? {} } : {}),
     ...(opts.retiredReachFacts ? { retiredReachFacts: opts.retiredReachFacts } : {}),
     ...(opts.exportTables ? { exportTables: opts.exportTables } : {}),
     ...(opts.projectFamily ? { projectFamily: opts.projectFamily } : {}),

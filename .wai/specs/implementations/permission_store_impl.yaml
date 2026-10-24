@@ -1,8 +1,9 @@
 id: permission_store_impl
 name: Permission Store Implementation
 description: >-
-  Authoritative in-memory permission-assignment grid loaded from and swapped as permissions.json
-  under the hosted data root.
+  Read-through file I/O over the permission-assignment grid at permissions.json under the hosted
+  data root: load parses the file fresh; update holds the file's write lock across a fresh read and
+  the replacement.
 contract: ipermission_store
 sourcePath: src/server/permissions.ts
 injectedParams:
@@ -11,15 +12,19 @@ methods:
   - name: load
     narrative: []
     intent: >-
-      Read the persisted assignment collection from permissions.json under the hosted data root — an
-      absent or empty file yields an empty collection — and hold it as the authoritative in-memory
-      representation.
-  - name: replaceAll
+      Read the persisted assignment collection fresh from permissions.json under the hosted data
+      root (no in-memory copy) - an absent or empty file yields an empty collection.
+  - name: update
     narrative: []
     intent: >-
-      Swap the in-memory assignment collection to the supplied complete set; the registry has
-      already persisted it durably.
+      Under permissions.json's write lock (file_write_lock.run), read the grid fresh - absent is
+      empty, a file that exists but cannot be read or parsed throws and nothing is written - apply
+      the change, replace the file atomically via write-temp-then-rename and release the lock, also
+      when the change throws. Answers the grid written, so two parallel grants from different
+      processes are both kept.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:56.023Z'
-updatedAt: '2026-09-23T21:19:51.110Z'
+updatedAt: '2026-10-23T22:23:36.729Z'

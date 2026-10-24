@@ -78,12 +78,29 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 11
         description: >-
+          Read the type groups, to count the types: under each subsystem (and the shared types), its
+          types per group, nested groups indented under their parent with their own counts and the
+          subtree's total, and the types in no group on a line of their own. A tree of types alone
+          (no component) therefore shows what it holds instead of nothing
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadGroupSpecs
+      - stepNumber: 12
+        description: >-
+          Ask the shared predicate whether the tree holds design (a subsystem, a type anywhere, an
+          L0 export entry or a direct member project): the approval sentence below says 'nothing
+          approvable yet' only when it does not
+        type: call
+        targetComponent: spec_loader
+        targetMethod: holdsDesign
+      - stepNumber: 13
+        description: >-
           Read the project graph: each member the tree reaches (its alias, project id, declaration
           form and parent), so members print as projects rather than as subsystems
         type: call
         targetComponent: spec_loader
         targetMethod: graph
-      - stepNumber: 12
+      - stepNumber: 14
         description: >-
           Count each component's progress through the layers — whether it has a contract, an
           implementation, and source files its implementation names — narrowing to one subsystem
@@ -101,35 +118,42 @@ methods:
           labelled by its local name under its project. Roles rather than colours, so this renderer
           never learns what a terminal is
         type: local
-      - stepNumber: 13
+      - stepNumber: 15
         description: >-
           When the options carry the pin tree (options.approvals, computed by the validator at each
           project's own root and handed in — this component cannot compute a gate identity), mark
           each `[Project]` line with that member's approval state in words (approved | drifted |
           never approved, `re-lock once` for an upgrade-only drift, `re-validated under <release>`
           for an approval a release change carried, `the new release finds N issue(s)` for one it
-          did not) and how its parent's lock pinned it (pinned | pin moved | not pinned), and close
-          the report with the root's own state as a sentence (`Approval: this project is approved |
-          drifted since its approval | never approved`, with the release line when its entry carries
-          one, and a notice for gate parts that are ignored or a release stamp this wairon cannot
-          stand behind) — a lone project never approved says so too, so the report never leaves the
-          question open. A never-approved tree holding the L0 and nothing below it (no subsystem, no
-          member project) says instead that there is nothing to approve yet — add a subsystem, then
-          `wairon lock` — as `wairon lock` and `lock-check` say of it. States are read, never
-          recomputed here, so the report from a parent and from the member agree by construction
-          (status-agrees). Without approvals the report shows no states. Before that sentence, one
-          line names each implementation whose conformance dial is off — on the implementation, or
-          on the methods it lists — as realization not checked: the dial is code linkage outside the
-          approval, and the dashboard is where a reader looks for what the gate does not judge
+          did not) and how its parent's lock pinned it (pinned | pin moved | not pinned; a member
+          whose entry is state never and whose pin matches — the parent recorded it unapproved —
+          reads `recorded unapproved`, so `[never approved · recorded unapproved]`, never `·
+          pinned`, which claimed an approval the parent never copied), and close the report with the
+          root's own state as a sentence (`Approval: this project is approved | drifted since its
+          approval | never approved`, with the release line when its entry carries one, and a notice
+          for gate parts that are ignored or a release stamp this wairon cannot stand behind) — a
+          lone project never approved says so too, so the report never leaves the question open. A
+          never-approved tree for which the shared predicate spec_loader.holdsDesign answers false
+          (an L0 with no subsystem, type, export entry or member project) says instead `Approval:
+          nothing approvable yet` — never a prescription to add a subsystem, as `wairon lock` and
+          `lock-check` word it; a types-only tree is approvable and reads `never approved`. States
+          are read, never recomputed here, so the report from a parent and from the member agree by
+          construction (status-agrees). Without approvals the report shows no states. Before that
+          sentence, one line names each implementation whose conformance dial is off — on the
+          implementation, or on the methods it lists — as realization not checked: the dial is code
+          linkage outside the approval, and the dashboard is where a reader looks for what the gate
+          does not judge
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
-          Answer the report as text, not failed. One renderer, so the terminal and the MCP status
-          tool cannot drift into disagreeing about what this tree contains — which they did, for as
-          long as each had its own copy
+          Answer the report as text, not failed, with validatorVersion set to the running wairon
+          release (WAIRON_VERSION) and printed as the report's last line, `wairon <version>`, so a
+          reading pasted into a thread dates itself. One renderer, so the terminal and the MCP
+          status tool cannot drift into disagreeing about what this tree contains — which they did,
+          for as long as each had its own copy
         type: return
         outcome: report
     symbol: getStatusReport
 status: complete
 createdAt: '2026-09-23T11:46:54.974Z'
-updatedAt: '2026-10-20T14:02:36.633Z'
+updatedAt: '2026-10-23T22:23:11.455Z'

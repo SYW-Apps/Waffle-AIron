@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import { spawn, type ChildProcess } from 'node:child_process';
-import * as net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -17,7 +16,7 @@ import {
 import { handleMcpRequest } from '../../src/server/request.js';
 import { queryAuditEvents } from '../../src/server/audit.js';
 import { projectConfigRepositoryAt } from '../../src/config/project-config.js';
-import { mintUserToken, allow, seedSubsystem, seedChainedMember } from './helpers.js';
+import { awaitDriverPorts, mintUserToken, allow, seedSubsystem, seedChainedMember } from './helpers.js';
 import type { HostConfig, Principal } from '../../src/server/types.js';
 
 /** A project root's configuration, so a member can be declared in it. */
@@ -374,17 +373,6 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     error?: { code?: number; message?: string };
   }
 
-  /** An OS-assigned free TCP port (bound, read, released). */
-  function freePort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const srv = net.createServer();
-      srv.listen(0, '127.0.0.1', () => {
-        const p = (srv.address() as net.AddressInfo).port;
-        srv.close(() => resolve(p));
-      });
-      srv.on('error', reject);
-    });
-  }
 
   beforeEach(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-subproj-fid-'));
@@ -403,19 +391,17 @@ describe('subproject binding fidelity (real hosted subprocess)', () => {
     qualToken = mintUserToken(dataDir, { id: 'author-qual', userId: 'u-author', projects: ['billing'] });
     starToken = mintUserToken(dataDir, { id: 'author-star', userId: 'u-author', projects: ['*'] });
 
-    port = await freePort();
-    const adminPort = await freePort();
     child = spawn(process.execPath, ['--import', TSX_LOADER, DRIVER], {
       cwd: dataDir,
       env: {
         ...process.env,
         WAIRON_ADMIN_TOKEN: 'test-admin-token-0123456789abcdef',
-        DRIVER_PORT: String(port),
-        DRIVER_ADMIN_PORT: String(adminPort),
         DRIVER_DATA_DIR: dataDir,
       },
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'ignore'],
     });
+    // The driver listens on port 0 and reports what it bound (no probe-then-bind race).
+    ({ port } = await awaitDriverPorts(child));
 
     // Wait until the data plane answers HTTP at all.
     const deadline = Date.now() + 30_000;
