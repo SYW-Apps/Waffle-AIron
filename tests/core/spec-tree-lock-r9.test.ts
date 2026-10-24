@@ -4,6 +4,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { inspectLock, lockTree, unlockTree } from '../../src/core/spec-files.js';
+import { ownPidNamespace } from '../../src/utils/lock-holder.js';
+
+/** The namespace line this process writes into a lock record (Linux), so a hand-written record reads as local. */
+const NS = ownPidNamespace();
+const nsTail = NS !== undefined ? `\nnonce\npidns=${NS}\n` : '';
 
 // ---------------------------------------------------------------------------
 // Round-9 tinkerer (EDGE): two MCP servers writing one spec within ~40 ms lost
@@ -87,7 +92,7 @@ describe('the spec tree write lock (item 4, EDGE)', () => {
     const deadPid = Number(gone.stdout);
     const lockDir = path.join(dir, '.wai', '.spec-write.lock');
     fs.mkdirSync(lockDir, { recursive: true });
-    fs.writeFileSync(path.join(lockDir, 'tree.lock.1'), `${deadPid}\n${Date.now()}\n`);
+    fs.writeFileSync(path.join(lockDir, 'tree.lock.1'), `${deadPid}\n${Date.now()}\n${nsTail}`);
     const started = Date.now();
     lockTree(dir);
     expect(Date.now() - started).toBeLessThan(5_000);

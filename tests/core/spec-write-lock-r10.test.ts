@@ -5,8 +5,13 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { setProjectRoot, writeFile } from '../../src/utils/fs.js';
 import { inspectLock, writeSpecFile, readSpecFile } from '../../src/core/spec-files.js';
+import { ownPidNamespace } from '../../src/utils/lock-holder.js';
 import { saveSystemSpec, saveSpec, loadSpec, invalidateSpecCache } from '../../src/core/specs.js';
 import type { SubsystemSpec } from '../../src/models/index.js';
+
+/** The namespace line this process writes into a lock record (Linux), so a hand-written record reads as local. */
+const NS = ownPidNamespace();
+const nsTail = NS !== undefined ? `\nnonce\npidns=${NS}\n` : '';
 
 // ---------------------------------------------------------------------------
 // Round 10 (the spec write lock). Decided behaviour:
@@ -146,16 +151,16 @@ describe('4 — inspectLock names a present lock and its holder', () => {
   it('none, gone and live', () => {
     root = project();
     expect(inspectLock(root)).toBeNull();
-    fs.writeFileSync(lockFile(root), `999999\n${Date.now()}\n`);
+    fs.writeFileSync(lockFile(root), `999999\n${Date.now()}\n${nsTail}`);
     expect(inspectLock(root)).toMatchObject({ pid: 999999, holder: 'gone', breaks: true });
-    fs.writeFileSync(lockFile(root), `${process.ppid}\n${Date.now()}\n`);
+    fs.writeFileSync(lockFile(root), `${process.ppid}\n${Date.now()}\n${nsTail}`);
     expect(inspectLock(root)).toMatchObject({ pid: process.ppid, holder: 'live', breaks: false });
   });
 
   it('an out-of-range pid is unknown, not gone: the lock is held until it is stale', () => {
     root = project();
     // process.kill rejects this id with an error that is not ESRCH.
-    fs.writeFileSync(lockFile(root), `99999999999\n${Date.now()}\n`);
+    fs.writeFileSync(lockFile(root), `99999999999\n${Date.now()}\n${nsTail}`);
     expect(inspectLock(root)).toMatchObject({ pid: 99999999999, holder: 'live', breaks: false });
   });
 });

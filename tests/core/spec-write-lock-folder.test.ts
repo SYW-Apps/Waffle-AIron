@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { lockTree, unlockTree } from '../../src/core/spec-files.js';
+import { ownPidNamespace } from '../../src/utils/lock-holder.js';
 
 // The spec tree's write lock keeps its generation files inside the folder
 // `.wai/.spec-write.lock/`: every ignore rule a tree already has for the old
@@ -64,10 +65,22 @@ describe('the spec tree lock keeps its files in a folder', () => {
     expect(fs.statSync(lockPath(dir)).isDirectory()).toBe(true);
   });
 
-  it('a legacy file whose holder process is gone is reclaimed even when young', () => {
+  it('a legacy file whose holder process is gone is reclaimed even when young, where no PID namespace exists', () => {
     const dir = tree();
     const gone = spawnSync(process.execPath, ['-e', 'process.stdout.write(String(process.pid))'], { encoding: 'utf8' });
     fs.writeFileSync(lockPath(dir), `${Number(gone.stdout)}\n${Date.now()}\n`);
+    if (ownPidNamespace() !== undefined) {
+      // Linux: a record without a namespace is a remote holder (lock_holder.isLocalTo), broken only by age.
+      const real = Date.now();
+      let looks = 0;
+      const clock = vi.spyOn(Date, 'now').mockImplementation(() => real + 7_000 * looks++);
+      try {
+        expect(() => lockTree(dir)).toThrow(/spec-tree-locked/);
+      } finally {
+        clock.mockRestore();
+      }
+      return;
+    }
     lockTree(dir);
     unlockTree(dir);
     expect(fs.statSync(lockPath(dir)).isDirectory()).toBe(true);

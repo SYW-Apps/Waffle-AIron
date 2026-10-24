@@ -11,7 +11,7 @@ import {
   withFileLock,
   type FileLockOptions,
 } from '../../src/utils/file-lock.js';
-import { holderIsLocal, parseHolder, pidAlive, serializeHolder, type LockHolder } from '../../src/utils/lock-holder.js';
+import { holderIsLocal, ownPidNamespace, parseHolder, pidAlive, serializeHolder, type LockHolder } from '../../src/utils/lock-holder.js';
 import { readJsonForUpdate, replaceFile } from '../../src/utils/fs.js';
 
 // ---------------------------------------------------------------------------
@@ -34,13 +34,15 @@ function folder(): string {
 }
 
 const HOST = os.hostname();
+const NS = ownPidNamespace();
 /** A pid no live process has. */
 const GONE = 999_999_999;
 const stop = (): never => { throw new Error('would wait'); };
 const waiting: FileLockOptions = { sleep: stop };
 
 const names = (dir: string): string[] => fs.readdirSync(dir).sort();
-const record = (pid: number, extra = ''): string => `${pid}\n${Date.now()}\n${HOST}\nnonce\n${extra}`;
+/** A record as this process would write it, its namespace included where the platform has one. */
+const record = (pid: number, extra = ''): string => `${pid}\n${Date.now()}\n${HOST}\nnonce\n${extra}${NS !== undefined ? `pidns=${NS}\n` : ''}`;
 const age = (file: string, ms: number): void => {
   const old = new Date(Date.now() - ms);
   fs.utimesSync(file, old, old);
