@@ -85,6 +85,6 @@ to the artifacts the host AI tool consumes:
 
 ## Stack
 
-TypeScript + Node 18+, Commander, Inquirer, Zod, js-yaml, the MCP SDK, Vitest,
+TypeScript + Node.js 22.23.4+ / 24.22.1+ / 26.12.1+, Commander, Inquirer, Zod, js-yaml, the MCP SDK, Vitest,
 and tsup for bundling. See [docs/standards/](standards/INDEX.md) for the
 architecture standards the SDD component model is built on.

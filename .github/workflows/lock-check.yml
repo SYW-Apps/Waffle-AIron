@@ -100,7 +100,7 @@ on:
         description: 'Node.js version used to install and run the CLI.'
         type: string
         required: false
-        default: '20'
+        default: '24'
       runs-on:
         description: 'Runner label for the job (e.g. "ubuntu-latest", or a self-hosted label).'
         type: string
