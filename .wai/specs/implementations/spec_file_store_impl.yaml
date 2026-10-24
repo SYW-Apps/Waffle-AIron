@@ -117,23 +117,29 @@ methods:
     detail: intent
     intent: >-
       Takes the tree's write lock through the generation lock primitive (file_write_lock's module,
-      src/utils/file-lock.ts) over <root>/.wai/.spec-write - the lock of generation g is
-      <root>/.wai/.spec-write.lock.<g>, ended by <root>/.wai/.spec-write.lock.<g>.end - with this
-      lock's own parameters: stale 60s, wait 30s, unreadable grace 10s. The holder record
-      (lock_holder) carries the pid, the time, the host name and, where the platform has PID
-      namespaces, a trailing `pidns=<id>` line. A process that already holds the lock counts one
-      more hold and returns at once (reentrant, keyed by the lock file's path as the platform
-      compares paths), so a write tool that calls another write path never waits on itself. When
-      another holder has it, it waits in short synchronous sleeps; a generation is reclaimed (its
-      .end created, nothing deleted) when its holder is LOCAL (lock_holder.isLocalTo: same host AND
-      same PID namespace) and its process is gone (only ESRCH), when it is older than the stale age,
-      this process's own with no hold counted, or when no holder can be read from it and it is older
-      than the ten-second grace. A REMOTE holder - another host, another PID namespace on a shared
-      volume, or, on a platform with namespaces, a record naming none - is judged by age alone.
-      After the bounded wait it throws, naming the holder's pid (and, when remote, its host and
-      namespace) and pointing at `wairon doctor`, exactly as before. A root holding no .wai folder
-      has no tree to guard: nothing is created. The gitignore line the tree adds for the old single
-      lock file covers the generation files too (`.spec-write.lock*`).
+      src/utils/file-lock.ts) over <root>/.wai/.spec-write.lock/tree - the lock of generation g is
+      <root>/.wai/.spec-write.lock/tree.lock.<g>, ended by
+      <root>/.wai/.spec-write.lock/tree.lock.<g>.end - with this lock's own parameters: stale 60s,
+      wait 30s, unreadable grace 10s. The generation files live inside the folder
+      `.wai/.spec-write.lock/` (created when absent, never removed) because one generation always
+      stays on disk: a folder of the old lock file's name is covered by every ignore rule a tree
+      already has for it (`.spec-write.lock` in .wai/.gitignore, `.wai/.spec-write.lock` in a root
+      .gitignore), so no gitignore is written or amended, and an older wairon that finds a folder
+      where it expects its lock file cannot create its lock and refuses after its bounded wait, so
+      two versions never write one tree unlocked. The holder record (lock_holder) carries the pid,
+      the time, the host name and, where the platform has PID namespaces, a trailing `pidns=<id>`
+      line. A process that already holds the lock counts one more hold and returns at once
+      (reentrant, keyed by the lock file's path as the platform compares paths), so a write tool
+      that calls another write path never waits on itself. When another holder has it, it waits in
+      short synchronous sleeps; a generation is reclaimed (its .end created, nothing deleted) when
+      its holder is LOCAL (lock_holder.isLocalTo: same host AND same PID namespace) and its process
+      is gone (only ESRCH), when it is older than the stale age, this process's own with no hold
+      counted, or when no holder can be read from it and it is older than the ten-second grace. A
+      REMOTE holder - another host, another PID namespace on a shared volume, or, on a platform with
+      namespaces, a record naming none - is judged by age alone. After the bounded wait it throws,
+      naming the holder's pid (and, when remote, its host and namespace) and pointing at `wairon
+      doctor`, exactly as before. A root holding no .wai folder has no tree to guard: nothing is
+      created.
   - name: unlockTree
     sourcePath: src/core/spec-files.ts
     narrative: []
@@ -150,11 +156,28 @@ methods:
     narrative: []
     detail: intent
     intent: >-
-      Reads the highest generation under <root>/.wai/.spec-write.lock.<g> when it is live (no .end):
-      the holder's pid and time when they can be read, the file's age, whether the holder is alive
-      (a REMOTE holder - another host or PID namespace - is taken as alive), and whether the next
-      write would reclaim it by the same rule lockTree waits by. An ended highest generation, or
-      none, is no lock. Writes and removes nothing.
+      Reads the highest generation under <root>/.wai/.spec-write.lock/tree.lock.<g> when it is live
+      (no .end): the holder's pid and time when they can be read, the file's age, whether the holder
+      is alive (a REMOTE holder - another host or PID namespace - is taken as alive), and whether
+      the next write would reclaim it by the same rule lockTree waits by. An ended highest
+      generation, or none, is no lock. Writes and removes nothing.
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/core/spec-files.ts -> src/utils/file-lock.ts
+      reason: >-
+        The spec tree's write lock and the hosted stores' locks share one generation lock primitive
+        (src/utils/file-lock.ts, file_write_lock): one safety-critical algorithm whose correctness
+        rests on every holder following the same protocol. Like src/utils/fs.ts it is shared
+        infrastructure below both subsystems; a second copy in sdd_core would be two implementations
+        of one protocol that can drift apart, and routing a lock through sdd_host's portal would
+        make the spec tree depend on the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/core/spec-files.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: src/core/spec-files.ts uses the shared
+        generation lock primitive in src/utils/file-lock.ts directly, as shared infrastructure, not
+        a capability of the hosted server's surface.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-23T22:34:39.258Z'
+updatedAt: '2026-10-24T00:38:30.799Z'

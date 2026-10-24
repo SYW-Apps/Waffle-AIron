@@ -68,10 +68,10 @@ fields:
     description: >-
       The wairon release of the process that ran the validation (WAIRON_VERSION,
       src/config/defaults.ts), set by validateProject, validateAsComplete and validateFamily alike
-      (a family run's members each carry their own run's). `wairon validate --json` and
-      sdd_validate_tree (structured content and the hint line) report it so a reading can be dated;
-      it is not an input of the gate identity and never a finding. Distinct from
-      analysis.analyzer.validatorVersion, which stays the code analyzer's identity.
+      (a family run's members each carry their own run's). `wairon validate` prints it on its
+      verdict line and sdd_validate_tree reports it (structured content and the hint line) so a
+      reading can be dated; it is not an input of the gate identity and never a finding. Distinct
+      from analysis.analyzer.validatorVersion, which stays the code analyzer's identity.
     optional: false
 methods:
   - name: changesTo
@@ -107,4 +107,4 @@ methods:
     symbol: ciBlockingIssues
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-23T22:14:13.268Z'
+updatedAt: '2026-10-24T00:37:53.064Z'
