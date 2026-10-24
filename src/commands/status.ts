@@ -175,6 +175,8 @@ export async function runStatus(options: StatusOptions = {}, listAll = false): P
   ));
 
   logger.blank();
+  // The release that produced the reading, last, so a pasted status dates itself.
+  console.log(`wairon ${report.validatorVersion}`);
   // Step 8: done.
 }
 

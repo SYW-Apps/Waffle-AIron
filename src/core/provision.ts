@@ -2138,7 +2138,7 @@ function waiRefusals(memberDir: string, homeRoot: string): string[] {
   const out: string[] = [];
   const wai = path.join(memberDir, '.wai');
   for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
-    if (entry === 'specs' || entry === 'transactions' || MEMBER_WAI_GROUPS.has(entry)) continue;
+    if (entry === 'specs' || entry === 'transactions' || entry.startsWith('.spec-write.lock') || MEMBER_WAI_GROUPS.has(entry)) continue;
     out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
   }
   for (const f of placedWaiFiles(memberDir, homeRoot)) {
@@ -2637,7 +2637,7 @@ function deleteMemberWai(memberDir: string): string[] {
   const wai = path.join(memberDir, '.wai');
   if (!fs.existsSync(wai)) return [];
   const deleted = listFilesRecursive(wai, '')
-    .filter((f) => !path.relative(wai, f).split(path.sep).includes('transactions'))
+    .filter((f) => !path.relative(wai, f).split(path.sep).includes('transactions') && !path.basename(f).startsWith('.spec-write.lock'))
     .map((f) => {
       const rel = toPosixPath(path.relative(wai, f));
       // What is left under specs/ once its subsystems and types moved is its L0, whose pieces were placed above.
@@ -3827,7 +3827,7 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
 }
 
 /** What a rehearsal copy never carries: generated outputs, derived context, an unfinished transaction, the write lock. */
-const REHEARSAL_SKIPS: ReadonlySet<string> = new Set(['generated', 'docs', 'context', 'transactions', '.spec-write.lock']);
+const REHEARSAL_SKIPS: ReadonlySet<string> = new Set(['generated', 'docs', 'context', 'transactions']);
 
 /**
  * core_orchestrator.rehearsalCopy — a private copy of the bound project's
@@ -3843,7 +3843,10 @@ export function rehearsalCopy(): string {
   const wai = paths.root();
   fs.cpSync(wai, path.join(dir, path.relative(root, wai)), {
     recursive: true,
-    filter: (src) => !REHEARSAL_SKIPS.has(path.relative(wai, src).split(path.sep)[0]),
+    filter: (src) => {
+      const top = path.relative(wai, src).split(path.sep)[0];
+      return !REHEARSAL_SKIPS.has(top) && !top.startsWith('.spec-write.lock');
+    },
   });
   const specs = paths.specsDir();
   const rel = path.relative(root, specs);

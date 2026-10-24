@@ -864,6 +864,8 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
       before = oldTypes.get(from)!;
       out.push({ kind: 'renamed', name: t.id, from, detail: `type renamed from "${from}"` });
     }
+    // The rows this type gets from here on, so a reorder is said only when it is the only one.
+    const rowsBefore = out.length;
     if (before.audience !== t.audience) out.push({ kind: 'changed', name: t.id, detail: `audience ${before.audience} → ${t.audience}` });
     const a = memberDigest(older, before.id, 'type');
     const b = memberDigest(newer, t.id, 'type');
@@ -886,6 +888,16 @@ export function surfaceChanges(newer: SurfaceSnapshot, older: SurfaceSnapshot): 
     }
     // A type's own methods are carried for bindings, never digested: a change drifts a pin.
     if (oldDef && newDef && factValue(typeMethods(oldDef)) !== factValue(typeMethods(newDef))) out.push({ kind: 'changed', name: t.id, detail: 'type methods changed (a method added, removed, or its params or returns)' });
+    // Same field names and shapes declared in another order: the digest sorts fields, so no pin
+    // moves, but a positional encoding follows declaration order. Judged with the traced field
+    // renames undone, and only when no other row was written for this type.
+    if (oldDef && newDef && out.length === rowsBefore) {
+      const was = oldDef.fields.map((f) => f.name);
+      const now = withFieldsRenamedBack(newDef, renames).fields.map((f) => f.name);
+      if (was.length === now.length && new Set(was).size === was.length && now.every((n) => was.includes(n)) && now.some((n, i) => n !== was[i])) {
+        out.push({ kind: 'changed', name: t.id, detail: 'field order changed; a consumer that encodes by position must follow' });
+      }
+    }
   }
   // The producer's targetLanguage: what a consumer in another language bridges to.
   if (factValue(older.targetLanguage) !== factValue(newer.targetLanguage)) {

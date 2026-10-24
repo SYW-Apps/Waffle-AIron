@@ -4086,6 +4086,25 @@ export class SpecWorkspace {
     return this.cachedRoots;
   }
 
+  /**
+   * ispec_index.holdsDesign — whether the bound root holds anything to
+   * approve: a subsystem, a type (flat, grouped or in a subsystem), an L0
+   * export entry, or a direct member project (a part's specs are this root's
+   * own subsystems and types). False only for an L0 with nothing below it.
+   */
+  holdsDesign(): boolean {
+    // Step 1: the root's own subsystems and types, whatever their layout.
+    const scan = this.scanAll();
+    const bound = this.cachedRoots.find((r) => r.namespace === '');
+    const own = new Set(bound?.specIds ?? []);
+    if (scan.subsystems.some((s) => own.has(s.id)) || scan.types.some((t) => own.has(t.id))) return true;
+    // Step 2: the L0's export table.
+    if ((bound?.system?.publicInterfaces ?? []).length > 0) return true;
+    // Step 3: a direct member project, read into the scan or only referenced.
+    if (this.cachedRoots.some((r) => r.parent === '' && r.mountAlias !== undefined)) return true;
+    return (bound?.referenced ?? []).length > 0;
+  }
+
   // -------------------------------------------------------------------------
   // Stage 8: a spec's home
   // -------------------------------------------------------------------------
@@ -8709,6 +8728,11 @@ export function graph(): ProjectFamily {
 /** ispec_index.listProjectRoots — the project roots the current scan read, bound root first. */
 export function listProjectRoots(): ScannedProjectRoot[] {
   return current().listProjectRoots();
+}
+
+/** ispec_loader.holdsDesign / ispec_tree_portal.holdsDesign — forwarded 1:1 to the index. */
+export function holdsDesign(): boolean {
+  return current().holdsDesign();
 }
 
 export function saveTypeSpec(spec: TypeSpec): string[] {

@@ -147,6 +147,12 @@ export interface ProjectApproval {
    * drifted entry; status, lock-check and lock read the same entry.
    */
   owed?: string;
+  /**
+   * Whether the project's own tree holds anything to approve, judged at its
+   * own root by the shared predicate (holdsDesign): false only for an L0 with
+   * nothing below it. Absent when the tree could not be read.
+   */
+  approvable?: boolean;
   /** How the parent's lock pinned it; absent on the root. */
   pinned?: PinState;
   /** part | project (stage 8). A part's state is its declaring project's, and it has no subject of its own. */

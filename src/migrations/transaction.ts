@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as files from './family-files.js';
 import * as core from './adapters/core.js';
-import { runWithProjectRoot } from '../utils/fs.js';
+import { listFilesRecursive, runWithProjectRoot } from '../utils/fs.js';
 import { transactionRepository as repository } from './transaction-store.js';
 import type {
   FileChange,
@@ -148,6 +148,17 @@ function lockOwners(owners: string[]): string[] {
   return taken;
 }
 
+/** Remove the tree lock's generation files from a .wai that holds nothing but them (and empty folders). */
+function dropLockFilesOfEmptiedWai(wai: string): void {
+  try {
+    const files = listFilesRecursive(wai, '');
+    if (files.length === 0 || !files.every((file) => path.basename(file).startsWith('.spec-write.lock.'))) return;
+    for (const file of files) fs.rmSync(file, { force: true });
+  } catch {
+    // Gone already, or not removable now: the prune below leaves the folder.
+  }
+}
+
 /** Release the holds lockOwners took. */
 function unlockOwners(taken: string[], familyRoot?: string): void {
   for (const owner of [...taken].reverse()) {
@@ -159,6 +170,9 @@ function unlockOwners(taken: string[], familyRoot?: string): void {
     // Up to the family root for an owner inside it; a sibling checkout's own folder is never removed.
     const top = familyRoot !== undefined ? path.resolve(familyRoot) : undefined;
     const stop = top !== undefined && path.resolve(owner).startsWith(top + path.sep) ? top : path.resolve(owner);
+    // The released lock's generation files stay on disk by design (nothing is deleted while a decision may rest on it);
+    // in a .wai the swap left holding nothing else they go with it.
+    dropLockFilesOfEmptiedWai(path.join(owner, '.wai'));
     for (let at = path.join(owner, '.wai'); ; at = path.dirname(at)) {
       const resolved = path.resolve(at);
       if (stop === undefined || resolved === stop || !resolved.startsWith(stop + path.sep)) break;

@@ -215,6 +215,34 @@ export interface PlannedMemberRecord {
   reason?: string;
 }
 
+/** dev_start_problem — one thing that kept part of the project's family from loading in `wairon dev`. */
+export interface DevStartProblem {
+  /** The member as the family declares it: its qualifier (the top id plus one alias per hop). */
+  member: string;
+  /** The member's path as declared in its parent, when it declares one. */
+  path?: string;
+  /** Why it cannot be registered, in words a person acts on. */
+  reason: string;
+}
+
+/** dev_status — what the web app learns about the local development server's start; a live read. */
+export interface DevStatus {
+  /** Whether this server is the local development server; false on a hosted instance. */
+  devMode: boolean;
+  /** Every member of the served project's family that could not be registered; empty when the whole family loaded. */
+  problems: DevStartProblem[];
+}
+
+/** dev_family_registration — what registering the local development project answered. */
+export interface DevFamilyRegistration {
+  /** The registered record of the developer's own working directory. */
+  project: HostedProjectRecord;
+  /** Every declared member, nested included; action 'unreadable' with its reason for each that could not be registered. */
+  members: PlannedMemberRecord[];
+  /** True when a stale development data directory was deleted (with its old backups) before starting fresh. */
+  reset: boolean;
+}
+
 /** What the data plane learns before it dispatches a membership-changing tool
  *  it does not serve itself: who gains access through an attach, or why the
  *  hosted model refuses a family root's rename. */

@@ -194,7 +194,7 @@ function outsideTree(base: string, own: string): Record<string, string> {
       const full = path.join(dir, e.name);
       if (full === ownSpecs) continue;
       // The tree's own write lock exists only while a write runs.
-      if (e.name === '.spec-write.lock') continue;
+      if (e.name.startsWith('.spec-write.lock')) continue;
       if (e.isDirectory()) {
         out[`${path.relative(base, full)}/`] = 'dir';
         walk(full);

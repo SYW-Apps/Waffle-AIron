@@ -11,7 +11,7 @@ import { runStatus } from '../../src/commands/status.js';
 import { runExternals } from '../../src/commands/externals.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { buildPathExternalPair, type PathExternalPair } from '../helpers/reference-family.js';
-import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { WAIRON_MAJOR, WAIRON_VERSION } from '../../src/config/defaults.js';
 
 // ---------------------------------------------------------------------------
 // The trial scenario end to end at the command surfaces: a producer renames a
@@ -78,6 +78,7 @@ describe('live drift at the command surfaces', () => {
     expect(text).toContain('renamed to "ledger-portal.record"');
     expect(text).toContain('`wairon externals pin ledger`');
     expect(text).toContain('All checks passed');
+    expect(text).toContain(`(wairon ${WAIRON_VERSION})`);
   });
 
   it('`status` prints an Externals section and exits as before', async () => {
@@ -86,7 +87,9 @@ describe('live drift at the command surfaces', () => {
     const exit = vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { throw new Error(`exit ${code}`); }) as never);
     await runStatus();
     expect(exit).not.toHaveBeenCalled();
-    expect(printed()).toMatch(/Externals[\s\S]*\[EXTERNAL_LIVE_INCOMPATIBLE\][\s\S]*renamed to "ledger-portal\.record"/);
+    const out = printed();
+    expect(out).toMatch(/Externals[\s\S]*\[EXTERNAL_LIVE_INCOMPATIBLE\][\s\S]*renamed to "ledger-portal\.record"/);
+    expect(out).toContain(`wairon ${WAIRON_VERSION}`);
   });
 
   it('`externals status` exits 1 on an incompatible external and names the rename; `externals pin` exits 1 when an alias cannot be pinned', async () => {

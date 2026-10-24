@@ -847,6 +847,9 @@ body:not(.panel-closed) #panelToggle { background:var(--accent); color:#fff; bor
 #panel .issue.notice { border-left-color:var(--accent); }
 #panel .issue .sev { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
 #panel .issue code { font-size:10.5px; color:var(--dim); }
+#panel .issue[data-find-kind] { cursor:pointer; }
+#panel .issue[data-find-kind]:hover { background:var(--hover-bg); }
+#panel .issue .where { font-size:10px; color:var(--dim); margin-left:6px; }
 
 /* Presentation mode = the canvas page, focused: the header chrome and legend
    are hidden, but the details panel stays TOGGLE-ABLE (the current settings are
@@ -1177,7 +1180,12 @@ var MODEL = __MODEL_JSON__;
     internals: typeof saved.internals === 'boolean' ? saved.internals : false,
     externals: typeof saved.externals === 'boolean' ? saved.externals : true,
     dataCoupling: typeof saved.dataCoupling === 'boolean' ? saved.dataCoupling : false,
-    showIssues: typeof saved.showIssues === 'boolean' ? saved.showIssues : false,
+    // The overlay's first-visit default is the host's showIssues option (off for a standalone file or a
+    // shared page, on for the local development server); once the reader has used the toggle, theirs wins.
+    issuesChosen: saved.issuesChosen === true || saved.showIssues === true,
+    showIssues: (saved.issuesChosen === true || saved.showIssues === true) && typeof saved.showIssues === 'boolean'
+      ? saved.showIssues
+      : (typeof opts !== 'undefined' && !!opts && opts.showIssues === true),
     query: '',
     selected: null,
     selectedKind: null,
@@ -1218,6 +1226,7 @@ var MODEL = __MODEL_JSON__;
         externals: state.externals,
         dataCoupling: state.dataCoupling,
         showIssues: state.showIssues,
+        issuesChosen: state.issuesChosen,
       }));
     } catch (e) { /* non-fatal */ }
   }
@@ -3422,7 +3431,7 @@ var MODEL = __MODEL_JSON__;
   document.getElementById('dataCouplingToggle').checked = state.dataCoupling;
   document.getElementById('dataCouplingToggle').addEventListener('change', function (ev) { state.dataCoupling = ev.target.checked; persist(); renderLegend(); rebuild(true); });
   document.getElementById('issuesToggle').checked = state.showIssues;
-  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; persist(); rebuild(false); renderPanel(); });
+  document.getElementById('issuesToggle').addEventListener('change', function (ev) { state.showIssues = ev.target.checked; state.issuesChosen = true; persist(); rebuild(false); renderPanel(); });
   document.getElementById('dragToggle').addEventListener('change', function (ev) { cy.autolock(!ev.target.checked); });
   // Mode seg: Components ⇄ Types. Entering Types keeps the current subsystem
   // scope, so a subsystem's own types (plus shared ones) show scoped.
@@ -4613,6 +4622,46 @@ var MODEL = __MODEL_JSON__;
     reveal.removeClass('defocus');
   }
 
+  // The Findings panel: EVERY finding of the model, errors first, then warnings, then notices - including one
+  // naming no spec (a spec that failed to load, a project-level finding), which no node carries. A finding that
+  // names a drawn spec focuses that node on click (opening the view that holds it).
+  function findingKind(specId) {
+    if (!specId) return null;
+    if (compById[specId]) return 'component';
+    if (subById[specId]) return 'subsystem';
+    for (var t = 0; t < MODEL.types.length; t++) if (MODEL.types[t].id === specId) return 'type';
+    return null;
+  }
+  function findingsHtml() {
+    var rank = { error: 0, warning: 1, notice: 2 };
+    var sorted = MODEL.issues.slice().sort(function (a, b) {
+      var ra = rank[a.severity] === undefined ? 3 : rank[a.severity];
+      var rb = rank[b.severity] === undefined ? 3 : rank[b.severity];
+      return ra - rb;
+    });
+    return sorted.map(function (i) {
+      var kind = findingKind(i.specId);
+      var where = kind ? '' : '<span class="where">' + (i.specId ? esc(i.specId) + ' \u00B7 ' : '') + 'project</span>';
+      return '<div class="issue ' + esc(i.severity) + '"' + (kind ? ' data-find-kind="' + kind + '" data-find-id="' + esc(i.specId) + '"' : '') + '>'
+        + '<code>' + esc(i.code) + '</code><span class="sev">' + esc(i.severity) + '</span>' + where + '<br>' + esc(i.message) + '</div>';
+    }).join('');
+  }
+  function focusFinding(kind, id) {
+    if (kind !== 'type' && !nodeForRef(kind, id).length) {
+      var scope;
+      if (kind === 'component') {
+        scope = compById[id] && compById[id].subsystem ? { kind: 'subsystem', id: compById[id].subsystem } : { kind: 'system', id: null };
+      } else {
+        var cut = id.lastIndexOf('::');
+        scope = cut >= 0 ? { kind: 'subsystem', id: id.slice(0, cut) } : { kind: 'system', id: null };
+      }
+      state.view = scope;
+      state.typesRenderAll = false;
+      rebuild(true);
+      notifyViewChange();
+    }
+    select(kind, id, true);
+  }
   function select(kind, id, focus) {
     // Selecting a type from a component view (param chip, "Used by" chip…)
     // switches into the ERD first, keeping the current subsystem scope.
@@ -4693,7 +4742,7 @@ var MODEL = __MODEL_JSON__;
   }
 
   function renderPanel() {
-    var head = '', body = '';
+    var head = '', body = '', rootPanel = false;
     // With nothing selected, describe the CURRENT VIEW SCOPE rather than the
     // root system — so drilling into a subsystem/component shows that scope's
     // details, and the breadcrumb still walks back up to the parent.
@@ -4932,8 +4981,9 @@ var MODEL = __MODEL_JSON__;
         + openApiButton(projectExposesApi(), '');
       if (MODEL.system.vision) body += '<p class="desc">' + esc(MODEL.system.vision) + '</p>';
       body += '<p class="desc">Each view shows one scope\\u2019s direct children \\u2014 double-click a box (or use \\u201COpen as view\\u201D) to drill in, and the breadcrumb to come back. Derived from <code style="display:inline">.wai/specs/</code>.</p>';
-      if (state.showIssues && MODEL.issues.length) body += section('All validation issues', MODEL.issues.length, issueHtml(MODEL.issues), true);
+      rootPanel = true;
     }
+    if (MODEL.issues.length) body += section('Findings', MODEL.issues.length, findingsHtml(), rootPanel);
     panel.innerHTML = '<div class="head">' + head + '</div><div class="body">' + body + '</div>';
 
     var navs = panel.querySelectorAll('[data-kind]');
@@ -4946,6 +4996,12 @@ var MODEL = __MODEL_JSON__;
         });
         n.addEventListener('mouseleave', function () { cy.nodes().removeClass('hoverhl'); });
       })(navs[i]);
+    }
+    var finds = panel.querySelectorAll('[data-find-kind]');
+    for (var fi = 0; fi < finds.length; fi++) {
+      (function (f) {
+        f.addEventListener('click', function () { focusFinding(f.getAttribute('data-find-kind'), f.getAttribute('data-find-id')); });
+      })(finds[fi]);
     }
     var opens = panel.querySelectorAll('[data-open-kind]');
     for (var k = 0; k < opens.length; k++) {

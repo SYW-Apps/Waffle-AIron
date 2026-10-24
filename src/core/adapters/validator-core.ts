@@ -12,6 +12,7 @@
 export {
   loadSystemSpec,
   loadSubsystemSpecs,
+  holdsDesign,
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,

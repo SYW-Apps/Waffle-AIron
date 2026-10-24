@@ -318,7 +318,7 @@ describe('property: status-agrees', () => {
     const report = getStatusReport({ approvals });
     expect(report.text).toMatch(/\[Project\] mid \(mid\) \[approved · not pinned\]/);
     expect(report.text).toMatch(/\[Project\] sib \(sib\) \[never approved · not pinned\]/);
-    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never approved · pinned\]/);
+    expect(report.text).toMatch(/\[Project\] leaf \(leaf\) \[never approved · recorded unapproved\]/);
     expect(report.text.trimEnd().split('\n').pop()).toBe('Approval: this project is never approved (`wairon lock` approves the design)');
   });
 });

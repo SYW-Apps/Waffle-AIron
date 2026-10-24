@@ -140,10 +140,67 @@ export function copyDataDir(dataDir: string, fromMajor: number, toMajor: number)
   return target;
 }
 
+/**
+ * iinstance_backup_adapter.discard — delete the data directory and every
+ * `<dataDir>.backup-*` folder beside it, and answer the paths removed. Only the
+ * local development server's data directory is ever discarded: the one caller
+ * is resetDevDataDir, which refuses a host that is not in development mode.
+ */
+export function discardDataDir(dataDir: string): string[] {
+  const dir = path.resolve(dataDir);
+  const parent = path.dirname(dir);
+  const name = path.basename(dir);
+  // Never a filesystem root: a directory with no name beside it has nothing to be a sibling of.
+  if (name === '' || parent === dir) throw new Error(`refusing to discard ${dir}: it is a filesystem root`);
+  const removed: string[] = [];
+  const targets = [dir];
+  if (fs.existsSync(parent)) {
+    for (const entry of fs.readdirSync(parent)) {
+      if (entry.startsWith(`${name}.backup-`)) targets.push(path.join(parent, entry));
+    }
+  }
+  for (const target of targets) {
+    if (!fs.existsSync(target)) continue;
+    fs.rmSync(target, { recursive: true, force: true });
+    removed.push(target);
+  }
+  return removed;
+}
+
 // ── instance_upgrade ────────────────────────────────────────────────────────
 
+/**
+ * iinstance_upgrade.resetDevDataDir — development mode only: a data directory
+ * that is unversioned, written by another major or has a version file that does
+ * not parse is deleted with its old backups (it is disposable: never backed up,
+ * never migrated) and stamped with the running major, so whatever the start
+ * writes into it next belongs to a current directory. A directory already at the
+ * running major is left as it is. Answers whether anything was deleted.
+ */
+export function resetDevDataDir(cfg: Pick<HostConfig, 'dataDir' | 'devMode'>): boolean {
+  // Steps 1-2.
+  if (cfg.devMode !== true) {
+    throw new Error("Only the local development server's disposable data directory may be reset.");
+  }
+  // Step 3: a version file that does not parse reads as not current.
+  let recorded: number | null;
+  try {
+    recorded = readVersion(cfg.dataDir);
+  } catch {
+    recorded = null;
+  }
+  // Steps 4 and 7.
+  if (recorded === WAIRON_MAJOR) return false;
+  // Steps 5-6.
+  const removed = discardDataDir(cfg.dataDir);
+  // The fresh directory is current from its first byte: a registration written before the server's own
+  // bootstrap stamps it must never read as an unversioned (v5) directory awaiting migration.
+  writeVersion(cfg.dataDir, WAIRON_MAJOR);
+  return removed.length > 0;
+}
+
 /** iinstance_upgrade.run — bring the data directory and every hosted tree to the running major, or refuse to start. */
-export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>): InstanceUpgradeReport {
+export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy' | 'devMode'>): InstanceUpgradeReport {
   // Step 1.
   const recorded = readVersion(cfg.dataDir);
   // Step 2: no version recorded reads as the oldest major this release upgrades.
@@ -188,9 +245,10 @@ export function run(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>): InstanceU
   }
   // Step 11: run even on a current data directory, so a tree restored or imported from an older major is upgraded too.
   const trees = upgradeTrees(cfg);
-  // Steps 12-13.
+  // Steps 12-13: only a hosted start stops on a failed tree; the development server keeps them in the report,
+  // which the start prints and the web UI shows.
   const failed = trees.filter((t) => t.failure !== undefined);
-  if (failed.length > 0) {
+  if (failed.length > 0 && cfg.devMode !== true) {
     throw new StartAborted(
       `${failed.length} hosted project(s) were not upgraded: ${failed.map((t) => `${t.project} (${t.failure})`).join('; ')}.`
         + `${named()} Every tree already upgraded stays upgraded, its family committed whole.`,

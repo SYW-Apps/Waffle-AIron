@@ -1,8 +1,9 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { breakLock, installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
+import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
+import { acquireFileLock, inspectFileLock, releaseFileLock, SPEC_TREE_LOCK_LIMITS, type FileLockHandle, type FileLockOptions } from '../utils/file-lock.js';
+import type { LockHolder } from '../utils/lock-holder.js';
 import { SpecWriteConflictError } from '../utils/errors.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 
@@ -82,11 +83,13 @@ export function removeSpecFile(specPath: string, specsRoot: string): boolean {
 // milliseconds both read the file, both merged their change and both wrote:
 // the second write silently replaced the first, and both answered "Updated".
 // So every write into a .wai tree is serialized here: `wx` creates the lock
-// file exclusively, which every platform — Windows included — makes atomic.
-// The holder writes its pid, the time and its host; a lock whose holder is
+// file exclusively, which every platform — Windows included — makes atomic;
+// the lock is generation-numbered (src/utils/file-lock.ts), so a reclaim of a stale
+// lock can end only the generation it judged, never one a new holder took.
+// The holder writes its pid, the time, its host and PID namespace; a lock whose holder is
 // gone, older than any write could take, or unreadable past a short grace, is
-// broken. Only a holder on this host can be seen to be gone: one on another
-// host sharing the volume holds until its lock is stale.
+// reclaimed. Only a holder on this host and in this PID namespace can be seen to be gone: one on
+// another host or namespace sharing the volume holds until its lock is stale.
 // Holds are counted per process, so a write path that calls another never
 // waits on itself.
 //
@@ -104,14 +107,16 @@ export function removeSpecFile(specPath: string, specsRoot: string): boolean {
 // rewrites, migrations, doctor --fix and the hosted server alike.
 // ---------------------------------------------------------------------------
 
-/** The lock file of a project's tree. Not a spec document: the tree walk never lists it. */
-const LOCK_FILE = '.spec-write.lock';
-/** A held lock older than this is a crashed writer's, never a live write. */
-const LOCK_STALE_MS = 60_000;
-/** A lock file whose holder cannot be read is a writer caught between creating and filling it — for milliseconds, never this long. */
-const LOCK_UNREADABLE_GRACE_MS = 10_000;
-/** How long a writer waits for another before it gives up, naming the holder. */
-const LOCK_WAIT_MS = 30_000;
+/**
+ * The lock of a project's tree: generation files `.wai/.spec-write.lock.<g>`
+ * and `.wai/.spec-write.lock.<g>.end` (src/utils/file-lock.ts). Not spec
+ * documents: the tree walk never lists them. LOCK_FILE is the name that keys
+ * this process's holds and the guard's skip of the lock itself.
+ */
+const LOCK_BASE = '.spec-write';
+const LOCK_FILE = `${LOCK_BASE}.lock`;
+/** The tree lock's wait (how long a writer waits before it gives up, naming the holder) and unreadable grace (a writer caught between creating and filling its lock file takes milliseconds, never this long). */
+const { waitMs: LOCK_WAIT_MS, graceMs: LOCK_UNREADABLE_GRACE_MS } = SPEC_TREE_LOCK_LIMITS;
 /** The holds this process has on each lock file, by normalized path. */
 const lockHolds = new Map<string, number>();
 /** What this process last read or wrote of each spec document, by normalized path: a digest of the text. */
@@ -147,50 +152,27 @@ function realFolder(dir: string): string {
   return real;
 }
 
-/** Sleep the calling thread without spinning: the write tools are synchronous end to end. */
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
+/** The lock handles this process holds, by normalized lock key (one per held tree; a re-entrant hold only counts). */
+const lockHandles = new Map<string, FileLockHandle>();
 
-/** Whether a process of that id is alive on this machine (only "no such process" means gone; any other refusal leaves it unknown, so alive). */
-function processAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code !== 'ESRCH';
-  }
-}
-
-/**
- * The holder a lock file names, or null when it cannot be read (absent,
- * foreign, or a holder mid-write). `host` is the machine it was taken on; a
- * file an older wairon wrote names none and is read as this machine's.
- */
-function lockHolder(file: string): { pid: number; at: number; host?: string } | null {
-  try {
-    const [pid, at, host] = fs.readFileSync(file, 'utf8').split('\n');
-    if (!/^\d+$/.test(pid ?? '') || !/^\d+$/.test(at ?? '')) return null;
-    return { pid: Number(pid), at: Number(at), ...(host ? { host } : {}) };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Whether the holder runs on this machine. A process id means nothing on
- * another host (or in another container's process namespace on a shared
- * volume), so only a local holder's liveness can be checked; a remote one
- * holds until its lock is stale.
- */
-function holderIsLocal(holder: { host?: string }): boolean {
-  return holder.host === undefined || holder.host === os.hostname();
-}
-
-/** Whether the holder is a live process: a remote holder is taken as live. */
-function holderAlive(holder: { pid: number; host?: string }): boolean {
-  return holderIsLocal(holder) ? processAlive(holder.pid) : true;
+/** The lock options of the tree whose lock keys `key`: its limits, the re-entrancy count (an own file with no hold counted is a leftover), the message of a timeout. */
+function treeLockOptions(key: string): FileLockOptions {
+  return {
+    ...SPEC_TREE_LOCK_LIMITS,
+    ownLeftover: () => (lockHolds.get(key) ?? 0) === 0,
+    timeoutError: (info) => {
+      const where = info.holder === null
+        ? 'unknown'
+        : info.remote
+          ? `${info.holder.pid}, on host ${info.holder.host ?? 'unknown'}${info.holder.pidNamespace ? ` in PID namespace ${info.holder.pidNamespace}` : ''}; it is broken only by age`
+          : `${info.holder.pid}`;
+      return new Error(
+        `spec-tree-locked: another session (process ${where}) has been writing this project's specs for over ${LOCK_WAIT_MS / 1000}s `
+        + `(${info.lockFile}). Nothing was written. Try again once it finishes; a lock left by a process that is gone, or one wairon cannot read that is older than `
+        + `${LOCK_UNREADABLE_GRACE_MS / 1000}s, is broken automatically — \`wairon doctor\` names the lock and its holder.`,
+      );
+    },
+  };
 }
 
 /**
@@ -201,104 +183,44 @@ function holderAlive(holder: { pid: number; host?: string }): boolean {
 export function lockTree(root: string): void {
   const dir = path.join(root, '.wai');
   if (!fs.existsSync(dir)) return;
-  const file = path.join(dir, LOCK_FILE);
-  const key = normalized(file);
+  const file = path.join(dir, LOCK_BASE);
+  const key = normalized(path.join(dir, LOCK_FILE));
   const held = lockHolds.get(key) ?? 0;
   if (held > 0) {
     lockHolds.set(key, held + 1);
     return;
   }
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  while (!tryCreateLock(file)) {
-    if (breakStaleLock(file, key)) continue;
-    if (Date.now() > deadline) {
-      const holder = lockHolder(file);
-      throw new Error(
-        `spec-tree-locked: another session (process ${holder?.pid ?? 'unknown'}) has been writing this project's specs for over ${LOCK_WAIT_MS / 1000}s `
-        + `(${file}). Nothing was written. Try again once it finishes; a lock left by a process that is gone, or one wairon cannot read that is older than `
-        + `${LOCK_UNREADABLE_GRACE_MS / 1000}s, is broken automatically — \`wairon doctor\` names the lock and its holder.`,
-      );
-    }
-    sleepSync(15 + Math.floor(Math.random() * 20));
-  }
+  ignoreLockFiles(dir);
+  lockHandles.set(key, acquireFileLock(file, treeLockOptions(key)));
   lockHolds.set(key, 1);
 }
 
-/** Remove a lock file this process holds or failed to fill; already gone is no error, and a failure only leaves a lock the next writer breaks. */
-function removeLockFile(file: string): void {
-  try { fs.rmSync(file, { force: true }); } catch { /* the next writer breaks it: this process holds no count of it */ }
-}
+/** The line .wai/.gitignore carries so the write lock's generation files are never committed. */
+export const LOCK_IGNORE_LINE = '.spec-write.lock*';
 
-/** How long ago the lock file was last written; 0 when it is gone. */
-function lockAge(file: string): number {
+/**
+ * Keep the lock's files out of git: .wai/.gitignore is created when absent and
+ * gains the line when it lacks it (a tree from before 6.2 ignored only the
+ * single `.spec-write.lock`, while every generation now leaves a file behind);
+ * anything else in it is kept. Best effort: a read-only tree still locks.
+ */
+export function ignoreLockFiles(waiDir: string): void {
+  const file = path.join(waiDir, '.gitignore');
   try {
-    return Date.now() - fs.statSync(file).mtimeMs;
+    const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+    if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === LOCK_IGNORE_LINE)) return;
+    const body = held === null
+      ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${LOCK_IGNORE_LINE}\n`
+      : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${LOCK_IGNORE_LINE}\n`;
+    fs.writeFileSync(file, body);
   } catch {
-    return 0;
+    /* the lock itself does not depend on it */
   }
 }
 
-/** Create the lock file exclusively, holder and time inside; false when another holds it. */
-function tryCreateLock(file: string): boolean {
-  let fd: number;
-  try {
-    fd = fs.openSync(file, 'wx');
-  } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST') return false;
-    // Windows: the file another holder just released is still being deleted
-    // (a delete pending), or a scanner holds it — taken as held, and waited for.
-    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) return false;
-    throw e;
-  }
-  try {
-    fs.writeSync(fd, `${process.pid}\n${Date.now()}\n${os.hostname()}\n`);
-  } catch (e) {
-    // A lock this process could not fill is no lock: never leave it behind.
-    fs.closeSync(fd);
-    removeLockFile(file);
-    throw e;
-  }
-  fs.closeSync(fd);
-  return true;
-}
-
-/**
- * Whether the next writer breaks a lock file instead of waiting: its holder
- * is gone, it is older than any write, it is this process's own while no hold
- * of it is counted (a leftover — this thread is the only one that could be
- * writing it), or it cannot be read and is older than the grace a holder
- * caught between creating and filling it needs.
- */
-function lockBreakable(file: string, key: string): boolean {
-  const holder = lockHolder(file);
-  if (holder === null) return lockAge(file) > LOCK_UNREADABLE_GRACE_MS;
-  if (holderIsLocal(holder) && holder.pid === process.pid) return (lockHolds.get(key) ?? 0) === 0;
-  return !holderAlive(holder) || Date.now() - holder.at > LOCK_STALE_MS;
-}
-
-/**
- * Remove a breakable lock and answer whether it is gone. Only the file judged
- * is removed (breakLock): a holder that exits releases its lock, and the file
- * found there a moment later can be the next holder's, which is live. A lock
- * file that cannot be opened is not judged at all: a live holder's can be
- * refused for a moment too, so the writer waits and judges it again.
- */
-function breakStaleLock(file: string, key: string): boolean {
-  let judged: string;
-  try {
-    judged = fs.readFileSync(file, 'utf8');
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'ENOENT';
-  }
-  if (!lockBreakable(file, key)) return false;
-  return breakLock(file, judged);
-}
-
-/** spec_file_store.unlockTree — release one hold; the last removes the lock file, when this process holds it. */
+/** spec_file_store.unlockTree — release one hold; the last ends the lock's generation, when this process holds it. */
 export function unlockTree(root: string): void {
-  const file = path.join(root, '.wai', LOCK_FILE);
-  const key = normalized(file);
+  const key = normalized(path.join(root, '.wai', LOCK_FILE));
   const held = lockHolds.get(key) ?? 0;
   if (held <= 0) return;
   if (held > 1) {
@@ -306,41 +228,43 @@ export function unlockTree(root: string): void {
     return;
   }
   lockHolds.delete(key);
-  const holder = lockHolder(file);
-  if (holder === null || holder.pid !== process.pid || !holderIsLocal(holder)) return;
-  removeLockFile(file);
+  const handle = lockHandles.get(key);
+  lockHandles.delete(key);
+  if (handle !== undefined) releaseFileLock(handle);
 }
 
-/** What a tree's write lock file says, for `wairon doctor`. */
+/** What a tree's write lock says as it stands, for `wairon doctor` (tree_lock_state). */
 export interface TreeLockState {
-  /** The lock file. */
+  /** The live generation's lock file. */
   file: string;
   /** The process the file names as its holder, when it can be read. */
   pid?: number;
   /** How long ago the file was written, in milliseconds. */
   ageMs: number;
-  /** live — a running process holds it; gone — its holder process has ended; unreadable — no holder can be read from it. */
-  holder: 'live' | 'gone' | 'unreadable';
-  /** Whether the next write breaks it instead of waiting. */
+  /** live — a running process holds it; gone — its holder process has ended; unreadable — no holder can be read from it; remote — its holder is on another host or in another PID namespace, so its liveness cannot be seen and it holds until the lock is older than any write. */
+  holder: 'live' | 'gone' | 'unreadable' | 'remote';
+  /** Whether the next write reclaims it (ends its generation) instead of waiting. */
   breaks: boolean;
+  /** The holder identity the file names (pid, time, host and PID namespace), when it can be read. */
+  identity?: LockHolder;
 }
 
 /**
  * spec_file_store.inspectLock — the write lock of the tree under `root` as
- * its file stands, or null when none is there. Reads only: a lock the next
- * write would break is named so, never removed here.
+ * its live generation stands, or null when none is there. Reads only: a lock
+ * the next write would reclaim is named so, never ended here.
  */
 export function inspectLock(root: string): TreeLockState | null {
-  const file = path.join(root, '.wai', LOCK_FILE);
-  if (!fs.existsSync(file)) return null;
-  const holder = lockHolder(file);
-  const state: TreeLockState['holder'] = holder === null ? 'unreadable' : holderAlive(holder) ? 'live' : 'gone';
+  const file = path.join(root, '.wai', LOCK_BASE);
+  const key = normalized(path.join(root, '.wai', LOCK_FILE));
+  const found = inspectFileLock(file, treeLockOptions(key));
+  if (found === null) return null;
   return {
-    file,
-    ...(holder !== null ? { pid: holder.pid } : {}),
-    ageMs: lockAge(file),
-    holder: state,
-    breaks: lockBreakable(file, normalized(file)),
+    file: found.lockFile,
+    ...(found.holder !== null ? { pid: found.holder.pid, identity: found.holder } : {}),
+    ageMs: found.ageMs,
+    holder: found.state,
+    breaks: found.breaks,
   };
 }
 
@@ -420,7 +344,7 @@ function enterWrite(file: string): () => void {
   if (root === null) return () => undefined;
   const key = normalized(path.join(root, '.wai', LOCK_FILE));
   // The lock file itself is never written through the helper.
-  if (normalized(file) === key) return () => undefined;
+  if (normalized(file) === key || path.basename(file).startsWith(LOCK_FILE + '.')) return () => undefined;
   // A tree inside one this process holds (a part, a member folder a family
   // commit swaps) is covered by that hold: no lock file is made inside it,
   // so a commit that empties the folder never leaves its .wai behind.

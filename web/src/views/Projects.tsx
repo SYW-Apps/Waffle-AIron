@@ -97,7 +97,7 @@ function CreateProjectModal(props: {
       }
     >
       <div className="stack-lg">
-        <Field label="Project id" hint="Lowercase identifier, unique on this instance.">
+        <Field label="Project id" hint="Lowercase letters, digits, - _ and . (start and end with a letter or digit), at most 64 characters; unique on this instance.">
           <TextInput value={id} onChange={(v) => setId(v.toLowerCase())} placeholder="billing" />
         </Field>
         <Field label="Owner unit" hint="Every project belongs to an organization unit.">

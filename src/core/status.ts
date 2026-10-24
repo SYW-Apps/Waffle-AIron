@@ -16,8 +16,10 @@
 // ---------------------------------------------------------------------------
 
 import * as path from 'path';
+import { WAIRON_VERSION } from '../config/defaults.js';
 import {
   graph,
+  holdsDesign,
   listProjectRoots,
   loadSystemSpec,
   loadSubsystemSpecs,
@@ -57,6 +59,12 @@ export interface StatusReport {
    * running `wairon status` over a broken tree must not read it as healthy.
    */
   failed: boolean;
+  /**
+   * The wairon release of the process that produced the report (WAIRON_VERSION).
+   * Present on every report, failed ones included, so a reading can be dated
+   * and a stale server told from a current one.
+   */
+  validatorVersion: string;
 }
 
 /**
@@ -88,6 +96,8 @@ function approvalTag(entry: ProjectApproval | undefined): string {
       ? `${words}, re-validated under ${entry.release.to}`
       : entry.release.reason ? `${words}: re-lock once at its own root` : `${words}: the new release finds ${entry.release.count ?? 0} issue(s)`)
     : entry.upgraded ? `${words}, re-lock once` : words;
+  // A member the parent recorded unapproved reads as that, never as `pinned`, which claimed an approval the parent never copied.
+  if (entry.pinned === 'matches' && entry.state === 'never') return ` [${state} · recorded unapproved]`;
   return entry.pinned ? ` [${state} · ${PIN_WORDS[entry.pinned]}]` : ` [${state}]`;
 }
 
@@ -209,6 +219,10 @@ function parentPinState(parent: string): string {
 }
 
 export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor): StatusReport {
+  return { ...buildStatusReport(options, decor), validatorVersion: WAIRON_VERSION };
+}
+
+function buildStatusReport(options: StatusOptions, decor?: StatusDecor): Omit<StatusReport, 'validatorVersion'> {
   const mark = fillDecor(decor);
 
   // Step 1: load the tree, following members as far as the options allow
@@ -535,10 +549,9 @@ export function getStatusReport(options: StatusOptions = {}, decor?: StatusDecor
   // A tree holding the L0 and nothing below it, never approved, has no design
   // to approve: said as `wairon lock` (which writes no record then) and
   // `lock-check` say it, never as an approval waiting to be taken.
-  const nothingDesigned = own?.state === 'never' && loadSubsystemSpecs().length === 0
-    && !(options.approvals ?? []).some((a) => a.key !== '' && a.parent === '' && a.as !== 'part');
+  const nothingDesigned = own?.state === 'never' && !holdsDesign();
   if (own && nothingDesigned) {
-    output += `${mark.layer('system', 'Approval:')} nothing to approve yet — the tree holds the L0 and nothing below it (add a subsystem, then \`wairon lock\`)\n`;
+    output += `${mark.layer('system', 'Approval:')} nothing approvable yet — the tree holds the L0 and nothing below it\n`;
   } else if (own) {
     const release = own.release
       ? (own.release.carried

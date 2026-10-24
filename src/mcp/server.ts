@@ -1078,7 +1078,13 @@ function pendingBanner(): string[] {
   }
 }
 
+const getStatusOutput = {
+  validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
+  ...staleServerOutput,
+};
+
 const validateTreeOutput = {
+  validatorVersion: z.string().describe('The wairon release of the running server process (ValidationResult.validatorVersion), so a verdict pasted into a thread can be dated.'),
   valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
   errors: z.array(z.object(validationIssueOutput)).describe('Every finding of severity error.'),
   warnings: z.array(z.object(validationIssueOutput)).describe('Every finding of severity warning.'),
@@ -3258,10 +3264,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const memberLine = parent
           ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.`
           : undefined;
-        const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading].filter((h): h is string => !!h).join(' ');
+        const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading, `Validated by wairon ${result.validatorVersion}.`].filter((h): h is string => !!h).join(' ');
         // The text block is the same JSON it has always been; the structured
         // twin is that very object, so the two can never disagree.
         return jsonStructured({
+          validatorVersion: result.validatorVersion,
           valid: result.valid,
           errors: all.filter((i) => i.severity === 'error'),
           warnings: all.filter((i) => i.severity === 'warning'),
@@ -3538,11 +3545,12 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls.',
+      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries validatorVersion, the wairon release of the running server, and the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
       },
+      outputSchema: getStatusOutput,
     },
     ({ subsystem, recursive }) => {
       // The tool's flag at the edge: recursive false is a member depth of 0, the default every level.
@@ -3595,7 +3603,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 5-6: the externals compared with their live producers, offline
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
-        return text(`${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}`);
+        return structured(`${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`, { validatorVersion: report.validatorVersion });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }

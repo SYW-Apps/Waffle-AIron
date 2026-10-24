@@ -386,22 +386,22 @@ describe('tinkerer: lock messages say what they approve', () => {
     expect(validate.all).toContain('Nothing to check yet');
     const lock = await sb.run(['lock', '--yes'], dir);
     expectExit(lock, 0);
-    expect(lock.all).toMatch(/nothing (designed|below the L0)|empty design|Nothing to (approve|check)/i);
-    expect(lock.all).toContain('Add a subsystem first');
+    expect(lock.all).toMatch(/nothing approvable yet/i);
+    expect(lock.all).not.toContain('Add a subsystem');
     expect(lock.all).not.toContain('First approval of this tree');
     expect(fs.existsSync(path.join(dir, '.wai', 'lock.json'))).toBe(false);
 
     // lock-check and status read the same: nothing to approve yet.
     const check = await sb.run(['lock-check'], dir);
     expectExit(check, 0);
-    expect(check.all).toContain('Nothing designed to approve yet');
+    expect(check.all).toContain('Nothing approvable yet');
     const strict = await sb.run(['lock-check', '--strict'], dir);
     expectExit(strict, 1);
-    expect(strict.all).toContain('Nothing designed to approve yet');
+    expect(strict.all).toContain('Nothing approvable yet');
     expect(strict.all).not.toContain('Run `wairon lock` and commit the record.');
     const status = await sb.run(['status'], dir);
     expectExit(status, 0);
-    expect(status.all).toContain('Approval: nothing to approve yet');
+    expect(status.all).toContain('Approval: nothing approvable yet');
     expect(status.all).not.toContain('never approved (`wairon lock` approves the design)');
   });
 });

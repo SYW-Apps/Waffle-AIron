@@ -28,8 +28,8 @@ const WAI = '.wai';
 const TRANSACTIONS = 'transactions';
 /** The spec tree's write lock: a file of the moment, held by whoever writes now, never the family's bytes. */
 const WRITE_LOCK = '.spec-write.lock';
-/** Whether a path under an owner is never mirrored, never compared: the transaction area and the write lock. */
-const momentary = (rel: string): boolean => rel === `${WAI}/${TRANSACTIONS}` || rel === `${WAI}/${WRITE_LOCK}`;
+/** Whether a path under an owner is never mirrored, never compared: the transaction area and the write lock (its generation files, in any .wai below the owner). */
+const momentary = (rel: string): boolean => rel === `${WAI}/${TRANSACTIONS}` || rel === `${WAI}/${WRITE_LOCK}` || /(^|\/)\.wai\/\.spec-write\.lock\./.test(rel);
 const RETRIED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const ATTEMPTS = 8;
 
@@ -378,6 +378,11 @@ export function prune(dir: string, stopAt: string): string[] {
       entries = fs.readdirSync(at);
     } catch {
       break;
+    }
+    // A .wai holding only the tree lock's generation files (they stay on disk by design) is empty: the project it belonged to is gone.
+    if (entries.length > 0 && nodePath.basename(at) === WAI && entries.every((name) => name.startsWith(`${WRITE_LOCK}.`))) {
+      for (const name of entries) fs.rmSync(nodePath.join(at, name), { force: true });
+      entries = [];
     }
     if (entries.length > 0) break;
     fs.rmdirSync(at);

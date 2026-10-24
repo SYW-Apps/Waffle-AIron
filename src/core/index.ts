@@ -59,6 +59,7 @@ export * from './rules/index.js';
 export {
   loadSystemSpec,
   loadSubsystemSpecs,
+  holdsDesign,
   loadSubsystemSpec,
   loadComponentSpecs,
   loadComponentSpec,

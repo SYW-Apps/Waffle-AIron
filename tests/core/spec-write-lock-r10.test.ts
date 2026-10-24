@@ -40,7 +40,12 @@ function project(): string {
   return dir;
 }
 
-const lockFile = (dir: string): string => path.join(dir, '.wai', '.spec-write.lock');
+// The next lock generation of the tree: one past the highest generation that has ended (the setup's own writes took and released the first ones).
+// Written without an .end marker beside it, it is the live lock.
+const lockFile = (dir: string): string => {
+  const ended = fs.readdirSync(path.join(dir, '.wai')).map((n) => /^\.spec-write\.lock\.(\d+)\.end$/.exec(n)).filter((m) => m !== null).map((m) => Number(m![1]));
+  return path.join(dir, '.wai', `.spec-write.lock.${Math.max(0, ...ended) + 1}`);
+};
 
 afterEach(() => {
   setProjectRoot(null);
@@ -90,7 +95,7 @@ describe('1 — every .wai write takes the tree lock', () => {
       `const f=${JSON.stringify(lock)};`,
       'fs.writeFileSync(f, process.pid+"\\n"+Date.now()+"\\n", {flag:"wx"});',
       'console.log("held");',
-      'setTimeout(()=>{fs.unlinkSync(f);process.exit(0)},600);',
+      'setTimeout(()=>{fs.writeFileSync(f+".end", "", {flag:"wx"});process.exit(0)},600);',
     ].join('')], { stdio: ['ignore', 'pipe', 'inherit'] });
     await new Promise<void>((resolve) => holder.stdout!.once('data', () => resolve()));
     const started = Date.now();
@@ -99,8 +104,8 @@ describe('1 — every .wai write takes the tree lock', () => {
     await new Promise((resolve) => holder.once('exit', resolve));
     expect(waited).toBeGreaterThanOrEqual(300);
     expect(fs.existsSync(path.join(root, '.wai', 'specs', 'dom', 'note.yaml'))).toBe(true);
-    // Released after the write: nothing left behind.
-    expect(fs.existsSync(lock)).toBe(false);
+    // Released after the write: no live generation is left behind.
+    expect(inspectLock(root)).toBeNull();
   }, 20_000);
 
   it('a file outside any .wai tree is written without a lock', () => {
@@ -124,7 +129,7 @@ describe('3 — a lock wairon cannot read is broken after a short grace (round 1
       const started = Date.now();
       writeSpecFile(path.join(root, '.wai', 'specs', 'dom', 'note.yaml'), { id: 'note' });
       expect(Date.now() - started).toBeLessThan(5_000);
-      expect(fs.existsSync(lock)).toBe(false);
+      expect(inspectLock(root)).toBeNull();
     }, 20_000);
   }
 

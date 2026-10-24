@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { readJsonForUpdate, replaceFile, withFileLock } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 import type { ApiKeyRecord } from './types.js';
 
 // ---------------------------------------------------------------------------

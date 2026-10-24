@@ -119,7 +119,7 @@ describe('journey: two CLI writers of one spec in the same instant (lib-and-app-
       if (a.code !== 0) expect((await runCliIn(['type', 'rename-field', 'coordinate', 'lat', 'latitude_deg'], dir, sb.env)).code).toBe(0);
       if (b.code !== 0) expect((await runCliIn(['type', 'rename-field', 'coordinate', 'lon', 'longitude_deg'], dir, sb.env)).code).toBe(0);
       expect(names()).toEqual(['latitude_deg', 'longitude_deg']);
-      expect(fs.existsSync(path.join(dir, '.wai', '.spec-write.lock'))).toBe(false);
+      expect(fs.readdirSync(path.join(dir, '.wai')).filter((n) => /^\.spec-write\.lock\.\d+$/.test(n) && !fs.existsSync(path.join(dir, '.wai', n + '.end')))).toEqual([]);
     }
   }, 600_000);
 });
@@ -130,12 +130,13 @@ describe('journey: a write lock wairon cannot read (tinkerer-r10, EDGE)', () => 
       subsystems: [{ id: 'geo', status: 'complete' }],
       types: [{ id: 'coordinate', kind: 'value-object', subsystem: 'geo', fields: [{ name: 'lat', type: 'float' }] }],
     }, 'stale');
-    const lock = path.join(dir, '.wai', '.spec-write.lock');
+    const ended = fs.readdirSync(path.join(dir, '.wai')).map((n) => /^\.spec-write\.lock\.(\d+)\.end$/.exec(n)).filter((m) => m !== null).map((m) => Number(m![1]));
+    const lock = path.join(dir, '.wai', `.spec-write.lock.${Math.max(0, ...ended) + 1}`);
     fs.writeFileSync(lock, '{"pid": 99999, "at": "2026-10-01T00:00:00Z"}');
     const old = new Date(Date.now() - 15_000);
     fs.utimesSync(lock, old, old);
     const doctor = await sb.run(['doctor'], dir);
-    expect(doctor.all, transcript(doctor)).toMatch(/\.wai\/\.spec-write\.lock is present .*no holder can be read from it.*the next spec write breaks it/);
+    expect(doctor.all, transcript(doctor)).toMatch(/\.wai\/\.spec-write\.lock\.\d+ is present .*no holder can be read from it.*the next spec write breaks it/);
     const started = Date.now();
     const r = await sb.run(['type', 'rename-field', 'coordinate', 'lat', 'latitude'], dir);
     expect(r.code, transcript(r)).toBe(0);
@@ -176,7 +177,7 @@ describe('journey: init (tinkerer-r10 MINORs)', () => {
     gitInit(dir);
     const init = await sb.run(['init', '-y'], dir);
     expect(init.code, transcript(init)).toBe(0);
-    expect(readFile(dir, '.wai/.gitignore').split(/\r?\n/)).toContain('.spec-write.lock');
+    expect(readFile(dir, '.wai/.gitignore').split(/\r?\n/)).toContain('.spec-write.lock*');
     const sub = path.join(dir, 'packages', 'contracts');
     fs.mkdirSync(sub, { recursive: true });
     const refused = await sb.run(['init', '-y'], sub);

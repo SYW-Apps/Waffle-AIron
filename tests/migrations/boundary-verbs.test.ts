@@ -473,7 +473,7 @@ describe('externalize into a part — a storage move — agrees with lock and lo
     expect(planned.refusals).toEqual([]);
     expect(planned.edits.map((e) => e.detail)).toEqual([expect.stringContaining('its specs into the part "orders"')]);
     // The spec tree's write lock is a file of the moment, never a change of the plan.
-    expect(planned.changes.some((c) => c.path.endsWith('.spec-write.lock'))).toBe(false);
+    expect(planned.changes.some((c) => c.path.includes('.spec-write.lock'))).toBe(false);
     const report = at(f.top, () => migrations.apply(planned));
     expect(report.applied).toBe(true);
     expect(fs.existsSync(path.join(f.top, 'services', 'orders', '.wai', 'specs', 'orders', '.index.yaml'))).toBe(true);
