@@ -350,7 +350,7 @@ Node 20 build; `/data` is a volume; `wairon` is on `PATH` so `docker exec …
 wairon host …` administers without exposing the admin port.
 
 > A distroless variant is possible later (`npm run build:binary` already produces
-> a pkg `node20-linux-x64` binary → copy into `gcr.io/distroless/cc-debian12`).
+> a pkg `node24-linux-x64` binary → copy into `gcr.io/distroless/cc-debian12`).
 > The Node image is the maintainable default.
 
 ### 5.2.1 Published images
