@@ -105,6 +105,9 @@ export function CanvasView({
       theme: canvasTheme,
       vars: canvasVars,
       embed: true,
+      // The issues overlay's first-visit default: on for the local development server (a reader's own
+      // toggle is remembered and wins), off in the hosted app.
+      showIssues: isLocal,
       // Stage J: seed the initial view from the URL route so a deep link renders
       // its scope immediately (no root-first flash).
       initialRoute: routeRef.current,

@@ -8,7 +8,7 @@ import {
   authenticateMaster,
   authenticateSession,
 } from '../../src/server/auth.js';
-import { createCredential, findByTokenHash, hashToken } from '../../src/server/credentials.js';
+import { createCredential, findByTokenHash, hashToken, revokeCredential } from '../../src/server/credentials.js';
 import { createWebSession } from '../../src/server/websessions.js';
 import { WEB_SESSION_PREFIX } from '../../src/server/types.js';
 import { upsertUser } from '../../src/server/users.js';
@@ -135,9 +135,20 @@ describe('auth specialist (sdd_host)', () => {
     expect(authenticate(dataDir, token).authenticated).toBe(true);
   });
 
-  it('rejects a revoked record', () => {
+  it('rejects a revoked credential: its record no longer exists', () => {
     const token = 'tok-rev';
-    createCredential(dataDir, mkRecord({ id: 'c-rev', keyHash: hashToken(token), revokedAt: '2026-07-05T00:00:00.000Z' }));
+    createCredential(dataDir, mkRecord({ id: 'c-rev', keyHash: hashToken(token) }));
+    expect(authenticate(dataDir, token).authenticated).toBe(true);
+    revokeCredential(dataDir, 'c-rev');
+
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  });
+
+  it('rejects a legacy record a older release left revoked in place (revokedAt)', () => {
+    const token = 'tok-legacy-rev';
+    const file = path.join(dataDir, 'auth', 'credentials.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify([{ ...mkRecord({ id: 'c-legacy', keyHash: hashToken(token) }), revokedAt: '2026-07-05T00:00:00.000Z' }]));
 
     expect(authenticate(dataDir, token).authenticated).toBe(false);
   });
@@ -339,16 +350,16 @@ describe('auth specialist (sdd_host)', () => {
     // Suspend through the real admin flow, addressed by the RECORD id.
     identity.setUserStatus(cfg, MASTER, 'rec-div-1', 'inactive');
     // The sweep revoked the pre-existing credential (it sweeps both ids) …
-    expect(findByTokenHash(dataDir, hashToken(before))?.revokedAt).toBeTruthy();
+    expect(findByTokenHash(dataDir, hashToken(before))).toBeNull();
     expect(authenticate(dataDir, before).authenticated).toBe(false);
 
     // … but the LIVE gate must not depend on the sweep: craft a credential that
     // survived it (written after the sweep ran), still owned under the subject id.
     const survivor = 'tok-div-survivor';
     createCredential(dataDir, mkRecord({ id: 'c-div-survivor', keyHash: hashToken(survivor), ownerSubject }));
-    // The record itself is NOT revoked — so the rejections below can only come
+    // The record itself is still there — so the rejections below can only come
     // from the per-request status gate resolving the suspended record.
-    expect(findByTokenHash(dataDir, hashToken(survivor))?.revokedAt).toBeUndefined();
+    expect(findByTokenHash(dataDir, hashToken(survivor))).not.toBeNull();
 
     expect(authenticate(dataDir, survivor).authenticated).toBe(false);
     expect(authenticateCredential(dataDir, survivor).authenticated).toBe(false);

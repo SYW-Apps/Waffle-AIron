@@ -4,7 +4,70 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
-## Unreleased
+## v6.2.0 (from v6.1.4)
+
+Upgrading: install 6.2.0. Nothing in a spec tree has to change. Two things to know:
+
+- Do not run two wairon versions on one tree at the same time. The spec-tree write lock now keeps its files
+  in a folder, `.wai/.spec-write.lock/`; an older wairon that finds that folder refuses to write
+  (it never writes past it), so finish or close sessions of the old version before the new one
+  writes. A lock file a crashed older session left behind (`.wai/.spec-write.lock`) is taken over
+  once it is stale.
+- The local `wairon dev` server's data folder is disposable: a folder an older version wrote is
+  deleted and started fresh, never migrated. Nothing of a project's own lives there.
+
+### New
+
+- **Type groups form a tree.** A group may name a `parent` group (`sdd_add_group`, or
+  `sdd_update_spec` with `kind: group`), and the folders under `types/` follow the parent chain.
+  Groups are layout and presentation only: type ids stay bare and global and nothing resolves
+  through a group. `sdd_rename_spec` and `sdd_move_spec` take `kind: group` (a group moves with
+  its whole folder), the canvas clusters types by group, `sdd_get_status` / `wairon status`
+  count types per group, and the design export (format 2.2) carries the tree. New checks:
+  `TYPE_GROUP_UNKNOWN`, `GROUP_PARENT_UNKNOWN`, `GROUP_PARENT_CROSS_HOME`, `GROUP_CYCLE` and
+  `TYPE_GROUP_MISPLACED`; `wairon doctor --fix` moves a misplaced group folder or type file to
+  where its group puts it.
+- **`wairon dev` always starts.** It no longer refuses a tree with errors: the canvas shows what
+  could be read and a findings panel lists every finding, so the problems are visible where they
+  are. Data an older version left in its folder is discarded instead of failing the start, and a
+  banner says which project the server registered.
+- **A project of only types is a design.** Its types and its L0 export table are approved by
+  `wairon lock` like any other design; `status`, `validate` and `lock-check` no longer call it
+  empty. A tree with truly nothing approvable says so in one sentence, and a member project with
+  nothing approvable is reported as a notice (`MEMBER_NOTHING_APPROVABLE`).
+- **The running version is in every reading.** `sdd_get_status` and `sdd_validate_tree` carry
+  `validatorVersion`, and `wairon validate` prints it on its closing line, so a pasted result
+  says which release produced it.
+- **`wairon surface diff` reports a reordered type's fields** (a field-order row), which matters
+  to positional bindings even when no field was added or removed.
+- **The generated guides name `wairon dev`** as the way to browse a design locally.
+
+### Fixed
+
+- **Every hosted store locks its writes.** Permission grants, the organization and its
+  placements, roles, policy, approvals, audit, sessions, share links and the rest now read and
+  write under the file's lock, as the credential and project registries did in 6.1.4, so two
+  processes changing the same store at once no longer lose a change. A family migration holds the
+  stores' locks for its whole run. The lock is generation-numbered, so taking over a stale lock
+  can never end a lock another process took meanwhile.
+- **Hosted record ids are project ids.** A project whose id contains `.` or `_` (valid project
+  ids) can now be registered on the hosted server and by `wairon dev`; before, the record grammar
+  allowed only letters, digits and `-`, and such a member was refused.
+- **Revoked credentials are deleted**, not kept with a revocation time; records an older version
+  kept that way are dropped when the file is next read.
+- **Decorator metadata is read from the project's `tsconfig.json`.** A type-only import counts as
+  a runtime use only when the nearest `tsconfig.json` turns decorator metadata on.
+
+### Known limitations
+
+- Two CLI-side files are not locked yet: the remote binding (`wairon login`, `mcp install
+  --hosted`) and the user configuration. Two of those commands run at the same moment can lose
+  one change; run them one at a time.
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores, 60 s for
+  the spec tree) can be taken over while it still works. Its final write is refused when that
+  happened, which narrows the window to the write itself but does not close it.
+
+### Also in this release
 
 - **CDN releases are published per platform plus an index.** The SYW CDN sits behind a 100 MB
   request limit and the five archives are about 204 MB together, so the single publish request

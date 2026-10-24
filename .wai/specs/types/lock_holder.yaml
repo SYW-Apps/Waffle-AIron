@@ -1,0 +1,59 @@
+kind: value-object
+id: lock_holder
+name: LockHolder
+description: >-
+  Who a file lock names as its holder, as the lock file's record carries it: the process id, the
+  time it was taken, the machine, and the PID namespace the id belongs to. A process id means
+  something only inside one PID namespace, and the same host name does not prove a shared one:
+  containers started with the same hostname (or host networking) on one volume, or a data directory
+  bind-mounted into a container and also used from the host, name one host while their pids collide
+  or are invisible to each other. The record therefore carries the namespace and the local/remote
+  judgement is host AND namespace, shared by the spec-tree write lock (spec_file_store.lockTree) and
+  the hosted file lock primitive. Liveness is probed only for a local holder; a remote one holds
+  until its lock is older than any write.
+fields:
+  - name: pid
+    type: int
+    description: The holder's process id, meaningful only inside its PID namespace
+    optional: false
+  - name: takenAt
+    type: int
+    description: Milliseconds since the epoch at which the lock was taken
+    optional: false
+  - name: host
+    type: string
+    description: The machine name the lock was taken on. Absent in a record an older wairon wrote
+    optional: true
+  - name: pidNamespace
+    type: string
+    description: >-
+      The PID namespace identity: on Linux the target of /proc/self/ns/pid (for example
+      pid:[4026531836]); absent where the platform has no PID namespaces (Windows, macOS) or the
+      link cannot be read, and in every record written before this field. Written in the record as a
+      trailing `pidns=<id>` line, so older readers ignore it and no positional line moves.
+    optional: true
+methods:
+  - name: isLocalTo
+    signature: 'isLocalTo(here: lock_holder): bool'
+    params:
+      - name: here
+        type: lock_holder
+        description: The judging process's own holder identity (its pid, host and namespace)
+    returns: bool
+    description: >-
+      Whether this holder runs where `here` does, so its pid can be checked for liveness. True only
+      when the host names are equal (an absent host counts as equal, as before) AND the namespaces
+      are equal. Namespaces are equal when both are the same identity, or when both are absent:
+      absent on both sides is the platform without PID namespaces (Windows, macOS), where the host
+      name alone is the proof, and it is also what an unreadable /proc looks like, which behaves
+      exactly as today. Unequal in any other case: a Linux process (namespace present) judging a
+      record without one (written by an older wairon, or by a process in a namespace it could not
+      name) treats the holder as REMOTE, never as local, because the same hostname no longer proves
+      anything; a remote holder is broken only by age (the lock's stale limit), never by a failed
+      liveness probe.
+    sourcePath: src/utils/lock-holder.ts
+    symbol: holderIsLocal
+sourcePath: src/utils/lock-holder.ts
+symbol: LockHolder
+createdAt: '2026-10-23T22:16:54.454Z'
+updatedAt: '2026-10-23T22:16:55.208Z'

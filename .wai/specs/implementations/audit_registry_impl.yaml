@@ -2,7 +2,10 @@ id: audit_registry_impl
 name: Audit Registry Implementation
 description: >-
   Write path for the durable audit log: policy-filtered append and retention pruning. Owns redaction
-  enforcement — no event carrying raw secrets ever reaches disk.
+  enforcement - no event carrying raw secrets ever reaches disk. Append and prune are each ONE store
+  update, so an event appended in another process is never lost to a concurrent prune or append;
+  every capture filter and the redaction guard run before the update, so the lock is held only for
+  the read-append-write.
 contract: iaudit_registry
 sourcePath: src/server/audit.ts
 methods:
@@ -65,38 +68,39 @@ methods:
         type: local
       - stepNumber: 12
         description: >-
-          Append the stamped event to the store's authoritative in-memory set and persist the full
-          set to the durable event file (a persistence failure surfaces as a storage error)
+          Stamp-complete event in hand, append it to the event set the store hands over (fresh,
+          under the file's write lock) as the change of the ONE store update below (a persistence
+          failure surfaces as a storage error)
         type: local
       - stepNumber: 13
-        description: >-
-          Swap the store to the persisted replacement in one assignment, so index reads always
-          observe a consistent set
+        description: 'Persist: the store writes the appended set under the lock it still holds'
         type: call
         targetComponent: audit_store
-        targetMethod: replaceAll
+        targetMethod: update
       - stepNumber: 14
         description: Return — the event is durably appended
         type: return
         outcome: appended
     intent: >-
-      Apply the retention policy's capture filter first — events whose level or category the policy
+      Apply the retention policy's capture filter first - events whose level or category the policy
       excludes are dropped without touching disk (a silent, successful no-op). Validate the
       surviving event is redacted: reject with a validation error any event whose metadata or target
       smells like a raw bearer token, secret value, or full spec body, and truncate oversize
-      metadata to the policy's size cap. Then stamp the event id and timestamp if absent, append it
-      to the persisted event set via write-temp-then-rename, and refresh the store with replaceAll.
-      Persistence failures surface as storage errors to the caller — hot-path callers are
-      responsible for treating append failure as non-blocking per the repository's contract.
+      metadata to the policy's size cap. Then stamp the event id and timestamp if absent and, in one
+      store update, append it to the event set read under the lock. Persistence failures surface as
+      storage errors to the caller - hot-path callers are responsible for treating append failure as
+      non-blocking per the repository's contract (the lock wait is bounded, so a stuck writer cannot
+      block a caller forever).
   - name: prune
     narrative: []
     intent: >-
-      Select the events whose age at the supplied now-timestamp exceeds the retention window their
-      level and category map to under the policy, rewrite the persisted set without them via
-      write-temp-then-rename, refresh the store, and return the removed count. A policy with no
-      matching windows prunes nothing and returns zero; persistence failures leave the previous set
-      fully intact.
+      In one store update: select the events in the set read under the lock whose age at the
+      supplied now-timestamp exceeds the retention window their level and category map to under the
+      policy, drop them, and return the removed count. A policy with no matching windows prunes
+      nothing and returns zero; a failure leaves the previous set intact.
+    calls:
+      - audit_store.update
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:50.941Z'
-updatedAt: '2026-07-19T00:01:16.542Z'
+updatedAt: '2026-10-23T22:20:21.148Z'

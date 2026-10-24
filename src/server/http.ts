@@ -749,7 +749,13 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
   memberRegistration.recoverData(cfg, true);
   // Step 5: bring the data directory and every hosted tree to the running major. Any
   // throw stops the start; its message names the backup once one was taken.
-  instanceUpgrade.run(cfg);
+  const upgrade = instanceUpgrade.run(cfg);
+  // The development server does not stop on a tree that failed to upgrade: say which, and serve the rest.
+  if (cfg.devMode === true) {
+    for (const tree of upgrade.trees) {
+      if (tree.failure !== undefined) console.warn(`[wairon dev] ${tree.project} was not upgraded: ${tree.failure}`);
+    }
+  }
   // Step 6: say whether the web UI is served and how a person signs in to it.
   noteWebUiPosture(cfg);
 

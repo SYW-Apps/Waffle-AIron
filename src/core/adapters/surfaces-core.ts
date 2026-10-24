@@ -10,6 +10,8 @@ export {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadTypeSpecs,
+  // The type group tree the design export carries as typeGroups.
+  loadGroupSpecs,
   computeStateId,
   // The resolved export table the projector flattens, and the configuration
   // whose effective id a snapshot records beside its name.

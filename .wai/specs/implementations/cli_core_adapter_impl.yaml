@@ -350,6 +350,27 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: buildCanvasDataModel
+  - name: loadGroupSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadGroupSpecs
+  - name: loadTypeSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadTypeSpecs
+  - name: scanAllSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: scanAllSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-20T09:29:25.667Z'
+updatedAt: '2026-10-24T11:34:12.597Z'

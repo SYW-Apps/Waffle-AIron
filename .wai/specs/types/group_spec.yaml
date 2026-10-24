@@ -1,0 +1,88 @@
+kind: entity
+id: group_spec
+name: GroupSpec
+description: >-
+  A type group: a named folder of types that organizes a large type surface (a shared contracts
+  library holding hundreds of types) without changing any type's identity. Groups form a TREE: a
+  group may name a parent group, and the folder chain on disk mirrors the parent chain
+  (types/<root>/<child>/.index.yaml holds the child group; the types of a group live beside its
+  index). Type ids stay bare and project-global (index.paths.type[id]) whatever group they sit in,
+  so grouping, moving a type between groups and re-parenting a group never change what any reference
+  spells. A group lives either in the project's shared types folder or in a subsystem's types folder
+  (its home is derived from where the folder sits, never stored); a group and its parent share one
+  home. Group files are spec files like any other (the lock record covers them); no reference
+  resolves through a group's name, and a group is layout and presentation, never design.
+subsystem: sdd_core
+fields:
+  - name: id
+    type: string
+    description: The group id, project-global like a type id; also its folder name
+    optional: false
+  - name: name
+    type: string
+    description: The group's display name
+    optional: false
+  - name: description
+    type: string
+    description: What the group's types have in common
+    optional: true
+  - name: parent
+    type: string
+    description: >-
+      The id of the group this one sits under, making the groups a tree; absent for a top-level
+      group. It must exist, must not lead back to this group, and names a group in the same home.
+      The folder of this group sits inside its parent's folder.
+    optional: true
+  - name: createdAt
+    type: datetime
+    description: When the group was created
+    optional: false
+  - name: updatedAt
+    type: datetime
+    description: When it last changed
+    optional: false
+  - name: subsystem
+    type: string
+    description: >-
+      The subsystem whose types folder holds the group (its home); absent for the project's shared
+      types folder. Like a type's subsystem it is an ownership label, and a group and its parent
+      share one home.
+    optional: true
+  - name: kind
+    type: string
+    description: >-
+      The document discriminator, always `group`: how the loader tells a group's .index.yaml from a
+      type document
+    optional: false
+methods:
+  - name: chain
+    signature: 'chain(all: list<group_spec>): list<string>'
+    params:
+      - name: all
+        type: list<group_spec>
+        description: Every group of the tree
+    returns: list<string>
+    description: >-
+      The ids from the top-level group down to this one, following parent through `all`; a parent
+      that is not in `all` ends the walk at the last known group, and a walk that meets a group
+      twice ends where it would have repeated, so a cycle is cut rather than followed. Pure over the
+      groups handed in; the folder of a group is the chain's ids joined under the home's types
+      folder, which is what the validator compares the stored file with.
+    sourcePath: src/core/specs.ts
+    symbol: groupChain
+  - name: cycles
+    signature: 'cycles(all: list<group_spec>): bool'
+    params:
+      - name: all
+        type: list<group_spec>
+        description: Every group of the tree
+    returns: bool
+    description: >-
+      Whether following parent from this group, through `all`, reaches this group again. Pure over
+      the groups handed in.
+    sourcePath: src/core/specs.ts
+    symbol: groupCycles
+sourcePath: src/models/specs.ts
+symbol: GroupSpec
+createdAt: '2026-10-23T22:18:38.794Z'
+updatedAt: '2026-10-23T22:21:42.265Z'

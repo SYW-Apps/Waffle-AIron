@@ -1,9 +1,10 @@
 id: user_registry_impl
 name: User Registry Implementation
 description: >-
-  Write path for hosted-user records: mutates the user set, persists it durably to the users file,
-  then refreshes the owned store. Never touches the index (the index projects over the store's
-  references).
+  Write path for hosted-user records: mutates the user set and persists it durably to the users
+  file. Every operation is ONE store update: the set is read fresh under users.json's write lock,
+  the change is applied to that set and the replacement is written before the lock is released, so a
+  user upserted or deactivated in another process is never lost. Never touches the index.
 contract: iuser_registry
 sourcePath: src/server/users.ts
 injectedParams:
@@ -12,25 +13,22 @@ methods:
   - name: upsert
     narrative: []
     intent: >-
-      Merge the supplied record into the current user set by id — inserting when absent, replacing
-      field-for-field when present — stamp updatedAt (and createdAt on insert), persist the complete
-      set durably via write-temp-then-rename so a crash never truncates the file, then push the new
-      set into the store with replaceAll and return the stored record. When persistence fails, no
-      in-memory state changes and the storage error propagates to the caller.
+      In one store update: merge the supplied record into the user set read under the lock by id -
+      inserting when absent, replacing field-for-field when present - stamp updatedAt (and createdAt
+      on insert), and return the stored record. A failure leaves the previous set intact and the
+      storage error propagates to the caller.
     calls:
-      - user_store.load
-      - user_store.replaceAll
+      - user_store.update
     symbol: registryUpsert
   - name: setStatus
     narrative: []
     intent: >-
-      Locate the user by id - failing with a not-found error when absent - set its lifecycle status
-      (active or inactive) while preserving identity, grant, and audit-history fields untouched,
-      stamp updatedAt, then persist and swap exactly as upsert does. Any other status value is
-      rejected before any mutation, naming the two.
+      In one store update: locate the user by id in the set read under the lock - failing with a
+      not-found error when absent - set its lifecycle status (active or inactive) while preserving
+      identity, grant, and audit-history fields untouched, and stamp updatedAt. Any other status
+      value is rejected before any mutation, naming the two.
     calls:
-      - user_store.load
-      - user_store.replaceAll
+      - user_store.update
     symbol: registrySetStatus
   - name: remapUnitReferences
     narrative:
@@ -45,10 +43,10 @@ methods:
         type: return
         outcome: unchanged
       - stepNumber: 3
-        description: Load every hosted-user record
-        type: call
-        targetComponent: user_store
-        targetMethod: load
+        description: >-
+          Everything below is the change of the ONE store update: it works on the hosted-user
+          records the update hands over (fresh, under the file's write lock)
+        type: local
       - stepNumber: 4
         description: Rewrite each record's unit references
         type: loop
@@ -74,19 +72,19 @@ methods:
         type: return
         outcome: unchanged
       - stepNumber: 9
-        description: Persist the rewritten set atomically
+        description: 'Persist the rewritten set atomically: the store writes the change''s result under the lock'
         type: call
         targetComponent: user_store
-        targetMethod: replaceAll
+        targetMethod: update
     detail: full
     intent: >-
-      For every user record, rewrite its home unitId and each role binding's scopeId to the new id
-      when the old matches a remap entry, and clear its home unitId or a role binding whose scope is
-      in removedScopeIds. Rewrite the persisted user collection via write-temp-then-rename and
-      refresh the store. Users referencing none of the ids are untouched.
+      In one store update: for every user record in the set read under the lock, rewrite its home
+      unitId and each role binding's scopeId to the new id when the old matches a remap entry, and
+      clear its home unitId or a role binding whose scope is in removedScopeIds. Users referencing
+      none of the ids are untouched.
     calls: []
     symbol: registryRemapUnitReferences
 detail: intent
 status: complete
 createdAt: '2026-07-09T17:30:03.044Z'
-updatedAt: '2026-10-19T06:12:23.068Z'
+updatedAt: '2026-10-23T22:20:17.790Z'

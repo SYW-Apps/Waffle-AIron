@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from 'vitest';
-import { WAIRON_MAJOR } from '../../src/config/defaults.js';
+import { WAIRON_MAJOR, WAIRON_VERSION } from '../../src/config/defaults.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -180,7 +180,8 @@ const HEADING = 'Architecture Status Dashboard';
  * Exactly what the healthy tree printed before the report grew its second
  * field — captured from the built CLI at 5432fb29 and pinned here. The happy
  * path is the half of this change that must NOT move: only the two refusals
- * were restored.
+ * were restored. 6.2.0 adds the one closing line, the release that produced
+ * the reading (`wairon <version>`), and nothing else moves.
  */
 const HEALTHY_STDOUT = [
   '',
@@ -201,6 +202,7 @@ const HEALTHY_STDOUT = [
     + 'implementation specs are written, 100% once its implementation names source files that exist (capped at 50% '
     + 'while any of them is draft or design). Approval is the lock record (.wai/lock.json); `wairon lock` changes no spec.')}`,
   '',
+  `wairon ${WAIRON_VERSION}`,
   '',
 ].join('\n');
 

@@ -66,7 +66,16 @@ methods:
       relations landing on it; and when the host provides an open-project hook (the web app) a node
       carrying a recordId offers “Open project ↗” in its panel and opens on double-click when it
       holds nothing to drill into — never in a standalone file or on a shared page, which have no
-      such hook.
+      such hook. FINDINGS: the engine lists EVERY finding of the model in a Findings panel — errors,
+      then warnings, then notices — including a finding that names no spec (a spec that failed to
+      load, a project-level finding), which no node can carry; a finding that names a drawn spec is
+      clickable and focuses that node (opening the view that holds it), one that names none is
+      listed all the same, marked as belonging to the project. The issues overlay (the marks on
+      nodes) is a per-reader toggle whose first-visit default is the host's `showIssues` option: off
+      for a standalone file or a shared page, on for the local development server, which passes it.
+      A reader's own toggle is remembered and wins over the default. The engine draws a PARTIAL
+      model without complaint: nodes and edges that loaded are drawn, and what did not load appears
+      only as findings.
     signature: 'render(model: CanvasModel): string'
     returns: string
     params:
@@ -77,4 +86,4 @@ methods:
       - idempotent
 status: complete
 createdAt: '2026-09-20T16:38:05.210Z'
-updatedAt: '2026-10-04T10:53:30.626Z'
+updatedAt: '2026-10-23T22:30:16.479Z'

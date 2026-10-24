@@ -3521,27 +3521,44 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Guard: only a contract or an implementation is renamed here — a component, a type, a
-          method, a field and a parameter each have their own rename
+          Guard: only a contract, an implementation or a type group is renamed here — a component, a
+          type, a method, a field and a parameter each have their own rename
         type: branch
-        condition: the kind is neither interface nor implementation
+        condition: the kind is none of interface, implementation and group
         onFalseStep: 3
       - stepNumber: 2
         label: invalid-kind
         description: Refuse, naming the tool that renames that kind
         type: throw
-        error: 'invalid-kind: only an interface or an implementation is renamed on its own'
+        error: 'invalid-kind: only an interface, an implementation or a group is renamed on its own'
       - stepNumber: 3
+        description: Is a type group renamed?
+        type: branch
+        condition: the kind is group
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
+        description: >-
+          Rename the group on its own and answer what that rename answers: its folder, its types'
+          group and its child groups' parent follow
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: renameGroup
+      - stepNumber: 5
+        description: Return what the group's rename answered
+        type: return
+        outcome: SpecIdRename
+      - stepNumber: 6
         description: For a contract, load the contract to rename
         type: call
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpec
-      - stepNumber: 4
+      - stepNumber: 7
         description: For an implementation, load the implementation to rename instead of a contract
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpec
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
           Guard: the spec must belong to the bound project — the project boundary every write asks
           (crossProjectWriteRefusal), asked first for an id carrying `::` — exist, and the new id
@@ -3550,35 +3567,35 @@ methods:
         condition: >-
           no spec of the kind holds the id, or the id carries ::, or the new id is not a lowercase
           identifier (an interface id begins with i)
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 10
+      - stepNumber: 9
         label: refused
         description: >-
           Refuse before anything is written: spec-missing, chained-spec (naming the member's folder
           and the session to open there), or invalid-id
         type: throw
         error: spec-missing, chained-spec or invalid-id
-      - stepNumber: 7
+      - stepNumber: 10
         description: For an implementation, load every implementation, for the ids already taken
         type: call
         targetComponent: spec_loader
         targetMethod: loadImplementationSpecs
-      - stepNumber: 8
+      - stepNumber: 11
         description: For a contract, load every contract, for the ids already taken
         type: call
         targetComponent: spec_loader
         targetMethod: loadInterfaceSpecs
-      - stepNumber: 9
+      - stepNumber: 12
         description: 'Guard: the new id must not be held or retired by a spec of the kind (spec_index.retiredBy)'
         type: branch
         condition: a spec of the kind holds the new id, or lists it in its previousIds
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 14
+      - stepNumber: 13
         label: id-taken
         description: 'Refuse: id-taken, or id-retired naming the holder and how to release it'
         type: throw
         error: id-taken or id-retired
-      - stepNumber: 11
+      - stepNumber: 14
         description: >-
           Describe the move as findings are keyed by it (identity_rename: the spec's old and new
           id), and rekey the debt register as a DRY RUN — a register that cannot be rewritten that
@@ -3586,46 +3603,46 @@ methods:
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 12
+      - stepNumber: 15
         description: >-
           Collect without writing every spec the rewrite would change — an implementation's contract
           and an export entry's interface naming a renamed contract — every export entry that would
           get `as`, and every lint allow that would be rekeyed
         type: local
-      - stepNumber: 13
+      - stepNumber: 16
         description: A dry run stops here
         type: branch
         condition: dryRun is set
-        onFalseStep: 15
-      - stepNumber: 14
+        onFalseStep: 18
+      - stepNumber: 17
         description: Return what the rename would do, marked dryRun; nothing was written
         type: return
         outcome: SpecIdRename (dry run)
-      - stepNumber: 15
+      - stepNumber: 18
         description: >-
           Write `as` on the export entries whose public name derived from the old id, rewrite every
           reference, and rekey the lint allows, across the bound tree
         type: local
-      - stepNumber: 16
+      - stepNumber: 19
         description: 'Drop the cached spec index: the rewrite changed files outside the save paths'
         type: call
         targetComponent: spec_loader
         targetMethod: invalidateCache
-      - stepNumber: 17
+      - stepNumber: 20
         description: >-
           For a contract, resolve its current file and the file its new id would take beside its
           component, to clear the file when the two are the same
         type: call
         targetComponent: spec_loader
         targetMethod: interfacePath
-      - stepNumber: 18
+      - stepNumber: 21
         description: >-
           For an implementation, resolve its current file and the file its new id would take, to
           clear the file when the two are the same
         type: call
         targetComponent: spec_loader
         targetMethod: implementationPath
-      - stepNumber: 19
+      - stepNumber: 22
         description: >-
           Write the spec under its new id, its old id appended to its rename trace (previousIds),
           beside its owner — an implementation whose new path is the file it occupies has that file
@@ -3634,19 +3651,19 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: saveInterfaceSpec
-      - stepNumber: 20
+      - stepNumber: 23
         description: >-
           For an implementation, write it likewise under its new id, its contract unchanged and its
           old id appended to its rename trace
         type: call
         targetComponent: spec_loader
         targetMethod: saveImplementationSpec
-      - stepNumber: 21
+      - stepNumber: 24
         description: Rekey the debt register for real
         type: call
         targetComponent: project_config_repository
         targetMethod: rekeyCarried
-      - stepNumber: 22
+      - stepNumber: 25
         description: Return renamed, rewritten, keptPublicNames and carried
         type: return
         outcome: SpecIdRename
@@ -3654,160 +3671,91 @@ methods:
     sourcePath: src/core/provision.ts
     narrative:
       - stepNumber: 1
-        description: 'Guard: only a component or a type moves between subsystems'
+        description: 'Guard: only a component, a type or a type group moves between subsystems'
         type: branch
-        condition: the kind is neither component nor type
+        condition: the kind is none of component, type and group
         onFalseStep: 3
       - stepNumber: 2
         label: invalid-kind
-        description: Refuse, naming what can move
+        description: Refuse, naming what can move (a contract or an implementation follows its component)
         type: throw
-        error: 'invalid-kind: only a component or a type moves to another subsystem'
+        error: 'invalid-kind: only a component, a type or a type group moves to another subsystem'
       - stepNumber: 3
-        description: 'Read the bound tree''s subsystems: the target must be one of the bound project''s own'
+        description: 'Read the bound tree''s subsystems: a named target must be one of the bound project''s own'
         type: call
         targetComponent: spec_loader
         targetMethod: loadSubsystemSpecs
       - stepNumber: 4
+        description: Is a target named that the bound project does not have?
+        type: branch
+        condition: a target subsystem is named and none of the bound project's own subsystems has that id
+        onFalseStep: 6
+      - stepNumber: 5
+        label: subsystem-missing
+        description: >-
+          Refuse before anything is written, naming the known subsystems (a spec never moves into
+          another project)
+        type: throw
+        error: subsystem-missing
+      - stepNumber: 6
+        description: Route on the kind
+        type: switch
+        'on': the kind moving
+        cases:
+          - value: group
+            step: 7
+          - value: component
+            step: 9
+          - value: type
+            step: 9
+        defaultStep: 7
+      - stepNumber: 7
+        label: group
+        description: Move the group as a folder, under the parent given, and answer what that move answers
+        type: call
+        targetComponent: core_orchestrator
+        targetMethod: moveGroup
+      - stepNumber: 8
+        description: Return the group's move
+        type: return
+        outcome: SpecMove
+      - stepNumber: 9
+        label: parent-check
+        description: 'Guard: parent names the group a moved GROUP goes under; a component or a type takes none'
+        type: branch
+        condition: a parent is named
+        onFalseStep: 11
+      - stepNumber: 10
+        description: Refuse before anything is written
+        type: throw
+        error: invalid-parent
+      - stepNumber: 11
+        label: route
         description: Is a component moving?
         type: branch
         condition: the kind is component
-        onFalseStep: 15
-      - stepNumber: 5
-        description: >-
-          Read every component, for the one moving, the members it owns and the pattern that may own
-          it
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadComponentSpecs
-      - stepNumber: 6
-        description: >-
-          Guard: the component exists, is the bound project's own, is owned by no pattern, and the
-          target is another subsystem of the bound tree
-        type: branch
-        condition: >-
-          the component is missing or in another project, a pattern owns it, or the target subsystem
-          is missing or the one it lives in
-        onFalseStep: 8
-      - stepNumber: 7
-        label: component-refused
-        description: >-
-          Refuse before anything is written: spec-missing, chained-spec, owned (move its owner),
-          subsystem-missing or same-subsystem
-        type: throw
-        error: the component cannot move there
-      - stepNumber: 8
-        description: >-
-          Collect what moves: the component and every member it owns (transitively), their contracts
-          and the implementations realizing those
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadInterfaceSpecs
-      - stepNumber: 9
-        description: >-
-          Plan what follows the old subsystem: its export entries and lifecycle entrypoints naming a
-          moved component — by its component or one of its contracts — go to the new subsystem, and
-          an L0 re-export from the old subsystem naming one is re-pointed at the new; each file it
-          will write and each reference it re-points is recorded for the report
-        type: local
-      - stepNumber: 10
-        description: A dry run stops here
-        type: branch
-        condition: dryRun is set
-        onFalseStep: 12
-      - stepNumber: 11
-        description: Return the plan, marked dryRun; nothing was written
-        type: return
-        outcome: SpecMove (dry run)
+        onFalseStep: 14
       - stepNumber: 12
         description: >-
-          Write the subsystems and the L0 the move re-homes entries on — the old subsystem without
-          the moved export entries and lifecycle entrypoints, the new one with them, an L0 re-export
-          re-pointed
+          Move the component with the members it owns, their contracts and implementations, and
+          answer what that move answers
         type: call
-        targetComponent: spec_loader
-        targetMethod: saveSpec
+        targetComponent: core_orchestrator
+        targetMethod: moveComponent
       - stepNumber: 13
-        description: >-
-          Write each moved component under the new subsystem, an owner before its members: the
-          nested layout moves a component's folder — its contract and implementation files inside it
-          — to where its subsystem places it
-        type: call
-        targetComponent: spec_loader
-        targetMethod: saveComponentSpec
-      - stepNumber: 14
-        description: 'The component''s move is written: go to the cache drop'
-        type: jump
-        toStep: 23
-      - stepNumber: 15
-        description: Read every type, for the one moving and the ids the target already holds
-        type: call
-        targetComponent: spec_loader
-        targetMethod: loadTypeSpecs
-      - stepNumber: 16
-        description: >-
-          Guard: the type exists, is the bound project's own, the target is another subsystem of the
-          bound tree (or system level), and the target holds no type of that id
-        type: branch
-        condition: >-
-          the type is missing or in another project, the target is missing or where it lives, or the
-          id is taken there
-        onFalseStep: 18
-      - stepNumber: 17
-        label: type-refused
-        description: Refuse before anything is written, naming the reason
-        type: throw
-        error: the type cannot move there
-      - stepNumber: 18
-        description: >-
-          Plan the rewrites: every type reference that names the moved type through its old
-          subsystem — in either spelling the loader resolves, `old::type` or `old.type`, matched as
-          the loader matches (case and punctuation aside, a deprecated own-project prefix and a
-          foreign key's `.field` tail included), wherever it stands in a type expression: a bare
-          position, a generic argument (`list<old.type>`, `map<string, old::type>`), an optional
-          (`old::type?`), a union, a result, a returns, a field, a signature type — is respelled to
-          name the new subsystem in the same spelling (the bare id at system level), through the one
-          type-reference rewriter every type move shares; and the export tables follow: its L1
-          export entries move with it to the target subsystem, an L0 re-export from the old
-          subsystem naming it is re-pointed at the new, an L0 entry publishing it as a project-level
-          type (no `from`) re-exports it `from` the target subsystem — whose L1 gains the type's
-          export entry — and, for a type made system-level, its L0 entries lose `from` (keeping the
-          public name its L1 entry gave) and its L1 entries go. Each file to write and each
-          reference respelled or re-pointed is recorded for the report
-        type: local
-      - stepNumber: 19
-        description: A dry run stops here
-        type: branch
-        condition: dryRun is set
-        onFalseStep: 21
-      - stepNumber: 20
-        description: Return the plan, marked dryRun; nothing was written
+        description: Return the component's move
         type: return
-        outcome: SpecMove (dry run)
-      - stepNumber: 21
+        outcome: SpecMove
+      - stepNumber: 14
+        label: type
         description: >-
-          Rewrite the references and the export entries across the bound tree, each touched spec
-          keeping its updatedAt: a move is placement, not an edit, so moving back leaves the tree
-          byte-identical
-        type: local
-      - stepNumber: 22
-        description: >-
-          Write the type under its new owner, its updatedAt and its line endings kept: its stored
-          file is removed first through the store (the loader never moves a file on a save), pruning
-          each folder the removal leaves empty — a subsystem's types folder a type moved out of is
-          never left behind — and restored, byte for byte, when the save fails
+          Move the type, its export entries and the references qualified by its old subsystem, and
+          answer what that move answers
         type: call
-        targetComponent: spec_loader
-        targetMethod: saveSpec
-      - stepNumber: 23
-        description: 'Drop the cached spec index: files moved outside the save paths'
-        type: call
-        targetComponent: spec_loader
-        targetMethod: invalidateCache
-      - stepNumber: 24
-        description: >-
-          Return what moved, what was rewritten, the files written (a moved file as old → new) and
-          the references respelled or re-pointed
+        targetComponent: core_orchestrator
+        targetMethod: moveType
+      - stepNumber: 15
+        description: Return the type's move
         type: return
         outcome: SpecMove
   - name: rehearsalCopy
@@ -3920,6 +3868,321 @@ methods:
         description: Return the plan with applied true
         type: return
         outcome: applied
+  - name: renameGroup
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read every group: the group must exist and be the bound project's own, and the new id must
+          be a lowercase identifier with no `::`, differ from the old one and be held by no group
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadGroupSpecs
+      - stepNumber: 2
+        description: Guard the group rename
+        type: branch
+        condition: the group is missing or another project's, or the new id is malformed, unchanged or taken
+        onFalseStep: 4
+      - stepNumber: 3
+        label: refused
+        description: >-
+          Refuse before anything is written: spec-missing, chained-spec, invalid-id, name-unchanged
+          or id-taken
+        type: throw
+        error: the group cannot take that id
+      - stepNumber: 4
+        description: >-
+          Read every type: the types naming the group and its child groups are the specs whose
+          reference the rename rewrites
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 5
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 7
+      - stepNumber: 6
+        description: >-
+          Return the rename and the types and groups it would rewrite, marked dryRun; nothing was
+          written
+        type: return
+        outcome: SpecIdRename (dry run)
+      - stepNumber: 7
+        description: >-
+          Rename the group: its folder, its types' group and its child groups' parent follow the new
+          id, every other key kept; no type id changes
+        type: call
+        targetComponent: spec_loader
+        targetMethod: renameGroup
+      - stepNumber: 8
+        description: 'Drop the cached spec index: files moved outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 9
+        description: >-
+          Return the rename and the ids it rewrote; nothing is carried and no public name kept,
+          since a group is no export
+        type: return
+        outcome: SpecIdRename
+    symbol: renameGroupSpec
+  - name: moveGroup
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read every group: the group exists and is the bound project's own, and the placement it
+          would take (another home, another parent, or both) is judged as the type-groups rule
+          judges it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadGroupSpecs
+      - stepNumber: 2
+        description: Guard the group move
+        type: branch
+        condition: >-
+          the group is missing or another project's, the placement is the one it has, or the
+          type-groups rule would refuse it (a missing parent, a parent in another home, a cycle)
+        onFalseStep: 4
+      - stepNumber: 3
+        label: refused
+        description: >-
+          Refuse before anything is written: spec-missing, chained-spec, same-subsystem, or the
+          type-groups code naming the placement
+        type: throw
+        error: the group cannot move there
+      - stepNumber: 4
+        description: >-
+          Collect what moves with it, ids unchanged: the groups beneath it and every type in its
+          folder or theirs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 5
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Return the plan, marked dryRun; nothing was written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 7
+        description: >-
+          Write the group at its new placement, its folder moving along, and restate the home of
+          every group beneath it when the home changed; updatedAt is kept
+        type: call
+        targetComponent: spec_loader
+        targetMethod: moveGroup
+      - stepNumber: 8
+        description: 'Drop the cached spec index: files moved outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 9
+        description: >-
+          Return what moved (the group, the groups beneath it and its types), the placement it left
+          and took, and the folder moved
+        type: return
+        outcome: SpecMove
+    symbol: moveGroupSpec
+  - name: moveComponent
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Read every component, for the one moving, the members it owns and the pattern that may own
+          it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 2
+        description: >-
+          Guard: the component exists, is the bound project's own, is owned by no pattern, and the
+          target is another subsystem than the one it lives in
+        type: branch
+        condition: >-
+          the component is missing or in another project, a pattern owns it, or the target is the
+          subsystem it lives in
+        onFalseStep: 4
+      - stepNumber: 3
+        label: refused
+        description: >-
+          Refuse before anything is written: spec-missing, chained-spec, owned (move its owner) or
+          same-subsystem
+        type: throw
+        error: the component cannot move there
+      - stepNumber: 4
+        description: >-
+          Collect what moves: the component and every member it owns (transitively), and their
+          contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: And the implementations realizing those contracts
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Read the L0, for its re-exports from the old subsystem that name a moved component
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 7
+        description: >-
+          Plan what follows the old subsystem: its export entries and lifecycle entrypoints naming a
+          moved component — by its component or one of its contracts — go to the new subsystem, and
+          an L0 re-export from the old subsystem naming one is re-pointed at the new; each file it
+          will write and each reference it re-points is recorded for the report
+        type: local
+      - stepNumber: 8
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Return the plan, marked dryRun; nothing was written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 10
+        description: >-
+          Write the two subsystems the move re-homes entries on: the old one without the moved
+          export entries and lifecycle entrypoints, the new one with them
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 11
+        description: Write the L0 with the re-exports re-pointed, when one names a moved component
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSystemSpec
+      - stepNumber: 12
+        description: Re-read each moved component as stored, an owner before its members
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpec
+      - stepNumber: 13
+        description: >-
+          Write it under the new subsystem: the nested layout moves a component's folder — its
+          contract and implementation files inside it — to where its subsystem places it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveComponentSpec
+      - stepNumber: 14
+        description: 'Drop the cached spec index: files moved outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 15
+        description: >-
+          Resolve the two subsystems' files, named among the files written when entries moved
+          between them
+        type: call
+        targetComponent: spec_loader
+        targetMethod: subsystemPath
+      - stepNumber: 16
+        description: >-
+          Return what moved, the files written (a moved file as old → new) and the references
+          re-pointed
+        type: return
+        outcome: SpecMove
+    symbol: moveComponentSpec
+  - name: moveType
+    sourcePath: src/core/provision.ts
+    narrative:
+      - stepNumber: 1
+        description: Read every type, for the one moving and the ids the target already holds
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 2
+        description: >-
+          Guard: the type exists, is the bound project's own, the target is another place than where
+          it lives (a subsystem or system level), and the target holds no type of that id
+        type: branch
+        condition: >-
+          the type is missing or in another project, the target is where it lives, or the id is
+          taken there
+        onFalseStep: 4
+      - stepNumber: 3
+        label: refused
+        description: Refuse before anything is written, naming the reason
+        type: throw
+        error: the type cannot move there
+      - stepNumber: 4
+        description: >-
+          Read the project configuration: its id decides which qualified references name this
+          project's own type
+        type: call
+        targetComponent: project_config_repository
+        targetMethod: load
+      - stepNumber: 5
+        description: >-
+          Read the L0: its name stands for the project id when the configuration names none, and its
+          export table follows the type
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 6
+        description: >-
+          Plan the rewrites: every type reference that names the moved type through its old
+          subsystem — in either spelling the loader resolves, `old::type` or `old.type`, matched as
+          the loader matches (case and punctuation aside, a deprecated own-project prefix and a
+          foreign key's `.field` tail included), wherever it stands in a type expression: a bare
+          position, a generic argument (`list<old.type>`, `map<string, old::type>`), an optional
+          (`old::type?`), a union, a result, a returns, a field, a signature type — is respelled to
+          name the new subsystem in the same spelling (the bare id at system level), through the one
+          type-reference rewriter every type move shares; and the export tables follow: its L1
+          export entries move with it to the target subsystem, an L0 re-export from the old
+          subsystem naming it is re-pointed at the new, an L0 entry publishing it as a project-level
+          type (no `from`) re-exports it `from` the target subsystem — whose L1 gains the type's
+          export entry — and, for a type made system-level, its L0 entries lose `from` (keeping the
+          public name its L1 entry gave) and its L1 entries go. Each file to write and each
+          reference respelled or re-pointed is recorded for the report
+        type: local
+      - stepNumber: 7
+        description: Resolve the old and the new subsystem's files, between which its export entries move
+        type: call
+        targetComponent: spec_loader
+        targetMethod: subsystemPath
+      - stepNumber: 8
+        description: A dry run stops here
+        type: branch
+        condition: dryRun is set
+        onFalseStep: 10
+      - stepNumber: 9
+        description: Return the plan, marked dryRun; nothing was written
+        type: return
+        outcome: SpecMove (dry run)
+      - stepNumber: 10
+        description: >-
+          Rewrite the references and the export entries across the bound tree, each touched spec
+          keeping its updatedAt: a move is placement, not an edit, so moving back leaves the tree
+          byte-identical
+        type: local
+      - stepNumber: 11
+        description: >-
+          Write the type under its new owner, its updatedAt and its line endings kept: its stored
+          file is removed first through the store (the loader never moves a file on a save), pruning
+          each folder the removal leaves empty — a subsystem's types folder a type moved out of is
+          never left behind — and restored, byte for byte, when the save fails
+        type: call
+        targetComponent: spec_loader
+        targetMethod: saveSpec
+      - stepNumber: 12
+        description: 'Drop the cached spec index: files moved outside the save paths'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: invalidateCache
+      - stepNumber: 13
+        description: >-
+          Return what moved, what was rewritten, the files written (a moved file as old → new) and
+          the references respelled or re-pointed
+        type: return
+        outcome: SpecMove
+    symbol: moveTypeSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-19T19:49:36.943Z'
+updatedAt: '2026-10-24T11:42:50.667Z'

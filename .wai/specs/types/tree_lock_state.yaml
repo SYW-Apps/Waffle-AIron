@@ -2,12 +2,13 @@ kind: value-object
 id: tree_lock_state
 name: TreeLockState
 description: >-
-  What a project tree's write lock file (.wai/.spec-write.lock) says as it stands — read for `wairon
-  doctor`, which names a lock that is present and whether the next write breaks it.
+  What a project tree's write lock says as it stands - the live generation file
+  (.wai/.spec-write.lock.<g>, no .end marker beside it) - read for `wairon doctor`, which names a
+  lock that is present and whether the next write reclaims it.
 fields:
   - name: file
     type: string
-    description: The lock file
+    description: The live generation's lock file
     optional: false
   - name: pid
     type: int
@@ -21,15 +22,25 @@ fields:
     type: string
     description: >-
       live — a running process holds it; gone — its holder process has ended; unreadable — no holder
-      can be read from it (a foreign or truncated file)
+      can be read from it (a foreign or truncated file); remote — its holder is on another host or
+      in another PID namespace, so its liveness cannot be seen and it holds until the lock is older
+      than any write
     optional: false
   - name: breaks
     type: bool
     description: >-
-      Whether the next write breaks it instead of waiting: a holder that is gone, a lock older than
-      any write, or one that cannot be read past the short grace a holder mid-write needs
+      Whether the next write reclaims it (ends its generation) instead of waiting: a local holder
+      that is gone, a lock older than any write, or one that cannot be read past the short grace a
+      holder mid-write needs
     optional: false
+  - name: identity
+    type: lock_holder
+    description: >-
+      The holder identity the file names (pid, time, host and PID namespace), when it can be read;
+      `wairon doctor` prints the host and namespace of a remote holder and says it is broken only by
+      age.
+    optional: true
 methods: []
 sourcePath: src/core/spec-files.ts
 createdAt: '2026-10-09T16:55:35.119Z'
-updatedAt: '2026-10-09T16:55:35.995Z'
+updatedAt: '2026-10-23T22:34:41.401Z'

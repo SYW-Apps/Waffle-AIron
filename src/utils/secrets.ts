@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { readJsonForUpdate, replaceFile } from './fs.js';
+import { withFileLock } from './file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Integration secret resolution (secret_write_registry + resolveSecret)
@@ -75,16 +77,31 @@ export function setSecret(key: string, value: string): void {
   registryWriteSecret(key, value);
 }
 
-/** The write registry's upsert behind setSecret: read the store, set the key, swap the file atomically. */
+/** The write registry's upsert behind setSecret: one locked read-change-write of the whole map. */
 function registryWriteSecret(key: string, value: string): void {
+  updateStore((store) => ({ ...store, [key]: value }));
+}
+
+/**
+ * isecret_store.update — requires the data dir (throws when unset). Under the
+ * secret file's write lock, read the map fresh (absent is empty; a file that
+ * exists but cannot be read or parsed throws and nothing is written, so a corrupt
+ * file is never replaced by a map of one key), apply the change and replace the
+ * file owner-readable atomically. Answers the map written.
+ */
+function updateStore(change: (store: Record<string, string>) => Record<string, string>): Record<string, string> {
   const p = storePath();
   if (!p) throw new Error('WAIRON_DATA_DIR is not set — a running server needs it to store secrets.');
-  const store = readStore();
-  store[key] = value;
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(store, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  return withFileLock(p, () => {
+    const current = readJsonForUpdate<unknown>(p, {});
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+      throw new Error(`${p} is not a JSON object of secrets. Nothing was written; repair or restore the file.`);
+    }
+    const next = change(current as Record<string, string>);
+    replaceFile(p, JSON.stringify(next, null, 2) + '\n', 0o600);
+    return next;
+  });
 }
 
 /** List configured secret key names — never the values. */

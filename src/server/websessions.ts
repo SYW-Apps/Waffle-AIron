@@ -33,7 +33,8 @@ import type { WebSession } from './types.js';
 // The reserved session-id prefix lives with the WebSession types so transport
 // code can brand-check a credential without importing this component's file.
 import { WEB_SESSION_PREFIX } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ── file helpers ─────────────────────────────────────────────────────────────
 
@@ -66,10 +67,13 @@ function readSessions(dataDir: string): WebSession[] {
 }
 
 /** Persist the complete session set atomically (write temp, then rename). */
-function persistSessions(dataDir: string, sessions: WebSession[]): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(sessions, null, 2) + '\n');
+/** The set as read under the write lock: absent is empty; unreadable or malformed throws and nothing is written. */
+function readCurrent(p: string): WebSession[] {
+  const parsed = readJsonForUpdate<unknown>(p, []);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Web session store at ${p} contains malformed JSON: expected a JSON array of web sessions`);
+  }
+  return parsed as WebSession[];
 }
 
 /** Mint a fresh, unguessable session id carrying the reserved prefix. */
@@ -92,8 +96,23 @@ class WebSessionStore {
   /** Swap the in-memory set to a complete replacement in one assignment. Only
    *  called by the registry after durable persistence has succeeded, so index
    *  reads always observe a consistent set. */
-  replaceAll(sessions: WebSession[]): void {
-    this.sessions = sessions;
+  /**
+   * iweb_session_store.update — under web-sessions.json's write lock, read the
+   * set fresh, apply the change and replace the file atomically; a change that
+   * throws, or one that answers the array it was given, writes nothing.
+   * Answers the set written.
+   */
+  update(change: (sessions: WebSession[]) => WebSession[]): WebSession[] {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    this.sessions = withFileLock(p, () => {
+      const current = readCurrent(p);
+      const before = JSON.stringify(current);
+      const next = change(current);
+      if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+      return next;
+    });
+    return this.sessions;
   }
 
   /** The current authoritative set (shared by reference with the index). */
@@ -105,7 +124,7 @@ class WebSessionStore {
 // ── registry: write path ─────────────────────────────────────────────────────
 
 class WebSessionRegistry {
-  constructor(private readonly dataDir: string, private readonly store: WebSessionStore) {}
+  constructor(private readonly store: WebSessionStore) {}
 
   /**
    * Mint the session id when absent (reserved prefix), stamp createdAt and the
@@ -122,9 +141,7 @@ class WebSessionRegistry {
       createdAt: now,
       lastSeenAt: session.lastSeenAt ?? now,
     };
-    const next = [...this.store.all(), stored];
-    persistSessions(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((sessions) => [...sessions, stored]);
     return stored;
   }
 
@@ -133,14 +150,13 @@ class WebSessionRegistry {
    * lastSeenAt while preserving every other field, then persist and swap.
    */
   touch(id: string, lastSeenAt: string): void {
-    const sessions = this.store.all();
-    const idx = sessions.findIndex((s) => s.id === id);
-    if (idx === -1) return;
-    const updated: WebSession = { ...sessions[idx], lastSeenAt };
-    const next = [...sessions];
-    next[idx] = updated;
-    persistSessions(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((sessions) => {
+      const idx = sessions.findIndex((s) => s.id === id);
+      if (idx === -1) return sessions;
+      const next = [...sessions];
+      next[idx] = { ...sessions[idx], lastSeenAt };
+      return next;
+    });
   }
 
   /**
@@ -148,11 +164,7 @@ class WebSessionRegistry {
    * rewrites nothing — then persist the reduced set durably and swap it in.
    */
   remove(id: string): void {
-    const sessions = this.store.all();
-    if (!sessions.some((s) => s.id === id)) return;
-    const next = sessions.filter((s) => s.id !== id);
-    persistSessions(this.dataDir, next);
-    this.store.replaceAll(next);
+    this.store.update((sessions) => (sessions.some((s) => s.id === id) ? sessions.filter((s) => s.id !== id) : sessions));
   }
 
   /**
@@ -162,13 +174,12 @@ class WebSessionRegistry {
    * return the number removed. A user with no sessions is a no-op returning zero.
    */
   removeAllForSubject(userId: string): number {
-    const sessions = this.store.all();
-    const next = sessions.filter((s) => s.subject.userId !== userId);
-    const removed = sessions.length - next.length;
-    if (removed > 0) {
-      persistSessions(this.dataDir, next);
-      this.store.replaceAll(next);
-    }
+    let removed = 0;
+    this.store.update((sessions) => {
+      const next = sessions.filter((s) => s.subject.userId !== userId);
+      removed = sessions.length - next.length;
+      return removed > 0 ? next : sessions;
+    });
     return removed;
   }
 
@@ -179,13 +190,12 @@ class WebSessionRegistry {
    */
   pruneExpired(now: string): number {
     const nowMs = Date.parse(now);
-    const sessions = this.store.all();
-    const next = sessions.filter((s) => Date.parse(s.expiresAt) > nowMs);
-    const removed = sessions.length - next.length;
-    if (removed > 0) {
-      persistSessions(this.dataDir, next);
-      this.store.replaceAll(next);
-    }
+    let removed = 0;
+    this.store.update((sessions) => {
+      const next = sessions.filter((s) => Date.parse(s.expiresAt) > nowMs);
+      removed = sessions.length - next.length;
+      return removed > 0 ? next : sessions;
+    });
     return removed;
   }
 }
@@ -217,38 +227,28 @@ class WebSessionIndex {
 
 /** Persist a new browser session (minting a reserved-prefix id) through the facade (atomic). */
 export function createWebSession(dataDir: string, session: WebSession): WebSession {
-  const store = new WebSessionStore(dataDir);
-  store.load();
-  return new WebSessionRegistry(dataDir, store).create(session);
+  return new WebSessionRegistry(new WebSessionStore(dataDir)).create(session);
 }
 
 /** Update one session's lastSeenAt activity timestamp through the facade (atomic). */
 export function touchWebSession(dataDir: string, id: string, lastSeenAt: string): void {
-  const store = new WebSessionStore(dataDir);
-  store.load();
-  new WebSessionRegistry(dataDir, store).touch(id, lastSeenAt);
+  new WebSessionRegistry(new WebSessionStore(dataDir)).touch(id, lastSeenAt);
 }
 
 /** Remove one session by id (sign-out / correlated revocation) through the facade (atomic). */
 export function removeWebSession(dataDir: string, id: string): void {
-  const store = new WebSessionStore(dataDir);
-  store.load();
-  new WebSessionRegistry(dataDir, store).remove(id);
+  new WebSessionRegistry(new WebSessionStore(dataDir)).remove(id);
 }
 
 /** Delete sessions at or past their expiresAt; returns the count removed (atomic). */
 export function pruneExpiredWebSessions(dataDir: string, now: string): number {
-  const store = new WebSessionStore(dataDir);
-  store.load();
-  return new WebSessionRegistry(dataDir, store).pruneExpired(now);
+  return new WebSessionRegistry(new WebSessionStore(dataDir)).pruneExpired(now);
 }
 
 /** Remove every browser session belonging to the given user id (correlated
  *  revocation on deactivation); returns the count removed (atomic). */
 export function removeAllWebSessionsForSubject(dataDir: string, userId: string): number {
-  const store = new WebSessionStore(dataDir);
-  store.load();
-  return new WebSessionRegistry(dataDir, store).removeAllForSubject(userId);
+  return new WebSessionRegistry(new WebSessionStore(dataDir)).removeAllForSubject(userId);
 }
 
 /** Return one browser session by id, or null when absent. */

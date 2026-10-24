@@ -8,23 +8,22 @@ component: organization_store
 methods:
   - name: load
     description: >-
-      Load both persisted collections (organization units and project placements) from the
-      organization.json file under the hosted data root and hold them as the authoritative in-memory
-      representation, returning them together.
+      Read organization.json fresh (units and placements; no in-memory copy). A missing file yields
+      the empty state; an unreadable file or structurally invalid JSON fails with a storage error
+      naming the path.
     signature: 'load(): OrganizationState'
     returns: OrganizationState
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Atomically swap both in-memory collections to the supplied complete unit and placement sets
-      after the registry has persisted them.
-    signature: 'replaceAll(units: list<OrganizationUnitRecord>, placements: list<ProjectPlacement>): void'
-    returns: void
-    params:
-      - name: units
-        type: list<OrganizationUnitRecord>
-      - name: placements
-        type: list<ProjectPlacement>
+      Read the organization state fresh and persist what the change makes of it (units and
+      placements are one file, so one update changes both), holding the file's write lock
+      (file_write_lock) across both, so a writer in another process that reads and writes the same
+      file in between is never lost; a change that throws writes nothing; a file that exists but
+      cannot be read or parsed throws. Answers the state written.
+    signature: 'update(change: (state: OrganizationState) => OrganizationState): OrganizationState'
+    returns: OrganizationState
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -40,4 +39,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:05:39.438Z'
-updatedAt: '2026-10-04T22:34:57.266Z'
+updatedAt: '2026-10-23T22:21:46.156Z'

@@ -15,7 +15,7 @@ import { ProjectNotInitializedError, WaironError, YamlSyntaxError } from '../uti
 // commands barrel) so the physical import graph mirrors the declared
 // cli_runner → adapter edges (dependency conformance).
 import { runGenerate } from '../commands/generate.js';
-import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict } from '../commands/lock.js';
+import { runLock as lockTree, checkApproval, holdsNoDesign, treeVerdict, NOTHING_TO_APPROVE } from '../commands/lock.js';
 import type { LockOptions, LockCheckOptions } from '../commands/lock.js';
 import { runValidate, validateAsComplete, computeGateStateId } from '../commands/validate.js';
 import { designOnly } from '../models/lock.js';
@@ -93,8 +93,7 @@ async function runLock(options: LockOptions): Promise<void> {
   // no design to approve — approving it would record an empty design. Said, and
   // nothing written; not a failure.
   if (holdsNoDesign()) {
-    logger.info('Nothing designed to approve yet: the spec tree holds the L0 and nothing below it (no subsystem, no member project). '
-      + 'Add a subsystem first (an assistant adds one with sdd_add_subsystem), then run `wairon lock`. Nothing was written.');
+    logger.info(`${NOTHING_TO_APPROVE} Nothing was written.`);
     return;
   }
 

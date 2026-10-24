@@ -59,6 +59,7 @@ export * from './rules/index.js';
 export {
   loadSystemSpec,
   loadSubsystemSpecs,
+  holdsDesign,
   loadSubsystemSpec,
   loadComponentSpecs,
   loadComponentSpec,
@@ -68,6 +69,8 @@ export {
   loadImplementationSpec,
   loadTypeSpecs,
   loadTypeSpec,
+  // The type group tree (spec_tree_portal loadGroupSpecs).
+  loadGroupSpecs,
   // The resolved export tables (spec_tree_portal resolveSubsystemExports /
   // resolveProjectExports): passthrough reads of the spec repository.
   resolveSubsystemExports,

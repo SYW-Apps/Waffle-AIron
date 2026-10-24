@@ -1,0 +1,33 @@
+id: ilocal_dev_registration
+name: Local Dev Registration Interface
+description: >-
+  Registers what `wairon dev` serves on a disposable data directory, best-effort for the family and
+  never refusing the start.
+component: local_dev_registration
+methods:
+  - name: register
+    description: >-
+      Register the local development server's single project: a record pointing at the developer's
+      own working directory instead of an allocated root, and the readable part of its family. No
+      credential exists in that mode, so the workflow admits only a development-mode host
+      configuration and refuses every other. The development data directory is disposable: when it
+      is unversioned, from another major or would need any instance migration it is deleted first
+      (with its old backups) and the start begins fresh, never backed up or migrated. The family is
+      registered best-effort: every member that can be read gets its record, and a member that
+      cannot (a project.yaml that cannot be read or fails its schema, an id that is no project id, a
+      missing directory, a path escaping its parent) is answered with its reason and registers
+      nothing - it never stops the start, unlike a hosted start, which stays fail-closed. Idempotent
+      across restarts.
+    signature: 'register(id: string, rootPath: string): DevFamilyRegistration'
+    returns: DevFamilyRegistration
+    params:
+      - name: id
+        type: string
+      - name: rootPath
+        type: string
+    previousNames:
+      - iadmin_orchestrator.registerLocalDevProject
+      - ilocal_dev_registration.registerLocalDevProject
+status: complete
+createdAt: '2026-10-23T22:31:21.357Z'
+updatedAt: '2026-10-23T22:31:43.227Z'

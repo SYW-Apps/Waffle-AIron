@@ -169,6 +169,13 @@ methods:
         targetComponent: spec_file_store
         targetMethod: write
       - stepNumber: 8
+        description: >-
+          A type given another group was written at its new group's folder: remove the file it left
+          through the file store
+        type: call
+        targetComponent: spec_file_store
+        targetMethod: remove
+      - stepNumber: 9
         description: Answer with the writer's placement notices; none for the L0 and a subsystem
         type: return
         outcome: saved
@@ -240,6 +247,7 @@ methods:
     calls:
       - spec_file_store.read
       - spec_file_store.write
+      - spec_file_store.remove
     symbol: writeCanonicalReferences
   - name: rewriteReferences
     narrative: []
@@ -279,6 +287,31 @@ methods:
           that follows starts from the tree as it is on disk
         type: local
     symbol: registryLockSpecTree
+  - name: renameGroup
+    narrative: []
+    detail: intent
+    intent: >-
+      Scans the tree for the group's file, the types naming it and its child groups (refusing an id
+      it does not hold), moves the group's folder to the new id beside it (refused when the target
+      folder already holds files, or lies inside the folder), rewrites the group's own document with
+      the new id and then the group key of each such type and the parent key of each child group,
+      each through the file store with every other key kept, drops the cached index and answers the
+      rewritten ids.
+    calls:
+      - spec_file_store.read
+      - spec_file_store.write
+  - name: moveGroup
+    narrative: []
+    detail: intent
+    intent: >-
+      Writes the group through its typed writer with updatedAt kept: a group given another parent or
+      home takes its whole folder along (its types and child groups), refused when the target folder
+      already holds files or lies inside the folder, and each folder the move empties is pruned.
+      Then, for each group beneath it whose stored home differs from the group's new home, rewrites
+      only that key through the file store; the cached index is dropped.
+    calls:
+      - spec_file_store.read
+      - spec_file_store.write
 lint:
   allow:
     - code: UNNARRATED_COMPLEXITY
@@ -289,4 +322,4 @@ lint:
         behavior contract.
 status: complete
 createdAt: '2026-07-18T22:57:53.545Z'
-updatedAt: '2026-10-09T12:14:39.231Z'
+updatedAt: '2026-10-24T11:35:07.538Z'

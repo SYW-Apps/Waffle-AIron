@@ -181,12 +181,12 @@ export function carryPlan(
  * the record id of the member whose qualifier equals it, a qualified entry that
  * equals none dropped (it resolved to nothing, so dropping narrows, never widens);
  * every other entry kept; duplicates collapsed, first order kept. A key left with
- * no entry is flagged as revoked. Null for a revoked key or when no entry is qualified.
+ * no entry is flagged as revoked. Null when no entry is qualified.
  */
 export function narrowing(key: ApiKeyRecord, members: PlannedMemberRecord[]): PlannedNarrowing | null {
   // Step 1.
-  if (key.revokedAt || !key.projects.some((e) => e.includes('::'))) {
-    // Step 2: a revoked key is left alone; a project entry covers its members through the chain.
+  if (!key.projects.some((e) => e.includes('::'))) {
+    // Step 2: a project entry covers its members through the chain.
     return null;
   }
   // Step 3.

@@ -1,24 +1,30 @@
 id: git_backing_store_impl
 name: Git Backing Store Implementation
 description: >-
-  Disk-backed binding collection at &lt;dataDir&gt;/git-backing.json, mirroring the other hosted
-  stores' storage conventions.
+  Read-through file I/O over the binding collection at <dataDir>/git-backing.json, mirroring the
+  other hosted stores' storage conventions: load parses the file fresh; update holds the file's
+  write lock across a fresh read and the replacement.
 contract: igit_backing_store
 sourcePath: src/server/gitbacking.ts
 methods:
   - name: load
     narrative: []
     intent: >-
-      Read and parse git-backing.json under the hosted data root as the authoritative binding
-      collection. A missing file yields an empty set (first boot is not an error); an unreadable
-      file or structurally invalid JSON fails with a storage error naming the path so the operator
-      can repair it — persisted bindings are never silently discarded.
-  - name: replaceAll
+      Read and parse git-backing.json under the hosted data root fresh (no in-memory copy). A
+      missing file yields an empty set (first boot is not an error); an unreadable file or
+      structurally invalid JSON fails with a storage error naming the path so the operator can
+      repair it - persisted bindings are never silently discarded.
+  - name: update
     narrative: []
     intent: >-
-      Persist the complete binding collection via write-temp-then-rename so a crashed write leaves
-      the prior state fully intact, then swap the in-memory representation in one assignment.
+      Under git-backing.json's write lock (file_write_lock.run), read the collection fresh - absent
+      is empty, a file that exists but cannot be read or parsed throws and nothing is written -
+      apply the change, replace the file atomically via write-temp-then-rename so a crashed write
+      leaves the prior state fully intact, and release the lock, also when the change throws.
+      Answers the collection written.
+    calls:
+      - file_write_lock.run
 detail: intent
 status: complete
 createdAt: '2026-07-16T15:39:47.904Z'
-updatedAt: '2026-07-16T15:48:49.592Z'
+updatedAt: '2026-10-23T22:23:29.296Z'

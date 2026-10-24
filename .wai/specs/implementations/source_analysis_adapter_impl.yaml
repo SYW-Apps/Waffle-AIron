@@ -78,6 +78,25 @@ methods:
           reads silence as a pass
         type: local
       - stepNumber: 6
+        label: decoratorMetadata
+        description: >-
+          For each exact-grade ts/js file, decide whether decorator metadata applies BEFORE its
+          facts are read: the nearest tsconfig.json at or above the file's directory, up to the
+          project root, is read through the compiler's own config reader (which FOLLOWS `extends`
+          chains — relative and package-named, arrays included — so a base config's
+          `emitDecoratorMetadata: true` counts exactly as the compiler would see it), and the answer
+          is its resolved compilerOptions.emitDecoratorMetadata === true, remembered per config path
+          and file modification time. No tsconfig found, a config the reader cannot parse or whose
+          `extends` cannot be resolved, or a solution-style tsconfig (references and no
+          files/include of its own, whose real options live in the configs it points at) keeps
+          today's behaviour: metadata treated as ON — the rule is only ever relaxed by a project
+          that visibly turns it off, so an unreadable config never produces a false 'type-only'
+          reading. When the answer is off, a decorated declaration's annotation is an ordinary type
+          position and the file's typePositionOnlyBindings includes it; when on, the per-declaration
+          decorator matching of source_file_facts.typePositionOnlyBindings applies. The switch is
+          analyzer input, not a fact of the file, and moves no approval.
+        type: local
+      - stepNumber: 7
         description: >-
           Extract per-file facts: declaration-tier names (named declarations at any nesting depth,
           destructuring bindings, object-literal keys, import bindings, export specifiers), weak
@@ -109,7 +128,7 @@ methods:
           republication is folded in, whether the file declared nothing of its own and only
           re-exported, which is what makes it a pure re-export barrel
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         label: readSignaturesAndRoutes
         description: >-
           Beside those facts, read at exact grade the parameters each named function-like with a
@@ -166,7 +185,7 @@ methods:
           tested by instanceof, passed or returned as a value, an export clause aside
           (source_file_facts.classReferences)
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         label: chaseReexports
         description: >-
           Chase the re-export barrels through their relative specifiers, and their package
@@ -183,7 +202,7 @@ methods:
           than guessed. A carried site keeps the file it was READ in, so its bare names and
           receivers resolve in the real module's scope and never in the barrel's
         type: local
-      - stepNumber: 9
+      - stepNumber: 10
         label: resolveCalls
         description: >-
           Resolve every call with the type checker: build one program over every exact-grade ts/js
@@ -237,7 +256,7 @@ methods:
           (no declaration file, nothing under node_modules) is kept as that file's canonical key,
           and a bare one that does not (never a relative path or a node: builtin) as a package
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         label: checkerReadings
         description: >-
           With the same program, three readings more. The RECEIVER is read the way the code means
@@ -277,12 +296,12 @@ methods:
           that resolves under each name it binds (`*` for a namespace import, none for a side-effect
           import), marked resolved, with the module it lands in relative to that project's root
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, the local-package map every import
@@ -366,4 +385,4 @@ methods:
     symbol: compilerIdentity
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-17T19:37:46.969Z'
+updatedAt: '2026-10-23T22:16:01.664Z'

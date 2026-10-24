@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
 import type { Role } from './types.js';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 
 // ---------------------------------------------------------------------------
 // Role Repository (sdd_host)
@@ -92,10 +93,19 @@ function load(dataDir: string): Role[] {
  * write-temp-then-rename, so a crash never truncates the file and readers never
  * observe a half-written state. Only called by the registry after a mutation.
  */
-function replaceAll(dataDir: string, roles: Role[]): void {
+function update(dataDir: string, change: (roles: Role[]) => Role[]): Role[] {
   const p = storePath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(roles, null, 2) + '\n');
+  return withFileLock(p, () => {
+    const current = readJsonForUpdate<unknown>(p, []);
+    if (!Array.isArray(current)) {
+      throw new Error(`Malformed role store at ${p}: expected a JSON array of roles.`);
+    }
+    const before = JSON.stringify(current);
+    const next = change(current as Role[]);
+    if (JSON.stringify(next) !== before) replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 // ── Registry (write path) ──────────────────────────────────────────────────
@@ -109,13 +119,13 @@ function registryCreate(dataDir: string, role: Role): Role {
   if (isBuiltinRoleId(role.id)) {
     throw new Error(`Role "${role.id}" is a reserved built-in role and cannot be created.`);
   }
-  const roles = load(dataDir);
-  if (roles.some((r) => r.id === role.id)) {
-    throw new Error(`Role "${role.id}" already exists.`);
-  }
   const stored: Role = { ...role, createdAt: new Date().toISOString() };
-  roles.push(stored);
-  replaceAll(dataDir, roles);
+  update(dataDir, (roles) => {
+    if (roles.some((r) => r.id === role.id)) {
+      throw new Error(`Role "${role.id}" already exists.`);
+    }
+    return [...roles, stored];
+  });
   return stored;
 }
 
@@ -128,14 +138,15 @@ function registryUpdate(dataDir: string, role: Role): Role {
   if (isBuiltinRoleId(role.id)) {
     throw new Error(`Role "${role.id}" is a reserved built-in role and cannot be modified.`);
   }
-  const roles = load(dataDir);
-  const idx = roles.findIndex((r) => r.id === role.id);
-  if (idx === -1) {
-    throw new Error(`Role "${role.id}" not found.`);
-  }
-  const stored: Role = { ...role, createdAt: roles[idx].createdAt, createdBy: roles[idx].createdBy };
-  roles[idx] = stored;
-  replaceAll(dataDir, roles);
+  let stored!: Role;
+  update(dataDir, (roles) => {
+    const idx = roles.findIndex((r) => r.id === role.id);
+    if (idx === -1) {
+      throw new Error(`Role "${role.id}" not found.`);
+    }
+    stored = { ...role, createdAt: roles[idx].createdAt, createdBy: roles[idx].createdBy };
+    return roles.map((r, i) => (i === idx ? stored : r));
+  });
   return stored;
 }
 
@@ -148,10 +159,10 @@ function registryDelete(dataDir: string, roleId: string): void {
   if (isBuiltinRoleId(roleId)) {
     throw new Error(`Role "${roleId}" is a reserved built-in role and cannot be deleted.`);
   }
-  const roles = load(dataDir);
-  const remaining = roles.filter((r) => r.id !== roleId);
-  if (remaining.length === roles.length) return;
-  replaceAll(dataDir, remaining);
+  update(dataDir, (roles) => {
+    const remaining = roles.filter((r) => r.id !== roleId);
+    return remaining.length === roles.length ? roles : remaining;
+  });
 }
 
 // ── Index (read path) ──────────────────────────────────────────────────────

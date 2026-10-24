@@ -15,7 +15,7 @@ import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
 import { impactHeadline } from '../models/pack-impact.js';
-import { isValidProjectId, listProjectRecords, existingProjectRoot } from './projects.js';
+import { isValidProjectId, invalidProjectIdProblem, listProjectRecords, existingProjectRoot } from './projects.js';
 import { authorize, visibleScopes, isInstanceAdmin, actionableProjectIds, resolveFamilyReach } from './authorization.js';
 import { describeDecision } from './types.js';
 import type {
@@ -244,7 +244,7 @@ export function initializeProject(
   // Structural validation: id shape, non-collision, and the required owner unit.
   if (!isValidProjectId(request.id)) {
     throw new Error(
-      `Invalid project id "${request.id}" (allowed: lowercase letters, digits, hyphen).`,
+      `Invalid project id "${request.id}": ${invalidProjectIdProblem(request.id)}.`,
     );
   }
   if (listProjectRecords(cfg.dataDir).some((p) => p.id === request.id)) {

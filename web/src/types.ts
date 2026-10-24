@@ -364,7 +364,6 @@ export interface ApiKeyRecord {
   label?: string;
   ownerSubject?: PrincipalSubject;
   expiresAt?: string;
-  revokedAt?: string;
 }
 
 export interface ApprovalRequest {
@@ -452,4 +451,20 @@ export function subjectLabel(s: { displayName?: string; email?: string; userId?:
 
 export function userLabel(u: HostedUserRecord): string {
   return subjectLabel({ displayName: u.displayName, email: u.email, userId: u.subject?.userId ?? u.id });
+}
+
+/** One thing that kept part of the dev project's family from loading (GET /web/dev/status). */
+export interface DevStartProblem {
+  /** The member as the family declares it: its qualifier (top id plus one alias per hop). */
+  member: string;
+  /** The member's path as declared in its parent, when it declares one. */
+  path?: string;
+  /** Why it cannot be loaded, in words a person acts on. */
+  reason: string;
+}
+
+/** What the local development server reports about its start; devMode is false on a hosted instance. */
+export interface DevStatus {
+  devMode: boolean;
+  problems: DevStartProblem[];
 }

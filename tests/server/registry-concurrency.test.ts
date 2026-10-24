@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
-import { breakLock, withFileLock } from '../../src/utils/fs.js';
+import { withFileLock } from '../../src/utils/file-lock.js';
 import { load as loadCredentials, update as updateCredentials } from '../../src/server/credential-store.js';
 import { listProjectRecords } from '../../src/server/projects.js';
 
@@ -111,36 +111,34 @@ describe('concurrent writers in separate processes', () => {
 });
 
 describe('the data file write lock', () => {
+  const liveGenerations = (dir: string): string[] => fs.readdirSync(dir)
+    .filter((n) => /\.lock\.\d+$/.test(n) && !fs.existsSync(path.join(dir, `${n}.end`)));
+
   it('a lock its holder left behind on this host, once gone, is taken over', () => {
     const dir = dataDir();
     const target = path.join(dir, 'records.json');
     // A pid no live process has, written the way a holder writes the lock.
-    fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\n${os.hostname()}\n`);
+    fs.writeFileSync(`${target}.lock.1`, `999999999\n${Date.now()}\n${os.hostname()}\n`);
     expect(withFileLock(target, () => 'ran')).toBe('ran');
-    expect(fs.existsSync(`${target}.lock`)).toBe(false);
+    // The dead holder's generation was ended and cleaned below the one this writer took, which it then ended.
+    expect(fs.existsSync(`${target}.lock.1`)).toBe(false);
+    expect(fs.existsSync(`${target}.lock.2.end`)).toBe(true);
+    expect(liveGenerations(dir)).toEqual([]);
   });
 
   it('a fresh lock whose pid the platform rejects (out of range) is not taken as gone: it holds until stale', () => {
     const dir = dataDir();
     const target = path.join(dir, 'records.json');
     // process.kill refuses this id with an error that is not ESRCH: the holder is unknown, so alive.
-    fs.writeFileSync(`${target}.lock`, `99999999999\n${Date.now()}\n${os.hostname()}\n`);
+    fs.writeFileSync(`${target}.lock.1`, `99999999999\n${Date.now()}\n${os.hostname()}\n`);
     // Time is simulated (each wait advances the clock one second) so the test need not sit out the 15 s.
-    const realNow = Date.now.bind(Date);
     let skew = 0;
     let waits = 0;
-    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + skew);
-    const waitSpy = vi.spyOn(Atomics, 'wait').mockImplementation(() => {
-      waits++;
-      skew += 1_000;
-      return 'timed-out';
+    const ran = withFileLock(target, () => 'ran', {
+      now: () => Date.now() + skew,
+      sleep: () => { waits++; skew += 1_000; },
     });
-    try {
-      expect(withFileLock(target, () => 'ran')).toBe('ran');
-    } finally {
-      waitSpy.mockRestore();
-      nowSpy.mockRestore();
-    }
+    expect(ran).toBe('ran');
     // Broken only by age (past 15 s), never at once as a dead holder.
     expect(waits).toBeGreaterThanOrEqual(14);
   });
@@ -148,39 +146,24 @@ describe('the data file write lock', () => {
   it('a fresh lock held on another host is waited for, not judged by a local pid, and taken over once stale', () => {
     const dir = dataDir();
     const target = path.join(dir, 'records.json');
-    fs.writeFileSync(`${target}.lock`, `999999999\n${Date.now()}\nanother-host\n`);
-    const started = Date.now();
+    fs.writeFileSync(`${target}.lock.1`, `999999999\n${Date.now()}\nanother-host\n`);
+    let skew = 0;
     // Its pid names no live process HERE, but it is another host's: it holds
     // until stale (15 s), within the wait (20 s), so the writer gets through.
-    expect(withFileLock(target, () => 'ran')).toBe('ran');
-    expect(Date.now() - started).toBeGreaterThanOrEqual(14_000);
-  }, 30_000);
-
-  it('a holder whose lock was taken over as stale leaves the new holder\'s lock in place', () => {
-    const dir = dataDir();
-    const target = path.join(dir, 'records.json');
-    const other = `1\n${Date.now()}\nanother-host\nnew-holder\n`;
-    withFileLock(target, () => fs.writeFileSync(`${target}.lock`, other));
-    expect(fs.readFileSync(`${target}.lock`, 'utf8')).toBe(other);
+    expect(withFileLock(target, () => 'ran', { now: () => Date.now() + skew, sleep: () => { skew += 1_000; } })).toBe('ran');
+    expect(skew).toBeGreaterThanOrEqual(14_000);
   });
 
-  it('a stale lock is broken only while it still holds what was judged, by one breaker at a time', () => {
+  it('a holder whose lock was reclaimed as stale leaves the new holder\'s lock in place', () => {
     const dir = dataDir();
-    const lock = path.join(dir, 'records.json.lock');
-    fs.writeFileSync(lock, 'next holder\n');
-    // Judged as one record, now holding another: the next holder's, left in place.
-    expect(breakLock(lock, 'judged holder\n')).toBe(false);
-    expect(fs.existsSync(lock)).toBe(true);
-    // Another breaker at work: this one waits its turn.
-    fs.writeFileSync(`${lock}.break`, '');
-    expect(breakLock(lock, 'next holder\n')).toBe(false);
-    expect(fs.existsSync(lock)).toBe(true);
-    // A claim a crashed breaker left is cleared once old, and the next turn breaks the lock.
-    const old = new Date(Date.now() - 10_000);
-    fs.utimesSync(`${lock}.break`, old, old);
-    expect(breakLock(lock, 'next holder\n')).toBe(false);
-    expect(breakLock(lock, 'next holder\n')).toBe(true);
-    expect(fs.readdirSync(dir)).toEqual([]);
+    const target = path.join(dir, 'records.json');
+    withFileLock(target, () => {
+      // The reclaimer ends this generation and the next holder takes the next name.
+      fs.writeFileSync(`${target}.lock.1.end`, '');
+      fs.writeFileSync(`${target}.lock.2`, `1\n${Date.now()}\nanother-host\nnew-holder\n`);
+    });
+    expect(fs.readFileSync(`${target}.lock.2`, 'utf8')).toContain('new-holder');
+    expect(fs.existsSync(`${target}.lock.2.end`)).toBe(false);
   });
 
   it('a store file that exists but does not parse is never written over as an empty set', () => {
@@ -190,13 +173,13 @@ describe('the data file write lock', () => {
     fs.writeFileSync(file, '[{"id":"kept"');
     expect(() => updateCredentials(dir, (records) => [...records, { id: 'new' } as never])).toThrow(/not valid JSON/);
     expect(fs.readFileSync(file, 'utf8')).toBe('[{"id":"kept"');
-    expect(fs.existsSync(`${file}.lock`)).toBe(false);
+    expect(liveGenerations(path.dirname(file))).toEqual([]);
   });
 
   it('a change that throws writes nothing and releases the lock', () => {
     const dir = dataDir();
     const target = path.join(dir, 'records.json');
     expect(() => withFileLock(target, () => { throw new Error('refused'); })).toThrow('refused');
-    expect(fs.existsSync(`${target}.lock`)).toBe(false);
+    expect(liveGenerations(dir)).toEqual([]);
   });
 });

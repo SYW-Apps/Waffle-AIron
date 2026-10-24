@@ -8,21 +8,22 @@ component: public_surface_store
 methods:
   - name: load
     description: >-
-      Load the persisted public-surface snapshot set, keyed by project id, from the
-      public-surfaces.json file under the hosted data root and hold it as the authoritative
-      in-memory representation, returning it.
+      Read public-surfaces.json fresh (no in-memory copy). A missing file yields an empty set; an
+      unreadable file or structurally invalid JSON fails with a storage error naming the path.
     signature: 'load(): list<ProjectPublicSurfaceSnapshot>'
     returns: list<ProjectPublicSurfaceSnapshot>
     params: []
-  - name: replaceAll
+  - name: update
     description: >-
-      Atomically swap the in-memory snapshot set to the supplied complete set after the registry has
-      persisted it.
-    signature: 'replaceAll(snapshots: list<ProjectPublicSurfaceSnapshot>): void'
-    returns: void
-    params:
-      - name: snapshots
-        type: list<ProjectPublicSurfaceSnapshot>
+      Read the snapshot set fresh and persist what the change makes of it, holding the file's write
+      lock (file_write_lock) across both, so a writer in another process that reads and writes the
+      same file in between is never lost; a change that throws writes nothing; a file that exists
+      but cannot be read or parsed throws. Answers the set written.
+    signature: >-
+      update(change: (snapshots: ProjectPublicSurfaceSnapshot[]) => ProjectPublicSurfaceSnapshot[]):
+      ProjectPublicSurfaceSnapshot[]
+    returns: list<ProjectPublicSurfaceSnapshot>
+    effect: write
 lint:
   allow:
     - code: UNUSED_METHOD
@@ -39,4 +40,4 @@ lint:
         would be declaring one the code does not make.
 status: complete
 createdAt: '2026-07-09T22:06:03.875Z'
-updatedAt: '2026-10-04T10:19:24.025Z'
+updatedAt: '2026-10-23T22:22:05.985Z'

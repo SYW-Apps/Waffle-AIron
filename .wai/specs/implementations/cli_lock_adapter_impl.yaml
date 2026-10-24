@@ -471,51 +471,49 @@ methods:
       - stepNumber: 23
         label: unlocked-subsystems
         description: >-
-          Never approved: read the subsystems, to tell a tree with a design to approve from one that
-          holds the L0 and nothing below it
+          Never approved: ask the shared predicate whether the tree holds design, to tell a tree
+          with a design to approve (types and the export table included) from one that holds the L0
+          and nothing below it
         type: call
         targetComponent: spec_tree_portal
-        targetMethod: loadSubsystemSpecs
+        targetMethod: holdsDesign
       - stepNumber: 24
         label: verdict-unlocked
         description: >-
           Never approved: the opt-in seam. A tree holding the L0 and nothing below it (no subsystem,
-          no member project) has nothing designed to approve, said as `wairon lock` says it — which
-          writes no record there — with the remedy: add a subsystem, then `wairon lock`. Any other
-          tree: plain lock-check fails only a committed approval that no longer matches, so a
-          project with no .wai/lock.json (never locked, or the record deleted) is not gated, which
-          is why CI runs `wairon lock-check --strict`. Without strict, pass with that notice; with
-          strict, refuse — there is no approved design.
+          no type, no export entry, no member project) has nothing approvable yet, said as `wairon
+          lock` says it — which writes no record there; it never prescribes adding a subsystem (a
+          types-only project is lockable as it stands). Any other tree: plain lock-check fails only
+          a committed approval that no longer matches, so a project with no .wai/lock.json (never
+          locked, or the record deleted) is not gated, which is why CI runs `wairon lock-check
+          --strict`. Without strict, pass with that notice; with strict, refuse — there is no
+          approved design.
         type: return
         outcome: unlocked
   - name: holdsNoDesign
     narrative:
       - stepNumber: 1
-        description: Read the subsystems the tree holds
+        description: >-
+          Ask the shared predicate whether the tree holds design: a subsystem, a type anywhere
+          (root-level, in a type group, in a subsystem), an L0 export entry or a direct member
+          project. Types and the export table ARE design: a types-only project is lockable.
         type: call
         targetComponent: spec_tree_portal
-        targetMethod: loadSubsystemSpecs
+        targetMethod: holdsDesign
       - stepNumber: 2
-        description: >-
-          Read the direct members (depth 1): a project that declares members has their pins to
-          approve even with no subsystem of its own
-        type: call
-        targetComponent: validator_portal
-        targetMethod: familyApprovals
-      - stepNumber: 3
         description: >-
           Read the approval on record: a tree emptied after an approval still has that change to
           approve, so only a never-approved tree can hold nothing to approve
         type: call
         targetComponent: approval_portal
         targetMethod: readLockRecord
-      - stepNumber: 4
+      - stepNumber: 3
         description: >-
-          Answer true when no subsystem is loaded, no direct member is declared and no approval is
-          on record — the tree holds the L0 and nothing below it, the state `validate` calls
-          "nothing to check yet"
+          Answer true when the tree holds no design and no approval is on record — an L0 with
+          nothing below it: no subsystem, no type, no export entry, no member project. `validate`
+          and `status` word the same verdict (nothing approvable yet) from the same predicate.
         type: return
-        outcome: whether there is nothing to approve
+        outcome: whether there is nothing approvable
   - name: treeVerdict
     narrative:
       - stepNumber: 1
@@ -779,6 +777,17 @@ methods:
         description: Approvable
         type: return
         outcome: ok
+lint:
+  allow:
+    - code: UNDECLARED_EXPORT
+      at: src/commands/lock.ts
+      covers:
+        - NOTHING_TO_APPROVE
+      reason: >-
+        A message constant, not a capability: the one sentence lock, lock-check and status say of a
+        tree with nothing approvable yet. The runner prints it beside its own 'Nothing was written.'
+        when holdsNoDesign (a declared method) answers true; sharing the text keeps the three
+        surfaces word-identical, which a second copy in the runner would not.
 status: complete
 createdAt: '2026-07-24T18:05:34.695Z'
-updatedAt: '2026-10-18T14:21:46.223Z'
+updatedAt: '2026-10-24T11:33:09.579Z'

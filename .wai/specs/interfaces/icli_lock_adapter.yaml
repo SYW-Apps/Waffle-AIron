@@ -80,11 +80,14 @@ methods:
         optional: false
   - name: holdsNoDesign
     description: >-
-      Whether there is nothing to approve: the tree holds the L0 and nothing below it — no
-      subsystem, no direct member project — and no approval is on record. `wairon lock` writes no
-      record then (approving an empty design approves nothing) and says to add a subsystem first;
-      `lock-check` and `status` say the same of such a tree. A tree emptied after an approval is not
-      this state: that change is the approval's to take.
+      Whether there is nothing approvable: the tree holds the L0 and nothing below it — no
+      subsystem, no type anywhere, no entry in the L0 export table, no direct member project — and
+      no approval is on record. The predicate is the shared spec_tree_portal.holdsDesign, so a
+      types-only project (an L0, an export table and types) is lockable. `wairon lock` writes no
+      record for an empty tree (approving an empty design approves nothing) and says there is
+      nothing approvable yet; it never prescribes adding a subsystem. `lock-check` and `status` say
+      the same of such a tree. A tree emptied after an approval is not this state: that change is
+      the approval's to take.
     signature: 'holdsNoDesign(): bool'
     returns: bool
     params: []
@@ -162,4 +165,4 @@ methods:
         description: The direct members' approval entries
 status: complete
 createdAt: '2026-07-24T18:05:14.406Z'
-updatedAt: '2026-10-18T14:21:52.925Z'
+updatedAt: '2026-10-23T22:13:10.898Z'

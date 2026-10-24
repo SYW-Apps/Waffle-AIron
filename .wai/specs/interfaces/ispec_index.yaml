@@ -236,6 +236,34 @@ methods:
     signature: 'loadDuplicateTypeSpecs(): list<DuplicateTypeSpec>'
     returns: list<DuplicateTypeSpec>
     params: []
+  - name: holdsDesign
+    description: >-
+      Whether the bound tree holds anything to approve. The ONE predicate lock, lock-check, status
+      and validate share for the words 'nothing to approve' and 'the tree is empty': true when the
+      tree holds at least one subsystem, one type (root-level, in a type group or in a subsystem),
+      one entry of the L0 export table (publicInterfaces) or one direct member project. A types-only
+      project (an L0, an export table and types, no subsystem) therefore holds design and is
+      lockable; only an L0 with nothing below it holds none. A part (stage 8) is not a member
+      project here: its specs are this project's own subsystems and counted as such. Read from the
+      cached scan, so it agrees with every other read of the same tree.
+    signature: 'holdsDesign(): bool'
+    returns: bool
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
+  - name: loadGroupSpecs
+    description: >-
+      Loads every type group of the tree (group_spec: id, name, description, parent), from the
+      .index.yaml documents of kind group in the shared types folder and the subsystems' types
+      folders. The group tree is read from here by the validator's type-groups rule, `wairon
+      export`, the canvas payload and the status counts.
+    signature: 'loadGroupSpecs(): list<group_spec>'
+    returns: list<group_spec>
+    params: []
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-07-18T22:57:53.410Z'
-updatedAt: '2026-10-19T19:47:17.495Z'
+updatedAt: '2026-10-23T22:18:56.750Z'

@@ -25,6 +25,7 @@ import { Instance } from './views/Instance';
 import { ThemeBuilder } from './views/ThemeBuilder';
 import { CanvasView } from './views/CanvasView';
 import { SpecsTab } from './views/SpecsEditor';
+import { DevBanner } from './views/DevBanner';
 import { Tabs } from './ui';
 import { post, raw } from './api';
 
@@ -170,6 +171,7 @@ function DevShell() {
           <RealtimeStatus />
           <ThemeCog />
         </header>
+        <DevBanner />
         <main className="view">
           <Routes>
             <Route path="/canvas/*" element={<DevCanvas />} />

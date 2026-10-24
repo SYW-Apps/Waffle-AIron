@@ -1149,6 +1149,9 @@
               "linkedEntity": {
                 "type": "string"
               },
+              "group": {
+                "type": "string"
+              },
               "formerly": {
                 "type": "array",
                 "items": {
@@ -1169,6 +1172,34 @@
               "values",
               "invariants",
               "formerly"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "typeGroups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "parent": {
+                "type": "string"
+              },
+              "subsystem": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key",
+              "name"
             ],
             "additionalProperties": true
           }

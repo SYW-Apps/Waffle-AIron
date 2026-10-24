@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { runWithProjectRoot, replaceFile } from '../utils/fs.js';
+import { runWithProjectRoot, replaceFile, readJsonForUpdate } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 import { parseYaml } from '../utils/yaml.js';
 import type { ProjectConfig } from '../models/project.js';
 import { impactHeadline, type PackCandidate, type PackDoctrine, type PackImpact } from '../models/pack-impact.js';
@@ -87,14 +88,22 @@ function storeLoadPackPolicy(dataDir: string): InstancePackPolicy | null {
 }
 
 /**
- * policy_store.replaceActive. Write the single active record via
- * write-temp-then-rename, so a persistence failure leaves the previous record
- * intact.
+ * policy_store.updatePackPolicy. Under pack-policy.json's write lock, read the
+ * active record fresh (null when absent; unreadable or malformed throws and
+ * nothing is written), apply the change and replace the file atomically, so a
+ * persistence failure leaves the previous record intact. Answers the record written.
  */
-function storeReplaceActivePackPolicy(dataDir: string, policy: InstancePackPolicy): void {
+function updatePackPolicy(
+  dataDir: string,
+  change: (current: InstancePackPolicy | null) => InstancePackPolicy,
+): InstancePackPolicy {
   const p = packPolicyPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(policy, null, 2) + '\n');
+  return withFileLock(p, () => {
+    const next = change(readJsonForUpdate<InstancePackPolicy | null>(p, null));
+    replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 /** policy_index.getPackPolicy: the active record as stored, or null. */
@@ -109,7 +118,7 @@ function indexGetPackPolicy(dataDir: string): InstancePackPolicy | null {
  */
 function registrySetPackPolicy(dataDir: string, policy: InstancePackPolicy): InstancePackPolicy {
   const stored: InstancePackPolicy = { ...policy, updatedAt: new Date().toISOString() };
-  storeReplaceActivePackPolicy(dataDir, stored);
+  updatePackPolicy(dataDir, () => stored);
   return stored;
 }
 
@@ -190,14 +199,36 @@ export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | n
   return parsed;
 }
 
-/** Persist the instance exposure policy wholesale via write-temp-then-rename
- *  and return it. No stamping — the exposure posture is a plain settings object. */
+/** policy_repository.setExposurePolicy: forwards to the policy registry. */
 export function setExposurePolicyRecord(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
+  return registrySetExposurePolicy(dataDir, policy);
+}
+
+/** policy_registry.setExposurePolicy. Persist the instance exposure policy wholesale via write-temp-then-rename
+ *  and return it. No stamping — the exposure posture is a plain settings object. */
+function registrySetExposurePolicy(dataDir: string, policy: HostExposurePolicy): HostExposurePolicy {
   const p = exposurePolicyPath(dataDir);
   assertAdminApiMode(policy?.adminApiMode, `The exposure policy for ${p}`);
+  return updateExposurePolicy(dataDir, () => policy);
+}
+
+/**
+ * policy_store.updateExposurePolicy. Under exposure-policy.json's write lock,
+ * read the record fresh (null when absent; unreadable or malformed throws and
+ * nothing is written), apply the change and replace the file atomically.
+ * Answers the record written.
+ */
+function updateExposurePolicy(
+  dataDir: string,
+  change: (current: HostExposurePolicy | null) => HostExposurePolicy,
+): HostExposurePolicy {
+  const p = exposurePolicyPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(policy, null, 2) + '\n');
-  return policy;
+  return withFileLock(p, () => {
+    const next = change(readJsonForUpdate<HostExposurePolicy | null>(p, null));
+    replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 /**
@@ -265,11 +296,23 @@ function sanitizeIdentityProvider(config: IdentityProviderConfig): IdentityProvi
   return clean;
 }
 
-/** Persist the whole identity-provider collection atomically (write-temp-then-rename). */
-function writeIdentityProviderRecords(dataDir: string, records: IdentityProviderConfig[]): void {
+/**
+ * policy_store.updateIdentityProviders. Under identity-providers.json's write
+ * lock, read the collection fresh (absent is empty; unreadable or malformed
+ * throws and nothing is written), apply the change and replace the file
+ * atomically. Answers the collection written.
+ */
+function updateIdentityProviders(
+  dataDir: string,
+  change: (records: IdentityProviderConfig[]) => IdentityProviderConfig[],
+): IdentityProviderConfig[] {
   const p = identityProvidersPath(dataDir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(records, null, 2) + '\n');
+  return withFileLock(p, () => {
+    const next = change(readJsonForUpdate<IdentityProviderConfig[]>(p, []));
+    replaceFile(p, JSON.stringify(next, null, 2) + '\n');
+    return next;
+  });
 }
 
 /**
@@ -295,8 +338,16 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
   }
 }
 
+/** policy_repository.upsertIdentityProvider: forwards to the policy registry. */
+export function upsertIdentityProviderRecord(
+  dataDir: string,
+  config: IdentityProviderConfig,
+): IdentityProviderConfig {
+  return registryUpsertIdentityProvider(dataDir, config);
+}
+
 /**
- * policy_registry.upsertIdentityProvider → policy_repository.upsertIdentityProvider.
+ * policy_registry.upsertIdentityProvider.
  * Create or update one identity-provider configuration by id: stamp updatedAt
  * server-side, whitelist-project the config to the persisted type (dropping any
  * field outside it so a raw client secret can never be written, preserving
@@ -304,33 +355,38 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
  * persist the whole collection via write-temp-then-rename, and return the stored
  * config. A persistence failure leaves the previous collection intact.
  */
-export function upsertIdentityProviderRecord(
+function registryUpsertIdentityProvider(
   dataDir: string,
   config: IdentityProviderConfig,
 ): IdentityProviderConfig {
   const stored = sanitizeIdentityProvider({ ...config, updatedAt: new Date().toISOString() });
-  const records = listIdentityProviderRecords(dataDir);
-  const idx = records.findIndex((c) => c.id === stored.id);
-  if (idx >= 0) records[idx] = stored;
-  else records.push(stored);
-  writeIdentityProviderRecords(dataDir, records);
+  updateIdentityProviders(dataDir, (records) => {
+    const idx = records.findIndex((c) => c.id === stored.id);
+    return idx >= 0 ? records.map((c, i) => (i === idx ? stored : c)) : [...records, stored];
+  });
   return stored;
 }
 
+/** policy_repository.removeIdentityProvider: forwards to the policy registry. */
+export function removeIdentityProviderRecord(dataDir: string, id: string): void {
+  registryRemoveIdentityProvider(dataDir, id);
+}
+
 /**
- * policy_registry.removeIdentityProvider → policy_repository.removeIdentityProvider.
+ * policy_registry.removeIdentityProvider.
  * Remove one identity-provider configuration by id, rejecting an unknown id with a
  * not-found error; otherwise persist the reduced collection via
  * write-temp-then-rename. A persistence failure leaves the previous collection
  * intact.
  */
-export function removeIdentityProviderRecord(dataDir: string, id: string): void {
-  const records = listIdentityProviderRecords(dataDir);
-  const next = records.filter((c) => c.id !== id);
-  if (next.length === records.length) {
-    throw new Error(`Identity provider "${id}" not found.`);
-  }
-  writeIdentityProviderRecords(dataDir, next);
+function registryRemoveIdentityProvider(dataDir: string, id: string): void {
+  updateIdentityProviders(dataDir, (records) => {
+    const next = records.filter((c) => c.id !== id);
+    if (next.length === records.length) {
+      throw new Error(`Identity provider "${id}" not found.`);
+    }
+    return next;
+  });
 }
 
 // ── grant vocabulary + authorization helpers (mirrored from identity.ts) ─────

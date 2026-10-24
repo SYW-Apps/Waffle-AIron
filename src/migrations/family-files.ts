@@ -28,8 +28,8 @@ const WAI = '.wai';
 const TRANSACTIONS = 'transactions';
 /** The spec tree's write lock: a file of the moment, held by whoever writes now, never the family's bytes. */
 const WRITE_LOCK = '.spec-write.lock';
-/** Whether a path under an owner is never mirrored, never compared: the transaction area and the write lock. */
-const momentary = (rel: string): boolean => rel === `${WAI}/${TRANSACTIONS}` || rel === `${WAI}/${WRITE_LOCK}`;
+/** Whether a path under an owner is never mirrored, never compared: the transaction area and the write lock (its folder and everything beneath it, or the old single file, in any .wai below the owner). */
+const momentary = (rel: string): boolean => rel === `${WAI}/${TRANSACTIONS}` || rel === `${WAI}/${WRITE_LOCK}` || /(^|\/)\.wai\/\.spec-write\.lock(\/|\.)/.test(rel);
 const RETRIED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 const ATTEMPTS = 8;
 
@@ -367,6 +367,11 @@ export function makeDirs(dir: string): string[] {
   return missing;
 }
 
+/** Whether a .wai folder holds only the tree lock (its folder, or the old single file): the project it belonged to is gone. */
+function holdsOnlyLock(dir: string, entries: string[]): boolean {
+  return entries.length > 0 && nodePath.basename(dir) === WAI && entries.every((name) => name.startsWith(WRITE_LOCK));
+}
+
 /** ifamily_file_adapter.prune — remove an empty directory and each empty parent below stopAt, deepest first. */
 export function prune(dir: string, stopAt: string): string[] {
   const removed: string[] = [];
@@ -378,6 +383,11 @@ export function prune(dir: string, stopAt: string): string[] {
       entries = fs.readdirSync(at);
     } catch {
       break;
+    }
+    // A .wai holding only the tree lock's generation files (they stay on disk by design) is empty: the project it belonged to is gone.
+    if (holdsOnlyLock(at, entries)) {
+      for (const name of entries) fs.rmSync(nodePath.join(at, name), { recursive: true, force: true });
+      entries = [];
     }
     if (entries.length > 0) break;
     fs.rmdirSync(at);

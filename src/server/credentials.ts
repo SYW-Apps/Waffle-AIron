@@ -40,32 +40,26 @@ export function createCredential(dataDir: string, record: ApiKeyRecord): void {
   });
 }
 
-/** Remove a credential by id (idempotent). */
+/** Revoke a credential by id: its record is deleted (idempotent). The audit event is the history. */
 export function revokeCredential(dataDir: string, id: string): void {
   update(dataDir, (records) => records.filter((r) => r.id !== id));
 }
 
 /**
- * Revoke (stamp revokedAt with the current time) every non-revoked credential
- * whose ownerSubject.userId matches ownerUserId, persist the store once (under its write lock), and
- * return the number of records newly revoked. Idempotent — records already
- * carrying a revokedAt (and records without an owner subject) are skipped and not
- * counted; an owner with no active credentials revokes nothing and returns 0.
+ * Revoke every credential whose ownerSubject.userId matches ownerUserId: the
+ * records are deleted, in one update under the store's write lock, and the
+ * number removed is returned. Idempotent — records without an owner subject are
+ * skipped; an owner with no credentials removes nothing and returns 0.
  * Backs the identity deactivation flow so authenticate() rejects the user's tokens.
  */
 export function revokeAllForOwner(dataDir: string, ownerUserId: string): number {
-  const now = new Date().toISOString();
-  let revoked = 0;
+  let removed = 0;
   update(dataDir, (records) => {
-    for (const rec of records) {
-      if (rec.ownerSubject?.userId === ownerUserId && !rec.revokedAt) {
-        rec.revokedAt = now;
-        revoked += 1;
-      }
-    }
-    return records;
+    const kept = records.filter((rec) => rec.ownerSubject?.userId !== ownerUserId);
+    removed = records.length - kept.length;
+    return kept;
   });
-  return revoked;
+  return removed;
 }
 
 /** List credentials authorized for a project (or all, for the wildcard). */
@@ -90,8 +84,8 @@ export function listByOwner(dataDir: string, ownerUserId: string): ApiKeyRecord[
 /**
  * Replace one credential's project narrowing with the given entries (record ids
  * or '*'), leaving the hash, owner, label and expiry untouched — the member
- * upgrade's token rewrite. Refuses an empty narrowing and an unknown or revoked
- * id.
+ * upgrade's token rewrite. Refuses an empty narrowing and an unknown id (a
+ * revoked credential no longer exists).
  */
 export function renarrowCredential(dataDir: string, id: string, projects: string[]): ApiKeyRecord {
   if (projects.length === 0) throw new Error(`Credential "${id}": a narrowing cannot be empty.`);
@@ -99,7 +93,6 @@ export function renarrowCredential(dataDir: string, id: string, projects: string
   update(dataDir, (records) => {
     const rec = records.find((r) => r.id === id);
     if (!rec) throw new Error(`Unknown credential "${id}".`);
-    if (rec.revokedAt) throw new Error(`Credential "${id}" is revoked.`);
     rec.projects = [...projects];
     renarrowed = rec;
     return records;

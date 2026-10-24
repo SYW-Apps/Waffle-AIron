@@ -106,7 +106,12 @@ methods:
       is not — an L4/L5 prose change re-opens the approval, so `wairon lock` is owed before code is
       implemented against it, while code linkage costs no re-lock — because the global body is also
       what .wai/context/wairon-guide.md carries to every AI tool that reads the context copy
-      instead.
+      instead. Both bodies carry the 'What the human runs' list of CLI commands an assistant
+      recommends and never runs; it names `wairon dev` (a local web UI over this project: canvas,
+      specs, findings) beside `wairon status` and `wairon diagram`, so an assistant asked for a
+      visual or browsable view of the design points the human at it. Both also describe type groups:
+      types may be organized in a tree of groups (`sdd_add_group`, a type's `group`), which changes
+      layout and presentation only — ids stay bare and global.
     signature: 'body(scope: GuideScope): string'
     returns: string
     params:
@@ -129,4 +134,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-09-23T00:11:03.274Z'
-updatedAt: '2026-10-08T08:26:06.209Z'
+updatedAt: '2026-10-23T22:23:42.638Z'

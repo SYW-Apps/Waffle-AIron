@@ -157,6 +157,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: memberRevisions
+  - name: loadGroupSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call loadGroupSpecs on core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadGroupSpecs
 status: complete
 createdAt: '2026-07-10T23:15:53.589Z'
-updatedAt: '2026-10-09T11:37:58.170Z'
+updatedAt: '2026-10-23T22:22:56.238Z'

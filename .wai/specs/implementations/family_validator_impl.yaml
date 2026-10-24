@@ -216,17 +216,20 @@ methods:
         targetMethod: approvals
       - stepNumber: 5
         description: >-
-          Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED and each
-          drifted one as MEMBER_DRIFTED, saying so when the drift is only the stage-5 identity
-          upgrade (re-lock once), saying for a release the member's approval was re-validated under
-          that the new release finds N issue(s) in its approved design (naming them), naming the
-          inputs that moved when its entry carries them, and quoting what its approval owes when it
-          carries an `owed` sentence (a moved id, an external to pin) instead of calling it changed;
-          a member whose approval carried over by re-validation is approved and gets none. A
-          referenced project member that could not be opened (offline, its checkout absent, out of
-          reach) is EXTERNAL_CHECK_UNAVAILABLE once, naming why — its gate and its composition did
-          not run, never a pass. Parts get none of these: a part has no lock of its own, its
-          approval is the declaring project's. The root's own lock is not a family finding
+          Report each present PROJECT member whose state is never as MEMBER_UNAPPROVED — or, when
+          its entry says approvable is false (nothing below its L0 to approve), as
+          MEMBER_NOTHING_APPROVABLE (notice) saying there is nothing to approve there yet, never
+          prescribing a lock that refuses — and each drifted one as MEMBER_DRIFTED, saying so when
+          the drift is only the stage-5 identity upgrade (re-lock once), saying for a release the
+          member's approval was re-validated under that the new release finds N issue(s) in its
+          approved design (naming them), naming the inputs that moved when its entry carries them,
+          and quoting what its approval owes when it carries an `owed` sentence (a moved id, an
+          external to pin) instead of calling it changed; a member whose approval carried over by
+          re-validation is approved and gets none. A referenced project member that could not be
+          opened (offline, its checkout absent, out of reach) is EXTERNAL_CHECK_UNAVAILABLE once,
+          naming why — its gate and its composition did not run, never a pass. Parts get none of
+          these: a part has no lock of its own, its approval is the declaring project's. The root's
+          own lock is not a family finding
         type: local
       - stepNumber: 6
         description: >-
@@ -523,7 +526,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the selected projects that loaded
-        endStep: 15
+        endStep: 16
       - stepNumber: 4
         description: >-
           Bind the project's own root for the next calls, restoring the caller's binding afterwards
@@ -610,11 +613,20 @@ methods:
           decided
         type: local
       - stepNumber: 14
+        description: >-
+          Ask whether the project's own tree holds anything approvable (a subsystem, a type
+          anywhere, an L0 export entry or a direct member project), carried on its entry as
+          approvable: a never-approved tree holding nothing is reported as nothing to approve yet,
+          never as unlocked
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: holdsDesign
+      - stepNumber: 15
         description: For a member, read its parent's lock record from the parent's directory
         type: call
         targetComponent: validator_core_adapter
         targetMethod: approvalRecord
-      - stepNumber: 15
+      - stepNumber: 16
         description: >-
           Decide how the parent pinned it: the parent's `members` entry for this alias, else (format
           1, in the v5 reading `wairon upgrade` binds) its `children` entry; matches when that
@@ -622,7 +634,7 @@ methods:
           never approved now), unpinned when the parent has no record or names no pin for the alias.
           The root's own entry carries no pin
         type: local
-      - stepNumber: 16
+      - stepNumber: 17
         description: Return the entries, root first
         type: return
         outcome: ProjectApproval[]
@@ -1163,4 +1175,4 @@ methods:
         outcome: none
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-18T19:08:54.890Z'
+updatedAt: '2026-10-24T11:37:17.974Z'

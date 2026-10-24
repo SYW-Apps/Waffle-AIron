@@ -57,9 +57,9 @@ methods:
   - name: narrowing
     narrative:
       - stepNumber: 1
-        description: Is the key revoked, or does no entry carry '::' (a member qualifier)?
+        description: Does no entry carry '::' (a member qualifier)?
         type: branch
-        condition: the key is revoked, or no entry of the narrowing is member-qualified
+        condition: no entry of the narrowing is member-qualified
         onTrueStep: 2
         onFalseStep: 3
       - stepNumber: 2
@@ -111,4 +111,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-10-01T16:56:34.586Z'
-updatedAt: '2026-10-19T06:11:59.128Z'
+updatedAt: '2026-10-23T22:13:23.772Z'

@@ -1,4 +1,4 @@
-<!-- wairon-version: 6.1.4-dev.13 -->
+<!-- wairon-version: 6.1.5-dev.1 -->
 <!-- wairon-generated — do not edit directly; the human developer rebuilds this with `wairon generate` -->
 
 # Domain Map (14 domains)
@@ -26,7 +26,7 @@
 
 The **wairon MCP server** is active in this project. The tools are self-describing; call them directly:
 
-- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`.
+- Authoring: `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints`, `sdd_write_narrative`, `sdd_add_type`, `sdd_add_group`.
 - Members (declared in project.yaml `members`; a PART by default — this project's own subsystems stored elsewhere, by local id — or a PROJECT, referenced as `alias::name`): `sdd_add_member`, `sdd_move_member`; and the family migrations, each with `dryRun` (run it first and show the plan; applied, it writes every project or none and never locks): `sdd_promote_member` / `sdd_demote_member` (a part made a project in place, and back), `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias`, `sdd_internalize_member`, `sdd_externalize_subsystem`.
 - Reading & maintenance: `sdd_get_spec`, `sdd_update_spec`, `sdd_delete_spec`, `sdd_validate_tree`, `sdd_get_status`.
 - Topology: `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig`.
@@ -57,6 +57,9 @@ If `.wai/specs/` exists, the wairon SDD workflow is active; otherwise ignore it.
 - **`injectedParams` are set when the code exists, by the implementer**: never declare them at design time. They name a parameter a framework imposes on written code (a request handle, a context) beside the contract's own; the implementer declares them with `sdd_write_narrative` (`injectedParams`) or `sdd_update_spec` once its code takes one, and removes a design-time guess its code does not take (`UNUSED_INJECTED_PARAM`) the same way — code linkage, no re-lock.
 - **Plain JavaScript is checked too**: a JSDoc `@typedef` with `@property` lines declares a plain-JS shape, and in a binding module its field names are compared with the producer's type like a TypeScript interface's — add one rather than telling the human a `.js`/`.cjs` binding's fields cannot be checked.
 
+### Type groups
+- **Type groups**: types may be organized in a tree of groups (`sdd_add_group`, a type's `group`; a group may name a `parent`, and the folders on disk mirror the parent chain). Grouping changes layout and presentation only — type ids stay bare and global, and no reference resolves through a group. Move a type between groups by updating its `group` (its file follows); `sdd_move_spec`, `sdd_rename_spec` and `sdd_delete_spec` take `kind: group`.
+
 ### What the human runs — recommend these, never run them
 The `wairon` CLI is the human developer's tool: you never run it, but when the human asks for something only it does, tell them the exact command:
 - `wairon lock` — approve the design (then commit `.wai/lock.json`); `wairon lock-check` is the CI merge gate on that approval.
@@ -68,3 +71,4 @@ The `wairon` CLI is the human developer's tool: you never run it, but when the h
 - `wairon upgrade` — move a project written by an older wairon major to this one (rewrites deprecated forms; `--report` shows the plan); `wairon doctor --fix` — finish unfinished transactions and repair signatures, type spellings and stale guides; `wairon generate` — refresh the generated guides, skills and context.
 - `wairon agent customize <id>` — scaffold `.wai/agents/<id>.md`, guidance folded into every brief of that agent; `wairon agent brief <id>` — print a live brief.
 - `wairon status` — readiness and approval; `wairon diagram` — architecture diagrams; `wairon network flows` — the allowed-flows matrix.
+- `wairon dev` — a local web UI over this project: canvas, specs, findings. When the human asks for a visual or browsable view of the design, point them at it.

@@ -6,7 +6,10 @@ methods:
   - name: run
     description: >-
       Bring the data directory and every hosted tree to the running major, or refuse to start,
-      naming why and, once one was taken, the backup.
+      naming why and, once one was taken, the backup. A development-mode host (`wairon dev`) is the
+      exception on one point: a hosted tree that was refused or failed is reported in the answer and
+      printed by the start, never stops it - the developer is looking at that tree, and the web UI
+      shows what did not load.
     signature: 'run(): InstanceUpgradeReport'
     returns: InstanceUpgradeReport
     params: []
@@ -22,8 +25,20 @@ methods:
     effect: write
     previousNames:
       - ihosted_spec_upgrade.upgradeTrees
+  - name: resetDevDataDir
+    description: >-
+      Development mode only: when the data directory is unversioned, was written by another major,
+      has a version file that does not parse, or would otherwise need any instance migration, delete
+      it together with its old backups and answer true so the start begins fresh; a data directory
+      already at the running major is left as it is (false). A development data directory is
+      disposable, so it is never backed up and never migrated; a hosted data directory is never
+      reset - the method refuses it.
+    signature: 'resetDevDataDir(): bool'
+    returns: bool
+    params: []
+    effect: io
 previousIds:
   - idata_dir_upgrade
 status: draft
 createdAt: '2026-10-18T14:29:24.116Z'
-updatedAt: '2026-10-18T14:31:30.079Z'
+updatedAt: '2026-10-23T22:28:35.712Z'

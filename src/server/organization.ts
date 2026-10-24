@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { replaceFile } from '../utils/fs.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
+import { withFileLock } from '../utils/file-lock.js';
 import type {
   OrganizationUnitRecord,
   ProjectPlacement,
@@ -67,8 +68,18 @@ function readState(dataDir: string): OrganizationState {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { units: [], placements: [] };
     throw new Error(`Failed to read organization store at ${p}: ${(e as Error).message}`);
   }
+  return parseState(p, () => JSON.parse(raw));
+}
+
+/** The state as read under the write lock: absent is empty; unreadable or malformed throws and nothing is written. */
+function readCurrentState(p: string): OrganizationState {
+  const parsedJson = readJsonForUpdate<unknown>(p, { units: [], placements: [] });
+  return parseState(p, () => parsedJson);
+}
+
+function parseState(p: string, parse: () => unknown): OrganizationState {
   try {
-    const parsed = JSON.parse(raw) as Partial<OrganizationState> | null;
+    const parsed = parse() as Partial<OrganizationState> | null;
     if (
       parsed === null ||
       typeof parsed !== 'object' ||
@@ -81,13 +92,6 @@ function readState(dataDir: string): OrganizationState {
   } catch (e) {
     throw new Error(`Organization store at ${p} contains malformed JSON: ${(e as Error).message}`);
   }
-}
-
-/** Persist both complete collections atomically (write temp, then rename). */
-function persistState(dataDir: string, state: OrganizationState): void {
-  const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  replaceFile(p, JSON.stringify(state, null, 2) + '\n');
 }
 
 /** A unit's local segment: lowercase [a-z0-9-], dot-free ('.' separates the
@@ -174,12 +178,26 @@ class OrganizationStore {
     return { units: this.units, placements: this.placements };
   }
 
-  /** Swap both in-memory collections to complete replacements in one assignment.
-   *  Only called by the registry after durable persistence has succeeded, so
-   *  index reads always observe a consistent pair of collections. */
-  replaceAll(units: OrganizationUnitRecord[], placements: ProjectPlacement[]): void {
-    this.units = units;
-    this.placements = placements;
+  /**
+   * iorganization_store.update — under organization.json's write lock, read
+   * units and placements fresh (one file, so one update changes both), apply
+   * the change and replace the file atomically; a change that throws, or one
+   * that answers the state it was given, writes nothing. The change reads the
+   * state it is given (the one read under the lock). Answers the state written.
+   */
+  update(change: (state: OrganizationState) => OrganizationState): OrganizationState {
+    const p = storePath(this.dataDir);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    const next = withFileLock(p, () => {
+      const current = readCurrentState(p);
+      const before = JSON.stringify(current);
+      const changed = change(current);
+      if (JSON.stringify(changed) !== before) replaceFile(p, JSON.stringify(changed, null, 2) + '\n');
+      return changed;
+    });
+    this.units = next.units;
+    this.placements = next.placements;
+    return next;
   }
 
   /** The current authoritative unit collection (shared by reference with the index). */
@@ -196,7 +214,7 @@ class OrganizationStore {
 // ── registry: write path ─────────────────────────────────────────────────────
 
 class OrganizationRegistry {
-  constructor(private readonly dataDir: string, private readonly store: OrganizationStore) {}
+  constructor(private readonly store: OrganizationStore) {}
 
   /**
    * Create one organization unit: compute its QUALIFIED id from the parentId
@@ -208,7 +226,9 @@ class OrganizationRegistry {
    * return the stored unit. Authorization is the orchestrator's job, not here.
    */
   createUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
-    const units = this.store.allUnits();
+    let stored!: OrganizationUnitRecord;
+    this.store.update((state) => {
+    const units = state.units;
     if (!unit.slug || !SLUG_PATTERN.test(unit.slug)) {
       throw new Error(
         `Organization unit slug "${unit.slug}" is invalid — lowercase [a-z0-9-] only (dot-free; '.' separates the qualified path).`,
@@ -232,7 +252,7 @@ class OrganizationRegistry {
       );
     }
 
-    const stored: OrganizationUnitRecord = {
+    stored = {
       ...unit,
       id,
       ...(parentId !== undefined ? { parentId } : {}),
@@ -241,10 +261,8 @@ class OrganizationRegistry {
     };
     if (parentId === undefined) delete stored.parentId;
 
-    const next = [...units, stored];
-    const placements = this.store.allPlacements();
-    persistState(this.dataDir, { units: next, placements });
-    this.store.replaceAll(next, placements);
+    return { units: [...units, stored], placements: state.placements };
+    });
     return stored;
   }
 
@@ -255,7 +273,9 @@ class OrganizationRegistry {
    * performed via reparentUnit. Persist durably and refresh the store.
    */
   updateUnit(unit: OrganizationUnitRecord): OrganizationUnitRecord {
-    const units = this.store.allUnits();
+    let stored!: OrganizationUnitRecord;
+    this.store.update((state) => {
+    const units = state.units;
     const idx = units.findIndex((u) => u.id === unit.id);
     if (idx < 0) {
       throw new Error(`Organization unit "${unit.id}" not found.`);
@@ -272,7 +292,7 @@ class OrganizationRegistry {
       );
     }
 
-    const stored: OrganizationUnitRecord = {
+    stored = {
       ...existing,
       name: unit.name || existing.name,
       kind: unit.kind || existing.kind,
@@ -281,10 +301,8 @@ class OrganizationRegistry {
       ...(unit.exposeTo !== undefined ? { exposeTo: unit.exposeTo } : {}),
     };
 
-    const next = units.map((u, i) => (i === idx ? stored : u));
-    const placements = this.store.allPlacements();
-    persistState(this.dataDir, { units: next, placements });
-    this.store.replaceAll(next, placements);
+    return { units: units.map((u, i) => (i === idx ? stored : u)), placements: state.placements };
+    });
     return stored;
   }
 
@@ -300,7 +318,9 @@ class OrganizationRegistry {
    * user home units, role-binding scopes).
    */
   reparentUnit(unitId: string, newParentId?: string): UnitIdRemap[] {
-    const units = this.store.allUnits();
+    let remap: UnitIdRemap[] = [];
+    this.store.update((state) => {
+    const units = state.units;
     const unit = units.find((u) => u.id === unitId);
     if (!unit) {
       throw new Error(`Organization unit "${unitId}" not found.`);
@@ -364,16 +384,15 @@ class OrganizationRegistry {
       return r;
     });
 
-    const nextPlacements = this.store
-      .allPlacements()
+    const nextPlacements = state.placements
       .map((p) => (newIds.has(p.unitId) ? { ...p, unitId: newIds.get(p.unitId)! } : p));
 
-    persistState(this.dataDir, { units: nextUnits, placements: nextPlacements });
-    this.store.replaceAll(nextUnits, nextPlacements);
-
-    return [...newIds.entries()]
+    remap = [...newIds.entries()]
       .filter(([oldId, newId]) => oldId !== newId)
       .map(([oldId, newId]) => ({ oldId, newId }));
+    return { units: nextUnits, placements: nextPlacements };
+    });
+    return remap;
   }
 
   /**
@@ -382,12 +401,13 @@ class OrganizationRegistry {
    * from every other unit's exposeTo[]. Deleting an absent unit is a no-op.
    */
   deleteUnit(unitId: string): void {
-    const units = this.store.allUnits();
-    if (!units.some((u) => u.id === unitId)) return; // no-op
+    this.store.update((state) => {
+    const units = state.units;
+    if (!units.some((u) => u.id === unitId)) return state; // no-op
     if (units.some((u) => u.parentId === unitId)) {
       throw new Error(`Organization unit "${unitId}" still has child units — empty it first.`);
     }
-    const placements = this.store.allPlacements();
+    const placements = state.placements;
     if (placements.some((p) => p.unitId === unitId)) {
       throw new Error(`Organization unit "${unitId}" still has project placements — empty it first.`);
     }
@@ -398,8 +418,8 @@ class OrganizationRegistry {
           ? { ...u, exposeTo: u.exposeTo.filter((e) => e !== unitId) }
           : u,
       );
-    persistState(this.dataDir, { units: next, placements });
-    this.store.replaceAll(next, placements);
+    return { units: next, placements };
+    });
   }
 
   /**
@@ -407,12 +427,11 @@ class OrganizationRegistry {
    * Removing an absent placement is a no-op.
    */
   deletePlacement(placementId: string): void {
-    const placements = this.store.allPlacements();
-    const next = placements.filter((p) => p.id !== placementId);
-    if (next.length === placements.length) return; // no-op
-    const units = this.store.allUnits();
-    persistState(this.dataDir, { units, placements: next });
-    this.store.replaceAll(units, next);
+    this.store.update((state) => {
+      const next = state.placements.filter((p) => p.id !== placementId);
+      if (next.length === state.placements.length) return state; // no-op
+      return { units: state.units, placements: next };
+    });
   }
 
   /**
@@ -425,18 +444,20 @@ class OrganizationRegistry {
    * Authorization is the orchestrator's job, not here.
    */
   placeProject(placement: ProjectPlacement): ProjectPlacement {
-    const units = this.store.allUnits();
+    let stored!: ProjectPlacement;
+    this.store.update((state) => {
+    const units = state.units;
     if (!units.some((u) => u.id === placement.unitId)) {
       throw new Error(
         `Project placement unitId "${placement.unitId}" does not resolve to an existing organization unit.`,
       );
     }
 
-    const placements = this.store.allPlacements();
+    const placements = state.placements;
     const existingIdx = placement.id ? placements.findIndex((p) => p.id === placement.id) : -1;
     const isUpdate = existingIdx >= 0;
 
-    const stored: ProjectPlacement = isUpdate
+    stored = isUpdate
       ? {
           ...placement,
           id: placements[existingIdx].id,
@@ -452,8 +473,8 @@ class OrganizationRegistry {
       ? placements.map((p, i) => (i === existingIdx ? stored : p))
       : [...placements, stored];
 
-    persistState(this.dataDir, { units, placements: next });
-    this.store.replaceAll(units, next);
+    return { units, placements: next };
+    });
     return stored;
   }
 }
@@ -497,17 +518,13 @@ class OrganizationIndex {
 /** Create one organization unit through the repository facade (atomic) — the
  *  registry computes the qualified dot-path id and rejects collisions. */
 export function createUnit(dataDir: string, unit: OrganizationUnitRecord): OrganizationUnitRecord {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  return new OrganizationRegistry(dataDir, store).createUnit(unit);
+  return new OrganizationRegistry(new OrganizationStore(dataDir)).createUnit(unit);
 }
 
 /** Update one organization unit's METADATA through the repository facade
  *  (atomic) — slug/parent changes are rejected there; use reparentUnit. */
 export function updateUnit(dataDir: string, unit: OrganizationUnitRecord): OrganizationUnitRecord {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  return new OrganizationRegistry(dataDir, store).updateUnit(unit);
+  return new OrganizationRegistry(new OrganizationStore(dataDir)).updateUnit(unit);
 }
 
 /** Move a unit's subtree under a new parent through the repository facade
@@ -517,30 +534,22 @@ export function reparentUnit(
   unitId: string,
   newParentId?: string,
 ): UnitIdRemap[] {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  return new OrganizationRegistry(dataDir, store).reparentUnit(unitId, newParentId);
+  return new OrganizationRegistry(new OrganizationStore(dataDir)).reparentUnit(unitId, newParentId);
 }
 
 /** Delete one EMPTY organization unit through the repository facade. */
 export function deleteUnit(dataDir: string, unitId: string): void {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  new OrganizationRegistry(dataDir, store).deleteUnit(unitId);
+  new OrganizationRegistry(new OrganizationStore(dataDir)).deleteUnit(unitId);
 }
 
 /** Remove one project placement through the repository facade. */
 export function deletePlacement(dataDir: string, placementId: string): void {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  new OrganizationRegistry(dataDir, store).deletePlacement(placementId);
+  new OrganizationRegistry(new OrganizationStore(dataDir)).deletePlacement(placementId);
 }
 
 /** Create or update a project placement inside an organization unit (atomic). */
 export function placeProject(dataDir: string, placement: ProjectPlacement): ProjectPlacement {
-  const store = new OrganizationStore(dataDir);
-  store.load();
-  return new OrganizationRegistry(dataDir, store).placeProject(placement);
+  return new OrganizationRegistry(new OrganizationStore(dataDir)).placeProject(placement);
 }
 
 /** List organization units, optionally narrowed to the direct children of a parent. */

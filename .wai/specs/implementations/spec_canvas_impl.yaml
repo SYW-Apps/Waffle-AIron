@@ -44,13 +44,23 @@ methods:
         targetMethod: loadTypeSpecs
       - stepNumber: 7
         description: >-
+          Load the type groups of the bound tree: the group tree the types view folds by. Each type
+          gets `group` and `groupPath` (group_spec.chain under the loaded groups; a broken or cyclic
+          chain is cut where it breaks, the type-groups rule reports it), and the model gets
+          `typeGroups`, parents before children, with the types each group holds counted directly
+          and through its descendants
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadGroupSpecs
+      - stepNumber: 8
+        description: >-
           Read the project's resolved export table, so a portal's "View OpenAPI" deep-links to the
           section tagged with the public name its canonical target is exported under — the
           resolver's name, not the raw L0 entry's
         type: call
         targetComponent: spec_loader
         targetMethod: resolveProjectExports
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Read the project graph: one project node per PROJECT member — contained, or referenced (a
           `../`, git or hosted source, drawn from its pin when its root is not on hand) — with its
@@ -62,7 +72,7 @@ methods:
         type: call
         targetComponent: spec_loader
         targetMethod: graph
-      - stepNumber: 9
+      - stepNumber: 10
         description: >-
           Emit a node per spec with its level and containment — a project member's specs under its
           project node; a part's subsystems as this project's own subsystems, each carrying the
@@ -72,7 +82,7 @@ methods:
           edges between projects included. Ids stay honest; only the displayed label collapses a
           subsystem whose key repeats its member's alias
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: >-
           Draw the data model: an edge from each type to each type a field's parsed expression
           references (type_expression.namedRefs, plus a foreign key's `references`), labelled with
@@ -81,15 +91,21 @@ methods:
           no edge to an enum or a named scalar, each a value domain rather than an entity relation.
           An enum node lists its values in place of fields; a signature type node shows its derived
           text; a named scalar node is drawn compactly, its name with the primitive it holds and no
-          field rows
+          field rows. Groups add containers, never edges: when the types in scope exceed the cluster
+          threshold (400) the client clusters them by TIER — first one cluster per subsystem (shared
+          types under their own), and opening a cluster shows that home's top-level groups as
+          clusters and its ungrouped types as nodes, a group opening into its child groups and its
+          own types the same way — so no view ever draws more than the threshold; cross-cluster
+          edges are aggregated between the clusters shown, as they are between subsystem clusters
+          today. Below the threshold the groups draw as collapsible containers around their types
         type: local
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Mark each node the passed-in findings name, keeping each finding's severity, so the canvas
           shows a judgement it did not make — and can draw a node holding only notices apart from
           one holding errors or warnings
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
         description: >-
           Draw the passed-in relation health, without judging it: when relations were passed, turn
           each consumer-to-producer pair the consumption edges connect (the edge's ends lie in
@@ -104,7 +120,7 @@ methods:
           relations at all, so the page says health was not checked rather than drawing anything as
           good
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: Answer with the model
         type: return
         outcome: built
@@ -122,7 +138,10 @@ methods:
           colour, folds edges at a collapsed level to their worst health, shows a relation on hover
           and in the details panel, adds the one legend row when a consumption edge exists, draws an
           external project node dashed, and offers a project's own page only through a host's
-          open-project hook
+          open-project hook. It also lists every finding of the model in a Findings panel (a finding
+          that names a drawn spec focuses its node on click; one that names none is listed as the
+          project's), takes the issues overlay's first-visit default from the host's showIssues
+          option, and draws a partial model as it is
         type: local
       - stepNumber: 3
         description: >-
@@ -139,4 +158,4 @@ methods:
     symbol: renderCanvasHtml
 status: complete
 createdAt: '2026-09-20T16:38:14.590Z'
-updatedAt: '2026-10-17T16:26:33.805Z'
+updatedAt: '2026-10-23T22:30:17.891Z'

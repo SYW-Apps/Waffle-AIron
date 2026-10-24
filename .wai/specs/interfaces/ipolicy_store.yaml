@@ -1,35 +1,54 @@
 id: ipolicy_store
 name: Policy Store Interface
 description: >-
-  Private store contract for hosted instance policy: the single active pack/profile policy record,
-  file-backed at <dataDir>/pack-policy.json, alongside the identity-provider (SSO) configuration
-  collection, file-backed at <dataDir>/identity-providers.json. Holds at most one active
-  InstancePackPolicy and the full identity-provider collection as authoritative in-memory state.
+  Private store contract for hosted instance policy: read-through file I/O over three files under
+  the data root - the single active pack/profile policy record (pack-policy.json), the
+  identity-provider (SSO) configuration collection (identity-providers.json) and the instance
+  exposure policy (exposure-policy.json). Every read parses the file fresh; every change is an
+  update of ONE of the three files under that file's own write lock.
 component: policy_store
 methods:
   - name: load
     description: >-
-      Read the persisted pack-policy record (<dataDir>/pack-policy.json) and the identity-provider
-      collection (<dataDir>/identity-providers.json) from the server data root and hold both as the
-      authoritative in-memory representation, returning the pack policy. A missing pack-policy file
-      yields null (no policy ever configured); a missing identity-providers file yields an empty
-      collection. An unreadable file or structurally invalid JSON fails with a storage error naming
-      the path — the store never silently drops a persisted policy or provider configuration.
+      Read pack-policy.json and identity-providers.json fresh (no in-memory copy), returning the
+      pack policy. A missing pack-policy file yields null (no policy ever configured); a missing
+      identity-providers file yields an empty collection. An unreadable file or structurally invalid
+      JSON fails with a storage error naming the path - the store never silently drops a persisted
+      policy or provider configuration.
     signature: 'load(): InstancePackPolicy?'
     returns: InstancePackPolicy?
     params: []
-  - name: replaceActive
+  - name: updatePackPolicy
     description: >-
-      Swap the authoritative in-memory active pack-policy record to the supplied record in one
-      assignment, only ever called by the owned registry after durable persistence has succeeded.
-      The identity-provider collection the store also holds is replaced through the registry's
-      provider write path. Never partially applies, so concurrent reads through the index always
-      observe a consistent record.
-    signature: 'replaceActive(policy: InstancePackPolicy): void'
-    returns: void
-    params:
-      - name: policy
-        type: InstancePackPolicy
+      Read pack-policy.json fresh (null when absent) and persist what the change makes of it,
+      holding that file's write lock (file_write_lock) across both; a change that throws writes
+      nothing; a file that exists but cannot be read or parsed throws. Answers the policy written.
+    signature: >-
+      updatePackPolicy(change: (policy: InstancePackPolicy?) => InstancePackPolicy):
+      InstancePackPolicy
+    returns: InstancePackPolicy
+    effect: write
+  - name: updateIdentityProviders
+    description: >-
+      Read identity-providers.json fresh (empty when absent) and persist what the change makes of
+      the collection, holding that file's write lock across both, so two administrators saving
+      different providers at once keep both; a change that throws writes nothing. Answers the
+      collection written.
+    signature: >-
+      updateIdentityProviders(change: (providers: IdentityProviderConfig[]) =>
+      IdentityProviderConfig[]): IdentityProviderConfig[]
+    returns: list<IdentityProviderConfig>
+    effect: write
+  - name: updateExposurePolicy
+    description: >-
+      Read exposure-policy.json fresh (null when absent) and persist what the change makes of it,
+      holding that file's write lock across both; a change that throws writes nothing. Answers the
+      policy written.
+    signature: >-
+      updateExposurePolicy(change: (policy: HostExposurePolicy?) => HostExposurePolicy):
+      HostExposurePolicy
+    returns: HostExposurePolicy
+    effect: write
 status: complete
 createdAt: '2026-07-09T20:46:15.267Z'
-updatedAt: '2026-10-04T10:19:15.756Z'
+updatedAt: '2026-10-23T22:21:56.455Z'

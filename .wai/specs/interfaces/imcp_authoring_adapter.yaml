@@ -86,9 +86,11 @@ methods:
         optional: true
   - name: moveSpec
     description: >-
-      Forward to authoring_portal.moveSpec: move a component or a type to another subsystem through
-      the gate
-    signature: 'moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool): SpecMove'
+      Forward to authoring_portal.moveSpec: move a component, a type or a type group to another
+      subsystem (a group also under another `parent` group) through the gate
+    signature: >-
+      moveSpec(kind: WritableSpecKind, id: string, subsystem?: string, dryRun?: bool, parent?:
+      string): SpecMove
     returns: SpecMove
     params:
       - name: kind
@@ -105,6 +107,12 @@ methods:
         type: bool
         description: Answer the plan and write nothing
         optional: true
+      - name: parent
+        type: string
+        description: >-
+          kind group only: the parent group the moved group goes under; omitted, top-level in the
+          destination home
+        optional: true
 status: complete
 createdAt: '2026-09-18T21:42:03.998Z'
-updatedAt: '2026-10-09T00:33:46.184Z'
+updatedAt: '2026-10-23T22:25:29.026Z'

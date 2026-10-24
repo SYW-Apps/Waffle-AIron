@@ -397,6 +397,9 @@ select.input option, select.input optgroup {
 .dev-bar .tabstrip { border-bottom: none; margin-left: 6px; }
 .dev-bar .tab { padding: 7px 13px; }
 .dev-bar .theme-cog { position: static; }
+.dev-banner { margin: 8px 14px 0; }
+.dev-banner-list { margin: 6px 0 0; padding-left: 18px; }
+.dev-banner-list li { margin: 2px 0; }
 .dev-tag {
   font-size: 10px;
   font-weight: 800;

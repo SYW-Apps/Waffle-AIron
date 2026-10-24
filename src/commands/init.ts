@@ -565,7 +565,7 @@ async function executeInit(
   logger.info('  .wai/phased_design.md — spec kit alternative design workbook');
   logger.info('  .wai/specs/         — SDD spec tree (L0 .index.yaml bootstrapped)');
   logger.info('  .wai/context/       — shared context directory (domains.md, wairon-guide.md)');
-  logger.info('  .wai/.gitignore     — keeps the spec write lock (.spec-write.lock) out of git');
+  logger.info('  .wai/.gitignore     — keeps the spec write lock (.spec-write.lock*) out of git');
   if (hadConfig) logger.info('Kept .wai/project.yaml as it was (not recreated).');
   logger.blank();
   logger.info('Next steps:');
@@ -768,7 +768,7 @@ A new project initialized with Wairon.
 }
 
 /** The line .wai/.gitignore carries so the spec tree's write lock is never committed. */
-const WRITE_LOCK_IGNORE = '.spec-write.lock';
+const WRITE_LOCK_IGNORE = '.spec-write.lock*';
 
 /**
  * Step 15 of runInit: .wai/.gitignore ignoring the spec tree's write lock —

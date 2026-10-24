@@ -1,0 +1,19 @@
+id: local_dev_registration
+name: Local Dev Registration
+description: >-
+  Registers what `wairon dev` serves, as the local development server starts: the developer's own
+  working directory as the single dev project, and the readable part of its family, on a data
+  directory that is disposable. The data directory is deleted and started fresh when it is
+  unversioned, from another major or would need any instance migration (never backed up, never
+  migrated). A member that cannot be registered never stops the start: it is answered with its
+  reason, printed at startup and shown by the web app, while a hosted start stays fail-closed.
+  Admits only a development-mode configuration.
+subsystem: sdd_host
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - instance_upgrade
+  - project_repository
+status: complete
+createdAt: '2026-10-23T22:31:11.419Z'
+updatedAt: '2026-10-23T22:31:12.221Z'
