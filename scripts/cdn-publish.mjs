@@ -150,7 +150,8 @@ const sha256 = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex'
  * TARGETS, with the right extension, each checked against its .sha256.
  */
 export function archives(dir, version) {
-  const esc = version.replace(/\./g, '\\.');
+  // Every regex metacharacter and the backslash itself, not only the dots a version holds.
+  const esc = version.replace(/[\\^$.*+?()[\]{}|]/g, (c) => `\\${c}`);
   const name = new RegExp(`^wairon-${esc}-([a-z0-9]+-[a-z0-9]+)(\\.zip|\\.tar\\.gz)$`);
   const present = new Map();
   const unexpected = [];

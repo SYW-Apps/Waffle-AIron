@@ -1572,7 +1572,7 @@ var MODEL = __MODEL_JSON__;
 
   function renderLegend() {
     var t = THEMES[state.theme];
-    var sw = function (c) { return '<span class="sw" style="background:' + c.fill + ';border-color:' + c.stroke + '"></span>'; };
+    var sw = function (c) { return '<span class="sw" style="background:' + esc(c.fill) + ';border-color:' + esc(c.stroke) + '"></span>'; };
     document.getElementById('legend').innerHTML =
       sw({ fill: t.subFill, stroke: t.subStroke }) + 'Subsystem&nbsp; ' +
       sw(t.stereo.entry) + 'Portal/Observer&nbsp; ' + sw(t.stereo.logic) + 'Logic&nbsp; ' +
@@ -3172,7 +3172,7 @@ var MODEL = __MODEL_JSON__;
   // ResizeObserver never fires for them — renderCrumbs nudges a reflow here.
   var headerReflowHook = null;
   function crumbBtnHtml(p, cur) {
-    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+    return '<button class="crumb' + (cur ? ' cur' : '') + '" data-ck="' + esc(p.kind) + '" data-ci="' + esc(p.id || '') + '">' + esc(p.label) + '</button>';
   }
   function renderCrumbs() {
     var el = document.getElementById('crumbs');
@@ -3183,7 +3183,7 @@ var MODEL = __MODEL_JSON__;
         + '<button class="crumb crumbmore" id="crumbMoreBtn" title="Show the collapsed ancestor path">\\u2026</button>'
         + '<span class="menu" id="crumbMenu">'
         + path.slice(0, path.length - 1).map(function (p) {
-          return '<button data-ck="' + p.kind + '" data-ci="' + (p.id || '') + '">' + p.label + '</button>';
+          return '<button data-ck="' + esc(p.kind) + '" data-ci="' + esc(p.id || '') + '">' + esc(p.label) + '</button>';
         }).join('')
         + '</span></span>'
         + '<span class="sep">\\u203A</span>'
@@ -4123,7 +4123,7 @@ var MODEL = __MODEL_JSON__;
   }
   function renderFlowCrumb() {
     document.getElementById('flowCrumb').innerHTML = flowStack.map(function (f, i) {
-      var s = f.comp + '.' + f.method + '()';
+      var s = esc(f.comp + '.' + f.method + '()');
       return i === flowStack.length - 1 ? s : '<span class="dimc">' + s + ' → </span>';
     }).join('');
     document.getElementById('flowBack').style.display = flowStack.length > 1 ? '' : 'none';
@@ -4528,8 +4528,8 @@ var MODEL = __MODEL_JSON__;
       var callHtml = '';
       if (s.call) {
         var callable = openable(s.call.component, s.call.method);
-        callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + s.call.component + '" data-dm="' + s.call.method + '">'
-          + s.call.component + '.' + s.call.method + '()' + (callable ? ' \\u21B4' : '') + '</span>'
+        callHtml = ' \\u2192 <span class="call' + (callable ? ' drillstep' : '') + '" data-dc="' + esc(s.call.component) + '" data-dm="' + esc(s.call.method) + '">'
+          + esc(s.call.component + '.' + s.call.method + '()') + (callable ? ' \\u21B4' : '') + '</span>'
           + (s.detach ? ' <span style="opacity:.72">\\u21E2 detached \\u2014 fire &amp; forget</span>' : '');
       }
       return '<div class="fstep"><span class="num">' + s.n + '.</span> ' + escText(flowStepText(s)) + callHtml + '</div>';
@@ -4545,7 +4545,7 @@ var MODEL = __MODEL_JSON__;
       })(drills[i]);
     }
   }
-  function escText(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  function escText(s) { return esc(s); }
   function renderFlowModal() {
     renderFlowCrumb();
     renderFlowGraph();
@@ -4653,7 +4653,12 @@ var MODEL = __MODEL_JSON__;
 
   // ---- detail sidebar -------------------------------------------------------------
   var panel = document.getElementById('panel');
-  function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
+  // Spec text (names, ids, prose) is written by whoever may edit the design, so
+  // every piece of it built into HTML goes through esc — quotes included, since
+  // much of it lands inside attribute values.
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   function chip(label, kind, target) {
     return '<span class="chip" data-kind="' + kind + '" data-id="' + esc(target) + '">' + esc(label) + '</span>';
   }
