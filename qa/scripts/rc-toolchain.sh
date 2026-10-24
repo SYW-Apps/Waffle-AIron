@@ -24,7 +24,13 @@ native() { if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else pri
 
 EXPECTED=""
 if [ -z "$PUBLISHED" ]; then
-  [ -f "$REPO/dist/cli/index.js" ] || { echo "dist/ is missing: run 'npm ci && npm run build' on the RC commit first" >&2; exit 1; }
+  [ -f "$REPO/dist/cli/index.js" ] || { echo "dist/ is missing: run 'npm ci && npm run build:web && npm run build' on the RC commit first" >&2; exit 1; }
+  # The web app is embedded from web/dist, which `npm run build` does not rebuild: a bundle older
+  # than its sources (web/, or the canvas engine generated from src/core/canvas.ts) is not the RC's,
+  # and the release pipelines always rebuild it. Refuse it rather than test what will not ship.
+  [ -f "$REPO/dist/webapp.html" ] || { echo "dist/webapp.html is missing: run 'npm run build:web && npm run build' on the RC commit first" >&2; exit 1; }
+  NEWER="$(cd "$REPO" && find web/src web/index.html src/core/canvas.ts -type f -newer dist/webapp.html 2>/dev/null | head -1)"
+  [ -z "$NEWER" ] || { echo "dist/webapp.html is older than $NEWER: run 'npm run build:web && npm run build' on the RC commit first" >&2; exit 1; }
   EXPECTED="$(node "$REPO/dist/cli/index.js" --version)"
 fi
 

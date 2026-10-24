@@ -16,7 +16,7 @@ verdict" job unless a passing verdict covers the code being merged (stage 5).
 ## The stages
 
 1. **Freeze a release candidate (RC).** The RC is one commit on dev. After it, only QA fixes land on
-   dev; features wait. Build it (`npm ci && npm run build`) and write its full sha down: the verdict
+   dev; features wait. Build it (`npm ci && npm run build:web && npm run build`: the release pipelines rebuild the web app, so the RC must too) and write its full sha down: the verdict
    names it.
 2. **Automated checks (free, no LLM).** All must be green before any LLM is started:
    - CI green on the RC commit (typecheck, unit tests, e2e journeys, conformance, lock-check).
