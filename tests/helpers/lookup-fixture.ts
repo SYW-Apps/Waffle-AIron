@@ -6,6 +6,7 @@ import { saveSystemSpec, saveSpec, invalidateSpecCache } from '../../src/core/sp
 import { captureApprovedSpecs } from '../../src/core/approval.js';
 import { writeLockRecord, type LockRecord } from '../../src/core/lockfile.js';
 import { computeGateStateId } from '../../src/core/validation.js';
+import { WAIRON_MAJOR } from '../../src/config/defaults.js';
 
 const now = '2026-10-25T10:00:00.000Z';
 
@@ -48,7 +49,7 @@ export function lookupProject(): {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-lookup-'));
   fs.mkdirSync(path.join(root, '.wai', 'specs'), { recursive: true });
   fs.writeFileSync(path.join(root, '.wai', 'project.yaml'), JSON.stringify({
-    schemaVersion: '1.0.0', name: 'lookup-sys', projectType: 'backend',
+    schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'lookup-sys', projectType: 'backend',
     targets: [{ type: 'claude', outputDir: '.claude/agents', enabled: true }],
     rules: { conformance: { sourceRoots: ['src'], testRoots: ['tests'], unclaimed: ['src/orphan.ts', 'src/stray.ts'] } },
     createdAt: now, updatedAt: now,
@@ -58,7 +59,7 @@ export function lookupProject(): {
     fs.writeFileSync(path.join(root, file), content);
   }
   setProjectRoot(root);
-  saveSystemSpec({ schemaVersion: '1.0.0', name: 'lookup-sys', vision: 'a lookup fixture', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
+  saveSystemSpec({ schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'lookup-sys', vision: 'a lookup fixture', boundaries: [], globalRequirements: [], createdAt: now, updatedAt: now });
   for (const id of ['shop', 'billing']) {
     saveSpec('subsystem', { id, name: id, description: `the ${id} subsystem`, parentSystem: 'lookup-sys', publicInterfaces: [], trustedLinks: [], status: 'complete', createdAt: now, updatedAt: now } as never);
   }

@@ -1483,13 +1483,13 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 50 tools:
+The local server offers 52 tools:
 
 | Group | Tools |
 |-------|-------|
 | Topology (read) | `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig` |
 | Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints` (dry run), `sdd_write_narrative`, `sdd_add_type` (dry run), `sdd_add_group` (dry run), `sdd_update_spec` (dry run, search), `sdd_delete_spec` (dry run, force, search) |
-| Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
+| Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree`, `sdd_search_specs` (where is X designed, which spec holds this file or symbol), `sdd_find_references` (who uses X, what breaks if it changes) |
 | Renames and moves (in this tree) — each with `dryRun` | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_param`, `sdd_rename_type`, `sdd_rename_field`, `sdd_rename_spec` (a contract or an implementation on its own), `sdd_move_methods`, `sdd_move_spec` (a component or a type to another subsystem) |
 | Members | `sdd_add_member`, `sdd_move_member` |
 | Family migrations (each takes `dryRun`) | `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
