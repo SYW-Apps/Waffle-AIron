@@ -4,6 +4,7 @@ import {
   projectFamily,
   exportUsage,
   loadProjectConfig,
+  resolveProjectExports,
 } from '../adapters/validator-core.js';
 import { current } from './code-model-loader.js';
 import { find } from './spec-search.js';
@@ -11,6 +12,7 @@ import { findTestsReferencing } from '../source-analysis.js';
 import { getProjectRoot } from '../../utils/fs.js';
 import { factsFor, pathKey, type CodeModel, type SourceFileFacts } from '../../models/code-model.js';
 import { specIndexReferencesTo, specIndexMethodReferences, type SpecRef, type SpecReference } from '../../models/specs.js';
+import type { ResolvedExport } from '../../models/exports.js';
 import type {
   LookupAgreement,
   LookupImpact,
@@ -195,9 +197,8 @@ export function collect(target: string, includeText?: boolean): LookupReferences
 
   // Step 4: the spec index.
   const index = scanAllSpecs();
-  const family = projectFamily();
-  const own = family.nodes.find((n) => n.namespace === '') ?? family.nodes[0];
-  const project = own?.id ?? own?.name ?? path.basename(getProjectRoot());
+  // The search placed every match in its project already.
+  const project = top.place.project;
   const subject = subjectOf(index, top);
 
   // Step 5: the design's references through the index's own walk.
@@ -226,19 +227,22 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     }
   }
 
-  // Step 6: the family, for the projects in reach that consume this one.
+  // Step 6: the L0 export table, for the public names the target is exported under.
+  const exported = resolveProjectExports().entries.filter((e) => exportsTarget(index, e, top, subject));
+  const publicNames = new Set(exported.map((e) => e.publicName));
+
+  // Step 7: the family, for the projects in reach that consume this one.
+  const family = projectFamily();
   const consumers = family.nodes.filter((n) => n.namespace !== '' && (n.parent === '' || n.externals.some((e) => e.producer === '')));
-  // The names the producer may publish this target under: its own id or name.
-  const publicNames = new Set<string>([top.id, top.name.toLowerCase(), subject.method?.component ?? '']);
-  // Step 7: for each consumer in reach.
-  for (const consumer of consumers) {
-    // Step 8: the exported names it uses, each one naming the target.
+  // Step 8: for each consumer in reach.
+  for (const consumer of publicNames.size > 0 ? consumers : []) {
+    // Step 9: the exported names it uses, each use of one of the target's public names.
     const usage = exportUsage(consumer.namespace, '');
     for (const use of usage.used) {
-      const names = publicNames.has(use.publicName);
-      const members = subject.method ? use.members.includes(subject.method.name) : true;
-      if (!names || !members) continue;
-      for (const spec of use.specs ?? [undefined]) {
+      if (!publicNames.has(use.publicName)) continue;
+      if (subject.method && !use.members.includes(subject.method.name)) continue;
+      const specs = subject.method ? use.memberSpecs?.[subject.method.name] ?? use.specs : use.specs;
+      for (const spec of specs ?? [undefined]) {
         references.push({
           kind: 'export-use', evidence: 'declared', agreement: 'unjudged',
           ...(spec ? { fromSpec: spec } : {}),
@@ -249,10 +253,14 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     }
   }
 
-  // Step 9: the code model, current for the files on disk.
+  // Step 10: the project configuration: the test roots, the unclaimed and carried registers.
+  const conformance = loadProjectConfig()?.rules?.conformance;
+  const testRoots = conformance?.testRoots ?? [];
+
+  // Step 11: the code model, current for the files on disk.
   const model = current().model;
 
-  // Step 10: the code's references to the realizing symbol in its sourcePath.
+  // Step 12: the code's references to the realizing symbol in its sourcePath.
   const targetFiles = new Set(subject.files);
   const owners = (file: string) => index.implementations.filter((impl) =>
     pathKey(impl.sourcePath ?? '') === file || impl.methods.some((m) => pathKey(m.sourcePath ?? '') === file));
@@ -260,7 +268,6 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   const codeCallFiles = new Map<LookupReference, string>();
   /** Calls written inside the target's own files: they confirm a declared caller living there, and are never observed-only news. */
   const ownCalls = new Set<LookupReference>();
-  const testRoots = loadProjectConfig()?.rules?.conformance?.testRoots ?? [];
   if (targetFiles.size > 0) {
     for (const facts of model.files) {
       const file = pathKey(facts.path);
@@ -297,7 +304,7 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     }
   }
 
-  // Step 11: the tests that import or name the target's methods.
+  // Step 13: the tests that import or name the target's methods.
   const tests = subject.searched.length > 0 ? findTestsReferencing(subject.searched, getProjectRoot(), testRoots) : [];
   const testPlace: LookupPlace = { project };
   const seenTests = new Set<string>();
@@ -306,9 +313,9 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     for (const file of t.mentioned) if (!seenTests.has(`m|${file}`) && seenTests.add(`m|${file}`)) references.push({ kind: 'mention', evidence: 'text', agreement: 'unjudged', file, place: testPlace, inTest: true, linked: false });
   }
 
-  // Step 12: were text mentions asked for?
+  // Step 14: were text mentions asked for?
   if (includeText !== false) {
-    // Step 13: the mentions in the design's own prose.
+    // Step 15: the mentions in the design's own prose.
     const seen = new Set<string>();
     const note = (spec: SpecRef, member: string | undefined, texts: (string | undefined)[]): void => {
       if (subject.specIds.has(spec.id) && (spec.kind !== 'implementation' || member === subject.methodName || subject.methodName === undefined)) return;
@@ -341,7 +348,7 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     }
   }
 
-  // Step 14: join the design with the code.
+  // Step 16: join the design with the code.
   const confirmedFiles = new Set<string>();
   const gradeExact = (file: string): boolean => {
     const facts = factsFor(model, file);
@@ -367,10 +374,7 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     references.push(entry);
   }
 
-  // Step 15: the project configuration for the unclaimed and carried registers.
-  const conformance = loadProjectConfig()?.rules?.conformance;
-
-  // Step 16: the waivers and the impact.
+  // Step 17: the waivers and the impact.
   const waivers: LookupWaiver[] = [];
   const unclaimed = new Set((conformance?.unclaimed ?? []).map(pathKey));
   for (const file of subject.files) {
@@ -392,9 +396,35 @@ export function collect(target: string, includeText?: boolean): LookupReferences
       waivers.push({ kind: 'lint-allow', subject: `${allow.code}${allow.at ? ` at ${allow.at}` : ''} in ${holder.id}`, reason: allow.reason });
     }
   }
-  const impact = impactOf(references, top.place);
+  // Exported beyond the family, consumers outside it may break whatever the references show.
+  const impact = exported.some((e) => e.audience !== 'project') ? 'public' : impactOf(references, top.place);
 
   return { target: top, candidates: [], references, waivers, impact, snapshot: found.snapshot };
+}
+
+/** Does one entry of the L0 export table publish the target: its component (narrowed to its interface or not), or its type? */
+function exportsTarget(index: Index, entry: ResolvedExport, target: LookupMatch, subject: Subject): boolean {
+  const componentOf = (contract: string | undefined) => index.interfaces.find((i) => i.id === contract)?.component;
+  const narrowsTo = (component: string, contract: string | undefined): boolean =>
+    entry.kind === 'component' && entry.component === component && (entry.interface === undefined || contract === undefined || entry.interface === contract);
+  switch (target.kind) {
+    case 'component': return narrowsTo(target.id, undefined);
+    case 'interface': return narrowsTo(componentOf(target.id) ?? '', target.id);
+    case 'implementation': {
+      const contract = index.implementations.find((i) => i.id === target.id)?.contract;
+      return narrowsTo(componentOf(contract) ?? '', contract);
+    }
+    case 'method':
+    case 'endpoint': {
+      if (subject.method === undefined) return entry.kind === 'type' && subject.specIds.has(entry.typeDef ?? '');
+      const { component, name } = subject.method;
+      if (entry.kind !== 'component' || entry.component !== component) return false;
+      return entry.interface === undefined || index.interfaces.some((i) => i.id === entry.interface && i.methods.some((m) => m.name === name));
+    }
+    case 'type':
+    case 'field': return entry.kind === 'type' && subject.refs.some((r) => r.kind === 'type' && r.id === entry.typeDef);
+    default: return false;
+  }
 }
 
 function isTest(file: string, testRoots: readonly string[]): boolean {

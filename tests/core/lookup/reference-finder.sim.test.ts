@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { setProjectRoot } from '../../../src/utils/fs.js';
-import { invalidateSpecCache } from '../../../src/core/specs.js';
+import { invalidateSpecCache, saveSpec, saveSystemSpec } from '../../../src/core/specs.js';
+import { WAIRON_MAJOR } from '../../../src/config/defaults.js';
 import { lookupProject } from '../../helpers/lookup-fixture.js';
 // The real modules of the component and of each direct dependency: no fakes.
 import { collect } from '../../../src/core/lookup/reference-finder.js';
@@ -90,5 +91,36 @@ describe('sim: reference_finder.collect', () => {
     expect(r.references).toEqual([]);
     expect(r.impact).toBe('none');
     expect(r.snapshot.searched.join(' ')).toContain('source files walked');
+  });
+});
+
+describe('sim: reference_finder.collect against the L0 export table', () => {
+  const fixture = lookupProject();
+  const now = '2026-10-25T10:00:00.000Z';
+  const publish = (audience: string): void => {
+    setProjectRoot(fixture.root);
+    saveSpec('subsystem', { id: 'shop', name: 'shop', description: 'the shop subsystem', parentSystem: 'lookup-sys', publicInterfaces: [{ component: 'reports', details: 'the reports' }], trustedLinks: [], status: 'complete', createdAt: now, updatedAt: now } as never);
+    saveSystemSpec({
+      schemaVersion: '1.0.0', waironMajor: WAIRON_MAJOR, name: 'lookup-sys', vision: 'a lookup fixture', boundaries: [], globalRequirements: [],
+      publicInterfaces: [{ as: 'reports-api', from: 'shop', component: 'reports', audience }], createdAt: now, updatedAt: now,
+    } as never);
+    invalidateSpecCache();
+  };
+  beforeAll(() => { setProjectRoot(fixture.root); invalidateSpecCache(); });
+  afterAll(() => fixture.cleanup());
+
+  it('judges an element exported beyond the family as public, whatever its references show', () => {
+    publish('external');
+    expect(validatorCore.resolveProjectExports().entries.map((e) => e.publicName)).toContain('reports-api');
+    expect(collect('reports').impact).toBe('public');
+    expect(collect('reports.report').impact).toBe('public');
+  });
+
+  it('keeps an export to the family only, and an element the table does not export, at the widest reference', () => {
+    publish('project');
+    expect(validatorCore.resolveProjectExports().entries.find((e) => e.publicName === 'reports-api')?.audience).toBe('project');
+    expect(collect('reports').impact).not.toBe('public');
+    publish('external');
+    expect(collect('audit').impact).not.toBe('public');
   });
 });
