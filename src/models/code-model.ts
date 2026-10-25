@@ -151,6 +151,11 @@ export interface CallSiteFact {
    * file's scope, never in the barrel's.
    */
   from?: string;
+  /**
+   * The 1-based line of the call, recorded at exact grade; the pattern and
+   * generic grades leave it out rather than guess.
+   */
+  line?: number;
 }
 
 /**

@@ -385,9 +385,9 @@ describe('`fn().method()` and `this.method()` — followed only where the code s
         '',
       ].join('\n'),
     }, 'src/a.ts');
-    expect(facts.functionCallSites?.a).toEqual([{ name: 'm', member: true, enclosingClass: 'K' }]);
-    expect(facts.functionCallSites?.b).toContainEqual({ name: 'm', member: true });
-    expect(facts.functionCallSites?.c).toEqual([{ name: 'm', member: true }]);
+    expect(facts.functionCallSites?.a).toEqual([{ name: 'm', member: true, enclosingClass: 'K', line: 3 }]);
+    expect(facts.functionCallSites?.b).toContainEqual({ name: 'm', member: true, line: 4 });
+    expect(facts.functionCallSites?.c).toEqual([{ name: 'm', member: true, line: 6 }]);
   });
 
   it('records a return type only where every same-named body agrees', () => {

@@ -770,8 +770,8 @@ describe('buildCodeModel — per-function callee facts (exact grade)', () => {
       // Shape is the fact a name alone would lose: `helper()` resolves through
       // this file's import binding, `specs.load()` through its receiver.
       expect(sites.driver).toEqual(expect.arrayContaining([
-        { name: 'helper', member: false },
-        { name: 'load', member: true, via: 'specs' },
+        { name: 'helper', member: false, line: 2 },
+        { name: 'load', member: true, via: 'specs', line: 2 },
       ]));
       expect(sites.bystander).toEqual([]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
