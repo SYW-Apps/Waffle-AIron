@@ -38,54 +38,67 @@ methods:
           step, each type position, at evidence declared, with the referring spec's place
         type: local
       - stepNumber: 6
+        description: >-
+          Read the project's L0 export table: the public names the target is exported under, by its
+          component (narrowed to its interface or not) or as a type
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveProjectExports
+      - stepNumber: 7
         description: Read the family, for the projects in reach that consume this one
         type: call
         targetComponent: validator_core_adapter
         targetMethod: projectFamily
-      - stepNumber: 7
+      - stepNumber: 8
         description: For each consumer in reach
         type: loop
         loopKind: forEach
         over: the projects in reach that declare this project as a member or an external
-        endStep: 8
-      - stepNumber: 8
+        endStep: 9
+      - stepNumber: 9
         label: usage
         description: >-
-          Read which exported names it uses, each one naming the target an export-use at evidence
-          declared
+          Read which exported names it uses: each use of one of the target's public names (reaching
+          the method, for a method) is an export-use at evidence declared
         type: call
         targetComponent: validator_core_adapter
         targetMethod: exportUsage
-      - stepNumber: 9
+      - stepNumber: 10
+        description: 'Read the project configuration: rules.conformance testRoots, unclaimed and carried'
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 11
         description: Take the code model, current for the files on disk
         type: call
         targetComponent: code_model_loader
         targetMethod: current
-      - stepNumber: 10
+      - stepNumber: 12
         description: >-
           Take the code's references to the target's realizing symbol in its sourcePath: each call
           the analysis resolved to it (evidence resolved, with its line), each import of that file
-          (syntactic), and each call it left unbound under the same name (unresolved)
+          (syntactic), and each call it left unbound under the same name (unresolved); a reference
+          in a test file or under the testRoots is marked in a test
         type: local
-      - stepNumber: 11
+      - stepNumber: 13
         description: >-
           Find the tests that import or name the target's methods: an import is syntactic, a name
           alone is text, both marked in a test
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: findTestsReferencing
-      - stepNumber: 12
+      - stepNumber: 14
         description: Were text mentions asked for?
         type: branch
         condition: includeText is not false
-        onFalseStep: 14
-      - stepNumber: 13
+        onFalseStep: 16
+      - stepNumber: 15
         description: >-
           Take the mentions in the design's own prose (descriptions, intents, narrative step text):
           linked when the text names the target's id, a bare-name mention otherwise, at evidence
           text
         type: local
-      - stepNumber: 14
+      - stepNumber: 16
         label: join
         description: >-
           Join the design with the code: a declared call whose caller's realizing file has a
@@ -93,23 +106,17 @@ methods:
           declared-only; a code call no declared edge covers is observed-only; a text mention, or
           code read below exact grade, is unjudged
         type: local
-      - stepNumber: 15
-        description: Read the project configuration for rules.conformance unclaimed and carried
-        type: call
-        targetComponent: validator_core_adapter
-        targetMethod: loadProjectConfig
-      - stepNumber: 16
+      - stepNumber: 17
         description: >-
           List the waivers covering the target: an unclaimed entry naming its file, a carried
           finding naming it, a lint.allow on its spec. Judge the impact as the widest place any
           reference sits (component, subsystem, project, family), public when the L0 export table
-          exports it beyond the project, none when nothing refers to it; write the snapshot as the
-          search wrote it
+          exports it, none when nothing refers to it; write the snapshot as the search wrote it
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Answer the target, its references, waivers and impact
         type: return
         outcome: references
 status: complete
 createdAt: '2026-10-25T19:16:15.020Z'
-updatedAt: '2026-10-25T20:56:41.911Z'
+updatedAt: '2026-10-25T22:57:41.479Z'
