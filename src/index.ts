@@ -68,6 +68,8 @@ export {
   listRules,
   computeGateStateId,
   findTestsReferencing,
+  searchSpecs,
+  findReferences,
   builtinProfileIds,
   builtinProjectKinds,
   measurePackImpact,

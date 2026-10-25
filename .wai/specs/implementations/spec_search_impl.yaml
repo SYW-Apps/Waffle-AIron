@@ -5,6 +5,7 @@ description: >-
   outranks a guess.
 contract: ispec_search
 sourcePath: src/core/lookup/spec-search.ts
+simPath: tests/core/lookup/spec-search.sim.test.ts
 methods:
   - name: find
     narrative:
@@ -67,4 +68,4 @@ methods:
         outcome: matches
 status: complete
 createdAt: '2026-10-25T19:16:04.553Z'
-updatedAt: '2026-10-25T19:17:51.548Z'
+updatedAt: '2026-10-25T20:56:41.006Z'
