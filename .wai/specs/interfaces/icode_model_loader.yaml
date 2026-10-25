@@ -1,0 +1,17 @@
+id: icode_model_loader
+name: Code Model Loader Interface
+description: The code model a lookup reads, never older than the files on disk as their fingerprint sees them.
+component: code_model_loader
+methods:
+  - name: current
+    description: >-
+      Load the bound project's implementations, types and conformance roots, fingerprint the source
+      files they name, and answer the cached entry when its fingerprint matches; otherwise build the
+      model, hold it in the cache and answer it. The validator's gate never calls this: a gate run
+      builds its own model, so the cache cannot change a verdict.
+    signature: 'current(): CachedCodeModel'
+    returns: CachedCodeModel
+    params: []
+status: complete
+createdAt: '2026-10-25T19:08:15.196Z'
+updatedAt: '2026-10-25T19:17:36.535Z'

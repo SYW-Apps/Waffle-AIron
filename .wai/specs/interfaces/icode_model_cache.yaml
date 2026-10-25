@@ -1,0 +1,31 @@
+id: icode_model_cache
+name: Code Model Cache Interface
+description: >-
+  Keyed by project root: one entry each, replaced whole. Loss-safe: an absent entry only costs its
+  reader a rebuild.
+component: code_model_cache
+methods:
+  - name: get
+    description: The entry held for this project root, or none.
+    signature: 'get(root: string): CachedCodeModel?'
+    returns: CachedCodeModel?
+    params:
+      - name: root
+        type: string
+        description: The resolved project root
+    effect: read
+  - name: put
+    description: Hold this entry for the project root, replacing any earlier one.
+    signature: 'put(root: string, entry: CachedCodeModel): void'
+    returns: void
+    params:
+      - name: root
+        type: string
+      - name: entry
+        type: CachedCodeModel
+    guarantees:
+      - idempotent
+    effect: write
+status: complete
+createdAt: '2026-10-25T19:08:11.176Z'
+updatedAt: '2026-10-25T19:17:33.442Z'

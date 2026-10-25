@@ -1,0 +1,17 @@
+kind: enum
+id: lookup_waiver_kind
+name: LookupWaiverKind
+description: Which declared exception covers an element.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: unclaimed
+    description: 'rules.conformance.unclaimed: a source file declared as no spec''s'
+  - name: carried
+    description: 'rules.conformance.carried: a finding carried as known debt'
+  - name: lint-allow
+    description: A lint.allow on the element's spec
+createdAt: '2026-10-25T19:07:07.065Z'
+updatedAt: '2026-10-25T19:07:08.263Z'

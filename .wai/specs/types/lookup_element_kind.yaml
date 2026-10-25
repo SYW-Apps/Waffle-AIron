@@ -1,0 +1,24 @@
+kind: enum
+id: lookup_element_kind
+name: LookupElementKind
+description: What kind of design or code element a lookup match names.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: project
+  - name: subsystem
+  - name: component
+  - name: interface
+  - name: implementation
+  - name: method
+  - name: type
+  - name: field
+  - name: group
+  - name: endpoint
+    description: 'A Portal verb''s wire binding: an HTTP route, a CLI command, a JSON-RPC method'
+  - name: file
+    description: A source file no spec names, matched by the code model alone
+createdAt: '2026-10-25T19:06:53.223Z'
+updatedAt: '2026-10-25T19:06:54.430Z'

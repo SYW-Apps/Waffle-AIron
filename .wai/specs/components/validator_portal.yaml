@@ -14,6 +14,8 @@ dependsOn:
   - spec_validator
   - family_validator
   - pack_impact
+  - spec_search
+  - reference_finder
 transport: InProcess
 invokedBy:
   kind: entry
@@ -23,4 +25,4 @@ invokedBy:
     own process
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T19:13:35.080Z'
+updatedAt: '2026-10-25T18:58:03.191Z'

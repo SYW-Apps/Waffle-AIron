@@ -91,7 +91,13 @@ fields:
       type, then each property's declared type on the shape that declares it — and like every
       receiver past an import binding it is a POSSIBLE origin and never a proven one
     optional: true
+  - name: line
+    type: int
+    description: >-
+      The 1-based line of the call, recorded at exact grade; the pattern and generic grades leave it
+      out rather than guess
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-10-07T10:53:33.460Z'
+updatedAt: '2026-10-25T19:07:53.617Z'

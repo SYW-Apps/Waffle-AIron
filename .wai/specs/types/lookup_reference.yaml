@@ -1,0 +1,47 @@
+kind: value-object
+id: lookup_reference
+name: LookupReference
+description: One place that refers to the looked-up element.
+subsystem: sdd_validator
+fields:
+  - name: kind
+    type: LookupReferenceKind
+    optional: false
+  - name: evidence
+    type: LookupEvidence
+    optional: false
+  - name: agreement
+    type: LookupAgreement
+    optional: false
+  - name: fromSpec
+    type: string
+    description: The spec that refers, for a design reference or a code reference inside a realized file
+    optional: true
+  - name: fromMember
+    type: string
+    description: The method or field within fromSpec
+    optional: true
+  - name: file
+    type: string
+    optional: true
+  - name: line
+    type: int
+    description: 'Present where the analysis records one: code calls at exact grade, imports, mentions'
+    optional: true
+  - name: place
+    type: LookupPlace
+    description: Where the referring element sits, which the impact is judged from
+    optional: false
+  - name: inTest
+    type: bool
+    optional: false
+  - name: linked
+    type: bool
+    description: >-
+      The reference names the element's id; false for a bare-name mention that may mean something
+      else
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:36.277Z'
+updatedAt: '2026-10-25T19:07:37.096Z'

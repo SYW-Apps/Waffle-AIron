@@ -1,0 +1,19 @@
+id: spec_search
+name: Spec Search
+description: >-
+  Finds the specs that match whatever a caller holds: a spec id or part of one, a name, a method, a
+  type, an endpoint (an HTTP route, a CLI command, a JSON-RPC method), a code file or a code symbol.
+  Answers ranked matches, each with how it matched (exact id, declared code link, resolved code
+  fact, text) and where it sits in the tree (project, subsystem, component, contract or group, part
+  or member project), and how it is realized (its sourcePath, or planned). A code file or symbol is
+  matched through the declared links first and the code model second, so a declared link always
+  outranks a guess.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - validator_core_adapter
+  - code_model_loader
+status: complete
+createdAt: '2026-10-25T18:57:48.845Z'
+updatedAt: '2026-10-25T19:17:30.213Z'

@@ -1,0 +1,51 @@
+kind: value-object
+id: lookup_match
+name: LookupMatch
+description: >-
+  One element a lookup found, with what it rests on and where to go next: its exact id reads it with
+  sdd_get_spec and follows it with sdd_find_references, and briefId fetches the brief of the agent
+  that implements it.
+subsystem: sdd_validator
+fields:
+  - name: id
+    type: string
+    description: >-
+      The exact id: a spec id, a method or field as owner.member, an endpoint as portal.verb, or a
+      project-relative file path
+    optional: false
+  - name: kind
+    type: LookupElementKind
+    optional: false
+  - name: name
+    type: string
+    optional: false
+  - name: place
+    type: LookupPlace
+    optional: false
+  - name: evidence
+    type: LookupEvidence
+    optional: false
+  - name: matchedOn
+    type: string
+    description: >-
+      What in the element matched the query, e.g. sourcePath src/core/specs.ts or endpoint POST
+      /orders
+    optional: false
+  - name: approval
+    type: LookupApproval
+    optional: false
+  - name: sourcePath
+    type: string
+    optional: true
+  - name: planned
+    type: bool
+    description: The named sourcePath does not exist yet
+    optional: false
+  - name: briefId
+    type: string
+    description: The component whose implementer brief covers the element (sdd_get_agent_brief takes it)
+    optional: true
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:26.033Z'
+updatedAt: '2026-10-25T19:07:27.103Z'

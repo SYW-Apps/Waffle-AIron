@@ -1,0 +1,25 @@
+kind: enum
+id: lookup_impact
+name: LookupImpact
+description: >-
+  How far a change to an element reaches, judged from its declared and observed references: the
+  widest place any of them sits.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: none
+    description: Nothing refers to it
+  - name: component
+    description: Only its own component
+  - name: subsystem
+    description: Components of its own subsystem
+  - name: project
+    description: Other subsystems of its project
+  - name: family
+    description: Other projects of the family
+  - name: public
+    description: 'Exported beyond the project: consumers outside the family may break'
+createdAt: '2026-10-25T19:07:10.582Z'
+updatedAt: '2026-10-25T19:07:11.562Z'

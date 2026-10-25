@@ -1,0 +1,70 @@
+id: spec_search_impl
+name: Spec Search Implementation
+description: >-
+  Matches the query against the spec index first, the code model second, so a declared link always
+  outranks a guess.
+contract: ispec_search
+sourcePath: src/core/lookup/spec-search.ts
+methods:
+  - name: find
+    narrative:
+      - stepNumber: 1
+        description: Read the spec index of the bound project and the members in its reach
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: scanAllSpecs
+      - stepNumber: 2
+        description: >-
+          Read the family, for each member's alias, form (part or project) and whether it is in
+          reach
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: projectFamily
+      - stepNumber: 3
+        description: >-
+          Read the query's form: an endpoint (an HTTP verb and path, a CLI command, a JSON-RPC
+          method or tool name), owner.member, a path (a separator or a source extension), or a name.
+          A form is a hint for ranking, never a filter
+        type: local
+      - stepNumber: 4
+        description: >-
+          Match the spec index: ids and names of every spec, method and field, type and group, and
+          each Portal verb's endpoint. A whole id or name is evidence id; a part of one is text.
+          Each implementation's and method's sourcePath and symbol, and each type's, matched by the
+          query's path or symbol, is evidence declared
+        type: local
+      - stepNumber: 5
+        description: Take the code model, current for the files on disk
+        type: call
+        targetComponent: code_model_loader
+        targetMethod: current
+      - stepNumber: 6
+        description: >-
+          Match the code model's declarations and walked files a spec did not already claim: a
+          declaration whose name is the query, resolved to the spec whose sourcePath holds it, is
+          evidence resolved; a walked file or a declaration no spec claims is a file match at
+          evidence syntactic. Mark every match whose sourcePath the model classifies missing as
+          planned
+        type: local
+      - stepNumber: 7
+        description: Read what changed since the lock
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: diffAgainstApproval
+      - stepNumber: 8
+        description: >-
+          Give each match its approval (approved, changed, added, unlocked when no lock is held,
+          not-applicable for a file or another project's element), its place and the component whose
+          brief covers it. Rank by evidence, then by the narrowest place; count all, keep the limit
+          (10 when omitted). Write the snapshot: the fingerprint, the weakest grade read (none when
+          nothing was walked), the build time, what was searched (the tree, the members in reach,
+          the source roots) and what was not (members out of reach, git members not checked out,
+          files outside the roots, prose outside the repository)
+        type: local
+      - stepNumber: 9
+        description: Answer the ranked matches
+        type: return
+        outcome: matches
+status: complete
+createdAt: '2026-10-25T19:16:04.553Z'
+updatedAt: '2026-10-25T19:17:51.548Z'

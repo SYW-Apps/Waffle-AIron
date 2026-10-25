@@ -1,0 +1,15 @@
+kind: enum
+id: status_detail
+name: StatusDetail
+description: How much of the status report an MCP caller asks for.
+subsystem: sdd_mcp
+fields: []
+methods: []
+sourcePath: src/mcp/status-summary.ts
+values:
+  - name: summary
+    description: Approval, counts per level and subsystem, errors and warnings by code, and what to read next
+  - name: full
+    description: The whole report, as the CLI's wairon status prints it
+createdAt: '2026-10-25T19:07:13.593Z'
+updatedAt: '2026-10-25T19:09:39.253Z'

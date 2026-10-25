@@ -1,0 +1,64 @@
+id: code_model_loader_impl
+name: Code Model Loader Implementation
+description: >-
+  Fingerprint first, build only on a change: the stat walk costs milliseconds where a build costs
+  seconds.
+contract: icode_model_loader
+sourcePath: src/core/lookup/code-model-loader.ts
+methods:
+  - name: current
+    narrative:
+      - stepNumber: 1
+        description: Load the bound project's implementations, whose sourcePaths name part of the file set
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 2
+        description: Load its types, whose sourcePaths name the rest
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadTypeSpecs
+      - stepNumber: 3
+        description: >-
+          Read its configuration for rules.conformance sourceRoots and exclude, the walk the gate
+          takes too
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: loadProjectConfig
+      - stepNumber: 4
+        description: Fingerprint the files that walk names, without reading them
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: fingerprintSources
+      - stepNumber: 5
+        description: Ask the cache for the entry held under the project root
+        type: call
+        targetComponent: code_model_cache
+        targetMethod: get
+      - stepNumber: 6
+        description: Is the held entry built from these files?
+        type: branch
+        condition: an entry is held and its fingerprint equals the one just taken
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Answer the held entry
+        type: return
+        outcome: cached
+      - stepNumber: 8
+        label: rebuild
+        description: Build the model from the same inputs
+        type: call
+        targetComponent: source_analysis_adapter
+        targetMethod: buildCodeModel
+      - stepNumber: 9
+        description: Hold it with the fingerprint and the time it was built
+        type: call
+        targetComponent: code_model_cache
+        targetMethod: put
+      - stepNumber: 10
+        description: Answer the new entry
+        type: return
+        outcome: built
+status: complete
+createdAt: '2026-10-25T19:16:01.704Z'
+updatedAt: '2026-10-25T19:17:47.755Z'

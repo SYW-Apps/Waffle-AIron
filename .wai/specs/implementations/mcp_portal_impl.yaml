@@ -421,6 +421,22 @@ methods:
         targetComponent: mcp_orchestrator
         targetMethod: addGroup
     symbol: sdd_add_group
+  - name: searchSpecs
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the search workflow
+        type: call
+        targetComponent: mcp_lookup_orchestrator
+        targetMethod: search
+    symbol: sdd_search_specs
+  - name: findReferences
+    narrative:
+      - stepNumber: 1
+        description: Dispatch to the references workflow
+        type: call
+        targetComponent: mcp_lookup_orchestrator
+        targetMethod: references
+    symbol: sdd_find_references
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-23T22:20:13.606Z'
+updatedAt: '2026-10-25T19:16:34.590Z'

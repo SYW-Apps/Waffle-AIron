@@ -682,6 +682,14 @@ methods:
         targetMethod: adviseExternals
       - stepNumber: 7
         description: >-
+          Unless detail full was asked for, cut the composed report to its summary: the leading
+          staleness and transaction lines, the approval verdict, one count line per level and
+          subsystem (members as projects), the findings counted by code, the Externals section when
+          present, and one line naming detail full and sdd_search_specs for more. The whole report
+          stays the CLI's: only this answer is cut
+        type: local
+      - stepNumber: 8
+        description: >-
           Answer it behind the tool-family context line, so a client reading one tool's output knows
           which family of tools it belongs to — with an Externals section when any external moved
           live, drifted or could not be compared (what moved, who uses it, the fix; the pin still
@@ -1016,4 +1024,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-24T11:43:10.454Z'
+updatedAt: '2026-10-25T19:09:12.921Z'

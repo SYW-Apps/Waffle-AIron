@@ -153,6 +153,20 @@ methods:
         type: call
         targetComponent: spec_validator
         targetMethod: introducedFindings
+  - name: searchSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward searchSpecs to the spec search
+        type: call
+        targetComponent: spec_search
+        targetMethod: find
+  - name: findReferences
+    narrative:
+      - stepNumber: 1
+        description: Forward findReferences to the reference finder
+        type: call
+        targetComponent: reference_finder
+        targetMethod: collect
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-08T18:50:38.862Z'
+updatedAt: '2026-10-25T19:16:24.312Z'

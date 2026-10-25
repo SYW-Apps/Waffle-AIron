@@ -1,0 +1,19 @@
+kind: value-object
+id: cached_code_model
+name: CachedCodeModel
+description: 'One code model cache entry: the model and the source fingerprint it was built from.'
+subsystem: sdd_validator
+fields:
+  - name: fingerprint
+    type: string
+    optional: false
+  - name: model
+    type: CodeModel
+    optional: false
+  - name: builtAt
+    type: datetime
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:43.886Z'
+updatedAt: '2026-10-25T19:07:44.649Z'

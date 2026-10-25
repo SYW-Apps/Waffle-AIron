@@ -1,0 +1,22 @@
+kind: value-object
+id: lookup_waiver
+name: LookupWaiver
+description: >-
+  A declared exception that covers the looked-up element, so a reader sees what the gate
+  deliberately lets pass.
+subsystem: sdd_validator
+fields:
+  - name: kind
+    type: LookupWaiverKind
+    optional: false
+  - name: subject
+    type: string
+    description: The file, finding code or site it covers
+    optional: false
+  - name: reason
+    type: string
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:38.719Z'
+updatedAt: '2026-10-25T19:07:39.506Z'

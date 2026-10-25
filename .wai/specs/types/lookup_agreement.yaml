@@ -1,0 +1,19 @@
+kind: enum
+id: lookup_agreement
+name: LookupAgreement
+description: Whether the design and the code agree on one reference.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: confirmed
+    description: The design declares it and the code does it
+  - name: declared-only
+    description: The design declares it and the code does not (yet) do it
+  - name: observed-only
+    description: The code does it and the design does not declare it
+  - name: unjudged
+    description: 'Not comparable: a text mention, or code read below exact grade'
+createdAt: '2026-10-25T19:07:03.427Z'
+updatedAt: '2026-10-25T19:07:04.583Z'

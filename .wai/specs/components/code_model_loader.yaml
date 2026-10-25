@@ -1,0 +1,18 @@
+id: code_model_loader
+name: Code Model Loader
+description: >-
+  Answers the code model a lookup reads, fresh for the tree on disk: fingerprints the source files
+  the implementations and the declared source roots name, answers the cached model when its
+  fingerprint matches, and otherwise rebuilds it through the source analysis adapter and replaces
+  the cache entry. The one writer of the code model cache. The validator's own gate does not use it:
+  a gate run builds its model fresh, so caching never changes a verdict.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - code_model_cache
+  - source_analysis_adapter
+  - validator_core_adapter
+status: complete
+createdAt: '2026-10-25T18:57:45.671Z'
+updatedAt: '2026-10-25T19:17:19.001Z'

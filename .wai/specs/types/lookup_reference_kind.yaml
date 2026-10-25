@@ -1,0 +1,25 @@
+kind: enum
+id: lookup_reference_kind
+name: LookupReferenceKind
+description: What shape a reference to an element takes.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: depends-on
+    description: A component names it in dependsOn or owns
+  - name: call-step
+    description: A narrative call, dispatch or register step targets it
+  - name: type-position
+    description: A param, returns or field is typed by it
+  - name: export-use
+    description: Another project uses it through its export table
+  - name: code-call
+    description: Code calls it
+  - name: import
+    description: Code imports the module that declares it
+  - name: mention
+    description: Prose, a test or a comment names it
+createdAt: '2026-10-25T19:06:59.884Z'
+updatedAt: '2026-10-25T19:07:00.973Z'

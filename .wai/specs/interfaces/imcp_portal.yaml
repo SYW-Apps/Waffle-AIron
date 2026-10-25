@@ -146,18 +146,22 @@ methods:
       - imcp_portal.sdd_validate_tree
   - name: getStatus
     description: >-
-      Tool: the spec tree as a structure, with each level's completeness (types counted per
-      subsystem and per type group); each member prints as a project holding its own subsystems.
-      Optionally narrowed to one subsystem, and optionally descending into members. The structured
-      content carries the whole answer as `report` (exactly the text block, so a client that reads
-      only the structured content sees the tree and the approval verdict, not just a release) and
-      `validatorVersion` (the running server's wairon release, StatusReport.validatorVersion); the
-      text also ends with `wairon <version>`. On a stale server the answer LEADS with the staleness
-      — whether the build on disk changed and whether spec writes are refused because its schemas
-      changed — so the first call of a session surfaces it before anything is written; an unfinished
-      family-migration transaction under the bound root leads likewise, one notice line each,
-      pointing at `wairon doctor --fix`.
-    signature: 'getStatus(subsystem?: string, recursive?: bool): string'
+      Tool: the spec tree's status. By default a SUMMARY sized for an agent's context: the approval
+      verdict, each level's counts per subsystem (members as projects), the findings counted by
+      code, and what to read next; `detail: full` answers the whole report — the spec tree as a
+      structure with each level's completeness (types counted per subsystem and per type group),
+      each member printed as a project holding its own subsystems. Optionally narrowed to one
+      subsystem, and optionally descending into members. The structured content carries the answer
+      as `report` (exactly the text block of the detail asked for, so a client that reads only the
+      structured content sees what the text says) beside `detail` and `validatorVersion` (the
+      running server's wairon release, StatusReport.validatorVersion); the text also ends with
+      `wairon <version>`. On a stale server the answer LEADS with the staleness — whether the build
+      on disk changed and whether spec writes are refused because its schemas changed — so the first
+      call of a session surfaces it before anything is written; an unfinished family-migration
+      transaction under the bound root leads likewise, one notice line each, pointing at `wairon
+      doctor --fix`. Both leads are kept in the summary. The summary is cut in this layer: the CLI's
+      wairon status and every other reader of the status report keep the whole report.
+    signature: 'getStatus(subsystem?: string, recursive?: bool, detail?: StatusDetail): string'
     returns: string
     params:
       - name: subsystem
@@ -167,6 +171,10 @@ methods:
       - name: recursive
         type: bool
         description: Descend into the members this project declares
+        optional: true
+      - name: detail
+        type: StatusDetail
+        description: summary (the default) or full
         optional: true
     endpoint:
       transport: JSONRPC
@@ -1381,6 +1389,24 @@ methods:
     endpoint:
       transport: JSONRPC
       method: tools/call sdd_add_group
+  - name: searchSpecs
+    description: >-
+      Tool (scope: tree, a read): find design elements from whatever the agent holds (an id or part
+      of one, a name, a method, a type, an endpoint, a code file or symbol), ranked by evidence,
+      each with its place, approval, realization and the component whose brief covers it.
+    signatureFrom: mcp_lookup_orchestrator.search
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_search_specs
+  - name: findReferences
+    description: >-
+      Tool (scope: tree, a read): what refers to one element, in the design, the code, the tests and
+      text, each graded by evidence, with where design and code disagree, the waivers that cover it
+      and how far a change reaches.
+    signatureFrom: mcp_lookup_orchestrator.references
+    endpoint:
+      transport: JSONRPC
+      method: tools/call sdd_find_references
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T14:23:42.227Z'
+updatedAt: '2026-10-25T19:09:01.854Z'

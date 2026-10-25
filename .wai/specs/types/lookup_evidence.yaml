@@ -1,0 +1,33 @@
+kind: enum
+id: lookup_evidence
+name: LookupEvidence
+description: >-
+  How a lookup knows a match or a reference, strongest first. Not the analysis grade: that says how
+  a file was read; this says what a single answer rests on.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: id
+    description: The query named the element's id or name exactly
+  - name: declared
+    description: >-
+      The design states it: a dependsOn, a call step, a type position, an export use, a sourcePath
+      or symbol
+  - name: resolved
+    description: >-
+      The code does it and the analysis resolved the target (a call or reference bound to its
+      declaration)
+  - name: syntactic
+    description: >-
+      The code names it without a resolved target: an import, or a matching name at pattern or
+      generic grade
+  - name: text
+    description: A mention in prose, a test name or a comment
+  - name: unresolved
+    description: >-
+      A code call the analysis could not bind; listed so a reader checks it by hand rather than
+      missing it
+createdAt: '2026-10-25T19:06:49.838Z'
+updatedAt: '2026-10-25T19:06:50.884Z'

@@ -1,0 +1,23 @@
+id: code_model_cache
+name: Code Model Cache
+description: >-
+  The last code model built for lookups, with the source fingerprint it was built from (each walked
+  file's path, size and modification time). Simple keyed state: one entry per project root, replaced
+  whole on every rebuild, never read by anything but its key. Evictable and loss-safe: a lost entry
+  costs one rebuild, never a wrong answer, because a reader compares the fingerprint before trusting
+  it.
+subsystem: sdd_validator
+componentType: Store
+owns: []
+dependsOn: []
+durability: cache
+lint:
+  allow:
+    - code: UNOWNED_STORE
+      reason: >-
+        Simple keyed state: one entry per project root, replaced whole, read only by its key; its
+        one writer and reader is the workflow code_model_loader. No lookup beyond the key needs a
+        Registry or Index.
+status: complete
+createdAt: '2026-10-25T18:57:42.800Z'
+updatedAt: '2026-10-25T19:17:15.198Z'

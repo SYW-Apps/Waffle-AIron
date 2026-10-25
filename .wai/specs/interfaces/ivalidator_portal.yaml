@@ -277,6 +277,38 @@ methods:
         type: list<ComponentSpec>
         description: The other components the same write changes
         optional: true
+  - name: searchSpecs
+    description: >-
+      Find design elements from whatever the caller holds, forwarded to spec_search. Read-only. Its
+      params are stated here, the boundary contract, so a client adapter takes its signature from
+      this verb in one hop.
+    signature: 'searchSpecs(query: string, limit?: int): LookupSearchResult'
+    returns: LookupSearchResult
+    params:
+      - name: query
+        type: string
+        description: >-
+          An id or part of one, a name, owner.member, an endpoint, a project-relative file path or a
+          code symbol
+      - name: limit
+        type: int
+        description: The most matches to answer; 10 when omitted
+        optional: true
+  - name: findReferences
+    description: >-
+      Everything that refers to one element, graded by evidence, forwarded to reference_finder.
+      Read-only. Its params are stated here, the boundary contract, so a client adapter takes its
+      signature from this verb in one hop.
+    signature: 'findReferences(target: string, includeText?: bool): LookupReferencesResult'
+    returns: LookupReferencesResult
+    params:
+      - name: target
+        type: string
+        description: A spec id, owner.member, portal.verb or a project-relative file path
+      - name: includeText
+        type: bool
+        description: Include text mentions; true when omitted
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-09T00:30:21.137Z'
+updatedAt: '2026-10-25T19:08:34.261Z'

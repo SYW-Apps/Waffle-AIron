@@ -1,0 +1,21 @@
+kind: value-object
+id: lookup_search_result
+name: LookupSearchResult
+description: 'The ranked answer to a spec search: strongest evidence first, then the narrowest place.'
+subsystem: sdd_validator
+fields:
+  - name: matches
+    type: list<LookupMatch>
+    description: At most the asked limit
+    optional: false
+  - name: total
+    type: int
+    description: Every match found before the limit cut the list
+    optional: false
+  - name: snapshot
+    type: LookupSnapshot
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:32.766Z'
+updatedAt: '2026-10-25T19:07:33.774Z'
