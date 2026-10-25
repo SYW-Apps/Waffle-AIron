@@ -83,6 +83,7 @@ import { standing as treeStanding } from './adapters/upgrade.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
+import { statusAnswer, type StatusDetail } from './status-summary.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
 // removeExternal as dropExternal / updateExternalUse as changeExternalUse:
@@ -1082,7 +1083,8 @@ function pendingBanner(): string[] {
 
 const getStatusOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
-  report: z.string().describe('The whole status answer, exactly the text block: the tree with its completeness, the approval verdict, any banner and the Externals section. A client that reads only the structured content would otherwise see nothing but the release.'),
+  detail: z.enum(['summary', 'full']).optional().describe('Which cut this answer is: summary (the default) or full'),
+  report: z.string().describe('The status answer of the detail asked for, exactly the text block: for full the tree with its completeness, the approval verdict, any banner and the Externals section; for summary the verdict, counts and findings by code. A client that reads only the structured content would otherwise see nothing but the release.'),
   ...staleServerOutput,
 };
 
@@ -3589,17 +3591,19 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ subsystem?: string; recursive?: boolean }>(server,
+  reg<{ subsystem?: string; recursive?: boolean; detail?: StatusDetail }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries the whole report (the text block, as `report`) and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
+      description: 'Get the status of the SDD spec tree. Answers a SUMMARY by default: the approval verdict, the counts per subsystem (members as projects), the findings counted by code, any Externals section and the Network line. Pass detail: full for the whole per-spec tree with its completeness, and sdd_search_specs to look one spec up. Supports scoping and recursion controls. The structured content carries the answer (the text block, as `report`), the `detail` it is, and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
+        detail: z.enum(['summary', 'full']).optional().describe('summary (default): approval, counts per level and subsystem, findings by code, what to read next. full: the whole report, as `wairon status` prints it'),
       },
       outputSchema: getStatusOutput,
     },
-    ({ subsystem, recursive }) => {
+    ({ subsystem, recursive, detail }) => {
+      const asked: StatusDetail = detail === 'full' ? 'full' : 'summary';
       // The tool's flag at the edge: recursive false is a member depth of 0, the default every level.
       const memberDepth = recursive === false ? 0 : undefined;
       // Step 1: the pending-transaction banner, led in the answer so an agent
@@ -3640,7 +3644,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // report's `failed` fact belongs to `wairon status`, and the
         // explanation belongs here.
         // Step 2: which trees this answer spans, and the network it declares.
-        const family = statusFamilyContext() + statusNetworkLine();
+        const family = statusFamilyContext();
+        const network = statusNetworkLine();
         // Step 3: what the lock says about the tree as it stands. An agent
         // reading this tool is deciding whether it may write code against these
         // specs, so a tree that has drifted from its approval is the single most
@@ -3650,8 +3655,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 5-6: the externals compared with their live producers, offline
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
-        const text = `${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`;
-        return structured(text, { validatorVersion: report.validatorVersion, report: text });
+        // Step 7: the cut, unless the whole report was asked for.
+        const text = statusAnswer(asked, { banner, family, network, report: report.text, verdict: verdict.text, externals: externalsSection(adviseExternals()), version: report.validatorVersion });
+        return structured(text, { validatorVersion: report.validatorVersion, report: text, detail: asked });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }
