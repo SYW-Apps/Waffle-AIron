@@ -4,6 +4,22 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.2.1 (from v6.2.0)
+
+A fix release. Nothing to do when upgrading: install 6.2.1.
+
+- **A type's group can be removed.** `sdd_update_spec` with `unset: ["group"]`, and re-defining
+  the type with `sdd_add_type` without the `group` argument, reported the group removed while
+  the saved file kept it (only `updatedAt` moved), so a type naming a group nothing declares
+  (`TYPE_GROUP_UNKNOWN`) could not be corrected through any tool. A save that states no group
+  now removes it. When the type leaves a declared group, its file also leaves the group's folder
+  for the home an ungrouped type has, and the write says so ("type X left group G: its file is
+  now ..."). The write receipt and `sdd_get_status` now agree on the change.
+- **A refusal for a member project of a member project names the right project.** Writing
+  `outer::inner::some-type` from the family root named the first hop (`outer`) and told you to
+  call the bare id there, which does not resolve. It now names the project that holds the spec
+  (`inner`, with its folder) and the id as that project's own root spells it.
+
 ## v6.2.0 (from v6.1.4)
 
 Upgrading: nothing in a spec tree has to change.
