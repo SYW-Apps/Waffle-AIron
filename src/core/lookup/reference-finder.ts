@@ -9,8 +9,9 @@ import {
 import { current } from './code-model-loader.js';
 import { find } from './spec-search.js';
 import { findTestsReferencing } from '../source-analysis.js';
+import { buildCodeIndex } from '../rules/read-model.js';
 import { getProjectRoot } from '../../utils/fs.js';
-import { factsFor, pathKey, type CodeModel, type SourceFileFacts } from '../../models/code-model.js';
+import { factsFor, pathKey, type CodeModel, type ResolvedCallFact, type SourceFileFacts } from '../../models/code-model.js';
 import { specIndexReferencesTo, specIndexMethodReferences, type SpecRef, type SpecReference } from '../../models/specs.js';
 import type { ResolvedExport } from '../../models/exports.js';
 import type {
@@ -268,6 +269,8 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   const codeCallFiles = new Map<LookupReference, string>();
   /** Calls written inside the target's own files: they confirm a declared caller living there, and are never observed-only news. */
   const ownCalls = new Set<LookupReference>();
+  const landings = landingsOf(model, targetFiles, subject.symbols);
+  const seenSites = new Set<string>();
   if (targetFiles.size > 0) {
     for (const facts of model.files) {
       const file = pathKey(facts.path);
@@ -277,12 +280,24 @@ export function collect(target: string, includeText?: boolean): LookupReferences
       const place = holder ? placeOfSpec(index, project, { kind: 'implementation', id: holder.id }) : { project };
       const memberOf = (enclosing: string | undefined): string | undefined =>
         holder?.methods.find((m) => (m.symbol ?? m.name) === enclosing)?.name;
+      const importsTarget = !own && (facts.imports ?? []).some((spec) => [...targetFiles].some((t) => importsFile(model, file, spec, t)));
       for (const rc of facts.resolvedCalls ?? []) {
-        const resolved = rc.targets.some((t) => targetFiles.has(pathKey(t.path)) && (subject.symbols === undefined || subject.symbols.has(t.member)));
+        // A call lands on the target in its own files, or — through a file that
+        // only republishes it (an adapter of identity re-exports) — on what the
+        // target forwards to, from a file that imports the target's.
+        const resolved = rc.targets.some((t) => {
+          const at = pathKey(t.path);
+          if (targetFiles.has(at)) return subject.symbols === undefined || subject.symbols.has(t.member);
+          return importsTarget && landings.has(`${at}#${t.member}`);
+        });
         const unresolved = !resolved && rc.unresolved === true && rc.targets.length === 0 && subject.symbol !== undefined && rc.name === subject.symbol;
         if (!resolved && !unresolved) continue;
-        const lines = unresolved ? [] : linesOf(facts, rc.enclosing, rc.name);
+        const lines = unresolved ? [] : linesOf(facts, rc);
         for (const line of lines.length > 0 ? lines : [undefined]) {
+          // Two resolved calls written alike in one function share their lines: one entry per site.
+          const site = `${file}|${line ?? `${rc.enclosing ?? ''}|${rc.written}`}`;
+          if (seenSites.has(site)) continue;
+          seenSites.add(site);
           const entry: LookupReference = {
             kind: 'code-call', evidence: resolved ? 'resolved' : 'unresolved', agreement: 'unjudged',
             ...(holder ? { fromSpec: holder.id } : {}),
@@ -294,7 +309,7 @@ export function collect(target: string, includeText?: boolean): LookupReferences
           if (own) ownCalls.add(entry);
         }
       }
-      if (!own && (facts.imports ?? []).some((spec) => [...targetFiles].some((t) => importsFile(model, file, spec, t)))) {
+      if (importsTarget) {
         references.push({
           kind: 'import', evidence: 'syntactic', agreement: 'unjudged',
           ...(holder ? { fromSpec: holder.id } : {}),
@@ -307,9 +322,10 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   // Step 13: the tests that import or name the target's methods.
   const tests = subject.searched.length > 0 ? findTestsReferencing(subject.searched, getProjectRoot(), testRoots) : [];
   const testPlace: LookupPlace = { project };
-  const seenTests = new Set<string>();
+  // A test file the code scan already listed as an import is not listed twice.
+  const seenTests = new Set<string>(references.filter((r) => r.kind === 'import' && r.inTest && r.file).map((r) => `i|${pathKey(r.file!)}`));
   for (const t of tests) {
-    for (const file of t.imported) if (!seenTests.has(`i|${file}`) && seenTests.add(`i|${file}`)) references.push({ kind: 'import', evidence: 'syntactic', agreement: 'unjudged', file, place: testPlace, inTest: true, linked: true });
+    for (const file of t.imported) if (!seenTests.has(`i|${pathKey(file)}`) && seenTests.add(`i|${pathKey(file)}`)) references.push({ kind: 'import', evidence: 'syntactic', agreement: 'unjudged', file, place: testPlace, inTest: true, linked: true });
     for (const file of t.mentioned) if (!seenTests.has(`m|${file}`) && seenTests.add(`m|${file}`)) references.push({ kind: 'mention', evidence: 'text', agreement: 'unjudged', file, place: testPlace, inTest: true, linked: false });
   }
 
@@ -368,7 +384,8 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   for (const entry of codeCalls) {
     const file = codeCallFiles.get(entry)!;
     if (ownCalls.has(entry) && !declaredFiles.has(file)) continue;
-    if (entry.evidence !== 'resolved') entry.agreement = 'unjudged';
+    // A test is no part of the design, so its calls are never a disagreement with it.
+    if (entry.evidence !== 'resolved' || entry.inTest) entry.agreement = 'unjudged';
     else if (declaredFiles.has(file)) entry.agreement = confirmedFiles.has(file) ? 'confirmed' : 'unjudged';
     else entry.agreement = gradeExact(file) ? 'observed-only' : 'unjudged';
     references.push(entry);
@@ -402,6 +419,23 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   return { target: top, candidates: [], references, waivers, impact, snapshot: found.snapshot };
 }
 
+/**
+ * Every `file#name` a call may land on and still be a call of the target: each
+ * name the target's files publish (its symbols, or every export of a file
+ * target), followed through the re-exports and export aliases the code writes
+ * down — the same forwarding the call conformance rule judges N:1 identity by.
+ */
+function landingsOf(model: CodeModel, files: ReadonlySet<string>, symbols: ReadonlySet<string> | undefined): Set<string> {
+  const out = new Set<string>();
+  if (files.size === 0) return out;
+  const code = buildCodeIndex(model);
+  for (const file of files) {
+    const names = symbols ?? new Set(factsFor(model, file)?.exportedNames ?? []);
+    for (const name of names) for (const p of code.forwardsOf(file, name)) out.add(`${p.file}#${p.name}`);
+  }
+  return out;
+}
+
 /** Does one entry of the L0 export table publish the target: its component (narrowed to its interface or not), or its type? */
 function exportsTarget(index: Index, entry: ResolvedExport, target: LookupMatch, subject: Subject): boolean {
   const componentOf = (contract: string | undefined) => index.interfaces.find((i) => i.id === contract)?.component;
@@ -432,11 +466,22 @@ function isTest(file: string, testRoots: readonly string[]): boolean {
   return /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(k) || testRoots.some((r) => k.startsWith(`${pathKey(r).replace(/\/$/, '')}/`));
 }
 
-/** The lines a function's call sites of one name were recorded at (exact grade only). */
-function linesOf(facts: SourceFileFacts, enclosing: string | undefined, name: string): number[] {
-  if (enclosing === undefined) return [];
-  const sites = facts.functionCallSites?.[enclosing] ?? [];
-  return [...new Set(sites.filter((s) => s.name === name && s.line !== undefined).map((s) => s.line as number))].sort((a, b) => a - b);
+/**
+ * The lines a resolved call's sites were recorded at (exact grade only): the
+ * sites in its function spelled as it is written — a bare call only by bare
+ * sites, a member call only by member sites on the same plain receiver — so an
+ * `items.find(…)` never lends its line to a call of an imported `find`.
+ */
+function linesOf(facts: SourceFileFacts, rc: ResolvedCallFact): number[] {
+  if (rc.enclosing === undefined) return [];
+  const callee = rc.written.split('(')[0].trim();
+  const name = /([A-Za-z_$][\w$]*)$/.exec(callee)?.[1] ?? rc.name;
+  const member = callee.includes('.');
+  const receiver = member ? /^([A-Za-z_$][\w$]*)\.[A-Za-z_$][\w$]*$/.exec(callee)?.[1] : undefined;
+  const sites = facts.functionCallSites?.[rc.enclosing] ?? [];
+  return [...new Set(sites
+    .filter((s) => s.name === name && s.member === member && (receiver === undefined || s.via === undefined || s.via === receiver) && s.line !== undefined)
+    .map((s) => s.line as number))].sort((a, b) => a - b);
 }
 
 /** The widest place any reference sits relative to the target. */
