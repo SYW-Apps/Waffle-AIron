@@ -4887,15 +4887,21 @@ export class SpecWorkspace {
     return path.join(this.paths.specsTypesDir(), `${localId}.yaml`);
   }
 
-  /** Where a type with no group lives: its subsystem's types/ folder (nested layout), else the shared types dir. */
-  private ungroupedTypePath(id: string, subsystemId?: string): string {
+  /**
+   * Where a type with no group lives: its subsystem's types/ folder (nested layout), else the shared
+   * types dir of the tree that holds `stored` — a part's own, for a type a part holds, so clearing a
+   * group never moves a file out of its part.
+   */
+  private ungroupedTypePath(id: string, subsystemId: string | undefined, stored: string): string {
     const localId = id.split('::').pop()!;
     const sub = subsystemId || (id.includes('::') ? id.split('::').slice(0, -1).join('::') : undefined);
     if (sub) {
       const subPath = this.getSubsystemPath(sub);
       if (subPath.endsWith('.index.yaml')) return path.join(path.dirname(subPath), 'types', `${localId}.yaml`);
     }
-    return path.join(this.paths.specsTypesDir(), `${localId}.yaml`);
+    const part = this.partHolding(stored)?.part;
+    const typesDir = part?.directory ? aiPathsAt(part.directory).specsTypesDir() : this.paths.specsTypesDir();
+    return path.join(typesDir, `${localId}.yaml`);
   }
 
   getGroupPath(id: string, subsystemId?: string, parentId?: string): string {
@@ -5632,7 +5638,7 @@ export class SpecWorkspace {
       ? (this.scanAll().paths.group[existing.group] ?? this.scanAll().paths.group[splitNamespace(existing.group).localId])
       : undefined;
     const leavingTarget = leftGroupIndex && path.resolve(path.dirname(leftGroupIndex)) === path.resolve(path.dirname(stored))
-      ? this.ungroupedTypePath(spec.id, spec.subsystem)
+      ? this.ungroupedTypePath(spec.id, spec.subsystem, stored)
       : undefined;
     // A type that joins another group takes its file along: beside the group's index, as a new type is placed.
     const regrouped = existing !== null && existing !== undefined && spec.group !== undefined && spec.group !== '' && spec.group !== existing.group;
@@ -6521,7 +6527,7 @@ export class SpecWorkspace {
         const namedDir = named === null ? null : this.rootCovering(named)?.directory ?? null;
         const deeperDir = deeper === null ? null : this.rootCovering(deeper)?.directory ?? null;
         const member = deeper !== null && (namedDir === null
-          || (deeperDir !== null && path.resolve(deeperDir).startsWith(path.resolve(namedDir))))
+          || (deeperDir !== null && isWithin(namedDir, deeperDir)))
           ? deeper : named;
         // Step 4: a member project — a legacy mount keeps its cross-tree writes.
         if (member !== null) {

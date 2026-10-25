@@ -145,6 +145,29 @@ describe('a type\'s group can be removed', () => {
     expect(onDisk(dir, 'cadence')!.rel).toContain('rhythms/');
   });
 
+  it('a part\'s type that leaves a declared group stays in the part', async () => {
+    const dir = habits();
+    const file = path.join(dir, '.wai', 'project.yaml');
+    fs.writeFileSync(file, yaml.dump({ ...(yaml.load(fs.readFileSync(file, 'utf8')) as object), members: { shared: 'parts/shared' } }));
+    const part = path.join(dir, 'parts', 'shared');
+    const stamp = '2026-10-25T00:00:00.000Z';
+    fs.mkdirSync(path.join(part, '.wai', 'specs', 'types', 'kinds'), { recursive: true });
+    fs.writeFileSync(path.join(part, '.wai', 'project.yaml'), yaml.dump({ schemaVersion: '1.0.0' }));
+    fs.writeFileSync(path.join(part, '.wai', 'specs', 'types', 'kinds', '.index.yaml'),
+      yaml.dump({ kind: 'group', id: 'kinds', name: 'Kinds', createdAt: stamp, updatedAt: stamp }));
+    fs.writeFileSync(path.join(part, '.wai', 'specs', 'types', 'kinds', 'token.yaml'),
+      yaml.dump({ id: 'token', name: 'Token', kind: 'value-object', group: 'kinds', holds: 'string', createdAt: stamp, updatedAt: stamp }));
+    invalidateSpecCache();
+    const call = await connect();
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'token', delta: { unset: ['group'] } });
+    expect(r.isError, r.text).toBe(false);
+    invalidateSpecCache();
+    const after = onDisk(part, 'token')!;
+    expect(after.rel).toBe('types/token.yaml');
+    expect('group' in after.doc).toBe(false);
+    expect(onDisk(dir, 'token')).toBeUndefined();
+  });
+
   it('an unrelated update keeps the group', async () => {
     const dir = habits();
     const call = await connect();
@@ -191,5 +214,31 @@ describe('a member project of a member project', () => {
     invalidateSpecCache();
     const there = await call('sdd_update_spec', { kind: 'type', id: 'depth_probe', delta: { description: 'Probe.' } });
     expect(there.isError, there.text).toBe(false);
+  });
+
+  it('a sibling whose folder name merely extends the named member\'s is never taken for a deeper project', async () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-sibling-')));
+    roots.push(base);
+    const flow = (id: string) => ({
+      system: { name: id, vision: `${id}.`, targetLanguage: 'TypeScript' },
+      subsystems: [{ id: `${id.replace('-', '_')}_sub`, status: 'complete' as const }],
+      components: [{ id: `${id.replace('-', '_')}_flow`, subsystem: `${id.replace('-', '_')}_sub`, componentType: 'Orchestrator', status: 'complete' as const }],
+      interfaces: [{ id: `i${id.replace('-', '_')}_flow`, component: `${id.replace('-', '_')}_flow`, methods: [{ name: 'run', description: 'Run.', params: [], returns: 'void' }] }],
+      types: [{ id: 'probe', kind: 'value-object', subsystem: `${id.replace('-', '_')}_sub`, fields: [{ name: 'n', type: 'int' }] }],
+    });
+    const app = project(path.join(base, 'app'), {
+      system: { name: 'app', vision: 'App.', targetLanguage: 'TypeScript' },
+      subsystems: [{ id: 'front', status: 'complete' }],
+      components: [{ id: 'front_flow', subsystem: 'front', componentType: 'Orchestrator', status: 'complete' }],
+      interfaces: [{ id: 'ifront_flow', component: 'front_flow', methods: [{ name: 'run', description: 'Run.', params: [], returns: 'void' }] }],
+    }, 'app', { members: { inner: 'libs/inner', 'inner-helper': 'libs/inner-helper' } });
+    project(path.join(app, 'libs', 'inner'), flow('inner'), 'inner');
+    project(path.join(app, 'libs', 'inner-helper'), flow('inner-helper'), 'inner-helper');
+    setProjectRoot(app);
+    invalidateSpecCache();
+    const call = await connect();
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'inner::inner-helper::probe', delta: { description: 'P.' } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).not.toContain('"inner-helper" at');
   });
 });
