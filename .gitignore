@@ -52,3 +52,5 @@ STATE.md
 .wai/generated/
 # Short-lived lock spec writers take; never committed.
 .wai/.spec-write.lock
+
+/docs/feedback

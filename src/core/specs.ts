@@ -4887,6 +4887,17 @@ export class SpecWorkspace {
     return path.join(this.paths.specsTypesDir(), `${localId}.yaml`);
   }
 
+  /** Where a type with no group lives: its subsystem's types/ folder (nested layout), else the shared types dir. */
+  private ungroupedTypePath(id: string, subsystemId?: string): string {
+    const localId = id.split('::').pop()!;
+    const sub = subsystemId || (id.includes('::') ? id.split('::').slice(0, -1).join('::') : undefined);
+    if (sub) {
+      const subPath = this.getSubsystemPath(sub);
+      if (subPath.endsWith('.index.yaml')) return path.join(path.dirname(subPath), 'types', `${localId}.yaml`);
+    }
+    return path.join(this.paths.specsTypesDir(), `${localId}.yaml`);
+  }
+
   getGroupPath(id: string, subsystemId?: string, parentId?: string): string {
     const index = this.scanAll();
     const { localId: plainId } = splitNamespace(id);
@@ -5614,14 +5625,22 @@ export class SpecWorkspace {
   saveTypeSpec(spec: TypeSpec, opts?: SaveSpecOptions): string[] {
     const notices: string[] = [];
     const existing = this.loadTypeSpec(spec.id);
-    const group = spec.group || (existing ? existing.group : undefined);
-    const stored = this.getTypePath(spec.id, spec.subsystem, group);
+    // A save that states no group REMOVES it (the documented unset / omission); the group is never carried over from the stored type.
+    const stored = this.getTypePath(spec.id, spec.subsystem, spec.group || undefined);
+    // A type leaving a DECLARED group takes its file out of that group's folder, to the home an ungrouped type has.
+    const leftGroupIndex = existing && existing.group && !spec.group
+      ? (this.scanAll().paths.group[existing.group] ?? this.scanAll().paths.group[splitNamespace(existing.group).localId])
+      : undefined;
+    const leavingTarget = leftGroupIndex && path.resolve(path.dirname(leftGroupIndex)) === path.resolve(path.dirname(stored))
+      ? this.ungroupedTypePath(spec.id, spec.subsystem)
+      : undefined;
     // A type that joins another group takes its file along: beside the group's index, as a new type is placed.
     const regrouped = existing !== null && existing !== undefined && spec.group !== undefined && spec.group !== '' && spec.group !== existing.group;
     const groupIndex = regrouped ? this.scanAll().paths.group[spec.group!] : undefined;
     const target = groupIndex ? path.join(path.dirname(groupIndex), `${spec.id.split('::').pop()}.yaml`) : undefined;
-    const relocating = target !== undefined && path.resolve(target) !== path.resolve(stored) && !fs.existsSync(target);
-    const p = relocating ? target! : stored;
+    const leaving = leavingTarget !== undefined && path.resolve(leavingTarget) !== path.resolve(stored) && !fs.existsSync(leavingTarget);
+    const relocating = leaving || (target !== undefined && path.resolve(target) !== path.resolve(stored) && !fs.existsSync(target));
+    const p = leaving ? leavingTarget! : relocating ? target! : stored;
     this.assertHomeWritable(p);
     ensureDir(path.dirname(p));
 
@@ -5647,15 +5666,14 @@ export class SpecWorkspace {
 
     if (existing) {
       specToWrite.createdAt = existing.createdAt;
-      if (!specToWrite.group && existing.group) {
-        specToWrite.group = localOf(this.writePrefixFor(spec.id), existing.group);
-      }
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id), 'type');
     if (relocating && fs.existsSync(stored)) {
       this.removeHome(stored, 'type');
-      notices.push(`type "${spec.id}" moved to group "${spec.group}": its file is now ${path.relative(this.rootDir, p)}.`);
+      notices.push(leaving
+        ? `type "${spec.id}" left group "${existing!.group}": its file is now ${path.relative(this.rootDir, p)}.`
+        : `type "${spec.id}" moved to group "${spec.group}": its file is now ${path.relative(this.rootDir, p)}.`);
     }
     registryInvalidateCache();
     return notices;
@@ -6492,8 +6510,19 @@ export class SpecWorkspace {
         const key = stored ?? this.bindReference('', target.id);
         const alias = target.id.slice(0, target.id.indexOf('::'));
         const aliased = this.cachedRawRoots[0]?.record.aliases.get(alias);
-        const member = this.getSubprojectPrefix(key) ?? this.getSubprojectPrefix(target.id)
+        const named = this.getSubprojectPrefix(key) ?? this.getSubprojectPrefix(target.id)
           ?? (aliased !== undefined && this.rootCovering(aliased) !== null ? aliased : null);
+        // Members are keyed by project id at any depth, so "outer::inner::x" (a member project of a member
+        // project) names the project "inner" — not the first hop. The project that holds the spec is the
+        // deepest one any trailing run of the typed id addresses.
+        // A deeper project counts only inside the one the id names first, so a later segment that merely
+        // spells some other project's id never redirects the sentence.
+        const deeper = this.deepestProjectNamed(target.id);
+        const namedDir = named === null ? null : this.rootCovering(named)?.directory ?? null;
+        const deeperDir = deeper === null ? null : this.rootCovering(deeper)?.directory ?? null;
+        const member = deeper !== null && (namedDir === null
+          || (deeperDir !== null && path.resolve(deeperDir).startsWith(path.resolve(namedDir))))
+          ? deeper : named;
         // Step 4: a member project — a legacy mount keeps its cross-tree writes.
         if (member !== null) {
           if (this.rootCovering(member)?.legacyMount) continue;
@@ -6519,6 +6548,24 @@ export class SpecWorkspace {
     }
     // Step 10.
     return undefined;
+  }
+
+  /**
+   * The key of the deepest member project an id addresses: the id read from
+   * its first hop, and from each later hop, since a member project of a member
+   * project is keyed by its own project id. Null when no member covers it.
+   */
+  private deepestProjectNamed(id: string): string | null {
+    const segments = id.split('::');
+    let deepest: { key: string; depth: number } | null = null;
+    for (let from = 0; from < segments.length - 1; from++) {
+      const key = this.getSubprojectPrefix(segments.slice(from).join('::'));
+      const root = key === null ? null : this.rootCovering(key);
+      if (key === null || root === null) continue;
+      const depth = root.directory.length;
+      if (deepest === null || depth > deepest.depth) deepest = { key, depth };
+    }
+    return deepest?.key ?? null;
   }
 
   /**
