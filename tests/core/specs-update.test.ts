@@ -198,7 +198,7 @@ describe('granular specification updates via updateSpec', () => {
       updatedAt: '2026-06-01T12:00:00Z',
     });
 
-    // Re-save without group parameter, check if it preserves group
+    // Re-save without a group: the group is removed (a save that states none clears it), the creation stamp is kept
     saveTypeSpec({
       schemaVersion: '1.0.0',
       kind: 'value-object',
@@ -212,7 +212,7 @@ describe('granular specification updates via updateSpec', () => {
 
     const typeSpec = loadTypeSpec('vm-instruction');
     expect(typeSpec).not.toBeNull();
-    expect(typeSpec!.group).toBe('runtime-vm');
+    expect(typeSpec!.group).toBeUndefined();
     expect(typeSpec!.createdAt).toBe('2026-06-01T12:00:00Z');
 
     // 3. Save Component with status and verify nested component path resolution under repository owner
