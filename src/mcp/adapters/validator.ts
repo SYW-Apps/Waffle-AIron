@@ -9,3 +9,5 @@ export { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 // externals the run did not compose — what sdd_validate_tree and
 // sdd_get_status append beside the gate's own findings.
 export { adviseExternals } from '../../core/validation.js';
+// searchSpecs, findReferences: the lookups behind sdd_search_specs and sdd_find_references.
+export { searchSpecs, findReferences } from '../../core/validation.js';

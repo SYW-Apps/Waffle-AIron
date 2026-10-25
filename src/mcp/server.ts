@@ -83,6 +83,8 @@ import { standing as treeStanding } from './adapters/upgrade.js';
 import { writeSpec, deleteSpec, updateSpecGated, moveMethods, moveSpec } from './adapters/authoring.js';
 import { captureBuildStamp, isBuildStale, readBuildFingerprint, findNewerWriter, type BuildStamp } from './build.js';
 import { listResources, readResource, buildServerInstructions } from './adapters/skills.js';
+import { search as lookupSearch, references as lookupReferences } from './lookup.js';
+import { statusAnswer, type StatusDetail } from './status-summary.js';
 // declareExternal as addExternal: sdd_add_external's workflow (mcp_externals_orchestrator.declare).
 import { pinExternals, getExternalsStatus, declareExternal as addExternal } from './adapters/surfaces.js';
 // removeExternal as dropExternal / updateExternalUse as changeExternalUse:
@@ -1080,9 +1082,57 @@ function pendingBanner(): string[] {
   }
 }
 
+const lookupPlaceOutput = z.object({
+  project: z.string(), member: z.string().optional(), subsystem: z.string().optional(),
+  component: z.string().optional(), container: z.string().optional(),
+});
+const lookupMatchOutput = z.object({
+  id: z.string().describe('The exact id: pass it to sdd_find_references or sdd_get_spec.'),
+  kind: z.string(), name: z.string(), place: lookupPlaceOutput,
+  evidence: z.enum(['id', 'declared', 'resolved', 'syntactic', 'text', 'unresolved']),
+  matchedOn: z.string(),
+  approval: z.enum(['approved', 'changed', 'added', 'unlocked', 'not-applicable']),
+  sourcePath: z.string().optional(), planned: z.boolean(),
+  briefId: z.string().optional().describe('The component whose sdd_get_agent_brief covers this element.'),
+});
+const lookupSnapshotOutput = z.object({
+  codeFingerprint: z.string(), codeGrade: z.enum(['exact', 'pattern', 'generic', 'none']), builtAt: z.string(),
+  searched: z.array(z.string()), notSearched: z.array(z.string()),
+});
+
+/** sdd_search_specs' structured answer: the text an agent reads and the whole typed result. */
+const searchSpecsOutput = {
+  report: z.string().describe('The text answer: one line per match, how many more, and what was searched and what was not.'),
+  result: z.object({
+    matches: z.array(lookupMatchOutput), total: z.number().describe('Every match found before the limit cut the list.'),
+    snapshot: lookupSnapshotOutput,
+  }),
+  ...staleServerOutput,
+};
+
+/** sdd_find_references' structured answer: the text an agent reads and the whole typed result, every group whole. */
+const findReferencesOutput = {
+  report: z.string().describe('The text answer: the target, then each group cut to its strongest few (expand names the rest).'),
+  result: z.object({
+    target: lookupMatchOutput.nullable(),
+    candidates: z.array(lookupMatchOutput),
+    references: z.array(z.object({
+      kind: z.string(), evidence: z.enum(['id', 'declared', 'resolved', 'syntactic', 'text', 'unresolved']),
+      agreement: z.enum(['confirmed', 'declared-only', 'observed-only', 'unjudged']),
+      fromSpec: z.string().optional(), fromMember: z.string().optional(), file: z.string().optional(), line: z.number().optional(),
+      place: lookupPlaceOutput, inTest: z.boolean(), linked: z.boolean(),
+    })),
+    waivers: z.array(z.object({ kind: z.enum(['unclaimed', 'carried', 'lint-allow']), subject: z.string(), reason: z.string() })),
+    impact: z.enum(['none', 'component', 'subsystem', 'project', 'family', 'public']),
+    snapshot: lookupSnapshotOutput,
+  }),
+  ...staleServerOutput,
+};
+
 const getStatusOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (StatusReport.validatorVersion), so a reading can be dated and a stale server told from a current one.'),
-  report: z.string().describe('The whole status answer, exactly the text block: the tree with its completeness, the approval verdict, any banner and the Externals section. A client that reads only the structured content would otherwise see nothing but the release.'),
+  detail: z.enum(['summary', 'full']).optional().describe('Which cut this answer is: summary (the default) or full'),
+  report: z.string().describe('The status answer of the detail asked for, exactly the text block: for full the tree with its completeness, the approval verdict, any banner and the Externals section; for summary the verdict, counts and findings by code. A client that reads only the structured content would otherwise see nothing but the release.'),
   ...staleServerOutput,
 };
 
@@ -3589,17 +3639,19 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     }
   );
 
-  reg<{ subsystem?: string; recursive?: boolean }>(server,
+  reg<{ subsystem?: string; recursive?: boolean; detail?: StatusDetail }>(server,
     'sdd_get_status',
     {
-      description: 'Get the completeness status dashboard of the SDD spec tree. Supports scoping and recursion controls. The structured content carries the whole report (the text block, as `report`) and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
+      description: 'Get the status of the SDD spec tree. Answers a SUMMARY by default: the approval verdict, the counts per subsystem (members as projects), the findings counted by code, any Externals section and the Network line. Pass detail: full for the whole per-spec tree with its completeness, and sdd_search_specs to look one spec up. Supports scoping and recursion controls. The structured content carries the answer (the text block, as `report`), the `detail` it is, and validatorVersion, the wairon release of the running server; the text ends with `wairon <version>`.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only show status for the specified subsystem'),
         recursive: z.boolean().optional().describe('Whether to descend into the members this project declares (default: true)'),
+        detail: z.enum(['summary', 'full']).optional().describe('summary (default): approval, counts per level and subsystem, findings by code, what to read next. full: the whole report, as `wairon status` prints it'),
       },
       outputSchema: getStatusOutput,
     },
-    ({ subsystem, recursive }) => {
+    ({ subsystem, recursive, detail }) => {
+      const asked: StatusDetail = detail === 'full' ? 'full' : 'summary';
       // The tool's flag at the edge: recursive false is a member depth of 0, the default every level.
       const memberDepth = recursive === false ? 0 : undefined;
       // Step 1: the pending-transaction banner, led in the answer so an agent
@@ -3640,7 +3692,8 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // report's `failed` fact belongs to `wairon status`, and the
         // explanation belongs here.
         // Step 2: which trees this answer spans, and the network it declares.
-        const family = statusFamilyContext() + statusNetworkLine();
+        const family = statusFamilyContext();
+        const network = statusNetworkLine();
         // Step 3: what the lock says about the tree as it stands. An agent
         // reading this tool is deciding whether it may write code against these
         // specs, so a tree that has drifted from its approval is the single most
@@ -3650,8 +3703,9 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Steps 5-6: the externals compared with their live producers, offline
         // and advisory — an Externals section only when one moved, drifted or
         // could not be compared; the pin still gates.
-        const text = `${banner}${family}${report.text}${verdict.text}${externalsSection(adviseExternals())}\nwairon ${report.validatorVersion}\n`;
-        return structured(text, { validatorVersion: report.validatorVersion, report: text });
+        // Step 7: the cut, unless the whole report was asked for.
+        const text = statusAnswer(asked, { banner, family, network, report: report.text, verdict: verdict.text, externals: externalsSection(adviseExternals()), version: report.validatorVersion });
+        return structured(text, { validatorVersion: report.validatorVersion, report: text, detail: asked });
       } catch (e) {
         return errText(`${banner}${String(e)}`);
       }
@@ -3775,6 +3829,47 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const moved = [change.added.length ? `+ ${change.added.join(', ')}` : '', change.removed.length ? `- ${change.removed.join(', ')}` : ''].filter(Boolean).join('; ') || 'no change';
         const list = change.use.length ? change.use.join(', ') : '(none)';
         return structured(`${dryRun ? 'Dry run: ' : ''}${alias}.use ${dryRun ? 'would be' : change.written ? 'is now' : 'is already'} [${list}] (${moved}).`, { ...change, ...(dryRun ? { dryRun: true } : {}) });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ query: string; limit?: number }>(server,
+    'sdd_search_specs',
+    {
+      description: 'Answers "where is X designed?" and "which spec holds this file or symbol?". Finds design elements (subsystems, components, contracts, methods, types, fields, endpoints) from whatever you hold: a name, a fragment of one, an exact id, a project-relative source path or a symbol. One line per match: id, kind, place, evidence, approval state, sourcePath (or planned) and the brief id of the component that covers it. Matches are graded by evidence (id, declared, resolved, syntactic, text), strongest first; the closing line says what was searched and what was not. Take a returned id to sdd_find_references or sdd_get_spec. A read: writes nothing.',
+      inputSchema: {
+        query: z.string().describe('A name, id, fragment, source path or symbol'),
+        limit: z.number().int().positive().optional().describe('The most matches to list (default 10); the answer says how many more there were'),
+      },
+      outputSchema: searchSpecsOutput,
+    },
+    ({ query, limit }) => {
+      try {
+        const answer = lookupSearch(query, limit);
+        return structured(answer.text, { report: answer.text, result: answer.result });
+      } catch (e) {
+        return errMessage(e);
+      }
+    },
+  );
+
+  reg<{ target: string; expand?: string[]; includeText?: boolean }>(server,
+    'sdd_find_references',
+    {
+      description: 'Answers "who uses X?" and "what breaks if I change it?". For one element (a component, contract method, type, field or source file; use sdd_search_specs first when you only hold a fragment) lists everything that refers to it: design references (dependencies, call steps, type positions, exports used), code references (calls and imports, file:line where known), tests, bare-name text mentions, the waivers that cover it, and where design and code disagree (declared-only: the spec says it, the code does not do it; observed-only: the code does it, no spec says so). Each is graded by evidence and agreement; the target line carries the impact (how far a change reaches). Default text keeps each group to its strongest five: name a group in expand (design, code, tests, text, waivers, declared-only, observed-only) to read it whole. An ambiguous target answers candidates; call again with one exact id. A read: writes nothing.',
+      inputSchema: {
+        target: z.string().describe('An exact id from sdd_search_specs (a spec id, owner.member, portal.verb) or a project-relative file path'),
+        expand: z.array(z.enum(['design', 'code', 'tests', 'text', 'waivers', 'declared-only', 'observed-only'])).optional().describe('Groups to write whole instead of their strongest five'),
+        includeText: z.boolean().optional().describe('Also count bare-name mentions in prose (default: off)'),
+      },
+      outputSchema: findReferencesOutput,
+    },
+    ({ target, expand, includeText }) => {
+      try {
+        const answer = lookupReferences(target, expand, includeText);
+        return structured(answer.text, { report: answer.text, result: answer.result });
       } catch (e) {
         return errMessage(e);
       }

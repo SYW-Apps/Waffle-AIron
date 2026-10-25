@@ -5,6 +5,7 @@ description: >-
   seconds.
 contract: icode_model_loader
 sourcePath: src/core/lookup/code-model-loader.ts
+simPath: tests/core/lookup/code-model-loader.sim.test.ts
 methods:
   - name: current
     narrative:
@@ -61,4 +62,4 @@ methods:
         outcome: built
 status: complete
 createdAt: '2026-10-25T19:16:01.704Z'
-updatedAt: '2026-10-25T19:17:47.755Z'
+updatedAt: '2026-10-25T20:56:40.111Z'
