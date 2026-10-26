@@ -60,6 +60,39 @@ const pickingSpecs = {
   }],
 };
 
+/**
+ * A type planned in a file another component wrote first: the picking
+ * scheduler's module holds no ShipmentManifest, and the dispatch planner — the
+ * one component whose contract uses the type — is built (`dispatchBuilt`) or not.
+ */
+function sharedFileTree(dispatchBuilt: boolean) {
+  return {
+    subsystems: pickingSpecs.subsystems,
+    components: [...pickingSpecs.components, {
+      id: 'dispatch-planner',
+      componentType: 'Orchestrator',
+      subsystem: 'warehouse',
+      description: 'Plans the dispatch wave for each shipment manifest.',
+    }],
+    interfaces: [...pickingSpecs.interfaces, {
+      id: 'idispatch_planner',
+      component: 'dispatch-planner',
+      methods: [{ name: 'planDispatch', description: 'Plan one manifest into a wave.', params: [{ name: 'manifest', type: 'shipment-manifest' }], returns: 'void' }],
+    }],
+    implementations: [...pickingSpecs.implementations, {
+      id: 'dispatch_planner_impl',
+      contract: 'idispatch_planner',
+      sourcePath: 'src/warehouse/dispatch.ts',
+      methods: [{ name: 'planDispatch', narrative: [{ stepNumber: 1, type: 'local', description: 'Place the manifest in the next wave.' }] }],
+    }],
+    types: [{ id: 'shipment-manifest', name: 'ShipmentManifest', subsystem: 'warehouse', sourcePath: 'src/warehouse/picking.ts', fields: [{ name: 'id', type: 'string', key: 'primary' }] }],
+    files: {
+      'src/warehouse/picking.ts': PICKING_MODULE,
+      ...(dispatchBuilt ? { 'src/warehouse/dispatch.ts': 'export function planDispatch(manifest: { id: string }): void { void manifest; }\n' } : {}),
+    },
+  };
+}
+
 export default [
   // -------------------------------------------------------------------------
   // MISSING_TYPE_SOURCE_PATH — a type no file claims is never shape-checked
@@ -159,6 +192,33 @@ export default [
         'src/warehouse/manifest.ts': 'export interface ShipmentDocket { id: string; }\n',
       },
     },
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_TYPE',
+    expectFire: false,
+    reason:
+      'The type is planned in a shared file another component wrote first; the one component that writes it (its contract uses it) has no code yet, so the declaration is planned (SOURCE_FILE_PLANNED), not missing.',
+    scenario:
+      'The picking scheduler is built and wrote the warehouse module; the dispatch planner, whose contract takes the shipment manifest, is not built yet, and the manifest is planned in that same module.',
+    tree: sharedFileTree(false),
+  }),
+  defineRuleFixture({
+    code: 'SOURCE_FILE_PLANNED',
+    severity: 'notice',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The shipment manifest is planned in the warehouse module the picking scheduler wrote first; the dispatch planner that writes it has no code yet.',
+    tree: sharedFileTree(false),
+  }),
+  defineRuleFixture({
+    code: 'UNREALIZED_TYPE',
+    severity: 'warning',
+    anchoredTo: 'shipment-manifest',
+    expectFire: true,
+    scenario:
+      'The dispatch planner that writes the shipment manifest is built now, and the shared warehouse module still does not declare it — the claim points at code that does not hold it.',
+    tree: sharedFileTree(true),
   }),
   defineRuleFixture({
     code: 'UNREALIZED_TYPE',
