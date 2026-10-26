@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "d9c1d68c83769af7a54829df14479221ab61e9c7bf60c1112cba4180115e3751"
+    "digest": "b2aca54290b7cdec63bce7d18687c49eb36d39067fa941d0db395167212c4511"
   },
-  "lockedAt": "2026-10-25T23:03:57.508Z",
+  "lockedAt": "2026-10-26T19:04:13.125Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -410,7 +410,7 @@
     ".wai/specs/implementations/conformance_rules_impl.yaml": "24488e1924ff051c6fbd8dce569f3c3afcf0107c6d88dc2d2b86c90c89a5d87f",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
     ".wai/specs/implementations/context_store_impl.yaml": "b8de786be17e816b1c1e2fd070f56ca7a85df41a87d389d5efbba5b2a7f9b252",
-    ".wai/specs/implementations/core_orchestrator_impl.yaml": "c228b2a417fc3b7e23c0ff7642d01d64ac5bd5d6412c885548400621f6321dfd",
+    ".wai/specs/implementations/core_orchestrator_impl.yaml": "4922134c0df8df53355e40edc6d1f0da6ca5a1446980dd198daefaeea5ee3d50",
     ".wai/specs/implementations/credential_index_impl.yaml": "c7c6f1f570473ba15b8d7530f1b7f6bb2a7ec5c411bb15f3e5bc696c058ea917",
     ".wai/specs/implementations/credential_repository_impl.yaml": "938def6b778e1526b9f7b94eae4d2ea917b7e02eee57c7f8fbdb5a7db74c304d",
     ".wai/specs/implementations/credential_store_impl.yaml": "778d5000577c9819b2b8be3e209e26be6645676aae640bab04a3015f3f2aa88f",
@@ -1760,7 +1760,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "5f457a80b5f976ba3fad345f1974ea4a5814d13e787fa8f61c70b6f83f2c2ff8",
+    "design": "a9fbd0bf88cb0b90c850d7ffbe67f10cd5f08f678efcb21e149294509f837729",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1776,7 +1776,7 @@
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 1,
+    "warnings": 0,
     "notices": 27
   }
 }
