@@ -5644,8 +5644,17 @@ export class SpecWorkspace {
     const regrouped = existing !== null && existing !== undefined && spec.group !== undefined && spec.group !== '' && spec.group !== existing.group;
     const groupIndex = regrouped ? this.scanAll().paths.group[spec.group!] : undefined;
     const target = groupIndex ? path.join(path.dirname(groupIndex), `${spec.id.split('::').pop()}.yaml`) : undefined;
-    const leaving = leavingTarget !== undefined && path.resolve(leavingTarget) !== path.resolve(stored) && !fs.existsSync(leavingTarget);
-    const relocating = leaving || (target !== undefined && path.resolve(target) !== path.resolve(stored) && !fs.existsSync(target));
+    // The file must move, and another file already holds its new home: refused before anything is written, never left behind.
+    for (const destination of [leavingTarget, target]) {
+      if (destination === undefined || path.resolve(destination) === path.resolve(stored) || !fs.existsSync(destination)) continue;
+      throw new Error(
+        `Refusing to move type "${spec.id}" ${leavingTarget !== undefined ? `out of group "${existing!.group}"` : `into group "${spec.group}"`}: `
+        + `its file ${path.relative(this.rootDir, stored)} would move to ${path.relative(this.rootDir, destination)}, which already holds another file. `
+        + 'Rename or remove that file, then save again.',
+      );
+    }
+    const leaving = leavingTarget !== undefined && path.resolve(leavingTarget) !== path.resolve(stored);
+    const relocating = leaving || (target !== undefined && path.resolve(target) !== path.resolve(stored));
     const p = leaving ? leavingTarget! : relocating ? target! : stored;
     this.assertHomeWritable(p);
     ensureDir(path.dirname(p));

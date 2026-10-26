@@ -145,6 +145,43 @@ describe('a type\'s group can be removed', () => {
     expect(onDisk(dir, 'cadence')!.rel).toContain('rhythms/');
   });
 
+  it('a type leaving its group for a home another file holds is refused, naming both files, and nothing changes', async () => {
+    const dir = habits();
+    const call = await connect();
+    await call('sdd_add_group', { id: 'cadences', name: 'Cadences', subsystem: 'habit' });
+    await addType(call, 'streak', { group: 'cadences' });
+    const specs = path.join(dir, '.wai', 'specs');
+    const before = onDisk(dir, 'streak')!;
+    const stray = path.join(specs, before.rel.replace('cadences/', ''));
+    fs.writeFileSync(stray, 'a stray file\n');
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'streak', delta: { unset: ['group'] } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).toContain('Refusing to move type "streak" out of group "cadences"');
+    expect(r.text).toContain(before.rel.split('/').pop()!);
+    expect(fs.readFileSync(stray, 'utf8')).toBe('a stray file\n');
+    invalidateSpecCache();
+    expect(yaml.load(fs.readFileSync(path.join(specs, before.rel), 'utf8'))).toMatchObject({ group: 'cadences' });
+  });
+
+  it('a type joining a group whose folder already holds its file name is refused, and nothing changes', async () => {
+    const dir = habits();
+    const call = await connect();
+    await call('sdd_add_group', { id: 'cadences', name: 'Cadences', subsystem: 'habit' });
+    await call('sdd_add_group', { id: 'rhythms', name: 'Rhythms', subsystem: 'habit' });
+    await call('sdd_update_spec', { kind: 'type', id: 'cadence', delta: { group: 'cadences' } });
+    invalidateSpecCache();
+    const specs = path.join(dir, '.wai', 'specs');
+    const before = onDisk(dir, 'cadence')!;
+    const stray = path.join(specs, before.rel.replace('cadences/', 'rhythms/'));
+    fs.writeFileSync(stray, 'a stray file\n');
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'cadence', delta: { group: 'rhythms' } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).toContain('Refusing to move type "cadence" into group "rhythms"');
+    expect(fs.readFileSync(stray, 'utf8')).toBe('a stray file\n');
+    invalidateSpecCache();
+    expect(yaml.load(fs.readFileSync(path.join(specs, before.rel), 'utf8'))).toMatchObject({ group: 'cadences' });
+  });
+
   it('a part\'s type that leaves a declared group stays in the part', async () => {
     const dir = habits();
     const file = path.join(dir, '.wai', 'project.yaml');
