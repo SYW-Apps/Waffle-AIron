@@ -89,4 +89,11 @@ describe('lookup tools', () => {
     expect(a.text).toMatch(/ambiguous/);
     expect(a.text).toMatch(/one exact id/);
   });
+
+  it('references leaves prose mentions out unless includeText asks for them', async () => {
+    await start();
+    const prose = (a: Answer) => a.structured.result.references.filter((r: { kind: string; inTest: boolean }) => r.kind === 'mention' && !r.inTest);
+    expect(prose(await ask(client, 'sdd_find_references', { target: 'ledger' }))).toEqual([]);
+    expect(prose(await ask(client, 'sdd_find_references', { target: 'ledger', includeText: true })).length).toBeGreaterThan(0);
+  });
 });

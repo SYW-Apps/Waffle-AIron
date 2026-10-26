@@ -82,7 +82,8 @@ function referenceLine(r: LookupReference): string {
 /** mcp_lookup_orchestrator.references — the sdd_find_references workflow. */
 export function references(target: string, expand?: string[], includeText?: boolean): LookupAnswer {
   // Step 1: ask the validator for the references.
-  const result = findReferences(target, includeText);
+  // Text mentions only when asked for: the tool answers small by default.
+  const result = findReferences(target, includeText ?? false);
   // Step 2: the target and its impact, each group's count and strongest few, the snapshot line.
   const lines: string[] = [];
   if (!result.target) {

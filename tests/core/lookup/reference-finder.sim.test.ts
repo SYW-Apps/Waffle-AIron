@@ -124,3 +124,44 @@ describe('sim: reference_finder.collect against the L0 export table', () => {
     expect(collect('audit').impact).not.toBe('public');
   });
 });
+
+describe('sim: reference_finder.collect through an adapter of identity re-exports', () => {
+  const fixture = lookupProject();
+  beforeAll(() => {
+    setProjectRoot(fixture.root);
+    fixture.edit('src/ledger-port.ts', "export { record } from './ledger.js';\n");
+    fixture.edit('src/settle.ts', "import { record } from './ledger-port.js';\n\nexport function settle(id: string): void {\n  record(id);\n  const log = { record: (s: string) => s };\n  log.record(id);\n}\n");
+    fixture.edit('src/ledger.test.ts', "import { record } from './ledger.js';\n\nexport function check(): void {\n  record('x');\n}\n");
+    fixture.addComponent({ id: 'ledger_port', subsystem: 'billing', methods: [{ name: 'record' }], sourcePath: 'src/ledger-port.ts' });
+    fixture.addComponent({ id: 'settlement', subsystem: 'billing', dependsOn: ['ledger_port'], methods: [{ name: 'settle', calls: ['ledger_port', 'record'] }], sourcePath: 'src/settle.ts' });
+    invalidateSpecCache();
+  });
+  afterAll(() => fixture.cleanup());
+
+  it('confirms a declared call the code makes through the republished name', () => {
+    const r = collect('ledger_port.record');
+    expect(r.references.find((x) => x.kind === 'call-step' && x.fromSpec === 'settlement_impl')).toMatchObject({ agreement: 'confirmed' });
+    expect(r.references.find((x) => x.kind === 'code-call' && x.file === 'src/settle.ts')).toMatchObject({ evidence: 'resolved', agreement: 'confirmed' });
+  });
+
+  it('does not count a call into the forwarded body from a file that never imports the adapter', () => {
+    const r = collect('ledger_port.record');
+    expect(r.references.some((x) => x.kind === 'code-call' && x.file === 'src/orders.ts')).toBe(false);
+  });
+
+  it('gives a call the line it is written on, never the line of a member call of the same name', () => {
+    const lines = collect('ledger_port.record').references.filter((x) => x.kind === 'code-call' && x.file === 'src/settle.ts').map((x) => x.line);
+    expect(lines).toEqual([4]);
+  });
+
+  it("never judges a test's call as a disagreement with the design", () => {
+    const tests = collect('ledger.record').references.filter((x) => x.kind === 'code-call' && x.inTest);
+    expect(tests.length).toBeGreaterThan(0);
+    expect(tests.every((x) => x.agreement === 'unjudged')).toBe(true);
+  });
+
+  it('lists a test file once, however many scans find its import', () => {
+    const files = collect('ledger.record').references.filter((x) => x.kind === 'import' && x.inTest).map((x) => x.file);
+    expect(files.length).toBe(new Set(files).size);
+  });
+});
