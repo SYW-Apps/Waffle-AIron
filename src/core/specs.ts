@@ -6541,7 +6541,8 @@ export class SpecWorkspace {
         // Step 4: a member project — a legacy mount keeps its cross-tree writes.
         if (member !== null) {
           if (this.rootCovering(member)?.legacyMount) continue;
-          const qualified = stored ?? target.id;
+          // Held under the id as written, else under the one spec the member spells another way (letter case, or its name).
+          const qualified = stored ?? (writable ? this.spelledAs(target.kind, `${member}::${localOf(target.id)}`) : undefined) ?? target.id;
           // Step 5.
           return this.foreignSpecSentence(qualified, [member], callFor(target.kind, qualified));
         }
@@ -6598,6 +6599,32 @@ export class SpecWorkspace {
     if (kind !== 'type' || !id.includes('::')) return false;
     const cut = id.lastIndexOf('::');
     return this.scanAll().types.some((t) => t.id === id.slice(cut + 2) && t.subsystem === id.slice(0, cut));
+  }
+
+  /**
+   * The one spec of the kind, in the same project as `id`, whose local id
+   * differs from the written one only in letter case or whose name is the
+   * written one — the id that project spells; undefined when there is none,
+   * or more than one.
+   */
+  spelledAs(kind: string, id: string): string | undefined {
+    if (!['subsystem', 'component', 'interface', 'implementation', 'type'].includes(kind)) return undefined;
+    const cut = id.lastIndexOf('::');
+    const prefix = cut < 0 ? '' : id.slice(0, cut + 2);
+    const local = id.slice(prefix.length);
+    const index = this.scanAll();
+    const listed: { id: string; name?: string }[] = kind === 'subsystem' ? index.subsystems
+      : kind === 'component' ? index.components
+        : kind === 'interface' ? index.interfaces
+          : kind === 'implementation' ? index.implementations
+            : index.types;
+    const found = listed.filter((spec) => {
+      if (!spec.id.startsWith(prefix)) return false;
+      const own = spec.id.slice(prefix.length);
+      if (own.includes('::')) return false;
+      return own.toLowerCase() === local.toLowerCase() || spec.name === local;
+    });
+    return found.length === 1 && found[0].id !== id ? found[0].id : undefined;
   }
 
   /**
@@ -9453,7 +9480,12 @@ export function rewriteReferences(kind: WritableSpecKind, id: string, edits: Ref
  * hint, when given, follows the sentence.
  */
 export function missingSpecSentence(kind: string, id: string, hint?: string): string {
-  return unparsedSpecSentence(kind, id, getLoaderIssues()) ?? `spec-missing: this project has no ${kind} "${id}".${hint ? ` ${hint}` : ''} Nothing was written.`;
+  const unparsed = unparsedSpecSentence(kind, id, getLoaderIssues());
+  if (unparsed) return unparsed;
+  // The one spec spelled another way (letter case, or its name), named as the id to use.
+  const other = current().spelledAs(kind, id);
+  const missing = other ? `${kind} "${id}" — did you mean "${other}"?` : `${kind} "${id}".`;
+  return `spec-missing: this project has no ${missing}${hint ? ` ${hint}` : ''} Nothing was written.`;
 }
 
 /**
