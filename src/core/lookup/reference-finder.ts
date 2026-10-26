@@ -457,6 +457,12 @@ export function collect(target: string, includeText?: boolean): LookupReferences
       waivers.push({ kind: 'lint-allow', subject: `${allow.code}${allow.at ? ` at ${allow.at}` : ''} in ${holder.id}`, reason: allow.reason });
     }
   }
+  // A member project's spec sits in that project, under the member key it is reached by.
+  for (const ref of references) {
+    if (ref.place.member === undefined) continue;
+    const node = family.nodes.find((n) => n.namespace === ref.place.member);
+    ref.place = { ...ref.place, project: node?.id ?? node?.name ?? ref.place.member };
+  }
   // Exported beyond the family, consumers outside it may break whatever the references show.
   const impact = exported.some((e) => e.audience !== 'project') ? 'public' : impactOf(references, top.place);
 
