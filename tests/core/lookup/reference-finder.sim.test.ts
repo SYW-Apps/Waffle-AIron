@@ -132,8 +132,10 @@ describe('sim: reference_finder.collect through an adapter of identity re-export
     fixture.edit('src/ledger-port.ts', "export { record } from './ledger.js';\n");
     fixture.edit('src/settle.ts', "import { record } from './ledger-port.js';\n\nexport function settle(id: string): void {\n  record(id);\n  const log = { record: (s: string) => s };\n  log.record(id);\n}\n");
     fixture.edit('src/ledger.test.ts', "import { record } from './ledger.js';\n\nexport function check(): void {\n  record('x');\n}\n");
-    fixture.addComponent({ id: 'ledger_port', subsystem: 'billing', methods: [{ name: 'record' }], sourcePath: 'src/ledger-port.ts' });
+    fixture.addComponent({ id: 'ledger_port', subsystem: 'billing', dependsOn: ['ledger'], methods: [{ name: 'record', calls: ['ledger', 'record'] }], sourcePath: 'src/ledger-port.ts' });
     fixture.addComponent({ id: 'settlement', subsystem: 'billing', dependsOn: ['ledger_port'], methods: [{ name: 'settle', calls: ['ledger_port', 'record'] }], sourcePath: 'src/settle.ts' });
+    // An id spelled like an existing method (orders.placeOrder), for the search's exact-id rank.
+    fixture.addComponent({ id: 'place_order', subsystem: 'shop', methods: [{ name: 'run' }] });
     invalidateSpecCache();
   });
   afterAll(() => fixture.cleanup());
@@ -158,6 +160,24 @@ describe('sim: reference_finder.collect through an adapter of identity re-export
     const tests = collect('ledger.record').references.filter((x) => x.kind === 'code-call' && x.inTest);
     expect(tests.length).toBeGreaterThan(0);
     expect(tests.every((x) => x.agreement === 'unjudged')).toBe(true);
+  });
+
+  it('confirms a forwarder\'s declared call by the forwarding, and a call through the forwarder by the call declared to it', () => {
+    const r = collect('ledger.record');
+    expect(r.references.find((x) => x.kind === 'call-step' && x.fromSpec === 'ledger_port_impl')).toMatchObject({ agreement: 'confirmed' });
+    expect(r.references.find((x) => x.kind === 'code-call' && x.file === 'src/settle.ts')).toMatchObject({ agreement: 'confirmed' });
+  });
+
+  it('answers a file with the design references to the component it realizes, not its own contract', () => {
+    const r = collect('src/ledger-port.ts');
+    expect(r.target).toMatchObject({ id: 'ledger_port_impl', kind: 'implementation' });
+    expect(r.references.find((x) => x.kind === 'call-step' && x.fromSpec === 'settlement_impl')).toMatchObject({ agreement: 'confirmed' });
+    expect(r.references.some((x) => x.fromSpec === 'iledger_port')).toBe(false);
+  });
+
+  it('takes an exact id as the target, over a method only spelled like it', () => {
+    const r = collect('place_order');
+    expect(r.target).toMatchObject({ id: 'place_order', kind: 'component' });
   });
 
   it('lists a test file once, however many scans find its import', () => {
