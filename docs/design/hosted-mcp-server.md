@@ -599,14 +599,12 @@ wairon's own tree needs more: plan on its measured ~11 MB plus growth). Fleet:
 | Large | 5,000+ | one larger machine (e.g. `e2-standard-8`) | 8 / 32 GB | 500 GB `pd-ssd`, separate disk + snapshots |
 
 **Run one instance per data directory, and scale up, not out.** Several
-replicas on a shared volume (Filestore/NFS) are not supported. The credential
-and project registries hold a lock file across each read-and-rewrite, and the
+replicas on a shared volume (Filestore/NFS) are not supported. Every hosted
+store holds its file's write lock across each read-and-rewrite, and the
 spec-tree lock names its host so a holder on another machine is never judged
 gone by a local process id — so several processes sharing one data directory
-on one machine (the server and the admin CLI) are safe for those registries and
-the spec tree. The other stores (permission grants, the organization, roles,
-policy and the rest) take no write lock yet: change them one at a time
-(see the Hosting section of `docs/cli.md`). Across hosts, those
+on one machine (the server and the admin CLI) are safe for the stores and the
+spec tree. Across hosts, those
 locks rely on exclusive file creation being atomic on the shared filesystem,
 and each instance keeps its own in-memory caches; no multi-host deployment has
 been tested. Replicas on shared storage stay unsupported until one is.

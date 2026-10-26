@@ -10,7 +10,8 @@ description: >-
   machine and never written into a project directory. Reads go straight to disk on every call (no
   RAM copy to go stale when another process re-attaches or a token is rotated), and a malformed or
   unreadable file reads as "no binding" rather than throwing — an unattached checkout is a normal
-  state, not an error.
+  state, not an error. Every change to the credential store is one read-change-write under the
+  file's write lock, and it is refused rather than replacing a credential file it cannot read.
 subsystem: sdd_cli
 componentType: Store
 owns: []
@@ -27,4 +28,4 @@ lint:
         to keep consistent.
 status: complete
 createdAt: '2026-08-12T18:41:35.884Z'
-updatedAt: '2026-08-12T18:46:31.763Z'
+updatedAt: '2026-10-26T22:46:34.068Z'

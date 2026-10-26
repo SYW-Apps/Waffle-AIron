@@ -5,7 +5,7 @@ import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, isProjectInitialized } from '../config/paths.js';
 import { loadProjectConfig } from '../core/index.js';
-import { aiDir, getProjectRoot, isOutsideRoot, backupBeside, withLineEndings, resolveProjectBinding } from '../utils/fs.js';
+import { aiDir, getProjectRoot, isOutsideRoot, backupBeside, writeFile, resolveProjectBinding } from '../utils/fs.js';
 import { ProjectNotInitializedError, WaironError } from '../utils/errors.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { effectiveProjectId } from '../models/project.js';
@@ -450,15 +450,34 @@ export function runMcpInstall(options: McpInstallOptions = {}): void {
  * previous value kept.
  */
 function writeInstallTarget(target: InstallTarget): void {
-  const mcpServers = (target.settings['mcpServers'] ?? {}) as Record<string, unknown>;
+  // Re-read just before writing: the agent tool (or another process) may have changed the file
+  // since it was planned, and these files are the agent tools', which take no wairon lock.
+  const settings = settingsAsTheyStand(target.path) ?? target.settings;
+  const mcpServers = (settings['mcpServers'] ?? {}) as Record<string, unknown>;
   mcpServers['wairon'] = target.after;
-  target.settings['mcpServers'] = mcpServers;
+  settings['mcpServers'] = mcpServers;
   if (!fs.existsSync(target.configBase)) fs.mkdirSync(target.configBase, { recursive: true });
   if (target.outsideProject && fs.existsSync(target.path)) {
     logger.info(`Backed up ${chalk.gray(target.path)} to ${chalk.cyan(backupBeside(target.path))} before replacing it (outside the project root).`);
   }
-  // Keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
-  fs.writeFileSync(target.path, withLineEndings(target.path, JSON.stringify(target.settings, null, 2) + '\n'));
+  // Atomic, and keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
+  writeFile(target.path, JSON.stringify(settings, null, 2) + '\n');
+}
+
+/** The config file's settings as they stand now: empty when it is gone, null when it no longer parses (the planned read then stands). */
+function settingsAsTheyStand(file: string): Record<string, unknown> | null {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? {} : null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Step 12: where it wrote, what the entry points at, and what the agent must do to pick it up. */
