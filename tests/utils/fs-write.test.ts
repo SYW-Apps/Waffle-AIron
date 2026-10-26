@@ -48,6 +48,19 @@ describe('writing a file replaces it whole', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe('id: b\r\nname: B\r\n');
   });
 
+  it('refuses a file its owner made read-only, as a write in place does, and leaves it as it was', () => {
+    const file = path.join(tmp(), 'spec.yaml');
+    fs.writeFileSync(file, 'id: a\n');
+    fs.chmodSync(file, 0o444);
+    try {
+      expect(() => writeFile(file, 'id: b\n')).toThrow(/EACCES|EPERM/);
+      expect(fs.readFileSync(file, 'utf8')).toBe('id: a\n');
+      expect(fs.readdirSync(path.dirname(file))).toEqual(['spec.yaml']);
+    } finally {
+      fs.chmodSync(file, 0o644);
+    }
+  });
+
   it.skipIf(process.platform === 'win32')('keeps an existing file\'s permission bits', () => {
     const file = path.join(tmp(), 'spec.yaml');
     fs.writeFileSync(file, 'id: a\n');

@@ -60,6 +60,8 @@ function rewrite(filePath: string, content: string | Uint8Array): void {
   try {
     target = fs.realpathSync(filePath);
     mode = fs.statSync(target).mode & 0o7777;
+    // A rename would replace a file its owner made read-only; refuse it as a write in place does.
+    fs.accessSync(target, fs.constants.W_OK);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
