@@ -105,7 +105,8 @@ export function find(query: string, limit?: number): LookupSearchResult {
   const endpointQuery = ql.replace(/\s+/g, ' ');
 
   // Step 4: match the spec index.
-  const entries = specEntries(index, project);
+  const projectOf = (key: string): string => { const node = family.nodes.find((n) => n.namespace === key); return node?.id ?? node?.name ?? key; };
+  const entries = specEntries(index, project, projectOf);
   const matches = new Map<string, LookupMatch & { specFile?: string }>();
   const keep = (entry: Entry, hit: Hit, kind: LookupElementKind = entry.kind): void => {
     const key = `${kind === 'endpoint' ? 'method' : kind}:${entry.id}`;
@@ -260,23 +261,28 @@ function claimedPaths(index: ReturnType<typeof scanAllSpecs>): Set<string> {
 }
 
 /** Flatten the index into the elements a query is matched against. */
-function specEntries(index: ReturnType<typeof scanAllSpecs>, project: string): Entry[] {
+function specEntries(index: ReturnType<typeof scanAllSpecs>, project: string, projectOf: (key: string) => string): Entry[] {
   const out: Entry[] = [];
-  const memberOf = (id: string): { member?: string } => (id.includes('::') ? { member: id.slice(0, id.indexOf('::')) } : {});
+  // A member project's spec sits in that project, under the member key it is reached by.
+  const at = (id: string): { project: string; member?: string } => {
+    if (!id.includes('::')) return { project };
+    const member = id.slice(0, id.indexOf('::'));
+    return { project: projectOf(member), member };
+  };
   const subsystemOf = new Map(index.components.map((c) => [c.id, c.subsystem]));
   const implsOf = (contractId: string) => index.implementations.filter((i) => i.contract === contractId);
   const componentOfContract = new Map(index.interfaces.map((i) => [i.id, i.component]));
 
   for (const s of index.subsystems) {
-    out.push({ id: s.id, kind: 'subsystem', name: s.name, place: { project, ...memberOf(s.id), subsystem: s.id }, specFile: index.paths.subsystem[s.id], links: [], symbols: [], realizes: [], endpoints: [] });
+    out.push({ id: s.id, kind: 'subsystem', name: s.name, place: { ...at(s.id), subsystem: s.id }, specFile: index.paths.subsystem[s.id], links: [], symbols: [], realizes: [], endpoints: [] });
   }
   for (const c of index.components) {
     const realizes = unique(index.interfaces.filter((i) => i.component === c.id).flatMap((i) => implsOf(i.id)).map((i) => i.sourcePath).filter((p): p is string => !!p));
-    out.push({ id: c.id, kind: 'component', name: c.name, place: { project, ...memberOf(c.id), subsystem: c.subsystem, component: c.id }, specFile: index.paths.component[c.id], links: [], symbols: [], realizes, endpoints: [], briefId: c.id });
+    out.push({ id: c.id, kind: 'component', name: c.name, place: { ...at(c.id), subsystem: c.subsystem, component: c.id }, specFile: index.paths.component[c.id], links: [], symbols: [], realizes, endpoints: [], briefId: c.id });
   }
   for (const i of index.interfaces) {
     const impls = implsOf(i.id);
-    const place: LookupPlace = { project, ...memberOf(i.id), subsystem: subsystemOf.get(i.component), component: i.component };
+    const place: LookupPlace = { ...at(i.id), subsystem: subsystemOf.get(i.component), component: i.component };
     out.push({ id: i.id, kind: 'interface', name: i.name, place, specFile: index.paths.interface[i.id], links: [], symbols: [], realizes: unique(impls.map((m) => m.sourcePath).filter((p): p is string => !!p)), endpoints: [], briefId: i.component });
     for (const m of i.methods) {
       const own = impls.flatMap((impl) => impl.methods.filter((im) => im.name === m.name).map((im) => ({ own: im.sourcePath, file: im.sourcePath ?? impl.sourcePath, symbol: im.symbol })));
@@ -293,14 +299,14 @@ function specEntries(index: ReturnType<typeof scanAllSpecs>, project: string): E
     const comp = componentOfContract.get(impl.contract);
     out.push({
       id: impl.id, kind: 'implementation', name: impl.name,
-      place: { project, ...memberOf(impl.id), subsystem: comp ? subsystemOf.get(comp) : undefined, component: comp, container: impl.contract },
+      place: { ...at(impl.id), subsystem: comp ? subsystemOf.get(comp) : undefined, component: comp, container: impl.contract },
       specFile: index.paths.implementation[impl.id],
       links: impl.sourcePath ? [impl.sourcePath] : [], symbols: [],
       realizes: impl.sourcePath ? [impl.sourcePath] : [], endpoints: [], briefId: comp,
     });
   }
   for (const t of index.types) {
-    const place: LookupPlace = { project, ...memberOf(t.id), subsystem: t.subsystem, container: t.group };
+    const place: LookupPlace = { ...at(t.id), subsystem: t.subsystem, container: t.group };
     const sp = t.sourcePath ? [t.sourcePath] : [];
     out.push({ id: t.id, kind: 'type', name: t.name, place, specFile: index.paths.type[t.id], links: sp, symbols: t.symbol ? [t.symbol] : [], realizes: sp, endpoints: [] });
     for (const f of t.fields ?? []) {
@@ -312,7 +318,7 @@ function specEntries(index: ReturnType<typeof scanAllSpecs>, project: string): E
     }
   }
   for (const g of index.groups) {
-    out.push({ id: g.id, kind: 'group', name: g.name, place: { project, ...memberOf(g.id), subsystem: g.subsystem }, specFile: index.paths.group[g.id], links: [], symbols: [], realizes: [], endpoints: [] });
+    out.push({ id: g.id, kind: 'group', name: g.name, place: { ...at(g.id), subsystem: g.subsystem }, specFile: index.paths.group[g.id], links: [], symbols: [], realizes: [], endpoints: [] });
   }
   return out;
 }

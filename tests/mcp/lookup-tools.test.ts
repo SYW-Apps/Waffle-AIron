@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createMcpServer } from '../../src/mcp/server.js';
 import { lookupProject } from '../helpers/lookup-fixture.js';
+import { REFERENCE_GROUPS } from '../../src/mcp/lookup.js';
 
 // ---------------------------------------------------------------------------
 // sdd_search_specs and sdd_find_references over MCP: the text is the small,
@@ -39,6 +40,13 @@ describe('lookup tools', () => {
       expect(t, name).toBeDefined();
       expect(t!.outputSchema).toBeDefined();
     }
+  });
+
+  it('offers exactly the groups a references answer writes as expand values', async () => {
+    await start();
+    const tool = (await client.listTools()).tools.find((x) => x.name === 'sdd_find_references')!;
+    const expand = (tool.inputSchema.properties as Record<string, { items: { enum: string[] } }>).expand;
+    expect(expand.items.enum).toEqual([...REFERENCE_GROUPS]);
   });
 
   it('search answers one line per match, and the whole result as structured content', async () => {

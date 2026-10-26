@@ -19,7 +19,7 @@ export interface LookupAnswer {
 }
 
 /** The groups a references answer writes, in order. */
-const REFERENCE_GROUPS = ['design', 'code', 'tests', 'text', 'waivers', 'declared-only', 'observed-only'] as const;
+export const REFERENCE_GROUPS = ['design', 'code', 'tests', 'text', 'waivers', 'declared-only', 'observed-only'] as const;
 type ReferenceGroup = (typeof REFERENCE_GROUPS)[number];
 
 /** How many entries a cut group keeps. */

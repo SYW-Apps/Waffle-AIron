@@ -145,6 +145,43 @@ describe('a type\'s group can be removed', () => {
     expect(onDisk(dir, 'cadence')!.rel).toContain('rhythms/');
   });
 
+  it('a type leaving its group for a home another file holds is refused, naming both files, and nothing changes', async () => {
+    const dir = habits();
+    const call = await connect();
+    await call('sdd_add_group', { id: 'cadences', name: 'Cadences', subsystem: 'habit' });
+    await addType(call, 'streak', { group: 'cadences' });
+    const specs = path.join(dir, '.wai', 'specs');
+    const before = onDisk(dir, 'streak')!;
+    const stray = path.join(specs, before.rel.replace('cadences/', ''));
+    fs.writeFileSync(stray, 'a stray file\n');
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'streak', delta: { unset: ['group'] } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).toContain('Refusing to move type "streak" out of group "cadences"');
+    expect(r.text).toContain(before.rel.split('/').pop()!);
+    expect(fs.readFileSync(stray, 'utf8')).toBe('a stray file\n');
+    invalidateSpecCache();
+    expect(yaml.load(fs.readFileSync(path.join(specs, before.rel), 'utf8'))).toMatchObject({ group: 'cadences' });
+  });
+
+  it('a type joining a group whose folder already holds its file name is refused, and nothing changes', async () => {
+    const dir = habits();
+    const call = await connect();
+    await call('sdd_add_group', { id: 'cadences', name: 'Cadences', subsystem: 'habit' });
+    await call('sdd_add_group', { id: 'rhythms', name: 'Rhythms', subsystem: 'habit' });
+    await call('sdd_update_spec', { kind: 'type', id: 'cadence', delta: { group: 'cadences' } });
+    invalidateSpecCache();
+    const specs = path.join(dir, '.wai', 'specs');
+    const before = onDisk(dir, 'cadence')!;
+    const stray = path.join(specs, before.rel.replace('cadences/', 'rhythms/'));
+    fs.writeFileSync(stray, 'a stray file\n');
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'cadence', delta: { group: 'rhythms' } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).toContain('Refusing to move type "cadence" into group "rhythms"');
+    expect(fs.readFileSync(stray, 'utf8')).toBe('a stray file\n');
+    invalidateSpecCache();
+    expect(yaml.load(fs.readFileSync(path.join(specs, before.rel), 'utf8'))).toMatchObject({ group: 'cadences' });
+  });
+
   it('a part\'s type that leaves a declared group stays in the part', async () => {
     const dir = habits();
     const file = path.join(dir, '.wai', 'project.yaml');
@@ -214,6 +251,45 @@ describe('a member project of a member project', () => {
     invalidateSpecCache();
     const there = await call('sdd_update_spec', { kind: 'type', id: 'depth_probe', delta: { description: 'Probe.' } });
     expect(there.isError, there.text).toBe(false);
+  });
+
+  it('an id written in another letter case is named as the owning project spells it, and spec-missing there says which one is meant', async () => {
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-spelling-')));
+    roots.push(base);
+    const app = project(path.join(base, 'app'), {
+      system: { name: 'app', vision: 'App.', targetLanguage: 'TypeScript' },
+      subsystems: [{ id: 'front', status: 'complete' }],
+      components: [{ id: 'front_flow', subsystem: 'front', componentType: 'Orchestrator', status: 'complete' }],
+      interfaces: [{ id: 'ifront_flow', component: 'front_flow', methods: [{ name: 'run', description: 'Run.', params: [], returns: 'void' }] }],
+    }, 'app', { members: { outer: 'libs/outer' } });
+    const outer = project(path.join(app, 'libs', 'outer'), {
+      system: { name: 'outer', vision: 'Outer.', targetLanguage: 'TypeScript' },
+      subsystems: [{ id: 'core', status: 'complete' }],
+      components: [{ id: 'core_flow', subsystem: 'core', componentType: 'Orchestrator', status: 'complete' }],
+      interfaces: [{ id: 'icore_flow', component: 'core_flow', methods: [{ name: 'run', description: 'Run.', params: [], returns: 'void' }] }],
+    }, 'outer', { members: { inner: 'inner' } });
+    const inner = project(path.join(outer, 'inner'), {
+      system: { name: 'inner', vision: 'Inner.', targetLanguage: 'TypeScript' },
+      subsystems: [{ id: 'deep', status: 'complete' }],
+      components: [{ id: 'deep_flow', subsystem: 'deep', componentType: 'Orchestrator', status: 'complete' }],
+      interfaces: [{ id: 'ideep_flow', component: 'deep_flow', methods: [{ name: 'run', description: 'Run.', params: [], returns: 'void' }] }],
+      types: [{ id: 'ledgerentry', name: 'LedgerEntry', kind: 'value-object', subsystem: 'deep', fields: [{ name: 'n', type: 'int' }] }],
+    }, 'inner');
+    setProjectRoot(app);
+    invalidateSpecCache();
+    const call = await connect();
+    const r = await call('sdd_update_spec', { kind: 'type', id: 'outer::inner::LedgerEntry', delta: { description: 'An entry.' } });
+    expect(r.isError, r.text).toBe(true);
+    expect(r.text).toContain('call sdd_update_spec type ledgerentry there.');
+    // Opened in the owning project, the spelling it was given names the id it holds.
+    setProjectRoot(inner);
+    invalidateSpecCache();
+    const there = await call('sdd_update_spec', { kind: 'type', id: 'LedgerEntry', delta: { description: 'An entry.' } });
+    expect(there.isError, there.text).toBe(true);
+    expect(there.text).toContain('spec-missing: this project has no type "LedgerEntry" — did you mean "ledgerentry"?');
+    const unknown = await call('sdd_update_spec', { kind: 'type', id: 'nothing_like_it', delta: { description: 'X.' } });
+    expect(unknown.text).not.toContain('did you mean');
+    expect((await call('sdd_update_spec', { kind: 'type', id: 'ledgerentry', delta: { description: 'An entry.' } })).isError).toBe(false);
   });
 
   it('a sibling whose folder name merely extends the named member\'s is never taken for a deeper project', async () => {
