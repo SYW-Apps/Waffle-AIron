@@ -1001,9 +1001,16 @@ methods:
         onFalseStep: 11
       - stepNumber: 10
         description: >-
-          Report UNREALIZED_TYPE (warning; spec type.id) naming the type, the name looked for, the
-          file and the grade it was analyzed at: the claim points at code that does not hold the
-          declaration — correct the sourcePath, or bind the code-level name with symbol
+          Who writes the declaration decides what its absence is. The type's writers are its
+          componentClass, else each component whose contract uses the type; a writer has begun once
+          a file one of its implementations names exists (code.holdsAny). When the type has writers
+          and none has begun, the declaration is planned in a file another component wrote first:
+          report SOURCE_FILE_PLANNED (notice, or error naming rules.conformance.requireCode; spec
+          type.id) naming the file and the writers whose code has not begun, and add the file to
+          blocked, so its methods are judged with it once it is written. Otherwise report
+          UNREALIZED_TYPE (warning; spec type.id) naming the type, the name looked for, the file and
+          the grade it was analyzed at: the claim points at code that does not hold the declaration
+          — correct the sourcePath, or bind the code-level name with symbol
         type: local
       - stepNumber: 11
         label: methodLoop
@@ -2445,4 +2452,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-21T23:29:14.943Z'
+updatedAt: '2026-10-26T20:28:51.382Z'

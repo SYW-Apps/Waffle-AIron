@@ -1,4 +1,4 @@
-import { implementationSourceFiles, pathKey, typeSourceFiles, type TypeSpec } from '../../../models/index.js';
+import { fieldTypeRefs, implementationSourceFiles, methodTypeRefs, pathKey, typeMatchesRef, typeSourceFiles, type TypeSpec } from '../../../models/index.js';
 import { plannedCode } from './source-file-linkage.js';
 import { RuleContext, SddRule } from '../types.js';
 
@@ -83,14 +83,14 @@ export const typeRealizationRule: SddRule = {
   name: 'type-realization',
   judges: 'code',
   description:
-    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode) — and a file only its METHODS name stays planned once it has begun, as a component method\'s planned file does. Once it has begun, the type\'s own file must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), and every file it names must stay inside the root and be readable, its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A type that names no sourcePath of its own claims no code, so nothing ever compares its shape with the code — and that is said, never left silent: before the code of the type\'s subsystem has begun (no file an implementation of that subsystem names exists; for a type no subsystem owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan the type\'s sourcePath with the implementations\'), and once that code exists it is a type no check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the setting. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
+    'Code↔spec Level 1 for the data model: a type that names a sourcePath is claiming code. Until that claim has BEGUN (code_index.holdsAny over the type\'s own file and its methods\' files) a named file that is not on disk is PLANNED (SOURCE_FILE_PLANNED, a notice; an error under rules.conformance.requireCode) — and a file only its METHODS name stays planned once it has begun, as a component method\'s planned file does. Once it has begun, the type\'s own file must resolve to a real, readable file inside the project root (MISSING_SOURCE_FILE, an error, otherwise), and every file it names must stay inside the root and be readable, its file must PUBLISH its declaration (an exported name at exact grade, the declaration tier below it, under its `symbol` when the code-level name differs from the type\'s name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never realized), and each of its pure methods must appear in its own file (the method\'s sourcePath, else the type\'s) at the declaration tier, under the method\'s `symbol`, else the method\'s name. A declaration its file does not publish yet is still PLANNED while none of the type\'s writers has begun its code (its componentClass, else each component whose contract uses it; begun = a file one of that component\'s implementations names exists): the file is shared, another component wrote it first, and the writer adds the type when it is built (SOURCE_FILE_PLANNED, naming those writers; its methods are judged with it once it is written). Once a writer has begun, or when the type has none, the missing declaration is UNREALIZED_TYPE. A type that names no sourcePath of its own claims no code, so nothing ever compares its shape with the code — and that is said, never left silent: before the code of the type\'s subsystem has begun (no file an implementation of that subsystem names exists; for a type no subsystem owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan the type\'s sourcePath with the implementations\'), and once that code exists it is a type no check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the setting. Findings carry the analysis grade, a file that escapes the root or could not be analyzed is reported once and blocks only what it would have realized, and types under chained subsystems (projectPath) validate standalone in their own project run.',
   codes: [
-    { code: 'UNREALIZED_TYPE', defaultSeverity: 'warning', summary: 'A type names a sourcePath but its declaration is nowhere in that file — the claim points at code that does not hold it' },
+    { code: 'UNREALIZED_TYPE', defaultSeverity: 'warning', summary: 'A type names a sourcePath but its declaration is nowhere in that file although a component that writes it has begun its code (or none writes it) — the claim points at code that does not hold it' },
     { code: 'UNREALIZED_TYPE_METHOD', defaultSeverity: 'warning', summary: 'A pure method of a claimed type is nowhere in its own source file (the method\'s sourcePath, else the type\'s)' },
     { code: 'MISSING_SOURCE_FILE', defaultSeverity: 'error', summary: 'The source file a type names for its own declaration does not resolve to a file on disk although the type\'s realization has begun (a file its methods name exists)' },
     { code: 'SOURCE_PATH_ESCAPES_ROOT', defaultSeverity: 'error', summary: 'A source file a type or one of its methods names is absolute or escapes the project root (containment refusal)' },
     { code: 'CONFORMANCE_ANALYSIS_SKIPPED', defaultSeverity: 'warning', summary: 'A source file a type or one of its methods names could not be analyzed (binary/unreadable) — what it would have realized was not checked' },
-    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — or a file only its methods name is not on disk yet — planned, not written yet; an error under rules.conformance.requireCode' },
+    { code: 'SOURCE_FILE_PLANNED', defaultSeverity: 'notice', summary: 'A source file a type names is not on disk and none of its named files is — or a file only its methods name is not on disk yet, or the type\'s own file exists but does not hold it while none of its writers has begun its code — planned, not written yet; an error under rules.conformance.requireCode' },
     { code: 'MISSING_TYPE_SOURCE_PATH', defaultSeverity: 'notice', summary: "A type names no sourcePath of its own, so its shape is never compared with code — a notice while its subsystem has no code yet (plan the path with the implementations'), a warning once it has; an error under rules.conformance.requireCode" },
   ],
 
@@ -116,6 +116,42 @@ export const typeRealizationRule: SddRule = {
       }
       return begun;
     };
+
+    // The components that write each type: its componentClass, else each
+    // component whose contract uses it — its params and returns, and the types
+    // their fields name in turn, as a brief fences a type's file. Built once,
+    // when a declaration is first found missing.
+    let usersOf: Map<string, Set<string>> | undefined;
+    const writersOf = (type: TypeSpec): string[] => {
+      if (type.componentClass) return [type.componentClass];
+      if (!usersOf) {
+        usersOf = new Map();
+        for (const contract of ctx.interfaces) {
+          const from = ctx.componentMap.get(contract.component)?.subsystem;
+          const pending = contract.methods.flatMap((m) => methodTypeRefs(m).map((ref) => ({ ref, from })));
+          const seen = new Set<string>();
+          while (pending.length > 0) {
+            const { ref, from: at } = pending.shift()!;
+            if (ctx.isBuiltinType(ref)) continue;
+            const r = ctx.resolveTypeRef(ref, at);
+            const hits = r.outcome === 'resolved' && r.type !== undefined ? ctx.types.filter((t) => t.id === r.type)
+              : r.outcome === 'ambiguous' ? ctx.types.filter((t) => typeMatchesRef(t, ref)) : [];
+            for (const hit of hits) {
+              if (seen.has(hit.id)) continue;
+              seen.add(hit.id);
+              const users = usersOf.get(hit.id) ?? new Set<string>();
+              users.add(contract.component);
+              usersOf.set(hit.id, users);
+              for (const field of hit.fields ?? []) pending.push(...fieldTypeRefs(hit, field.type).map((r2) => ({ ref: r2, from: hit.subsystem })));
+            }
+          }
+        }
+      }
+      return [...(usersOf.get(type.id) ?? [])].sort();
+    };
+    // Whether a component's realization has begun: a file one of its implementations names exists.
+    const componentBegun = (component: string): boolean => ctx.implementations.some((impl) =>
+      ctx.interfaceMap.get(impl.contract)?.component === component && code.holdsAny(implementationSourceFiles(impl)));
 
     for (const type of ctx.types) {
       // A chained child's sourcePaths are relative to its own root, so the
@@ -185,7 +221,23 @@ export const typeRealizationRule: SddRule = {
         const published = typeFacts.analysisGrade === 'exact'
           ? new Set(typeFacts.reexportOnly ? [] : typeFacts.exportedNames)
           : code.declarationsAt(typeKey);
-        if (!published.has(symbol)) {
+        // A file another component wrote first, which this type's writers add to
+        // once they are built: planned until one of them has begun, and its
+        // methods are judged with it once it is written.
+        const writers = published.has(symbol) ? [] : writersOf(type);
+        if (writers.length > 0 && !writers.some(componentBegun)) {
+          const planned = plannedCode(ctx);
+          const one = writers.length === 1;
+          blocked.add(typeKey);
+          ctx.addIssue(
+            planned.severity,
+            'SOURCE_FILE_PLANNED',
+            `Type "${type.id}" is planned in "${type.sourcePath}", not written yet — the file exists, written first by other code, and `
+            + `${writers.map((w) => `"${w}"`).join(', ')} ${one ? 'adds' : 'add'} the declaration when ${one ? 'its' : 'their'} code is built `
+            + `(no file ${one ? 'its' : 'their'} implementations name exists yet). It is judged once ${one ? 'that code begins' : 'one of them begins'}${planned.note}.`,
+            type.id,
+          );
+        } else if (!published.has(symbol)) {
           const label = type.symbol ? `"${type.name}" (symbol "${symbol}")` : `"${type.name}"`;
           ctx.addIssue(
             'warning',

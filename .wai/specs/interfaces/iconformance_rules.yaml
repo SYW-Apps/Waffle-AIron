@@ -608,15 +608,21 @@ methods:
       name — and a pure re-export barrel publishes nothing of its own, so a claim on one is never
       realized), and each of its pure methods must appear in its own file (the method's sourcePath,
       else the type's) at the declaration tier, under the method's `symbol`, else the method's name.
-      A type that names no sourcePath of its own claims no code, so nothing ever compares its shape
-      with the code — and that is said, never left silent: before the code of the type's subsystem
-      has begun (no file an implementation of that subsystem names exists; for a type no subsystem
-      owns, no file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice
-      — plan the type's sourcePath with the implementations'), and once that code exists it is a
-      type no check reads (a warning). rules.conformance.requireCode reports the notice at error,
-      naming the setting. Findings carry the analysis grade, a file that escapes the root or could
-      not be analyzed is reported once and blocks only what it would have realized, and types under
-      chained subsystems (projectPath) validate standalone in their own project run.
+      A declaration its file does not publish yet is still PLANNED while none of the type's writers
+      has begun its code (its componentClass, else each component whose contract uses it; begun = a
+      file one of that component's implementations names exists): the file is shared, another
+      component wrote it first, and the writer adds the type when it is built (SOURCE_FILE_PLANNED,
+      naming those writers; its methods are judged with it once it is written). Once a writer has
+      begun, or when the type has none, the missing declaration is UNREALIZED_TYPE. A type that
+      names no sourcePath of its own claims no code, so nothing ever compares its shape with the
+      code — and that is said, never left silent: before the code of the type's subsystem has begun
+      (no file an implementation of that subsystem names exists; for a type no subsystem owns, no
+      file of any implementation) it is unlinked design (MISSING_TYPE_SOURCE_PATH, a notice — plan
+      the type's sourcePath with the implementations'), and once that code exists it is a type no
+      check reads (a warning). rules.conformance.requireCode reports the notice at error, naming the
+      setting. Findings carry the analysis grade, a file that escapes the root or could not be
+      analyzed is reported once and blocks only what it would have realized, and types under chained
+      subsystems (projectPath) validate standalone in their own project run.
     signature: 'typeRealization(ctx: RuleContext): void'
     returns: void
     params:
@@ -627,8 +633,9 @@ methods:
       - code: UNREALIZED_TYPE
         severity: warning
         summary: >-
-          A type names a sourcePath but its declaration is nowhere in that file — the claim points
-          at code that does not hold it
+          A type names a sourcePath but its declaration is nowhere in that file although a component
+          that writes it has begun its code (or none writes it) — the claim points at code that does
+          not hold it
       - code: UNREALIZED_TYPE_METHOD
         severity: warning
         summary: >-
@@ -653,7 +660,8 @@ methods:
         severity: notice
         summary: >-
           A source file a type names is not on disk and none of its named files is — or a file only
-          its methods name is not on disk yet — planned, not written yet; an error under
+          its methods name is not on disk yet, or the type's own file exists but does not hold it
+          while none of its writers has begun its code — planned, not written yet; an error under
           rules.conformance.requireCode
       - code: MISSING_TYPE_SOURCE_PATH
         severity: notice
@@ -1254,4 +1262,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-22T09:32:52.298Z'
+updatedAt: '2026-10-26T20:29:03.975Z'
