@@ -49,6 +49,24 @@ function guarded(files: string[], mutate: () => void): void {
 }
 
 /**
+ * Replace a file's whole content atomically (see replaceFile), so a reader in
+ * another process sees the old content or the new, never an emptied file. A
+ * symbolic link is written through to the file it names, and an existing
+ * file keeps its permission bits, as a write in place would.
+ */
+function rewrite(filePath: string, content: string | Uint8Array): void {
+  let target = filePath;
+  let mode: number | undefined;
+  try {
+    target = fs.realpathSync(filePath);
+    mode = fs.statSync(target).mode & 0o7777;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+  }
+  replaceFile(target, content, mode);
+}
+
+/**
  * Write a file, ensuring the parent directory exists first. The text keeps the
  * file's line endings (see withLineEndings): CRLF stays CRLF, and a new file
  * follows the convention around it.
@@ -57,7 +75,7 @@ export function writeFile(filePath: string, content: string): void {
   ensureDir(path.dirname(filePath));
   const text = withLineEndings(filePath, content);
   guarded([filePath], () => {
-    fs.writeFileSync(filePath, text, 'utf-8');
+    rewrite(filePath, text);
     treeFileGuard?.noteWritten(filePath, text);
   });
 }
@@ -76,7 +94,7 @@ export function writeFileIfChanged(filePath: string, content: string): boolean {
   }
   ensureDir(path.dirname(filePath));
   guarded([filePath], () => {
-    fs.writeFileSync(filePath, text, 'utf-8');
+    rewrite(filePath, text);
     treeFileGuard?.noteWritten(filePath, text);
   });
   return true;
@@ -107,7 +125,7 @@ export function removeFile(filePath: string): void {
 export function restoreFile(filePath: string, bytes: Buffer): void {
   ensureDir(path.dirname(filePath));
   guarded([filePath], () => {
-    fs.writeFileSync(filePath, bytes);
+    rewrite(filePath, bytes);
     treeFileGuard?.noteWritten(filePath, bytes.toString('utf-8'));
   });
 }
@@ -817,7 +835,7 @@ function renameOver(from: string, to: string): void {
  * Replace `file` with `text` atomically: a temporary sibling named for this
  * writer (two writers never share one), then a rename over the file.
  */
-export function replaceFile(file: string, text: string, mode?: number): void {
+export function replaceFile(file: string, text: string | Uint8Array, mode?: number): void {
   const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
     fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
