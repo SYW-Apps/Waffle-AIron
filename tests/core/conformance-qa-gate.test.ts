@@ -215,6 +215,18 @@ describe('the findings name the method that changed', () => {
     expect(issues[0].message).toContain('this.store.lookup');
   });
 
+  it('an unnarrated call in Python is written as the Python code writes it', () => {
+    const issues = run(dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> str:',
+      '    earlier = self._store.lookup(parcel_id)',
+      '    self._store.record(parcel_id, earlier)',
+      '    return earlier',
+    ]), true)).issues.filter(i => i.code === 'UNNARRATED_CALL');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].message).toContain('self._store.lookup');
+    expect(issues[0].message).not.toContain('this.');
+  });
+
   it('a Python parameter renamed in the code alone is told under both names', () => {
     const issues = run(dispatchTree(py([
       'async def dispatch_parcel(self, parcel_ref: str) -> str:',
