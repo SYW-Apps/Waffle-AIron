@@ -79,8 +79,17 @@ function subjectFor(index: Index, target: LookupMatch): Subject {
       };
     }
     case 'implementation': {
+      // Nothing in a design refers to an implementation: who uses it uses the component it realizes, through its contract.
       const impl = index.implementations.find((i) => i.id === target.id);
-      return { ...empty, refs: [{ kind: 'implementation', id: target.id }], files: impl ? filesOf([impl]) : [], searched: impl ? searchedOf([impl]) : [] };
+      const component = index.interfaces.find((i) => i.id === impl?.contract)?.component;
+      const realized: SpecRef[] = [
+        ...(component ? [{ kind: 'component' as const, id: component }] : []),
+        ...(impl?.contract ? [{ kind: 'interface' as const, id: impl.contract }] : []),
+      ];
+      return {
+        ...empty, refs: [{ kind: 'implementation', id: target.id }, ...realized], files: impl ? filesOf([impl]) : [], searched: impl ? searchedOf([impl]) : [],
+        specIds: new Set([target.id, ...realized.map((r) => r.id)]),
+      };
     }
     case 'type': {
       const type = index.types.find((t) => t.id === target.id);
@@ -208,7 +217,12 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     : specIndexReferencesTo(index, subject.refs);
   const references: LookupReference[] = [];
   const callerFiles = new Map<LookupReference, string[]>();
+  /** The code name each declared caller is realized by, to tell a caller that only forwards to the target. */
+  const callerSymbols = new Map<LookupReference, string>();
   for (const ref of walked) {
+    // The target's own component and contract are part of it, not references to it; its
+    // implementation stays, since one of its methods calling another is a real (component-wide) use.
+    if (subject.specIds.has(ref.id) && ref.kind !== 'implementation') continue;
     const member = /^methods\.([^.]+)/.exec(ref.position)?.[1];
     const entry: LookupReference = {
       kind: kindOfPosition(ref.position, ref.kind),
@@ -223,8 +237,10 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     references.push(entry);
     if (entry.kind === 'call-step' && ref.kind === 'implementation' && member) {
       const impl = index.implementations.find((i) => i.id === ref.id);
-      const own = impl?.methods.find((m) => m.name === member)?.sourcePath ?? impl?.sourcePath;
+      const method = impl?.methods.find((m) => m.name === member);
+      const own = method?.sourcePath ?? impl?.sourcePath;
       if (own) callerFiles.set(entry, [pathKey(own)]);
+      callerSymbols.set(entry, method?.symbol ?? member);
     }
   }
 
@@ -269,7 +285,8 @@ export function collect(target: string, includeText?: boolean): LookupReferences
   const codeCallFiles = new Map<LookupReference, string>();
   /** Calls written inside the target's own files: they confirm a declared caller living there, and are never observed-only news. */
   const ownCalls = new Set<LookupReference>();
-  const landings = landingsOf(model, targetFiles, subject.symbols);
+  const code = buildCodeIndex(model);
+  const landings = landingsOf(code, model, targetFiles, subject.symbols);
   const seenSites = new Set<string>();
   if (targetFiles.size > 0) {
     for (const facts of model.files) {
@@ -381,12 +398,39 @@ export function collect(target: string, includeText?: boolean): LookupReferences
     ref.agreement = agreement;
   }
   const declaredFiles = new Set([...callerFiles.values()].flat());
+  // A method elsewhere whose code only republishes the target IS the target
+  // (N:1 identity): a declared call to it covers the target, and a declared
+  // call it makes to the target is proven by the forwarding itself.
+  const bodies = new Set([...targetFiles].flatMap((f) => [...(subject.symbols ?? factsFor(model, f)?.exportedNames ?? [])].map((n) => `${f}#${n}`)));
+  const forwards = (file: string, symbol: string): boolean =>
+    !targetFiles.has(file) && code.forwardsOf(file, symbol).some((p) => bodies.has(`${p.file}#${p.name}`));
+  for (const [ref, files] of callerFiles) {
+    const symbol = callerSymbols.get(ref);
+    if (symbol !== undefined && files.some((f) => forwards(f, symbol))) ref.agreement = 'confirmed';
+  }
+  const viaForwarder = new Set<string>();
+  for (const impl of index.implementations) {
+    if (subject.specIds.has(impl.id)) continue;
+    const component = index.interfaces.find((i) => i.id === impl.contract)?.component;
+    for (const m of impl.methods) {
+      const file = m.sourcePath ?? impl.sourcePath;
+      if (!component || !file || !forwards(pathKey(file), m.symbol ?? m.name)) continue;
+      for (const ref of specIndexMethodReferences(index, component, [m.name])) {
+        const member = /^methods.([^.]+)/.exec(ref.position)?.[1];
+        if (ref.kind !== 'implementation' || !member || kindOfPosition(ref.position, ref.kind) !== 'call-step') continue;
+        const caller = index.implementations.find((i) => i.id === ref.id);
+        const callerFile = caller?.methods.find((cm) => cm.name === member)?.sourcePath ?? caller?.sourcePath;
+        if (callerFile) viaForwarder.add(pathKey(callerFile));
+      }
+    }
+  }
   for (const entry of codeCalls) {
     const file = codeCallFiles.get(entry)!;
     if (ownCalls.has(entry) && !declaredFiles.has(file)) continue;
     // A test is no part of the design, so its calls are never a disagreement with it.
     if (entry.evidence !== 'resolved' || entry.inTest) entry.agreement = 'unjudged';
     else if (declaredFiles.has(file)) entry.agreement = confirmedFiles.has(file) ? 'confirmed' : 'unjudged';
+    else if (viaForwarder.has(file)) entry.agreement = 'confirmed';
     else entry.agreement = gradeExact(file) ? 'observed-only' : 'unjudged';
     references.push(entry);
   }
@@ -425,10 +469,9 @@ export function collect(target: string, includeText?: boolean): LookupReferences
  * target), followed through the re-exports and export aliases the code writes
  * down — the same forwarding the call conformance rule judges N:1 identity by.
  */
-function landingsOf(model: CodeModel, files: ReadonlySet<string>, symbols: ReadonlySet<string> | undefined): Set<string> {
+function landingsOf(code: ReturnType<typeof buildCodeIndex>, model: CodeModel, files: ReadonlySet<string>, symbols: ReadonlySet<string> | undefined): Set<string> {
   const out = new Set<string>();
   if (files.size === 0) return out;
-  const code = buildCodeIndex(model);
   for (const file of files) {
     const names = symbols ?? new Set(factsFor(model, file)?.exportedNames ?? []);
     for (const name of names) for (const p of code.forwardsOf(file, name)) out.add(`${p.file}#${p.name}`);

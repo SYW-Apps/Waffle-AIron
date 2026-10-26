@@ -127,7 +127,9 @@ export function find(query: string, limit?: number): LookupSearchResult {
   };
   const textHit = (value: string, label: string, exactOnly = false): Hit | null => {
     const v = value.toLowerCase();
-    if (v === ql || (qs.length >= 3 && squash(value) === qs)) return { evidence: 'id', matchedOn: label };
+    if (v === ql) return { evidence: 'id', matchedOn: label };
+    // Spelled another way (`local_approver` for `localApprover`) is no exact name: it ranks with the partial matches.
+    if (qs.length >= 3 && squash(value) === qs) return { evidence: 'text', matchedOn: `${label} spelled another way` };
     if (!exactOnly && !pathForm && !endpointForm && qs.length >= 2 && squash(value).includes(qs)) return { evidence: 'text', matchedOn: `part of ${label}` };
     return null;
   };
