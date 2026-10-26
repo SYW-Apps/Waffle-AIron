@@ -1,12 +1,16 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { withFileLock } from '../utils/file-lock.js';
+import { replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // User-level CLI config
 //
 // Stored at: ~/.wairon/config.json
-// Created on first write; all fields are optional.
+// Created on first write; all fields are optional. Every setter is one
+// read-change-write under the file's write lock, so two wairon processes
+// setting different fields at once both keep theirs.
 // ---------------------------------------------------------------------------
 
 export type UpdateChannel = 'stable' | 'beta' | 'preview' | 'dev';
@@ -46,17 +50,26 @@ export function loadUserConfig(): UserConfig {
   return {};
 }
 
-export function saveUserConfig(config: UserConfig): void {
+/** The settings folder, made on the first write: the lock files sit beside the settings in it. */
+function ensureConfigDir(): void {
   if (!fs.existsSync(CONFIG_DIR)) {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
   }
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+}
+
+export function saveUserConfig(config: UserConfig): void {
+  ensureConfigDir();
+  // A temp file of this writer's own renamed over the old one: a concurrent read never sees half a file.
+  replaceFile(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n');
 }
 
 export function setChannel(channel: UpdateChannel): void {
-  const config = loadUserConfig();
-  config.channel = channel;
-  saveUserConfig(config);
+  ensureConfigDir();
+  withFileLock(CONFIG_FILE, () => {
+    const config = loadUserConfig();
+    config.channel = channel;
+    saveUserConfig(config);
+  });
 }
 
 export function getChannel(): UpdateChannel {
@@ -72,9 +85,12 @@ export function getDisabledAliases(): string[] {
 }
 
 export function setDisabledAliases(names: string[]): void {
-  const config = loadUserConfig();
-  config.disabledAliases = names;
-  saveUserConfig(config);
+  ensureConfigDir();
+  withFileLock(CONFIG_FILE, () => {
+    const config = loadUserConfig();
+    config.disabledAliases = names;
+    saveUserConfig(config);
+  });
 }
 
 /** The version whose release notes were last shown here, or null when none was. */
@@ -85,7 +101,10 @@ export function lastSeenVersion(): string | null {
 
 /** Record the version whose release notes were just shown, leaving every other setting untouched. */
 export function setLastSeenVersion(version: string): void {
-  const config = loadUserConfig();
-  config.lastSeenVersion = version;
-  saveUserConfig(config);
+  ensureConfigDir();
+  withFileLock(CONFIG_FILE, () => {
+    const config = loadUserConfig();
+    config.lastSeenVersion = version;
+    saveUserConfig(config);
+  });
 }
