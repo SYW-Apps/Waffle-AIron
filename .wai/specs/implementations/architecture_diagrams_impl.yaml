@@ -165,6 +165,75 @@ methods:
         description: Return it as data
         type: return
         outcome: success
+  - name: renderTypeDiagrams
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Load the type specs and keep this project's own: a type spelled alias::name is another
+          project's, drawn only where one of these refers to it
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadTypeSpecs
+      - stepNumber: 2
+        description: Load the type group specs, keeping this project's own
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadGroupSpecs
+      - stepNumber: 3
+        description: Are there any types to draw?
+        type: branch
+        condition: the project holds types of its own
+        onTrueStep: 5
+        onFalseStep: 4
+      - stepNumber: 4
+        description: >-
+          Answer no diagrams: there is nothing to draw, and an empty diagram would read as a broken
+          one
+        type: return
+        outcome: none
+      - stepNumber: 5
+        description: >-
+          Place each type in its group and each group under its parent, the way the canvas folds
+          them: a type naming a group no spec declares is drawn ungrouped (TYPE_GROUP_UNKNOWN
+          reports it), and a parent chain that breaks or loops is cut where it does. Collect every
+          reference a type makes to another type: its fields, its methods' parameters and returns,
+          an alias's or a union's members
+        type: local
+      - stepNumber: 6
+        description: >-
+          Draw the index as a Mermaid flowchart: one node per group carrying its name and how many
+          types it holds itself, each child group inside its parent's subgraph, an Ungrouped node
+          when a type has no group, and one edge per ordered pair of groups whose types refer to
+          each other, labelled with how many references it adds up. A reference within one group
+          draws no edge
+        type: local
+      - stepNumber: 7
+        description: Draw each group that holds types, then the ungrouped types when there are any
+        type: loop
+        loopKind: forEach
+        over: the groups holding types, parents before children, then the ungrouped set
+        endStep: 9
+      - stepNumber: 8
+        description: >-
+          Draw the slice as a Mermaid class diagram: each of its types with its fields (type and
+          name, an optional one marked), an enum's values under its enumeration annotation, and its
+          methods with their parameters and return; one edge per reference to another type, labelled
+          with the field or method that makes it. A referenced type of another group, or an
+          ungrouped one, is a stub class without members, annotated with the group that holds it, so
+          the reader sees where to look next; a primitive or another project's type stays as it is
+          spelled in the member line and draws no edge
+        type: local
+      - stepNumber: 9
+        label: sliceEnd
+        description: This slice is drawn
+        type: local
+      - stepNumber: 10
+        description: >-
+          Answer the index first at types/index.md, then each group's diagram at types/groups/<the
+          group's ids from the top-level group down, joined by />.md, then the ungrouped types at
+          types/ungrouped.md, each with its title
+        type: return
+        outcome: drawn
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -181,4 +250,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-10-20T09:22:00.982Z'
+updatedAt: '2026-10-26T23:58:17.405Z'

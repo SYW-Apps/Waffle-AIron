@@ -371,6 +371,13 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: scanAllSpecs
+  - name: renderTypeDiagrams
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal's type diagrams
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: renderTypeDiagrams
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:12.597Z'
+updatedAt: '2026-10-26T23:58:20.986Z'
