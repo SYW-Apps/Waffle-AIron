@@ -1,9 +1,12 @@
 id: user_config_store_impl
 name: User Config Store Implementation
 description: >-
-  src/config/userconfig.ts. Every setter is read-modify-write through the same two primitives, so
-  setting one field can never discard another written by a different command — or by the same
-  command a moment earlier. Nothing is cached between calls, which is what lets a hand edit or
+  src/config/userconfig.ts. Every setter is one read-modify-write through the same two primitives,
+  held under the settings file's write lock (the generation lock primitive, file_write_lock's module
+  src/utils/file-lock.ts, with its default limits), so setting one field can never discard another
+  written by a different command — by the same command a moment earlier, or by another wairon
+  process at the same moment (two commands each recording the release notes they showed, a channel
+  switch beside an alias change). Nothing is cached between calls, which is what lets a hand edit or
   another process take effect immediately.
 contract: iuser_config_store
 sourcePath: src/config/userconfig.ts
@@ -36,7 +39,10 @@ methods:
           the first setting anyone records is also what makes the home for it
         type: local
       - stepNumber: 2
-        description: Write the whole document back, pretty-printed so a person can read and hand-edit it
+        description: >-
+          Replace the whole document, pretty-printed so a person can read and hand-edit it,
+          atomically through a temp file of its own renamed over the old one, so a concurrent read
+          never sees a half-written file
         type: local
       - stepNumber: 3
         description: Done
@@ -71,19 +77,24 @@ methods:
   - name: setChannel
     narrative:
       - stepNumber: 1
+        description: >-
+          Take the settings file's write lock, so no other wairon process reads and writes the file
+          until the steps below end; it is released also when one of them throws
+        type: local
+      - stepNumber: 2
         description: Read the settings as they stand
         type: call
         targetComponent: user_config_store
         targetMethod: load
-      - stepNumber: 2
+      - stepNumber: 3
         description: Replace the channel, leaving every other setting untouched
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Write the whole document back
         type: call
         targetComponent: user_config_store
         targetMethod: save
-      - stepNumber: 4
+      - stepNumber: 5
         description: Done
         type: return
         outcome: recorded
@@ -105,19 +116,24 @@ methods:
   - name: setDisabledAliases
     narrative:
       - stepNumber: 1
+        description: >-
+          Take the settings file's write lock, so no other wairon process reads and writes the file
+          until the steps below end; it is released also when one of them throws
+        type: local
+      - stepNumber: 2
         description: Read the settings as they stand
         type: call
         targetComponent: user_config_store
         targetMethod: load
-      - stepNumber: 2
+      - stepNumber: 3
         description: Replace the opted-out list, leaving every other setting untouched
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Write the whole document back
         type: call
         targetComponent: user_config_store
         targetMethod: save
-      - stepNumber: 4
+      - stepNumber: 5
         description: Done
         type: return
         outcome: recorded
@@ -136,22 +152,44 @@ methods:
   - name: setLastSeenVersion
     narrative:
       - stepNumber: 1
+        description: >-
+          Take the settings file's write lock, so no other wairon process reads and writes the file
+          until the steps below end; it is released also when one of them throws
+        type: local
+      - stepNumber: 2
         description: Read the settings as they stand
         type: call
         targetComponent: user_config_store
         targetMethod: load
-      - stepNumber: 2
+      - stepNumber: 3
         description: Replace the version, leaving every other setting untouched
         type: local
-      - stepNumber: 3
+      - stepNumber: 4
         description: Write them back
         type: call
         targetComponent: user_config_store
         targetMethod: save
-      - stepNumber: 4
+      - stepNumber: 5
         description: Done
         type: return
         outcome: saved
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/config/userconfig.ts -> src/utils/file-lock.ts
+      reason: >-
+        The settings file's read-change-write takes the same generation lock primitive the hosted
+        stores and the spec tree take (src/utils/file-lock.ts, file_write_lock): one safety-critical
+        protocol every holder must follow. Like src/utils/fs.ts it is shared infrastructure below
+        the subsystems; a second copy in sdd_cli would be two implementations of one protocol that
+        can drift apart, and routing a lock through sdd_host's portal would make the CLI depend on
+        the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/config/userconfig.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: the settings store uses the shared
+        generation lock primitive directly, which no sdd_host portal publishes because it is not a
+        capability of the hosted server.
 status: complete
 createdAt: '2026-09-22T21:18:19.297Z'
-updatedAt: '2026-10-18T14:21:14.227Z'
+updatedAt: '2026-10-26T22:46:38.619Z'
