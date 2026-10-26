@@ -1694,6 +1694,12 @@ administrator grants them under Users or Permissions, or with
 API keys for AI tools stay what `wairon host key mint --owner` mints (or the UI
 under Agents), and act as their owner.
 
+The `/web/*` routes are the browser app's own backend, not an API: they answer
+a signed-in browser session. An API key belongs on `/mcp` (what `wairon mcp
+install --hosted` configures), and administration scripts use `wairon host`.
+Sent to `/web/*`, a key gets a 401 or the lists a key has none of (web users,
+sessions), never more than it reads on `/mcp`.
+
 ---
 
 ## Connecting to a hosted instance
