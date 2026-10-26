@@ -3413,9 +3413,12 @@ methods:
         onFalseStep: 6
       - stepNumber: 3
         description: >-
-          Read the key the target lives under: the stored spec's own key when the scan holds it,
-          else the id bound through the bound project's alias table (an `alias::name` lands on the
-          member's key) — and the deepest member key that prefixes it, and that member's root
+          Read the key the target lives under: the stored spec's own key when the scan holds it —
+          under the id as written, else, in the member project the id names, under the one spec of
+          the kind whose local id differs from the written one only in letter case or whose name is
+          the written one, so the sentence names the id that project's own root spells — else the id
+          bound through the bound project's alias table (an `alias::name` lands on the member's key)
+          — and the deepest member key that prefixes it, and that member's root
         type: local
       - stepNumber: 4
         description: >-
@@ -3470,7 +3473,9 @@ methods:
         label: missing
         description: >-
           Answer the one missing sentence every write tool shares: spec-missing: this project has no
-          <kind> "<id>". Nothing was written
+          <kind> "<id>" — and, when the bound project holds exactly one spec of the kind whose id
+          differs from it only in letter case or whose name is it, the id to use instead ("did you
+          mean <its id>?"). Nothing was written
         type: return
         outcome: missing
       - stepNumber: 11
@@ -4185,4 +4190,4 @@ methods:
     symbol: moveTypeSpec
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:42:50.667Z'
+updatedAt: '2026-10-26T18:49:44.914Z'
