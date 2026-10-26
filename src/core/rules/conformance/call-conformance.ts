@@ -468,15 +468,19 @@ const claimNoun = (implMethod: MethodImplementation): string =>
  * unresolved answer. The shape is all this reports: naming the form it could
  * not follow is the honest content of "I cannot say", where advice to write
  * the call differently would be asking working code to suit the analysis.
+ * Spelled in the language of the file the call is written in (`self.` and no
+ * `new` in Python).
  */
-function describeSite(site: CallSiteFact): string {
+function describeSite(site: CallSiteFact, file?: string): string {
+  const python = file !== undefined && languageOfSourcePath(file) === 'python';
+  const self = python ? 'self' : 'this';
   if (!site.member) return `${site.name}(…)`;
   if (site.via) return `${site.via}.${site.name}(…)`;
-  if (site.field) return `this.${site.field}.${site.name}(…)`;
-  if (site.constructed) return `new ${site.constructed}(…).${site.name}(…)`;
+  if (site.field) return `${self}.${site.field}.${site.name}(…)`;
+  if (site.constructed) return `${python ? '' : 'new '}${site.constructed}(…).${site.name}(…)`;
   if (site.returnedBy) return `${site.returnedBy}(…).${site.name}(…)`;
   if (site.receiverPath) return `${site.receiverPath.join('.')}.${site.name}(…)`;
-  if (site.enclosingClass) return `this.${site.name}(…)`;
+  if (site.enclosingClass) return `${self}.${site.name}(…)`;
   return `<receiver>.${site.name}(…)`;
 }
 
@@ -866,7 +870,7 @@ export const callConformanceRule: SddRule = {
           if (landing === here) continue;
           const routed = routedVerb(component, landing, site.name);
           if (routed !== undefined) {
-            if (!declared.has(routed) && !unnarrated.has(routed)) unnarrated.set(routed, `\`${describeSite(site)}\``);
+            if (!declared.has(routed) && !unnarrated.has(routed)) unnarrated.set(routed, `\`${describeSite(site, scope)}\``);
             continue;
           }
           for (const callee of realization.componentsAt(landing)) {
@@ -875,7 +879,7 @@ export const callConformanceRule: SddRule = {
             if (!verb) continue;
             const ref = `${callee.id}.${verb.name}`;
             if (declared.has(ref) || unnarrated.has(ref)) continue;
-            unnarrated.set(ref, `\`${describeSite(site)}\``);
+            unnarrated.set(ref, `\`${describeSite(site, scope)}\``);
           }
         }
       }
@@ -1079,7 +1083,7 @@ export const callConformanceRule: SddRule = {
         const miss: Miss = matching.length === 0
           ? { kind: 'absent' }
           : landed.size === 0
-            ? { kind: 'unresolved', shapes: [...new Set(matching.map(describeSite))].sort() }
+            ? { kind: 'unresolved', shapes: [...new Set(matching.map((site) => describeSite(site)))].sort() }
             : { kind: 'elsewhere', landed: [...landed].sort() };
         // The call is there by name, through a receiver nothing in the code
         // can land yet, because the target's code is not written: no file

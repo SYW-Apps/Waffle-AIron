@@ -1620,7 +1620,7 @@ decided is always the signed-in person, never a field of the body. The admin API
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
-| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
+| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members, and a member is named by its own record id. A key never narrows to a subsystem: confine a person to one with `wairon host permission set --project <id> --subsystem <id>`. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 3) against the hosted project |
@@ -1663,7 +1663,9 @@ A person signs in one of two ways; the startup log names the ones configured:
 
 - **The built-in administrator.** Set both `WAIRON_ADMIN_USER` and
   `WAIRON_ADMIN_PASSWORD` in the server's environment; the login page then shows
-  a username and password form (`POST /web/login`). This account is the
+  a username and password form. The form posts the JSON body
+  `{ "user": "<WAIRON_ADMIN_USER>", "password": "<WAIRON_ADMIN_PASSWORD>" }` to
+  `POST /web/login`, which answers with the session cookie. This account is the
   instance super-administrator, like `WAIRON_ADMIN_TOKEN`, and the only
   password login: there are no per-user passwords.
 - **Single sign-on (OIDC).** Everyone else signs in through an identity
