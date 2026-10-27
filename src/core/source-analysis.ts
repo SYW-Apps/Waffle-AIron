@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
+import { createHash } from 'crypto';
 import {
   implementationSourceFiles,
   routerLinkage,
@@ -1991,7 +1992,15 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   const collectFunctionFacts = (fn: import('typescript').Node & { body?: import('typescript').Node }): { score: number; callees: Map<string, CallSiteFact> } => {
     let score = 1;
     const callees = new Map<string, CallSiteFact>();
-    const addSite = (site: CallSiteFact): void => { callees.set(siteKey(site), site); };
+    // The 1-based line of the call being read (exact grade only); the first
+    // writing of a shape keeps its line.
+    let callLine: number | undefined;
+    const addSite = (site: CallSiteFact): void => {
+      const key = siteKey(site);
+      const prior = callees.get(key);
+      const line = prior?.line ?? callLine;
+      callees.set(key, line !== undefined ? { ...site, line } : site);
+    };
     // A receiver is read through what only the type checker cares about — a
     // non-null assertion, parentheses, `satisfies`, a cast to a NAMED type —
     // so `this.store!.save()` is the same call as `this.store.save()`, never a
@@ -2056,6 +2065,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         // names right there, and a member access through anything else
         // (`getStore().x()`) resolves nowhere without a type checker.
         const callee = node.expression;
+        callLine = sf.getLineAndCharacterOfPosition(
+          (ts.isPropertyAccessExpression(callee) ? callee.name : node).getStart(sf),
+        ).line + 1;
         if (ts.isIdentifier(callee)) addSite({ name: callee.text, member: false });
         else if (ts.isPropertyAccessExpression(callee)) {
           const receiver = unwrapped(callee.expression);
@@ -4224,6 +4236,78 @@ interface CheckerReading {
 }
 
 /**
+ * The one file set both buildCodeModel and fingerprintSources take: every
+ * source file an implementation names (its own path, then each method's), its
+ * simPath and router module, then every file a type names, then the walked
+ * root files — in that order, before deduplication. `claimed` is the files
+ * the implementations name.
+ */
+function sourceFileSet(
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+  projectRoot: string,
+  sourceRoots: readonly string[],
+  exclude: readonly string[],
+): { rootFiles: string[]; declaredPaths: string[]; claimed: string[] } {
+  const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
+  const declaredPaths: string[] = [];
+  const claimed: string[] = [];
+  for (const impl of implementations) {
+    declaredPaths.push(...implementationSourceFiles(impl));
+    claimed.push(...implementationSourceFiles(impl));
+    if (impl.simPath) declaredPaths.push(impl.simPath);
+    // A router linkage naming a module of its own (a central routes.ts) is a
+    // file route coverage reads, whatever spec otherwise names it.
+    const routerFile = impl.router ? routerLinkage(impl.router).file : undefined;
+    if (routerFile) declaredPaths.push(routerFile);
+  }
+  for (const type of types) declaredPaths.push(...typeSourceFiles(type));
+  declaredPaths.push(...rootFiles);
+  return { rootFiles, declaredPaths, claimed };
+}
+
+/**
+ * A fingerprint of the files buildCodeModel would read: the same set, each
+ * file's path with its size and modification time (stat only, no content), or
+ * its classification when it is missing, escaped or not a file; folded in
+ * path order into one digest. Not a content hash: a change that keeps both
+ * size and modification time is not seen.
+ */
+export function fingerprintSources(
+  implementations: ImplementationSpec[],
+  types: TypeSpec[],
+  projectRoot: string,
+  sourceRoots: readonly string[] = [],
+  exclude: readonly string[] = [],
+): string {
+  const { declaredPaths } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
+  const entries = new Map<string, string>();
+  for (const declared of declaredPaths) {
+    const key = pathKey(declared);
+    if (entries.has(key)) continue;
+    if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') {
+      entries.set(key, 'escaped');
+      continue;
+    }
+    const absolute = path.resolve(projectRoot, key);
+    if (path.relative(projectRoot, absolute).startsWith('..')) {
+      entries.set(key, 'escaped');
+      continue;
+    }
+    try {
+      const stat = fs.statSync(absolute);
+      entries.set(key, stat.isFile() ? `${stat.size}:${stat.mtimeMs}` : 'missing');
+    } catch {
+      entries.set(key, 'missing');
+    }
+  }
+  const hash = createHash('sha256');
+  for (const key of [...entries.keys()].sort()) hash.update(`${key} ${entries.get(key)}
+`);
+  return hash.digest('hex');
+}
+
+/**
  * Build the pure source-code model for a validation run: one SourceFileFacts
  * per distinct source path across the given implementations — each
  * implementation's sourcePath, each method's own sourcePath, and each simPath
@@ -4240,6 +4324,7 @@ export function buildCodeModel(
   sourceRoots: readonly string[] = [],
   exclude: readonly string[] = [],
 ): CodeModel {
+  const { rootFiles, declaredPaths, claimed } = sourceFileSet(implementations, types, projectRoot, sourceRoots, exclude);
   const files: SourceFileFacts[] = [];
   const seen = new Set<string>();
   const exactCache = new Map<string, ExactFacts | null>();
@@ -4250,7 +4335,6 @@ export function buildCodeModel(
   const checkerRoots = new Map<string, string>();
   /** Each exact-grade file's parameter lists in walk order: what the checker's kinds are joined onto. */
   const paramSitesAt = new Map<string, ParameterSite[]>();
-  const rootFiles = walkDeclaredRoots(sourceRoots, exclude, projectRoot);
   // The repository's own packages, read once: what lets a package specifier
   // naming one of them resolve like a relative import.
   const localPackages = readLocalPackages(projectRoot);
@@ -4264,20 +4348,8 @@ export function buildCodeModel(
   // files, which no spec names yet and which the unclaimed-source rule judges
   // — analyzed like any other file, since proving one a re-export barrel means
   // reading it. Same containment, same tiers, same dedup (N:1).
-  const declaredPaths: string[] = [];
   /** Every file an implementation names, absolute: the helpers a handle's reads never follow into (another component's code is that component's). */
-  const claimedFiles = new Set<string>();
-  for (const impl of implementations) {
-    declaredPaths.push(...implementationSourceFiles(impl));
-    for (const file of implementationSourceFiles(impl)) claimedFiles.add(path.resolve(projectRoot, file));
-    if (impl.simPath) declaredPaths.push(impl.simPath);
-    // A router linkage naming a module of its own (a central routes.ts) is a
-    // file route coverage reads, whatever spec otherwise names it.
-    const routerFile = impl.router ? routerLinkage(impl.router).file : undefined;
-    if (routerFile) declaredPaths.push(routerFile);
-  }
-  for (const type of types) declaredPaths.push(...typeSourceFiles(type));
-  declaredPaths.push(...rootFiles);
+  const claimedFiles = new Set<string>(claimed.map(file => path.resolve(projectRoot, file)));
   for (const declared of declaredPaths) {
     const sourcePath = pathKey(declared);
     if (seen.has(sourcePath)) continue;

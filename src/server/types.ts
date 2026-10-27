@@ -58,8 +58,8 @@ export function parseSubsystemScope(scopeId: string): { projectId: string; subsy
 
 /** The rung that decided an effective permission, in words a refusal or an explanation can quote. */
 export function describeDecision(p: EffectivePermission): string {
-  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default' }[p.source];
-  if (p.source === 'instance-admin' || p.source === 'instance-default') return setting;
+  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default', 'key-narrowing': 'the API key narrowing (the key is not narrowed to this project)' }[p.source];
+  if (p.source === 'instance-admin' || p.source === 'instance-default' || p.source === 'key-narrowing') return setting;
   if (p.decidedScopeKind === 'subsystem' && p.decidedScopeId) {
     const parsed = parseSubsystemScope(p.decidedScopeId);
     return `${setting} at subsystem ${parsed?.subsystemId ?? p.decidedScopeId} of project ${parsed?.projectId ?? ''}`.trim();
@@ -340,7 +340,7 @@ export interface RepositoryScope {
 }
 
 /** Which source decided an effective permission. */
-export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default';
+export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default' | 'key-narrowing';
 
 /** The resolved effective permission for one (subject, capability, target). */
 export interface EffectivePermission {
@@ -403,6 +403,12 @@ export interface Principal {
   subject?: PrincipalSubject;
   /** The resolved permission subject for hierarchical authorization. */
   permissionSubject?: PermissionSubject;
+  /**
+   * The projects an API key is narrowed to, set only for a key narrowed to
+   * projects (not '*'). An authorization source: the key acts as its owner only
+   * within the projects its entries cover, and never holds the instance-admin bypass.
+   */
+  keyNarrowing?: string[];
 }
 
 export const UNAUTHENTICATED: Principal = {

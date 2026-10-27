@@ -47,11 +47,27 @@ methods:
           no silent admin lockout.
         type: local
       - stepNumber: 7
+        description: Does a key narrowing confine the principal away from the target?
+        type: branch
+        condition: >-
+          the principal carries a keyNarrowing, and the target is an instance or unit scope, a
+          project scope whose record no entry covers (an entry covers its record and every member
+          record whose parent chain climbs through it), or a subsystem scope of such a project
+        onTrueStep: 8
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Answer no, decided by the key narrowing: the key acts as its owner only within the
+          projects it is narrowed to, so neither the owner's grants nor the instance-admin bypass
+          reach past them
+        type: return
+        outcome: no (key-narrowing)
+      - stepNumber: 9
         description: Resolve the principal's effective permission for the capability at the target scope
         type: call
         targetComponent: permission_rules
         targetMethod: resolvePermission
-      - stepNumber: 8
+      - stepNumber: 10
         description: Return the effective permission
         type: return
         outcome: the effective permission
@@ -95,6 +111,12 @@ methods:
         targetComponent: permission_rules
         targetMethod: resolveVisibleScopes
       - stepNumber: 8
+        description: >-
+          For a principal carrying a keyNarrowing, keep actionable only the project and subsystem
+          scopes its narrowing covers, and as context only their ancestors; every other scope is
+          dropped
+        type: local
+      - stepNumber: 9
         description: Return the visible scopes
         type: return
         outcome: the visible scopes
@@ -145,25 +167,30 @@ methods:
         type: loop
         loopKind: forEach
         over: projectIds
-        endStep: 5
+        endStep: 6
       - stepNumber: 3
+        description: >-
+          A record the principal's keyNarrowing does not cover is neither read nor written and
+          carries no subsystem rungs; the rungs below are resolved for the records it covers
+        type: local
+      - stepNumber: 4
         description: Resolve the principal's project:read over the record's OWN project scope
         type: call
         targetComponent: permission_rules
         targetMethod: resolvePermission
-      - stepNumber: 4
+      - stepNumber: 5
         description: Resolve its project:write over the same scope, collecting each record whose value is yes
         type: call
         targetComponent: permission_rules
         targetMethod: resolvePermission
-      - stepNumber: 5
+      - stepNumber: 6
         description: >-
           Resolve the subsystem rungs the principal meets in the record — every subsystem carrying a
           setting that applies to the principal, with project:write resolved at it
         type: call
         targetComponent: permission_rules
         targetMethod: resolveSubsystemReach
-      - stepNumber: 6
+      - stepNumber: 7
         description: Return the readable and writable record ids and the subsystem rungs met in them
         type: return
         outcome: FamilyReach
@@ -201,4 +228,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-10-03T17:49:08.334Z'
+updatedAt: '2026-10-27T08:43:42.964Z'

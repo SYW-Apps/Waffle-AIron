@@ -388,7 +388,8 @@ describe('auth specialist (sdd_host)', () => {
     });
 
     const token = 'tok-div-live';
-    createCredential(dataDir, mkRecord({ id: 'c-div-live', keyHash: hashToken(token), ownerSubject }));
+    // Unnarrowed: a key narrowed to projects never reaches instance-level authority.
+    createCredential(dataDir, mkRecord({ id: 'c-div-live', keyHash: hashToken(token), ownerSubject, projects: ['*'] }));
 
     const p = authenticate(dataDir, token);
     expect(p.authenticated).toBe(true);

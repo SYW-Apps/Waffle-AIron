@@ -334,6 +334,9 @@ const READ_TOOL_NAMES = new Set<string>([
   'sdd_explain_flow',
   // Who consumes this project, and its public-surface changelog: reads of the bound tree (a hosted request may not search folders).
   'sdd_list_consumers',
+  // Where an element is designed and who uses it: reads of the bound tree and its code.
+  'sdd_search_specs',
+  'sdd_find_references',
   'sdd_surface_diff',
 ]);
 

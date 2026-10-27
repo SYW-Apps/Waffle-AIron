@@ -586,8 +586,16 @@ function planOne(
 export function assertMintableNarrowingEntry(dataDir: string, entry: string): string {
   if (entry === '*') return entry;
   if (entry.includes(SUBPROJECT_SEPARATOR)) {
+    // Name the forms that work: each member record of the named project, and the grant that confines to a subsystem.
+    const parent = entry.slice(0, entry.indexOf(SUBPROJECT_SEPARATOR));
+    const members = isValidProjectId(parent)
+      ? load(dataDir).filter((r) => r.parentProjectId === parent && r.status === 'active').map((r) => r.id).sort()
+      : [];
     throw new Error(
-      `invalid project narrowing entry "${entry}": a member is a record of its own - name it by its project record id`,
+      `invalid project narrowing entry "${entry}": a member is a record of its own - name it by its project record id`
+      + (members.length > 0 ? ` (the member records of "${parent}": ${members.map((m) => `"${m}"`).join(', ')})` : '')
+      + '. A key narrows to whole projects, never to a subsystem: to confine a person to one subsystem, grant it with '
+      + '`wairon host permission set --user <id> --capability project:write --project <id> --subsystem <id>`.',
     );
   }
   if (!isValidProjectId(entry)) {

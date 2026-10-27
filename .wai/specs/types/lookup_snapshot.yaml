@@ -1,0 +1,32 @@
+kind: value-object
+id: lookup_snapshot
+name: LookupSnapshot
+description: What a lookup read and what it did not, so an empty answer is never read as a proven absence.
+subsystem: sdd_validator
+fields:
+  - name: codeFingerprint
+    type: string
+    description: A fingerprint of the walked source files (path, size, modification time), not a content hash
+    optional: false
+  - name: codeGrade
+    type: AnalysisGradeLabel
+    description: The weakest grade any walked file was read at; none when no code was walked
+    optional: false
+  - name: builtAt
+    type: datetime
+    description: When the code model read was built
+    optional: false
+  - name: searched
+    type: list<string>
+    description: 'What was read: the spec tree, the members in reach, the walked source roots, tests'
+    optional: false
+  - name: notSearched
+    type: list<string>
+    description: >-
+      What was not: members out of reach, git members not checked out, files outside the source
+      roots, prose outside the repository
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:29.652Z'
+updatedAt: '2026-10-25T19:07:30.666Z'

@@ -1,0 +1,34 @@
+kind: value-object
+id: type_diagram
+name: TypeDiagram
+description: >-
+  One Mermaid type diagram of the project's types, with the path it is written to under the diagrams
+  folder. Derived from the spec tree on every call; nothing reads it back.
+fields:
+  - name: scope
+    type: TypeDiagramScope
+    description: Which slice this diagram draws
+    optional: false
+  - name: group
+    type: string
+    description: The group drawn, for a group diagram; absent for the index and the ungrouped types
+    optional: true
+  - name: relPath
+    type: string
+    description: >-
+      Where it is written, relative to the diagrams folder with forward slashes: types/index.md,
+      types/groups/<the group's ids from the top-level group down, joined by />.md, or
+      types/ungrouped.md
+    optional: false
+  - name: title
+    type: string
+    description: The heading the written page carries
+    optional: false
+  - name: mermaid
+    type: string
+    description: The Mermaid source, without the Markdown fence
+    optional: false
+methods: []
+sourcePath: src/core/diagram.ts
+createdAt: '2026-10-26T23:57:35.257Z'
+updatedAt: '2026-10-26T23:57:36.216Z'

@@ -21,8 +21,10 @@ methods:
     intent: >-
       Write { url, projectId, attachedAt } to <root>/.wai/remote.json, creating .wai/ if needed,
       replacing any previous record. The credential is deliberately absent from what is written —
-      this file lives in the project and may be committed. Written atomically (temp file + rename)
-      so a concurrent read never observes a half-written record.
+      this file lives in the project and may be committed. Written atomically through a temp file of
+      its own beside the record, then renamed over it, so a concurrent read never observes a
+      half-written record and two writers never share one temp file. A whole-record replace reads
+      nothing first, so it needs no write lock: the last attach wins, as it should.
     symbol: writeBinding
   - name: clear
     narrative: []
@@ -39,22 +41,46 @@ methods:
   - name: writeCredential
     narrative: []
     intent: >-
-      Upsert the token under the normalized instance URL in ~/.wairon/credentials.json, creating the
-      directory and file if needed and preserving every other instance's entry. Written atomically,
-      and with owner-only permissions (0600) where the platform supports it — this file holds live
-      bearer credentials.
+      Under credentials.json's write lock (the generation lock primitive, file_write_lock's module
+      src/utils/file-lock.ts, with its default limits), read the map fresh — an absent file is
+      empty, while a file that exists but cannot be read or parsed is refused, naming it, and
+      nothing is written, so a damaged store is never replaced by a map of one credential — then
+      upsert the token under the normalized instance URL, preserving every other instance's entry,
+      and replace the file atomically, creating ~/.wairon if needed, with owner-only permissions
+      (0600) where the platform supports it, because it holds live bearer credentials. The lock is
+      released also when the change throws, so two `wairon login` or `remote attach` commands at
+      once both keep their credential.
   - name: clearCredential
     narrative: []
     intent: >-
-      Remove the entry for the normalized instance URL, preserving every other. Idempotent. This
-      forgets the credential LOCALLY only — it does not and cannot revoke it on the instance, which
-      the caller's output must say plainly.
+      Under the same write lock, read the map fresh: an absent file has nothing to forget, and a
+      file that cannot be read or parsed is refused, naming it, with nothing written. Remove the
+      entry for the normalized instance URL, preserving every other, and replace the file atomically
+      (0600). Idempotent. This forgets the credential LOCALLY only — it does not and cannot revoke
+      it on the instance, which the caller's output must say plainly.
   - name: listCredentialUrls
     narrative: []
     intent: >-
       Return the instance URLs the credential file holds entries for, sorted, with no token values —
       the safe projection `wairon remote status` and `wairon logout` (with no argument) print.
 detail: intent
+lint:
+  allow:
+    - code: UNDECLARED_DEPENDENCY
+      at: src/commands/remotebinding.ts -> src/utils/file-lock.ts
+      reason: >-
+        The credential store's read-change-write takes the same generation lock primitive the hosted
+        stores and the spec tree take (src/utils/file-lock.ts, file_write_lock): one safety-critical
+        protocol every holder must follow. Like src/utils/fs.ts it is shared infrastructure below
+        the subsystems; a second copy in sdd_cli would be two implementations of one protocol that
+        can drift apart, and routing a lock through sdd_host's portal would make the CLI depend on
+        the hosted server.
+    - code: IMPORT_BYPASSES_PORTAL
+      at: src/commands/remotebinding.ts -> src/utils/file-lock.ts
+      reason: >-
+        Same import as the UNDECLARED_DEPENDENCY allow: the credential store uses the shared
+        generation lock primitive directly, which no sdd_host portal publishes because it is not a
+        capability of the hosted server.
 status: complete
 createdAt: '2026-08-12T18:43:31.843Z'
-updatedAt: '2026-09-17T20:29:09.776Z'
+updatedAt: '2026-10-26T22:46:28.215Z'

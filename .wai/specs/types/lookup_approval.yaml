@@ -1,0 +1,23 @@
+kind: enum
+id: lookup_approval
+name: LookupApproval
+description: Where a matched spec stands against the project's approval record.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/lookup.ts
+values:
+  - name: approved
+    description: Unchanged since the lock
+  - name: changed
+    description: 'Changed since the lock: a re-lock is owed before code is written against it'
+  - name: added
+    description: Added since the lock
+  - name: unlocked
+    description: The project holds no approval record
+  - name: not-applicable
+    description: >-
+      A code file or an element outside this project's approval (another project's, a pinned
+      external's)
+createdAt: '2026-10-25T19:06:56.811Z'
+updatedAt: '2026-10-25T19:06:57.926Z'

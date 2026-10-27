@@ -243,6 +243,12 @@ methods:
           instanceAdmin.
         type: local
       - stepNumber: 11
+        description: >-
+          When the record's projects narrowing names projects rather than '*', carry the same
+          entries as the Principal's keyNarrowing, so authorization confines the key to them
+          wherever its owner's permissions would reach further
+        type: local
+      - stepNumber: 12
         description: Return the authenticated principal
         type: return
         outcome: authenticated principal
@@ -483,4 +489,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-10-23T22:12:46.257Z'
+updatedAt: '2026-10-27T08:43:37.984Z'

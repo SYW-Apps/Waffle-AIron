@@ -115,6 +115,38 @@ methods:
         type: string
         description: The bound project's root
     effect: io
+  - name: fingerprintSources
+    description: >-
+      Fingerprint the source files buildCodeModel would read, without reading them: the same file
+      set on the same containment terms (the declared roots walked, every spec-named path resolved),
+      each file's project-relative path, size and modification time folded into one string in a
+      stable order. A file that is missing or escaped contributes its classification instead, so a
+      file appearing or vanishing changes the fingerprint. Stat-only: no file content is read, which
+      is what makes it cheap enough to run before every lookup. A size- and time-preserving edit
+      within the clock's resolution is not seen; the fingerprint says the files look unchanged, not
+      that their contents are.
+    signature: >-
+      fingerprintSources(implementations: list<ImplementationSpec>, types: list<TypeSpec>,
+      projectRoot: string, sourceRoots?: list<string>, exclude?: list<string>): string
+    returns: string
+    params:
+      - name: implementations
+        type: list<ImplementationSpec>
+        description: As buildCodeModel takes them
+      - name: types
+        type: list<TypeSpec>
+        description: As buildCodeModel takes them
+      - name: projectRoot
+        type: string
+      - name: sourceRoots
+        type: list<string>
+        optional: true
+      - name: exclude
+        type: list<string>
+        optional: true
+    guarantees:
+      - idempotent
+    effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-10-07T21:50:13.355Z'
+updatedAt: '2026-10-25T19:08:09.179Z'

@@ -1,0 +1,47 @@
+id: mcp_lookup_orchestrator_impl
+name: MCP Lookup Orchestrator Implementation
+description: >-
+  Writes the validator's lookup answers for an agent: a small default, a handle per group, and the
+  closing line saying what was and was not searched.
+contract: imcp_lookup_orchestrator
+sourcePath: src/mcp/lookup.ts
+methods:
+  - name: search
+    narrative:
+      - stepNumber: 1
+        description: Ask the validator for the matches
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: searchSpecs
+      - stepNumber: 2
+        description: >-
+          Write one line per match (id, kind, place, evidence, approval, sourcePath or planned),
+          then how many more there were and how to see them (a larger limit or a narrower query),
+          then the snapshot line: what was searched, what was not, the code grade read
+        type: local
+      - stepNumber: 3
+        description: Answer the text with the whole result
+        type: return
+        outcome: answer
+  - name: references
+    narrative:
+      - stepNumber: 1
+        description: Ask the validator for the references
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: findReferences
+      - stepNumber: 2
+        description: >-
+          Write the answer: for an ambiguous target, the candidates as a search answer writes them
+          and a line asking for one id; otherwise the target and its impact, then each group
+          (design, code, tests, text, waivers, declared-only, observed-only) as its count and its
+          strongest five, a group named in expand written whole, an empty group left out, and each
+          cut group's expand name. Close with the snapshot line
+        type: local
+      - stepNumber: 3
+        description: Answer the text with the whole result
+        type: return
+        outcome: answer
+status: complete
+createdAt: '2026-10-25T19:16:20.045Z'
+updatedAt: '2026-10-25T19:17:49.023Z'

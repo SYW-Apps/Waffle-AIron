@@ -1,0 +1,31 @@
+kind: value-object
+id: lookup_references_result
+name: LookupReferencesResult
+description: >-
+  Everything that refers to one element, with the waivers that cover it and how far a change to it
+  reaches. When the target names no single element, target is absent, candidates lists the elements
+  it could mean, and no references are given.
+subsystem: sdd_validator
+fields:
+  - name: target
+    type: LookupMatch?
+    optional: false
+  - name: candidates
+    type: list<LookupMatch>
+    optional: false
+  - name: references
+    type: list<LookupReference>
+    optional: false
+  - name: waivers
+    type: list<LookupWaiver>
+    optional: false
+  - name: impact
+    type: LookupImpact
+    optional: false
+  - name: snapshot
+    type: LookupSnapshot
+    optional: false
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:41.330Z'
+updatedAt: '2026-10-25T19:07:42.189Z'

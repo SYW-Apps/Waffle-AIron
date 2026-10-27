@@ -1,0 +1,22 @@
+id: reference_finder
+name: Reference Finder
+description: >-
+  Answers everything that refers to one element (a component, a contract method, a type or field, a
+  file), each reference graded by how it is known: declared (a dependsOn, a call step, a type
+  position, an export use), resolved (a code call the compiler resolved), syntactic (an import or a
+  name in code), text (a mention in tests or prose) or unresolved. Joins the declared edges with
+  what the code does, so a declared caller the code never calls and a code caller the design never
+  declared are both named; groups tests apart; names the declared exceptions (unclaimed files,
+  carried findings) that cover the element; and states an impact verdict for a change to it. Says
+  what it searched and what it did not.
+subsystem: sdd_validator
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - validator_core_adapter
+  - code_model_loader
+  - source_analysis_adapter
+  - spec_search
+status: complete
+createdAt: '2026-10-25T18:57:52.285Z'
+updatedAt: '2026-10-25T19:17:26.597Z'

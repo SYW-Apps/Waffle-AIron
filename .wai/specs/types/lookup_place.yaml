@@ -1,0 +1,30 @@
+kind: value-object
+id: lookup_place
+name: LookupPlace
+description: 'Where an element sits in the design: from the project down to the spec that holds it.'
+subsystem: sdd_validator
+fields:
+  - name: project
+    type: string
+    description: The project's id; this project's own for a part's element
+    optional: false
+  - name: member
+    type: string
+    description: >-
+      The member alias the element lives under: a part's or a member project's, as project.yaml
+      declares it
+    optional: true
+  - name: subsystem
+    type: string
+    optional: true
+  - name: component
+    type: string
+    optional: true
+  - name: container
+    type: string
+    description: The contract, implementation, type or group holding a method, field or type
+    optional: true
+methods: []
+sourcePath: src/models/lookup.ts
+createdAt: '2026-10-25T19:07:21.100Z'
+updatedAt: '2026-10-25T19:07:22.024Z'

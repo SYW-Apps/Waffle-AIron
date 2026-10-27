@@ -1,0 +1,17 @@
+id: mcp_lookup_orchestrator
+name: MCP Lookup Orchestrator
+description: >-
+  The lookup tools' workflows (sdd_search_specs, sdd_find_references): asks the validator for the
+  matches or references, which carry each element's place, approval state and the component whose
+  brief covers it, and shapes the answer for an agent's context: a small default with a handle to
+  expand each group, and a closing line saying what was searched, what was not, and the snapshot it
+  read. Its own component beside the network and externals workflows, because it shares no write
+  path with the authoring workflows.
+subsystem: sdd_mcp
+componentType: Orchestrator
+owns: []
+dependsOn:
+  - mcp_validator_adapter
+status: complete
+createdAt: '2026-10-25T18:57:54.879Z'
+updatedAt: '2026-10-25T19:17:22.771Z'

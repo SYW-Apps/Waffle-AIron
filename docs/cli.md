@@ -1054,7 +1054,7 @@ writes**; anything but yes writes nothing. In a script, pass `-y, --yes`: the
 write happens without the report, and the command says it applied without
 showing it. A run with no terminal to ask on (CI, a pipe) behaves the same way.
 
-### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>] [--no-health]`
+### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--types] [--group <id>] [--all] [--out <path>] [--no-health]`
 Generate architecture diagrams derived from the spec tree — living
 documentation from the same source of truth as the conformance gate. Every
 format writes a file (by default under `.wai/docs/diagrams/`; `--out` names
@@ -1084,13 +1084,24 @@ another file or directory); nothing opens automatically.
   to undo — and "export PNG" renders the full graph to a high-res image for
   Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
   works offline).
+- `--types`: the **type groups overview** as Mermaid (`types/index.md`): one
+  node per type group with the types it holds, child groups inside their
+  parent, an Ungrouped node, and the references between two groups added up
+  into one counted edge.
+- `--group <id>`: one type group's types as a Mermaid **class diagram**
+  (`types/groups/<parent>/<group>.md`): fields, enum values and methods, an
+  edge per reference labelled with the field or method, and each type it
+  references in another group as a stub naming that group. Only the
+  project's own types are drawn. `--types` and `--group` are Mermaid only:
+  the canvas already folds types by group.
 - `--format <mermaid|canvas|drawio|excalidraw>`: friendly alias for the flags below/above.
 - `--drawio` / `--excalidraw`: **editable** exports in open formats
   (draw.io / diagrams.net XML, Excalidraw scene JSON) with the exact same
   computed layout as the canvas — import into diagrams.net, excalidraw.com,
   VS Code extensions, or any whiteboard tool that accepts these formats.
 - `--all`: write the full set (system, per-subsystem, one sequence per
-  entrypoint method with a narrative, plus `canvas.html`,
+  entrypoint method with a narrative, the type groups overview, one class
+  diagram per type group and one of the ungrouped types, plus `canvas.html`,
   `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
 - `--no-health`: skip comparing each consumption relation with its live
@@ -1483,13 +1494,13 @@ its `sdd_validate_tree` answer, with an `OLDER SERVER` banner (`olderServer` in 
 content, where the tool has one). Fix it by updating or removing the old install (`where wairon` on Windows,
 `which -a wairon` elsewhere), then reconnect the assistant.
 
-The local server offers 50 tools:
+The local server offers 52 tools:
 
 | Group | Tools |
 |-------|-------|
 | Topology (read) | `listAgents`, `getAgent`, `listDomains`, `validateTopology`, `getProjectConfig` |
 | Authoring | `sdd_initialize_system`, `sdd_add_subsystem`, `sdd_set_public_interfaces`, `sdd_add_component`, `sdd_define_interface`, `sdd_set_endpoints` (dry run), `sdd_write_narrative`, `sdd_add_type` (dry run), `sdd_add_group` (dry run), `sdd_update_spec` (dry run, search), `sdd_delete_spec` (dry run, force, search) |
-| Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree` |
+| Reading and checking | `sdd_get_spec`, `sdd_get_status`, `sdd_validate_tree`, `sdd_search_specs` (where is X designed, which spec holds this file or symbol), `sdd_find_references` (who uses X, what breaks if it changes) |
 | Renames and moves (in this tree) — each with `dryRun` | `sdd_rename_component`, `sdd_rename_method`, `sdd_rename_param`, `sdd_rename_type`, `sdd_rename_field`, `sdd_rename_spec` (a contract or an implementation on its own), `sdd_move_methods`, `sdd_move_spec` (a component or a type to another subsystem) |
 | Members | `sdd_add_member`, `sdd_move_member` |
 | Family migrations (each takes `dryRun`) | `sdd_externalize_subsystem`, `sdd_promote_member`, `sdd_demote_member`, `sdd_internalize_member`, `sdd_attach_member`, `sdd_detach_member`, `sdd_adopt_member`, `sdd_rename_project`, `sdd_rename_member_alias` |
@@ -1611,6 +1622,13 @@ is not a boolean, or a missing or unknown `requestId` is never read as a denial.
 decided is always the signed-in person, never a field of the body. The admin API's
 `POST /admin/approvals/{id}/decision` takes the same `approved` and `reason`, with the id in the path.
 
+**A reviewer without a web sign-in.** Only the built-in administrator signs in to the web UI
+with a password; everyone else signs in through an SSO provider. Without one, a reviewer decides
+with their own API key (an administrator mints it: `wairon host key mint --owner <their user id>`) on the admin API:
+`GET /admin/approvals?status=pending` lists the pending requests they may decide, and
+`POST /admin/approvals/{id}/decision` decides one, with `Authorization: Bearer <key>`. The
+decision is recorded as theirs, and their `approval:decide` grant is checked as on the web.
+
 | Command | Description |
 |---------|-------------|
 | `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |
@@ -1620,7 +1638,7 @@ decided is always the signed-in person, never a field of the body. The admin API
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
-| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
+| `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members, and a member is named by its own record id. A key never narrows to a subsystem: confine a person to one with `wairon host permission set --project <id> --subsystem <id>`. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |
 | `wairon host lock --project <id>` | The same lock flow as `wairon lock` (design gate, `members`, `code` beside the claim, format 3) against the hosted project |
@@ -1663,7 +1681,9 @@ A person signs in one of two ways; the startup log names the ones configured:
 
 - **The built-in administrator.** Set both `WAIRON_ADMIN_USER` and
   `WAIRON_ADMIN_PASSWORD` in the server's environment; the login page then shows
-  a username and password form (`POST /web/login`). This account is the
+  a username and password form. The form posts the JSON body
+  `{ "user": "<WAIRON_ADMIN_USER>", "password": "<WAIRON_ADMIN_PASSWORD>" }` to
+  `POST /web/login`, which answers with the session cookie. This account is the
   instance super-administrator, like `WAIRON_ADMIN_TOKEN`, and the only
   password login: there are no per-user passwords.
 - **Single sign-on (OIDC).** Everyone else signs in through an identity
@@ -1691,6 +1711,14 @@ administrator grants them under Users or Permissions, or with
 `wairon host permission set --user <id>` using the id the Users view shows.
 API keys for AI tools stay what `wairon host key mint --owner` mints (or the UI
 under Agents), and act as their owner.
+
+The `/web/*` routes are the browser app's own backend, not an API: they answer
+a signed-in browser session. An API key belongs on `/mcp` (what `wairon mcp
+install --hosted` configures), and administration scripts use `wairon host`.
+Wherever it is sent, a key acts as its owner and never more: a key narrowed to
+projects (`--project`) is refused every permission outside them, including on
+`/web/*` and the admin API, and never holds the instance administrator's
+bypass, whoever owns it.
 
 ---
 

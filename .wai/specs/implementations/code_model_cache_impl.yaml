@@ -1,0 +1,23 @@
+id: code_model_cache_impl
+name: Code Model Cache Implementation
+description: >-
+  An in-process map from resolved project root to its one entry. It lives as long as the server
+  process and is never written to disk: a restart starts empty and the first lookup rebuilds.
+contract: icode_model_cache
+sourcePath: src/core/lookup/code-model-cache.ts
+methods:
+  - name: get
+    narrative: []
+    detail: intent
+    intent: >-
+      Answer the entry held under the root, or none when nothing is held for it. Reads only; never
+      fails.
+  - name: put
+    narrative: []
+    detail: intent
+    intent: >-
+      Hold the entry under the root, replacing any earlier entry whole. Holding the same entry twice
+      leaves one. Never fails; nothing is written to disk.
+status: complete
+createdAt: '2026-10-25T19:15:58.630Z'
+updatedAt: '2026-10-25T19:17:46.643Z'

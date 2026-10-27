@@ -39,6 +39,8 @@ export {
   repairSignatures,
   repairTypeSpellings,
   renderDiagram,
+  // `wairon diagram --types | --group <id>` (spec_tree_portal renderTypeDiagrams).
+  renderTypeDiagrams,
   generateAll,
   resolveExpectedOutputPaths,
   resolveDomains,

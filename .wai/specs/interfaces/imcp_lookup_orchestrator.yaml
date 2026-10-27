@@ -1,0 +1,44 @@
+id: imcp_lookup_orchestrator
+name: MCP Lookup Orchestrator Interface
+description: 'The lookup tools'' workflows: the validator''s answer shaped for an agent''s context. Read-only.'
+component: mcp_lookup_orchestrator
+methods:
+  - name: search
+    description: >-
+      The sdd_search_specs workflow: ask the validator for the matches and write one line per match
+      (id, kind, place, evidence, approval, sourcePath or planned), then how many more there were
+      and the line saying what was searched and what was not. The whole result travels as structured
+      content.
+    signature: 'search(query: string, limit?: int): LookupAnswer'
+    returns: LookupAnswer
+    params:
+      - name: query
+        type: string
+      - name: limit
+        type: int
+        optional: true
+  - name: references
+    description: >-
+      The sdd_find_references workflow: ask the validator for the references and write the target,
+      the impact, then each group (design, code, tests, text, waivers, and the declared-only and
+      observed-only disagreements) as a count with its strongest few; a group named in expand is
+      written whole. Candidates, when the target was ambiguous, are written as a search answer is.
+      Closed by the line saying what was searched and what was not. The whole result travels as
+      structured content.
+    signature: 'references(target: string, expand?: list<string>, includeText?: bool): LookupAnswer'
+    returns: LookupAnswer
+    params:
+      - name: target
+        type: string
+      - name: expand
+        type: list<string>
+        description: >-
+          The groups to write whole: design, code, tests, text, waivers, declared-only,
+          observed-only
+        optional: true
+      - name: includeText
+        type: bool
+        optional: true
+status: complete
+createdAt: '2026-10-25T19:08:40.210Z'
+updatedAt: '2026-10-25T19:17:39.381Z'

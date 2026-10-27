@@ -48,6 +48,20 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: adviseExternals
+  - name: searchSpecs
+    narrative:
+      - stepNumber: 1
+        description: Call searchSpecs on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: searchSpecs
+  - name: findReferences
+    narrative:
+      - stepNumber: 1
+        description: Call findReferences on the validator portal
+        type: call
+        targetComponent: validator_portal
+        targetMethod: findReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:18:00.365Z'
+updatedAt: '2026-10-25T19:16:32.892Z'

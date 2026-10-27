@@ -1,0 +1,18 @@
+kind: enum
+id: type_diagram_scope
+name: TypeDiagramScope
+description: Which slice of the project's types one type diagram draws.
+fields: []
+methods: []
+sourcePath: src/core/diagram.ts
+values:
+  - name: index
+    description: >-
+      The overview: one node per group with its type count, child groups inside their parent, and
+      the references between groups added up into one counted edge per pair
+  - name: group
+    description: One group's own types, with stubs for the types they reference elsewhere
+  - name: ungrouped
+    description: The types no group holds, drawn as a group's are
+createdAt: '2026-10-26T23:57:32.607Z'
+updatedAt: '2026-10-26T23:57:33.340Z'

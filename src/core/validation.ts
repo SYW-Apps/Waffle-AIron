@@ -58,6 +58,10 @@ import type { LoadedExtensions } from './extensions.js';
 import { projectIdentity, requiredPolicies, type PackRequirement, type PackSelection, type ProjectIdentity } from '../models/project.js';
 // pack_impact: the pre-write pack measurement the portal forwards to.
 import * as packImpact from './pack-impact.js';
+// spec_search and reference_finder: the lookups the portal forwards searchSpecs and findReferences to.
+import * as specSearch from './lookup/spec-search.js';
+import * as referenceFinder from './lookup/reference-finder.js';
+import type { LookupSearchResult, LookupReferencesResult } from '../models/lookup.js';
 import type { PackCandidate, PackDoctrine, PackImpact } from '../models/pack-impact.js';
 import type { ExtensionPack } from './extensions.js';
 import { analyzerDigest, computeGateIdentity, gateParts, type GateConfig } from './rules/gate-identity.js';
@@ -161,6 +165,22 @@ export function findTestsReferencing(
   testRoots: readonly string[],
 ): TestsToRevisit[] {
   return findTestsUnderRoots(methods, projectRoot, testRoots);
+}
+
+/**
+ * ispec_validator/ivalidator_portal.searchSpecs — find design elements from whatever the caller holds.
+ * Forwarded to the spec search. Read-only.
+ */
+export function searchSpecs(query: string, limit?: number): LookupSearchResult {
+  return specSearch.find(query, limit);
+}
+
+/**
+ * ispec_validator/ivalidator_portal.findReferences — everything that refers to one element, graded by evidence.
+ * Forwarded to the reference finder. Read-only.
+ */
+export function findReferences(target: string, includeText?: boolean): LookupReferencesResult {
+  return referenceFinder.collect(target, includeText);
 }
 
 // ---------------------------------------------------------------------------

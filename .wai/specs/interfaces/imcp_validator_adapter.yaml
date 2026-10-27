@@ -71,6 +71,12 @@ methods:
         type: list<string>
         description: Aliases the run already composed as part of its gate
         optional: true
+  - name: searchSpecs
+    description: Calls searchSpecs on the validator portal.
+    signatureFrom: validator_portal.searchSpecs
+  - name: findReferences
+    description: Calls findReferences on the validator portal.
+    signatureFrom: validator_portal.findReferences
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T18:55:15.180Z'
+updatedAt: '2026-10-25T19:08:36.854Z'

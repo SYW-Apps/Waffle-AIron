@@ -140,10 +140,14 @@ methods:
       - stepNumber: 11
         description: >-
           Write the entry under mcpServers.wairon — REWRITING a stale one rather than skipping,
-          because a stale command path is exactly how an agent silently loses its wairon tools. When
-          the file lies OUTSIDE the project root and already exists, first copy it beside itself as
-          <file>.wairon-backup-<timestamp> and say where, so a machine-wide configuration is never
-          replaced without its previous value kept.
+          because a stale command path is exactly how an agent silently loses its wairon tools.
+          Re-read the file just before writing and put the entry into what it holds now (what step 6
+          read when it no longer parses), so a change the agent tool or another process made since
+          step 6 is kept; these files belong to the agent tools, which take no wairon lock, so no
+          lock file is left beside them. Replace the file atomically through a temp file of its own,
+          keeping its line endings. When the file lies OUTSIDE the project root and already exists,
+          first copy it beside itself as <file>.wairon-backup-<timestamp> and say where, so a
+          machine-wide configuration is never replaced without its previous value kept.
         type: local
       - stepNumber: 12
         description: >-
@@ -211,4 +215,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-22T15:00:13.333Z'
+updatedAt: '2026-10-26T22:46:42.422Z'

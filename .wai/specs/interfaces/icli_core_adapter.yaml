@@ -634,6 +634,7 @@ methods:
       Forward to spec_tree_portal.loadGroupSpecs: the type group tree, which doctor's
       group-placement repair reads
     signatureFrom: spec_tree_portal.loadGroupSpecs
+    effect: read
   - name: loadTypeSpecs
     description: >-
       Forward to spec_tree_portal.loadTypeSpecs: every type of the bound tree, for doctor's
@@ -644,6 +645,13 @@ methods:
       Forward to spec_tree_portal.scanAllSpecs: the scan with each spec's file, which doctor's
       group-placement repair compares with the folder each type and group should sit in
     signatureFrom: spec_tree_portal.scanAllSpecs
+  - name: renderTypeDiagrams
+    description: >-
+      Calls renderTypeDiagrams on the core portal: the project's types drawn as Mermaid per type
+      group, for `wairon diagram --types`, `--group` and `--all`.
+    signature: 'renderTypeDiagrams(): list<TypeDiagram>'
+    returns: list<TypeDiagram>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:00.291Z'
+updatedAt: '2026-10-26T23:57:49.143Z'

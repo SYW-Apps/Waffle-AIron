@@ -17,5 +17,9 @@ values:
     description: A scope's everyone assignment
   - name: instance-default
     description: Nothing decided; the instance default applied
+  - name: key-narrowing
+    description: >-
+      The API key the request came with is narrowed to projects that do not cover the target, so its
+      owner's permissions do not apply there
 createdAt: '2026-10-04T23:18:07.111Z'
-updatedAt: '2026-10-04T23:18:07.504Z'
+updatedAt: '2026-10-27T08:43:37.129Z'

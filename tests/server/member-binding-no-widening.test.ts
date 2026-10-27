@@ -83,6 +83,10 @@ describe('hosted members: bound by record id, a qualifier binds nothing, nothing
     for (const qualified of ['demo::billing', 'demo::billing::payments', 'demo::plain']) {
       expect(() => assertMintableNarrowingEntry(dataDir, qualified)).toThrow(/name it by its project record id/);
     }
+    // The refusal names the member records of the project it names, and how to confine to a subsystem instead.
+    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/the member records of "demo": "billing", "other"\)\. A key narrows to whole projects, never to a subsystem/);
+    expect(() => assertMintableNarrowingEntry(dataDir, 'demo::plain')).toThrow(/wairon host permission set --user <id> --capability project:write --project <id> --subsystem <id>/);
+    expect(() => assertMintableNarrowingEntry(dataDir, 'ghost::x')).not.toThrow(/member records/);
     expect(() => assertMintableNarrowingEntry(dataDir, 'ghost')).toThrow(/unknown project "ghost"/);
     expect(() => assertMintableNarrowingEntry(dataDir, 'Not A Project')).toThrow(/invalid project narrowing entry/);
   });

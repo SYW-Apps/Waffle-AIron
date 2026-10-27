@@ -1,0 +1,30 @@
+id: ispec_search
+name: Spec Search Interface
+description: Find design elements from whatever the caller holds. Read-only.
+component: spec_search
+methods:
+  - name: find
+    description: >-
+      Match the query against every element of the bound project and the members in its reach: spec
+      ids and names, methods and fields, type names, endpoints, each implementation's and method's
+      sourcePath and symbol, and, for a query naming a code file or symbol that no spec names, the
+      code model's declarations. Rank by evidence (an exact id or name, then a declared code link,
+      then a resolved code fact, then a name in code, then text), then by the narrowest place. Each
+      match carries its place, its approval state against the lock, its realization (sourcePath,
+      planned) and the component whose brief covers it. A query matching nothing answers no matches
+      and a snapshot saying what was read.
+    signature: 'find(query: string, limit?: int): LookupSearchResult'
+    returns: LookupSearchResult
+    params:
+      - name: query
+        type: string
+        description: >-
+          An id or part of one, a name, owner.member, an endpoint (POST /orders, a CLI command, a
+          JSON-RPC method), a project-relative file path or a code symbol
+      - name: limit
+        type: int
+        description: The most matches to answer; 10 when omitted
+        optional: true
+status: complete
+createdAt: '2026-10-25T19:08:19.593Z'
+updatedAt: '2026-10-25T19:17:45.468Z'

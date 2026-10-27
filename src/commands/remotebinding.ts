@@ -2,6 +2,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
+import { withFileLock } from '../utils/file-lock.js';
+import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
 
 // ---------------------------------------------------------------------------
 // Remote Binding Store (remote_binding_store_impl)
@@ -18,6 +20,8 @@ import { aiPathsAt } from '../config/paths.js';
 // Every read goes to disk (no RAM copy to go stale when another process
 // re-attaches or a token is rotated) and treats a missing or malformed file as
 // "nothing stored" — an unattached checkout is a normal state, not an error.
+// Every change to the credential file is one read-change-write under its
+// write lock, refused rather than replacing a file it cannot read.
 // ---------------------------------------------------------------------------
 
 /** Where a recorded remote binding was resolved from. */
@@ -62,12 +66,13 @@ function readJson<T>(file: string): T | null {
   }
 }
 
-/** Write atomically (temp + rename) so a concurrent read never sees a half file. */
+/**
+ * Write atomically through a temp file of this writer's own, then a rename, so
+ * a concurrent read never sees a half file and two writers never share a temp.
+ */
 function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', mode !== undefined ? { mode } : undefined);
-  fs.renameSync(tmp, file);
+  replaceFile(file, JSON.stringify(value, null, 2) + '\n', mode);
   if (mode !== undefined) {
     try {
       fs.chmodSync(file, mode);
@@ -75,6 +80,26 @@ function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
       /* platforms without POSIX modes (Windows) — the rename already landed */
     }
   }
+}
+
+/**
+ * One read-change-write of the credential map under its write lock: read fresh
+ * (absent is empty; a file that cannot be read or parsed throws and nothing is
+ * written), apply the change, replace the file owner-only. A change answering
+ * null writes nothing.
+ */
+function updateCredentials(change: (store: Record<string, string>) => Record<string, string> | null): void {
+  const file = credentialsPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  withFileLock(file, () => {
+    const current = readJsonForUpdate<unknown>(file, {});
+    if (current === null || typeof current !== 'object' || Array.isArray(current)) {
+      throw new Error(`${file} is not a JSON object of credentials. Nothing was written; repair or remove the file.`);
+    }
+    const next = change({ ...(current as Record<string, string>) });
+    // 0600: this file holds live bearer credentials.
+    if (next !== null) writeJsonAtomic(file, next, 0o600);
+  });
 }
 
 /** The binding recorded for a project root, or null when unattached. */
@@ -114,10 +139,7 @@ export function readCredential(url: string): string | null {
 
 /** Store the credential for an instance URL in the USER's credential store. */
 export function writeCredential(url: string, token: string): void {
-  const store = readJson<Record<string, string>>(credentialsPath()) ?? {};
-  store[normalizeInstanceUrl(url)] = token;
-  // 0600: this file holds live bearer credentials.
-  writeJsonAtomic(credentialsPath(), store, 0o600);
+  updateCredentials((store) => ({ ...store, [normalizeInstanceUrl(url)]: token }));
 }
 
 /**
@@ -125,10 +147,13 @@ export function writeCredential(url: string, token: string): void {
  * revoke it on the instance; callers must say so plainly.
  */
 export function clearCredential(url: string): void {
-  const store = readJson<Record<string, string>>(credentialsPath());
-  if (!store) return;
-  delete store[normalizeInstanceUrl(url)];
-  writeJsonAtomic(credentialsPath(), store, 0o600);
+  if (!fs.existsSync(credentialsPath())) return;
+  updateCredentials((store) => {
+    const key = normalizeInstanceUrl(url);
+    if (!(key in store)) return null;
+    delete store[key];
+    return store;
+  });
 }
 
 /** The instance URLs a credential is stored for — URLs only, never tokens. */

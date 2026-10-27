@@ -1,0 +1,19 @@
+kind: value-object
+id: lookup_answer
+name: LookupAnswer
+description: >-
+  A lookup tool's answer: the text an agent reads (a small default with a handle to expand each
+  group, closed by what was searched and what was not) and the whole typed result, carried as
+  structured content.
+subsystem: sdd_mcp
+fields:
+  - name: text
+    type: string
+    optional: false
+  - name: result
+    type: LookupSearchResult | LookupReferencesResult
+    optional: false
+methods: []
+sourcePath: src/mcp/lookup.ts
+createdAt: '2026-10-25T19:07:46.448Z'
+updatedAt: '2026-10-25T19:07:47.223Z'

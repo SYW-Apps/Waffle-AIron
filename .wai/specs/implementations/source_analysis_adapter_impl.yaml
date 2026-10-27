@@ -383,6 +383,28 @@ methods:
         type: return
         outcome: compiler_identity?
     symbol: compilerIdentity
+  - name: fingerprintSources
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Take the file set buildCodeModel takes, on the same terms: the declared roots walked
+          (containment-checked, node_modules and dot-directories skipped, known source extensions
+          only, exclude entries left out) and every spec-named path resolved and classified
+        type: local
+      - stepNumber: 2
+        description: >-
+          Stat each readable file for its size and modification time, reading no content; a missing
+          or escaped file contributes its classification instead
+        type: local
+      - stepNumber: 3
+        description: >-
+          Fold path, size and time (or classification) in project-relative path order into one
+          digest
+        type: local
+      - stepNumber: 4
+        description: Answer the fingerprint
+        type: return
+        outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-23T22:16:01.664Z'
+updatedAt: '2026-10-25T19:16:36.391Z'

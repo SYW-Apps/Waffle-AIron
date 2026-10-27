@@ -55,12 +55,27 @@ methods:
     returns: ValidationResult
   - name: getStatus
     description: >-
-      Compose the spec-tree completeness dashboard, opened by the project's family context: the
-      alias this root is declared under by its parent and the parent project's name (only within the
-      request's reach), and the members this root declares with their paths. Members print as
-      projects, not subsystems.
-    signature: 'getStatus(): string'
+      Compose the spec-tree status, opened by the project's family context: the alias this root is
+      declared under by its parent and the parent project's name (only within the request's reach),
+      and the members this root declares with their paths. Members print as projects, not
+      subsystems. By default the answer is the summary an agent's context can hold (approval
+      verdict, counts per level and subsystem, findings by code, what to read next); detail full
+      answers the whole report.
+    signature: 'getStatus(subsystem?: string, recursive?: bool, detail?: StatusDetail): string'
     returns: string
+    params:
+      - name: subsystem
+        type: string
+        description: Report only this subsystem's slice
+        optional: true
+      - name: recursive
+        type: bool
+        description: Descend into the members this project declares
+        optional: true
+      - name: detail
+        type: StatusDetail
+        description: summary (the default) or full
+        optional: true
   - name: moveMember
     description: >-
       The sdd_move_member workflow: relocate a member's directory and point its `members` entry
@@ -599,4 +614,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-23T22:25:25.739Z'
+updatedAt: '2026-10-25T19:09:11.585Z'
