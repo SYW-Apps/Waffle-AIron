@@ -65,7 +65,7 @@ import { aiPathsAt } from '../config/paths.js';
 // git_source_adapter (stage 8): a git member's commit resolved and fetched.
 import * as gitSource from './adapters/git-source.js';
 import { projectConfigRepository, projectConfigRepositoryAt } from '../config/project-config.js';
-import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile, readsV5Forms } from '../utils/fs.js';
+import { getProjectRoot, runWithProjectRoot, ensureDir, listFilesRecursive, removeFile, renamePath, restoreFile, readsV5Forms, ignoreWriteLock } from '../utils/fs.js';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WaironError } from '../utils/errors.js';
 import { identifierProblem, reservedWordProblem } from '../models/identifiers.js';
@@ -589,6 +589,7 @@ function scaffoldPart(alias: string, memberDir: string, contained: boolean): Omi
   }
   const root = getProjectRoot();
   ensureDir(aiPathsAt(memberDir).specsDir());
+  ignoreWriteLock(aiPathsAt(memberDir).root());
   let configCreated = false;
   if (!contained) {
     const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
@@ -655,6 +656,7 @@ function scaffoldMemberProject(alias: string, memberDir: string, description?: s
   // Steps 7-15: scoped to the member, complete only what is missing.
   const creation = runWithProjectRoot(memberDir, (): Omit<MemberCreation, 'as' | 'storage'> => {
     ensureDir(aiPathsAt(memberDir).specsDir());
+    ignoreWriteLock(aiPathsAt(memberDir).root());
     // Steps 8-9: an existing configuration is the member's own and is never given selections.
     if (projectConfigRepository.exists()) {
       ensureProjectInitialized(alias, alias, vision);
@@ -1046,6 +1048,25 @@ function ownSpecFiles(family: ProjectFamily, except: string): string[] {
     .filter((p) => p.directory !== undefined).map((p) => aiPathsAt(p.directory!).specsDir())];
   const l0 = path.resolve(aiPathsAt(root).specsSystem());
   return dirs.flatMap(specFilesUnder).filter((f) => !isWithinDir(except, f) && path.resolve(f) !== l0);
+}
+
+/**
+ * The bound project's own writable spec folders: its specs folder and every
+ * part's that is stored on disk. A part's subsystems are the project's own, so
+ * a rename must walk them too; a part fetched from git is read-only here and is
+ * left out.
+ */
+function ownSpecsDirs(): string[] {
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  return [
+    aiPathsAt(getProjectRoot()).specsDir(),
+    ...parts.filter((p) => p.directory !== undefined && p.storage !== 'git').map((p) => aiPathsAt(p.directory!).specsDir()),
+  ];
+}
+
+/** Every spec file under one specs folder, or under each of several. */
+function specFilesIn(dirs: string | readonly string[]): string[] {
+  return (typeof dirs === 'string' ? [dirs] : dirs).flatMap(specFilesUnder);
 }
 
 /** One spec file as read: its kind, its id and the raw document. */
@@ -3124,13 +3145,13 @@ interface RewrittenSpec {
  * rewrite, persist what changed.
  */
 function rewriteRefFields(
-  specsDir: string,
+  specsDir: string | readonly string[],
   remap: (ref: string, position: RefPosition, owner?: string) => string,
   excludeDir?: string,
   dryRun = false,
 ): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+  for (const file of specFilesIn(specsDir)) {
     if (excludeDir && isWithinDir(excludeDir, file)) continue;
     let raw: any;
     try {
@@ -3156,9 +3177,9 @@ function rewriteRefFields(
  * follows too. Where the allow LIVES is the file walk's business: a spec the
  * rename moves carries its allows with it.
  */
-function rekeyLintAllows(specsDir: string, rename: IdentityRename, dryRun = false): RewrittenSpec[] {
+function rekeyLintAllows(specsDir: string | readonly string[], rename: IdentityRename, dryRun = false): RewrittenSpec[] {
   const rewritten: RewrittenSpec[] = [];
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+  for (const file of specFilesIn(specsDir)) {
     let raw: any;
     try {
       raw = readYamlFile(file);
@@ -3364,7 +3385,7 @@ export function renameComponent(componentId: string, newId: string, dryRun?: boo
   // Inside a hosted request, every spec the rename would write — the moved
   // specs and every spec whose references it rewrites — is judged against the
   // request's write reach before the first write; nothing is written on a refusal.
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = ownSpecsDirs();
   // An export entry whose public name was derived from a renamed id: the one
   // naming the moving interface, or naming the component with no interface.
   const derivesName = (entry: any): boolean => (entry.interface !== undefined
@@ -3541,13 +3562,13 @@ function refuseRetiredIds(wanted: { kind: 'component' | 'interface' | 'implement
  * changed; `dryRun` changes nothing.
  */
 function keepPublicNames(
-  specsDir: string,
+  specsDir: string | readonly string[],
   derives: (entry: any, owner?: string) => boolean,
   dryRun = false,
 ): { names: string[]; specs: RewrittenSpec[] } {
   const names: string[] = [];
   const specs: RewrittenSpec[] = [];
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+  for (const file of specFilesIn(specsDir)) {
     let raw: any;
     try {
       raw = readYamlFile(file);
@@ -3588,7 +3609,9 @@ function removeSpecFile(file: string, id: string): void {
     return;
   }
   removeFile(file);
-  const specsRoot = path.resolve(aiPathsAt(getProjectRoot()).specsDir());
+  // The specs folder the file lives in: the project's own, or the part's it sits in.
+  const specsRoot = ownSpecsDirs().map((d) => path.resolve(d)).find((d) => isWithinDir(d, file))
+    ?? path.resolve(aiPathsAt(getProjectRoot()).specsDir());
   for (let dir = path.dirname(path.resolve(file)); dir !== specsRoot && isWithinDir(specsRoot, dir); dir = path.dirname(dir)) {
     if (fs.readdirSync(dir).length > 0) break;
     fs.rmdirSync(dir);
@@ -3674,7 +3697,7 @@ export function renameSpecId(kind: WritableSpecKind, id: string, newId: string, 
   const rename: IdentityRename = { specs: [{ from: id, to: newId }] };
   const registerEdits = projectConfigRepository.rekeyCarried(rename, true);
   // Step 10: what the rewrite would change, collected without writing.
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = ownSpecsDirs();
   const remap = (ref: string, position: RefPosition): string => (kind === 'interface' && position === 'interface' && ref === id ? newId : ref);
   const derivesName = (entry: any): boolean => kind === 'interface' && entry.interface === id;
   const others = (specs: RewrittenSpec[]): string[] => [...new Set(specs.filter((s) => !(s.kind === kind && s.id === id)).map((s) => s.id))];
@@ -4454,7 +4477,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // before the first write; nothing is written on a refusal.
   const methodRemap = (ref: string, position: RefPosition, owner?: string): string =>
     (position === 'method' && owner === componentId && ref === methodName ? newName : ref);
-  const reachDir = aiPathsAt(getProjectRoot()).specsDir();
+  const reachDir = ownSpecsDirs();
   assertSpecsInReach(
     [
       ...(rename.methods?.[0]?.specs ?? []).map((id) => ({ kind: moving.some((i) => i.id === id) ? 'interface' : 'implementation', id })),
@@ -4534,7 +4557,7 @@ export function renameMethod(componentId: string, methodName: string, newName: s
   // Step 22: every reference to the method on THIS component, retargeted where
   // it is named: a narrative call, register or dispatch step, a dispatch-table
   // binding, and a lifecycle entrypoint. The rewriter persists what it changes.
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = ownSpecsDirs();
   const retargeted = rewriteRefFields(specsDir, methodRemap);
   // Still step 22: the lint allows naming it — a site on a spec it moved in, a
   // covered unit — follow as the register does.
@@ -4600,7 +4623,7 @@ function renameInSignature(signature: string, from: string, to: string): string 
  * PROSE_FIELDS), and the moved contracts whose method keeps it as a gRPC wire
  * method — a rename never edits prose, and never changes a published wire name.
  */
-function collectMentions(specsDir: string, methodName: string, moved: InterfaceSpec[]): string[] {
+function collectMentions(specsDir: string | readonly string[], methodName: string, moved: InterfaceSpec[]): string[] {
   const mentions = new Set<string>();
   for (const contract of moved) {
     const wireBound = contract.methods.some((m) => {
@@ -4620,7 +4643,7 @@ function collectMentions(specsDir: string, methodName: string, moved: InterfaceS
       : namesMethod(nested)));
   };
 
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+  for (const file of specFilesIn(specsDir)) {
     let raw: any;
     try {
       raw = readYamlFile(file);
@@ -4807,7 +4830,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean, allo
       return parts.join('');
     });
   };
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = ownSpecsDirs();
   const derivesName = (entry: any, owner?: string): boolean => entry.interface === undefined && entry.component === undefined
     && typeof entry.typeDef === 'string' && namesType(entry.typeDef, owner);
   /** Respell one spec's type positions in place; answers whether any changed. */
@@ -4865,7 +4888,7 @@ export function renameType(typeId: string, newId: string, dryRun?: boolean, allo
   /** The specs whose type positions name the type; `dryRun` writes nothing. The type's own file is the move's. */
   const respellAll = (dryRun: boolean): RewrittenSpec[] => {
     const out: RewrittenSpec[] = [];
-    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    for (const file of specFilesIn(specsDir)) {
       let raw: any;
       try {
         raw = readYamlFile(file);
@@ -5040,10 +5063,10 @@ export function renameField(typeId: string, field: string, newName: string, dryR
     const head = ref.slice(0, dot);
     return resolvedTo(resolveTypeRef(head, owner, all), owner) === typeQualified;
   };
-  const specsDir = aiPathsAt(getProjectRoot()).specsDir();
+  const specsDir = ownSpecsDirs();
   const respell = (dryRun: boolean): RewrittenSpec[] => {
     const out: RewrittenSpec[] = [];
-    for (const file of listFilesRecursive(specsDir, '.yaml')) {
+    for (const file of specFilesIn(specsDir)) {
       let raw: any;
       try {
         raw = readYamlFile(file);
@@ -5103,7 +5126,7 @@ export function renameField(typeId: string, field: string, newName: string, dryR
  * A field name is often an ordinary word ("kind", "id"), so a spec that never
  * reaches the type is not reported for it. Nothing is rewritten.
  */
-function fieldMentions(specsDir: string, type: TypeSpec, field: string): string[] {
+function fieldMentions(specsDir: string | readonly string[], type: TypeSpec, field: string): string[] {
   const carrying = carryingTypes(type);
   const named = identifierPattern(field);
   const typeWords = [...new Set(carrying.flatMap((t) => [t.id, t.id.split('::').pop()!, t.name, t.symbol]
@@ -5126,7 +5149,7 @@ function fieldMentions(specsDir: string, type: TypeSpec, field: string): string[
     return !!value && typeof value === 'object' && Object.values(value as Record<string, unknown>).some(namesType);
   };
   const mentions = new Set<string>();
-  for (const file of listFilesRecursive(specsDir, '.yaml')) {
+  for (const file of specFilesIn(specsDir)) {
     let raw: any;
     try {
       raw = readYamlFile(file);
