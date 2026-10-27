@@ -4,6 +4,102 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.3.0 (from v6.2.1)
+
+Upgrading: nothing in a spec tree has to change.
+
+1. Install 6.3.0 (the Node.js requirement is unchanged from 6.2.0: 22.23.4+, 24.22.1+ or
+   26.12.1+).
+2. Run `wairon generate` to refresh the guides and skills, so your assistant's guide lists the two
+   new lookup tools (`wairon doctor` reports the guides stale until you do), then reconnect your
+   assistant's MCP server so it runs the new release.
+3. Commit the regenerated files.
+
+### New
+
+- **Spec lookup for assistants.** Two read-only MCP tools answer the questions a session used to
+  answer by reading spec files:
+  - `sdd_search_specs` finds any design element from whatever you hold: an id, part of a name,
+    a method, a type, an endpoint, a code file or a code symbol. Each match comes with where it
+    sits, who owns it, the code that realizes it, its approval state and how sure the match is.
+  - `sdd_find_references` answers "who uses this, and what breaks if it changes". Each reference
+    is graded by its evidence, and what the design declares is joined with what the code does:
+    confirmed, declared only, or in the code only. Tests and waivers are listed apart, and the
+    answer ends with an impact verdict, from one component up to `public` when the project's
+    export table exports the target beyond the family. A code file answers for the component it
+    realizes, and a method that only re-exports another counts as that method, as the
+    code-vs-design gate already judges it.
+
+  The code model behind both is cached against the source files, so later lookups are fast (on a
+  large repository, about 12 s for the first and under 4 s after).
+- **Type diagrams per group.** `wairon diagram --types` writes a Mermaid overview of the type
+  groups (`types/index.md`): each group with its type count, child groups inside their parent,
+  and the references between two groups added up into one counted edge. `wairon diagram --group
+  <id>` writes one group's types as a Mermaid class diagram, with fields, enum values and methods,
+  and a stub naming the group of each type it references elsewhere. `--all` writes every type
+  diagram with the rest of the set. Both options are Mermaid only; the canvas already folds types
+  by group.
+
+### Changed
+
+- **`sdd_get_status` answers a summary by default.** Pass `detail: full` for the whole report. A
+  script that read the full report from the default answer must now ask for it.
+- **A type planned in a file another component already wrote is planned, not missing.** When the
+  components that write a type (its `componentClass`, else the components whose contracts use it)
+  have no code yet, a declaration missing from a shared file that exists is `SOURCE_FILE_PLANNED`,
+  a notice naming those writers, instead of an `UNREALIZED_TYPE` warning that failed
+  `validate --ci` before anyone could write it. Once one of them has code, a missing declaration is
+  `UNREALIZED_TYPE` as before.
+- **The CLI's own files take a write lock.** The credential store (`~/.wairon/credentials.json`)
+  and the settings file (`~/.wairon/config.json`) do each change under the same write lock the
+  hosted stores use, so two `wairon login` or `remote attach` commands at once both keep their
+  credential, and two commands recording settings at once both keep theirs. A credential file that
+  exists but cannot be read is now refused, naming the file, instead of being replaced by a file
+  holding only the new credential: repair or remove it. `wairon mcp install` re-reads the agent's
+  configuration just before it writes and adds only the wairon entry, so a server the agent added
+  in the meantime is kept.
+
+### Fixed
+
+- **Spec files are replaced atomically.** A spec write goes to a temporary file that is then
+  renamed over the old one, so a command reading the tree at the same moment sees the old spec or
+  the new one, never an empty file (it answered `spec-missing` before). A symbolic link is written
+  through, permissions are kept, and a read-only file is still refused.
+- **A type whose new home is taken is refused.** A type leaving its group, or joining another,
+  while another file already holds its new path, used to change the group, leave the file where
+  it was and report success. Nothing is written now, and the refusal names both files.
+- **A refusal names another project's spec as that project spells it.** A write naming a member
+  project's spec in another letter case, or by its name, is refused with the id that project uses,
+  and `spec-missing` adds `did you mean "<id>"?` when exactly one spec matches that way.
+- **Python code is quoted as Python.** Conformance findings wrote a Python call as
+  `this._store.lookup(…)`; they now write `self.` and no `new`.
+- **`wairon host key mint --project "<id>::<name>"`** explains that a key narrows to whole
+  projects, lists the project's members, and names the permission grant that confines a person to
+  one subsystem.
+
+### Docs
+
+- The hosted web routes (`/web/*`) are the browser app's backend, not an API: an API key belongs
+  on `/mcp`, and administration scripts use `wairon host`. `docs/cli.md` also documents the
+  `POST /web/login` body.
+
+### Known limitations
+
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores and the
+  CLI's own files, 60 s for the spec tree) can be taken over while it still works. Its final write
+  is refused when that happened, which narrows the window to the write itself but does not close
+  it. (Carried from 6.2.0.)
+- `wairon mcp install` does not lock the agent's configuration file: the agent tools write it
+  without wairon's lock. It re-reads the file just before writing, which narrows the window.
+- A member project's own `wairon validate` does not show the network findings judged at the
+  family root (`EXPORT_BEYOND_NETWORK`, `GATEWAY_BYPASSED`); run `wairon validate` at the family
+  root to read them. (Carried from 6.2.0.)
+- The code-vs-design gate does not report external I/O or libraries a component uses: I/O
+  outside an Adapter passes `validate --ci`. The "Never checked" line of `validate` says so.
+  (Carried from 6.1.3.)
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins. (Carried from 6.1.3.)
+
 ## v6.2.1 (from v6.2.0)
 
 A fix release. Nothing to do when upgrading: install 6.2.1.
