@@ -40,10 +40,3 @@ export function getExporter(target: TargetConfig): Exporter {
   }
   return exporter;
 }
-
-/**
- * Register a custom exporter (for programmatic use / future plugin support).
- */
-export function registerExporter(type: string, exporter: Exporter): void {
-  EXPORTERS.set(type, exporter);
-}
