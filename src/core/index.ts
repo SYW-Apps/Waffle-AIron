@@ -250,6 +250,11 @@ export type { LockRecord, MemberPin } from './lockfile.js';
 // four core modules it used to build its artifacts out of.
 export { renderDiagram } from './specs.js';
 
+// The project's types drawn per type group (spec_tree_portal renderTypeDiagrams),
+// for `wairon diagram --types | --group <id>`.
+export { renderTypeDiagrams } from './specs.js';
+export type { TypeDiagram, TypeDiagramScope } from './diagram.js';
+
 // The same canvas as data (spec_tree_portal buildCanvasDataModel), for a client
 // that mounts the shared renderer itself — the hosted web app and share
 // snapshots.

@@ -2077,17 +2077,35 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
-          Refuse a --depth that is not a whole number of at least 1 ("-1", "abc") and a --subsystem
-          the tree does not hold, naming what is accepted, before anything is rendered: a sequence
-          diagram of depth nothing, or a component diagram of an unknown subsystem, would be written
-          as if it were the answer
+          Refuse a --depth that is not a whole number of at least 1 ("-1", "abc"), a --subsystem the
+          tree does not hold, a --group no type group spec declares, and --types or --group with a
+          format other than Mermaid (the canvas already folds types by group), naming what is
+          accepted, before anything is rendered: a sequence diagram of depth nothing, or a component
+          diagram of an unknown subsystem, would be written as if it were the answer
         type: local
       - stepNumber: 2
+        description: Were type diagrams asked for?
+        type: branch
+        condition: '--types or --group was given (and not --all, which writes them with the rest of the set)'
+        onTrueStep: 3
+        onFalseStep: 5
+      - stepNumber: 3
+        description: >-
+          Render the type diagrams through the core client adapter, and keep the one asked for: the
+          index for --types, the named group's for --group
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renderTypeDiagrams
+      - stepNumber: 4
+        description: Write it like any other artifact
+        type: jump
+        toStep: 8
+      - stepNumber: 5
         description: Should the canvas carry relation health?
         type: branch
         condition: the canvas is drawn (alone or in --all) and --no-health was not given
-        onFalseStep: 4
-      - stepNumber: 3
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Compare the family's relations with their live producers through the validator adapter:
           each project's externals status at its own root, read within the explicit local reach
@@ -2098,7 +2116,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyRelations
-      - stepNumber: 4
+      - stepNumber: 7
         label: render
         description: >-
           Render the requested format through the core client adapter, which crosses into sdd_core
@@ -2106,7 +2124,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 5
+      - stepNumber: 8
         description: >-
           Write the artifact to the requested path and report where it landed. Written to the
           default folder (no --out), say once that these files are derived from the spec tree,
@@ -4197,4 +4215,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-24T11:37:43.326Z'
+updatedAt: '2026-10-26T23:58:22.190Z'

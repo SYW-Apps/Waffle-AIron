@@ -55,7 +55,19 @@ fields:
     type: DiagramFormat
     description: The output format by name. An alias for the boolean flags.
     optional: true
+  - name: types
+    type: bool
+    description: >-
+      Draw the overview of the project's type groups (the type diagram index) instead of the
+      architecture. Mermaid only.
+    optional: true
+  - name: group
+    type: string
+    description: >-
+      Draw one type group's own types as a Mermaid class diagram, with stubs for the types they
+      reference in other groups. Implies a type diagram; Mermaid only.
+    optional: true
 methods: []
 sourcePath: src/commands/diagram.ts
 createdAt: '2026-09-20T16:42:26.894Z'
-updatedAt: '2026-10-04T23:38:20.031Z'
+updatedAt: '2026-10-26T23:57:37.167Z'

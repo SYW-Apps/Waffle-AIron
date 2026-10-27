@@ -521,6 +521,13 @@ methods:
     invokedBy:
       kind: entry
       caller: the status, export and canvas surfaces over the in-process core
+  - name: renderTypeDiagrams
+    description: >-
+      The current project's types drawn as Mermaid per type group: the index of groups, one class
+      diagram per group, and the ungrouped types.
+    signature: 'renderTypeDiagrams(): list<TypeDiagram>'
+    returns: list<TypeDiagram>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-23T22:19:06.920Z'
+updatedAt: '2026-10-26T23:57:46.420Z'

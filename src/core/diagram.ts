@@ -4,6 +4,9 @@ import {
   loadComponentSpecs,
   loadInterfaceSpecs,
   loadImplementationSpecs,
+  loadTypeSpecs,
+  loadGroupSpecs,
+  groupChain,
 } from './specs.js';
 import {
   ComponentSpec,
@@ -12,6 +15,12 @@ import {
   ImplementationSpec,
   PATTERN_TYPES,
   isOwnComponentEntry,
+  fieldTypeRefs,
+  methodTypeRefs,
+  signatureTypeRefs,
+  typeMatchesRef,
+  type GroupSpec,
+  type TypeSpec,
   type ProjectRelations,
 } from '../models/index.js';
 import { buildCanvasModel, renderCanvasHtml, type CanvasModel } from './canvas.js';
@@ -712,6 +721,11 @@ export function generateDiagramSet(): DiagramFile[] {
     }
   }
 
+  // The type diagrams: the index of type groups, one per group, the ungrouped types.
+  for (const d of renderTypeDiagrams()) {
+    files.push({ relPath: d.relPath, title: d.title, mermaid: d.mermaid });
+  }
+
   return files;
 }
 
@@ -732,5 +746,242 @@ export function diagramSetIndex(files: DiagramFile[], systemName: string): strin
     lines.push(`- [${f.title}](${f.relPath.replace(/\\/g, '/')})`);
   }
   lines.push('');
+  return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Type diagrams per type group (architecture_diagrams.renderTypeDiagrams)
+// ---------------------------------------------------------------------------
+
+/** Which slice of the project's types one type diagram draws. */
+export type TypeDiagramScope = 'index' | 'group' | 'ungrouped';
+
+/** One Mermaid type diagram, with the path it is written to under the diagrams folder. */
+export interface TypeDiagram {
+  scope: TypeDiagramScope;
+  /** The group drawn, for a group diagram. */
+  group?: string;
+  /** Relative to the diagrams folder, forward slashes. */
+  relPath: string;
+  title: string;
+  /** Raw mermaid source (no markdown fence). */
+  mermaid: string;
+}
+
+/** One reference a type makes to another of this project's types. */
+interface TypeReference {
+  from: string;
+  to: string;
+  /** The field or method that makes it. */
+  via: string;
+}
+
+/**
+ * architecture_diagrams.renderTypeDiagrams — the project's own types drawn as
+ * Mermaid per type group: the index of groups, then one class diagram per
+ * group holding types (parents before children), then the ungrouped types.
+ * Empty when the project has no types of its own.
+ */
+export function renderTypeDiagrams(): TypeDiagram[] {
+  // Steps 1-2: this project's own types and groups; an alias::name spec is another project's.
+  const types = loadTypeSpecs().filter((t) => !t.id.includes('::'));
+  const groups = loadGroupSpecs().filter((g) => !g.id.includes('::'));
+  // Steps 3-4: nothing to draw is no diagram.
+  if (types.length === 0) return [];
+
+  // Step 5: each type in its group, each group under its parent, every reference collected.
+  const known = new Set(groups.map((g) => g.id));
+  const chainOf = new Map(groups.map((g) => [g.id, groupChain(g, groups)] as const));
+  const groupOfType = new Map(types.map((t) => [t.id, t.group !== undefined && known.has(t.group) ? t.group : undefined] as const));
+  const ordered = [...groups].sort((a, b) => (chainOf.get(a.id)!.length - chainOf.get(b.id)!.length) || (a.id < b.id ? -1 : 1));
+  const references = typeReferences(types);
+
+  const diagrams: TypeDiagram[] = [{
+    scope: 'index',
+    relPath: 'types/index.md',
+    title: 'Type groups',
+    // Step 6: the index.
+    mermaid: typeGroupIndex(types, ordered, chainOf, groupOfType, references),
+  }];
+  // Steps 7-9: one class diagram per group holding types, then the ungrouped ones.
+  for (const group of ordered) {
+    const own = types.filter((t) => groupOfType.get(t.id) === group.id);
+    if (own.length === 0) continue;
+    diagrams.push({
+      scope: 'group',
+      group: group.id,
+      relPath: `types/groups/${chainOf.get(group.id)!.join('/')}.md`,
+      title: `${group.name} — types`,
+      mermaid: typeClassDiagram(own, types, groups, groupOfType, references),
+    });
+  }
+  const ungrouped = types.filter((t) => groupOfType.get(t.id) === undefined);
+  if (ungrouped.length > 0) {
+    diagrams.push({
+      scope: 'ungrouped',
+      relPath: 'types/ungrouped.md',
+      title: 'Ungrouped types',
+      mermaid: typeClassDiagram(ungrouped, types, groups, groupOfType, references),
+    });
+  }
+  // Step 10.
+  return diagrams;
+}
+
+/**
+ * Every reference one of `types` makes to another of them, through its fields,
+ * its methods' params and returns, and a signature's params and returns. A
+ * reference that names no type here, or more than one, draws nothing.
+ */
+function typeReferences(types: TypeSpec[]): TypeReference[] {
+  const resolve = (ref: string): string | undefined => {
+    const matches = types.filter((t) => typeMatchesRef(t, ref));
+    return matches.length === 1 ? matches[0].id : undefined;
+  };
+  const out: TypeReference[] = [];
+  const add = (from: string, refs: string[], via: string): void => {
+    for (const to of new Set(refs.map(resolve))) {
+      if (to !== undefined && to !== from) out.push({ from, to, via });
+    }
+  };
+  for (const t of types) {
+    for (const f of t.fields) add(t.id, fieldTypeRefs(t, f.type), f.name);
+    for (const m of t.methods) add(t.id, methodTypeRefs(m), `${m.name}()`);
+    if (t.kind === 'signature') add(t.id, signatureTypeRefs(t), '(signature)');
+  }
+  return out;
+}
+
+/** The group index: a flowchart node per group, child groups inside their parent, counted edges between groups. */
+function typeGroupIndex(
+  types: TypeSpec[],
+  ordered: GroupSpec[],
+  chainOf: Map<string, string[]>,
+  groupOfType: Map<string, string | undefined>,
+  references: TypeReference[],
+): string {
+  const ids = new IdPool();
+  const UNGROUPED = '\u0000ungrouped';
+  const nodeOf = (group: string | undefined): string => ids.idFor(group ?? UNGROUPED);
+  const count = (group: string | undefined): number => types.filter((t) => groupOfType.get(t.id) === group).length;
+  const label = (name: string, n: number): string => escapeLabel(`${name}<br/>${n} type${n === 1 ? '' : 's'}`);
+  const children = (parent: string | undefined): GroupSpec[] =>
+    ordered.filter((g) => {
+      const chain = chainOf.get(g.id)!;
+      return parent === undefined ? chain.length === 1 : chain.length >= 2 && chain[chain.length - 2] === parent;
+    });
+
+  const lines: string[] = ['flowchart LR'];
+  const draw = (group: GroupSpec, indent: string): void => {
+    const below = children(group.id);
+    const node = `${nodeOf(group.id)}["${label(group.name, count(group.id))}"]`;
+    if (below.length === 0) {
+      lines.push(`${indent}${node}`);
+      return;
+    }
+    lines.push(`${indent}subgraph ${ids.idFor(`\u0000tree:${group.id}`)}["${escapeLabel(group.name)}"]`);
+    lines.push(`${indent}  ${node}`);
+    for (const child of below) draw(child, `${indent}  `);
+    lines.push(`${indent}end`);
+  };
+  for (const top of children(undefined)) draw(top, '  ');
+  const loose = count(undefined);
+  if (loose > 0) lines.push(`  ${nodeOf(undefined)}["${label('Ungrouped', loose)}"]`);
+
+  // One counted edge per ordered pair of groups; a reference within one group draws none.
+  const pairs = new Map<string, { from: string | undefined; to: string | undefined; n: number }>();
+  for (const r of references) {
+    const from = groupOfType.get(r.from);
+    const to = groupOfType.get(r.to);
+    if (from === to) continue;
+    const key = `${from ?? UNGROUPED}\u0001${to ?? UNGROUPED}`;
+    const pair = pairs.get(key) ?? { from, to, n: 0 };
+    pair.n += 1;
+    pairs.set(key, pair);
+  }
+  for (const { from, to, n } of pairs.values()) lines.push(`  ${nodeOf(from)} -->|${n}| ${nodeOf(to)}`);
+  return lines.join('\n');
+}
+
+/** Mermaid writes a generic's angle brackets as tildes; a colon would end the member text, braces and quotes the class. */
+function classText(text: string): string {
+  return text.replace(/[<>]/g, '~').replace(/[{}":]/g, '');
+}
+
+/** A prose signature's parameters (`a: T, b?: U`) as the member line writes structured ones: `T a, U? b`. */
+function proseParams(signature: string): string {
+  const open = signature.indexOf('(');
+  const close = signature.lastIndexOf(')');
+  if (open < 0 || close <= open) return '';
+  const inner = signature.slice(open + 1, close);
+  const params: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i <= inner.length; i++) {
+    const c = inner[i];
+    if (c === '<' || c === '(' || c === '[') depth++;
+    else if (c === '>' || c === ')' || c === ']') depth--;
+    else if ((c === ',' && depth === 0) || i === inner.length) {
+      const param = inner.slice(start, i).trim();
+      const named = /^(\w+)(\?)?\s*:\s*(.+)$/.exec(param);
+      if (param) params.push(named ? `${classText(named[3])}${named[2] ?? ''} ${named[1]}` : classText(param));
+      start = i + 1;
+    }
+  }
+  return params.join(', ');
+}
+
+/** One slice's class diagram: its types with their members, an edge per reference, stubs for types elsewhere. */
+function typeClassDiagram(
+  slice: TypeSpec[],
+  types: TypeSpec[],
+  groups: GroupSpec[],
+  groupOfType: Map<string, string | undefined>,
+  references: TypeReference[],
+): string {
+  const ids = new IdPool();
+  const inSlice = new Set(slice.map((t) => t.id));
+  const byId = new Map(types.map((t) => [t.id, t] as const));
+  const groupName = (id: string | undefined): string =>
+    id === undefined ? 'Ungrouped' : (groups.find((g) => g.id === id)?.name ?? id);
+  const lines: string[] = ['classDiagram'];
+  for (const t of slice) {
+    const id = ids.idFor(t.id);
+    lines.push(`  class ${id}["${escapeLabel(classText(t.name))}"]`);
+    if (t.kind === 'enum') {
+      lines.push(`  <<enumeration>> ${id}`);
+      for (const v of t.values ?? []) lines.push(`  ${id} : ${classText(v.name)}`);
+      continue;
+    }
+    if (t.kind === 'signature') lines.push(`  <<signature>> ${id}`);
+    if (t.holds !== undefined) lines.push(`  ${id} : holds ${classText(t.holds)}`);
+    for (const f of t.fields) lines.push(`  ${id} : +${classText(f.type)}${f.optional ? '?' : ''} ${classText(f.name)}`);
+    if (t.kind === 'signature') {
+      const params = (t.params ?? []).map((p) => `${classText(p.type)} ${classText(p.name)}`).join(', ');
+      lines.push(`  ${id} : +(${params}) ${classText(t.returns ?? 'void')}`);
+    }
+    for (const m of t.methods) {
+      const params = m.params
+        ? m.params.map((p) => `${classText(p.type)} ${classText(p.name)}`).join(', ')
+        : proseParams(m.signature ?? '');
+      lines.push(`  ${id} : +${classText(m.name)}(${params}) ${classText(m.returns ?? '')}`.trimEnd());
+    }
+  }
+  // Edges from this slice; a target outside it is a stub annotated with the group holding it.
+  const stubs = new Set<string>();
+  const drawn = new Set<string>();
+  for (const r of references) {
+    if (!inSlice.has(r.from)) continue;
+    const key = `${r.from}\u0001${r.to}\u0001${r.via}`;
+    if (drawn.has(key)) continue;
+    drawn.add(key);
+    if (!inSlice.has(r.to) && !stubs.has(r.to)) {
+      stubs.add(r.to);
+      const stub = ids.idFor(r.to);
+      // An annotation takes one word, so the group the stub sits in is part of its label.
+      lines.push(`  class ${stub}["${escapeLabel(classText(`${byId.get(r.to)!.name} — in ${groupName(groupOfType.get(r.to))}`))}"]`);
+    }
+    lines.push(`  ${ids.idFor(r.from)} --> ${ids.idFor(r.to)} : ${classText(r.via)}`);
+  }
   return lines.join('\n');
 }

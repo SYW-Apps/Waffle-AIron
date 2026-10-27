@@ -103,7 +103,13 @@ import {
 } from '../models/index.js';
 import type { ValidationIssue } from './validation.js';
 import { resolveNarrativeLabels } from './narrative-labels.js';
-import { buildGraphModel, renderDiagram as renderArchitectureDiagram, type DiagramFormat } from './diagram.js';
+import {
+  buildGraphModel,
+  renderDiagram as renderArchitectureDiagram,
+  renderTypeDiagrams as renderArchitectureTypeDiagrams,
+  type DiagramFormat,
+  type TypeDiagram,
+} from './diagram.js';
 // The export index is an owned face of this Repository: the facade forwards
 // its two reads 1:1 (spec_loader resolveSubsystemExports / resolveProjectExports).
 import { resolveProjectExportTable, resolveSubsystemExportTable, exportUsageOf, pinnedUsageOf } from './exports.js';
@@ -9161,6 +9167,15 @@ export function writeLockRecord(record: LockRecord): void {
  */
 export function renderDiagram(format: DiagramFormat, relations?: ProjectRelations[]): string {
   return renderArchitectureDiagram(format, relations);
+}
+
+/**
+ * core_orchestrator.renderTypeDiagrams — the project's types drawn as Mermaid
+ * per type group by the architecture diagrams. The spec tree portal publishes
+ * this function.
+ */
+export function renderTypeDiagrams(): TypeDiagram[] {
+  return renderArchitectureTypeDiagrams();
 }
 
 /**

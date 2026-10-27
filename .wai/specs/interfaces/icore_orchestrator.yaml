@@ -1693,6 +1693,11 @@ methods:
       - name: dryRun
         type: bool
         description: Answer what the move would do and write nothing
+  - name: renderTypeDiagrams
+    description: Delegate the type diagrams to architecture_diagrams.
+    signature: 'renderTypeDiagrams(): list<TypeDiagram>'
+    returns: list<TypeDiagram>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:43:07.671Z'
+updatedAt: '2026-10-26T23:57:43.324Z'

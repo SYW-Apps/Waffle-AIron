@@ -46,8 +46,17 @@ methods:
         type: list<ProjectRelations>
         description: The family's relation health to carry on the model; omitted, the model carries none
         optional: true
+  - name: renderTypeDiagrams
+    description: >-
+      Draw the current project's own types as Mermaid, organized by their type groups: the index of
+      groups first, then one class diagram per group that holds types, then the ungrouped types when
+      there are any. Pure derivation over the loader; an empty list when the project has no types of
+      its own.
+    signature: 'renderTypeDiagrams(): list<TypeDiagram>'
+    returns: list<TypeDiagram>
+    params: []
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-04T23:38:09.195Z'
+updatedAt: '2026-10-26T23:57:40.251Z'

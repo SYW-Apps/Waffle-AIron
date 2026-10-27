@@ -4188,6 +4188,13 @@ methods:
         type: return
         outcome: SpecMove
     symbol: moveTypeSpec
+  - name: renderTypeDiagrams
+    narrative:
+      - stepNumber: 1
+        description: Delegate to architecture_diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: renderTypeDiagrams
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T18:49:44.914Z'
+updatedAt: '2026-10-26T23:58:18.624Z'
