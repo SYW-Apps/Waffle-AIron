@@ -39,8 +39,10 @@ fields:
       Every place in this project's own code the call can land: the declaration the checker
       resolved, and, for a declaration in an interface or type shape, each class of the project that
       realizes it — the classes whose implements clause names it when any does, else every class
-      whose instance type the checker finds assignable to it and which declares the member. Empty
-      for a call that lands only in a dependency or the language library
+      whose instance type the checker finds assignable to it and which declares the member — and
+      each module function an object literal the checker types as that shape wires into the member,
+      under the function's own name. Empty for a call that lands only in a dependency or the
+      language library
     optional: false
   - name: unresolved
     type: bool
@@ -86,4 +88,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-07T18:28:29.773Z'
-updatedAt: '2026-10-08T18:51:33.811Z'
+updatedAt: '2026-10-27T17:52:18.924Z'

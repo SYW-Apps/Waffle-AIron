@@ -1225,7 +1225,10 @@ methods:
           method (with its symbol when one is mapped), impl.contract and file: the name is a
           declaration with no function body behind it — a signature, an ambient or interface
           declaration, a value binding, or a name this file only imports or re-exports — so every
-          deeper check reads nothing and the method is judged on its name alone
+          deeper check reads nothing and the method is judged on its name alone — ending with the
+          remedy: when nothing implements it yet, implement the method in that file (a body, not
+          only a signature), or point the implementation's sourcePath or symbol at the file that
+          does
         type: local
     symbol: check
     exportedVia: methodRealizationRule
@@ -1815,11 +1818,17 @@ methods:
           reader that reads members, each public instance method of a class holding one of the
           components' modelled methods, and each function the file exports, that no contract,
           symbol, exportedVia, router or type of the file declares and that nothing in the project
-          uses — no call or reference in its own file but its own body, no name another analyzed
-          file writes, no identifier of an unanalyzed project file (code_model.outsideNames), no
-          star re-export publishing the module — is reported once per file as
-          UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). An exported CLASS is
-          read the same way, where the reader recorded the file's class references
+          uses — no call or reference in its own file but its own body, no use in another analyzed
+          file, no identifier of an unanalyzed project file (code_model.outsideNames) — where, in a
+          file the type checker read, a call or reference is a use only when the checker lands it on
+          that very declaration (or on a class realizing it) or lands it nowhere it can name (a
+          receiver typed any, a port no class realizes) under its name, and an import of the name
+          from that file is a use, while a same-named member of another class or module is no use
+          however it is spelled; in a file no checker read, any name the file writes is, as before;
+          and a re-export, named or star, is publication and never a use: the name counts as used
+          only when what the barrel publishes it as is used, followed barrel by barrel — is reported
+          once per file as UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). An
+          exported CLASS is read the same way, where the reader recorded the file's class references
           (source_file_facts.classReferences): a top-level class the file exports beside the classes
           realizing its components, that no contract, symbol, exportedVia, router or type declares,
           that its own file names nowhere outside its own declaration and that nothing else uses —
@@ -2452,4 +2461,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-26T20:28:51.382Z'
+updatedAt: '2026-10-27T18:08:10.814Z'

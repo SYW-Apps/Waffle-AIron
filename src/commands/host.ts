@@ -7,6 +7,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WaironError } from '../utils/errors.js';
+import { adminTokenProblem } from '../utils/admin-token.js';
 // sdd_host's admin workflows are reached in-process through cli_host_adapter,
 // which re-exports the host's local admin portal — never past it into the
 // modules that realize the workflows.
@@ -233,7 +234,11 @@ export function parseQuotaPolicyEnv(raw: string): Partial<ResourceQuotaPolicy> {
 }
 
 function masterCredential(): string | null {
-  return process.env['WAIRON_ADMIN_TOKEN'] ?? null;
+  const token = process.env['WAIRON_ADMIN_TOKEN'];
+  if (token === undefined) return null;
+  const weak = adminTokenProblem(token);
+  if (weak !== undefined) throw new WaironError(weak);
+  return token;
 }
 
 function mapAdminError(e: unknown): WaironError {

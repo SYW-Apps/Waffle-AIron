@@ -63,6 +63,16 @@ function narrowedAway(principal: Principal, scopeKind: string, scopeId: string, 
   return true;
 }
 
+/** What a request naming a project hears when it is refused only because its key is narrowed to other projects: the same for a project that exists and one that does not. */
+const PROJECT_NARROWING_NOTE = 'This key is narrowed to its projects, and this project is not one of them.';
+
+/** The sentence for a request naming a project the principal's key is narrowed away from, or undefined. */
+export function narrowingNote(dataDir: string, principal: Principal, projectId: string): string | undefined {
+  const narrowing = principal.keyNarrowing;
+  if (narrowing === undefined) return undefined;
+  return keyCovers(narrowing, projectId, gatherPermissionWorld(dataDir)) ? undefined : PROJECT_NARROWING_NOTE;
+}
+
 /** Whether a key's entries cover a record: the record itself, or a project its parent chain climbs through. */
 function keyCovers(narrowing: string[], projectId: string, world: PermissionWorld): boolean {
   if (narrowing.includes('*')) return true;

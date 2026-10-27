@@ -519,3 +519,20 @@ describe('3b. a local record spelled `<subsystem>.<id>` is read with its closure
     ]);
   });
 });
+
+describe('2d. a narrative call to a verb a member removed names the removal', () => {
+  it('INVALID_TARGET_METHOD_REFERENCE says the producer no longer has a verb its approved design held, with the remedy', () => {
+    const { app } = approvedThenDropped(false);
+    const file = path.join(app, '.wai', 'specs', 'implementations', fs.readdirSync(path.join(app, '.wai', 'specs', 'implementations')).find((x) => x.startsWith('stop_sequencer_impl'))!);
+    const spec = readYamlFile(file) as { methods: Record<string, unknown>[] };
+    delete spec.methods[0].calls;
+    spec.methods[0].detail = 'full';
+    spec.methods[0].narrative = [{ stepNumber: 1, type: 'call', description: 'Measure the distance with the second formula', targetComponent: 'geo::distance', targetMethod: 'vincenty_distance' }, { stepNumber: 2, type: 'return', description: 'Return the stops', outcome: 'success' }];
+    writeYamlFile(file, spec);
+    invalidateSpecCache();
+    bind(app);
+    const hit = validateProject().issues.filter((i) => i.code === 'INVALID_TARGET_METHOD_REFERENCE').map((i) => i.message);
+    expect(hit).toEqual([expect.stringContaining('The producer no longer has it')]);
+    expect(hit[0]).toContain('Remove this call');
+  });
+});

@@ -281,9 +281,10 @@ methods:
         onFalseStep: 21
       - stepNumber: 20
         description: >-
-          Persist the member's bootstrap L0 system spec, creating its specs directory — its vision
-          is the description given, else one line naming it a member of this project — so a fresh
-          member becomes runnable standalone
+          Persist the member's bootstrap L0 system spec, creating its specs directory and its
+          .wai/.gitignore keeping the spec write lock out of git (created when absent, the line
+          added when missing, anything else kept) — its vision is the description given, else one
+          line naming it a member of this project — so a fresh member becomes runnable standalone
         type: call
         targetComponent: spec_loader
         targetMethod: saveSystemSpec
@@ -294,11 +295,12 @@ methods:
       - stepNumber: 22
         label: part
         description: >-
-          Scaffold a part: its specs directory and, when it is NOT contained, with the project root
-          scoped to it, a configuration holding only its PartOf (the bound project's id, the bound
-          root relative to it) — a contained part needs no configuration, its parent finds it; a
-          directory that already holds a project refuses (adopting an existing project is `member
-          attach`); then restore the declaring project's scope
+          Scaffold a part: its specs directory, its .wai/.gitignore keeping its own spec write lock
+          out of git (the root's does not cover a part's .wai), and, when it is NOT contained, with
+          the project root scoped to it, a configuration holding only its PartOf (the bound
+          project's id, the bound root relative to it) — a contained part needs no configuration,
+          its parent finds it; a directory that already holds a project refuses (adopting an
+          existing project is `member attach`); then restore the declaring project's scope
         type: call
         targetComponent: project_config_repository
         targetMethod: setPartOf
@@ -4197,4 +4199,4 @@ methods:
         targetMethod: renderTypeDiagrams
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T23:58:18.624Z'
+updatedAt: '2026-10-27T18:08:13.877Z'

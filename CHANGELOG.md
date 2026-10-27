@@ -4,6 +4,61 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.4.0 (from v6.3.0)
+
+Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported
+verbs it used to let pass (see Changed), so `wairon validate --ci` may fail on code that passed
+under 6.3.0. Each finding names the verb and the file; declare it, make it private or remove it.
+
+1. Install 6.4.0.
+2. Run `wairon validate --ci` and settle any new `UNDECLARED_PUBLIC_MEMBER`.
+3. In a project with parts, run `wairon doctor --fix` once, so each part's `.wai/.gitignore` keeps
+   its spec write lock out of git (see Fixed), and commit the result.
+
+### Changed
+
+- **A use is a use of that very function.** `UNDECLARED_PUBLIC_MEMBER` exempted an exported verb
+  as soon as anything in the project wrote its name, so a verb removed from the design but still
+  exported passed whenever a method of the same name existed elsewhere (a facade forwarding to
+  `registration.isDeviceActive()` kept an exported `isDeviceActive` alive). Where the type checker
+  read the using file, a call or reference now counts only when it lands on that function itself,
+  and an import of the name from its file counts. A re-export (`export { x } from`, `export *
+  from`) publishes a name and is no use of it: the name counts as used only when what the barrel
+  publishes it as is used. Files the run does not analyze (tests, a composition root) still exempt
+  any name they write, except in their own re-export statements.
+
+### Fixed
+
+- **Dependency injection through an object of a module's functions.** A collaborator wired as
+  `threshold: { isBreach }` in a composition root, where the caller types it by a port it declares
+  itself, was reported as `CALL_ORIGIN_UNRESOLVED` and `UNREALIZED_DEPENDENCY`. The type checker
+  now also reads the project files no spec names that import the analyzed files (a composition
+  root, the tests), and an object literal typed as a port realizes its members with the module
+  functions it names. Reading those files makes `validate` slower on a large repository (about
+  10% on wairon's own).
+- **Renames inside a part.** Renaming a component, a contract, an implementation, a method, a type
+  or a field rewrote references only in the root's own spec folder. In a part, an implementation
+  kept its old contract and was written back into the old component's folder. Every rename now
+  rewrites the parts' specs too (a part fetched from git is read-only and is not written).
+- **A part's spec write lock was committed.** Only the root's `.wai/.gitignore` ignored the lock.
+  A new part or member project gets the same line, and `wairon doctor --fix` adds it to existing
+  ones.
+- **`wairon host` accepted a weak admin token** that `wairon serve` then refused to start with.
+  Both now apply the same rule, in the same words.
+- **Messages:**
+  - A narrowed key connecting to `/mcp` for a project it is not narrowed to is told so in one added
+    sentence, said the same way for a project that does not exist.
+  - `INVALID_TARGET_METHOD_REFERENCE` says when a member project removed the verb from its
+    approved design, not only when it renamed it.
+  - `METHOD_BODY_NOT_FOUND` ends with the remedy.
+  - The Python line of `validate`'s code report says what it checks of calls: claimed calls are
+    found by name, and calls the narrative does not have are not reported.
+
+### Docs
+
+- `docs/cli.md` documents the self-service key routes (`GET /web/tokens`, `POST /web/tokens`,
+  `POST /web/tokens/revoke`) and how a narrowed key is refused on `/mcp`.
+
 ## v6.3.0 (from v6.2.1)
 
 Upgrading: nothing in a spec tree has to change.

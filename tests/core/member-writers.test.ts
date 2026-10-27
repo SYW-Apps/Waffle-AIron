@@ -109,6 +109,18 @@ describe('createMember', () => {
     expect(node).toMatchObject({ parent: '', mountForm: 'members', id: 'billing', memberDescription: 'Invoices and payments' });
   });
 
+  it('a part and a member project each ignore their own spec write lock, keeping an existing .gitignore lines', () => {
+    rootDir = makeRoot();
+    fs.mkdirSync(path.join(rootDir, 'services', 'storage', '.wai'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'services', 'storage', '.wai', '.gitignore'), 'keep-me\n');
+    createMember('storage', 'services/storage');
+    createMember('billing', 'packages/billing', undefined, 'project');
+    const part = fs.readFileSync(path.join(rootDir, 'services', 'storage', '.wai', '.gitignore'), 'utf8').split('\n').map((l) => l.trim());
+    expect(part).toEqual(['keep-me', '.spec-write.lock*', '']);
+    const project = fs.readFileSync(path.join(rootDir, 'packages', 'billing', '.wai', '.gitignore'), 'utf8');
+    expect(project).toContain('.spec-write.lock*');
+  });
+
   it('writes the shorthand without a description, and a vision naming the member of this project', () => {
     rootDir = makeRoot();
     createMember('ledger', 'services\\ledger', undefined, 'project');

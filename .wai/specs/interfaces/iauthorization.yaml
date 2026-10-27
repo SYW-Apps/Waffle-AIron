@@ -119,6 +119,25 @@ methods:
       - name: scopes
         type: list<VisibleScope>
         description: The visibleScopes answer for the principal.
+  - name: narrowingNote
+    description: >-
+      The one sentence a refusal adds when the request names a project the principal's API key is
+      not narrowed to: the key is narrowed to its projects, and this project is not one of them.
+      Nothing for a principal with no key narrowing, or a key whose entries cover the project (the
+      record itself, or a project its parent chain climbs through). The sentence reads the same
+      whether or not the project exists, so it reveals nothing about it.
+    signature: 'narrowingNote(principal: Principal, projectId: string): string?'
+    returns: string?
+    params:
+      - name: principal
+        type: Principal
+        description: The authenticated caller
+      - name: projectId
+        type: string
+        description: The project the request names, as written
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-27T08:43:41.034Z'
+updatedAt: '2026-10-27T18:08:16.943Z'

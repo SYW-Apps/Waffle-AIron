@@ -426,6 +426,13 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
+  // A narrowed key is refused outside its projects before the project is looked up, so the
+  // refusal is the same for a project that exists and one that does not.
+  if (principal.keyNarrowing !== undefined
+    && authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', projectId.split('::')[0]).source === 'key-narrowing') {
+    throw new ForbiddenError('caller lacks project:read on the requested project');
+  }
+
   // The record the token names: a project id as it is (a member's own record id
   // for a member). A member-qualified id or an unknown project is rejected with
   // guidance, never stored broken.

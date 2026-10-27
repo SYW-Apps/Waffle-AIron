@@ -165,9 +165,11 @@ methods:
       a target that names no file of its own falls back to name membership. Where a type checker
       read the file, a claim is also realized by any call or reference in the bodies the function
       reaches — and in the unowned code they call — that the checker lands on the target: its file
-      under a name it is realized by, a class realizing the port the call was typed by, or what the
-      target forwards to by identity — whatever the receiver's spelling (a type-only or `export *`
-      barrel, a port declared in a shared module, a dependency bag typed inline); a claim it does
+      under a name it is realized by, a class realizing the port the call was typed by or a module
+      function an object literal typed as that port wires into it (a composition root's `threshold:
+      { isBreach }`, read in a file that imports the run's files though no spec names it), or what
+      the target forwards to by identity — whatever the receiver's spelling (a type-only or `export
+      *` barrel, a port declared in a shared module, a dependency bag typed inline); a claim it does
       not land keeps the shape tier's answer, since the checker's landing on a declaration says what
       a receiver is TYPED as, never where the call went instead. N:1 identity — a caller that IS the
       target — is judged on the body, the same anchor in the same file, never on a shared name: a
@@ -763,22 +765,28 @@ methods:
       — a class holding one of its modelled methods — or a function its realizing file exports, that
       no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`,
       `router` or type of it) and that NOTHING in the project uses — no call or reference in its own
-      file, no name another analyzed file writes, no identifier in a project file the run did not
-      analyze (its tests, a composition root), no star re-export publishing the module on — is
-      UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains.
-      Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a
-      function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt:
-      constructors, accessors and fields, static, private, protected, #private and
-      underscore-prefixed members, an `override`, a computed name, a language protocol or framework
-      lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount,
-      ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation
-      whose conformance dial is off. Read at exact grade, or by a reader that reads class members
-      (Python, where a leading underscore is private). An exported CLASS is judged the same way: a
-      top-level class the realizing file exports beside the classes realizing a component, that no
-      contract or type declares and that nothing uses — its own file naming it nowhere outside its
-      own declaration (constructed, extended, annotated with, tested by instanceof or isinstance,
-      passed on: source_file_facts.classReferences), no other analyzed file naming it, no identifier
-      of a file the run did not analyze, no star re-export publishing the module on — is
+      file, no use in another analyzed file, no identifier in a project file the run did not analyze
+      (its tests, a composition root) — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no
+      design, brief or caller explains. A use is a use of THAT declaration: where the type checker
+      read the using file, a call or reference counts only when the checker lands it on the
+      declaration itself (or on a class realizing it), or lands it nowhere it can name under its
+      name, and an import of the name from its file counts — a same-named method of another class,
+      the way a verb removed from the design survives beside the method it forwarded to, is no use;
+      where no checker read it, any name the file writes counts. A re-export, named or star, is
+      publication, never a use: the name is used only when what the barrel publishes it as is. Used,
+      it is the module's factoring (a helper the class calls, a facade forwarding to it, a function
+      its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors,
+      accessors and fields, static, private, protected, #private and underscore-prefixed members, an
+      `override`, a computed name, a language protocol or framework lifecycle hook (toString,
+      toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their
+      kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read
+      at exact grade, or by a reader that reads class members (Python, where a leading underscore is
+      private). An exported CLASS is judged the same way: a top-level class the realizing file
+      exports beside the classes realizing a component, that no contract or type declares and that
+      nothing uses — its own file naming it nowhere outside its own declaration (constructed,
+      extended, annotated with, tested by instanceof or isinstance, passed on:
+      source_file_facts.classReferences), no other analyzed file naming it, no identifier of a file
+      the run did not analyze, no re-export of it whose published name is used — is
       UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The
       finding names the files that took each name as well as the one publishing it: an import that
       no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different
@@ -1262,4 +1270,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-26T20:29:03.975Z'
+updatedAt: '2026-10-27T17:52:16.436Z'
