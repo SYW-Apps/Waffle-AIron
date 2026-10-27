@@ -10,7 +10,8 @@ Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now
 verbs it used to let pass (see Changed), so `wairon validate --ci` may fail on code that passed
 under 6.3.0. Each finding names the verb and the file; declare it, make it private or remove it.
 
-1. Install 6.4.0.
+1. Install 6.4.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.4.0` (or `--save-dev` in the project) for npm.
 2. Run `wairon validate --ci` and settle any new `UNDECLARED_PUBLIC_MEMBER`.
 3. In a project with parts, run `wairon doctor --fix` once, so each part's `.wai/.gitignore` keeps
    its spec write lock out of git (see Fixed), and commit the result.
