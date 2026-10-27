@@ -206,25 +206,35 @@ methods:
         label: resolveCalls
         description: >-
           Resolve every call with the type checker: build one program over every exact-grade ts/js
-          file of the run, under the compiler options of the project's tsconfig.json when one is
-          readable (its module resolution, paths and baseUrl), with JavaScript allowed, a fixed ES
-          library and no ambient @types, reusing each parsed source file from a cache keyed on the
-          compiler module, the file's path and its exact text — so a changed file, or a different
-          compiler, is never answered from a stale parse. For each call expression of an analyzed
-          file record a ResolvedCallFact: the callee followed through parentheses, non-null
-          assertions, casts and satisfies, and through .call/.apply/.bind to the function they are
-          invoked on; the declarations its resolved signature and its symbol name, kept when they
-          lie inside the project root and outside node_modules; for a declaration in an interface or
-          a type shape, the project classes that realize it (the ones whose implements clause names
-          it when any does, else every class declaring the member whose instance type the checker
-          finds assignable to the shape); the innermost named function-like the call sits in and its
-          top-level container; and unresolved when the code made the call land nowhere this analysis
-          can name — no declaration answers because the receiver or the callee is typed any, unknown
-          or not at all, or no declaration of the project does because a computed key names no
-          single member (anything but a literal, or an expression the checker types as one literal —
-          whose VALUE then names the member, never the variable holding it) or the receiver as
-          written is cast to a type with an index signature — together with, for an unresolved call,
-          the project classes its receiver's ORIGINAL type lands on: the receiver with every cast,
+          file of the run — and, read for their wiring alone and never given facts of their own,
+          every TypeScript or JavaScript source file of the project the run analyzed no facts for
+          that imports one of the run's files (a composition root, a test), found by the bounded
+          walk outsideNames come from (step 13) — under the compiler options of the project's
+          tsconfig.json when one is readable (its module resolution, paths and baseUrl), with
+          JavaScript allowed, a fixed ES library and no ambient @types, reusing each parsed source
+          file from a cache keyed on the compiler module, the file's path and its exact text — so a
+          changed file, or a different compiler, is never answered from a stale parse. For each call
+          expression of an analyzed file record a ResolvedCallFact: the callee followed through
+          parentheses, non-null assertions, casts and satisfies, and through .call/.apply/.bind to
+          the function they are invoked on; the declarations its resolved signature and its symbol
+          name, kept when they lie inside the project root and outside node_modules; for a
+          declaration in an interface or a type shape, the project classes that realize it (the ones
+          whose implements clause names it when any does, else every class declaring the member
+          whose instance type the checker finds assignable to the shape), and the module functions
+          an object literal wires into it: wherever a project file of the program builds an object
+          literal the checker types as that interface or shape (its contextual type), each property
+          whose value is a module-scope function of the project — a function declaration, or a const
+          bound to an arrow or function expression, followed through import aliases — realizes the
+          member the property names, as an implementor target under the function's own name, so a
+          composition root wiring `threshold: { isBreach }` lands a call through the port's isBreach
+          on that function; the innermost named function-like the call sits in and its top-level
+          container; and unresolved when the code made the call land nowhere this analysis can name
+          — no declaration answers because the receiver or the callee is typed any, unknown or not
+          at all, or no declaration of the project does because a computed key names no single
+          member (anything but a literal, or an expression the checker types as one literal — whose
+          VALUE then names the member, never the variable holding it) or the receiver as written is
+          cast to a type with an index signature — together with, for an unresolved call, the
+          project classes its receiver's ORIGINAL type lands on: the receiver with every cast,
           assertion, non-null mark and parenthesis taken off, each class that type is or that
           realizes the interface or shape it is, as receivers. A call into a dependency or the
           language library records no target and is not unresolved. Beside the calls, record each
@@ -309,10 +319,13 @@ methods:
           — their resolved calls as reachedCalls, keyed by canonical path, and — where the checker
           was loaded — what every own file of the program imports as reachedImports (ModuleImports:
           the project files and the packages), keyed by canonical path; and outsideNames: every
-          identifier, comments stripped, of each source file of the project the run analyzed no
-          facts for — its tests, a composition root, scripts — read by a bounded walk of the project
-          root that enters no dependency, build-output, cache or hidden folder; what lets a public
-          verb nothing uses be told from one code outside the design calls
+          identifier, comments and re-export statements stripped (an `export … from` publishes a
+          name and never uses it; one it publishes under another name counts once that other name is
+          written), of each source file of the project the run analyzed no facts for — its tests, a
+          composition root, scripts — read by a bounded walk of the project root (made before the
+          checker runs, which reads the walk's TypeScript and JavaScript files importing a file of
+          the run for their wiring) that enters no dependency, build-output, cache or hidden folder;
+          what lets a public verb nothing uses be told from one code outside the design calls
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -407,4 +420,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-25T19:16:36.391Z'
+updatedAt: '2026-10-27T17:59:55.404Z'

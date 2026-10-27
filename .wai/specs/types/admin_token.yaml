@@ -1,0 +1,30 @@
+kind: value-object
+id: admin_token
+name: Admin Token
+description: >-
+  The hosted server's master credential as configured (WAIRON_ADMIN_TOKEN), and the one rule a
+  usable one meets. The server's start and the wairon host commands both ask it, so a token one
+  refuses the other refuses too, in the same words.
+fields: []
+methods:
+  - name: problem
+    signature: 'problem(): string?'
+    params: []
+    returns: string?
+    description: >-
+      Why this token is refused — it is the example placeholder shipped in .env.example, or shorter
+      than 16 characters — with the remedy (generate a strong one), or none when it is usable. Pure
+    sourcePath: src/utils/admin-token.ts
+    symbol: adminTokenProblem
+sourcePath: src/utils/admin-token.ts
+symbol: AdminToken
+lint:
+  allow:
+    - code: UNUSED_TYPE
+      reason: >-
+        The admin token is read from the environment (WAIRON_ADMIN_TOKEN) by the server's start and
+        the host commands; no modelled configuration or contract carries it, so no spec can
+        reference the type. It exists for the one rule both apply (problem).
+holds: string
+createdAt: '2026-10-27T18:11:17.368Z'
+updatedAt: '2026-10-27T18:12:14.875Z'

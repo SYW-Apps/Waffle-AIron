@@ -2,8 +2,7 @@ id: exporter_resolver_impl
 name: Exporter Resolver Implementation
 description: >-
   src/exporters/registry.ts. A module-level Map built once at load, mapping seven target names onto
-  three exporter instances. `registerExporter` is exported beside it and called by nothing in src or
-  tests — recorded here rather than left for the next reader to discover.
+  three exporter instances.
 contract: iexporter_resolver
 sourcePath: src/exporters/registry.ts
 methods:
@@ -40,4 +39,4 @@ methods:
         outcome: resolved
 status: complete
 createdAt: '2026-09-20T19:46:35.234Z'
-updatedAt: '2026-09-20T19:48:29.036Z'
+updatedAt: '2026-10-27T17:57:22.887Z'

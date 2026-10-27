@@ -24,9 +24,10 @@ fields:
     type: string
     description: >-
       declaration when the checker named this declaration itself; implementor when the declaration
-      sits in an interface or type shape and this is a class of the project that realizes it
+      sits in an interface or type shape and this is a class of the project that realizes it, or a
+      module function an object literal the checker types as that shape wires into the member
     optional: false
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-07T18:28:18.707Z'
-updatedAt: '2026-10-07T18:28:19.617Z'
+updatedAt: '2026-10-27T17:52:18.073Z'

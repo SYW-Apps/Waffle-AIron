@@ -225,7 +225,36 @@ methods:
         description: Keep the visible scopes that are units and not breadcrumb context, and answer their ids
         type: local
     symbol: actionableUnitIds
+  - name: narrowingNote
+    narrative:
+      - stepNumber: 1
+        description: A principal with no key narrowing hears nothing
+        type: branch
+        condition: the principal carries no keyNarrowing
+        onTrueStep: 2
+        onFalseStep: 3
+      - stepNumber: 2
+        description: Answer nothing
+        type: return
+        outcome: none
+      - stepNumber: 3
+        description: Gather the permission world once, as world does
+        type: call
+        targetComponent: authorization
+        targetMethod: world
+      - stepNumber: 4
+        description: >-
+          Does an entry of the narrowing cover the project — a `*` entry, the record itself, or a
+          project its parent chain climbs through?
+        type: local
+      - stepNumber: 5
+        description: >-
+          Covered: nothing; else the sentence that the key is narrowed to its projects and this
+          project is not one of them
+        type: return
+        outcome: string?
+    detail: full
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-10-27T08:43:42.964Z'
+updatedAt: '2026-10-27T18:08:17.990Z'
