@@ -198,7 +198,10 @@ describe('a subsystem rule decides spec writes in its subsystem', () => {
     expect(elsewhere.isError).toBe(true);
     expect(elsewhere.text).toMatch(/SubsystemWriteDenied/);
     expect(elsewhere.text).toMatch(/subsystem "catalog" of project "platform"/);
-    const l0 = await call(team, 'sdd_update_spec', { kind: 'system', id: 'system', delta: { vision: 'taken over' } });
+    // It says what is missing and the grant that would let the write through.
+    expect(elsewhere.text).toMatch(/decided by the project rung: no project:write on the project, and no setting on this subsystem/);
+    expect(elsewhere.text).toMatch(/needs project:write on it, which an administrator of the project grants: `wairon host permission set --user <user> --capability project:write --project platform --subsystem catalog`/);
+    const l0 =await call(team, 'sdd_update_spec', { kind: 'system', id: 'system', delta: { vision: 'taken over' } });
     expect(l0.isError).toBe(true);
     expect(l0.text).toMatch(/project "platform" itself/);
     const newSubsystem = await call(team, 'sdd_add_subsystem', { id: 'fresh', name: 'fresh', description: 'A new subsystem' });

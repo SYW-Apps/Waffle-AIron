@@ -353,9 +353,19 @@ function deniedOwners(reach: WriteReach, owners: SpecWriteOwner[]): string[] {
       : reach.subsystems.find((s) => s.subsystemId === o.subsystemId && path.resolve(s.root) === path.resolve(o.root));
     denied.push(o.subsystemId === null
       ? `project "${o.project}" itself (a spec of no subsystem, decided at the project rung)`
-      : `subsystem "${o.subsystemId}" of project "${o.project}" (decided by ${rule?.decidedBy ?? 'the project rung'})`);
+      : `subsystem "${o.subsystemId}" of project "${o.project}" (decided by ${rule?.decidedBy ?? 'the project rung: no project:write on the project, and no setting on this subsystem'})`);
   }
   return denied;
+}
+
+/** The grant that would let the refused write through, said after the refusal (one subsystem: its exact command). */
+function grantHint(reach: WriteReach, owners: SpecWriteOwner[]): string {
+  const refused = owners.filter((o) => !writeReachPermits(reach, o.root, o.subsystemId));
+  const one = refused.length > 0 && refused.every((o) => o.project === refused[0].project && o.subsystemId === refused[0].subsystemId) ? refused[0] : undefined;
+  const command = one === undefined
+    ? '`wairon host permission set --user <user> --capability project:write --project <project> [--subsystem <subsystem>]`'
+    : `\`wairon host permission set --user <user> --capability project:write --project ${one.project}${one.subsystemId === null ? '' : ` --subsystem ${one.subsystemId}`}\``;
+  return ` A write there needs project:write on it, which an administrator of the project grants: ${command}.`;
 }
 
 /** Refuse, writing nothing, when the current hosted request may not change every owner named. Outside a hosted request nothing is judged. */
@@ -366,7 +376,7 @@ export function assertSpecWritesPermitted(owners: SpecWriteOwner[], what: string
   if (denied.length === 0) return;
   throw new SubsystemWriteDenied(
     `SubsystemWriteDenied: ${what} would change ${denied.length === 1 ? 'a spec' : 'specs'} this request may not change — `
-    + `${denied.join('; ')}. Nothing was written.`,
+    + `${denied.join('; ')}. Nothing was written.${grantHint(reach, owners)}`,
   );
 }
 
