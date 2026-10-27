@@ -178,6 +178,9 @@ function principalFromRecord(dataDir: string, rec: ApiKeyRecord): Principal {
     permissionSubject,
   };
   if (rec.ownerSubject) principal.subject = rec.ownerSubject;
+  // A key narrowed to projects acts as its owner only within them (authorization confines it).
+  // A record an older release wrote may carry no projects list: it narrows nothing here.
+  if (Array.isArray(rec.projects) && !rec.projects.includes('*')) principal.keyNarrowing = [...rec.projects];
   return principal;
 }
 
