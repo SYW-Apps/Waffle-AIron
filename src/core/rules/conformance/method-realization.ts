@@ -159,7 +159,7 @@ export const methodRealizationRule: SddRule = {
           ctx.addIssue(
             'warning',
             'METHOD_BODY_NOT_FOUND',
-            `Method ${bodyLabel} of contract "${impl.contract}" is declared in "${file}" but has no function body there — a signature, an ambient or interface declaration, a value binding, or a name this file only imports or re-exports. Every deeper check reads a body (the realized calls of Level 3, the measured complexity of the detail dial), so this method is judged on its name alone. Point the sourcePath at the file that implements it, map the code name via a per-method SYMBOL, or dial this method to "off".`,
+            `Method ${bodyLabel} of contract "${impl.contract}" is declared in "${file}" but has no function body there — a signature, an ambient or interface declaration, a value binding, or a name this file only imports or re-exports. Every deeper check reads a body (the realized calls of Level 3, the measured complexity of the detail dial), so this method is judged on its name alone. Point the sourcePath at the file that implements it, map the code name via a per-method SYMBOL, or dial this method to "off". If nothing implements it yet, implement the method in that file (a body, not only a signature), or point the implementation's sourcePath/symbol at the file that does.`,
             impl.id,
             draft,
             undefined,

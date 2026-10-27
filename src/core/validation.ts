@@ -592,7 +592,7 @@ const NOT_CHECKED_EVER = [
   'libraries and platform I/O a component uses (a file read, fetch, an HTTP client, a helper class no component realizes) — only a bound technology\'s packages are compared, so I/O outside an Adapter passes',
 ];
 const READING_CHECKS: Record<string, string> = {
-  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls: through declared receivers; a narrated call by name',
+  params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls (claimed calls found by name, through declared receivers; calls the narrative does not have are not reported)',
 };
 
 /** A Portal binding HTTP endpoints whose implementation names no router, with its exact-grade files (route-coverage's portalsWithoutRouter). */

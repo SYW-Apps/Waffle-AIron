@@ -1,6 +1,7 @@
 import { parseDeclaredCall } from '../../../models/index.js';
 import type { Guarantee, MethodImplementation } from '../../../models/index.js';
 import { SddRule } from '../types.js';
+import { nameKey } from '../../../models/type-references.js';
 
 // ---------------------------------------------------------------------------
 // Narrative targets inside THIS tree. A call, dispatch or register step names
@@ -167,9 +168,14 @@ export const narrativeTargetReferencesRule: SddRule = {
             const renamedTo = targetInterfaces
               .flatMap((intf) => intf.methods.filter((m) => (m.previousNames ?? []).some((p) => p === entry.targetMethod || p === `${intf.id}.${entry.targetMethod}` || p.endsWith(`.${entry.targetMethod}`))))
               .map((m) => m.name)[0];
+            // A member project's verb the approved surface held and the live one neither holds nor traces was removed.
+            const heldByApproval = renamedTo === undefined && (ctx.exportTables ?? []).some((t) => t.level === 'project' && t.entries.some((e) => e.kind === 'component' && e.component === target
+              && Object.values(ctx.memberApprovedSurfaces ?? {}).some((s) => s.interfaces.some((x) => x.id === e.publicName && x.methods.some((m) => nameKey(m.name) === nameKey(entry.targetMethod ?? ''))))));
             const hint = renamedTo !== undefined
               ? ` It was renamed to "${renamedTo}" (the rename trace of "${target}" records "${entry.targetMethod}") — did you mean "${renamedTo}"?`
-              : '';
+              : heldByApproval
+                ? ` The producer no longer has it: "${entry.targetMethod}" was in the surface of its approved design and has been removed. Remove this call, or re-design it against what "${target}" offers now (then re-pin or re-lock).`
+                : '';
             ctx.addIssue(
               'error',
               'INVALID_TARGET_METHOD_REFERENCE',
