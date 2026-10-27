@@ -1054,7 +1054,7 @@ writes**; anything but yes writes nothing. In a script, pass `-y, --yes`: the
 write happens without the report, and the command says it applied without
 showing it. A run with no terminal to ask on (CI, a pipe) behaves the same way.
 
-### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--all] [--out <path>] [--no-health]`
+### `wairon diagram [--format <fmt>] [--subsystem <id>] [--sequence <component:method>] [--depth <n>] [--types] [--group <id>] [--all] [--out <path>] [--no-health]`
 Generate architecture diagrams derived from the spec tree — living
 documentation from the same source of truth as the conformance gate. Every
 format writes a file (by default under `.wai/docs/diagrams/`; `--out` names
@@ -1084,13 +1084,24 @@ another file or directory); nothing opens automatically.
   to undo — and "export PNG" renders the full graph to a high-res image for
   Miro/docs/slides. Fully self-contained (Cytoscape.js embedded inline,
   works offline).
+- `--types`: the **type groups overview** as Mermaid (`types/index.md`): one
+  node per type group with the types it holds, child groups inside their
+  parent, an Ungrouped node, and the references between two groups added up
+  into one counted edge.
+- `--group <id>`: one type group's types as a Mermaid **class diagram**
+  (`types/groups/<parent>/<group>.md`): fields, enum values and methods, an
+  edge per reference labelled with the field or method, and each type it
+  references in another group as a stub naming that group. Only the
+  project's own types are drawn. `--types` and `--group` are Mermaid only:
+  the canvas already folds types by group.
 - `--format <mermaid|canvas|drawio|excalidraw>`: friendly alias for the flags below/above.
 - `--drawio` / `--excalidraw`: **editable** exports in open formats
   (draw.io / diagrams.net XML, Excalidraw scene JSON) with the exact same
   computed layout as the canvas — import into diagrams.net, excalidraw.com,
   VS Code extensions, or any whiteboard tool that accepts these formats.
 - `--all`: write the full set (system, per-subsystem, one sequence per
-  entrypoint method with a narrative, plus `canvas.html`,
+  entrypoint method with a narrative, the type groups overview, one class
+  diagram per type group and one of the ungrouped types, plus `canvas.html`,
   `architecture.drawio`, and `architecture.excalidraw`) into
   `.wai/docs/diagrams/` (or `--out`).
 - `--no-health`: skip comparing each consumption relation with its live
