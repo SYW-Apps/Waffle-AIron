@@ -4,7 +4,7 @@ import * as path from 'path';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { runWithProjectRoot, runWithProjectBinding, type HostedRecordLookup, type WriteReach } from '../utils/fs.js';
 import { authenticate, authenticateSession, verifyViewToken } from './auth.js';
-import { authorize, resolveFamilyReach } from './authorization.js';
+import { authorize, resolveFamilyReach, narrowingNote } from './authorization.js';
 import { WEB_SESSION_PREFIX, describeDecision } from './types.js';
 import {
   resolveProjectBinding,
@@ -57,8 +57,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 import { bearerToken, sendJson } from './httpio.js';
-// Historical import site for these helpers — republish them.
-export { bearerToken, sendJson } from './httpio.js';
+// Historical import site for this helper — republish it.
+export { bearerToken } from './httpio.js';
 import { publishChange } from './realtime.js';
 
 function projectSelector(req: IncomingMessage): string | null {
@@ -703,7 +703,9 @@ export async function handleMcpRequest(
   // record of its own; a narrowing entry naming a project covers its members.
   const binding = resolveProjectBinding(cfg.dataDir, principal, selector);
   if (!binding) {
-    sendJson(res, 403, { error: 'project not authorized, unknown, or not specified' });
+    // A narrowed key naming a project outside its narrowing is told so; the sentence reads the same whether or not that project exists.
+    const note = selector ? narrowingNote(cfg.dataDir, principal, selector) : undefined;
+    sendJson(res, 403, { error: note ? `project not authorized, unknown, or not specified. ${note}` : 'project not authorized, unknown, or not specified' });
     return;
   }
 

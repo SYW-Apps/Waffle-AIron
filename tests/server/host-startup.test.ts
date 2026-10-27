@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { startHostServer, PLACEHOLDER_ADMIN_TOKEN, type HostServerHandle } from '../../src/server/http.js';
+import { runHostKey } from '../../src/commands/host.js';
 import * as backupSchedule from '../../src/server/backup-schedule.js';
 import type { HostConfig } from '../../src/server/types.js';
 
@@ -81,5 +82,37 @@ describe('startHostServer admin-token guard', () => {
 
     startSpy.mockRestore();
     stopSpy.mockRestore();
+  });
+});
+
+describe('the host commands apply the same admin-token rule as the server', () => {
+  let base: string;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-host-token-'));
+  });
+
+  afterEach(() => {
+    process.env = { ...savedEnv };
+    try {
+      fs.rmSync(base, { recursive: true, force: true });
+    } catch {
+      /* windows file locks */
+    }
+  });
+
+  it('refuses a 13-character token and the placeholder with the wording the server uses', async () => {
+    const expected = "WAIRON_ADMIN_TOKEN is the example placeholder or too weak (must be at least 16 characters and not the shipped default). Generate a strong one with `openssl rand -hex 32`.";
+    for (const weak of ['a'.repeat(13), PLACEHOLDER_ADMIN_TOKEN]) {
+      process.env.WAIRON_ADMIN_TOKEN = weak;
+      await expect(runHostKey('list', { dataDir: base })).rejects.toThrow(expected);
+      expect(() => startHostServer({ host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir: base, authEnabled: true })).toThrow(expected);
+    }
+  });
+
+  it('accepts a 16-character token', async () => {
+    process.env.WAIRON_ADMIN_TOKEN = 'a'.repeat(16);
+    await expect(runHostKey('list', { dataDir: base })).resolves.not.toThrow(/too weak/);
   });
 });

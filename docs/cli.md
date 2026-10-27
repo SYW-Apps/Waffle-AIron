@@ -1718,7 +1718,24 @@ install --hosted` configures), and administration scripts use `wairon host`.
 Wherever it is sent, a key acts as its owner and never more: a key narrowed to
 projects (`--project`) is refused every permission outside them, including on
 `/web/*` and the admin API, and never holds the instance administrator's
-bypass, whoever owns it.
+bypass, whoever owns it. When an AI tool connects to `/mcp` naming a project
+the key is not narrowed to, the refusal adds one sentence — "This key is
+narrowed to its projects, and this project is not one of them." — and says the
+same for a project that does not exist, so it never tells whether a project is
+there. Other routes refuse a narrowed key with their usual `forbidden`; the
+status codes are unchanged.
+
+**Your own agent keys.** A signed-in user lists, mints and revokes keys for AI
+tools under Agents in the web UI, which uses three routes. A browser session
+sends a `POST` with the `X-Wairon-Web: 1` header; every key it mints or lists is
+owned by the person who is signed in, and a person sees and revokes only their
+own.
+
+| Route | Takes | Answers |
+|---|---|---|
+| `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set) and `ownerSubject`. The plaintext key is never in the list |
+| `POST /web/tokens` | JSON `{ "projectId": "<project id>", "write": true \| false }` | `201` `{ "token": "wk_…" }`. The key is shown once and cannot be read back. `projectId` is required and names one project by its record id (a member is named by its own id, never `project::alias`); `write` is optional and only `true` asks for write access (anything else is read-only). The key is narrowed to that project and acts as its owner: the caller must already hold `project:read` on it (and `project:write` when `write` is `true`), else the answer is `403`. An unknown project answers `404` and an invalid `projectId` `400`, each naming the problem |
+| `POST /web/tokens/revoke` | JSON `{ "id": "<key id>" }` | `200` `{ "ok": true }`. A key the caller does not own answers `404` as if it did not exist |
 
 ---
 
