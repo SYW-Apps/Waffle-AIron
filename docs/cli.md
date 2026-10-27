@@ -1622,6 +1622,13 @@ is not a boolean, or a missing or unknown `requestId` is never read as a denial.
 decided is always the signed-in person, never a field of the body. The admin API's
 `POST /admin/approvals/{id}/decision` takes the same `approved` and `reason`, with the id in the path.
 
+**A reviewer without a web sign-in.** Only the built-in administrator signs in to the web UI
+with a password; everyone else signs in through an SSO provider. Without one, a reviewer decides
+with their own API key (an administrator mints it: `wairon host key mint --owner <their user id>`) on the admin API:
+`GET /admin/approvals?status=pending` lists the pending requests they may decide, and
+`POST /admin/approvals/{id}/decision` decides one, with `Authorization: Bearer <key>`. The
+decision is recorded as theirs, and their `approval:decide` grant is checked as on the web.
+
 | Command | Description |
 |---------|-------------|
 | `wairon host unit create --slug <slug> [--kind <kind>] [--name <name>] [--parent <unitId>]` | Create an organization unit. A root unit (no `--parent`) must be a `business_entity`, which is its default kind; under `--parent` the default is `team`, and `department`, … are allowed where the hierarchy admits them |
@@ -1708,8 +1715,10 @@ under Agents), and act as their owner.
 The `/web/*` routes are the browser app's own backend, not an API: they answer
 a signed-in browser session. An API key belongs on `/mcp` (what `wairon mcp
 install --hosted` configures), and administration scripts use `wairon host`.
-Sent to `/web/*`, a key gets a 401 or the lists a key has none of (web users,
-sessions), never more than it reads on `/mcp`.
+Wherever it is sent, a key acts as its owner and never more: a key narrowed to
+projects (`--project`) is refused every permission outside them, including on
+`/web/*` and the admin API, and never holds the instance administrator's
+bypass, whoever owns it.
 
 ---
 

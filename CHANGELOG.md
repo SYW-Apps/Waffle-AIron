@@ -61,6 +61,18 @@ Upgrading: nothing in a spec tree has to change.
 
 ### Fixed
 
+- **Security: a key narrowed to projects stays within them.** An API key minted for some projects
+  acts as its owner only there. Its narrowing was applied where a request picks its project, but
+  not to every permission check, so on some routes the key could act with its owner's wider
+  permissions. Every permission outside the key's projects is now refused, and a narrowed key
+  never holds the instance administrator's bypass, whoever owns it. Unnarrowed keys and browser
+  sessions are unchanged. Hosted operators: install 6.3.0; no key has to be reissued. One thing a
+  narrowed key could do before and no longer can: use a permission granted on an organization unit
+  or the instance, such as creating a project (`sdd_host_initialize_project`). Use a key minted
+  without `--project` for that.
+- **A refused write in a subsystem says what is missing.** The refusal names the grant the write
+  needs and the `wairon host permission set … --subsystem <id>` command an administrator runs to
+  give it, instead of ending at "decided by the project rung".
 - **Spec files are replaced atomically.** A spec write goes to a temporary file that is then
   renamed over the old one, so a command reading the tree at the same moment sees the old spec or
   the new one, never an empty file (it answered `spec-missing` before). A symbolic link is written
@@ -82,6 +94,9 @@ Upgrading: nothing in a spec tree has to change.
 - The hosted web routes (`/web/*`) are the browser app's backend, not an API: an API key belongs
   on `/mcp`, and administration scripts use `wairon host`. `docs/cli.md` also documents the
   `POST /web/login` body.
+- `docs/cli.md` says how a reviewer without a web sign-in decides a lock request: with their own
+  API key on the admin API (`GET /admin/approvals?status=pending`,
+  `POST /admin/approvals/{id}/decision`).
 
 ### Known limitations
 
@@ -89,6 +104,10 @@ Upgrading: nothing in a spec tree has to change.
   CLI's own files, 60 s for the spec tree) can be taken over while it still works. Its final write
   is refused when that happened, which narrows the window to the write itself but does not close
   it. (Carried from 6.2.0.)
+- `sdd_move_spec` cannot move a component, a type or a group into a part's subsystem: it offers
+  only the subsystems of the project's own folder, and names a part's subsystem as another
+  project. Re-create the spec in the part's subsystem and delete the old one, then update what
+  referred to it.
 - `wairon mcp install` does not lock the agent's configuration file: the agent tools write it
   without wairon's lock. It re-reads the file just before writing, which narrows the window.
 - A member project's own `wairon validate` does not show the network findings judged at the
