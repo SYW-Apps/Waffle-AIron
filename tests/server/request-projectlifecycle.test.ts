@@ -176,8 +176,16 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     const unit = createUnit(dataDir, {
       id: '', name: 'Makers', slug: 'makers', kind: 'team', status: 'active', createdAt: '', createdBy: subject(),
     });
-    const token = agentToken('agent-init', 'demo', 'u-agent');
+    agentToken('agent-init', 'demo', 'u-agent');
     allow('u-agent', 'project:create', 'unit', unit.id, 'approval');
+    // Creating a project needs a key that is not narrowed to projects: one narrowed to
+    // demo acts as its owner only within demo, so the unit's project:create is refused to it.
+    const narrowedRes = await post(
+      call('sdd_host_initialize_project', { id: 'brand-new', displayName: 'Brand New', ownerUnitId: unit.id }),
+      mintToken({ id: 'agent-init-narrowed', projects: ['demo'], userId: 'u-agent' }),
+    );
+    expect(((await narrowedRes.json()) as RpcResponse).result?.isError).toBe(true);
+    const token = mintToken({ id: 'agent-init-any', projects: ['*'], userId: 'u-agent' });
 
     const res = await post(
       call('sdd_host_initialize_project', { id: 'brand-new', displayName: 'Brand New', ownerUnitId: unit.id }),
@@ -196,18 +204,19 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     expect(outcome.approval?.id).toBeTruthy();
 
     // The pending request is persisted in approvals.json.
+    // Only the unnarrowed key's request: the narrowed attempt queued nothing.
     const pending = listApprovalRequests(dataDir, 'pending');
-    expect(pending.map((p) => p.id)).toContain(outcome.approval!.id);
+    expect(pending.map((p) => p.id)).toEqual([outcome.approval!.id]);
 
-    // An mcp.tool.call audit event captures the lifecycle tool by name.
+    // An mcp.tool.call audit event captures the lifecycle tool by name, for each attempt.
     const events = queryAuditEvents(dataDir, { action: 'mcp.tool.call' });
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
+    expect(events).toHaveLength(2);
+    expect(events.find((e) => e.tokenId === 'agent-init-any')).toMatchObject({
       target: 'sdd_host_initialize_project',
       projectId: 'demo',
       outcome: 'success',
-      tokenId: 'agent-init',
     });
+    expect(events.find((e) => e.tokenId === 'agent-init-narrowed')?.outcome).not.toBe('success');
   }, 20_000);
 
   it('initialize with NO project:create reach → isError Forbidden (execute-primary denies, it does not queue)', async () => {

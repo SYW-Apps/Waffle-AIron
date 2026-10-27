@@ -13,6 +13,7 @@ import type {
   ProjectParentLink,
   VisibleScope,
 } from './types.js';
+import { SUBSYSTEM_SCOPE_SEPARATOR } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Authorization (sdd_host) — the single I/O-backed authorization seam.
@@ -47,6 +48,60 @@ function gatherWorld(dataDir: string): PermissionWorld {
   return { assignments, roles, units, placements, parents };
 }
 
+/**
+ * Whether a key narrowing confines the principal away from a target scope: an
+ * instance or unit scope always, a project scope whose record no entry covers,
+ * and a subsystem scope of such a project. An entry covers its record and every
+ * member record whose parent chain climbs through it. A principal without a key
+ * narrowing (a session, the master credential, an unnarrowed key) is never confined.
+ */
+function narrowedAway(principal: Principal, scopeKind: string, scopeId: string, world: PermissionWorld): boolean {
+  const narrowing = principal.keyNarrowing;
+  if (narrowing === undefined) return false;
+  if (scopeKind === 'project') return !keyCovers(narrowing, scopeId, world);
+  if (scopeKind === 'subsystem') return !keyCovers(narrowing, scopeId.split(SUBSYSTEM_SCOPE_SEPARATOR)[0], world);
+  return true;
+}
+
+/** Whether a key's entries cover a record: the record itself, or a project its parent chain climbs through. */
+function keyCovers(narrowing: string[], projectId: string, world: PermissionWorld): boolean {
+  if (narrowing.includes('*')) return true;
+  const seen = new Set<string>();
+  for (let at: string | undefined = projectId; at !== undefined && !seen.has(at); at = world.parents.find((p) => p.projectId === at)?.parentProjectId) {
+    if (narrowing.includes(at)) return true;
+    seen.add(at);
+  }
+  return false;
+}
+
+/**
+ * A narrowed key's view: actionable only the project and subsystem scopes its
+ * narrowing covers; context only the scopes above them that the view already
+ * held (their parent projects and the units above their family root).
+ */
+function narrowView(principal: Principal, scopes: VisibleScope[], world: PermissionWorld): VisibleScope[] {
+  if (principal.keyNarrowing === undefined) return scopes;
+  const kept = scopes.filter((s) => s.scopeKind !== 'unit' && !narrowedAway(principal, s.scopeKind, s.scopeId, world));
+  const above = new Set<string>();
+  for (const s of kept) {
+    let project = s.scopeKind === 'subsystem' ? s.scopeId.split(SUBSYSTEM_SCOPE_SEPARATOR)[0] : s.scopeId;
+    for (let parent = world.parents.find((p) => p.projectId === project); parent !== undefined; parent = world.parents.find((p) => p.projectId === project)) {
+      if (above.has(`project:${parent.parentProjectId}`)) break;
+      above.add(`project:${parent.parentProjectId}`);
+      project = parent.parentProjectId;
+    }
+    for (const placement of world.placements.filter((p) => p.projectId === project)) {
+      const parts = placement.unitId.split('.');
+      for (let i = 1; i <= parts.length; i++) above.add(`unit:${parts.slice(0, i).join('.')}`);
+    }
+  }
+  const keptKeys = new Set(kept.map((s) => `${s.scopeKind}:${s.scopeId}`));
+  const context = scopes
+    .filter((s) => !keptKeys.has(`${s.scopeKind}:${s.scopeId}`) && above.has(`${s.scopeKind}:${s.scopeId}`))
+    .map((s) => ({ ...s, context: true }));
+  return [...context, ...kept];
+}
+
 /** Each member record's link to its parent — the project rungs of a member's chain. */
 function parentLinksOf(records: HostedProjectRecord[]): ProjectParentLink[] {
   return records
@@ -75,6 +130,8 @@ export function resolveFamilyReach(dataDir: string, principal: Principal, projec
   const world = gatherPermissionWorld(dataDir);
   // Steps 2-4: each record's read and write over its own project scope.
   for (const id of projectIds) {
+    // Step 3: a record the key narrowing does not cover is neither read nor written.
+    if (narrowedAway(principal, 'project', id, world)) continue;
     if (resolvePermission(principal.permissionSubject, 'project:read', 'project', id, world).value === 'yes') reach.readable.push(id);
     if (resolvePermission(principal.permissionSubject, 'project:write', 'project', id, world).value === 'yes') reach.writable.push(id);
     // Step 5: the subsystem rungs the principal meets in the record.
@@ -120,7 +177,11 @@ export function authorize(
   }
   // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
-  // Step 7: resolve the effective permission through pure permission rules.
+  // Steps 7-8: a key acts as its owner only within the projects it is narrowed to.
+  if (narrowedAway(principal, scopeKind, scopeId, world)) {
+    return { value: 'no', source: 'key-narrowing' };
+  }
+  // Step 9: resolve the effective permission through pure permission rules.
   return resolvePermission(principal.permissionSubject, capability, scopeKind, scopeId, world);
 }
 
@@ -141,7 +202,9 @@ export function visibleScopes(
   // Steps 1-6: gather the permission world once.
   const world = gatherWorld(dataDir);
   // Step 7: compute the actionable scopes plus their ancestor breadcrumb.
-  return resolveVisibleScopes(principal.permissionSubject, capability, world);
+  const scopes = resolveVisibleScopes(principal.permissionSubject, capability, world);
+  // Step 8: a narrowed key sees only what its narrowing covers.
+  return narrowView(principal, scopes, world);
 }
 
 /**
@@ -156,7 +219,8 @@ export function visibleScopes(
  * organization unit, so no unit-scoped permission can reach them.
  */
 export function isInstanceAdmin(principal: Principal): boolean {
-  return principal.permissionSubject?.instanceAdmin === true;
+  // A key narrowed to projects never holds the bypass, whoever owns it.
+  return principal.permissionSubject?.instanceAdmin === true && principal.keyNarrowing === undefined;
 }
 
 /** The actionable (non-breadcrumb) project ids from a visibility view. */
