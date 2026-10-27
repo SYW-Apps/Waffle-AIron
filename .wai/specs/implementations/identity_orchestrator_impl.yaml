@@ -342,7 +342,8 @@ methods:
         description: >-
           Mint a fresh random token and build the caller-owned record NARROWED to exactly the one
           project — the record stores NO permissions: the data-plane gate resolves the owner's LIVE
-          permission per request, so revoking the owner cuts the token off
+          permission per request, so revoking the owner cuts the token off. Minted without write,
+          the record is read-only
         type: local
       - stepNumber: 8
         description: Persist the credential record (hashed token only — the plaintext is never stored)
@@ -365,11 +366,12 @@ methods:
       principal's subject) narrowed to exactly one project (projects = [projectId]); the token
       carries NO grants — it acts as the caller's OWN live permission on that project, so permission
       rules gate read vs write at use time and the token can never exceed the caller's access
-      (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
-      (token label only). Persist only the hashed record through the credential repository, append a
-      best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
-      once. Because the token is owned by the caller, a later deactivation of that user revokes it
-      via revokeAllForOwner.
+      (self-scoped, so key:manage is neither required nor consulted). Minted without write, the
+      record is read-only: authorization refuses it every capability but project:read, whatever its
+      owner may do, so a read-only token never writes. Persist only the hashed record through the
+      credential repository, append a best-effort redacted token.mint.self (security) audit event,
+      and return the plaintext exactly once. Because the token is owned by the caller, a later
+      deactivation of that user revokes it via revokeAllForOwner.
   - name: listSelfTokens
     narrative:
       - stepNumber: 1
@@ -1145,4 +1147,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-23T22:13:14.327Z'
+updatedAt: '2026-10-27T22:54:55.153Z'

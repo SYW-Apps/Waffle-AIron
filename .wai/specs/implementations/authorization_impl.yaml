@@ -63,11 +63,23 @@ methods:
         type: return
         outcome: no (key-narrowing)
       - stepNumber: 9
+        description: Is the key read-only, and the capability anything but project:read?
+        type: branch
+        condition: the principal carries keyReadOnly and the capability is not project:read
+        onTrueStep: 10
+        onFalseStep: 11
+      - stepNumber: 10
+        description: >-
+          Answer no, decided by the read-only key: it reads what its owner reads and nothing more,
+          so neither the owner's grants nor the instance-admin bypass make it write
+        type: return
+        outcome: no (key-read-only)
+      - stepNumber: 11
         description: Resolve the principal's effective permission for the capability at the target scope
         type: call
         targetComponent: permission_rules
         targetMethod: resolvePermission
-      - stepNumber: 10
+      - stepNumber: 12
         description: Return the effective permission
         type: return
         outcome: the effective permission
@@ -114,7 +126,8 @@ methods:
         description: >-
           For a principal carrying a keyNarrowing, keep actionable only the project and subsystem
           scopes its narrowing covers, and as context only their ancestors; every other scope is
-          dropped
+          dropped; for a principal carrying a read-only key and any capability but project:read,
+          nothing stays
         type: local
       - stepNumber: 9
         description: Return the visible scopes
@@ -171,7 +184,9 @@ methods:
       - stepNumber: 3
         description: >-
           A record the principal's keyNarrowing does not cover is neither read nor written and
-          carries no subsystem rungs; the rungs below are resolved for the records it covers
+          carries no subsystem rungs; the rungs below are resolved for the records it covers. A
+          read-only key reads what its owner reads but writes no record and meets no subsystem rung:
+          the write and subsystem steps are skipped for it
         type: local
       - stepNumber: 4
         description: Resolve the principal's project:read over the record's OWN project scope
@@ -257,4 +272,4 @@ methods:
 detail: full
 status: complete
 createdAt: '2026-07-15T21:32:08.971Z'
-updatedAt: '2026-10-27T18:08:17.990Z'
+updatedAt: '2026-10-27T22:54:52.080Z'
