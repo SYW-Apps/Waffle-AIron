@@ -7,7 +7,7 @@ import { ensureDir } from '../utils/fs.js';
 // directly — the same boundary `wairon lock` and `wairon status` were taught.
 // renderDiagram is the whole of the four-format path; the scoped Mermaid and
 // the --all set come through the adapter too.
-import { renderDiagram } from './adapters/core.js';
+import { renderDiagram, renderTypeDiagrams, loadGroupSpecs } from './adapters/core.js';
 // cli_validator_adapter: the family's relation health the canvas colours its
 // consumption edges by.
 import { familyRelations } from './validate.js';
@@ -57,6 +57,10 @@ export interface DiagramOptions {
    * canvas carries health.
    */
   health?: boolean;
+  /** Draw the overview of the project's type groups (Mermaid only). */
+  types?: boolean;
+  /** Draw one type group's own types as a class diagram (Mermaid only; implies a type diagram). */
+  group?: string;
 }
 
 const FORMATS = ['mermaid', 'canvas', 'drawio', 'excalidraw'] as const;
@@ -114,6 +118,25 @@ export async function runDiagram(options: DiagramOptions = {}): Promise<void> {
   }
 }
 
+/** The index for --types, the named group's class diagram for --group, written under the diagrams folder or to --out. */
+function writeTypeDiagram(options: DiagramOptions): void {
+  const diagrams = renderTypeDiagrams();
+  const chosen = options.group !== undefined
+    ? diagrams.find((d) => d.scope === 'group' && d.group === options.group)
+    : diagrams.find((d) => d.scope === 'index');
+  if (chosen === undefined) {
+    if (options.group === undefined) {
+      logger.warn('No type diagrams to draw — the project has no types of its own yet. Nothing was written.');
+      return;
+    }
+    throw new WaironError(`Type group "${options.group}" holds no types of its own (its child groups may: \`wairon diagram --types\` shows the tree). Nothing was written.`);
+  }
+  const dest = options.out ?? path.join(AI_PATHS.docsDir(), 'diagrams', ...chosen.relPath.split('/'));
+  writeArtifact(dest, dest.endsWith('.mmd') ? `${chosen.mermaid}\n` : toMarkdown({ relPath: dest, title: chosen.title, mermaid: chosen.mermaid }));
+  logger.success(`Mermaid type diagram written to ${dest}`);
+  if (chosen.scope === 'index') logger.info('One group\'s types: `wairon diagram --group <id>`; every group at once: `wairon diagram --all`.');
+}
+
 async function writeDiagrams(options: DiagramOptions): Promise<void> {
   assertProjectInitialized();
   const formatted = applyFormat(options);
@@ -128,6 +151,23 @@ async function writeDiagrams(options: DiagramOptions): Promise<void> {
     if (!known.some((id) => id === formatted.subsystem || id.startsWith(`${formatted.subsystem}::`))) {
       throw new WaironError(`No subsystem "${formatted.subsystem}" in this tree — ${known.length ? `it holds ${known.join(', ')}` : 'it holds none yet'}. Nothing was written.`);
     }
+  }
+  // Type diagrams are Mermaid, and a --group must name a declared type group.
+  const wantsTypes = !!formatted.types || formatted.group !== undefined;
+  if (wantsTypes && (formatted.canvas || formatted.drawio || formatted.excalidraw)) {
+    throw new WaironError('Type diagrams (--types, --group) are Mermaid only; the canvas already folds types by group. Drop the format, or use `wairon diagram --format canvas` without them. Nothing was written.');
+  }
+  if (formatted.group !== undefined) {
+    const known = loadGroupSpecs().filter((g) => !g.id.includes('::')).map((g) => g.id);
+    if (!known.includes(formatted.group)) {
+      throw new WaironError(`No type group "${formatted.group}" in this tree — ${known.length ? `it holds ${known.join(', ')}` : 'it declares none'}. Nothing was written.`);
+    }
+  }
+
+  // Steps 2-4: the type diagram asked for, written like any other artifact (--all writes them with the set).
+  if (wantsTypes && !formatted.all) {
+    writeTypeDiagram(formatted);
+    return;
   }
 
   // Step 1: render the requested format through the core client adapter.

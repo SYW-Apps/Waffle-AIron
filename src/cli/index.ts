@@ -438,7 +438,9 @@ program
   .option('--subsystem <id>', 'scope the component diagram to one subsystem (plus its external neighbors)')
   .option('--sequence <component:method>', 'emit a sequence diagram derived from the method\'s L5 narrative')
   .option('--depth <n>', 'max call-expansion depth for sequence diagrams (default 3)', (v: string) => (/^\d+$/.test(v) ? parseInt(v, 10) : v))
-  .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, and the interactive canvas')
+  .option('--all', 'write the full diagram set: system, per-subsystem, entrypoint sequences, the type diagrams, and the interactive canvas')
+  .option('--types', 'emit the Mermaid overview of the type groups: types per group and the references between groups (types/index.md)')
+  .option('--group <id>', 'emit one type group\'s types as a Mermaid class diagram, with stubs for the types it references elsewhere')
   .option('--canvas', 'emit the interactive self-contained HTML canvas (pan/zoom, collapse boundaries, detail panel, issue overlay)')
   .option('--drawio', 'emit an editable draw.io / diagrams.net file (same layout as the canvas)')
   .option('--excalidraw', 'emit an editable Excalidraw scene (same layout as the canvas)')
@@ -457,6 +459,8 @@ program
       format: opts.format,
       out: opts.out,
       health: opts.health,
+      types: opts.types,
+      group: opts.group,
     });
   });
 
