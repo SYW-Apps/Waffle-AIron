@@ -12,6 +12,7 @@ import {
   getProjectRootOverride,
   setProjectRoot,
   pathExists,
+  ignoreWriteLock as ignoreWriteLockAt,
 } from '../utils/fs.js';
 import { writeYamlFile } from '../utils/yaml.js';
 import { AI_PATHS } from '../config/paths.js';
@@ -767,9 +768,6 @@ A new project initialized with Wairon.
   writeFile(AI_PATHS.contextProjectMd(), content);
 }
 
-/** The line .wai/.gitignore carries so the spec tree's write lock is never committed. */
-const WRITE_LOCK_IGNORE = '.spec-write.lock*';
-
 /**
  * Step 15 of runInit: .wai/.gitignore ignoring the spec tree's write lock —
  * created when absent, the line added when the file lacks it, anything else
@@ -777,11 +775,5 @@ const WRITE_LOCK_IGNORE = '.spec-write.lock*';
  * root .gitignore, and travels with .wai/ wherever that is committed.
  */
 function ignoreWriteLock(): void {
-  const file = path.join(AI_PATHS.root(), '.gitignore');
-  const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
-  if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return;
-  const body = held === null
-    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
-    : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${WRITE_LOCK_IGNORE}\n`;
-  writeFile(file, body);
+  ignoreWriteLockAt(AI_PATHS.root());
 }

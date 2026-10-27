@@ -82,6 +82,26 @@ export function writeFile(filePath: string, content: string): void {
   });
 }
 
+/** The line a .wai/.gitignore carries so the spec tree's write lock is never committed. */
+export const WRITE_LOCK_IGNORE = '.spec-write.lock*';
+
+/**
+ * .wai/.gitignore of the project whose .wai folder is `waiDir`, ignoring the
+ * spec tree's write lock: created when absent, the line appended when the file
+ * lacks it, anything else in it kept. Returns whether it wrote. Every project
+ * (the root, a part, a member project) needs it: the lock lives in its own .wai.
+ */
+export function ignoreWriteLock(waiDir: string): boolean {
+  const file = path.join(waiDir, '.gitignore');
+  const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return false;
+  const body = held === null
+    ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
+    : `${held}${held === '' || held.endsWith('\n') ? '' : '\n'}${WRITE_LOCK_IGNORE}\n`;
+  writeFile(file, body);
+  return true;
+}
+
 /**
  * Write a file only if the content differs from what is already on disk.
  * Returns true if the file was written (new or changed), false if unchanged.

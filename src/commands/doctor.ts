@@ -6,7 +6,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
-import { AI_PATHS } from '../config/paths.js';
+import { AI_PATHS, aiPathsAt } from '../config/paths.js';
 import { LockRecordUnreadableError, ProjectNotInitializedError } from '../utils/errors.js';
 import {
   loadProjectConfig,
@@ -39,7 +39,7 @@ import {
   loadGroupSpecs,
   scanAllSpecs,
 } from './adapters/core.js';
-import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot, renamePath, ensureDir } from '../utils/fs.js';
+import { pathExists, readFileOrNull, fromProjectRoot, getProjectRoot, isOutsideRoot, runWithProjectRoot, renamePath, ensureDir, ignoreWriteLock } from '../utils/fs.js';
 import { misplacedGroupFiles } from '../models/specs.js';
 import { checkSkillFreshness, exportSddSkills } from './adapters/skills.js';
 // A configuration's enabled targets are the project_config type's own behaviour.
@@ -658,6 +658,7 @@ async function applyFixes(options: DoctorOptions, tally: Tally): Promise<void> {
   // The members: the repairs above wrote this project only. Cascade into each
   // member below it, the way the family run validates them.
   repairMembers();
+  repairPartIgnores();
 
   // The derived documents describe the tree as it stands NOW: the first
   // regeneration above ran before the spec repairs and the members' repairs
@@ -844,6 +845,30 @@ function memberProjects(): MemberProject[] {
 }
 
 /**
+ * --fix for the parts: a part keeps its spec write lock in its own .wai, which
+ * the root's .wai/.gitignore does not cover, so each part inside the bound root
+ * — of the bound project or of a member project below it — gets the same
+ * ignore line. A part fetched from git is the fetch cache's and is not written.
+ */
+function repairPartIgnores(): void {
+  const root = getProjectRoot();
+  let nodes: ReturnType<typeof projectFamily>['nodes'];
+  try {
+    nodes = projectFamily().nodes;
+  } catch {
+    return; // repairMembers names the unreadable family
+  }
+  for (const node of nodes) {
+    for (const part of node.parts ?? []) {
+      if (part.storage === 'git' || !part.directory || isOutsideRoot(root, part.directory)) continue;
+      const wai = aiPathsAt(part.directory).root();
+      if (!pathExists(wai)) continue;
+      if (ignoreWriteLock(wai)) console.log(`  ${icon('ok')} [${part.alias}] .wai/.gitignore now ignores the spec write lock`);
+    }
+  }
+}
+
+/**
  * --fix's cascade: each member inside the bound root gets the per-project
  * repairs, bound to its own root — the packs it no longer applies pinned, then
  * its spec repairs — each line marked with the member. A member outside the
@@ -865,6 +890,8 @@ function repairMembers(): void {
     }
     runWithProjectRoot(member.directory, () => {
       if (!projectConfigExists()) return;
+      // A part's write lock lives in its own .wai: ignored like the root's, or it is committed.
+      if (ignoreWriteLock(AI_PATHS.root())) console.log(`  ${icon('ok')} [${member.alias}] .wai/.gitignore now ignores the spec write lock`);
       repairProjectSpecs(member.alias);
       repairGroupPlacement(member.alias);
       repairMemberSurfaces(member.alias);
