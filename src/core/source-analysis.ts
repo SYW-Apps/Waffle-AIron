@@ -28,6 +28,7 @@ import {
   type TypeShapeFact,
   type TypeSpec,
   languageOfSourcePath,
+  resolveImport,
 } from '../models/index.js';
 
 // ---------------------------------------------------------------------------
@@ -3274,6 +3275,7 @@ function resolveCalls(
   files: Map<string, string>,
   projectRoot: string,
   claimed: ReadonlySet<string> = new Set<string>(),
+  wiring: readonly string[] = [],
 ): CheckerReading {
   const out = new Map<string, ResolvedCallFact[]>();
   if (files.size === 0) return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
@@ -3294,7 +3296,7 @@ function resolveCalls(
   };
   let program: import('typescript').Program;
   try {
-    program = ts.createProgram({ rootNames: [...files.keys()], options, host });
+    program = ts.createProgram({ rootNames: [...files.keys(), ...wiring], options, host });
   } catch {
     return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
   }
@@ -3392,6 +3394,79 @@ function resolveCalls(
     return found;
   };
 
+  /**
+   * The module functions realizing a shape's members through an object
+   * literal: wherever the code builds a literal the checker types as the
+   * shape — a composition root wiring `{ isBreach }`, a default `{ save:
+   * saveRecord }` — each property whose value is a project function, a
+   * declaration or a const bound to one, realizes that member, by the
+   * function's own name. Read once over the project, keyed by the shape's
+   * declaration, then by member.
+   */
+  let literalImplementors: Map<import('typescript').Node, Map<string, CallTargetFact[]>> | undefined;
+  const functionTargetOf = (value: import('typescript').Symbol | undefined): CallTargetFact | undefined => {
+    const decl = value?.valueDeclaration;
+    if (!decl) return undefined;
+    const isFunction = ts.isFunctionDeclaration(decl)
+      || (ts.isVariableDeclaration(decl) && !!decl.initializer && (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)));
+    if (!isFunction) return undefined;
+    // Module scope only: a function bound inside another is no name a file publishes.
+    const statement = ts.isVariableDeclaration(decl) ? decl.parent?.parent : decl;
+    if (!statement || !ts.isSourceFile(statement.parent)) return undefined;
+    const key = ownKey(decl.getSourceFile());
+    const member = nameText(ts.getNameOfDeclaration(decl));
+    return key && member ? { path: key, member, via: 'implementor' } : undefined;
+  };
+  const literalImplementorsOf = (shape: import('typescript').Node, member: string): CallTargetFact[] => {
+    if (!literalImplementors) {
+      literalImplementors = new Map();
+      const found = literalImplementors;
+      for (const sf of program.getSourceFiles()) {
+        if (!ownKey(sf) || sf.isDeclarationFile) continue;
+        const visit = (node: import('typescript').Node): void => {
+          if (ts.isObjectLiteralExpression(node)) {
+            const wired: Array<[string, CallTargetFact]> = [];
+            for (const prop of node.properties) {
+              const name = nameText(prop.name);
+              if (!name) continue;
+              let value: import('typescript').Symbol | undefined;
+              if (ts.isShorthandPropertyAssignment(prop)) value = checker.getShorthandAssignmentValueSymbol(prop);
+              else if (ts.isPropertyAssignment(prop) && (ts.isIdentifier(prop.initializer) || ts.isPropertyAccessExpression(prop.initializer))) {
+                value = checker.getSymbolAtLocation(ts.isPropertyAccessExpression(prop.initializer) ? prop.initializer.name : prop.initializer);
+              }
+              if (value && value.flags & ts.SymbolFlags.Alias) {
+                try { value = checker.getAliasedSymbol(value); } catch { /* keep the alias */ }
+              }
+              const target = functionTargetOf(value);
+              if (target) wired.push([name, target]);
+            }
+            if (wired.length > 0) {
+              const contextual = checker.getContextualType(node);
+              const type = contextual ? checker.getNonNullableType(contextual) : undefined;
+              for (const part of type ? (type.isUnionOrIntersection() ? type.types : [type]) : []) {
+                const symbol = part.aliasSymbol ?? part.getSymbol();
+                for (const decl of symbol?.declarations ?? []) {
+                  if (!ts.isInterfaceDeclaration(decl) && !ts.isTypeLiteralNode(decl) && !ts.isTypeAliasDeclaration(decl)) continue;
+                  const shapeNode = ts.isTypeAliasDeclaration(decl) ? decl.type : decl;
+                  let members = found.get(shapeNode);
+                  if (!members) found.set(shapeNode, (members = new Map()));
+                  for (const [name, target] of wired) {
+                    const list = members.get(name) ?? [];
+                    if (!list.some(t => t.path === target.path && t.member === target.member)) list.push(target);
+                    members.set(name, list);
+                  }
+                }
+              }
+            }
+          }
+          ts.forEachChild(node, visit);
+        };
+        visit(sf);
+      }
+    }
+    return literalImplementors.get(shape)?.get(member) ?? [];
+  };
+
   /** The class, interface, shape or object a member declaration belongs to, by name. */
   const containerOf = (decl: import('typescript').Node): string | undefined => {
     const holder = decl.parent;
@@ -3436,6 +3511,7 @@ function resolveCalls(
         for (const c of implementorsOf(holder)) {
           if (c.members.has(member)) add({ path: c.path, container: c.name, member, via: 'implementor' });
         }
+        for (const target of literalImplementorsOf(holder, member)) add(target);
       }
     }
     return targets;
@@ -3749,6 +3825,7 @@ function resolveCalls(
         else if (ts.isInterfaceDeclaration(decl) || ts.isTypeLiteralNode(decl)) {
           const realizing = implementorsOf(decl);
           for (const c of realizing) add({ path: c.path, container: c.name, member, via: 'implementor' });
+          for (const target of literalImplementorsOf(decl, member)) add(target);
           // A shape no class realizes — the type of a component a factory
           // builds — is the shape itself, in the file that declares it: where
           // a call through it lands, and so where its receiver was.
@@ -4471,12 +4548,13 @@ export function buildCodeModel(
   // Every call of every exact-grade file, resolved by the type checker. A
   // program that cannot be built leaves the facts without resolved calls, and
   // the rules read the shape facts as they always have.
+  const outside = outsideOf(projectRoot, seen, packages);
   if (ts && checkerRoots.size > 0) {
     let resolved = new Map<string, ResolvedCallFact[]>();
     let imports = new Map<string, ModuleImports>();
     let reading: CheckerReading | undefined;
     try {
-      reading = resolveCalls(ts, checkerRoots, projectRoot, claimedFiles);
+      reading = resolveCalls(ts, checkerRoots, projectRoot, claimedFiles, outside.wiring);
       ({ calls: resolved, imports } = reading);
     } catch {
       resolved = new Map();
@@ -4517,13 +4595,13 @@ export function buildCodeModel(
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
-    const model: CodeModel = { files, projectRoot, rootFiles, packages, ...outsideNamesOf(projectRoot, seen) };
+    const model: CodeModel = { files, projectRoot, rootFiles, packages, ...outside.names };
     if (Object.keys(reached).length > 0) model.reachedCalls = reached;
     if (imports.size > 0) model.reachedImports = Object.fromEntries(imports);
     return model;
   }
 
-  return { files, projectRoot, rootFiles, packages, ...outsideNamesOf(projectRoot, seen) };
+  return { files, projectRoot, rootFiles, packages, ...outside.names };
 }
 
 /** Folders the outside walk never reads: dependencies, build output, caches, virtual environments. */
@@ -4532,14 +4610,31 @@ const OUTSIDE_SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'c
 const OUTSIDE_MAX_FILES = 20000;
 const OUTSIDE_MAX_BYTES = 1_000_000;
 
+/** A re-export statement — `export { a, b as c } from '…'`, `export * from '…'`, `export * as ns from '…'`. */
+const REEXPORT_RE = /\bexport\s+(?:type\s+)?(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"][^'"\n]+['"]/g;
+
+/** A module specifier of an import, an export-from or a require, as written. */
+const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"\n]+)['"]/g;
+
 /**
- * The identifiers written in the project's source files the run did not
- * analyze (CodeModel.outsideNames), comments stripped: a bounded walk of the
- * project root. Never throws; an unreadable folder or file adds nothing.
+ * The project's source files the run did not analyze, read in a bounded walk
+ * of the project root, comments stripped: the identifiers they write
+ * (CodeModel.outsideNames), and the TypeScript and JavaScript ones that import
+ * an analyzed file — a composition root, a test — whose wiring the type
+ * checker reads beside the analyzed files. Never throws; an unreadable folder
+ * or file adds nothing.
  */
-function outsideNamesOf(projectRoot: string, analyzed: ReadonlySet<string>): { outsideNames?: string[] } {
-  if (!projectRoot) return {};
+function outsideOf(
+  projectRoot: string,
+  analyzed: ReadonlySet<string>,
+  packages: Readonly<Record<string, string>>,
+): { names: { outsideNames?: string[] }; wiring: string[] } {
+  if (!projectRoot) return { names: {}, wiring: [] };
   const names = new Set<string>();
+  const wiring: string[] = [];
+  const known = new Set(analyzed);
+  /** Each renamed re-export of an unanalyzed barrel: the name it takes, and the name it publishes. */
+  const aliases: Array<[string, string]> = [];
   let read = 0;
   const descend = (dir: string): void => {
     if (read >= OUTSIDE_MAX_FILES) return;
@@ -4568,14 +4663,34 @@ function outsideNamesOf(projectRoot: string, analyzed: ReadonlySet<string>): { o
         read++;
         const patterns = LANGUAGE_PATTERNS[language];
         const text = patterns ? stripComments(buffer.toString('utf8'), patterns) : buffer.toString('utf8');
-        for (const m of text.matchAll(IDENTIFIER_RE)) names.add(m[0]);
+        // A re-export publishes a name and never uses it: an unanalyzed
+        // barrel's `export … from` statements exempt nothing.
+        // Renamed on the way, it is used when what the barrel publishes is.
+        const script = language === 'typescript' || language === 'javascript';
+        if (script) {
+          for (const statement of text.matchAll(REEXPORT_RE)) {
+            for (const m of statement[0].matchAll(/([\w$]+)\s+as\s+([\w$]+)/g)) aliases.push([m[1], m[2]]);
+          }
+        }
+        const used = script ? text.replace(REEXPORT_RE, ' ') : text;
+        for (const m of used.matchAll(IDENTIFIER_RE)) names.add(m[0]);
+        if ((language === 'typescript' || language === 'javascript') && !key.endsWith('.d.ts')
+          && [...text.matchAll(SPECIFIER_RE)].some(m => resolveImport(key, m[1], known, packages) !== undefined)) {
+          wiring.push(child);
+        }
       } catch {
         // an unreadable file adds nothing
       }
     }
   };
   descend(projectRoot);
-  return names.size > 0 ? { outsideNames: [...names].sort() } : {};
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [local, exported] of aliases) {
+      if (names.has(exported) && !names.has(local)) { names.add(local); grew = true; }
+    }
+  }
+  return { names: names.size > 0 ? { outsideNames: [...names].sort() } : {}, wiring };
 }
 
 // ---------------------------------------------------------------------------
