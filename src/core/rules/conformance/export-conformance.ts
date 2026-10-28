@@ -1,4 +1,4 @@
-import { defaultConformanceTier, importBindingOf, pathKey, resolveImport, routerLinkage, type ClassMemberFact, type FunctionBodyFact, type SourceFileFacts } from '../../../models/index.js';
+import { defaultConformanceTier, importBindingOf, pathKey, resolveImport, routerLinkage, type ClassMemberFact, type FunctionBodyFact, type ResolvedCallFact, type SourceFileFacts } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 /** The bodies a file holds under a name, each with the class or object literal it is a member of. */
@@ -143,7 +143,7 @@ export const exportConformanceRule: SddRule = {
   name: 'export-conformance',
   judges: 'code',
   description:
-    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real. Nor is a declared dependent taking a class that realizes the component it depends on (a class holding one of its modelled methods): constructing it, or receiving it injected under its class (a decorator-metadata token), is the dependsOn edge made real. Taken by a component with no such dependency it still crosses, an owned member\'s class above all. And the surface no taker reveals: a public method of a component's REALIZING class — a class holding one of its modelled methods — or a function its realizing file exports, that no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or reference in its own file, no name another analyzed file writes, no identifier in a project file the run did not analyze (its tests, a composition root), no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains. Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected, #private and underscore-prefixed members, an `override`, a computed name, a language protocol or framework lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read at exact grade, or by a reader that reads class members (Python, where a leading underscore is private). An exported CLASS is judged the same way: a top-level class the realizing file exports beside the classes realizing a component, that no contract or type declares and that nothing uses — its own file naming it nowhere outside its own declaration (constructed, extended, annotated with, tested by instanceof or isinstance, passed on: source_file_facts.classReferences), no other analyzed file naming it, no identifier of a file the run did not analyze, no star re-export publishing the module on — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The finding names the files that took each name as well as the one publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different fact — who reached across, where this is what crossed.",
+    "Code-to-contract for the SURFACE: does this file publish anything the components it realizes never promised, that another component then takes? The rest of the conformance set reads contract-to-code (it asks whether the code holds what a spec claims), so a file could export whatever it liked under a component's name and nothing looked. That is one half of the same hole as a contract promising a parameter it never passes. A method's `exportedVia` names the export a consumer imports to REACH it: the value that composes it, which `symbol` cannot name because `symbol` names the function inside. A Portal implementation's `router` names the entry whatever serves the Portal calls to hand it its requests — in the Portal's own files, or, written `<module>#<name>`, in the module it names, which must export that name (a module named alone must be on disk); an entry that is a class's method is written `Class.method` (`<module>#Class.method` in another module), and the class is then the export, which must hold the method. Both are declared publication, and a declared handle the file does not actually export is itself a finding, so naming one can never become a free-text suppression. Both questions are asked only of a file read at exact grade, and a taker counts only when its own import specifier resolves to the file it is accused of taking from: below that nothing separates an export from a mention, or a shared word from a shared module. A taker inside the owns fence is no crossing: a pattern constructs the blocks it owns, so the owner's file, or another member of the same pattern, importing a member's class is the owns relation made real. Nor is a declared dependent taking a class that realizes the component it depends on (a class holding one of its modelled methods): constructing it, or receiving it injected under its class (a decorator-metadata token), is the dependsOn edge made real. Taken by a component with no such dependency it still crosses, an owned member's class above all. And the surface no taker reveals: a public method of a component's REALIZING class — a class holding one of its modelled methods — or a function its realizing file exports, that no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`, `router` or type of it) and that NOTHING in the project uses — no call or reference in its own file, no use in another analyzed file, no identifier in a project file the run did not analyze (its tests, a composition root) — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no design, brief or caller explains. A use is a use of THAT declaration: where the type checker read the using file, a call or reference counts only when the checker lands it on the declaration itself (or on a class realizing it), or lands it nowhere it can name under its name, and an import of the name from its file counts — a same-named method of another class, the way a verb removed from the design survives beside the method it forwarded to, is no use; where no checker read it, any name the file writes counts. A re-export, named or star, is publication, never a use: the name is used only when what the barrel publishes it as is. Used, it is the module's factoring (a helper the class calls, a facade forwarding to it, a function its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected, #private and underscore-prefixed members, an `override`, a computed name, a language protocol or framework lifecycle hook (toString, toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read at exact grade, or by a reader that reads class members (Python, where a leading underscore is private). An exported CLASS is judged the same way: a top-level class the realizing file exports beside the classes realizing a component, that no contract or type declares and that nothing uses — its own file naming it nowhere outside its own declaration (constructed, extended, annotated with, tested by instanceof or isinstance, passed on: source_file_facts.classReferences), no other analyzed file naming it, no identifier of a file the run did not analyze, no re-export of it whose published name is used — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The finding names the files that took each name as well as the one publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different fact — who reached across, where this is what crossed.",
   codes: [
     {
       code: 'UNDECLARED_PUBLIC_MEMBER',
@@ -436,20 +436,37 @@ export const exportConformanceRule: SddRule = {
     const outside = new Set(ctx.codeModel.outsideNames ?? []);
     /** The names each analyzed file writes, its own declarations included. */
     const writtenIn = new Map<string, Set<string>>();
+    const collectNames = (facts: SourceFileFacts, declared: string[]): Set<string> => {
+      const names = new Set<string>([...declared, ...facts.anchoredNames]);
+      for (const sites of Object.values(facts.functionCallSites ?? {})) for (const site of sites) names.add(site.name);
+      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) { names.add(local); if (binding.imported) names.add(binding.imported); }
+      for (const call of facts.resolvedCalls ?? []) names.add(call.name);
+      return names;
+    };
     const namesWritten = (facts: SourceFileFacts): Set<string> => {
       const key = pathKey(facts.path);
       let names = writtenIn.get(key);
       if (names) return names;
-      names = new Set<string>([...facts.declaredNames, ...facts.anchoredNames]);
-      for (const sites of Object.values(facts.functionCallSites ?? {})) for (const site of sites) names.add(site.name);
-      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) { names.add(local); if (binding.imported) names.add(binding.imported); }
-      for (const binding of facts.reexportBindings ?? []) names.add(binding.local);
-      for (const call of facts.resolvedCalls ?? []) names.add(call.name);
+      names = collectNames(facts, facts.declaredNames);
       writtenIn.set(key, names);
       return names;
     };
+    /**
+     * Whether a call the type checker resolved may be a use of the candidate:
+     * it lands on that very declaration (or a class realizing it), or it lands
+     * where the checker can name nothing — a receiver typed any, a port no
+     * class realizes — under the candidate's name. A same-named member of
+     * another class or module is another function, never a use.
+     */
+    const lands = (call: ResolvedCallFact, file: string, candidate: string, cls: string | undefined): boolean => {
+      if (call.unresolved || call.port) return call.name === candidate;
+      return call.targets.some(target => target.member === candidate && target.container === cls && pathKey(target.path) === file);
+    };
     /** The names a file USES of its own: its call sites, property reads and references — never its declarations. */
-    const usedHere = (facts: SourceFileFacts, candidate: string, cls: string | undefined): boolean => {
+    const usedHere = (file: string, facts: SourceFileFacts, candidate: string, cls: string | undefined): boolean => {
+      if (facts.resolvedCalls) {
+        return facts.resolvedCalls.some(call => lands(call, file, candidate, cls) && !(call.enclosing === candidate && call.enclosingContainer === cls));
+      }
       for (const [fn, bodies] of Object.entries(facts.functionBodies ?? {})) {
         for (const body of bodies) {
           // The candidate's own body calling itself is no use.
@@ -457,22 +474,81 @@ export const exportConformanceRule: SddRule = {
           if (body.sites.some(site => site.name === candidate)) return true;
         }
       }
-      if (facts.analysisGrade === 'exact' && facts.anchoredNames.includes(candidate)) return true;
-      return (facts.resolvedCalls ?? []).some(call => call.name === candidate && !(call.enclosing === candidate && call.enclosingContainer === cls));
+      return facts.analysisGrade === 'exact' && facts.anchoredNames.includes(candidate);
     };
-    /** The modules a star re-export republishes whole: every export of theirs is published on, a library's surface. */
-    const starRepublished = new Set<string>();
+    /**
+     * Where each module's names are published on: a re-export — named or star
+     * — publishes them under the barrel's name, which is publication and never
+     * a use. The name is used when what the barrel publishes is.
+     */
+    const republished = new Map<string, Array<{ barrel: string; local: string; exported: string }>>();
     for (const facts of ctx.codeModel.files) {
+      if (facts.status !== 'analyzed') continue;
       for (const binding of facts.reexportBindings ?? []) {
-        if (binding.local !== '*') continue;
         const target = resolveImport(pathKey(facts.path), binding.from, code.paths, code.packages);
-        if (target) starRepublished.add(target);
+        if (!target) continue;
+        let list = republished.get(target);
+        if (!list) republished.set(target, (list = []));
+        list.push({ barrel: pathKey(facts.path), local: binding.local, exported: binding.exported });
       }
     }
-    const usedAnywhere = (file: string, facts: SourceFileFacts, candidate: string, cls: string | undefined): boolean => {
-      if (outside.has(candidate) || usedHere(facts, candidate, cls)) return true;
-      if (cls === undefined && starRepublished.has(file)) return true;
-      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(candidate));
+    const filesByKey = new Map(ctx.codeModel.files.map(facts => [pathKey(facts.path), facts] as const));
+    /** Whether another analyzed file uses the candidate: a call the checker lands on it where one read the file, else any name it writes. */
+    const usedBy = (other: SourceFileFacts, file: string, candidate: string, cls: string | undefined): boolean => {
+      if (!other.resolvedCalls) return namesWritten(other).has(candidate);
+      if (other.resolvedCalls.some(call => lands(call, file, candidate, cls))) return true;
+      if (cls !== undefined) return false;
+      // An import of the very name, from the very file: a module function a
+      // composition root wires, a test imports.
+      const key = pathKey(other.path);
+      // A binding records `imported` only when the import renames it; unrenamed, the local name is the imported one.
+      return Object.entries(other.importBindings ?? {}).some(([local, binding]) => !binding.namespace && (binding.imported ?? local) === candidate
+        && resolveImport(key, binding.from, code.paths, code.packages) === file);
+    };
+    /**
+     * The names a file only republishes: the barrel chase folds every name a
+     * re-export publishes into the file's declared names, and a re-export is
+     * publication, never a use. Named re-exports publish their exported name, a
+     * star re-export every name its module (and its own re-exports) export.
+     */
+    const publishedOnly = new Map<string, Set<string>>();
+    const republishedNames = (facts: SourceFileFacts, seen = new Set<string>()): Set<string> => {
+      const key = pathKey(facts.path);
+      const cached = publishedOnly.get(key);
+      if (cached) return cached;
+      const names = new Set<string>();
+      if (seen.has(key)) return names;
+      seen.add(key);
+      for (const binding of facts.reexportBindings ?? []) {
+        if (binding.exported !== '*') { names.add(binding.exported); continue; }
+        const target = resolveImport(key, binding.from, code.paths, code.packages);
+        const module = target === undefined ? undefined : filesByKey.get(target);
+        if (!module) continue;
+        for (const name of module.exportedNames) names.add(name);
+        for (const name of republishedNames(module, seen)) names.add(name);
+      }
+      publishedOnly.set(key, names);
+      return names;
+    };
+    /** The names a file writes, less the ones it declares only by republishing them. */
+    const namesUsedIn = (facts: SourceFileFacts): Set<string> => {
+      const published = republishedNames(facts);
+      return published.size === 0 ? namesWritten(facts) : collectNames(facts, facts.declaredNames.filter(name => !published.has(name)));
+    };
+    const usedAnywhere = (file: string, facts: SourceFileFacts, candidate: string, cls: string | undefined, seen = new Set<string>()): boolean => {
+      const visit = `${file}#${cls ?? ''}.${candidate}`;
+      if (seen.has(visit)) return false;
+      seen.add(visit);
+      if (outside.has(candidate) || usedHere(file, facts, candidate, cls)) return true;
+      if (cls === undefined) {
+        for (const via of republished.get(file) ?? []) {
+          const barrel = filesByKey.get(via.barrel);
+          if (!barrel) continue;
+          if (via.local === '*' && usedAnywhere(via.barrel, barrel, candidate, undefined, seen)) return true;
+          if (via.local === candidate && usedAnywhere(via.barrel, barrel, via.exported, undefined, seen)) return true;
+        }
+      }
+      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && usedBy(other, file, candidate, cls));
     };
     /**
      * Whether anything but the class itself uses an exported class: as
@@ -481,7 +557,11 @@ export const exportConformanceRule: SddRule = {
      * itself, never a use.
      */
     const classUsed = (file: string, facts: SourceFileFacts, cls: string): boolean => {
-      if (outside.has(cls) || starRepublished.has(file)) return true;
+      if (outside.has(cls)) return true;
+      for (const via of republished.get(file) ?? []) {
+        const barrel = filesByKey.get(via.barrel);
+        if (barrel && (via.local === '*' || via.local === cls) && usedAnywhere(via.barrel, barrel, via.local === '*' ? cls : via.exported, undefined)) return true;
+      }
       for (const bodies of Object.values(facts.functionBodies ?? {})) {
         for (const body of bodies) {
           if (body.container === cls) continue;
@@ -490,7 +570,7 @@ export const exportConformanceRule: SddRule = {
       }
       if (facts.analysisGrade === 'exact' && facts.anchoredNames.includes(cls)) return true;
       if ((facts.resolvedCalls ?? []).some(call => call.name === cls && call.enclosingContainer !== cls && call.enclosing !== cls)) return true;
-      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(cls));
+      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesUsedIn(other).has(cls));
     };
     for (const file of realization.paths) {
       if (TEST_FILE.test(file)) continue;

@@ -17,6 +17,7 @@ import * as identityPortal from './identity-portal.js';
 import * as projectlifecycle from './projectlifecycle.js';
 import * as policy from './policy.js';
 import { providerSetupProblem } from './types.js';
+import { adminTokenProblem, PLACEHOLDER_ADMIN_TOKEN, MIN_ADMIN_TOKEN_LENGTH } from '../utils/admin-token.js';
 import * as policyPortal from './policy-portal.js';
 import * as landscapePortal from './landscape-portal.js';
 import * as operationsPortal from './operations-portal.js';
@@ -713,10 +714,7 @@ export function noteWebUiPosture(cfg: HostConfig): void {
 }
 
 /** Bind the data-plane and admin-plane listeners and begin accepting connections. */
-/** The literal placeholder shipped in .env.example — never a real credential. */
-export const PLACEHOLDER_ADMIN_TOKEN = 'replace-with-a-random-64-hex-character-token';
-/** Shortest admin token we accept; anything below this is trivially guessable. */
-export const MIN_ADMIN_TOKEN_LENGTH = 16;
+export { PLACEHOLDER_ADMIN_TOKEN, MIN_ADMIN_TOKEN_LENGTH };
 
 export function startHostServer(cfg: HostConfig): HostServerHandle {
   if (cfg.authEnabled) {
@@ -731,13 +729,8 @@ export function startHostServer(cfg: HostConfig): HostServerHandle {
     // Reject the shipped placeholder and trivially-short tokens: copying
     // .env.example without editing it would otherwise run the admin API with a
     // publicly known master credential.
-    if (adminToken === PLACEHOLDER_ADMIN_TOKEN || adminToken.length < MIN_ADMIN_TOKEN_LENGTH) {
-      throw new Error(
-        'Refusing to start: WAIRON_ADMIN_TOKEN is the example placeholder or too weak ' +
-          `(must be at least ${MIN_ADMIN_TOKEN_LENGTH} characters and not the shipped default). ` +
-          'Generate a strong one with `openssl rand -hex 32`.',
-      );
-    }
+    const weak = adminTokenProblem(adminToken);
+    if (weak !== undefined) throw new Error(`Refusing to start: ${weak}`);
   }
   // Lifecycle init runs BEFORE the listeners bind: seed the persisted instance
   // identity (and, under devMode, the synthetic local development unit).

@@ -6,6 +6,7 @@ import * as identity from '../../src/server/identity.js';
 import { ForbiddenError } from '../../src/server/errors.js';
 import { authenticate } from '../../src/server/auth.js';
 import { authorize, isInstanceAdmin, resolveFamilyReach, visibleScopes } from '../../src/server/authorization.js';
+import { startHostServer, type HostServerHandle } from '../../src/server/http.js';
 import { createProjectRecord, registerMemberRecord } from '../../src/server/projects.js';
 import { placeProject } from '../../src/server/organization.js';
 import { mintUserToken, allow, seedUnit } from './helpers.js';
@@ -102,5 +103,130 @@ describe('a key narrowed to projects acts as its owner only within them', () => 
     const reach = resolveFamilyReach(dataDir, principal, ['proj-a', 'proj-b']);
     expect(reach.readable).toEqual(['proj-a']);
     expect(reach.writable).toEqual(['proj-a']);
+  });
+});
+
+describe('a refusal caused by the key narrowing says so, and reveals nothing about the project', () => {
+  let dataDir: string;
+  let handle: HostServerHandle | undefined;
+  const savedEnv = { ...process.env };
+  const NOTE = /This key is narrowed to its projects, and this project is not one of them./;
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-key-narrowing-note-'));
+    process.env.WAIRON_ADMIN_TOKEN = 'master-key-narrowing-note';
+    createProjectRecord(dataDir, 'proj-a');
+    createProjectRecord(dataDir, 'proj-b');
+    for (const p of ['proj-a', 'proj-b']) {
+      allow(dataDir, 'owner', 'project:read', 'project', p);
+      allow(dataDir, 'owner', 'project:write', 'project', p);
+      allow(dataDir, 'owner', 'approval:decide', 'project', p);
+      allow(dataDir, 'owner', 'project:admin', 'project', p);
+    }
+  });
+
+  afterEach(() => {
+    handle?.close();
+    handle = undefined;
+    process.env = { ...savedEnv };
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const start = async (): Promise<{ data: string; admin: string }> => {
+    handle = startHostServer({ host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true } as HostConfig);
+    const ports = await handle.listening;
+    return { data: `http://127.0.0.1:${ports.port}`, admin: `http://127.0.0.1:${ports.adminPort}` };
+  };
+  const key = (projects: string[]): string => mintUserToken(dataDir, { id: `n-${keySeq++}`, userId: 'owner', projects });
+  let keySeq = 0;
+  const mcp = (base: string, token: string, project: string) =>
+    fetch(`${base}/mcp?project=${project}`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+
+  it('the MCP binding says it for another project and for an unknown one alike, with the status unchanged', async () => {
+    const { data } = await start();
+    const token = key(['proj-a']);
+    const other = await mcp(data, token, 'proj-b');
+    const unknown = await mcp(data, token, 'no-such-project');
+    expect(other.status).toBe(403);
+    expect(unknown.status).toBe(403);
+    const a = (await other.json()) as { error: string };
+    const b = (await unknown.json()) as { error: string };
+    expect(a.error).toMatch(/^project not authorized, unknown, or not specified. /);
+    expect(a.error).toMatch(NOTE);
+    expect(b).toEqual(a);
+  });
+
+  it('adds nothing for an unnarrowed key, or for a project the key covers', async () => {
+    const { data } = await start();
+    const wide = await mcp(data, key(['*']), 'no-such-project');
+    expect(wide.status).toBe(403);
+    expect(((await wide.json()) as { error: string }).error).toBe('project not authorized, unknown, or not specified');
+    const covered = await mcp(data, key(['proj-a', 'ghost']), 'ghost');
+    expect(covered.status).toBe(403);
+    expect(((await covered.json()) as { error: string }).error).toBe('project not authorized, unknown, or not specified');
+  });
+
+  it('an admin route refuses another project and an unknown one alike', async () => {
+    const { admin } = await start();
+    const token = key(['proj-a']);
+    const lock = (project: string) =>
+      fetch(`${admin}/admin/projects/${project}/lock`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' });
+    const other = await lock('proj-b');
+    const unknown = await lock('no-such-project');
+    expect(other.status).toBe(403);
+    expect(unknown.status).toBe(403);
+    expect(await unknown.json()).toEqual(await other.json());
+  });
+
+  it('the self-service mint refuses another project and an unknown one with the same words', () => {
+    const cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true } as HostConfig;
+    const token = key(['proj-a']);
+    const refusal = (project: string): string => {
+      try {
+        identity.mintSelfToken(cfg, token, project, false);
+      } catch (e) {
+        return (e as Error).message;
+      }
+      return 'minted';
+    };
+    expect(refusal('proj-b')).toBe(refusal('no-such-project'));
+    expect(refusal('proj-b')).toMatch(/caller lacks project:read/);
+  });
+});
+
+describe('a read-only key is refused the admin plane\'s writes', () => {
+  let dataDir: string;
+  let handle: HostServerHandle | undefined;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-read-only-key-'));
+    process.env.WAIRON_ADMIN_TOKEN = 'master-read-only-key';
+    createProjectRecord(dataDir, 'proj-a');
+    for (const capability of ['project:read', 'project:write', 'approval:decide', 'project:admin'] as const) allow(dataDir, 'owner', capability, 'project', 'proj-a');
+  });
+
+  afterEach(() => {
+    handle?.close();
+    handle = undefined;
+    process.env = { ...savedEnv };
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('locking the project is refused for the read-only key, not for the owner\'s write key', async () => {
+    const cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true } as HostConfig;
+    handle = startHostServer(cfg);
+    const ports = await handle.listening;
+    const owner = mintUserToken(dataDir, { id: 'owner-key', userId: 'owner', projects: ['proj-a'] });
+    const lock = (token: string) =>
+      fetch(`http://127.0.0.1:${ports.adminPort}/admin/projects/proj-a/lock`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' });
+    const readOnly = await lock(identity.mintSelfToken(cfg, owner, 'proj-a', false));
+    expect(readOnly.status).toBe(403);
+    const write = await lock(identity.mintSelfToken(cfg, owner, 'proj-a', true));
+    expect(write.status).not.toBe(403);
   });
 });

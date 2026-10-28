@@ -434,7 +434,11 @@ methods:
           called name in its rename trace (previousNames, `<contract>.<name>` or the bare name),
           that it was renamed to that method, per the rename trace, with "did you mean" the new
           name: the same hint a renamed type carries, read here from a member's or this project's
-          own contracts alike
+          own contracts alike; and, when no rename trace names it but the target is a member
+          project's component whose exported interface held the verb in the surface of the member's
+          approved design (ctx.memberApprovedSurfaces), that the producer no longer has it — it was
+          there and has been removed — with the remedy: remove the call, or re-design it against
+          what the target offers now, then re-pin or re-lock
         type: local
     symbol: check
     exportedVia: narrativeTargetReferencesRule
@@ -1039,4 +1043,4 @@ methods:
     exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-10-07T18:42:21.671Z'
+updatedAt: '2026-10-27T18:08:09.571Z'

@@ -14,8 +14,9 @@ methods:
       through the permission rules, using the principal's permissionSubject. A principal carrying a
       key narrowing is no, with source key-narrowing, at any target its narrowing does not cover:
       every instance and unit scope, a project scope whose record no entry covers, and a subsystem
-      scope of such a project. Consumers branch on the returned value: yes acts, approval gates, no
-      denies.
+      scope of such a project. A principal carrying a read-only key: every capability but
+      project:read is no, with source key-read-only, whatever its owner may do. Consumers branch on
+      the returned value: yes acts, approval gates, no denies.
     signature: >-
       authorize(principal: Principal, capability: string, scopeKind: string, scopeId: string):
       EffectivePermission
@@ -36,7 +37,8 @@ methods:
       (context) — for scope-filtered control-plane listings and the hierarchical UI. Delegates to
       permission_rules.resolveVisibleScopes. For a principal carrying a key narrowing, only the
       project and subsystem scopes its narrowing covers stay actionable, and only their ancestors
-      stay as context.
+      stay as context. For a read-only key, nothing is actionable for any capability but
+      project:read.
     signature: 'visibleScopes(principal: Principal, capability: string): list<VisibleScope>'
     returns: list<VisibleScope>
     params:
@@ -62,10 +64,11 @@ methods:
       grant reaches its members and an explicit no on a member removes it; and, per record, the
       subsystem rungs the principal meets there (each subsystem carrying a setting that applies to
       the principal, with project:write resolved at it). A record a principal's key narrowing does
-      not cover is neither read nor written. The data plane asks it for the bound project's family,
-      so a family run composes, a family migration writes only within it, and a spec write lands
-      only in a subsystem the principal may change. With no subsystem settings the subsystems list
-      is empty and the answer is exactly what it was before subsystem rules existed.
+      not cover is neither read nor written, and a read-only key writes no record and meets no
+      subsystem rung. The data plane asks it for the bound project's family, so a family run
+      composes, a family migration writes only within it, and a spec write lands only in a subsystem
+      the principal may change. With no subsystem settings the subsystems list is empty and the
+      answer is exactly what it was before subsystem rules existed.
     signature: 'reach(principal: Principal, projectIds: list<string>): FamilyReach'
     returns: FamilyReach
     params:
@@ -119,6 +122,25 @@ methods:
       - name: scopes
         type: list<VisibleScope>
         description: The visibleScopes answer for the principal.
+  - name: narrowingNote
+    description: >-
+      The one sentence a refusal adds when the request names a project the principal's API key is
+      not narrowed to: the key is narrowed to its projects, and this project is not one of them.
+      Nothing for a principal with no key narrowing, or a key whose entries cover the project (the
+      record itself, or a project its parent chain climbs through). The sentence reads the same
+      whether or not the project exists, so it reveals nothing about it.
+    signature: 'narrowingNote(principal: Principal, projectId: string): string?'
+    returns: string?
+    params:
+      - name: principal
+        type: Principal
+        description: The authenticated caller
+      - name: projectId
+        type: string
+        description: The project the request names, as written
+    guarantees:
+      - idempotent
+    effect: read
 status: complete
 createdAt: '2026-07-15T21:31:59.946Z'
-updatedAt: '2026-10-27T08:43:41.034Z'
+updatedAt: '2026-10-27T22:54:50.187Z'

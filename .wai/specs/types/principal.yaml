@@ -59,15 +59,23 @@ fields:
       the projects its entries cover is no, and the instance-admin bypass does not apply. An entry
       covers its record and every member record whose parent chain climbs through it.
     optional: true
+  - name: keyReadOnly
+    type: bool
+    description: >-
+      Set when the principal was authenticated by a read-only key. An authorization source like
+      keyNarrowing: every capability but project:read is no, with source key-read-only, whatever its
+      owner may do, and the instance-admin bypass does not apply.
+    optional: true
 methods:
   - name: isInstanceAdmin
     signature: 'isInstanceAdmin(): boolean'
     returns: bool
     description: >-
       Whether this principal holds the permission-rules bypass: its permissionSubject marks it
-      instanceAdmin and no key narrowing confines it (a key narrowed to projects never holds the
-      bypass, whoever owns it). Listings short-circuit on it to show the whole instance.
+      instanceAdmin and no key narrowing confines it (a key narrowed to projects, or a read-only
+      key, never holds the bypass, whoever owns it). Listings short-circuit on it to show the whole
+      instance.
     sourcePath: src/server/authorization.ts
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.529Z'
-updatedAt: '2026-10-27T08:43:25.615Z'
+updatedAt: '2026-10-27T22:54:39.901Z'

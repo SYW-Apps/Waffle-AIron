@@ -426,6 +426,13 @@ export function mintSelfToken(
 ): string {
   const principal = requirePrincipal(cfg, credential);
 
+  // A narrowed key is refused outside its projects before the project is looked up, so the
+  // refusal is the same for a project that exists and one that does not.
+  if (principal.keyNarrowing !== undefined
+    && authorize(cfg.dataDir, principal, PROJECT_READ_CAPABILITY, 'project', projectId.split('::')[0]).source === 'key-narrowing') {
+    throw new ForbiddenError('caller lacks project:read on the requested project');
+  }
+
   // The record the token names: a project id as it is (a member's own record id
   // for a member). A member-qualified id or an unknown project is rejected with
   // guidance, never stored broken.
@@ -454,6 +461,8 @@ export function mintSelfToken(
     ownerSubject: owner,
     createdBySubject: owner,
     label: `agent token (${recordId})`,
+    // Minted without write, the record is read-only: authorization refuses it every write.
+    ...(write ? {} : { readOnly: true }),
   };
   createCredential(cfg.dataDir, record);
 
@@ -480,12 +489,18 @@ export function listSelfTokens(cfg: HostConfig, credential: string | null): ApiK
 /**
  * Authenticate the caller, confirm tokenId is among the caller's OWN tokens
  * (ownerSubject.userId = caller) — a token the caller does not own is rejected as
- * not found, so there is no cross-user revocation and no key:manage escalation —
+ * not found, so there is no cross-user revocation and no key:manage escalation;
+ * a read-only key is refused before that, since it revokes no key —
  * then revoke it through the credential registry and append a best-effort
  * token.revoke.self (security) audit event.
  */
 export function revokeSelfToken(cfg: HostConfig, credential: string | null, tokenId: string): void {
   const principal = requirePrincipal(cfg, credential);
+
+  // A read-only key reads what its owner reads and nothing more: it revokes no key, its owner's included.
+  if (principal.keyReadOnly === true) {
+    throw new ForbiddenError('a read-only key cannot revoke keys');
+  }
 
   const own = listByOwner(cfg.dataDir, auditActor(principal).userId);
   if (!own.some((r) => r.id === tokenId)) {

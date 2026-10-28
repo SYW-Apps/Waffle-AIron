@@ -59,6 +59,15 @@ fields:
     type: string
     description: Optional ISO-8601 expiration timestamp.
     optional: true
+  - name: readOnly
+    type: bool
+    description: >-
+      Set when the key was minted read-only (a self-service mint without write): authorization
+      answers no for every capability but project:read, whatever its owner may do, so the key never
+      writes. Absent, the key acts as its owner's live permission within its narrowing; a
+      self-service key minted before this field existed carries none, and is not read-only whatever
+      was asked.
+    optional: true
 methods:
   - name: hashOf
     signature: 'hashOf(token: string): string'
@@ -71,4 +80,4 @@ methods:
     symbol: hashToken
 sourcePath: src/server/types.ts
 createdAt: '2026-07-04T12:44:18.552Z'
-updatedAt: '2026-10-23T22:12:18.688Z'
+updatedAt: '2026-10-27T22:54:39.079Z'

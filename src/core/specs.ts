@@ -8860,10 +8860,6 @@ export function resolveSubprojectForNamespace(namespace: string): string | null 
   return current().resolveSubprojectForNamespace(namespace);
 }
 
-export function getSubprojectPrefix(qualifiedId: string): string | null {
-  return current().getSubprojectPrefix(qualifiedId);
-}
-
 export function getSubsystemPath(id: string): string {
   return current().getSubsystemPath(id);
 }
@@ -9362,11 +9358,6 @@ export function saveGroupSpec(spec: GroupSpec, opts?: SaveSpecOptions): void {
   current().saveGroupSpec(spec, opts);
 }
 
-/** Restate the home of groups whose folder moved with an ancestor; only that key changes. */
-export function restateGroupHomes(ids: string[], subsystem: string | undefined): void {
-  current().restateGroupHomes(ids, subsystem);
-}
-
 /** Rename a group with its folder, its types' group and its children's parent. */
 export function renameGroup(id: string, newId: string): string[] {
   return current().renameGroup(id, newId);
@@ -9374,10 +9365,6 @@ export function renameGroup(id: string, newId: string): string[] {
 
 export function moveGroup(spec: GroupSpec, beneath: string[]): void {
   current().moveGroup(spec, beneath);
-}
-
-export function deleteGroupSpec(id: string): boolean {
-  return current().deleteGroupSpec(id);
 }
 
 export function collectPromotableSpecs(scopeSubsystem?: string): PromotableSpec[] {

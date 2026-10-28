@@ -342,7 +342,8 @@ methods:
         description: >-
           Mint a fresh random token and build the caller-owned record NARROWED to exactly the one
           project — the record stores NO permissions: the data-plane gate resolves the owner's LIVE
-          permission per request, so revoking the owner cuts the token off
+          permission per request, so revoking the owner cuts the token off. Minted without write,
+          the record is read-only
         type: local
       - stepNumber: 8
         description: Persist the credential record (hashed token only — the plaintext is never stored)
@@ -365,11 +366,12 @@ methods:
       principal's subject) narrowed to exactly one project (projects = [projectId]); the token
       carries NO grants — it acts as the caller's OWN live permission on that project, so permission
       rules gate read vs write at use time and the token can never exceed the caller's access
-      (self-scoped, so key:manage is neither required nor consulted). The write flag is advisory
-      (token label only). Persist only the hashed record through the credential repository, append a
-      best-effort redacted token.mint.self (security) audit event, and return the plaintext exactly
-      once. Because the token is owned by the caller, a later deactivation of that user revokes it
-      via revokeAllForOwner.
+      (self-scoped, so key:manage is neither required nor consulted). Minted without write, the
+      record is read-only: authorization refuses it every capability but project:read, whatever its
+      owner may do, so a read-only token never writes. Persist only the hashed record through the
+      credential repository, append a best-effort redacted token.mint.self (security) audit event,
+      and return the plaintext exactly once. Because the token is owned by the caller, a later
+      deactivation of that user revokes it via revokeAllForOwner.
   - name: listSelfTokens
     narrative:
       - stepNumber: 1
@@ -405,43 +407,56 @@ methods:
         targetComponent: authentication
         targetMethod: authenticateCredential
       - stepNumber: 2
+        description: Is the caller authenticated by a read-only key?
+        type: branch
+        condition: the principal carries keyReadOnly
+        onTrueStep: 3
+        onFalseStep: 4
+      - stepNumber: 3
+        description: >-
+          Refuse: a read-only key reads what its owner reads and nothing more, so it revokes no key,
+          its owner's included
+        type: throw
+        error: Forbidden — a read-only key cannot revoke keys
+      - stepNumber: 4
         description: List the caller's OWN tokens through the credential repository
         type: call
         targetComponent: credential_repository
         targetMethod: listByOwner
-      - stepNumber: 3
+      - stepNumber: 5
         description: Only a token the caller owns may be revoked
         type: branch
         condition: tokenId is not among the caller's own tokens
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Refuse as not found — no cross-user revocation, no key:manage escalation, no existence
           leak
         type: throw
         error: token not found
-      - stepNumber: 5
+      - stepNumber: 7
         description: Revoke the token through the credential repository
         type: call
         targetComponent: credential_repository
         targetMethod: revoke
-      - stepNumber: 6
+      - stepNumber: 8
         description: Append the redacted token.revoke.self (security) audit event best-effort
         type: call
         targetComponent: identity_orchestrator
         targetMethod: appendAuditBestEffort
-      - stepNumber: 7
+      - stepNumber: 9
         description: Return — the token is revoked
         type: return
         outcome: void
     detail: intent
     intent: >-
-      Authenticate the caller credential to the calling principal, fetch the principal's own tokens
-      (listByOwner) and confirm tokenId is among them (a token the caller does not own is rejected
-      as not found, so there is no cross-user revocation and no key:manage escalation), then revoke
-      it through the credential repository and append a best-effort redacted token.revoke.self
-      (security) audit event.
+      Authenticate the caller credential to the calling principal and refuse a read-only key
+      outright (it reads and nothing more, so it revokes no key, its owner's included); otherwise
+      fetch the principal's own tokens (listByOwner) and confirm tokenId is among them (a token the
+      caller does not own is rejected as not found, so there is no cross-user revocation and no
+      key:manage escalation), then revoke it through the credential repository and append a
+      best-effort redacted token.revoke.self (security) audit event.
   - name: listUsers
     narrative:
       - stepNumber: 1
@@ -1145,4 +1160,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-23T22:13:14.327Z'
+updatedAt: '2026-10-28T06:43:52.689Z'
