@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "1113115c1b3d2d7163b1ae352b8178511772104fdbf049af53bfe41499024c2e"
+    "digest": "2d378d7d2a5ee465b607df1e0920cb02f53da29aa2e0ea1d5ec774c0c169fd5a"
   },
-  "lockedAt": "2026-10-27T23:11:09.914Z",
+  "lockedAt": "2026-10-28T06:54:33.888Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.3.1-dev.1",
+  "validatorVersion": "6.3.1-dev.3",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -474,7 +474,7 @@
     ".wai/specs/implementations/host_upgrade_adapter_impl.yaml": "f55f88ad71315386566ef0916e83f896e1e4cdb6ce87d05978666b75e1756f5c",
     ".wai/specs/implementations/host_validator_adapter_impl.yaml": "4db73bf2b3927f73b75580204022a770166e1e8285f74ab91e855935542fefe2",
     ".wai/specs/implementations/identity_migration_impl.yaml": "203038e847a79ecd95196059c3dcb30be472a3408b3221bedcd7d549e2b7bd2d",
-    ".wai/specs/implementations/identity_orchestrator_impl.yaml": "3a581c44740ffba53a5c9058719946a35c389108ccf27bfd3f237f58ee160ce7",
+    ".wai/specs/implementations/identity_orchestrator_impl.yaml": "f06cb761fdc8637979aaf4d4c62da1a29bcb0014a538660826a0c5a79907ca12",
     ".wai/specs/implementations/identity_portal_impl.yaml": "e5c0898a2caeb418bedd5bbb470467dd659d38bb07a453f49dafb0f599e2a9f6",
     ".wai/specs/implementations/identity_provider_adapter_impl.yaml": "40d3f206537fab39f26f9ff53dbd727884b9c5941b3bd5941477c760286faaba",
     ".wai/specs/implementations/identity_provider_bootstrap_impl.yaml": "0b711adabbcb71d4528df17930e763bb6767ae71f480828f4e5edc4f0446bec2",
@@ -813,7 +813,7 @@
     ".wai/specs/interfaces/ihost_upgrade_adapter.yaml": "63976f611bcdcadfdae21e3336b7c173c59ab9282ea21f6dceca357a1e63e345",
     ".wai/specs/interfaces/ihost_validator_adapter.yaml": "4dc273310e9beeb477b7a17caf3fb3c8770e539e9ac2010327cdef921e28a4a9",
     ".wai/specs/interfaces/iidentity_migration.yaml": "e0ca2e01f00c33bb04dd8f58caf1c819e412be046b91357d692307c4613bff21",
-    ".wai/specs/interfaces/iidentity_orchestrator.yaml": "272ecc7b1f8818b05f2a7e9f082d879796e193550ee6f95c2a7bb155fa94f5b1",
+    ".wai/specs/interfaces/iidentity_orchestrator.yaml": "a9d7ff88742eea167d99dcf6e72ff9469a75ae77115dac64f47d31e1a3318268",
     ".wai/specs/interfaces/iidentity_portal.yaml": "af6cf787f17e03bfc224f77049b1a6b6182aeb79fc23e1bf59e7d533a1b6f239",
     ".wai/specs/interfaces/iidentity_provider_adapter.yaml": "57423bc25e63dc90661e19a6e2fcff00fc2247287c09402e0e859079bd4402d7",
     ".wai/specs/interfaces/iidentity_provider_bootstrap.yaml": "45a7540ccb21c0692541c91655af7607f89075f49490b064a9626767f756e575",
@@ -1763,7 +1763,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "6584ec5667ae3d9705c62e0a26e488d1323505f144adde626be6af21fb4946db",
+    "design": "99cf03e52428b9acfc87578b6fcdddfc30c295f5cbe3851fe34990fe33ee614a",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1774,12 +1774,12 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.3.1-dev.1",
+      "validatorVersion": "6.3.1-dev.3",
       "doctrineDigest": "d01f95d331513a34a66c890f92261f9af2edee7727ca86497f45ffb053daf50d",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 3,
+    "warnings": 0,
     "notices": 27
   }
 }
