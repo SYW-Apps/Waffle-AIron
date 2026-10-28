@@ -244,11 +244,11 @@ methods:
         type: bool
   - name: listSelfTokens
     description: >-
-      Authenticate the caller and return the caller's OWN minted credential records
-      (ownerSubject.userId = caller) through the credential repository, redacted (hashed token
-      only). A read; not audited.
-    signature: 'listSelfTokens(credential: string): list<ApiKeyRecord>'
-    returns: list<ApiKeyRecord>
+      Authenticate the caller and return the caller's OWN minted credentials (ownerSubject.userId =
+      caller) through the credential repository, each projected to an OwnTokenSummary: never the key
+      or its hash. A read; not audited.
+    signature: 'listSelfTokens(credential: string): list<OwnTokenSummary>'
+    returns: list<OwnTokenSummary>
     params:
       - name: credential
         type: string
@@ -311,4 +311,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-28T06:44:02.564Z'
+updatedAt: '2026-10-28T20:15:58.099Z'
