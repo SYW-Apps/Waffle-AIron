@@ -23,7 +23,8 @@ under 6.3.0. Each finding names the verb and the file; declare it, make it priva
 - **A read-only key could write.** A key minted on the Tokens page or through `POST /web/tokens`
   without write access acted with its owner's full permissions, so "Read only" was only a label.
   Such a key is now refused everything but reading, whatever its owner may do, and it never acts
-  as an instance administrator; a key that cannot write cannot mint one that can. A key minted with
+  as an instance administrator; a key that cannot write cannot mint one that can, nor revoke any
+  key, its owner's included. A key minted with
   write still acts as its owner. A key minted before 6.4.0 carries no read-only mark and keeps
   acting as its owner: revoke it and mint it again.
 

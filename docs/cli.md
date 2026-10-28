@@ -1740,7 +1740,8 @@ own.
 A read-only key reads what its owner reads and nothing more: every write, approval, share and
 administration is refused (`403` on a route, a forbidden tool result on `/mcp`), whatever its
 owner may do, and it never acts as an instance administrator. It cannot mint a key with write
-access. A key minted before 6.4.0 is not read-only, whatever was asked: revoke it and mint it
+access, and `POST /web/tokens/revoke` refuses it (`403`) for every key, its owner's included. A
+key minted before 6.4.0 is not read-only, whatever was asked: revoke it and mint it
 again.
 
 ---

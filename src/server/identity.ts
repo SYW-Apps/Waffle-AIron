@@ -489,12 +489,18 @@ export function listSelfTokens(cfg: HostConfig, credential: string | null): ApiK
 /**
  * Authenticate the caller, confirm tokenId is among the caller's OWN tokens
  * (ownerSubject.userId = caller) — a token the caller does not own is rejected as
- * not found, so there is no cross-user revocation and no key:manage escalation —
+ * not found, so there is no cross-user revocation and no key:manage escalation;
+ * a read-only key is refused before that, since it revokes no key —
  * then revoke it through the credential registry and append a best-effort
  * token.revoke.self (security) audit event.
  */
 export function revokeSelfToken(cfg: HostConfig, credential: string | null, tokenId: string): void {
   const principal = requirePrincipal(cfg, credential);
+
+  // A read-only key reads what its owner reads and nothing more: it revokes no key, its owner's included.
+  if (principal.keyReadOnly === true) {
+    throw new ForbiddenError('a read-only key cannot revoke keys');
+  }
 
   const own = listByOwner(cfg.dataDir, auditActor(principal).userId);
   if (!own.some((r) => r.id === tokenId)) {
