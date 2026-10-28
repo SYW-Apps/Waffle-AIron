@@ -572,6 +572,11 @@ describe('a key minted without write is read-only, whatever its owner may do', (
     const update = await call(token, 'sdd_update_spec', { kind: 'component', id: 'pay_gate', delta: { description: 'Written by a read-only key' } });
     expect(update.isError).toBe(true);
     expect(bytes(fam.platform)).toEqual(tree);
+    // A lock is refused too, and the refusal says the key is read-only.
+    const lock = await call(token, 'sdd_host_lock_project', {});
+    expect(lock.isError).toBe(true);
+    expect(lock.text).toMatch(/caller may not lock this project: .*(project:write decided at the API key being read-only)/);
+    expect(bytes(fam.platform)).toEqual(tree);
     // The owner's own write key still writes.
     const owner = await call(dev, 'sdd_add_component', comp('pay_rw', 'payments'));
     expect(owner.isError, owner.text).toBe(false);

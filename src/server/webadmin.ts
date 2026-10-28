@@ -10,7 +10,7 @@ import { listFamilyRecords } from './projects.js';
 import { ForbiddenError } from './errors.js';
 import { listSecretKeys, setSecret as storeSecret } from '../utils/secrets.js';
 import type {
-  ApiKeyRecord,
+  OwnTokenSummary,
   AuditEvent,
   EffectivePermission,
   HostConfig,
@@ -120,10 +120,10 @@ export function revokeProjectToken(cfg: HostConfig, sessionId: string, tokenId: 
   identity.revokeSelfToken(cfg, sessionId, tokenId);
 }
 
-/** Return the caller's own minted MCP tokens (redacted — hashed token only) by
+/** Return the caller's own minted MCP tokens (summaries, never the key or its hash) by
  *  forwarding to identity_orchestrator.listSelfTokens with the session as the
  *  credential. */
-export function listMyTokens(cfg: HostConfig, sessionId: string): ApiKeyRecord[] {
+export function listMyTokens(cfg: HostConfig, sessionId: string): OwnTokenSummary[] {
   return identity.listSelfTokens(cfg, sessionId);
 }
 

@@ -406,7 +406,8 @@ function lifecycleAction(
   if (write.value === 'no' && decide.value !== 'approval') {
     throw new ForbiddenError(
       `caller may not ${opts.noun} this project: approving it needs approval:decide over the project, `
-        + `and requesting the ${opts.noun} for someone else to approve needs project:write over it`,
+        + `and requesting the ${opts.noun} for someone else to approve needs project:write over it `
+        + `(project:write decided at ${describeDecision(write)})`,
     );
   }
   // Steps 10-12: a lock signs the whole tree — nobody requests a signature
