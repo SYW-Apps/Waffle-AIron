@@ -584,6 +584,18 @@ describe('a key minted without write is read-only, whatever its owner may do', (
     expect(authenticate(dataDir, child).keyReadOnly).toBe(true);
   });
 
+  it('lists its owner\'s keys but revokes none, its owner\'s write key included', () => {
+    const token = readOnlyKey();
+    const own = identity.listSelfTokens(cfg, token);
+    const writeKeyId = own.find((r) => r.id === 'tok-dev')!.id;
+    expect(() => identity.revokeSelfToken(cfg, token, writeKeyId)).toThrow(ForbiddenError);
+    expect(() => identity.revokeSelfToken(cfg, token, own.find((r) => r.readOnly === true)!.id)).toThrow(/a read-only key cannot revoke keys/);
+    expect(identity.listSelfTokens(cfg, dev).map((r) => r.id)).toEqual(own.map((r) => r.id));
+    // The owner's write key still revokes the read-only one.
+    identity.revokeSelfToken(cfg, dev, own.find((r) => r.readOnly === true)!.id);
+    expect(authenticate(dataDir, token).authenticated).toBe(false);
+  });
+
   it('a write key, and a self-service key minted before read-only keys existed, act as their owner', () => {
     const write = authenticate(dataDir, identity.mintSelfToken(cfg, dev, 'platform', true));
     expect(write.keyReadOnly).toBeUndefined();
