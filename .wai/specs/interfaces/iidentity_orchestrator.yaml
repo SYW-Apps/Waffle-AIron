@@ -257,7 +257,8 @@ methods:
       Authenticate the caller, confirm the token identified by tokenId is among the caller's OWN
       tokens (ownerSubject.userId = caller), revoke it, and append a redacted token.revoke.self
       audit event. A token the caller does not own is rejected (no cross-user revocation, no
-      key:manage escalation).
+      key:manage escalation). A caller authenticated by a read-only key is refused: it revokes no
+      key, its owner's included.
     signature: 'revokeSelfToken(credential: string, tokenId: string): void'
     returns: void
     params:
@@ -310,4 +311,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-27T22:54:58.029Z'
+updatedAt: '2026-10-28T06:44:02.564Z'
