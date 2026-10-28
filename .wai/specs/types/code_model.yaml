@@ -64,6 +64,16 @@ fields:
       walk finds the TypeScript and JavaScript files among them that import a file of the run, which
       the type checker reads for their wiring. Absent when the walk found no such file
     optional: true
+  - name: uncheckedOutsideNames
+    type: list<string>
+    description: >-
+      The identifiers of outsideNames written only in the walked files the type checker did not
+      read: files in a language no checker reads and, when no checker reading was made, every walked
+      file. A TypeScript or JavaScript file the checker read is judged by where its calls and
+      references land (reachedCalls), and one reaching none of the run's files can reach no
+      declaration of the run, so neither adds a name here. What a public function or method nothing
+      uses is told apart by; it may only ever exempt a name. Absent when no such file was walked
+    optional: true
 methods:
   - name: pathKey
     signature: 'pathKey(path: string): string'
@@ -79,4 +89,4 @@ methods:
       analyzed no such path
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:46.094Z'
-updatedAt: '2026-10-27T17:59:57.153Z'
+updatedAt: '2026-10-28T22:18:15.164Z'
