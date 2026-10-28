@@ -1,0 +1,41 @@
+kind: value-object
+id: own_token_summary
+name: OwnTokenSummary
+description: >-
+  One of the caller's own API keys as the self-service token list shows it: what the key is for and
+  how long it lives, never the key or its hash. The credential record's keyHash, legacy role and
+  createdBySubject are not part of it.
+subsystem: sdd_host
+fields:
+  - name: id
+    type: string
+    description: Stable credential id, the handle a revoke names
+    optional: false
+  - name: projects
+    type: list<string>
+    description: The key's project narrowing, as on the credential record
+    optional: false
+  - name: createdAt
+    type: string
+    description: ISO-8601 mint timestamp
+    optional: false
+  - name: ownerSubject
+    type: PrincipalSubject
+    description: The identity that owns the key (the caller)
+    optional: true
+  - name: label
+    type: string
+    description: Human-readable label
+    optional: true
+  - name: expiresAt
+    type: string
+    description: ISO-8601 expiration timestamp, when set
+    optional: true
+  - name: readOnly
+    type: bool
+    description: 'true for a key minted read-only: it reads what its owner reads and nothing more'
+    optional: true
+methods: []
+sourcePath: src/server/types.ts
+createdAt: '2026-10-28T20:15:54.893Z'
+updatedAt: '2026-10-28T20:15:55.667Z'

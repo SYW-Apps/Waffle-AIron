@@ -51,6 +51,7 @@ import {
 import { routeData } from '../../src/server/http.js';
 import type {
   ApiKeyRecord,
+  OwnTokenSummary,
   HostConfig,
   IdentityProviderConfig,
   PrincipalSubject,
@@ -1475,7 +1476,7 @@ describe('web admin orchestrator (sdd_host)', () => {
     expect(() => webadmin.mintProjectToken(cfg, viewer, 'other', false)).toThrow(ForbiddenError);
   });
 
-  it('listMyTokens returns only the caller-owned tokens (redacted); revokeSelfToken by a non-owner is rejected', () => {
+  it('listMyTokens returns only the caller-owned tokens (summaries); revokeSelfToken by a non-owner is rejected', () => {
     createProjectRecord(dataDir, 'proj-a');
     createProjectRecord(dataDir, 'proj-b');
     // Two distinct users, each with their own session + read/write reach on one project.
@@ -1496,12 +1497,12 @@ describe('web admin orchestrator (sdd_host)', () => {
     const tokenA = webadmin.mintProjectToken(cfg, sessA, 'proj-a', true);
     webadmin.mintProjectToken(cfg, sessB, 'proj-b', false);
 
-    // Each caller sees ONLY their own token, redacted (hashed token only, no plaintext).
+    // Each caller sees ONLY their own token, as a summary: neither the key nor its hash.
     const myA = webadmin.listMyTokens(cfg, sessA);
     expect(myA).toHaveLength(1);
     expect(myA[0].ownerSubject?.userId).toBe('u-a');
-    expect(myA[0].keyHash).toBeTruthy();
-    expect((myA[0] as unknown as { token?: string }).token).toBeUndefined();
+    expect(Object.keys(myA[0]).sort()).toEqual(['createdAt', 'id', 'label', 'ownerSubject', 'projects']);
+    expect(Object.keys(webadmin.listMyTokens(cfg, sessB)[0])).toContain('readOnly');
     expect(myA.some((r) => r.ownerSubject?.userId === 'u-b')).toBe(false);
     expect(webadmin.listMyTokens(cfg, sessB).map((r) => r.ownerSubject?.userId)).toEqual(['u-b']);
 
@@ -1702,7 +1703,7 @@ describe('web admin routes over HTTP (sdd_host)', () => {
     expect(authenticate(dataDir, token).authenticated).toBe(false);
   }, 20_000);
 
-  it('GET /web/tokens lists the caller-owned tokens (no CSRF header needed) and redacts to the hashed token', async () => {
+  it('GET /web/tokens lists the caller-owned tokens (no CSRF header needed) and shows summaries, never the key or its hash', async () => {
     const cookie = adminCookie();
     createProjectRecord(dataDir, 'proj-a');
 
@@ -1720,13 +1721,15 @@ describe('web admin routes over HTTP (sdd_host)', () => {
     // GET is a read — it needs NO X-Wairon-Web header (only cookie POSTs are gated).
     const list = await raw({ method: 'GET', path: '/web/tokens', headers: { cookie } });
     expect(list.status).toBe(200);
-    const tokens = JSON.parse(list.body).tokens as ApiKeyRecord[];
+    const tokens = JSON.parse(list.body).tokens as OwnTokenSummary[];
     const mine = tokens.find((t) => t.id === rec.id)!;
     expect(mine).toBeTruthy();
-    // Owned by the caller, and redacted: hashed token present, plaintext absent.
+    // Owned by the caller, and a summary: neither the key nor its hash, nor who minted it.
     expect(mine.ownerSubject?.userId).toBe(adminSubject().userId);
-    expect(mine.keyHash).toBeTruthy();
     expect(list.body).not.toContain(token);
+    expect(list.body).not.toContain(rec.keyHash);
+    expect(list.body).not.toContain('keyHash');
+    expect(list.body).not.toContain('createdBySubject');
   }, 20_000);
 });
 

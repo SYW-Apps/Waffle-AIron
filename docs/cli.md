@@ -266,6 +266,20 @@ warnings as errors (notices are printed and counted, never fatal).
   in `project.yaml` reports the two notices as errors, for a CI that must say
   every designed implementation has code. It is code-conformance configuration,
   outside the approval identity: flipping it never stales a lock (see `lock-check`).
+- **Code nobody designed.** `rules.conformance.sourceRoots` in `project.yaml`
+  lists where this project's own code lives (project-relative; a folder is
+  walked recursively, a file names itself). Files under the roots are read when
+  the gate judges code, so a use or a wiring in a file no spec names still
+  counts, and each such file is `UNCLAIMED_SOURCE_FILE` (warning) until a spec
+  names it as a `sourcePath`. `rules.conformance.exclude` leaves paths inside a
+  root out (vendored or generated code), `rules.conformance.unclaimed` carries
+  today's unclaimed files as debt (the list only shrinks: an entry that is now
+  claimed or no longer found is `STALE_UNCLAIMED_ENTRY`), and
+  `rules.conformance.testRoots` names test folders, which are not claimed. A
+  pure re-export barrel, a file that only re-exports other modules, declares
+  nothing of its own and is not reported, once exact-grade analysis proves it
+  one; a file it cannot prove is judged like any other. Declaring no root walks
+  nothing.
 - **Types are linked to code too.** A type spec without a `sourcePath` is
   `MISSING_TYPE_SOURCE_PATH` — a notice before its subsystem has code, a
   warning after. Plan a type's `sourcePath` when you plan the implementations'.
@@ -1733,7 +1747,7 @@ own.
 
 | Route | Takes | Answers |
 |---|---|---|
-| `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set) and `ownerSubject`. The plaintext key is never in the list |
+| `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set), `ownerSubject` and `readOnly` (`true` for a read-only key). Neither the key nor its hash is in the list |
 | `POST /web/tokens` | JSON `{ "projectId": "<project id>", "write": true \| false }` | `201` `{ "token": "wk_…" }`. The key is shown once and cannot be read back. `projectId` is required and names one project by its record id (a member is named by its own id, never `project::alias`); `write` is optional and only `true` asks for write access (anything else mints a read-only key). The key is narrowed to that project and acts as its owner: the caller must already hold `project:read` on it (and `project:write` when `write` is `true`), else the answer is `403`. An unknown project answers `404` and an invalid `projectId` `400`, each naming the problem, except to a caller whose own key is narrowed to other projects: it is answered `403` for any project outside its narrowing, whether the project exists or not |
 | `POST /web/tokens/revoke` | JSON `{ "id": "<key id>" }` | `200` `{ "ok": true }`. A key the caller does not own answers `404` as if it did not exist |
 

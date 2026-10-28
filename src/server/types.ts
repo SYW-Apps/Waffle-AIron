@@ -461,6 +461,19 @@ export interface ApiKeyRecord {
   readOnly?: boolean;
 }
 
+/** One of the caller's own API keys as the self-service token list shows it:
+ *  what the key is for and how long it lives, never the key or its hash. */
+export interface OwnTokenSummary {
+  id: string;
+  projects: string[];
+  createdAt: string;
+  ownerSubject?: PrincipalSubject;
+  label?: string;
+  expiresAt?: string;
+  /** true for a key minted read-only: it reads what its owner reads and nothing more. */
+  readOnly?: boolean;
+}
+
 /** A hosted human or service-principal account bound to an identity subject.
  *  Links tokens, permission bindings, and audit events to a stable actor
  *  identity. Permissions live in roleBindings + the assignment grid — never on

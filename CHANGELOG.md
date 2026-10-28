@@ -4,6 +4,21 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## Unreleased
+
+### Changed
+
+- **The own-key list shows less.** `GET /web/tokens` (the Agents page) answers each key's id,
+  projects, creation and expiry time, label, owner and `readOnly`, and no longer the key's hash or
+  who minted it.
+- **A refused lock says why.** A lock refused because the caller may not write the project now
+  names where that was decided, so a read-only key's refusal says the key is read-only.
+
+### Docs
+
+- `rules.conformance.sourceRoots`, `exclude`, `unclaimed` and `testRoots` are described under
+  `wairon validate`, with the exemption for a file that only re-exports other modules.
+
 ## v6.4.0 (from v6.3.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported

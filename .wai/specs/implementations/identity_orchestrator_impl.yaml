@@ -381,24 +381,28 @@ methods:
         targetMethod: authenticateCredential
       - stepNumber: 2
         description: >-
-          Return the caller's OWN minted credential records through the credential repository,
-          redacted — hashed token only, with id/project/label/createdAt/expiresAt (every stored
-          record is live: a revoked token is deleted)
+          Read the caller's OWN minted credential records through the credential repository (every
+          stored record is live: a revoked token is deleted)
         type: call
         targetComponent: credential_repository
         targetMethod: listByOwner
       - stepNumber: 3
-        description: Return the redacted records — a read, not audited
+        description: >-
+          Project each record to an OwnTokenSummary: id, projects, createdAt, ownerSubject, label,
+          expiresAt and readOnly, leaving out the key hash, the legacy role and createdBySubject
+        type: local
+      - stepNumber: 4
+        description: Return the summaries — a read, not audited
         type: return
-        outcome: the caller's own redacted credential records
+        outcome: the caller's own token summaries
     detail: intent
     intent: >-
       Authenticate the caller credential to the calling principal, list the principal's own
       credential records through the credential repository (listByOwner on the principal's subject
-      user id), and return them redacted: each carries the hashed token (never plaintext) with its
-      id, authorized project, label, createdAt and expiresAt, so the client can show a user their
-      agent tokens and offer revoke. There is no revoked state to show: a revoked token is deleted,
-      and the token.revoke / token.revoke.self audit events are its history. A read; not audited.
+      user id), and return each projected to an OwnTokenSummary (id, projects, createdAt,
+      ownerSubject, label, expiresAt, readOnly), so the client can show a user their agent tokens
+      and offer revoke; neither the key nor its hash leaves the server. There is no revoked state to
+      show: a revoked token is deleted.
   - name: revokeSelfToken
     narrative:
       - stepNumber: 1
@@ -1160,4 +1164,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-28T06:43:52.689Z'
+updatedAt: '2026-10-28T20:16:09.755Z'
