@@ -84,10 +84,12 @@ describe('hosted operator journey (built server)', () => {
     ], { env, cwd: base, stdio: ['ignore', 'pipe', 'pipe'] });
     server.stdout!.on('data', (d) => { log += String(d); });
     server.stderr!.on('data', (d) => { log += String(d); });
-    for (let i = 0; i < 200 && !log.includes('hosting server started'); i++) await new Promise((r) => setTimeout(r, 100));
-    expect(log).toContain('hosting server started');
     // Both planes listen on port 0 (no free-port probe to race other tests); the start banner names the bound data-plane port.
-    port = Number(/data plane:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/.exec(log)?.[1]);
+    // The banner arrives in separate writes, so wait for the port line itself, not the first line.
+    const dataPlane = /data plane:\s+http:\/\/127\.0\.0\.1:(\d+)\/mcp/;
+    for (let i = 0; i < 200 && !dataPlane.test(log); i++) await new Promise((r) => setTimeout(r, 100));
+    expect(log).toContain('hosting server started');
+    port = Number(dataPlane.exec(log)?.[1]);
     expect(port).toBeGreaterThan(0);
     // The server upgrades its data dir at start (there is no `host doctor` any more) and records the running major.
     const version = JSON.parse(fs.readFileSync(path.join(dataDir, 'version.json'), 'utf8')) as Record<string, unknown>;
