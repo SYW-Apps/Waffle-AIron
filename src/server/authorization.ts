@@ -143,6 +143,8 @@ export function resolveFamilyReach(dataDir: string, principal: Principal, projec
     // Step 3: a record the key narrowing does not cover is neither read nor written.
     if (narrowedAway(principal, 'project', id, world)) continue;
     if (resolvePermission(principal.permissionSubject, 'project:read', 'project', id, world).value === 'yes') reach.readable.push(id);
+    // A read-only key reads what its owner reads, but writes no record and meets no subsystem rung.
+    if (principal.keyReadOnly === true) continue;
     if (resolvePermission(principal.permissionSubject, 'project:write', 'project', id, world).value === 'yes') reach.writable.push(id);
     // Step 5: the subsystem rungs the principal meets in the record.
     reach.subsystems.push(...resolveSubsystemReach(principal.permissionSubject, id, world));
@@ -191,7 +193,11 @@ export function authorize(
   if (narrowedAway(principal, scopeKind, scopeId, world)) {
     return { value: 'no', source: 'key-narrowing' };
   }
-  // Step 9: resolve the effective permission through pure permission rules.
+  // Steps 9-10: a read-only key reads what its owner reads and nothing more.
+  if (principal.keyReadOnly === true && capability !== 'project:read') {
+    return { value: 'no', source: 'key-read-only' };
+  }
+  // Step 11: resolve the effective permission through pure permission rules.
   return resolvePermission(principal.permissionSubject, capability, scopeKind, scopeId, world);
 }
 
@@ -213,7 +219,8 @@ export function visibleScopes(
   const world = gatherWorld(dataDir);
   // Step 7: compute the actionable scopes plus their ancestor breadcrumb.
   const scopes = resolveVisibleScopes(principal.permissionSubject, capability, world);
-  // Step 8: a narrowed key sees only what its narrowing covers.
+  // Step 8: a narrowed key sees only what its narrowing covers; a read-only key acts on nothing but reads.
+  if (principal.keyReadOnly === true && capability !== 'project:read') return [];
   return narrowView(principal, scopes, world);
 }
 
@@ -229,8 +236,8 @@ export function visibleScopes(
  * organization unit, so no unit-scoped permission can reach them.
  */
 export function isInstanceAdmin(principal: Principal): boolean {
-  // A key narrowed to projects never holds the bypass, whoever owns it.
-  return principal.permissionSubject?.instanceAdmin === true && principal.keyNarrowing === undefined;
+  // A key narrowed to projects, or a read-only key, never holds the bypass, whoever owns it.
+  return principal.permissionSubject?.instanceAdmin === true && principal.keyNarrowing === undefined && principal.keyReadOnly !== true;
 }
 
 /** The actionable (non-breadcrumb) project ids from a visibility view. */
