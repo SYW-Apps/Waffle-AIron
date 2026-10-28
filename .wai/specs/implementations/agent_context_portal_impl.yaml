@@ -174,11 +174,14 @@ lint:
       covers:
         - judgesCode
         - makeScopeFilter
+        - buildRuleContext
+        - composeRuleSequence
       reason: >-
         src/core/index.ts keeps one star re-export on purpose: ./rules/index.js, sdd_validator's
         shared vocabulary (rule types, the context builder, the registry), which realizes no
-        component. A star cannot leave names out, so it republishes these two as well; their callers
-        inside src/core import them from ./rules directly.
+        component. A star cannot leave names out, so it republishes these four as well; their
+        callers inside src import them from ./rules directly, and composeRuleSequence is also part
+        of the embedding API docs/extending-wairon.md names on the library entry.
 status: complete
 createdAt: '2026-09-25T17:33:15.144Z'
-updatedAt: '2026-10-27T17:57:23.805Z'
+updatedAt: '2026-10-28T22:51:54.225Z'

@@ -772,24 +772,25 @@ methods:
       declaration itself (or on a class realizing it), or lands it nowhere it can name under its
       name, and an import of the name from its file counts — a same-named method of another class,
       the way a verb removed from the design survives beside the method it forwarded to, is no use;
-      a file the run did not analyze is read the same way when the checker read it, by its calls and
-      references, and adds nothing when its imports reach none of the run's files; where no checker
-      read it, any name the file writes counts. A re-export, named or star, is publication, never a
-      use: the name is used only when what the barrel publishes it as is. Used, it is the module's
-      factoring (a helper the class calls, a facade forwarding to it, a function its tests import),
-      or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors, accessors and fields,
-      static, private, protected, #private and underscore-prefixed members, an `override`, a
-      computed name, a language protocol or framework lifecycle hook (toString, toJSON, then,
-      render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their kin), a Python
-      dunder, test files, and an implementation whose conformance dial is off. Read at exact grade,
-      or by a reader that reads class members (Python, where a leading underscore is private). An
-      exported CLASS is judged the same way: a top-level class the realizing file exports beside the
-      classes realizing a component, that no contract or type declares and that nothing uses — its
-      own file naming it nowhere outside its own declaration (constructed, extended, annotated with,
-      tested by instanceof or isinstance, passed on: source_file_facts.classReferences), no other
-      analyzed file naming it, no identifier of a file the run did not analyze, no re-export of it
-      whose published name is used — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a
-      static factory) are no use. The finding names the files that took each name as well as the one
+      a file the run did not analyze is read the same way when the checker read it, by its calls,
+      its references and the names it imports from the file, and adds nothing when its imports reach
+      none of the run's files; where no checker read it, any name the file writes counts. A
+      re-export, named or star, is publication, never a use: the name is used only when what the
+      barrel publishes it as is. Used, it is the module's factoring (a helper the class calls, a
+      facade forwarding to it, a function its tests import), or, taken by another component,
+      UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected,
+      #private and underscore-prefixed members, an `override`, a computed name, a language protocol
+      or framework lifecycle hook (toString, toJSON, then, render, connectedCallback,
+      componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an
+      implementation whose conformance dial is off. Read at exact grade, or by a reader that reads
+      class members (Python, where a leading underscore is private). An exported CLASS is judged the
+      same way: a top-level class the realizing file exports beside the classes realizing a
+      component, that no contract or type declares and that nothing uses — its own file naming it
+      nowhere outside its own declaration (constructed, extended, annotated with, tested by
+      instanceof or isinstance, passed on: source_file_facts.classReferences), no other analyzed
+      file naming it, no identifier of a file the run did not analyze, no re-export of it whose
+      published name is used — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static
+      factory) are no use. The finding names the files that took each name as well as the one
       publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the
       importer besides, a different fact — who reached across, where this is what crossed.
     signature: 'exportConformance(ctx: RuleContext): void'
@@ -1271,4 +1272,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-28T22:18:19.330Z'
+updatedAt: '2026-10-28T22:51:49.974Z'

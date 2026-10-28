@@ -1821,12 +1821,13 @@ methods:
           uses — no call or reference in its own file but its own body, no use in another analyzed
           file, no use in an unanalyzed project file — where, in a file the type checker read (an
           analyzed one, or an unanalyzed one the checker read for its wiring:
-          code_model.reachedCalls), a call or reference is a use only when the checker lands it on
-          that very declaration (or on a class realizing it) or lands it nowhere it can name (a
-          receiver typed any, a port no class realizes) under its name, and an import of the name
-          from that file is a use, while a same-named member of another class or module is no use
-          however it is spelled; in an analyzed file no checker read, any name the file writes is,
-          as before, and of the unanalyzed files only the identifiers of those no checker read count
+          code_model.reachedCalls, with the names it imports by name in code_model.reachedImports),
+          a call or reference is a use only when the checker lands it on that very declaration (or
+          on a class realizing it) or lands it nowhere it can name (a receiver typed any, a port no
+          class realizes) under its name, and an import of the name from that file is a use, while a
+          same-named member of another class or module is no use however it is spelled; in an
+          analyzed file no checker read, any name the file writes is, as before, and of the
+          unanalyzed files only the identifiers of those no checker read count
           (code_model.uncheckedOutsideNames), an unanalyzed script file that reaches none of the
           run's files adding none; an exported class is still exempted by any identifier of an
           unanalyzed file (code_model.outsideNames); and a re-export, named or star, is publication
@@ -2466,4 +2467,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-28T22:18:20.688Z'
+updatedAt: '2026-10-28T22:51:52.127Z'
