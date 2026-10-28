@@ -15,6 +15,17 @@ under 6.3.0. Each finding names the verb and the file; declare it, make it priva
 2. Run `wairon validate --ci` and settle any new `UNDECLARED_PUBLIC_MEMBER`.
 3. In a project with parts, run `wairon doctor --fix` once, so each part's `.wai/.gitignore` keeps
    its spec write lock out of git (see Fixed), and commit the result.
+4. On a hosted instance, revoke each self-service key that was minted read-only before 6.4.0 and
+   mint it again: an older key is not read-only (see Security).
+
+### Security
+
+- **A read-only key could write.** A key minted on the Tokens page or through `POST /web/tokens`
+  without write access acted with its owner's full permissions, so "Read only" was only a label.
+  Such a key is now refused everything but reading, whatever its owner may do, and it never acts
+  as an instance administrator; a key that cannot write cannot mint one that can. A key minted with
+  write still acts as its owner. A key minted before 6.4.0 carries no read-only mark and keeps
+  acting as its owner: revoke it and mint it again.
 
 ### Changed
 
@@ -23,7 +34,8 @@ under 6.3.0. Each finding names the verb and the file; declare it, make it priva
   exported passed whenever a method of the same name existed elsewhere (a facade forwarding to
   `registration.isDeviceActive()` kept an exported `isDeviceActive` alive). Where the type checker
   read the using file, a call or reference now counts only when it lands on that function itself,
-  and an import of the name from its file counts. A re-export (`export { x } from`, `export *
+  and an import of the name from its file counts. A call the checker cannot follow to one function
+  (a receiver typed `any`, a port no class realizes) still counts by its name. A re-export (`export { x } from`, `export *
   from`) publishes a name and is no use of it: the name counts as used only when what the barrel
   publishes it as is used. Files the run does not analyze (tests, a composition root) still exempt
   any name they write, except in their own re-export statements.
@@ -43,7 +55,10 @@ under 6.3.0. Each finding names the verb and the file; declare it, make it priva
   rewrites the parts' specs too (a part fetched from git is read-only and is not written).
 - **A part's spec write lock was committed.** Only the root's `.wai/.gitignore` ignored the lock.
   A new part or member project gets the same line, and `wairon doctor --fix` adds it to existing
-  ones.
+  ones inside the project folder. A part outside that folder is not written: add
+  `.spec-write.lock*` to its `.wai/.gitignore` by hand. A lock already committed stays tracked
+  until it is removed from the index (`git rm -r --cached <part>/.wai/.spec-write.lock`) and that
+  is committed.
 - **`wairon host` accepted a weak admin token** that `wairon serve` then refused to start with.
   Both now apply the same rule, in the same words.
 - **Messages:**
@@ -58,7 +73,8 @@ under 6.3.0. Each finding names the verb and the file; declare it, make it priva
 ### Docs
 
 - `docs/cli.md` documents the self-service key routes (`GET /web/tokens`, `POST /web/tokens`,
-  `POST /web/tokens/revoke`) and how a narrowed key is refused on `/mcp`.
+  `POST /web/tokens/revoke`), what a read-only key may do, and how a narrowed key is refused on
+  `/mcp`.
 
 ## v6.3.0 (from v6.2.1)
 

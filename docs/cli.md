@@ -1734,8 +1734,14 @@ own.
 | Route | Takes | Answers |
 |---|---|---|
 | `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set) and `ownerSubject`. The plaintext key is never in the list |
-| `POST /web/tokens` | JSON `{ "projectId": "<project id>", "write": true \| false }` | `201` `{ "token": "wk_…" }`. The key is shown once and cannot be read back. `projectId` is required and names one project by its record id (a member is named by its own id, never `project::alias`); `write` is optional and only `true` asks for write access (anything else is read-only). The key is narrowed to that project and acts as its owner: the caller must already hold `project:read` on it (and `project:write` when `write` is `true`), else the answer is `403`. An unknown project answers `404` and an invalid `projectId` `400`, each naming the problem |
+| `POST /web/tokens` | JSON `{ "projectId": "<project id>", "write": true \| false }` | `201` `{ "token": "wk_…" }`. The key is shown once and cannot be read back. `projectId` is required and names one project by its record id (a member is named by its own id, never `project::alias`); `write` is optional and only `true` asks for write access (anything else mints a read-only key). The key is narrowed to that project and acts as its owner: the caller must already hold `project:read` on it (and `project:write` when `write` is `true`), else the answer is `403`. An unknown project answers `404` and an invalid `projectId` `400`, each naming the problem, except to a caller whose own key is narrowed to other projects: it is answered `403` for any project outside its narrowing, whether the project exists or not |
 | `POST /web/tokens/revoke` | JSON `{ "id": "<key id>" }` | `200` `{ "ok": true }`. A key the caller does not own answers `404` as if it did not exist |
+
+A read-only key reads what its owner reads and nothing more: every write, approval, share and
+administration is refused (`403` on a route, a forbidden tool result on `/mcp`), whatever its
+owner may do, and it never acts as an instance administrator. It cannot mint a key with write
+access. A key minted before 6.4.0 is not read-only, whatever was asked: revoke it and mint it
+again.
 
 ---
 

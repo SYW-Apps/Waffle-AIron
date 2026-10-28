@@ -461,6 +461,8 @@ export function mintSelfToken(
     ownerSubject: owner,
     createdBySubject: owner,
     label: `agent token (${recordId})`,
+    // Minted without write, the record is read-only: authorization refuses it every write.
+    ...(write ? {} : { readOnly: true }),
   };
   createCredential(cfg.dataDir, record);
 

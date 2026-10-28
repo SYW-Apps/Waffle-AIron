@@ -8,7 +8,10 @@ import * as crypto from 'node:crypto';
 import { createProjectRecord, listProjectRecords } from '../../src/server/projects.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { listAssignments as localListAssignments } from '../../src/server/local-admin.js';
-import { authorize } from '../../src/server/authorization.js';
+import { authorize, isInstanceAdmin, resolveFamilyReach, visibleScopes } from '../../src/server/authorization.js';
+import { authenticate } from '../../src/server/auth.js';
+import * as identity from '../../src/server/identity.js';
+import { ForbiddenError } from '../../src/server/errors.js';
 import { setAssignment as repoSetAssignment } from '../../src/server/permissions.js';
 import { setAssignment, bindRole, explain, listAssignments } from '../../src/server/permissionadmin.js';
 import { generateDiagram, downloadDiagram } from '../../src/server/admin.js';
@@ -531,5 +534,70 @@ describe('relation health on the HTML canvas and the admin diagrams', () => {
       expect(canvas).toMatch(/"relations":\[\{[^\]]*"health":"ok"/);
     }
     expect(generateDiagram(cfg, MASTER, 'platform', 'mermaid')).not.toMatch(/"relations"/);
+  });
+});
+
+// ── a read-only key ─────────────────────────────────────────────────────────
+
+describe('a key minted without write is read-only, whatever its owner may do', () => {
+  /** u-dev reads and writes platform, and may write payments by a subsystem rule too. */
+  function readOnlyKey(): string {
+    rule('u-dev', 'platform/payments', 'yes');
+    return identity.mintSelfToken(cfg, dev, 'platform', false);
+  }
+
+  it('authenticates read-only and is refused every capability but project:read', () => {
+    const principal = authenticate(dataDir, readOnlyKey());
+    expect(principal.keyReadOnly).toBe(true);
+    expect(authorize(dataDir, principal, 'project:read', 'project', 'platform').value).toBe('yes');
+    for (const capability of ['project:write', 'project:admin', 'approval:decide', 'share:create'] as const) {
+      expect(authorize(dataDir, principal, capability, 'project', 'platform')).toEqual({ value: 'no', source: 'key-read-only' });
+    }
+    expect(authorize(dataDir, principal, 'project:write', 'subsystem', 'platform/payments')).toEqual({ value: 'no', source: 'key-read-only' });
+    const reach = resolveFamilyReach(dataDir, principal, ['platform']);
+    expect(reach.readable).toEqual(['platform']);
+    expect(reach.writable).toEqual([]);
+    expect(reach.subsystems).toEqual([]);
+    expect(visibleScopes(dataDir, principal, 'project:write')).toEqual([]);
+  });
+
+  it('reads over MCP and is refused every write, a subsystem-scoped one included, with the tree untouched', async () => {
+    const token = readOnlyKey();
+    const status = await call(token, 'sdd_get_status', {});
+    expect(status.isError, status.text).toBe(false);
+    const tree = bytes(fam.platform);
+    const scoped = await call(token, 'sdd_add_component', comp('pay_ro', 'payments'));
+    expect(scoped.isError).toBe(true);
+    expect(scoped.text).toMatch(/Forbidden — permission project:write required for sdd_add_component, decided at the API key being read-only/);
+    const update = await call(token, 'sdd_update_spec', { kind: 'component', id: 'pay_gate', delta: { description: 'Written by a read-only key' } });
+    expect(update.isError).toBe(true);
+    expect(bytes(fam.platform)).toEqual(tree);
+    // The owner's own write key still writes.
+    const owner = await call(dev, 'sdd_add_component', comp('pay_rw', 'payments'));
+    expect(owner.isError, owner.text).toBe(false);
+  });
+
+  it('cannot mint a write key, and a key it mints is read-only too', () => {
+    const token = readOnlyKey();
+    expect(() => identity.mintSelfToken(cfg, token, 'platform', true)).toThrow(ForbiddenError);
+    const child = identity.mintSelfToken(cfg, token, 'platform', false);
+    expect(authenticate(dataDir, child).keyReadOnly).toBe(true);
+  });
+
+  it('a write key, and a self-service key minted before read-only keys existed, act as their owner', () => {
+    const write = authenticate(dataDir, identity.mintSelfToken(cfg, dev, 'platform', true));
+    expect(write.keyReadOnly).toBeUndefined();
+    expect(authorize(dataDir, write, 'project:write', 'project', 'platform').value).toBe('yes');
+    const older = authenticate(dataDir, mintUserToken(dataDir, { id: 'tok-older', userId: 'u-dev', projects: ['platform'] }));
+    expect(older.keyReadOnly).toBeUndefined();
+    expect(authorize(dataDir, older, 'project:write', 'project', 'platform').value).toBe('yes');
+  });
+
+  it('never holds the instance-admin bypass', () => {
+    const admin: Principal = { ...principalOf('u-admin'), permissionSubject: { subjectId: 'u-admin', roleBindings: [], instanceAdmin: true }, keyReadOnly: true };
+    expect(isInstanceAdmin(admin)).toBe(false);
+    expect(isInstanceAdmin({ ...admin, keyReadOnly: undefined })).toBe(true);
+    expect(authorize(dataDir, admin, 'project:admin', 'instance', '')).toEqual({ value: 'no', source: 'key-read-only' });
+    expect(authorize(dataDir, admin, 'project:read', 'project', 'platform').value).toBe('yes');
   });
 });

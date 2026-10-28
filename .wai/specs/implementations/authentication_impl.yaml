@@ -246,7 +246,9 @@ methods:
         description: >-
           When the record's projects narrowing names projects rather than '*', carry the same
           entries as the Principal's keyNarrowing, so authorization confines the key to them
-          wherever its owner's permissions would reach further
+          wherever its owner's permissions would reach further; and when the record is read-only,
+          mark the Principal keyReadOnly, so authorization refuses it every capability but
+          project:read
         type: local
       - stepNumber: 12
         description: Return the authenticated principal
@@ -489,4 +491,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-04T12:54:26.477Z'
-updatedAt: '2026-10-27T08:43:37.984Z'
+updatedAt: '2026-10-27T22:54:53.900Z'

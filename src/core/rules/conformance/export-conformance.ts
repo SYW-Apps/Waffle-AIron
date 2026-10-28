@@ -436,14 +436,18 @@ export const exportConformanceRule: SddRule = {
     const outside = new Set(ctx.codeModel.outsideNames ?? []);
     /** The names each analyzed file writes, its own declarations included. */
     const writtenIn = new Map<string, Set<string>>();
+    const collectNames = (facts: SourceFileFacts, declared: string[]): Set<string> => {
+      const names = new Set<string>([...declared, ...facts.anchoredNames]);
+      for (const sites of Object.values(facts.functionCallSites ?? {})) for (const site of sites) names.add(site.name);
+      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) { names.add(local); if (binding.imported) names.add(binding.imported); }
+      for (const call of facts.resolvedCalls ?? []) names.add(call.name);
+      return names;
+    };
     const namesWritten = (facts: SourceFileFacts): Set<string> => {
       const key = pathKey(facts.path);
       let names = writtenIn.get(key);
       if (names) return names;
-      names = new Set<string>([...facts.declaredNames, ...facts.anchoredNames]);
-      for (const sites of Object.values(facts.functionCallSites ?? {})) for (const site of sites) names.add(site.name);
-      for (const [local, binding] of Object.entries(facts.importBindings ?? {})) { names.add(local); if (binding.imported) names.add(binding.imported); }
-      for (const call of facts.resolvedCalls ?? []) names.add(call.name);
+      names = collectNames(facts, facts.declaredNames);
       writtenIn.set(key, names);
       return names;
     };
@@ -497,8 +501,39 @@ export const exportConformanceRule: SddRule = {
       // An import of the very name, from the very file: a module function a
       // composition root wires, a test imports.
       const key = pathKey(other.path);
-      return Object.values(other.importBindings ?? {}).some(binding => !binding.namespace && binding.imported === candidate
+      // A binding records `imported` only when the import renames it; unrenamed, the local name is the imported one.
+      return Object.entries(other.importBindings ?? {}).some(([local, binding]) => !binding.namespace && (binding.imported ?? local) === candidate
         && resolveImport(key, binding.from, code.paths, code.packages) === file);
+    };
+    /**
+     * The names a file only republishes: the barrel chase folds every name a
+     * re-export publishes into the file's declared names, and a re-export is
+     * publication, never a use. Named re-exports publish their exported name, a
+     * star re-export every name its module (and its own re-exports) export.
+     */
+    const publishedOnly = new Map<string, Set<string>>();
+    const republishedNames = (facts: SourceFileFacts, seen = new Set<string>()): Set<string> => {
+      const key = pathKey(facts.path);
+      const cached = publishedOnly.get(key);
+      if (cached) return cached;
+      const names = new Set<string>();
+      if (seen.has(key)) return names;
+      seen.add(key);
+      for (const binding of facts.reexportBindings ?? []) {
+        if (binding.exported !== '*') { names.add(binding.exported); continue; }
+        const target = resolveImport(key, binding.from, code.paths, code.packages);
+        const module = target === undefined ? undefined : filesByKey.get(target);
+        if (!module) continue;
+        for (const name of module.exportedNames) names.add(name);
+        for (const name of republishedNames(module, seen)) names.add(name);
+      }
+      publishedOnly.set(key, names);
+      return names;
+    };
+    /** The names a file writes, less the ones it declares only by republishing them. */
+    const namesUsedIn = (facts: SourceFileFacts): Set<string> => {
+      const published = republishedNames(facts);
+      return published.size === 0 ? namesWritten(facts) : collectNames(facts, facts.declaredNames.filter(name => !published.has(name)));
     };
     const usedAnywhere = (file: string, facts: SourceFileFacts, candidate: string, cls: string | undefined, seen = new Set<string>()): boolean => {
       const visit = `${file}#${cls ?? ''}.${candidate}`;
@@ -535,7 +570,7 @@ export const exportConformanceRule: SddRule = {
       }
       if (facts.analysisGrade === 'exact' && facts.anchoredNames.includes(cls)) return true;
       if ((facts.resolvedCalls ?? []).some(call => call.name === cls && call.enclosingContainer !== cls && call.enclosing !== cls)) return true;
-      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesWritten(other).has(cls));
+      return ctx.codeModel.files.some(other => other.status === 'analyzed' && pathKey(other.path) !== file && namesUsedIn(other).has(cls));
     };
     for (const file of realization.paths) {
       if (TEST_FILE.test(file)) continue;

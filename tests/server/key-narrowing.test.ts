@@ -197,3 +197,36 @@ describe('a refusal caused by the key narrowing says so, and reveals nothing abo
     expect(refusal('proj-b')).toMatch(/caller lacks project:read/);
   });
 });
+
+describe('a read-only key is refused the admin plane\'s writes', () => {
+  let dataDir: string;
+  let handle: HostServerHandle | undefined;
+  const savedEnv = { ...process.env };
+
+  beforeEach(() => {
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-read-only-key-'));
+    process.env.WAIRON_ADMIN_TOKEN = 'master-read-only-key';
+    createProjectRecord(dataDir, 'proj-a');
+    for (const capability of ['project:read', 'project:write', 'approval:decide', 'project:admin'] as const) allow(dataDir, 'owner', capability, 'project', 'proj-a');
+  });
+
+  afterEach(() => {
+    handle?.close();
+    handle = undefined;
+    process.env = { ...savedEnv };
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('locking the project is refused for the read-only key, not for the owner\'s write key', async () => {
+    const cfg = { host: '127.0.0.1', port: 0, adminHost: '127.0.0.1', adminPort: 0, dataDir, authEnabled: true } as HostConfig;
+    handle = startHostServer(cfg);
+    const ports = await handle.listening;
+    const owner = mintUserToken(dataDir, { id: 'owner-key', userId: 'owner', projects: ['proj-a'] });
+    const lock = (token: string) =>
+      fetch(`http://127.0.0.1:${ports.adminPort}/admin/projects/proj-a/lock`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' });
+    const readOnly = await lock(identity.mintSelfToken(cfg, owner, 'proj-a', false));
+    expect(readOnly.status).toBe(403);
+    const write = await lock(identity.mintSelfToken(cfg, owner, 'proj-a', true));
+    expect(write.status).not.toBe(403);
+  });
+});

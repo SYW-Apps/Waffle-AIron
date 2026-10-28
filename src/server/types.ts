@@ -58,8 +58,8 @@ export function parseSubsystemScope(scopeId: string): { projectId: string; subsy
 
 /** The rung that decided an effective permission, in words a refusal or an explanation can quote. */
 export function describeDecision(p: EffectivePermission): string {
-  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default', 'key-narrowing': 'the API key narrowing (the key is not narrowed to this project)' }[p.source];
-  if (p.source === 'instance-admin' || p.source === 'instance-default' || p.source === 'key-narrowing') return setting;
+  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default', 'key-narrowing': 'the API key narrowing (the key is not narrowed to this project)', 'key-read-only': 'the API key being read-only' }[p.source];
+  if (p.source === 'instance-admin' || p.source === 'instance-default' || p.source === 'key-narrowing' || p.source === 'key-read-only') return setting;
   if (p.decidedScopeKind === 'subsystem' && p.decidedScopeId) {
     const parsed = parseSubsystemScope(p.decidedScopeId);
     return `${setting} at subsystem ${parsed?.subsystemId ?? p.decidedScopeId} of project ${parsed?.projectId ?? ''}`.trim();
@@ -340,7 +340,7 @@ export interface RepositoryScope {
 }
 
 /** Which source decided an effective permission. */
-export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default' | 'key-narrowing';
+export type PermissionSource = 'instance-admin' | 'user' | 'role' | 'everyone-default' | 'instance-default' | 'key-narrowing' | 'key-read-only';
 
 /** The resolved effective permission for one (subject, capability, target). */
 export interface EffectivePermission {
@@ -409,6 +409,12 @@ export interface Principal {
    * within the projects its entries cover, and never holds the instance-admin bypass.
    */
   keyNarrowing?: string[];
+  /**
+   * Set when the principal was authenticated by a read-only key. An authorization
+   * source like keyNarrowing: every capability but project:read is no, whatever its
+   * owner may do, and the instance-admin bypass does not apply.
+   */
+  keyReadOnly?: boolean;
 }
 
 export const UNAUTHENTICATED: Principal = {
@@ -449,6 +455,10 @@ export interface ApiKeyRecord {
   label?: string;
   /** Optional ISO-8601 expiration timestamp. */
   expiresAt?: string;
+  /** Set when the key was minted read-only (a self-service mint without write):
+   *  authorization answers no for every capability but project:read, whatever its
+   *  owner may do. A self-service key minted before this field existed carries none. */
+  readOnly?: boolean;
 }
 
 /** A hosted human or service-principal account bound to an identity subject.

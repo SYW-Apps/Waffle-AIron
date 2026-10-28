@@ -60,6 +60,33 @@ describe('a use is a use of that declaration', () => {
     }), ['UNDECLARED_PUBLIC_MEMBER']);
     expect(found).toEqual([]);
   });
+
+  it('an analyzed file importing it unrenamed and wiring it without a call is a use', () => {
+    const tree = leftoverTree({
+      'src/app.ts': 'import { lookup } from \'./dispatch/dispatch_orchestrator.js\';\nexport const handlers = { lookup };\n',
+    });
+    // Analyzed, the importer is judged by what the checker lands and the names it imports.
+    tree.rules = { conformance: { sourceRoots: ['src'] } };
+    expect(issues(tree, ['UNDECLARED_PUBLIC_MEMBER'])).toEqual([]);
+  });
+
+  it('an exported class a star barrel only republishes is used by nothing', () => {
+    const tree = dispatchTree(ts([...TS_DISPATCH_BODY], [
+      '/** A class no contract declares. */',
+      'export class RouteCache {',
+      '  get(parcelId: string): string { return parcelId; }',
+      '}',
+    ]), false);
+    tree.files!['src/dispatch/index.ts'] = 'export * from \'./dispatch_orchestrator.js\';\n';
+    // Analyzed, the barrel's declared names carry what it republishes.
+    tree.rules = { conformance: { sourceRoots: ['src'] } };
+    const found = issues(tree, ['UNDECLARED_PUBLIC_MEMBER']);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('"RouteCache" (an exported class)');
+    // A file importing it through the barrel and constructing it uses it.
+    tree.files!['src/app.ts'] = 'import { RouteCache } from \'./dispatch/index.js\';\nexport const cache = new RouteCache();\n';
+    expect(issues(tree, ['UNDECLARED_PUBLIC_MEMBER'])).toEqual([]);
+  });
 });
 
 /** The planner as a module function behind a port the orchestrator declares for itself, wired (or not) by a composition root. */
