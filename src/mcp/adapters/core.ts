@@ -9,7 +9,6 @@
 export {
   loadSystemSpec,
   loadSubsystemSpec,
-  loadSubsystemSpecs,
   loadComponentSpec,
   loadComponentSpecs,
   loadInterfaceSpec,
