@@ -89,6 +89,63 @@ describe('a use is a use of that declaration', () => {
   });
 });
 
+describe('a file the run does not analyze is judged by where its uses land', () => {
+  const lookupFindings = (extra: Record<string, string>): string[] => issues(leftoverTree(extra), ['UNDECLARED_PUBLIC_MEMBER']);
+
+  it('a test calling the same-named method of another class uses nothing', () => {
+    const found = lookupFindings({
+      'tests/store.test.ts': 'import { TrackingStore } from \'../src/dispatch/tracking-store.js\';\nnew TrackingStore().lookup(\'p-1\');\n',
+    });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('"lookup"');
+  });
+
+  it('a script file reaching none of the run\'s files adds no name', () => {
+    const found = lookupFindings({ 'scripts/tally.ts': 'const lookup = 1;\nconsole.log(lookup);\n' });
+    expect(found).toHaveLength(1);
+    expect(found[0]).toContain('"lookup"');
+  });
+
+  it('a test importing the function and calling it uses it', () => {
+    expect(lookupFindings({
+      'tests/dispatch.test.ts': 'import { lookup } from \'../src/dispatch/dispatch_orchestrator.js\';\nlookup(\'p-1\');\n',
+    })).toEqual([]);
+  });
+
+  it('a test reaching it through an unanalyzed barrel under another name uses it', () => {
+    expect(lookupFindings({
+      'lib/index.ts': 'export { lookup as routeOf } from \'../src/dispatch/dispatch_orchestrator.js\';\n',
+      'tests/dispatch.test.ts': 'import { routeOf } from \'../lib/index.js\';\nrouteOf(\'p-1\');\n',
+    })).toEqual([]);
+  });
+
+  it('a test importing a name the realizing file republishes, and calling it, uses it', () => {
+    // The call lands on the helper's own declaration; the import of the name from the realizing file is the use of its re-export.
+    const tree = dispatchTree(ts([...TS_DISPATCH_BODY], ['export { formatRoute } from \'./route-format.js\';']), false);
+    tree.files!['src/dispatch/route-format.ts'] = 'export function formatRoute(parcelId: string): string {\n  return `route-${parcelId}`;\n}\n';
+    const formatFindings = (): string[] => issues(tree, ['UNDECLARED_PUBLIC_MEMBER']).filter(f => f.includes('formatRoute'));
+    expect(formatFindings()).toHaveLength(1);
+    tree.files!['tests/format.test.ts'] = 'import { formatRoute } from \'../src/dispatch/dispatch_orchestrator.js\';\nformatRoute(\'p-1\');\n';
+    expect(formatFindings()).toEqual([]);
+  });
+
+  it('a file in a language no checker reads still exempts by name', () => {
+    expect(lookupFindings({ 'tools/report.py': 'def report(lookup):\n    return lookup\n' })).toEqual([]);
+  });
+
+  it('an exported class is still exempted by its name in an unanalyzed file', () => {
+    const tree = dispatchTree(ts([...TS_DISPATCH_BODY], [
+      '/** A class no contract declares. */',
+      'export class RouteCache {',
+      '  get(parcelId: string): string { return parcelId; }',
+      '}',
+    ]), false);
+    expect(issues(tree, ['UNDECLARED_PUBLIC_MEMBER'])).toHaveLength(1);
+    tree.files!['scripts/notes.ts'] = 'const RouteCache = 1;\nconsole.log(RouteCache);\n';
+    expect(issues(tree, ['UNDECLARED_PUBLIC_MEMBER'])).toEqual([]);
+  });
+});
+
 /** The planner as a module function behind a port the orchestrator declares for itself, wired (or not) by a composition root. */
 function wiredTree(root: string | undefined): FixtureTree {
   const tree = plannerTree({ stated: true, narrated: true });
