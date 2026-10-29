@@ -752,8 +752,15 @@ function annotationAgreement(ctx: RuleContext): (language: string | undefined, a
       if ((c.form === 'primitive' && c.name === 'any') || (d.form === 'primitive' && d.name === 'any')) return undefined;
       if (d.form === 'primitive' && TEMPORAL.has(d.name as string)) {
         if (c.form === 'primitive' && (c.name === d.name || c.name === 'string' || (d.name === 'duration' && (c.name === 'number' || c.name === 'int' || c.name === 'float')))) return true;
+        // One Date object (TypeScript's, read as a datetime) is how a date and a datetime are both
+        // written, and an epoch number is the other way either is.
+        const calendar = new Set(['date', 'datetime']);
+        if (c.form === 'primitive' && calendar.has(d.name as string)
+          && (calendar.has(c.name as string) || c.name === 'number' || c.name === 'int' || c.name === 'float')) return true;
         if (c.form === 'named') return undefined;
       }
+      // Bytes travel as a buffer, a list or an encoded string.
+      if (d.form === 'primitive' && d.name === 'bytes' && c.form === 'primitive' && (c.name === 'bytes' || c.name === 'string')) return true;
       if (c.form === 'named') {
         if (!known.has(c.name as string)) return undefined;
         if (d.form === 'named' && (namesAgree(c.name as string, d.name as string, names) || loose(c.name as string) === loose(d.name as string))) return true;

@@ -82,6 +82,17 @@ describe('the spellings a scalar is written as stay silent', () => {
 
   it('a date written as a string, an enum as a string, a named scalar as what it holds', () => {
     expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string')), false), 'date'))).toEqual([]);
+    // A Date object is the other way a date, or a datetime, is written.
+    expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: Date')), false), 'date'))).toEqual([]);
+    expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: Date')), false), 'datetime'))).toEqual([]);
+    expect(paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: datetime'), [], ['from datetime import datetime']), true), 'datetime'))).toEqual([]);
+    expect(paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: date'), [], ['from datetime import date']), true), 'date'))).toEqual([]);
+    // An epoch number is a datetime too, and bytes travel as a buffer or an encoded string.
+    expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: number')), false), 'datetime'))).toEqual([]);
+    for (const written of ['string', 'Uint8Array', 'Buffer']) {
+      expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY(`parcelId: ${written}`)), false), 'bytes')).filter(f => f.startsWith('PARAM_TYPE_MISMATCH'))).toEqual([]);
+    }
+    expect(paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: bytes')), true), 'bytes'))).toEqual([]);
     const status = { id: 'parcel_status', name: 'ParcelStatus', kind: 'enum', values: [{ name: 'booked' }, { name: 'sent' }] };
     expect(paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string')), false), 'parcel_status', [status]))).toEqual([]);
     const ref = { id: 'parcel_ref', name: 'ParcelRef', kind: 'value-object', holds: 'string' };
