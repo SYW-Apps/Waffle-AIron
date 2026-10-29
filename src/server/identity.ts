@@ -32,6 +32,7 @@ import { isReservedSubject } from './auth.js';
 import { SSO_ADMIN_ROLE_ID, providerSetupProblem, providerNotSetUpMessage } from './types.js';
 import type {
   ApiKeyRecord,
+  OwnTokenSummary,
   AuditEvent,
   AuditLevel,
   AuditQuery,
@@ -475,15 +476,28 @@ export function mintSelfToken(
 }
 
 /**
- * Authenticate the caller and return their OWN minted credential records
- * (ownerSubject.userId = caller) through the credential registry, redacted — each
- * carries the hashed token only (the plaintext is never stored), with its id,
- * project, label, createdAt and revokedAt for the client to render and offer revoke.
- * A read; not audited.
+ * Authenticate the caller and return their OWN minted credentials
+ * (ownerSubject.userId = caller) through the credential registry, each as an
+ * OwnTokenSummary for the client to render and offer revoke: neither the key nor
+ * its hash leaves the server. A read; not audited.
  */
-export function listSelfTokens(cfg: HostConfig, credential: string | null): ApiKeyRecord[] {
+export function listSelfTokens(cfg: HostConfig, credential: string | null): OwnTokenSummary[] {
   const principal = requirePrincipal(cfg, credential);
-  return listByOwner(cfg.dataDir, auditActor(principal).userId);
+  return listByOwner(cfg.dataDir, auditActor(principal).userId).map(ownTokenSummary);
+}
+
+/** A credential record as the own-token list shows it: the key hash, the legacy
+ *  role and createdBySubject left out. */
+function ownTokenSummary(rec: ApiKeyRecord): OwnTokenSummary {
+  return {
+    id: rec.id,
+    projects: rec.projects,
+    createdAt: rec.createdAt,
+    ...(rec.ownerSubject ? { ownerSubject: rec.ownerSubject } : {}),
+    ...(rec.label !== undefined ? { label: rec.label } : {}),
+    ...(rec.expiresAt !== undefined ? { expiresAt: rec.expiresAt } : {}),
+    ...(rec.readOnly === true ? { readOnly: true } : {}),
+  };
 }
 
 /**

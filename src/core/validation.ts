@@ -593,6 +593,7 @@ const NOT_CHECKED_EVER = [
 ];
 const READING_CHECKS: Record<string, string> = {
   params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls (claimed calls found by name, through declared receivers; calls the narrative does not have are not reported)',
+  routes: 'routes', types: 'data types (of declarative data classes)',
 };
 
 /** A Portal binding HTTP endpoints whose implementation names no router, with its exact-grade files (route-coverage's portalsWithoutRouter). */
@@ -626,7 +627,18 @@ function languageReading(files: SourceFileFacts[], unrouted: number = 0): { grad
     : [];
   const checked = [grade === 'generic' ? 'methods (by name only)' : 'methods', ...reads.map((r) => READING_CHECKS[r])];
   const unchecked = CHECKED_AT_EXACT.filter((c) => !checked.some((k) => k.startsWith(c.split(' ')[0]))).map((c) => c.replace(/ \(.*\)$/, ''));
-  return { grade, checked, unchecked, ...(reads.length > 0 ? { reader: 'its signature reader' } : {}) };
+  const reader = reads.length > 0 ? { reader: 'its signature reader' } : {};
+  // A reader of routes reads them only out of a router a Portal names, as exact grade does.
+  if (reads.includes('routes') && unrouted > 0) {
+    return {
+      grade,
+      checked: checked.map((c) => (c === 'routes' ? 'routes where a router is named' : c)),
+      unchecked: [...unchecked, `routes of ${unrouted} HTTP Portal(s) naming no router`],
+      ...reader,
+      note: 'each judged by the public methods of its realizing class alone',
+    };
+  }
+  return { grade, checked, unchecked, ...reader };
 }
 
 /**
@@ -646,7 +658,7 @@ function portalsWithoutRouter(ctx: RuleContext): UnroutedPortal[] {
     if (!realization.implementationsOf(portal.id).some((impl) => !impl.router)) continue;
     const files = realization.filesOf(portal.id).map(pathKey).filter((file) => {
       const facts = code.factsAt(file);
-      return !!facts && facts.status === 'analyzed' && facts.analysisGrade === 'exact';
+      return !!facts && facts.status === 'analyzed' && (facts.analysisGrade === 'exact' || !!facts.reads?.includes('routes'));
     });
     if (files.length > 0) out.push({ portal: portal.id, files });
   }

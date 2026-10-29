@@ -37,29 +37,6 @@ import type { FamilyMigrationReport, MigrationPlan, MigrationRequest } from '../
 // all or nothing through the migration portal. None of them ever locks.
 // ---------------------------------------------------------------------------
 
-// The rest of the diagram surface `wairon diagram` needs, republished by
-// identity rather than wrapped.
-//
-// These are NOT on icli_core_adapter: the contract names renderDiagram alone,
-// because runDiagram's narrative models only the four-format path. The command
-// also has --all, --sequence and --subsystem — scopes DiagramOptions models as
-// fields while no method takes them — and those need generateDiagramSet,
-// generateSequenceDiagram, generateComponentDiagram and the set's index. That
-// gap belongs in the spec, and it is reported rather than papered over. The
-// re-export lands on the core portal file; this file itself calls none of them.
-//
-// buildCanvasDataModel (a spec_tree_portal method) is the model as DATA. The
-// commands reach it through the core adapter; it stays here for the barrel.
-export {
-  generateComponentDiagram,
-  generateSequenceDiagram,
-  generateDiagramSet,
-  diagramSetIndex,
-  toMarkdown,
-  loadSpecGraph,
-  buildCanvasDataModel,
-} from '../core/index.js';
-
 interface MemberAddOptions {
   description?: string;
   /** --project: create an independent project instead of a part (stage 8). */

@@ -96,28 +96,6 @@ function typeMethodNames(): Set<string> {
   return names;
 }
 
-/**
- * The six diagram functions `wairon diagram --all|--sequence|--subsystem` is
- * built out of. (buildCanvasDataModel was the seventh: it is a spec_tree_portal
- * method now, which is the shrink this ratchet exists for.) No contract names them —
- * `ispec_tree_portal` names `renderDiagram`, `iarchitecture_diagrams` names `render`
- * and `buildGraphModel` — and cli_core_adapter depends on core's portals alone, so
- * this barrel is the only route that does not make sdd_cli import an sdd_core
- * module.
- *
- * A shrink-only ratchet, not an allowance: the list may lose entries (as each
- * one gets modelled) and never gain one. The assertion below fails the moment a
- * name here becomes a contract method, so a fix cannot leave a stale entry.
- */
-const REPORTED_UNMODELLED = [
-  'diagramSetIndex',
-  'generateComponentDiagram',
-  'generateDiagramSet',
-  'generateSequenceDiagram',
-  'loadSpecGraph',
-  'toMarkdown',
-] as const;
-
 /** The shared value shapes the barrel publishes as types, by name. */
 const DECLARED_TYPES = [
   'ComponentRename',
@@ -193,8 +171,7 @@ describe('core barrel surface (src/core/index.ts)', () => {
       (name) =>
         !CONTRACT.has(name)
         && !TYPE_METHODS.has(name)
-        && !RULE_VOCABULARY.has(name)
-        && !(REPORTED_UNMODELLED as readonly string[]).includes(name),
+        && !RULE_VOCABULARY.has(name),
     );
     expect(
       unaccounted,
@@ -220,16 +197,6 @@ describe('core barrel surface (src/core/index.ts)', () => {
       'A star export republishes a whole module, so it says nothing about which of its functions '
       + 'the Portal means — which is exactly how the surface grew to 315 names.',
     ).toEqual(['./rules/index.js']);
-  });
-
-  it('carries the unmodelled diagram functions as a shrink-only ratchet', () => {
-    for (const name of REPORTED_UNMODELLED) {
-      expect(PUBLISHED, `${name} is listed as reported-unmodelled but is not exported`).toContain(name);
-      expect(
-        CONTRACT.has(name),
-        `${name} is now a contract method — delete it from REPORTED_UNMODELLED; the list only shrinks.`,
-      ).toBe(false);
-    }
   });
 
   it('publishes the shared value shapes its consumers need, as types', () => {

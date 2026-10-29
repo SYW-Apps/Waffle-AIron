@@ -317,8 +317,8 @@ methods:
       path: /web/tokens/revoke
   - name: listAgentTokens
     description: List the caller's own MCP tokens; forwards to web_admin_orchestrator.listMyTokens.
-    signature: 'listAgentTokens(sessionId: string): list<ApiKeyRecord>'
-    returns: list<ApiKeyRecord>
+    signature: 'listAgentTokens(sessionId: string): list<OwnTokenSummary>'
+    returns: list<OwnTokenSummary>
     params:
       - name: sessionId
         type: string
@@ -1627,4 +1627,4 @@ methods:
       path: /web/dev/status
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-23T22:30:21.309Z'
+updatedAt: '2026-10-28T20:16:08.519Z'

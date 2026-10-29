@@ -1,0 +1,16 @@
+kind: value-object
+id: component_diagram_options
+name: ComponentDiagramOptions
+description: 'What a component diagram draws: the whole system, or one subsystem with its direct neighbours.'
+subsystem: sdd_core
+fields:
+  - name: subsystem
+    type: string
+    description: >-
+      The subsystem drawn, with the subsystems nested under it and its direct neighbours; absent,
+      the whole system
+    optional: true
+methods: []
+sourcePath: src/core/diagram.ts
+createdAt: '2026-10-29T09:36:40.159Z'
+updatedAt: '2026-10-29T09:36:40.951Z'

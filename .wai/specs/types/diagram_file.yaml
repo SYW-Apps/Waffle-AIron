@@ -1,0 +1,33 @@
+kind: value-object
+id: diagram_file
+name: DiagramFile
+description: >-
+  One Mermaid diagram of a diagram set, with the path it is written to. Derived from the spec tree
+  on every call; nothing reads it back.
+subsystem: sdd_core
+fields:
+  - name: relPath
+    type: string
+    description: Where it is written, relative to the diagrams folder with forward slashes
+    optional: false
+  - name: title
+    type: string
+    description: The heading the written page carries
+    optional: false
+  - name: mermaid
+    type: string
+    description: The Mermaid source, without a Markdown fence
+    optional: false
+methods:
+  - name: toMarkdown
+    signature: 'toMarkdown(): string'
+    params: []
+    returns: string
+    description: >-
+      The diagram as a Markdown page: its title as the heading, a line saying it is generated from
+      the spec tree and is regenerated rather than edited, and the Mermaid in a fence. Pure
+    sourcePath: src/core/diagram.ts
+    symbol: toMarkdown
+sourcePath: src/core/diagram.ts
+createdAt: '2026-10-29T09:36:44.963Z'
+updatedAt: '2026-10-29T09:36:45.805Z'

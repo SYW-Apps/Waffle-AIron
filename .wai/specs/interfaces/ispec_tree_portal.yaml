@@ -528,6 +528,56 @@ methods:
     signature: 'renderTypeDiagrams(): list<TypeDiagram>'
     returns: list<TypeDiagram>
     params: []
+  - name: generateComponentDiagram
+    description: >-
+      The current project's components drawn as a Mermaid flowchart, the whole system or one
+      subsystem with its direct neighbours.
+    signature: 'generateComponentDiagram(options?: ComponentDiagramOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: ComponentDiagramOptions
+        description: The scope to draw; omitted, the whole system
+        optional: true
+  - name: generateSequenceDiagram
+    description: >-
+      One method's narrative drawn as a Mermaid sequence diagram, its callees expanded to the depth
+      asked for.
+    signature: >-
+      generateSequenceDiagram(componentId: string, methodName: string, options?:
+      SequenceDiagramOptions): string
+    returns: string
+    params:
+      - name: componentId
+        type: string
+        description: >-
+          The component whose method is drawn: its id, or a bare id that matches exactly one
+          qualified component
+      - name: methodName
+        type: string
+        description: The method whose narrative is drawn
+      - name: options
+        type: SequenceDiagramOptions
+        description: How deep the callees are expanded; omitted, three levels
+        optional: true
+  - name: generateDiagramSet
+    description: >-
+      The whole Mermaid diagram set of the current project, each diagram with the path it is written
+      to.
+    signature: 'generateDiagramSet(): list<DiagramFile>'
+    returns: list<DiagramFile>
+    params: []
+  - name: diagramSetIndex
+    description: The Markdown index linking a diagram set's files.
+    signature: 'diagramSetIndex(files: list<DiagramFile>, systemName: string): string'
+    returns: string
+    params:
+      - name: files
+        type: list<DiagramFile>
+        description: The diagrams the index links, in the order listed
+      - name: systemName
+        type: string
+        description: The system the index is titled after
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T23:57:46.420Z'
+updatedAt: '2026-10-29T09:36:52.807Z'

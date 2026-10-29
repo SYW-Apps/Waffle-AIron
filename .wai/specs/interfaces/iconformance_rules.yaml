@@ -366,22 +366,33 @@ methods:
       source files (a component maps to every file its implementations and their methods name) must
       be justified by declared relations — a direct dependsOn/owns pair, a shared component,
       membership in a depended-on pattern, or (across subsystems) a declared edge to the target
-      subsystem's published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses
-      — type coupling is allowed — but a CALL of a modelled contract method through a collaborator
-      whose declared type comes from another component's file is runtime collaboration whatever the
-      import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge).
-      Conversely, a declared dependsOn/owns edge between components realized in different files
-      should be visible as an import between any file of the source and any file of the target, or —
-      where the type checker read a file of the source — as a call or reference the checker lands in
-      a file of the target, through every barrel, port declaration, dependency bag and unowned
-      helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning);
-      a type-only import realizes it, since `import type` is what dependency injection writes down.
-      An Adapter's edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a
-      CLI…) is the link the design models: the Adapter's transport client realizes it, never an
-      import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that
-      boundary, which would couple two deployables' builds. Two twins of design rules are judged on
-      the same code: a Portal file calling a write- or lifecycle-effect contract method of a
-      Repository, Index, Store or Registry is the persistence shortcut the design rule
+      subsystem's published surface (UNDECLARED_DEPENDENCY). A runtime re-export is such an edge too
+      — a named value, a star or a namespace re-export (`export { x } from`, `export * from`,
+      `export * as ns from`), never a type-only one: republishing another component's code from this
+      file reaches it as surely as importing it does, so it is justified exactly as an import is (a
+      Portal's barrel republishing its Orchestrator is a declared edge). And a name imported through
+      a file no component realizes — a barrel, whether the run analyzes it or not — is followed to
+      where it comes from: to the files the type checker resolves the name's declaration to through
+      every re-export (for a namespace import, the declarations of everything the module exports), a
+      value only, a type republishing no code; where no checker read the importer, through the
+      barrel's own re-exports of the name (renamed, or by a star whose module exports it) from one
+      analyzed barrel to the next. The import is then an edge to each component-mapped file it lands
+      in, judged and reported the same way, the finding naming the barrel. A type-only import alone
+      never accuses — type coupling is allowed — but a CALL of a modelled contract method through a
+      collaborator whose declared type comes from another component's file is runtime collaboration
+      whatever the import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that
+      edge). Conversely, a declared dependsOn/owns edge between components realized in different
+      files should be visible as an import between any file of the source and any file of the
+      target, or — where the type checker read a file of the source — as a call or reference the
+      checker lands in a file of the target, through every barrel, port declaration, dependency bag
+      and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading,
+      hence warning); a type-only import realizes it, since `import type` is what dependency
+      injection writes down. An Adapter's edge to a Portal reached over an out-of-process transport
+      (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter's transport client
+      realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an
+      import across that boundary, which would couple two deployables' builds. Two twins of design
+      rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract
+      method of a Repository, Index, Store or Registry is the persistence shortcut the design rule
       PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
       design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by
       the TypeScript type checker: every call written in a file realizing only Portals — in a file
@@ -451,19 +462,25 @@ methods:
       the analyzer's signature reader read (source_file_facts.reads): `from .sibling import X`,
       `from ..pkg.mod import X`, `import pkg.mod` and `from . import sibling`, resolved from the
       importing file's package or any folder above it to a module or a package's `__init__.py` — a
-      Python import resolves only to a Python module, so the two languages' graphs never cross;
-      whether a declared Python edge is realized is not judged. And a declared edge whose target's
-      own code drifted from its contract (RETURN_TYPE_MISMATCH) is not reported as
-      UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the class, so the
-      edge only looks stale — the drift's consequence, held under that one finding and judged again
-      once it is fixed. The one reverse import a declared edge justifies is a MOUNT: a Portal or
-      Observer that depends on a component of its own subsystem without calling it — no narrative
-      call or dispatch step, declared call or dispatch-table binding of the Portal names it — whose
-      file imports the Portal's to dispatch inward (a server mounting its Portals). A component the
-      Portal calls is its downstream collaborator, so that component importing the Portal back runs
-      against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the importer, the
-      finding naming the edge it inverts — and such a reverse import realizes no edge of a Portal
-      that calls.
+      Python import resolves only to a Python module, so the two languages' graphs never cross. A
+      declared edge between two components realized in Python is judged for realization on that
+      graph: an import between any file of the source and any file of the target realizes it — an
+      import of a package's `__init__.py` that no component realizes reaching every file in that
+      package's folder — and so does a call one of the source's files makes, through a field or a
+      name, of a method the target's contract declares (its code name: the verb in snake_case, or
+      the method's symbol), which is all a collaborator injected through a Protocol writes down; an
+      edge between a component read in one language and one read in the other is not judged. And a
+      declared edge whose target's own code drifted from its contract (RETURN_TYPE_MISMATCH) is not
+      reported as UNREALIZED_DEPENDENCY: a port typed after the contract no longer matches the
+      class, so the edge only looks stale — the drift's consequence, held under that one finding and
+      judged again once it is fixed. The one reverse import a declared edge justifies is a MOUNT: a
+      Portal or Observer that depends on a component of its own subsystem without calling it — no
+      narrative call or dispatch step, declared call or dispatch-table binding of the Portal names
+      it — whose file imports the Portal's to dispatch inward (a server mounting its Portals). A
+      component the Portal calls is its downstream collaborator, so that component importing the
+      Portal back runs against the declared edge — an import cycle, UNDECLARED_DEPENDENCY on the
+      importer, the finding naming the edge it inverts — and such a reverse import realizes no edge
+      of a Portal that calls.
     signature: 'dependencyConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -765,32 +782,34 @@ methods:
       — a class holding one of its modelled methods — or a function its realizing file exports, that
       no contract of the components the file realizes declares (nor a `symbol`, `exportedVia`,
       `router` or type of it) and that NOTHING in the project uses — no call or reference in its own
-      file, no use in another analyzed file, no identifier in a project file the run did not analyze
-      (its tests, a composition root) — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no
+      file, no use in another analyzed file, no use in a project file the run did not analyze (its
+      tests, a composition root) — is UNDECLARED_PUBLIC_MEMBER: a verb the code added that no
       design, brief or caller explains. A use is a use of THAT declaration: where the type checker
       read the using file, a call or reference counts only when the checker lands it on the
       declaration itself (or on a class realizing it), or lands it nowhere it can name under its
       name, and an import of the name from its file counts — a same-named method of another class,
       the way a verb removed from the design survives beside the method it forwarded to, is no use;
-      where no checker read it, any name the file writes counts. A re-export, named or star, is
-      publication, never a use: the name is used only when what the barrel publishes it as is. Used,
-      it is the module's factoring (a helper the class calls, a facade forwarding to it, a function
-      its tests import), or, taken by another component, UNDECLARED_EXPORT. Exempt: constructors,
-      accessors and fields, static, private, protected, #private and underscore-prefixed members, an
-      `override`, a computed name, a language protocol or framework lifecycle hook (toString,
-      toJSON, then, render, connectedCallback, componentDidMount, ngOnInit, onModuleInit and their
-      kin), a Python dunder, test files, and an implementation whose conformance dial is off. Read
-      at exact grade, or by a reader that reads class members (Python, where a leading underscore is
-      private). An exported CLASS is judged the same way: a top-level class the realizing file
-      exports beside the classes realizing a component, that no contract or type declares and that
-      nothing uses — its own file naming it nowhere outside its own declaration (constructed,
-      extended, annotated with, tested by instanceof or isinstance, passed on:
-      source_file_facts.classReferences), no other analyzed file naming it, no identifier of a file
-      the run did not analyze, no re-export of it whose published name is used — is
-      UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static factory) are no use. The
-      finding names the files that took each name as well as the one publishing it: an import that
-      no declared relation justifies is UNDECLARED_DEPENDENCY on the importer besides, a different
-      fact — who reached across, where this is what crossed.
+      a file the run did not analyze is read the same way when the checker read it, by its calls,
+      its references and the names it imports from the file, and adds nothing when its imports reach
+      none of the run's files; where no checker read it, any name the file writes counts. A
+      re-export, named or star, is publication, never a use: the name is used only when what the
+      barrel publishes it as is. Used, it is the module's factoring (a helper the class calls, a
+      facade forwarding to it, a function its tests import), or, taken by another component,
+      UNDECLARED_EXPORT. Exempt: constructors, accessors and fields, static, private, protected,
+      #private and underscore-prefixed members, an `override`, a computed name, a language protocol
+      or framework lifecycle hook (toString, toJSON, then, render, connectedCallback,
+      componentDidMount, ngOnInit, onModuleInit and their kin), a Python dunder, test files, and an
+      implementation whose conformance dial is off. Read at exact grade, or by a reader that reads
+      class members (Python, where a leading underscore is private). An exported CLASS is judged the
+      same way: a top-level class the realizing file exports beside the classes realizing a
+      component, that no contract or type declares and that nothing uses — its own file naming it
+      nowhere outside its own declaration (constructed, extended, annotated with, tested by
+      instanceof or isinstance, passed on: source_file_facts.classReferences), no other analyzed
+      file naming it, no identifier of a file the run did not analyze, no re-export of it whose
+      published name is used — is UNDECLARED_PUBLIC_MEMBER too; its own methods naming it (a static
+      factory) are no use. The finding names the files that took each name as well as the one
+      publishing it: an import that no declared relation justifies is UNDECLARED_DEPENDENCY on the
+      importer besides, a different fact — who reached across, where this is what crossed.
     signature: 'exportConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -838,6 +857,16 @@ methods:
       compared with the right side of the type alias the file declares under its name, read through
       the file's dialect (`type PackPath = string` agrees with holds string); an object shape under
       that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.
+      Python is read the same way by its signature reader, for a class whose body declares its
+      fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings),
+      a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member
+      (ClassVar, InitVar and a Pydantic model's underscore attributes aside), absent-able when it
+      has a default or a default factory, or in a TypedDict when it is NotRequired or the class is
+      total=False — `Optional` alone is nullable, never absent-able. Its field names compare with
+      the spec's by nameKey, so the spec's documentId is the code's document_id. A class with any
+      other base is judged as one extending another. A plain class, a model built by a call
+      (create_model, a functional TypedDict or namedtuple) and a named scalar are not read in
+      Python, and stay silent.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -937,58 +966,65 @@ methods:
       — opaque as above — and whose body reads a member off it directly that no such value has
       (`args.habitId`, where the contract declares the date `date`) is an object in the scalar's
       place, PARAM_TYPE_MISMATCH too; one read only as the scalar it is (`date.length`,
-      `day.getTime()`) is not. Where nothing decides between a rename and another argument (the
-      types cannot be compared, no kind or field speaks, and no handle name does), the name still
-      differs from the contract's either way, so it is PARAM_NAME_MISMATCH, said with the comparison
-      that could not be made: a Python `quote_order(order_items: list[dict])` realizing
-      `quote_order(items: list<order_item>)` is never silent. A parameter standing ahead of every
-      kept pair under a name transports give their handles (req, request, res, response, reply, url,
-      ctx, context, next, event, socket) is how a transport handle arrives, and the finding names
-      the one green path for it: the handle in `injectedParams`, the contract's own parameters after
-      it in order, the router unpacking the request into them — or, where the framework hands the
-      function the handles alone, the contract's parameters read off the injected request by their
-      own names: a contract parameter the code does not take but reads off an injected request
-      handle (req, request, ctx, context, event, url) by its own name is realized through that
-      handle — `req.params.code`, `req.query.limit`, `req.body.code`,
-      `url.searchParams.get('limit')`, a destructuring at any depth, a local the handle's value
-      flows into (`const url = new URL(req.url, base)`), and what a helper the handle is passed to
-      reads off it or its result yields, where the helper is written in the same file or in a file
-      no implementation claims (`const { orderId } = pathParams(req)`) — and the one RECORD
-      parameter left unpaired is realized by the request's body read whole: `req.body`, or the
-      request handed as the first argument to a function — any function, an imported one included,
-      but a collaborator's method (a callee reached through `this.<field>` or through another of the
-      handler's parameters) — whose result the handler binds to a local and then uses whole, passing
-      it on, returning it, placing it into an object or a list, or assigning it (`const cart = await
-      readJsonBody(req)`); a result only destructured or only read for members is a set of named
-      reads, never the body. A parameter left unrealized because the implementation injects its own
-      name is said so: the injection set the code's parameter of that name aside as wiring. An
-      injected name none of the implementation's realizing functions read in this run takes is said
-      as a NOTICE (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and
-      one nothing takes hides nothing, since no function takes a parameter it could set aside — so
-      it never fails a gate. A name with several bodies is judged on what they all agree on, and a
-      method the named file only CALLS is left to `methodRealization`, which already reports that
-      the body is not here; a method whose conformance dial is off (its own, else its
-      implementation's) is not judged. The signature's other half is its RETURN: a realizing
-      function annotated to return a type its contract's `returns` does not describe is
-      RETURN_TYPE_MISMATCH, naming the method, the contract's type and the code's — whatever every
-      body of the name agrees on, read through the file's dialect. Completing later is
-      ASYNC_MISMATCH's subject, so both sides are read past `async`; a named scalar agrees with what
-      it holds, an enum with a string, a date, a datetime or a duration with the string (or Date, or
-      number) the code writes it as, and a name differing only in case and separators with itself.
-      Not compared: a contract returning void (whatever the code hands back beside it, no caller
-      built from the contract reads), a function that registers the method's handler (a narrative
-      `register` step), whose result is the handler's, a void function handed a response handle
-      (`injectedParams`: res, response, reply, ctx, context), which writes its result through the
-      handle, an unannotated body, and a type either side does not read or the design does not know
-      — never accused. A caller whose port no longer matches the drifted class is not reported again
-      on its own: its call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED)
-      and its declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under
-      RETURN_TYPE_MISMATCH and judged again once it is fixed. Python is read without a type checker
-      by the analyzer's signature reader (source_file_facts.reads): its `def` parameter names —
-      compared in the language's snake_case, so the contract's `documentId` is the code's
-      `document_id` — their annotations and return annotations, the receiver (`self`, `cls`) set
-      aside, judged like any other signature; an unannotated Python parameter is never read as
-      opaque.
+      `day.getTime()`) is not. And a paired parameter the code ANNOTATES as a scalar other than the
+      one the contract declares — read through the file's dialect as a return is, a named scalar as
+      what it holds and an enum as a string, TypeScript's `number` agreeing with int and float alike
+      and a date, a datetime or a duration with the string, Date or number the code writes it as —
+      takes a different value than the design declares: PARAM_TYPE_MISMATCH, naming both types
+      (`authorId: number` realizing `authorId: string`, a Python `text: int` realizing `text:
+      string`), whether the names agree or not. An annotation either side does not read as one
+      scalar — a union, a named type the design does not know, any — is not compared. Where nothing
+      decides between a rename and another argument (the types cannot be compared, no kind or field
+      speaks, and no handle name does), the name still differs from the contract's either way, so it
+      is PARAM_NAME_MISMATCH, said with the comparison that could not be made: a Python
+      `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` is
+      never silent. A parameter standing ahead of every kept pair under a name transports give their
+      handles (req, request, res, response, reply, url, ctx, context, next, event, socket) is how a
+      transport handle arrives, and the finding names the one green path for it: the handle in
+      `injectedParams`, the contract's own parameters after it in order, the router unpacking the
+      request into them — or, where the framework hands the function the handles alone, the
+      contract's parameters read off the injected request by their own names: a contract parameter
+      the code does not take but reads off an injected request handle (req, request, ctx, context,
+      event, url) by its own name is realized through that handle — `req.params.code`,
+      `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a destructuring at any
+      depth, a local the handle's value flows into (`const url = new URL(req.url, base)`), and what
+      a helper the handle is passed to reads off it or its result yields, where the helper is
+      written in the same file or in a file no implementation claims (`const { orderId } =
+      pathParams(req)`) — and the one RECORD parameter left unpaired is realized by the request's
+      body read whole: `req.body`, or the request handed as the first argument to a function — any
+      function, an imported one included, but a collaborator's method (a callee reached through
+      `this.<field>` or through another of the handler's parameters) — whose result the handler
+      binds to a local and then uses whole, passing it on, returning it, placing it into an object
+      or a list, or assigning it (`const cart = await readJsonBody(req)`); a result only
+      destructured or only read for members is a set of named reads, never the body. A parameter
+      left unrealized because the implementation injects its own name is said so: the injection set
+      the code's parameter of that name aside as wiring. An injected name none of the
+      implementation's realizing functions read in this run takes is said as a NOTICE
+      (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing
+      takes hides nothing, since no function takes a parameter it could set aside — so it never
+      fails a gate. A name with several bodies is judged on what they all agree on, and a method the
+      named file only CALLS is left to `methodRealization`, which already reports that the body is
+      not here; a method whose conformance dial is off (its own, else its implementation's) is not
+      judged. The signature's other half is its RETURN: a realizing function annotated to return a
+      type its contract's `returns` does not describe is RETURN_TYPE_MISMATCH, naming the method,
+      the contract's type and the code's — whatever every body of the name agrees on, read through
+      the file's dialect. Completing later is ASYNC_MISMATCH's subject, so both sides are read past
+      `async`; a named scalar agrees with what it holds, an enum with a string, a date, a datetime
+      or a duration with the string (or Date, or number) the code writes it as, and a name differing
+      only in case and separators with itself. Not compared: a contract returning void (whatever the
+      code hands back beside it, no caller built from the contract reads), a function that registers
+      the method's handler (a narrative `register` step), whose result is the handler's, a void
+      function handed a response handle (`injectedParams`: res, response, reply, ctx, context),
+      which writes its result through the handle, an unannotated body, and a type either side does
+      not read or the design does not know — never accused. A caller whose port no longer matches
+      the drifted class is not reported again on its own: its call to the drifted component that no
+      longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows
+      (UNREALIZED_DEPENDENCY) are held under RETURN_TYPE_MISMATCH and judged again once it is fixed.
+      Python is read without a type checker by the analyzer's signature reader
+      (source_file_facts.reads): its `def` parameter names — compared in the language's snake_case,
+      so the contract's `documentId` is the code's `document_id` — their annotations and return
+      annotations, the receiver (`self`, `cls`) set aside, judged like any other signature; an
+      unannotated Python parameter is never read as opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1029,8 +1065,8 @@ methods:
         summary: >-
           A contract parameter is realized by a parameter whose type cannot hold it — a record under
           an opaque type (any, unknown, an index signature) or an object missing the record's fields
-          or adding its own, or a scalar under an opaque type the body reads as an object — so what
-          a caller hands over is never compared with what the design declares
+          or adding its own, a scalar under an opaque type the body reads as an object, or a scalar
+          annotated as another scalar — so what a caller hands over is not what the design declares
       - code: RETURN_TYPE_MISMATCH
         severity: warning
         summary: >-
@@ -1093,6 +1129,17 @@ methods:
       check read is a hole, not a choice; only where its files hold none is it the notice
       ROUTER_UNDECLARED, the Portal then read as served method by method, every public method of its
       realizing class answering to its contract (export-conformance's UNDECLARED_PUBLIC_MEMBER).
+      Python is read the same way by its signature reader, in the decorator idiom: a router is a
+      router object — a FastAPI, APIRouter, Flask, Blueprint, Quart or Sanic instance — named by its
+      variable (`router: app`, `<module>#router`, or the module alone, every router object of it),
+      and its routes are its route decorators (`@app.get("/orders/{id}")`, `@bp.route("/x",
+      methods=["POST"])`, `.api_route`), each path under the prefixes stated by the object's
+      construction and by the includes bringing it in (`APIRouter(prefix=…)`, `include_router(r,
+      prefix=…)`, `Blueprint(…, url_prefix=…)`, `register_blueprint(bp, url_prefix=…)`), followed
+      through the modules the includes import. A router any route, prefix or include of which does
+      not settle to a string, or that mounts an application, is unread. A Python Portal naming no
+      router is ROUTES_UNCHECKED or ROUTER_UNDECLARED as above, its router objects being what reads
+      as a router.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -1270,4 +1317,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-27T17:52:16.436Z'
+updatedAt: '2026-10-29T16:38:36.125Z'

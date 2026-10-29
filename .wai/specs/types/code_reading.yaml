@@ -19,5 +19,11 @@ values:
     description: The module's imports, resolvable to the project's modules
   - name: calls
     description: A function's call sites, by the receivers the code declares
+  - name: routes
+    description: The routes each router object answers, read off its route decorators
+  - name: types
+    description: >-
+      The fields of each declarative data class: a dataclass, a Pydantic model, a TypedDict, a
+      NamedTuple, an attrs class
 createdAt: '2026-10-17T15:42:11.519Z'
-updatedAt: '2026-10-17T15:42:12.754Z'
+updatedAt: '2026-10-29T11:38:49.123Z'

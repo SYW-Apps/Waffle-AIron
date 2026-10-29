@@ -89,7 +89,22 @@ methods:
           = the component's implementations that named at least one such file. reach = the private
           unownedReach(ctx) — a call's own answer plus the calls of every unowned function it lands
           on, transitively, with the hops — and candidatesOf = the private writeCandidates(ctx),
-          both shared with call-conformance
+          both shared with call-conformance. reexportTargetsOf(path) = the mapped files other than
+          path that its RUNTIME re-exports resolve to — the module of each
+          source_file_facts.reexportBindings entry and of each namespaceReexports specifier,
+          resolved against mappedPaths as the graph resolves — a type-only re-export republishing no
+          code. throughBarrelsOf(path) = the mapped files, other than path, that the names it
+          imports through a project file no component realizes land in, each with that file: where
+          code_model.reachedImports holds the file, each of its ImportedName entries whose file is
+          such a barrel, at its declaredIn files; otherwise, for each runtime import binding
+          (importBindings) whose module resolves to no mapped file but to an exact-grade file no
+          component realizes, that file's reexportBindings entry publishing the name leads to its
+          module under its local name and a star to its module when that module exports the name,
+          from one unrealized file to the next, each file and name followed once, and a namespace
+          binding reaches every mapped file the unrealized file republishes. pyFilesOf(compId) =
+          realization.filesOf narrowed to the files the Python reader read imports in
+          (source_file_facts.reads includes imports), and pyGraph = ctx.importGraph over all such
+          files
         type: local
       - stepNumber: 3
         description: >-
@@ -102,11 +117,13 @@ methods:
         type: local
       - stepNumber: 4
         label: edgeLoop
-        description: Every runtime import edge between mapped files needs a justification
+        description: >-
+          Every runtime import, runtime re-export, and import through an unrealized barrel between
+          mapped files needs a justification
         type: loop
         over: >-
-          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
-          targets
+          each edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf targets,
+          then its reexportTargetsOf and throughBarrelsOf targets not already among them, each once
         endStep: 7
       - stepNumber: 5
         description: >-
@@ -133,7 +150,9 @@ methods:
           realization.implementationsAt(fromPath); draft context when any implementation naming
           either file is ctx.isImplementationDraft) naming fromPath and toPath with the components
           each realizes: declare the collaboration on the component that uses it, or route the
-          cross-subsystem hop through the target's published surface. When an imported component
+          cross-subsystem hop through the target's published surface. The finding says how the edge
+          is written: an import, a re-export (republishing the code reaches it), or an import of the
+          name through the unrealized files it passed, naming them. When an imported component
           depends on or owns an importing one and calls it, the finding says so: the import runs
           against that declared edge — an import cycle between the two — and is no Portal mounting
           onto its host
@@ -142,19 +161,24 @@ methods:
         label: compLoop
         description: >-
           Every declared edge should leave a trace. A trace is a runtime import or a re-export
-          (barrel forwarding), for a mounting declarer the reverse import counts too — unless the
-          declarer calls the target, since a client's edge is never realized by its callee importing
-          it back — and a TYPE-ONLY import counts as well: a collaborator injected through its
-          constructor is reached through its type, and `import type` is the whole of what dependency
-          injection writes down — so it realizes the declared edge, while it still never ACCUSES one
-          (UNDECLARED_DEPENDENCY reads runtime imports alone, type coupling being allowed)
+          (barrel forwarding), an import of a name through an unrealized barrel to the target's
+          file, for a mounting declarer the reverse import counts too — unless the declarer calls
+          the target, since a client's edge is never realized by its callee importing it back — and
+          a TYPE-ONLY import counts as well: a collaborator injected through its constructor is
+          reached through its type, and `import type` is the whole of what dependency injection
+          writes down — so it realizes the declared edge, while it still never ACCUSES one
+          (UNDECLARED_DEPENDENCY reads runtime imports and re-exports alone, type coupling being
+          allowed)
         type: loop
         over: ctx.components
         endStep: 14
       - stepNumber: 9
-        description: A component with no exact-grade file continues with the next component
+        description: >-
+          A component with no file to trace from continues with the next component: its exact-grade
+          files, else — a component realized in Python — the files the Python reader read its
+          imports in
         type: branch
-        condition: fromFiles = filesOf(component.id) is non-empty
+        condition: fromFiles = filesOf(component.id), else pyFilesOf(component.id), is non-empty
         onFalseStep: 8
       - stepNumber: 10
         label: targetLoop
@@ -175,7 +199,10 @@ methods:
           realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
           import into any module of the target subsystem as proof the hop exists, and a shared file
           satisfies it trivially — WHERE the hop lands (the target's portal file or past it) is
-          portal-imports' question, not this one; within one subsystem, filesOf(targetId)
+          portal-imports' question, not this one; within one subsystem, filesOf(targetId). For
+          Python fromFiles each of these is read over pyFilesOf in place of the exact-grade files,
+          so an edge into a component realized only in the other language has no toFiles and is not
+          judged
         type: local
       - stepNumber: 13
         label: traceGuard
@@ -193,7 +220,12 @@ methods:
           unowned helper); and a target whose own code drifted from its contract's return
           (RETURN_TYPE_MISMATCH) only LOOKS stale, a port typed after the contract no longer
           matching the class — the drift's consequence, held under that one finding and judged again
-          once it is fixed: continue with the next target
+          once it is fixed: continue with the next target. For Python fromFiles the traces are the
+          Python ones: an import between the files on pyGraph; an import of a package's
+          `__init__.py` that no component realizes, whose folder holds a toFile; or a call site of a
+          fromFile (source_file_facts.functionCallSites) through a field or a name whose method is
+          the code name of one of the target's contract methods — the verb in snake_case, or the
+          method's symbol — the call a collaborator injected through a Protocol makes
         type: branch
         condition: >-
           the edge is not a remote link (component is an Adapter and target a Portal whose transport
@@ -201,7 +233,9 @@ methods:
           graph.connects(fromFiles, toFiles, component is a Portal or Observer that does not call
           the target) is false, no type-only import of a fromFile resolves into toFiles, and no call
           or reference reach answers for a fromFile lands in toFiles, and the target's own code has
-          no return drift (param conformance's returnDrifts)
+          no return drift (param conformance's returnDrifts), and, for Python fromFiles, no import
+          on pyGraph connects them, no unrealized package `__init__.py` a fromFile imports holds a
+          toFile in its folder, and no call site of a fromFile names a contract method of the target
         onFalseStep: 10
       - stepNumber: 14
         label: unrealizedReport
@@ -268,8 +302,9 @@ methods:
       - stepNumber: 19
         label: typeOnlyEdge
         description: >-
-          For each toPath that the file does not import at runtime (graph.importsOf(fromPath) does
-          not hold it — a runtime edge was judged above) and edgeJustified refuses, report
+          For each toPath that the file does not import at runtime, re-export or import through an
+          unrealized barrel (graph.importsOf, reexportTargetsOf and throughBarrelsOf of fromPath
+          hold none of it — such an edge was judged above) and edgeJustified refuses, report
           UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
           runtime import of it reports under), naming the call: a shape-fact site counts here only
           when a type-only import connects the two files, and a Portal's resolved call only when it
@@ -1819,23 +1854,29 @@ methods:
           components' modelled methods, and each function the file exports, that no contract,
           symbol, exportedVia, router or type of the file declares and that nothing in the project
           uses — no call or reference in its own file but its own body, no use in another analyzed
-          file, no identifier of an unanalyzed project file (code_model.outsideNames) — where, in a
-          file the type checker read, a call or reference is a use only when the checker lands it on
-          that very declaration (or on a class realizing it) or lands it nowhere it can name (a
-          receiver typed any, a port no class realizes) under its name, and an import of the name
-          from that file is a use, while a same-named member of another class or module is no use
-          however it is spelled; in a file no checker read, any name the file writes is, as before;
-          and a re-export, named or star, is publication and never a use: the name counts as used
-          only when what the barrel publishes it as is used, followed barrel by barrel — is reported
-          once per file as UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). An
-          exported CLASS is read the same way, where the reader recorded the file's class references
-          (source_file_facts.classReferences): a top-level class the file exports beside the classes
-          realizing its components, that no contract, symbol, exportedVia, router or type declares,
-          that its own file names nowhere outside its own declaration and that nothing else uses —
-          its own methods naming it, a static factory, are no use — is one of those members, said as
-          an exported class. Exempt: constructors, accessors, fields, static, private, protected,
-          #private, underscore-prefixed, override, computed names, language protocol and framework
-          lifecycle hooks, Python dunders, and an implementation whose conformance dial is off
+          file, no use in an unanalyzed project file — where, in a file the type checker read (an
+          analyzed one, or an unanalyzed one the checker read for its wiring:
+          code_model.reachedCalls, with the names it imports by name in code_model.reachedImports),
+          a call or reference is a use only when the checker lands it on that very declaration (or
+          on a class realizing it) or lands it nowhere it can name (a receiver typed any, a port no
+          class realizes) under its name, and an import of the name from that file is a use, while a
+          same-named member of another class or module is no use however it is spelled; in an
+          analyzed file no checker read, any name the file writes is, as before, and of the
+          unanalyzed files only the identifiers of those no checker read count
+          (code_model.uncheckedOutsideNames), an unanalyzed script file that reaches none of the
+          run's files adding none; an exported class is still exempted by any identifier of an
+          unanalyzed file (code_model.outsideNames); and a re-export, named or star, is publication
+          and never a use: the name counts as used only when what the barrel publishes it as is
+          used, followed barrel by barrel — is reported once per file as UNDECLARED_PUBLIC_MEMBER
+          (warning; site the file; units the members). An exported CLASS is read the same way, where
+          the reader recorded the file's class references (source_file_facts.classReferences): a
+          top-level class the file exports beside the classes realizing its components, that no
+          contract, symbol, exportedVia, router or type declares, that its own file names nowhere
+          outside its own declaration and that nothing else uses — its own methods naming it, a
+          static factory, are no use — is one of those members, said as an exported class. Exempt:
+          constructors, accessors, fields, static, private, protected, #private,
+          underscore-prefixed, override, computed names, language protocol and framework lifecycle
+          hooks, Python dunders, and an implementation whose conformance dial is off
         type: local
       - stepNumber: 10
         description: Decide whether anything crossed
@@ -1882,7 +1923,9 @@ methods:
       - stepNumber: 3
         description: Decide whether the shape can honestly be read at all
         type: branch
-        condition: the file was read at exact grade and a shape of that name was found
+        condition: >-
+          the file was read at exact grade, or by a reader whose reads include types (the Python
+          reader), and a shape of that name was found
         onTrueStep: 4
         onFalseStep: 10
       - stepNumber: 4
@@ -1893,7 +1936,9 @@ methods:
           optional. Method-style members are not data and are left to the method axis
           `typeRealization` already judges; counting them here would accuse every behavioural
           interface of carrying undeclared state. A field the spec gives a function type that the
-          code writes as a method is one fact in two spellings, not a disagreement
+          code writes as a method is one fact in two spellings, not a disagreement. A shape the
+          Python reader read names its fields in snake_case, so each is compared with the spec's by
+          nameKey
         type: local
       - stepNumber: 5
         description: Decide whether this shape's whole membership is in front of us
@@ -1932,10 +1977,11 @@ methods:
       - stepNumber: 10
         label: silent
         description: >-
-          Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
-          about somebody's data model is worse than silence; a type whose shape the file does not
-          declare at all is `typeRealization`'s finding, and reporting it here too would make one
-          absence look like two
+          Say nothing. Below exact grade — the declarative classes a reader of types reads aside — a
+          member list cannot be told from a mention, and a guess about somebody's data model is
+          worse than silence; a type whose shape the file does not declare at all is
+          `typeRealization`'s finding, and reporting it here too would make one absence look like
+          two
         type: return
         outcome: unjudged
       - stepNumber: 11
@@ -2096,37 +2142,44 @@ methods:
           value it is written as) and the code's parameter is opaque as above and the body reads a
           member directly off it that no such value has (parameter_fact.members: `args.habitId`
           where a date is declared), report PARAM_TYPE_MISMATCH too: an object stands in the
-          scalar's place. Otherwise, for a pair whose names differ, report a rename where the
-          declared type agrees: through the file's dialect (source_file_facts.dialect, then
-          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
-          type matching through its code-level name), as the same primitive kind of value (string,
-          number, boolean) of an annotated parameter or one of the kinds a date, a datetime, a
-          duration or bytes is written as, or as an object holding every field of the declared
-          record — naming the contract's former name (its previousNames) when the code still uses
-          it. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it under
-          that public name (ctx.pinnedExternals); a MEMBER's type (alias::name of a project the
-          family composes, ctx.projectFamily) to its own type spec in ctx.types, read live — its
-          code name, its kind and its fields — so where a parameter's type lives never decides
-          whether it is compared; anything else to its public name's last segment in the code's type
-          casing. Where nothing decides between a rename and a substitution (no agreeing type, no
-          settled kind, no field, no handle name), the name still differs from the contract's either
-          way: report the rename too, saying the comparison could not be made and that it may also
-          be a different argument — the contract states the name, so it binds. Judge the RETURN
-          beside the parameters: for every contract method whose `returns` is not void, whose
-          function is not a registrar (a narrative register step) nor a void function handed a
-          response handle, and whose every body under the symbol annotates a return
-          (source_file_facts.functionReturns) — at exact grade, or by a reader that read returns
-          (Python) — read each annotation through the file's dialect past `async` on both sides, a
-          named scalar through what it holds, an enum as a string, a date, datetime or duration as
-          the string, Date or number the code writes it as, a name differing only in case and
-          separators as itself; a type the design does not know, or either side does not read, is
-          never accused. When every body disagrees, report RETURN_TYPE_MISMATCH (warning; site the
-          method; unit returns) naming the method, the contract's type and the code's. The drifts
-          are shared, so a caller whose call or declared edge no longer resolves because of one is
-          not reported again (CALL_ORIGIN_UNRESOLVED, UNREALIZED_DEPENDENCY): it is held under this
-          finding and judged again once it is fixed. Read Python signatures the same way through its
-          reader, naming parameters in the language's snake_case: a code `document_id` is the
-          contract's `documentId`
+          scalar's place. And where the contract declares a scalar and the code ANNOTATES the paired
+          parameter as another scalar — each side read as one scalar (a primitive, a named scalar as
+          what it holds, an enum as a string) through the file's dialect as RETURN_TYPE_MISMATCH
+          reads a return, optionality set aside, TypeScript's `number` agreeing with int and float
+          and a date, a datetime or a duration with the string, Date or number it is written as —
+          report PARAM_TYPE_MISMATCH naming both types, the names agreeing or not (a pair already
+          reported as a substitution excepted); a side read as no single scalar (a union, an unknown
+          named type, any) is not compared. Otherwise, for a pair whose names differ, report a
+          rename where the declared type agrees: through the file's dialect
+          (source_file_facts.dialect, then type_dialect.agrees on the code's annotation and the
+          contract's canonical type, a named type matching through its code-level name), as the same
+          primitive kind of value (string, number, boolean) of an annotated parameter or one of the
+          kinds a date, a datetime, a duration or bytes is written as, or as an object holding every
+          field of the declared record — naming the contract's former name (its previousNames) when
+          the code still uses it. An EXTERNAL type (alias::name) answers to the name its pinned
+          snapshot gives it under that public name (ctx.pinnedExternals); a MEMBER's type
+          (alias::name of a project the family composes, ctx.projectFamily) to its own type spec in
+          ctx.types, read live — its code name, its kind and its fields — so where a parameter's
+          type lives never decides whether it is compared; anything else to its public name's last
+          segment in the code's type casing. Where nothing decides between a rename and a
+          substitution (no agreeing type, no settled kind, no field, no handle name), the name still
+          differs from the contract's either way: report the rename too, saying the comparison could
+          not be made and that it may also be a different argument — the contract states the name,
+          so it binds. Judge the RETURN beside the parameters: for every contract method whose
+          `returns` is not void, whose function is not a registrar (a narrative register step) nor a
+          void function handed a response handle, and whose every body under the symbol annotates a
+          return (source_file_facts.functionReturns) — at exact grade, or by a reader that read
+          returns (Python) — read each annotation through the file's dialect past `async` on both
+          sides, a named scalar through what it holds, an enum as a string, a date, datetime or
+          duration as the string, Date or number the code writes it as, a name differing only in
+          case and separators as itself; a type the design does not know, or either side does not
+          read, is never accused. When every body disagrees, report RETURN_TYPE_MISMATCH (warning;
+          site the method; unit returns) naming the method, the contract's type and the code's. The
+          drifts are shared, so a caller whose call or declared edge no longer resolves because of
+          one is not reported again (CALL_ORIGIN_UNRESOLVED, UNREALIZED_DEPENDENCY): it is held
+          under this finding and judged again once it is fixed. Read Python signatures the same way
+          through its reader, naming parameters in the language's snake_case: a code `document_id`
+          is the contract's `documentId`
         type: local
       - stepNumber: 8
         description: >-
@@ -2162,30 +2215,38 @@ methods:
           off the path before matching (source_file_facts.routePrefixes), where exactly one settles.
           Routers resolving to the same entry in the same files are one router, read once against
           every Portal naming it, however each linkage spells it. A Portal that binds HTTP endpoints
-          and names no router, while a file of its implementation is read at exact grade, is
-          reported once as ROUTER_UNDECLARED (notice; site router), naming what its files hold, each
-          spelled as the linkage accepts it — an exported router or table by its name, a method of
-          an exported class as `Class.method`, an exported entry calling into a router of its file —
-          and, apart, what reads as a router or a table but is not exported, to be exported before
-          it can be named: its routes are checked against nothing, and that is said, never left
-          silent. A router linkage naming a declaration of an exact-grade file that holds neither a
-          function body nor a route table is reported as unread (step 4); one naming nothing the
-          module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router naming a route
-          TABLE that no table of the exact-grade code spreads and that spreads none itself, where a
-          sibling table spreading other tables of its module (source_file_facts.tableSpreads, in
-          that module or through an import binding in another) leaves it out, is reported as
-          ROUTER_NOT_DISPATCHED (notice; site the router): if the server dispatches the sibling,
-          none of its routes is served, while coverage reading the table itself reads them as
-          served. A Portal binding HTTP endpoints that names no router while its exact-grade files
-          hold what reads as a router or a route table is ROUTES_UNCHECKED (warning; site router;
-          units each spelling `router:` accepts) — route-bearing code no check read; only where its
-          files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method
-          by method, its realizing class's public methods judged by UNDECLARED_PUBLIC_MEMBER
+          and names no router, while a file of its implementation is read at exact grade or by a
+          reader of routes, is reported once as ROUTER_UNDECLARED (notice; site router), naming what
+          its files hold, each spelled as the linkage accepts it — an exported router or table by
+          its name, a method of an exported class as `Class.method`, an exported entry calling into
+          a router of its file — and, apart, what reads as a router or a table but is not exported,
+          to be exported before it can be named: its routes are checked against nothing, and that is
+          said, never left silent. A router linkage naming a declaration of an exact-grade file that
+          holds neither a function body nor a route table is reported as unread (step 4); one naming
+          nothing the module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router
+          naming a route TABLE that no table of the exact-grade code spreads and that spreads none
+          itself, where a sibling table spreading other tables of its module
+          (source_file_facts.tableSpreads, in that module or through an import binding in another)
+          leaves it out, is reported as ROUTER_NOT_DISPATCHED (notice; site the router): if the
+          server dispatches the sibling, none of its routes is served, while coverage reading the
+          table itself reads them as served. A Portal binding HTTP endpoints that names no router
+          while its files read at exact grade or by a reader of routes hold what reads as a router
+          or a route table is ROUTES_UNCHECKED (warning; site router; units each spelling `router:`
+          accepts) — route-bearing code no check read; only where its files hold none is it the
+          notice ROUTER_UNDECLARED, the Portal then read as served method by method, its realizing
+          class's public methods judged by UNDECLARED_PUBLIC_MEMBER. A file the Python reader read
+          routes in (source_file_facts.reads includes routes) is read the same way: a bare name or
+          `<module>#<name>` names a router object, a module alone every router object of it (the
+          keys of source_file_facts.functionRoutes and its unreadRouters), a router object listed in
+          unreadRouters is unread (step 4), and its router objects are what its files hold that
+          reads as a router
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
         type: branch
-        condition: the entry's file was read at exact grade
+        condition: >-
+          the entry's file was read at exact grade, or by a reader whose reads include routes (the
+          Python reader)
         onTrueStep: 3
         onFalseStep: 7
       - stepNumber: 3
@@ -2232,8 +2293,9 @@ methods:
       - stepNumber: 7
         label: silent
         description: >-
-          Say nothing. Below exact grade a guard cannot be read as a route, and the file's grade is
-          already on every other finding about it
+          Say nothing. Below exact grade a guard cannot be read as a route — a reader of routes
+          aside, which reads decorators rather than guards — and the file's grade is already on
+          every other finding about it
         type: return
         outcome: unjudged
     symbol: check
@@ -2461,4 +2523,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-27T18:08:10.814Z'
+updatedAt: '2026-10-29T16:38:43.742Z'

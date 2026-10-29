@@ -376,6 +376,34 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: renderTypeDiagrams
+  - name: generateComponentDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: renderComponents
+  - name: generateSequenceDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: renderSequence
+  - name: generateDiagramSet
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: renderSet
+  - name: diagramSetIndex
+    narrative:
+      - stepNumber: 1
+        description: Forward to the architecture diagrams
+        type: call
+        targetComponent: architecture_diagrams
+        targetMethod: indexSet
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T23:58:19.781Z'
+updatedAt: '2026-10-29T09:36:53.772Z'

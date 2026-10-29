@@ -172,11 +172,13 @@ methods:
           approval
         onFalseStep: 10
       - stepNumber: 9
-        description: Reject the lock; nothing is requested
+        description: >-
+          Reject the lock; nothing is requested. The refusal names where project:write was decided,
+          so a read-only key's refusal says the key is read-only
         type: throw
         error: >-
           Forbidden — caller may not lock this project: approving it needs approval:decide,
-          requesting it needs project:write
+          requesting it needs project:write (project:write decided at <the rung that decided it>)
       - stepNumber: 10
         description: >-
           Read the subsystem rungs the caller meets in the project through the authorization seam: a
@@ -709,4 +711,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-20T09:22:03.364Z'
+updatedAt: '2026-10-28T20:16:10.990Z'

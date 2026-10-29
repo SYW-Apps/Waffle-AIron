@@ -46,7 +46,7 @@ import type { ExternalStatus } from '../models/index.js';
 import { readExternalSource } from '../models/project.js';
 import type {
   DevStatus,
-  ApiKeyRecord,
+  OwnTokenSummary,
   ApprovalDecision,
   ApprovalRequest,
   AuditEvent,
@@ -3051,7 +3051,7 @@ function revokeAgentToken(cfg: HostConfig, sessionId: string, tokenId: string): 
 
 /** List the caller's own MCP tokens (redacted); forwards to
  *  web_admin_orchestrator.listMyTokens. */
-function listAgentTokens(cfg: HostConfig, sessionId: string): ApiKeyRecord[] {
+function listAgentTokens(cfg: HostConfig, sessionId: string): OwnTokenSummary[] {
   return webadmin.listMyTokens(cfg, sessionId);
 }
 

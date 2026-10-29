@@ -425,12 +425,18 @@ export interface SourceFileFacts {
   /**
    * Runtime import/require module specifiers (dependency-conformance fuel).
    * Type-only imports and export-from specifiers are excluded — type coupling
-   * is allowed by default, and re-exporting is surface republication, not
-   * collaboration.
+   * is allowed by default, and a runtime re-export is read from
+   * reexportBindings and namespaceReexports instead.
    */
   imports: string[];
-  /** Module specifiers of export-from declarations (surface republication). */
+  /**
+   * Module specifiers of export-from declarations, type-only ones included:
+   * what realizes a declared forwarding edge. Which of them carry code is read
+   * from reexportBindings and namespaceReexports.
+   */
   reexports: string[];
+  /** Runtime `export * as name from` specifiers: a module's whole namespace republished under one name. Exact grade only. */
+  namespaceReexports?: string[];
   /**
    * What each export-from declaration republishes, name by name: a named one
    * with both sides of its rename (`export { a as b } from 'm'` publishes `b`
@@ -638,6 +644,14 @@ export interface SourceFileFacts {
    */
   routePrefixes?: Record<string, string>;
   /**
+   * The router objects the Python reader found whose routes it could not all
+   * settle — a path, a prefix or a methods list that is no string literal or
+   * module constant bound to one, an include it cannot follow to an analyzed
+   * module's router, an application it mounts. Such a router records no
+   * routes at all, so a router linkage naming it is reported as unread.
+   */
+  unreadRouters?: string[];
+  /**
    * The names each top-level const spreads into itself, by const name —
    * `routes = [...ingestRoutes, ...statsRoutes]` spreads ingestRoutes and
    * statsRoutes — as the code spells them (a local table or an import
@@ -750,7 +764,7 @@ export type ClassMemberKind = 'method' | 'accessor' | 'property' | 'constructor'
 export type ClassMemberAccess = 'public' | 'protected' | 'private' | 'hash';
 
 /** One conformance check a reader's facts are fuel for (SourceFileFacts.reads). */
-export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls';
+export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls' | 'routes' | 'types';
 
 /**
  * One member a top-level named class declares, as its public surface reads it:
@@ -905,6 +919,17 @@ export interface CodeModel {
    * found no such file.
    */
   outsideNames?: string[];
+  /**
+   * The identifiers of outsideNames written only in the walked files the type
+   * checker did not read: files in a language no checker reads and, when no
+   * checker reading was made, every walked file. A TypeScript or JavaScript
+   * file the checker read is judged by where its calls and references land
+   * (reachedCalls), and one reaching none of the run's files can reach no
+   * declaration of the run, so neither adds a name here. What a public
+   * function or method nothing uses is told apart by; it may only ever exempt
+   * a name. Absent when no such file was walked.
+   */
+  uncheckedOutsideNames?: string[];
 }
 
 /**
@@ -917,6 +942,18 @@ export interface ModuleImports {
   packages: string[];
   /** Each project source file an import of the file resolves to, by canonical key. */
   files: string[];
+  /** Each value name the file imports by name from a project source file, as that file exports it (`import { a as b }` takes `a`): what an import of a name from its file is read from. Absent when it imports none. */
+  names?: ImportedName[];
+}
+
+/** imported_name — one value a source file imports from a project source file: by name as that file exports it (`import { a as b }` takes `a`), a default import as `default`, a namespace import as `*`. */
+export interface ImportedName {
+  /** The name as the imported file exports it: `default` for a default import, `*` for a namespace import. */
+  name: string;
+  /** The project source file it is imported from, by canonical key. */
+  file: string;
+  /** The project files the checker resolves its declaration to through every re-export (a namespace's value exports' files); a type is left out. Absent when it lands in no project file. */
+  declaredIn?: string[];
 }
 
 /**

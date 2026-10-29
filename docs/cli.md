@@ -131,11 +131,13 @@ warnings as errors (notices are printed and counted, never fatal).
   (where annotated), public members, imports, calls, routes, data types`;
   `python: 4 file(s) at grade pattern with its signature reader, checked methods,
   params, returns (where annotated), public members, imports, calls through
-  declared receivers — not checked: routes, data types`; a language read by its
-  pattern table alone checks methods only and names everything else. A family run
-  prints each project's reading under its verdict, and the closing line repeats it
-  in a few words (`Code checked: python pattern (not checked: routes, data
-  types); typescript exact.`) — a pass never implies more was checked than was.
+  declared receivers, routes, data types (of declarative data classes)`; a
+  language read by its pattern table alone checks methods only and names
+  everything else. A family run prints each project's reading under its verdict,
+  and the closing line repeats it in a few words (`Code checked: python pattern;
+  rust pattern (not checked: params, returns, public members, imports, calls,
+  routes, data types); typescript exact.`) — a pass never implies more was
+  checked than was.
   Routes are read only out of a router a Portal names (`router:`), so where an
   HTTP Portal names none the line says `routes where a router is named` and
   counts it among what was not checked (`not checked: routes of 1 HTTP Portal(s)
@@ -144,7 +146,10 @@ warnings as errors (notices are printed and counted, never fatal).
 - What it never checks is behaviour: the reading compares the code's structure and
   linkage with the design (which methods, signatures, imports, calls and routes exist),
   not what a method computes. A business rule deleted from a method body that keeps
-  its signature and its calls passes; tests catch that, the gate does not.
+  its signature and its calls passes; tests catch that, the gate does not. The
+  same goes for HOW a narrated call runs: a call step marked `detach: true` that
+  the code awaits, and an error-isolation (`try`) step whose try/catch the code
+  dropped, both pass, since only the call itself is compared.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -152,9 +157,15 @@ warnings as errors (notices are printed and counted, never fatal).
   edge are held under that finding until the return is fixed).
   A public method of a component's realizing class, or a function or class its
   file exports, that no contract declares and nothing in the project uses — no
-  call in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
+  call in its file, no other file or test using it — is `UNDECLARED_PUBLIC_MEMBER`
   (private, protected, `#private`, underscore-prefixed, static, accessor,
-  `override`, constructor, protocol and lifecycle members are exempt).
+  `override`, constructor, protocol and lifecycle members are exempt). Where the
+  TypeScript checker reads the using file (a test or a composition root among
+  them, once its imports reach the project's code), a use is a call or reference
+  that lands on that very declaration: a same-named method of another class is
+  none, and a TypeScript or JavaScript file that imports none of the project's
+  code uses nothing. A file no checker reads, such as a Python test, uses a name
+  by writing it, and an exported class is used wherever its name is written.
   What a method's narrative says about its calls is judged by how much it
   states. **Stated detail is binding:** a method whose `detail` (`full` or
   `calls-only`) is set on the method or its implementation, or that declares
@@ -172,7 +183,26 @@ warnings as errors (notices are printed and counted, never fatal).
   `UNDECLARED_DEPENDENCY`. Python is read by its signature reader: parameter
   names (in snake_case, so the contract's `documentId` is `document_id`),
   annotations, return annotations, public members and imports are judged like
-  TypeScript's. A component importing a Portal that depends on it and calls it is
+  TypeScript's. Its routes are read off the route decorators of FastAPI,
+  APIRouter, Flask, Blueprint, Quart and Sanic objects (`@app.get("/x")`,
+  `@bp.route("/x", methods=["POST"])`), under the prefixes their construction
+  and their includes state (`APIRouter(prefix=…)`, `include_router`,
+  `Blueprint(url_prefix=…)`, `register_blueprint`), followed across modules; a
+  Portal names the router object (`router: app`, `<module>#router`, or a module
+  alone). A router whose path, prefix, methods or include is not a string
+  literal or a module constant holding one, or that mounts an application, is
+  `UNREADABLE_ROUTER`, never read in part. Its data types are the fields of
+  dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
+  and attrs classes, compared with the type's by name in either casing: a field
+  may be absent when it has a default or a default factory, is `NotRequired`,
+  or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
+  required, as in Pydantic v2. A plain class, a model built by a call and a
+  type alias are not read. A declared edge between two Python components is
+  `UNREALIZED_DEPENDENCY` unless one imports the other (an import of a package
+  whose `__init__.py` no component realizes reaches every file in it) or a file
+  of the source calls a method of the target's contract through a field or a
+  name, which is what a collaborator injected through a Protocol writes; an
+  edge between a TypeScript and a Python component is not judged. A component importing a Portal that depends on it and calls it is
   `UNDECLARED_DEPENDENCY` on the importer, in either language: only a server
   importing a Portal mounted onto it, which the Portal does not call, is the
   declared edge read in reverse.
@@ -266,6 +296,20 @@ warnings as errors (notices are printed and counted, never fatal).
   in `project.yaml` reports the two notices as errors, for a CI that must say
   every designed implementation has code. It is code-conformance configuration,
   outside the approval identity: flipping it never stales a lock (see `lock-check`).
+- **Code nobody designed.** `rules.conformance.sourceRoots` in `project.yaml`
+  lists where this project's own code lives (project-relative; a folder is
+  walked recursively, a file names itself). Files under the roots are read when
+  the gate judges code, so a use or a wiring in a file no spec names still
+  counts, and each such file is `UNCLAIMED_SOURCE_FILE` (warning) until a spec
+  names it as a `sourcePath`. `rules.conformance.exclude` leaves paths inside a
+  root out (vendored or generated code), `rules.conformance.unclaimed` carries
+  today's unclaimed files as debt (the list only shrinks: an entry that is now
+  claimed or no longer found is `STALE_UNCLAIMED_ENTRY`), and
+  `rules.conformance.testRoots` names test folders, which are not claimed. A
+  pure re-export barrel, a file that only re-exports other modules, declares
+  nothing of its own and is not reported, once exact-grade analysis proves it
+  one; a file it cannot prove is judged like any other. Declaring no root walks
+  nothing.
 - **Types are linked to code too.** A type spec without a `sourcePath` is
   `MISSING_TYPE_SOURCE_PATH` — a notice before its subsystem has code, a
   warning after. Plan a type's `sourcePath` when you plan the implementations'.
@@ -281,7 +325,11 @@ warnings as errors (notices are printed and counted, never fatal).
 - **Code that crosses the design.** A call through a constructor-injected
   collaborator is collaboration whatever the import's form: when its type comes
   from a component the caller never declared, even through `import type`, it is
-  `UNDECLARED_DEPENDENCY`; a Portal calling a write- or lifecycle-effect method
+  `UNDECLARED_DEPENDENCY`. So is a re-export of another component's code
+  (`export { x } from`, `export * from`, `export * as ns from`; a type-only
+  one republishes no code), and a name imported through a barrel no component
+  realizes, which is charged to the file the type checker resolves it to; a
+  Portal calling a write- or lifecycle-effect method
   of a Repository, Index, Store or Registry is
   `PORTAL_WRITE_SHORTCUT_IN_CODE` (error, the code twin of
   `PORTAL_WRITE_SHORTCUT`). A Portal's calls are resolved by the TypeScript
@@ -356,7 +404,14 @@ realizes it, in order. A framework handler is green without any design change:
   fails closed on them, as it does on an `any` receiver. A scalar (a string, a
   number, a boolean, a date) realized by an `any`-typed parameter the body reads
   as an object (`args.habitId` where the contract declares `date`) is
-  `PARAM_TYPE_MISMATCH` too; one read only as the scalar it is is not.
+  `PARAM_TYPE_MISMATCH` too; one read only as the scalar it is is not. A scalar
+  parameter the code annotates as ANOTHER scalar (`authorId: number` where the
+  contract declares a string, a Python `text: int`) is `PARAM_TYPE_MISMATCH`,
+  naming both types, whatever either side calls it. The spellings a scalar is
+  written as agree: TypeScript's `number` for an int or a float, a date, a
+  datetime or a duration as a string, a `Date` or a number, an enum as a string,
+  a named scalar as what it holds, and optionality set aside. A union, a named
+  type the design does not know and `any` are not compared.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the
@@ -1733,7 +1788,7 @@ own.
 
 | Route | Takes | Answers |
 |---|---|---|
-| `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set) and `ownerSubject`. The plaintext key is never in the list |
+| `GET /web/tokens` | nothing | `200` `{ "tokens": [...] }`: the caller's own keys, each with `id`, `projects`, `createdAt`, `label`, `expiresAt` (when set), `ownerSubject` and `readOnly` (`true` for a read-only key). Neither the key nor its hash is in the list |
 | `POST /web/tokens` | JSON `{ "projectId": "<project id>", "write": true \| false }` | `201` `{ "token": "wk_…" }`. The key is shown once and cannot be read back. `projectId` is required and names one project by its record id (a member is named by its own id, never `project::alias`); `write` is optional and only `true` asks for write access (anything else mints a read-only key). The key is narrowed to that project and acts as its owner: the caller must already hold `project:read` on it (and `project:write` when `write` is `true`), else the answer is `403`. An unknown project answers `404` and an invalid `projectId` `400`, each naming the problem, except to a caller whose own key is narrowed to other projects: it is answered `403` for any project outside its narrowing, whether the project exists or not |
 | `POST /web/tokens/revoke` | JSON `{ "id": "<key id>" }` | `200` `{ "ok": true }`. A key the caller does not own answers `404` as if it did not exist |
 

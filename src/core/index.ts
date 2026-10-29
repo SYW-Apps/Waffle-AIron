@@ -238,11 +238,10 @@ export type { StateId } from './statehash.js';
 // The lock record itself (approval_portal readLockRecord / writeLockRecord).
 // `wairon lock` writes one and `wairon status` reads one; neither is allowed to
 // know where the file lives.
-// The write is the core orchestrator's (a Portal never reaches the lock store's
-// write itself); the read is the store's own function, which the orchestrator
-// binds and hands through.
-export { readLockRecord } from './lockfile.js';
-export { writeLockRecord } from './specs.js';
+// Both come from the core orchestrator (a Portal never reaches the lock store
+// itself); the read is the store's own function, which the orchestrator binds
+// and hands through.
+export { readLockRecord, writeLockRecord } from './specs.js';
 export type { LockRecord, MemberPin } from './lockfile.js';
 
 // The rendered architecture diagram (spec_tree_portal renderDiagram) — one string
@@ -260,30 +259,18 @@ export type { TypeDiagram, TypeDiagramScope } from './diagram.js';
 // snapshots.
 export { buildCanvasDataModel } from './diagram.js';
 
-// THE REST OF THE DIAGRAM SURFACE — NOT contract methods, and reported as a
-// gap rather than papered over.
-//
-// `ispec_tree_portal` names `renderDiagram`; `iarchitecture_diagrams` names `render`
-// and `buildGraphModel`. These seven are none of those, and no spec anywhere
-// names them — yet `wairon diagram --all|--sequence|--subsystem` and
-// `wairon host demo` are built out of them, and cli_core_adapter depends on
-// core's portals alone, so this barrel is the only route that does not make
-// sdd_cli import an sdd_core module.
-//
-// They are published here under their own heading, separate from the contract
-// above, so the gap is legible instead of hiding inside a star export: the
-// honest fix is to model them (on this contract or on a diagram portal of their
-// own), not to keep the star that concealed that they were never designed. The
-// barrel-surface test carries this list as a shrink-only ratchet — a new name
-// cannot join it without a spec.
+// The scoped diagrams and the whole set (spec_tree_portal generateComponentDiagram,
+// generateSequenceDiagram, generateDiagramSet, diagramSetIndex), forwarded by
+// identity to the architecture diagrams' renderComponents, renderSequence,
+// renderSet and indexSet; toMarkdown is DiagramFile's own pure method.
 export {
   generateComponentDiagram,
   generateSequenceDiagram,
   generateDiagramSet,
   diagramSetIndex,
   toMarkdown,
-  loadSpecGraph,
 } from './diagram.js';
+export type { ComponentDiagramOptions, SequenceDiagramOptions, DiagramFile } from './diagram.js';
 
 // Domain detection (agent_context_portal detectDomainCandidates) — the detector is its
 // own component, published by identity rather than wrapped. It proposes
@@ -339,18 +326,18 @@ export type { LoadedExtensions, LoadedPackSkill, PackRef, PackScope, PackDiagnos
 export { loadProjectVariants, resolveVariantGuidance } from './variants.js';
 
 // The machine's pack store (extension_portal packStoreDir … uninstallPack) —
-// forwarded from the module that HOLDS them, which is the store adapter. The
-// extension orchestrator binds the same five functions (see ./extensions.js)
-// and publishes the two writes, so this Portal method, the orchestrator's
-// method and the store's function are one function under three names — the
-// identity the forward is worth having.
+// forwarded from the extension orchestrator, which binds the same five
+// functions from the store adapter and publishes them, so this Portal method,
+// the orchestrator's method and the store's function are one function under
+// three names — the identity the forward is worth having — and the Portal
+// never reaches the Adapter itself.
 export {
   packStoreDir,
   listInstalledPacks,
   resolveInstalledPack,
   installPackFromDirectory,
   uninstallPack,
-} from './packstore.js';
+} from './extensions.js';
 export type { InstalledPack } from './packstore.js';
 
 // The agent topology as the spec tree and the registry describe it (agent_context_portal

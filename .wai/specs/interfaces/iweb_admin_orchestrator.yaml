@@ -111,8 +111,8 @@ methods:
     description: >-
       Return the caller's own minted MCP tokens (redacted) by forwarding to
       identity_orchestrator.listSelfTokens with the session as the credential.
-    signature: 'listMyTokens(sessionId: string): list<ApiKeyRecord>'
-    returns: list<ApiKeyRecord>
+    signature: 'listMyTokens(sessionId: string): list<OwnTokenSummary>'
+    returns: list<OwnTokenSummary>
     params:
       - name: sessionId
         type: string
@@ -253,4 +253,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-10-19T22:11:43.035Z'
+updatedAt: '2026-10-28T20:16:05.628Z'

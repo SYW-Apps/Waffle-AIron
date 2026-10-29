@@ -234,6 +234,206 @@ methods:
           types/ungrouped.md, each with its title
         type: return
         outcome: drawn
+  - name: renderComponents
+    narrative:
+      - stepNumber: 1
+        description: 'Read the spec graph: load the system spec, whose name titles the diagram'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load the subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load the component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load the interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load the implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Is the diagram scoped to a subsystem?
+        type: branch
+        condition: options.subsystem is set
+        onFalseStep: 10
+      - stepNumber: 7
+        description: Take the components of that subsystem and of the subsystems nested under it
+        type: local
+      - stepNumber: 8
+        description: Does the scope hold a component?
+        type: branch
+        condition: a component is in the subsystem or one nested under it
+        onFalseStep: 13
+      - stepNumber: 9
+        description: >-
+          Add each component outside the scope that depends on or owns one inside it, or that one
+          inside depends on or owns
+        type: local
+      - stepNumber: 10
+        description: >-
+          Group the drawn components into one subgraph per subsystem, each node with its name and
+          stereotype, a published one marked
+        type: local
+      - stepNumber: 11
+        description: >-
+          Draw each owns edge between drawn components dotted and each dependsOn edge solid, thick
+          where it crosses a subsystem boundary, under a title naming the system and the scope
+        type: local
+      - stepNumber: 12
+        description: Answer the Mermaid flowchart
+        type: return
+      - stepNumber: 13
+        description: Refuse a scope that holds no component
+        type: throw
+        error: Error
+    symbol: generateComponentDiagram
+  - name: renderSequence
+    narrative:
+      - stepNumber: 1
+        description: 'Read the spec graph: load the system spec'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load the subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load the component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load the interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load the implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: 'Find the entry component: by its id, or a bare id matching exactly one qualified component'
+        type: local
+      - stepNumber: 7
+        description: Is the component in the tree?
+        type: branch
+        condition: the id, or exactly one qualified component's suffix, names a component
+        onFalseStep: 12
+      - stepNumber: 8
+        description: Does one of its implementations narrate the method?
+        type: branch
+        condition: an implementation of the component's contracts holds the method
+        onFalseStep: 13
+      - stepNumber: 9
+        description: >-
+          Open the sequence diagram, declaring each participant with its stereotype as it is first
+          reached
+        type: local
+      - stepNumber: 10
+        description: >-
+          Walk the narrative step by step: a call, or a dispatch through a Portal's table to the
+          component it binds, is an arrow to the callee, open when detached, and within the depth
+          (three unless asked) and never into its own component the callee's narrative is walked in
+          turn and answers a return; a register step is a dashed handoff; a loop, try or parallel
+          region with an end step is a loop, critical or par fragment; any other step is a note on
+          the lifeline; a method reached again on the same path is cut with a note
+        type: local
+      - stepNumber: 11
+        description: Answer the Mermaid sequence diagram
+        type: return
+      - stepNumber: 12
+        description: Refuse a component the tree does not hold
+        type: throw
+        error: Error
+      - stepNumber: 13
+        description: Refuse a method with no narrative, saying to write one first
+        type: throw
+        error: Error
+    symbol: generateSequenceDiagram
+  - name: renderSet
+    narrative:
+      - stepNumber: 1
+        description: 'Read the spec graph: load the system spec, whose name titles the system diagram'
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSystemSpec
+      - stepNumber: 2
+        description: Load the subsystem specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 3
+        description: Load the component specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadComponentSpecs
+      - stepNumber: 4
+        description: Load the interface specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadInterfaceSpecs
+      - stepNumber: 5
+        description: Load the implementation specs
+        type: call
+        targetComponent: spec_loader
+        targetMethod: loadImplementationSpecs
+      - stepNumber: 6
+        description: Draw the system's component diagram, unscoped, at system.md
+        type: local
+      - stepNumber: 7
+        description: Draw each subsystem that holds a component
+        type: loop
+        over: the subsystems holding a component, their own or a nested subsystem's
+        endStep: 8
+      - stepNumber: 8
+        description: 'Draw its scoped component diagram at subsystems/<its id, :: written as -->.md'
+        type: local
+      - stepNumber: 9
+        description: Draw the sequence of each entry method
+        type: loop
+        over: >-
+          every narrated method of the implementations of each Portal, Observer and published
+          component, each component once
+        endStep: 10
+      - stepNumber: 10
+        description: >-
+          Draw its sequence at the default depth at sequences/<the component id, :: written as
+          -->.<the method>.md
+        type: local
+      - stepNumber: 11
+        description: Add the type diagrams, each at the path renderTypeDiagrams gives it
+        type: local
+      - stepNumber: 12
+        description: Answer the files, the system diagram first
+        type: return
+    symbol: generateDiagramSet
+  - name: indexSet
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Title the index after the system and say it is generated from the spec tree, the same
+          source the conformance gate reads, to be regenerated after a spec change
+        type: local
+      - stepNumber: 2
+        description: List each file as a link carrying its title, its path written with forward slashes
+        type: local
+      - stepNumber: 3
+        description: Answer the Markdown
+        type: return
+    symbol: diagramSetIndex
 lint:
   allow:
     - code: UNDECLARED_DEPENDENCY
@@ -250,4 +450,4 @@ lint:
         above, in the same refactor.
 status: complete
 createdAt: '2026-07-04T15:59:34.318Z'
-updatedAt: '2026-10-26T23:58:17.405Z'
+updatedAt: '2026-10-29T09:39:04.494Z'

@@ -4,6 +4,105 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.5.0 (from v6.4.0)
+
+Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported
+functions or methods, dependencies and parameter types it used to let pass (see Changed), so
+`wairon validate --ci` may fail on code that passed under 6.4.0. Python code is now checked for
+routes, data types and declared dependencies too. Each finding names the verb, the edge, the route,
+the field or the parameter, and its file.
+
+1. Install 6.5.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.5.0` (or `--save-dev` in the project) for npm.
+2. Run `wairon doctor --fix` once, so the generated guides (`.wai/context/wairon-guide.md`,
+   `.claude/CLAUDE.md` and their kin) describe 6.5.0, and commit the result.
+3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
+   to the new wairon.
+4. Run `wairon validate --ci` and settle what it reports: declare what the code really does, or
+   change the code to what the design says.
+
+### Changed
+
+- **A scalar parameter's type is compared.** A parameter the code annotates as another scalar than
+  its contract declares (`authorId: number` for a `string`, a Python `text: int`) is now
+  `PARAM_TYPE_MISMATCH`, naming both types, as a return type already was. TypeScript's `number` for
+  an int, a date written as a string, an enum as a string and a named scalar as what it holds still
+  agree; a union or a type the design does not know is not compared.
+
+- **Python routes, data types and dependencies are checked.** Python's code reading used to say
+  "not checked: routes, data types", and a declared edge between two Python components was never
+  judged. Now:
+  - A Python Portal's routes are read off the route decorators of FastAPI, APIRouter, Flask,
+    Blueprint, Quart and Sanic objects, under the prefixes of their construction and of the
+    `include_router` / `register_blueprint` calls that bring them in, across modules. They are
+    compared with the Portal's HTTP endpoints like TypeScript routes (`UNDECLARED_ROUTE`,
+    `UNROUTED_ENDPOINT`). Name the router object in `router:`. A router with a path, prefix,
+    methods list or include that is not a string literal or a module constant holding one, or that
+    mounts an application, is `UNREADABLE_ROUTER`. A Python Portal with HTTP endpoints that names
+    no router now gets `ROUTES_UNCHECKED` or `ROUTER_UNDECLARED`.
+  - The fields of dataclass, Pydantic, `TypedDict`, `NamedTuple` and attrs classes are compared
+    with their type spec's (`UNREALIZED_TYPE_FIELD`, `UNDECLARED_TYPE_FIELD`,
+    `TYPE_FIELD_OPTIONALITY`), names compared in either casing. `Optional[T]` alone means nullable,
+    not optional, as in Pydantic v2. Plain classes are not read.
+  - A declared dependency between two Python components is `UNREALIZED_DEPENDENCY` unless one
+    imports the other, or calls a method of the other's contract through a field or a variable (a
+    collaborator injected through a Protocol).
+
+- **A re-export is a dependency.** A file that re-exports another component's code
+  (`export { x } from`, `export * from`, `export * as ns from`) now needs the same declared relation
+  as one that imports it, and `UNDECLARED_DEPENDENCY` reports it otherwise. A name imported through a
+  barrel that no component realizes is charged to the file where the type checker finds it
+  declared. A type-only re-export republishes no code and is still never reported.
+- **The diagram API is designed.** The scoped and whole-set Mermaid diagrams behind
+  `wairon diagram --subsystem`, `--sequence` and `--all` are now declared contract methods of the
+  core Portal (`generateComponentDiagram`, `generateSequenceDiagram`, `generateDiagramSet`,
+  `diagramSetIndex`), with `ComponentDiagramOptions`, `SequenceDiagramOptions` and `DiagramFile` as
+  types. `loadSpecGraph` is no longer exported from the library entry.
+
+- **A test's uses are read like any other code's.** A test, a composition root or another
+  TypeScript or JavaScript file that no spec names used to keep an undeclared exported function or
+  method from `UNDECLARED_PUBLIC_MEMBER` by writing its name anywhere, even as a method of another
+  class. The type checker now reads such a file when its imports reach the project's code, and it
+  counts as a use only when a call or reference lands on that very declaration, through a barrel
+  included, or when the file imports the name from the file that exports it. A script file that imports none of the project's code no longer exempts anything. Files
+  in a language no checker reads still exempt a name by writing it, and an exported class is judged
+  as before.
+- **The own-key list shows less.** `GET /web/tokens` (the Agents page) answers each key's id,
+  projects, creation and expiry time, label, owner and `readOnly`, and no longer the key's hash or
+  who minted it.
+- **A refused lock says why.** A lock refused because the caller may not write the project now
+  names where that was decided, so a read-only key's refusal says the key is read-only.
+
+### Docs
+
+- `rules.conformance.sourceRoots`, `exclude`, `unclaimed` and `testRoots` are described under
+  `wairon validate`, with the exemption for a file that only re-exports other modules.
+
+### Known limitations
+
+- The code-vs-design gate compares a narrated call, not how it runs: code that awaits a call step
+  marked `detach: true`, or drops the try/catch of an error-isolation (`try`) step, passes.
+- A call to another project's component through a binding module is not judged against that
+  project's code, and the `CALL_TARGET_PLANNED` notice says the target plans no file even once its
+  code exists.
+- Python routes are read only from route decorators on router objects: a handler that matches
+  paths in its own body (`if path == …`) is not read, and its Portal gets `ROUTER_UNDECLARED`.
+  Calls a Python method makes that its narrative does not name are not reported.
+- `sdd_move_spec` cannot move a component, a type or a group into a part's subsystem; re-create the
+  spec there and delete the old one. (Carried from 6.3.0.)
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores and the CLI's
+  own files, 60 s for the spec tree) can be taken over while it still works; its final write is
+  refused, which narrows the window but does not close it. (Carried from 6.2.0.)
+- `wairon mcp install` does not lock the agent's configuration file, which the agent tools write
+  without wairon's lock; it re-reads the file just before writing. (Carried from 6.3.0.)
+- A member project's own `wairon validate` does not show the network findings judged at the family
+  root (`EXPORT_BEYOND_NETWORK`, `GATEWAY_BYPASSED`); run `wairon validate` at the family root to
+  read them. (Carried from 6.2.0.)
+- The code-vs-design gate does not report external I/O or libraries a component uses: I/O outside
+  an Adapter passes `validate --ci`. (Carried from 6.1.3.)
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins. (Carried from 6.1.3.)
+
 ## v6.4.0 (from v6.3.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported
