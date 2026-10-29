@@ -644,6 +644,14 @@ export interface SourceFileFacts {
    */
   routePrefixes?: Record<string, string>;
   /**
+   * The router objects the Python reader found whose routes it could not all
+   * settle — a path, a prefix or a methods list that is no string literal or
+   * module constant bound to one, an include it cannot follow to an analyzed
+   * module's router, an application it mounts. Such a router records no
+   * routes at all, so a router linkage naming it is reported as unread.
+   */
+  unreadRouters?: string[];
+  /**
    * The names each top-level const spreads into itself, by const name —
    * `routes = [...ingestRoutes, ...statsRoutes]` spreads ingestRoutes and
    * statsRoutes — as the code spells them (a local table or an import
@@ -756,7 +764,7 @@ export type ClassMemberKind = 'method' | 'accessor' | 'property' | 'constructor'
 export type ClassMemberAccess = 'public' | 'protected' | 'private' | 'hash';
 
 /** One conformance check a reader's facts are fuel for (SourceFileFacts.reads). */
-export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls';
+export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls' | 'routes' | 'types';
 
 /**
  * One member a top-level named class declares, as its public surface reads it:
