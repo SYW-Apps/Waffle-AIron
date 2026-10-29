@@ -146,7 +146,10 @@ warnings as errors (notices are printed and counted, never fatal).
 - What it never checks is behaviour: the reading compares the code's structure and
   linkage with the design (which methods, signatures, imports, calls and routes exist),
   not what a method computes. A business rule deleted from a method body that keeps
-  its signature and its calls passes; tests catch that, the gate does not.
+  its signature and its calls passes; tests catch that, the gate does not. The
+  same goes for HOW a narrated call runs: a call step marked `detach: true` that
+  the code awaits, and an error-isolation (`try`) step whose try/catch the code
+  dropped, both pass, since only the call itself is compared.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -401,7 +404,14 @@ realizes it, in order. A framework handler is green without any design change:
   fails closed on them, as it does on an `any` receiver. A scalar (a string, a
   number, a boolean, a date) realized by an `any`-typed parameter the body reads
   as an object (`args.habitId` where the contract declares `date`) is
-  `PARAM_TYPE_MISMATCH` too; one read only as the scalar it is is not.
+  `PARAM_TYPE_MISMATCH` too; one read only as the scalar it is is not. A scalar
+  parameter the code annotates as ANOTHER scalar (`authorId: number` where the
+  contract declares a string, a Python `text: int`) is `PARAM_TYPE_MISMATCH`,
+  naming both types, whatever either side calls it. The spellings a scalar is
+  written as agree: TypeScript's `number` for an int or a float, a date, a
+  datetime or a duration as a string, a `Date` or a number, an enum as a string,
+  a named scalar as what it holds, and optionality set aside. A union, a named
+  type the design does not know and `any` are not compared.
 - **Declare what the framework hands you as wiring.** Name the handles in the
   implementation's `injectedParams` (code linkage: `sdd_update_spec`, no
   re-lock). A name matches with or without its leading `_`, at the start or the

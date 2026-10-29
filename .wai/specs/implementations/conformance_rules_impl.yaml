@@ -2142,37 +2142,44 @@ methods:
           value it is written as) and the code's parameter is opaque as above and the body reads a
           member directly off it that no such value has (parameter_fact.members: `args.habitId`
           where a date is declared), report PARAM_TYPE_MISMATCH too: an object stands in the
-          scalar's place. Otherwise, for a pair whose names differ, report a rename where the
-          declared type agrees: through the file's dialect (source_file_facts.dialect, then
-          type_dialect.agrees on the code's annotation and the contract's canonical type, a named
-          type matching through its code-level name), as the same primitive kind of value (string,
-          number, boolean) of an annotated parameter or one of the kinds a date, a datetime, a
-          duration or bytes is written as, or as an object holding every field of the declared
-          record — naming the contract's former name (its previousNames) when the code still uses
-          it. An EXTERNAL type (alias::name) answers to the name its pinned snapshot gives it under
-          that public name (ctx.pinnedExternals); a MEMBER's type (alias::name of a project the
-          family composes, ctx.projectFamily) to its own type spec in ctx.types, read live — its
-          code name, its kind and its fields — so where a parameter's type lives never decides
-          whether it is compared; anything else to its public name's last segment in the code's type
-          casing. Where nothing decides between a rename and a substitution (no agreeing type, no
-          settled kind, no field, no handle name), the name still differs from the contract's either
-          way: report the rename too, saying the comparison could not be made and that it may also
-          be a different argument — the contract states the name, so it binds. Judge the RETURN
-          beside the parameters: for every contract method whose `returns` is not void, whose
-          function is not a registrar (a narrative register step) nor a void function handed a
-          response handle, and whose every body under the symbol annotates a return
-          (source_file_facts.functionReturns) — at exact grade, or by a reader that read returns
-          (Python) — read each annotation through the file's dialect past `async` on both sides, a
-          named scalar through what it holds, an enum as a string, a date, datetime or duration as
-          the string, Date or number the code writes it as, a name differing only in case and
-          separators as itself; a type the design does not know, or either side does not read, is
-          never accused. When every body disagrees, report RETURN_TYPE_MISMATCH (warning; site the
-          method; unit returns) naming the method, the contract's type and the code's. The drifts
-          are shared, so a caller whose call or declared edge no longer resolves because of one is
-          not reported again (CALL_ORIGIN_UNRESOLVED, UNREALIZED_DEPENDENCY): it is held under this
-          finding and judged again once it is fixed. Read Python signatures the same way through its
-          reader, naming parameters in the language's snake_case: a code `document_id` is the
-          contract's `documentId`
+          scalar's place. And where the contract declares a scalar and the code ANNOTATES the paired
+          parameter as another scalar — each side read as one scalar (a primitive, a named scalar as
+          what it holds, an enum as a string) through the file's dialect as RETURN_TYPE_MISMATCH
+          reads a return, optionality set aside, TypeScript's `number` agreeing with int and float
+          and a date, a datetime or a duration with the string, Date or number it is written as —
+          report PARAM_TYPE_MISMATCH naming both types, the names agreeing or not (a pair already
+          reported as a substitution excepted); a side read as no single scalar (a union, an unknown
+          named type, any) is not compared. Otherwise, for a pair whose names differ, report a
+          rename where the declared type agrees: through the file's dialect
+          (source_file_facts.dialect, then type_dialect.agrees on the code's annotation and the
+          contract's canonical type, a named type matching through its code-level name), as the same
+          primitive kind of value (string, number, boolean) of an annotated parameter or one of the
+          kinds a date, a datetime, a duration or bytes is written as, or as an object holding every
+          field of the declared record — naming the contract's former name (its previousNames) when
+          the code still uses it. An EXTERNAL type (alias::name) answers to the name its pinned
+          snapshot gives it under that public name (ctx.pinnedExternals); a MEMBER's type
+          (alias::name of a project the family composes, ctx.projectFamily) to its own type spec in
+          ctx.types, read live — its code name, its kind and its fields — so where a parameter's
+          type lives never decides whether it is compared; anything else to its public name's last
+          segment in the code's type casing. Where nothing decides between a rename and a
+          substitution (no agreeing type, no settled kind, no field, no handle name), the name still
+          differs from the contract's either way: report the rename too, saying the comparison could
+          not be made and that it may also be a different argument — the contract states the name,
+          so it binds. Judge the RETURN beside the parameters: for every contract method whose
+          `returns` is not void, whose function is not a registrar (a narrative register step) nor a
+          void function handed a response handle, and whose every body under the symbol annotates a
+          return (source_file_facts.functionReturns) — at exact grade, or by a reader that read
+          returns (Python) — read each annotation through the file's dialect past `async` on both
+          sides, a named scalar through what it holds, an enum as a string, a date, datetime or
+          duration as the string, Date or number the code writes it as, a name differing only in
+          case and separators as itself; a type the design does not know, or either side does not
+          read, is never accused. When every body disagrees, report RETURN_TYPE_MISMATCH (warning;
+          site the method; unit returns) naming the method, the contract's type and the code's. The
+          drifts are shared, so a caller whose call or declared edge no longer resolves because of
+          one is not reported again (CALL_ORIGIN_UNRESOLVED, UNREALIZED_DEPENDENCY): it is held
+          under this finding and judged again once it is fixed. Read Python signatures the same way
+          through its reader, naming parameters in the language's snake_case: a code `document_id`
+          is the contract's `documentId`
         type: local
       - stepNumber: 8
         description: >-
@@ -2516,4 +2523,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-29T11:39:03.985Z'
+updatedAt: '2026-10-29T16:38:43.742Z'
