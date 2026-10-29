@@ -78,6 +78,31 @@ the field or the parameter, and its file.
 - `rules.conformance.sourceRoots`, `exclude`, `unclaimed` and `testRoots` are described under
   `wairon validate`, with the exemption for a file that only re-exports other modules.
 
+### Known limitations
+
+- The code-vs-design gate compares a narrated call, not how it runs: code that awaits a call step
+  marked `detach: true`, or drops the try/catch of an error-isolation (`try`) step, passes.
+- A call to another project's component through a binding module is not judged against that
+  project's code, and the `CALL_TARGET_PLANNED` notice says the target plans no file even once its
+  code exists.
+- Python routes are read only from route decorators on router objects: a handler that matches
+  paths in its own body (`if path == …`) is not read, and its Portal gets `ROUTER_UNDECLARED`.
+  Calls a Python method makes that its narrative does not name are not reported.
+- `sdd_move_spec` cannot move a component, a type or a group into a part's subsystem; re-create the
+  spec there and delete the old one. (Carried from 6.3.0.)
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores and the CLI's
+  own files, 60 s for the spec tree) can be taken over while it still works; its final write is
+  refused, which narrows the window but does not close it. (Carried from 6.2.0.)
+- `wairon mcp install` does not lock the agent's configuration file, which the agent tools write
+  without wairon's lock; it re-reads the file just before writing. (Carried from 6.3.0.)
+- A member project's own `wairon validate` does not show the network findings judged at the family
+  root (`EXPORT_BEYOND_NETWORK`, `GATEWAY_BYPASSED`); run `wairon validate` at the family root to
+  read them. (Carried from 6.2.0.)
+- The code-vs-design gate does not report external I/O or libraries a component uses: I/O outside
+  an Adapter passes `validate --ci`. (Carried from 6.1.3.)
+- Plain `wairon validate --ci` at a family root does not compose externals; `wairon validate
+  --family` does, and `lock-check` gates on the pins. (Carried from 6.1.3.)
+
 ## v6.4.0 (from v6.3.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported
