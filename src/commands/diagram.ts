@@ -17,8 +17,9 @@ import {
   generateDiagramSet,
   toMarkdown,
   diagramSetIndex,
-  loadSpecGraph,
-} from './subsystem.js';
+  loadSubsystemSpecs,
+  loadSystemSpec,
+} from './adapters/core.js';
 import { WaironError } from '../utils/errors.js';
 import type { ProjectRelations } from '../models/index.js';
 
@@ -147,7 +148,7 @@ async function writeDiagrams(options: DiagramOptions): Promise<void> {
     throw new WaironError(`--depth takes a whole number of at least 1, and "${String(depth)}" is not one. Nothing was written.`);
   }
   if (formatted.subsystem !== undefined) {
-    const known = loadSpecGraph().subsystems.map((s) => s.id);
+    const known = loadSubsystemSpecs().map((s) => s.id);
     if (!known.some((id) => id === formatted.subsystem || id.startsWith(`${formatted.subsystem}::`))) {
       throw new WaironError(`No subsystem "${formatted.subsystem}" in this tree — ${known.length ? `it holds ${known.join(', ')}` : 'it holds none yet'}. Nothing was written.`);
     }
@@ -221,9 +222,8 @@ async function writeDiagrams(options: DiagramOptions): Promise<void> {
     writeArtifact(path.join(outDir, 'canvas.html'), renderDiagram('canvas', canvasRelations(formatted)));
     writeArtifact(path.join(outDir, 'architecture.drawio'), renderDiagram('drawio'));
     writeArtifact(path.join(outDir, 'architecture.excalidraw'), renderDiagram('excalidraw'));
-    const graph = loadSpecGraph();
     const indexPath = path.join(outDir, 'README.md');
-    writeArtifact(indexPath, diagramSetIndex(files, graph.systemName));
+    writeArtifact(indexPath, diagramSetIndex(files, loadSystemSpec()?.name ?? 'System'));
     logger.success(`Generated ${files.length} diagram(s) + interactive canvas.html + index into ${outDir}`);
     for (const file of files.slice(0, 12)) {
       logger.info(`  ${file.relPath}`);

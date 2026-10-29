@@ -22,6 +22,9 @@ import { ensureDir, listFiles, pathExists, getProjectRoot, renamePath, runWithPr
 import { computeStateId, stateIdEquals, type StateId } from './statehash.js';
 import { canonicalize } from '../utils/canonical-json.js';
 import { readLockRecord, writeLockRecord as persistLockRecord, type LockRecord } from './lockfile.js';
+// icore_orchestrator readLockRecord: the lock store's read, bound by identity and
+// published here so the approval portal forwards to this component, never the store.
+export { readLockRecord };
 import { readYamlFile } from '../utils/yaml.js';
 import { inspectLock as inspectLockFile, listSpecFiles, lockTree as lockTreeFile, readSpecFile, removeSpecFile, unlockTree as unlockTreeFile, writeSpecFile, type TreeLockState } from './spec-files.js';
 // git_source_adapter: a git part is read from the content-addressed fetch cache at its pinned commit (stage 8).
