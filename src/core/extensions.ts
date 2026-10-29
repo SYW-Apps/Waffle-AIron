@@ -26,6 +26,9 @@ export { installPackFromDirectory, uninstallPack };
 // (createMember picks each required pack's highest installed version), so the
 // orchestrator reaches the store through this component, never the adapter.
 export { listInstalledPacks };
+// The two remaining reads iextension_orchestrator forwards (packStoreDir,
+// resolveInstalledPack), published so the core portal forwards all five from here.
+export { packStoreDir, resolveInstalledPack };
 
 // ---------------------------------------------------------------------------
 // Extension packs — wairon's plugin surface.

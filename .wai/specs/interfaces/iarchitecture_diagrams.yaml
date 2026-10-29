@@ -55,8 +55,67 @@ methods:
     signature: 'renderTypeDiagrams(): list<TypeDiagram>'
     returns: list<TypeDiagram>
     params: []
+  - name: renderComponents
+    description: >-
+      Draw the Mermaid component diagram: each component in its subsystem's subgraph with its name
+      and stereotype, a published one marked, its owns edges dotted and its dependsOn edges solid,
+      thick where they cross a subsystem boundary. Scoped to a subsystem, it draws that subsystem's
+      components and the subsystems nested under it, with each component outside that depends on or
+      owns one of them or that one of them depends on or owns, for the boundary's context; a scope
+      holding no component is refused.
+    signature: 'renderComponents(options?: ComponentDiagramOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: ComponentDiagramOptions
+        description: The scope to draw; omitted, the whole system
+        optional: true
+  - name: renderSequence
+    description: >-
+      Draw one method's narrative as a Mermaid sequence diagram, expanding the narratives of the
+      methods it calls and dispatches to down to the depth asked for. An unknown component, or a
+      method with no narrative, is refused.
+    signature: >-
+      renderSequence(componentId: string, methodName: string, options?: SequenceDiagramOptions):
+      string
+    returns: string
+    params:
+      - name: componentId
+        type: string
+        description: >-
+          The component whose method is drawn: its id, or a bare id that matches exactly one
+          qualified component
+      - name: methodName
+        type: string
+        description: The method whose narrative is drawn
+      - name: options
+        type: SequenceDiagramOptions
+        description: How deep the callees are expanded; omitted, three levels
+        optional: true
+  - name: renderSet
+    description: >-
+      Draw the whole diagram set `wairon diagram --all` writes: the system's component diagram, one
+      scoped component diagram per subsystem that holds a component, the sequence of every narrated
+      method of each Portal, Observer and published component, and the type diagrams, each with the
+      path it is written to.
+    signature: 'renderSet(): list<DiagramFile>'
+    returns: list<DiagramFile>
+    params: []
+  - name: indexSet
+    description: >-
+      The Markdown index of a diagram set: titled after the system, saying it is generated from the
+      spec tree, and linking each diagram by its title. Pure.
+    signature: 'indexSet(files: list<DiagramFile>, systemName: string): string'
+    returns: string
+    params:
+      - name: files
+        type: list<DiagramFile>
+        description: The diagrams the index links, in the order listed
+      - name: systemName
+        type: string
+        description: The system the index is titled after
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T15:59:08.698Z'
-updatedAt: '2026-10-26T23:57:40.251Z'
+updatedAt: '2026-10-29T09:36:48.275Z'

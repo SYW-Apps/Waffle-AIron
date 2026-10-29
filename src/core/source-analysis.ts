@@ -1342,6 +1342,10 @@ interface ExactFacts {
    * the barrel publishes.
    */
   namedReexports: { exported: string; local: string; from: string }[];
+  /** Runtime `export * as name from` specifiers: a module's whole namespace republished under one name. */
+  namespaceReexports: string[];
+  /** The `export type * from` specifiers among starExports: they republish types, never code. */
+  typeOnlyStars: Set<string>;
   /**
    * The forwarding bindings the file publishes with no specifier of its own
    * (see SourceFileFacts.exportAliases): runtime export specifiers, and the
@@ -1479,6 +1483,8 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   const reexports = new Set<string>();
   const starExports: string[] = [];
   const namedReexports: { exported: string; local: string; from: string }[] = [];
+  const namespaceReexports: string[] = [];
+  const typeOnlyStars = new Set<string>();
   const exportAliases: ExportAliasFact[] = [];
   /** Property aliases of top-level object literals, kept until the walk knows which objects are exported. */
   const propertyAliases: ExportAliasFact[] = [];
@@ -2423,6 +2429,9 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         }
       } else if (!node.exportClause && spec) {
         starExports.push(spec);
+        if (node.isTypeOnly) typeOnlyStars.add(spec);
+      } else if (node.exportClause && ts.isNamespaceExport(node.exportClause) && spec && !node.isTypeOnly) {
+        namespaceReexports.push(spec);
       }
     } else if (ts.isExportAssignment(node)) {
       exported.add('default');
@@ -2682,7 +2691,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     visitReference(sf);
   }
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, namespaceReexports, typeOnlyStars, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -3988,20 +3997,46 @@ function resolveCalls(
   // files each import resolves to, and the bare package specifiers it names.
   // What lets a rule read an unowned module's imports as its importer's.
   const imports = new Map<string, ModuleImports>();
+  // Where an imported value is declared, through every re-export: the own
+  // files the checker lands the binding on (each value a namespace's module
+  // exports, for a namespace import). A type republishes no code.
+  const declarationFilesOf = (local: import('typescript').Identifier, namespace: boolean): string[] => {
+    const unalias = (s: import('typescript').Symbol): import('typescript').Symbol => (s.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(s) : s);
+    const bound = checker.getSymbolAtLocation(local);
+    if (!bound) return [];
+    const target = unalias(bound);
+    const symbols = namespace ? checker.getExportsOfModule(target).map(unalias) : [target];
+    const files = new Set<string>();
+    for (const symbol of symbols) {
+      if (!(symbol.flags & ts.SymbolFlags.Value)) continue;
+      for (const declaration of symbol.declarations ?? []) {
+        const sf = declaration.getSourceFile();
+        const key = sf.isDeclarationFile ? undefined : ownKey(sf);
+        if (key !== undefined) files.add(key);
+      }
+    }
+    return [...files];
+  };
   const cache = ts.createModuleResolutionCache(projectRoot, f => (ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase()), options);
   for (const sf of program.getSourceFiles()) {
     const key = ownKey(sf);
     if (!key || sf.isDeclarationFile) continue;
     const specifiers: string[] = [];
-    /** The names each specifier's named imports take, as the module exports them. */
-    const named = new Map<string, string[]>();
+    /** The values each specifier's imports take: by name as the module exports them, `default`, or `*` for the namespace. */
+    const named = new Map<string, Array<{ name: string; local: import('typescript').Identifier; namespace?: true }>>();
     const visit = (node: import('typescript').Node): void => {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) {
         specifiers.push(node.moduleSpecifier.text);
-        const bindings = ts.isImportDeclaration(node) ? node.importClause?.namedBindings : undefined;
-        if (bindings && ts.isNamedImports(bindings) && !(node as import('typescript').ImportDeclaration).importClause!.isTypeOnly) {
+        const clause = ts.isImportDeclaration(node) ? node.importClause : undefined;
+        if (clause && !clause.isTypeOnly) {
           const list = named.get(node.moduleSpecifier.text) ?? [];
-          for (const element of bindings.elements) if (!element.isTypeOnly) list.push((element.propertyName ?? element.name).text);
+          if (clause.name) list.push({ name: 'default', local: clause.name });
+          const bindings = clause.namedBindings;
+          if (bindings && ts.isNamedImports(bindings)) {
+            for (const element of bindings.elements) if (!element.isTypeOnly) list.push({ name: (element.propertyName ?? element.name).text, local: element.name });
+          } else if (bindings) {
+            list.push({ name: '*', local: bindings.name, namespace: true });
+          }
           named.set(node.moduleSpecifier.text, list);
         }
       } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)
@@ -4028,8 +4063,13 @@ function resolveCalls(
       }
       if (resolved !== undefined) {
         if (!entry.files.includes(resolved)) entry.files.push(resolved);
-        for (const name of named.get(specifier) ?? []) {
-          if (!(entry.names ??= []).some(n => n.name === name && n.file === resolved)) entry.names.push({ name, file: resolved });
+        for (const { name, local, namespace } of named.get(specifier) ?? []) {
+          const names = (entry.names ??= []);
+          let imported = names.find(n => n.name === name && n.file === resolved);
+          if (!imported) names.push((imported = { name, file: resolved }));
+          for (const at of declarationFilesOf(local, namespace === true)) {
+            if (!(imported.declaredIn ??= []).includes(at)) imported.declaredIn.push(at);
+          }
         }
       } else if (!specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('node:')) {
         entry.packages.push(specifier);
@@ -4507,8 +4547,9 @@ export function buildCodeModel(
             reexports: [...facts.reexports],
             reexportBindings: [
               ...facts.namedReexports.map(({ exported, local, from }) => ({ exported, local, from })),
-              ...facts.starExports.map((from) => ({ exported: '*', local: '*', from })),
+              ...facts.starExports.filter((from) => !facts.typeOnlyStars.has(from)).map((from) => ({ exported: '*', local: '*', from })),
             ],
+            ...(facts.namespaceReexports.length ? { namespaceReexports: [...facts.namespaceReexports] } : {}),
             exportAliases: facts.exportAliases.map(alias => ({ ...alias })),
             returnTypes: Object.fromEntries(
               [...facts.returnTypes].filter((entry): entry is [string, string] => entry[1] !== null),

@@ -301,7 +301,11 @@ warnings as errors (notices are printed and counted, never fatal).
 - **Code that crosses the design.** A call through a constructor-injected
   collaborator is collaboration whatever the import's form: when its type comes
   from a component the caller never declared, even through `import type`, it is
-  `UNDECLARED_DEPENDENCY`; a Portal calling a write- or lifecycle-effect method
+  `UNDECLARED_DEPENDENCY`. So is a re-export of another component's code
+  (`export { x } from`, `export * from`, `export * as ns from`; a type-only
+  one republishes no code), and a name imported through a barrel no component
+  realizes, which is charged to the file the type checker resolves it to; a
+  Portal calling a write- or lifecycle-effect method
   of a Repository, Index, Store or Registry is
   `PORTAL_WRITE_SHORTCUT_IN_CODE` (error, the code twin of
   `PORTAL_WRITE_SHORTCUT`). A Portal's calls are resolved by the TypeScript

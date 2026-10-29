@@ -4,5 +4,4 @@
 // ---------------------------------------------------------------------------
 
 export { configure, produce, remove, list } from './orchestrator.js';
-export { project } from './projection.js';
 export type { ProducerConfig, DocPage, GraphModel, GraphNode, GraphEdge } from './types.js';

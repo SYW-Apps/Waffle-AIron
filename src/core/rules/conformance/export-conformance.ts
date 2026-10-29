@@ -337,17 +337,30 @@ export const exportConformanceRule: SddRule = {
     // sibling component's file is that component's surface, not this one's,
     // and stays a crossing. Read at exact grade, from the re-export bindings
     // the analyzer records (a star republishes every method of the module).
-    for (const file of realization.paths) {
-      const facts = code.factsAt(file);
-      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
-      for (const binding of facts.reexportBindings ?? []) {
-        const target = resolveImport(file, binding.from, code.paths, code.packages);
-        const methods = target ? typeMethodsAt.get(target) : undefined;
-        if (!methods) continue;
-        if (binding.local === '*') {
-          for (const name of methods) promise(file, name);
-        } else if (methods.has(binding.local)) {
-          promise(file, binding.exported);
+    // A barrel republishing another barrel's re-export of it hands out the
+    // same method, so the walk runs until nothing new is republished.
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const file of realization.paths) {
+        const facts = code.factsAt(file);
+        if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+        const republish = (name: string): void => {
+          let names = typeMethodsAt.get(file);
+          if (!names) typeMethodsAt.set(file, (names = new Set<string>()));
+          if (names.has(name)) return;
+          names.add(name);
+          promise(file, name);
+          grew = true;
+        };
+        for (const binding of facts.reexportBindings ?? []) {
+          const target = resolveImport(file, binding.from, code.paths, code.packages);
+          const methods = target ? typeMethodsAt.get(target) : undefined;
+          if (!methods) continue;
+          if (binding.local === '*') {
+            for (const name of [...methods]) republish(name);
+          } else if (methods.has(binding.local)) {
+            republish(binding.exported);
+          }
         }
       }
     }

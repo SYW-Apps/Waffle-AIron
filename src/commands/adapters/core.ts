@@ -72,4 +72,13 @@ export {
   // `wairon doctor --fix` moves a misplaced type group folder or grouped type file (TYPE_GROUP_MISPLACED).
   loadGroupSpecs,
   scanAllSpecs,
+  // `wairon diagram --subsystem`, `--sequence` and `--all`: the scoped diagrams,
+  // the whole set and its index, DiagramFile's page, and the subsystems a scope
+  // must name one of.
+  generateComponentDiagram,
+  generateSequenceDiagram,
+  generateDiagramSet,
+  diagramSetIndex,
+  toMarkdown,
+  loadSubsystemSpecs,
 } from '../../core/index.js';

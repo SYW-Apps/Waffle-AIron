@@ -425,12 +425,18 @@ export interface SourceFileFacts {
   /**
    * Runtime import/require module specifiers (dependency-conformance fuel).
    * Type-only imports and export-from specifiers are excluded — type coupling
-   * is allowed by default, and re-exporting is surface republication, not
-   * collaboration.
+   * is allowed by default, and a runtime re-export is read from
+   * reexportBindings and namespaceReexports instead.
    */
   imports: string[];
-  /** Module specifiers of export-from declarations (surface republication). */
+  /**
+   * Module specifiers of export-from declarations, type-only ones included:
+   * what realizes a declared forwarding edge. Which of them carry code is read
+   * from reexportBindings and namespaceReexports.
+   */
   reexports: string[];
+  /** Runtime `export * as name from` specifiers: a module's whole namespace republished under one name. Exact grade only. */
+  namespaceReexports?: string[];
   /**
    * What each export-from declaration republishes, name by name: a named one
    * with both sides of its rename (`export { a as b } from 'm'` publishes `b`
@@ -932,12 +938,14 @@ export interface ModuleImports {
   names?: ImportedName[];
 }
 
-/** imported_name — one value name a source file imports by name from a project source file, as that file exports it (`import { a as b }` takes `a`). */
+/** imported_name — one value a source file imports from a project source file: by name as that file exports it (`import { a as b }` takes `a`), a default import as `default`, a namespace import as `*`. */
 export interface ImportedName {
-  /** The name as the imported file exports it. */
+  /** The name as the imported file exports it: `default` for a default import, `*` for a namespace import. */
   name: string;
   /** The project source file it is imported from, by canonical key. */
   file: string;
+  /** The project files the checker resolves its declaration to through every re-export (a namespace's value exports' files); a type is left out. Absent when it lands in no project file. */
+  declaredIn?: string[];
 }
 
 /**
