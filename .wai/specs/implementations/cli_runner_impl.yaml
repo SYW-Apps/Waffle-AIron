@@ -2086,35 +2086,42 @@ methods:
     narrative:
       - stepNumber: 1
         description: >-
+          When a --subsystem is given, read the subsystems through the core client adapter, so one
+          the tree does not hold is refused naming those it does
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSubsystemSpecs
+      - stepNumber: 2
+        description: >-
           Refuse a --depth that is not a whole number of at least 1 ("-1", "abc"), a --subsystem the
           tree does not hold, a --group no type group spec declares, and --types or --group with a
           format other than Mermaid (the canvas already folds types by group), naming what is
           accepted, before anything is rendered: a sequence diagram of depth nothing, or a component
           diagram of an unknown subsystem, would be written as if it were the answer
         type: local
-      - stepNumber: 2
+      - stepNumber: 3
         description: Were type diagrams asked for?
         type: branch
         condition: '--types or --group was given (and not --all, which writes them with the rest of the set)'
-        onTrueStep: 3
-        onFalseStep: 5
-      - stepNumber: 3
+        onTrueStep: 4
+        onFalseStep: 6
+      - stepNumber: 4
         description: >-
           Render the type diagrams through the core client adapter, and keep the one asked for: the
           index for --types, the named group's for --group
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renderTypeDiagrams
-      - stepNumber: 4
+      - stepNumber: 5
         description: Write it like any other artifact
         type: jump
-        toStep: 8
-      - stepNumber: 5
+        toStep: 22
+      - stepNumber: 6
         description: Should the canvas carry relation health?
         type: branch
         condition: the canvas is drawn (alone or in --all) and --no-health was not given
-        onFalseStep: 7
-      - stepNumber: 6
+        onFalseStep: 8
+      - stepNumber: 7
         description: >-
           Compare the family's relations with their live producers through the validator adapter:
           each project's externals status at its own root, read within the explicit local reach
@@ -2125,7 +2132,76 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyRelations
-      - stepNumber: 7
+      - stepNumber: 8
+        description: Was the whole set asked for?
+        type: branch
+        condition: '--all was given'
+        onFalseStep: 15
+      - stepNumber: 9
+        description: >-
+          Draw the whole Mermaid diagram set through the core client adapter; an empty set (a tree
+          with no component yet) is reported, and nothing is written
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: generateDiagramSet
+      - stepNumber: 10
+        description: >-
+          Write each diagram as its Markdown page (DiagramFile.toMarkdown) at its path under the
+          output folder: --out, else .wai/docs/diagrams
+        type: local
+      - stepNumber: 11
+        description: >-
+          Render the canvas, with the relations when they were read, and the draw.io and Excalidraw
+          files, written beside the set
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: renderDiagram
+      - stepNumber: 12
+        description: Read the system spec for the name the index is titled after
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: loadSystemSpec
+      - stepNumber: 13
+        description: Index the set, written as the folder's README.md
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: diagramSetIndex
+      - stepNumber: 14
+        description: Report how many diagrams were written and where, naming the first twelve
+        type: return
+      - stepNumber: 15
+        description: Was one method's sequence asked for?
+        type: branch
+        condition: '--sequence <component>.<method> was given'
+        onFalseStep: 18
+      - stepNumber: 16
+        description: >-
+          Draw that method's narrative sequence through the core client adapter, to the --depth
+          given
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: generateSequenceDiagram
+      - stepNumber: 17
+        description: Write it like any other Mermaid diagram
+        type: jump
+        toStep: 22
+      - stepNumber: 18
+        description: Was one subsystem asked for?
+        type: branch
+        condition: '--subsystem was given'
+        onFalseStep: 21
+      - stepNumber: 19
+        description: >-
+          Draw that subsystem's component diagram, with its direct neighbours, through the core
+          client adapter
+        type: call
+        targetComponent: cli_core_adapter
+        targetMethod: generateComponentDiagram
+      - stepNumber: 20
+        description: Write it like any other Mermaid diagram
+        type: jump
+        toStep: 22
+      - stepNumber: 21
         label: render
         description: >-
           Render the requested format through the core client adapter, which crosses into sdd_core
@@ -2133,7 +2209,7 @@ methods:
         type: call
         targetComponent: cli_core_adapter
         targetMethod: renderDiagram
-      - stepNumber: 8
+      - stepNumber: 22
         description: >-
           Write the artifact to the requested path and report where it landed. Written to the
           default folder (no --out), say once that these files are derived from the spec tree,
@@ -4224,4 +4300,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-27T18:08:12.112Z'
+updatedAt: '2026-10-29T09:39:07.328Z'

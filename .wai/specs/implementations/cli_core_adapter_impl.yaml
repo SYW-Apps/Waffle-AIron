@@ -378,6 +378,41 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: renderTypeDiagrams
+  - name: generateComponentDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: generateComponentDiagram
+  - name: generateSequenceDiagram
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: generateSequenceDiagram
+  - name: generateDiagramSet
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: generateDiagramSet
+  - name: diagramSetIndex
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: diagramSetIndex
+  - name: loadSubsystemSpecs
+    narrative:
+      - stepNumber: 1
+        description: Forward to the core portal
+        type: call
+        targetComponent: spec_tree_portal
+        targetMethod: loadSubsystemSpecs
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T23:58:20.986Z'
+updatedAt: '2026-10-29T09:36:58.344Z'

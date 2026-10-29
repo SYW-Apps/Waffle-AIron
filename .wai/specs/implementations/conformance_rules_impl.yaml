@@ -93,13 +93,15 @@ methods:
           path that its RUNTIME re-exports resolve to — the module of each
           source_file_facts.reexportBindings entry and of each namespaceReexports specifier,
           resolved against mappedPaths as the graph resolves — a type-only re-export republishing no
-          code. throughBarrelsOf(path) = for each runtime import binding of the file
+          code. throughBarrelsOf(path) = the mapped files, other than path, that the names it
+          imports through a project file no component realizes land in, each with that file: where
+          code_model.reachedImports holds the file, each of its ImportedName entries whose file is
+          such a barrel, at its declaredIn files; otherwise, for each runtime import binding
           (importBindings) whose module resolves to no mapped file but to an exact-grade file no
-          component realizes, the mapped files the imported name comes from, with the unrealized
-          files passed on the way: that file's reexportBindings entry publishing the name leads to
-          its module under its local name, a star leads to its module when that module exports the
-          name, from one unrealized file to the next, each file and name followed once; a namespace
-          binding reaches every mapped file the unrealized file republishes, transitively
+          component realizes, that file's reexportBindings entry publishing the name leads to its
+          module under its local name and a star to its module when that module exports the name,
+          from one unrealized file to the next, each file and name followed once, and a namespace
+          binding reaches every mapped file the unrealized file republishes
         type: local
       - stepNumber: 3
         description: >-
@@ -2484,4 +2486,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-29T09:09:53.061Z'
+updatedAt: '2026-10-29T09:43:58.968Z'

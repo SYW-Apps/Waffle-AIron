@@ -1,0 +1,14 @@
+kind: value-object
+id: sequence_diagram_options
+name: SequenceDiagramOptions
+description: How far a sequence diagram expands the methods it reaches.
+subsystem: sdd_core
+fields:
+  - name: depth
+    type: int
+    description: How many levels of narrative are walked, the drawn method's own being the first; absent, three
+    optional: true
+methods: []
+sourcePath: src/core/diagram.ts
+createdAt: '2026-10-29T09:36:42.562Z'
+updatedAt: '2026-10-29T09:36:43.342Z'

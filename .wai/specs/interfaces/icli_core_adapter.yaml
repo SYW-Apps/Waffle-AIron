@@ -652,6 +652,67 @@ methods:
     signature: 'renderTypeDiagrams(): list<TypeDiagram>'
     returns: list<TypeDiagram>
     params: []
+  - name: generateComponentDiagram
+    description: >-
+      Calls generateComponentDiagram on the core portal: the current project's components drawn as a
+      Mermaid flowchart, the whole system or one subsystem with its direct neighbours. For `wairon
+      diagram` --subsystem.
+    signature: 'generateComponentDiagram(options?: ComponentDiagramOptions): string'
+    returns: string
+    params:
+      - name: options
+        type: ComponentDiagramOptions
+        description: The scope to draw; omitted, the whole system
+        optional: true
+  - name: generateSequenceDiagram
+    description: >-
+      Calls generateSequenceDiagram on the core portal: one method's narrative drawn as a Mermaid
+      sequence diagram, its callees expanded to the depth asked for. For `wairon diagram`
+      --sequence.
+    signature: >-
+      generateSequenceDiagram(componentId: string, methodName: string, options?:
+      SequenceDiagramOptions): string
+    returns: string
+    params:
+      - name: componentId
+        type: string
+        description: >-
+          The component whose method is drawn: its id, or a bare id that matches exactly one
+          qualified component
+      - name: methodName
+        type: string
+        description: The method whose narrative is drawn
+      - name: options
+        type: SequenceDiagramOptions
+        description: How deep the callees are expanded; omitted, three levels
+        optional: true
+  - name: generateDiagramSet
+    description: >-
+      Calls generateDiagramSet on the core portal: the whole Mermaid diagram set of the current
+      project, each diagram with the path it is written to. For `wairon diagram` --all.
+    signature: 'generateDiagramSet(): list<DiagramFile>'
+    returns: list<DiagramFile>
+    params: []
+  - name: diagramSetIndex
+    description: >-
+      Calls diagramSetIndex on the core portal: the Markdown index linking a diagram set's files.
+      For `wairon diagram` --all.
+    signature: 'diagramSetIndex(files: list<DiagramFile>, systemName: string): string'
+    returns: string
+    params:
+      - name: files
+        type: list<DiagramFile>
+        description: The diagrams the index links, in the order listed
+      - name: systemName
+        type: string
+        description: The system the index is titled after
+  - name: loadSubsystemSpecs
+    description: >-
+      Calls loadSubsystemSpecs on the core portal: the subsystems a `wairon diagram --subsystem`
+      scope must name one of.
+    signature: 'loadSubsystemSpecs(): list<SubsystemSpec>'
+    returns: list<SubsystemSpec>
+    params: []
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-26T23:57:49.143Z'
+updatedAt: '2026-10-29T09:36:57.389Z'

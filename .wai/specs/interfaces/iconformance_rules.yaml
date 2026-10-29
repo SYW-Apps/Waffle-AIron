@@ -371,26 +371,28 @@ methods:
       `export * as ns from`), never a type-only one: republishing another component's code from this
       file reaches it as surely as importing it does, so it is justified exactly as an import is (a
       Portal's barrel republishing its Orchestrator is a declared edge). And a name imported through
-      a file no component realizes is followed to where it comes from: through that file's
-      re-exports of the name — renamed, or by a star whose module exports it — from one such file to
-      the next, the import is an edge to the component-mapped file that publishes the name, judged
-      and reported the same way, the finding naming the files it passed; a namespace import of such
-      a file reaches every mapped file it republishes. A type-only import alone never accuses — type
-      coupling is allowed — but a CALL of a modelled contract method through a collaborator whose
-      declared type comes from another component's file is runtime collaboration whatever the
-      import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge).
-      Conversely, a declared dependsOn/owns edge between components realized in different files
-      should be visible as an import between any file of the source and any file of the target, or —
-      where the type checker read a file of the source — as a call or reference the checker lands in
-      a file of the target, through every barrel, port declaration, dependency bag and unowned
-      helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading, hence warning);
-      a type-only import realizes it, since `import type` is what dependency injection writes down.
-      An Adapter's edge to a Portal reached over an out-of-process transport (HTTP, gRPC, a bus, a
-      CLI…) is the link the design models: the Adapter's transport client realizes it, never an
-      import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an import across that
-      boundary, which would couple two deployables' builds. Two twins of design rules are judged on
-      the same code: a Portal file calling a write- or lifecycle-effect contract method of a
-      Repository, Index, Store or Registry is the persistence shortcut the design rule
+      a file no component realizes — a barrel, whether the run analyzes it or not — is followed to
+      where it comes from: to the files the type checker resolves the name's declaration to through
+      every re-export (for a namespace import, the declarations of everything the module exports), a
+      value only, a type republishing no code; where no checker read the importer, through the
+      barrel's own re-exports of the name (renamed, or by a star whose module exports it) from one
+      analyzed barrel to the next. The import is then an edge to each component-mapped file it lands
+      in, judged and reported the same way, the finding naming the barrel. A type-only import alone
+      never accuses — type coupling is allowed — but a CALL of a modelled contract method through a
+      collaborator whose declared type comes from another component's file is runtime collaboration
+      whatever the import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that
+      edge). Conversely, a declared dependsOn/owns edge between components realized in different
+      files should be visible as an import between any file of the source and any file of the
+      target, or — where the type checker read a file of the source — as a call or reference the
+      checker lands in a file of the target, through every barrel, port declaration, dependency bag
+      and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading,
+      hence warning); a type-only import realizes it, since `import type` is what dependency
+      injection writes down. An Adapter's edge to a Portal reached over an out-of-process transport
+      (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter's transport client
+      realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an
+      import across that boundary, which would couple two deployables' builds. Two twins of design
+      rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract
+      method of a Repository, Index, Store or Registry is the persistence shortcut the design rule
       PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
       design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by
       the TypeScript type checker: every call written in a file realizing only Portals — in a file
@@ -1281,4 +1283,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-29T09:09:51.416Z'
+updatedAt: '2026-10-29T09:43:57.634Z'

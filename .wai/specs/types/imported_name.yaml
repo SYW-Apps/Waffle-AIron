@@ -2,19 +2,28 @@ kind: value-object
 id: imported_name
 name: ImportedName
 description: >-
-  One value name a source file imports by name from a project source file, as that file exports it
-  (`import { a as b }` takes `a`).
+  One value a source file imports from a project source file: by name as that file exports it
+  (`import { a as b }` takes `a`), a default import as `default`, a namespace import as `*`.
 subsystem: sdd_validator
 fields:
   - name: name
     type: string
-    description: The name as the imported file exports it
+    description: >-
+      The name as the imported file exports it: `default` for a default import, `*` for a namespace
+      import
     optional: false
   - name: file
     type: string
     description: The project source file it is imported from, by canonical key
     optional: false
+  - name: declaredIn
+    type: list<string>
+    description: >-
+      The project source files the type checker resolves its declaration to through every re-export,
+      by canonical key — for a namespace import, the files declaring the module's value exports. A
+      type, which republishes no code, is left out. Absent when it lands in no project file
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-28T22:51:41.140Z'
-updatedAt: '2026-10-28T22:51:42.483Z'
+updatedAt: '2026-10-29T09:43:53.005Z'
