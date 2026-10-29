@@ -366,9 +366,18 @@ methods:
       source files (a component maps to every file its implementations and their methods name) must
       be justified by declared relations — a direct dependsOn/owns pair, a shared component,
       membership in a depended-on pattern, or (across subsystems) a declared edge to the target
-      subsystem's published surface (UNDECLARED_DEPENDENCY). A type-only import alone never accuses
-      — type coupling is allowed — but a CALL of a modelled contract method through a collaborator
-      whose declared type comes from another component's file is runtime collaboration whatever the
+      subsystem's published surface (UNDECLARED_DEPENDENCY). A runtime re-export is such an edge too
+      — a named value, a star or a namespace re-export (`export { x } from`, `export * from`,
+      `export * as ns from`), never a type-only one: republishing another component's code from this
+      file reaches it as surely as importing it does, so it is justified exactly as an import is (a
+      Portal's barrel republishing its Orchestrator is a declared edge). And a name imported through
+      a file no component realizes is followed to where it comes from: through that file's
+      re-exports of the name — renamed, or by a star whose module exports it — from one such file to
+      the next, the import is an edge to the component-mapped file that publishes the name, judged
+      and reported the same way, the finding naming the files it passed; a namespace import of such
+      a file reaches every mapped file it republishes. A type-only import alone never accuses — type
+      coupling is allowed — but a CALL of a modelled contract method through a collaborator whose
+      declared type comes from another component's file is runtime collaboration whatever the
       import's form, and the same justification is owed (UNDECLARED_DEPENDENCY on that edge).
       Conversely, a declared dependsOn/owns edge between components realized in different files
       should be visible as an import between any file of the source and any file of the target, or —
@@ -1272,4 +1281,4 @@ methods:
           reaches neither a pinned external nor a member project that exports something
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-28T22:51:49.974Z'
+updatedAt: '2026-10-29T09:09:51.416Z'

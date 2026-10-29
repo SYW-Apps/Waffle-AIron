@@ -89,7 +89,17 @@ methods:
           = the component's implementations that named at least one such file. reach = the private
           unownedReach(ctx) — a call's own answer plus the calls of every unowned function it lands
           on, transitively, with the hops — and candidatesOf = the private writeCandidates(ctx),
-          both shared with call-conformance
+          both shared with call-conformance. reexportTargetsOf(path) = the mapped files other than
+          path that its RUNTIME re-exports resolve to — the module of each
+          source_file_facts.reexportBindings entry and of each namespaceReexports specifier,
+          resolved against mappedPaths as the graph resolves — a type-only re-export republishing no
+          code. throughBarrelsOf(path) = for each runtime import binding of the file
+          (importBindings) whose module resolves to no mapped file but to an exact-grade file no
+          component realizes, the mapped files the imported name comes from, with the unrealized
+          files passed on the way: that file's reexportBindings entry publishing the name leads to
+          its module under its local name, a star leads to its module when that module exports the
+          name, from one unrealized file to the next, each file and name followed once; a namespace
+          binding reaches every mapped file the unrealized file republishes, transitively
         type: local
       - stepNumber: 3
         description: >-
@@ -102,11 +112,13 @@ methods:
         type: local
       - stepNumber: 4
         label: edgeLoop
-        description: Every runtime import edge between mapped files needs a justification
+        description: >-
+          Every runtime import, runtime re-export, and import through an unrealized barrel between
+          mapped files needs a justification
         type: loop
         over: >-
-          each import edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf
-          targets
+          each edge fromPath to toPath: for every path in mappedPaths, its graph.importsOf targets,
+          then its reexportTargetsOf and throughBarrelsOf targets not already among them, each once
         endStep: 7
       - stepNumber: 5
         description: >-
@@ -133,7 +145,9 @@ methods:
           realization.implementationsAt(fromPath); draft context when any implementation naming
           either file is ctx.isImplementationDraft) naming fromPath and toPath with the components
           each realizes: declare the collaboration on the component that uses it, or route the
-          cross-subsystem hop through the target's published surface. When an imported component
+          cross-subsystem hop through the target's published surface. The finding says how the edge
+          is written: an import, a re-export (republishing the code reaches it), or an import of the
+          name through the unrealized files it passed, naming them. When an imported component
           depends on or owns an importing one and calls it, the finding says so: the import runs
           against that declared edge — an import cycle between the two — and is no Portal mounting
           onto its host
@@ -142,12 +156,14 @@ methods:
         label: compLoop
         description: >-
           Every declared edge should leave a trace. A trace is a runtime import or a re-export
-          (barrel forwarding), for a mounting declarer the reverse import counts too — unless the
-          declarer calls the target, since a client's edge is never realized by its callee importing
-          it back — and a TYPE-ONLY import counts as well: a collaborator injected through its
-          constructor is reached through its type, and `import type` is the whole of what dependency
-          injection writes down — so it realizes the declared edge, while it still never ACCUSES one
-          (UNDECLARED_DEPENDENCY reads runtime imports alone, type coupling being allowed)
+          (barrel forwarding), an import of a name through an unrealized barrel to the target's
+          file, for a mounting declarer the reverse import counts too — unless the declarer calls
+          the target, since a client's edge is never realized by its callee importing it back — and
+          a TYPE-ONLY import counts as well: a collaborator injected through its constructor is
+          reached through its type, and `import type` is the whole of what dependency injection
+          writes down — so it realizes the declared edge, while it still never ACCUSES one
+          (UNDECLARED_DEPENDENCY reads runtime imports and re-exports alone, type coupling being
+          allowed)
         type: loop
         over: ctx.components
         endStep: 14
@@ -268,8 +284,9 @@ methods:
       - stepNumber: 19
         label: typeOnlyEdge
         description: >-
-          For each toPath that the file does not import at runtime (graph.importsOf(fromPath) does
-          not hold it — a runtime edge was judged above) and edgeJustified refuses, report
+          For each toPath that the file does not import at runtime, re-export or import through an
+          unrealized barrel (graph.importsOf, reexportTargetsOf and throughBarrelsOf of fromPath
+          hold none of it — such an edge was judged above) and edgeJustified refuses, report
           UNDECLARED_DEPENDENCY once per edge (site `<fromPath> -> <toPath>`, the same site a
           runtime import of it reports under), naming the call: a shape-fact site counts here only
           when a type-only import connects the two files, and a Portal's resolved call only when it
@@ -2467,4 +2484,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-28T22:51:52.127Z'
+updatedAt: '2026-10-29T09:09:53.061Z'

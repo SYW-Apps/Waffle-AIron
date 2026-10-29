@@ -55,9 +55,10 @@ fields:
   - name: reexports
     type: list<string>
     description: >-
-      Module specifiers of export-from declarations — surface republication, not collaboration:
-      never accused as an undeclared dependency, but realizes a declared forwarding edge (a portal
-      barrel republishing its orchestrator).
+      Module specifiers of export-from declarations, type-only ones included: what realizes a
+      declared forwarding edge (a portal barrel republishing its orchestrator). Which of them carry
+      code — and so are an edge dependency conformance judges like an import — is read from
+      reexportBindings and namespaceReexports, the runtime ones.
     optional: false
   - name: functionComplexity
     type: map<string, int>
@@ -341,6 +342,12 @@ fields:
       annotations are ordinary type positions and are listed here. Exact grade only;
       UNDECLARED_EXPORT does not count such a binding as taking the export.
     optional: true
+  - name: namespaceReexports
+    type: list<string>
+    description: >-
+      Module specifiers of runtime `export * as name from` declarations: the module's whole
+      namespace republished under one name. Exact grade only; absent when the file writes none
+    optional: true
 methods:
   - name: resolveImport
     signature: >-
@@ -459,4 +466,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-23T22:16:03.926Z'
+updatedAt: '2026-10-29T09:09:49.069Z'
