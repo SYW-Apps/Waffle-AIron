@@ -14,7 +14,11 @@ description: >-
   mount guarantees and the router never re-checks — unless the router strips a prefix it spells out
   (`path.slice(BASE.length)`), which is then folded in front of the segments. A router written
   another way yields nothing, and that is reported as unread rather than passed; an entry or prefix
-  whose value cannot be settled is never guessed at.
+  whose value cannot be settled is never guessed at. Read by the Python reader it is one route
+  decorator (`@app.get("/orders/{id}")`, `@bp.route("/x", methods=["POST"])`) under the prefixes of
+  its router and of the routers including it, marked fullPath: a path parameter (`{id}`, `{id:int}`,
+  `<id>`, `<int:id>`) is a `*` segment, and a path converter (`{p:path}`, `<path:p>`) leaves the
+  length open.
 subsystem: sdd_validator
 fields:
   - name: verb
@@ -49,4 +53,4 @@ fields:
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-24T20:30:22.052Z'
-updatedAt: '2026-10-09T00:42:22.009Z'
+updatedAt: '2026-10-29T11:38:51.165Z'

@@ -72,10 +72,35 @@ methods:
           through a name), the annotated type of each instance field (an annotation, or the
           annotated constructor parameter it is assigned from) and of each annotated name, and the
           module's imports with the local name each binds (`from .x import Y`, `from . import x`,
-          `import a.b as c`), and which top-level classes the module names outside their own `class`
-          block (source_file_facts.classReferences) — still pattern grade, the checks it read for
-          recorded in source_file_facts.reads. What it cannot read it leaves unset, so a check never
-          reads silence as a pass
+          `import a.b as c`), which top-level classes the module names outside their own `class`
+          block (source_file_facts.classReferences), the routes of each router object and the shapes
+          of the declarative data classes — still pattern grade, the checks it read for recorded in
+          source_file_facts.reads. ROUTES: a module-level name bound to a router class's
+          construction (FastAPI, APIRouter, Flask, Blueprint, Quart, Sanic, plain or dotted) or to
+          an import, decorating a top-level function with a route decorator — `.get`, `.post`,
+          `.put`, `.patch`, `.delete`, `.head` or `.options` with the path first or as `path=`;
+          `.route` or `.api_route` with `methods=` a list, tuple or set of verbs, GET where it
+          states none — answers that route under the object's name
+          (source_file_facts.functionRoutes). A construction's `prefix=` or `url_prefix=` is folded
+          in front of its routes, and a module-level `include_router(r, prefix=…)` or
+          `register_blueprint(bp, url_prefix=…)` on the object brings r's routes in under that
+          prefix (folded across modules in step 12). Every path, prefix and verb is a string literal
+          or a module-level constant bound to one; a router any of whose routes, prefixes or
+          includes does not settle, or that mounts an application (`.mount`), records no route and
+          is listed as unread (source_file_facts.unreadRouters). DATA TYPES: the fields of each
+          top-level class that a dataclass or attrs decorator (dataclass, define, frozen, mutable,
+          attr.s, attrs.define and their dotted forms) or a base (BaseModel, BaseSettings,
+          TypedDict, NamedTuple) makes declarative, as source_file_facts.typeShapes: each annotated
+          name of its body — ClassVar, InitVar and KW_ONLY aside, and on a Pydantic model an
+          underscore name — and on an attrs class each `x = attr.ib()` or `field()` too. A field is
+          absent-able when it has a default — a value, or a field call (field, Field, attr.ib,
+          attrs.field) given a default or a default factory, while `Field(...)` and a field call
+          naming neither leave it required — and in a TypedDict when the annotation is
+          `NotRequired[…]`, or the class is `total=False` and the annotation is not `Required[…]`;
+          `Optional[T]` alone never makes it absent-able, since a Pydantic v2 field so annotated is
+          required and merely nullable. Its public methods are its methods, and a base beyond the
+          framework's own (Generic aside) marks it inherited. What it cannot read it leaves unset,
+          so a check never reads silence as a pass
         type: local
       - stepNumber: 6
         label: decoratorMetadata
@@ -308,11 +333,23 @@ methods:
           import), marked resolved, with the module it lands in relative to that project's root
         type: local
       - stepNumber: 12
+        label: pythonRouteIncludes
+        description: >-
+          Fold each Python router's includes across modules: an included router bound by an import
+          (`from .orders import router as orders_router`, or `orders.router` through a namespace
+          import) is followed through the import's resolution to the router of that name in the
+          analyzed module it lands in, its routes taken under the include's prefix, transitively,
+          each router once; and the routes decorated on an imported router object in another module
+          join that object's routes in its own module. An include that lands on no router of an
+          analyzed module, or on an unread one, makes the including router unread
+          (source_file_facts.unreadRouters), its routes removed
+        type: local
+      - stepNumber: 13
         description: >-
           Degrade any file whose exact analysis throws to the generic scan, recording the grade per
           file — a single file never aborts the run
         type: local
-      - stepNumber: 13
+      - stepNumber: 14
         description: >-
           Return the assembled CodeModel: per-file facts, the resolved project root, the walked
           root-file list the unclaimed-source rule judges, the local-package map every import
@@ -429,4 +466,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-29T09:43:54.685Z'
+updatedAt: '2026-10-29T11:38:52.185Z'
