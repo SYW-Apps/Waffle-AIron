@@ -131,11 +131,13 @@ warnings as errors (notices are printed and counted, never fatal).
   (where annotated), public members, imports, calls, routes, data types`;
   `python: 4 file(s) at grade pattern with its signature reader, checked methods,
   params, returns (where annotated), public members, imports, calls through
-  declared receivers — not checked: routes, data types`; a language read by its
-  pattern table alone checks methods only and names everything else. A family run
-  prints each project's reading under its verdict, and the closing line repeats it
-  in a few words (`Code checked: python pattern (not checked: routes, data
-  types); typescript exact.`) — a pass never implies more was checked than was.
+  declared receivers, routes, data types (of declarative data classes)`; a
+  language read by its pattern table alone checks methods only and names
+  everything else. A family run prints each project's reading under its verdict,
+  and the closing line repeats it in a few words (`Code checked: python pattern;
+  rust pattern (not checked: params, returns, public members, imports, calls,
+  routes, data types); typescript exact.`) — a pass never implies more was
+  checked than was.
   Routes are read only out of a router a Portal names (`router:`), so where an
   HTTP Portal names none the line says `routes where a router is named` and
   counts it among what was not checked (`not checked: routes of 1 HTTP Portal(s)
@@ -178,7 +180,26 @@ warnings as errors (notices are printed and counted, never fatal).
   `UNDECLARED_DEPENDENCY`. Python is read by its signature reader: parameter
   names (in snake_case, so the contract's `documentId` is `document_id`),
   annotations, return annotations, public members and imports are judged like
-  TypeScript's. A component importing a Portal that depends on it and calls it is
+  TypeScript's. Its routes are read off the route decorators of FastAPI,
+  APIRouter, Flask, Blueprint, Quart and Sanic objects (`@app.get("/x")`,
+  `@bp.route("/x", methods=["POST"])`), under the prefixes their construction
+  and their includes state (`APIRouter(prefix=…)`, `include_router`,
+  `Blueprint(url_prefix=…)`, `register_blueprint`), followed across modules; a
+  Portal names the router object (`router: app`, `<module>#router`, or a module
+  alone). A router whose path, prefix, methods or include is not a string
+  literal or a module constant holding one, or that mounts an application, is
+  `UNREADABLE_ROUTER`, never read in part. Its data types are the fields of
+  dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
+  and attrs classes, compared with the type's by name in either casing: a field
+  may be absent when it has a default or a default factory, is `NotRequired`,
+  or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
+  required, as in Pydantic v2. A plain class, a model built by a call and a
+  type alias are not read. A declared edge between two Python components is
+  `UNREALIZED_DEPENDENCY` unless one imports the other (an import of a package
+  whose `__init__.py` no component realizes reaches every file in it) or a file
+  of the source calls a method of the target's contract through a field or a
+  name, which is what a collaborator injected through a Protocol writes; an
+  edge between a TypeScript and a Python component is not judged. A component importing a Portal that depends on it and calls it is
   `UNDECLARED_DEPENDENCY` on the importer, in either language: only a server
   importing a Portal mounted onto it, which the Portal does not call, is the
   declared edge read in reverse.
