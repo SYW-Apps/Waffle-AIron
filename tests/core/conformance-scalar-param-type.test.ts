@@ -109,5 +109,20 @@ describe('the spellings a scalar is written as stay silent', () => {
     const found = paramFindings(typedAs(dispatchTree(ts(TS_BODY('parcelId: string')), false), 'parcel_ref', [ref]));
     expect(found.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
   });
+
+  it('a Python date never stands for a datetime, as a parameter or a return', () => {
+    const param = paramFindings(typedAs(dispatchTree(py(PY_BODY('parcel_id: date'), [], ['from datetime import date']), true), 'datetime'));
+    expect(param.map(f => f.split(':')[0])).toEqual(['PARAM_TYPE_MISMATCH']);
+    const tree = dispatchTree(py([
+      'async def dispatch_parcel(self, parcel_id: str) -> date:',
+      '    self._store.record(parcel_id, "route-" + parcel_id)',
+      '    return date.today()',
+    ], [], ['from datetime import date']), true);
+    const method = (tree.interfaces!.find(i => i.id === 'idispatch_orchestrator')!.methods as Array<Record<string, unknown>>)[0];
+    method.returns = 'async datetime';
+    method.signature = 'dispatch_parcel(parcel_id: string): async datetime';
+    const run = runRuleFixture(defineRuleFixture({ code: 'RETURN_TYPE_MISMATCH', expectFire: true, reason: 'a date has no time of day', scenario: 'A parcel dispatch system whose booking answers when it was booked.', tree }));
+    expect(run.matching).toHaveLength(1);
+  });
 });
 
