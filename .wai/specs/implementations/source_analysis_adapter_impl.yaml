@@ -208,7 +208,8 @@ methods:
           Resolve every call with the type checker: build one program over every exact-grade ts/js
           file of the run — and, read for their wiring alone and never given facts of their own,
           every TypeScript or JavaScript source file of the project the run analyzed no facts for
-          that imports one of the run's files (a composition root, a test), found by the bounded
+          that reaches one of the run's files by its imports, directly or through other such files
+          (a composition root, a test, a test importing an unanalyzed barrel), found by the bounded
           walk outsideNames come from (step 13) — under the compiler options of the project's
           tsconfig.json when one is readable (its module resolution, paths and baseUrl), with
           JavaScript allowed, a fixed ES library and no ambient @types, reusing each parsed source
@@ -318,14 +319,20 @@ methods:
           resolution reads, and — where the checker reached project files the run holds no facts for
           — their resolved calls as reachedCalls, keyed by canonical path, and — where the checker
           was loaded — what every own file of the program imports as reachedImports (ModuleImports:
-          the project files and the packages), keyed by canonical path; and outsideNames: every
-          identifier, comments and re-export statements stripped (an `export … from` publishes a
-          name and never uses it; one it publishes under another name counts once that other name is
-          written), of each source file of the project the run analyzed no facts for — its tests, a
-          composition root, scripts — read by a bounded walk of the project root (made before the
-          checker runs, which reads the walk's TypeScript and JavaScript files importing a file of
-          the run for their wiring) that enters no dependency, build-output, cache or hidden folder;
-          what lets a public verb nothing uses be told from one code outside the design calls
+          the project files, the packages and the value names it imports by name from each project
+          file), keyed by canonical path; and outsideNames: every identifier, comments and re-export
+          statements stripped (an `export … from` publishes a name and never uses it; one it
+          publishes under another name counts once that other name is written), of each source file
+          of the project the run analyzed no facts for — its tests, a composition root, scripts —
+          read by a bounded walk of the project root (made before the checker runs, which reads the
+          walk's TypeScript and JavaScript files importing a file of the run for their wiring) that
+          enters no dependency, build-output, cache or hidden folder; what lets a public verb
+          nothing uses be told from one code outside the design calls; and uncheckedOutsideNames:
+          the same identifiers of only the walked files the type checker did not read — a file in a
+          language no checker reads, and, when no checker reading was made, every walked file — so a
+          TypeScript or JavaScript file the checker read is judged by where its calls and references
+          land (reachedCalls), and one that reaches none of the run's files, which cannot reach a
+          declaration of the run, adds no name to it
         type: return
         outcome: CodeModel
   - name: findTestsReferencing
@@ -420,4 +427,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-27T17:59:55.404Z'
+updatedAt: '2026-10-28T22:51:45.201Z'

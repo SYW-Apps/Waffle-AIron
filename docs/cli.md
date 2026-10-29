@@ -152,9 +152,15 @@ warnings as errors (notices are printed and counted, never fatal).
   edge are held under that finding until the return is fixed).
   A public method of a component's realizing class, or a function or class its
   file exports, that no contract declares and nothing in the project uses — no
-  call in its file, no other file or test naming it — is `UNDECLARED_PUBLIC_MEMBER`
+  call in its file, no other file or test using it — is `UNDECLARED_PUBLIC_MEMBER`
   (private, protected, `#private`, underscore-prefixed, static, accessor,
-  `override`, constructor, protocol and lifecycle members are exempt).
+  `override`, constructor, protocol and lifecycle members are exempt). Where the
+  TypeScript checker reads the using file (a test or a composition root among
+  them, once its imports reach the project's code), a use is a call or reference
+  that lands on that very declaration: a same-named method of another class is
+  none, and a TypeScript or JavaScript file that imports none of the project's
+  code uses nothing. A file no checker reads, such as a Python test, uses a name
+  by writing it, and an exported class is used wherever its name is written.
   What a method's narrative says about its calls is judged by how much it
   states. **Stated detail is binding:** a method whose `detail` (`full` or
   `calls-only`) is set on the method or its implementation, or that declares

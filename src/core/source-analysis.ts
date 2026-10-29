@@ -3298,7 +3298,7 @@ function resolveCalls(
   try {
     program = ts.createProgram({ rootNames: [...files.keys(), ...wiring], options, host });
   } catch {
-    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map() };
+    return { calls: out, imports: new Map(), kinds: new Map(), routes: new Map(), prefixes: new Map(), crossProjectImports: new Map(), unbuilt: true };
   }
   const checker = program.getTypeChecker();
   const assignable = (checker as unknown as {
@@ -3973,6 +3973,16 @@ function resolveCalls(
     }
   }
 
+  // The walked files read for their wiring: their calls and references are
+  // what tells a verb a test or a composition root uses from one nothing does.
+  // Not followed further — what they call into is no root's code.
+  for (const absolute of wiring) {
+    const sf = program.getSourceFile(path.resolve(absolute));
+    const key = sf && !sf.isDeclarationFile ? ownKey(sf) : undefined;
+    if (!sf || key === undefined || out.has(key)) continue;
+    out.set(key, resolveFile(sf));
+  }
+
   // What every own file of the program imports — the roots and every project
   // file they pull in, a helper module no spec names included: the project
   // files each import resolves to, and the bare package specifiers it names.
@@ -3983,9 +3993,17 @@ function resolveCalls(
     const key = ownKey(sf);
     if (!key || sf.isDeclarationFile) continue;
     const specifiers: string[] = [];
+    /** The names each specifier's named imports take, as the module exports them. */
+    const named = new Map<string, string[]>();
     const visit = (node: import('typescript').Node): void => {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteralLike(node.moduleSpecifier)) {
         specifiers.push(node.moduleSpecifier.text);
+        const bindings = ts.isImportDeclaration(node) ? node.importClause?.namedBindings : undefined;
+        if (bindings && ts.isNamedImports(bindings) && !(node as import('typescript').ImportDeclaration).importClause!.isTypeOnly) {
+          const list = named.get(node.moduleSpecifier.text) ?? [];
+          for (const element of bindings.elements) if (!element.isTypeOnly) list.push((element.propertyName ?? element.name).text);
+          named.set(node.moduleSpecifier.text, list);
+        }
       } else if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)
         && ts.isStringLiteralLike(node.moduleReference.expression)) {
         specifiers.push(node.moduleReference.expression.text);
@@ -4010,6 +4028,9 @@ function resolveCalls(
       }
       if (resolved !== undefined) {
         if (!entry.files.includes(resolved)) entry.files.push(resolved);
+        for (const name of named.get(specifier) ?? []) {
+          if (!(entry.names ??= []).some(n => n.name === name && n.file === resolved)) entry.names.push({ name, file: resolved });
+        }
       } else if (!specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('node:')) {
         entry.packages.push(specifier);
       }
@@ -4310,6 +4331,8 @@ interface CheckerReading {
   prefixes: Map<string, Map<string, string>>;
   /** Per root file, its imports from another project's source that resolve to nothing. */
   crossProjectImports: Map<string, CrossProjectImportFact[]>;
+  /** Set when the compiler could not build the program: nothing was read. */
+  unbuilt?: true;
 }
 
 /**
@@ -4595,13 +4618,31 @@ export function buildCodeModel(
     }
     const reached: Record<string, ResolvedCallFact[]> = {};
     for (const [key, calls] of resolved) if (!held.has(key) && !seen.has(key)) reached[key] = calls;
-    const model: CodeModel = { files, projectRoot, rootFiles, packages, ...outside.names };
+    // Read by the checker, a walked script file is judged by where its uses land; unread, by every name it writes.
+    const model: CodeModel = { files, projectRoot, rootFiles, packages, ...outsideFields(outside, reading !== undefined && !reading.unbuilt) };
     if (Object.keys(reached).length > 0) model.reachedCalls = reached;
     if (imports.size > 0) model.reachedImports = Object.fromEntries(imports);
     return model;
   }
 
-  return { files, projectRoot, rootFiles, packages, ...outside.names };
+  return { files, projectRoot, rootFiles, packages, ...outsideFields(outside, false) };
+}
+
+/**
+ * The walk's names as the CodeModel carries them: outsideNames, every
+ * identifier of the walked files, and uncheckedOutsideNames, those of the
+ * files no checker read — only the other languages' files when the checker
+ * read the script ones, every walked file when it did not.
+ */
+function outsideFields(
+  outside: { names: string[]; unchecked: string[] },
+  checked: boolean,
+): { outsideNames?: string[]; uncheckedOutsideNames?: string[] } {
+  const unchecked = checked ? outside.unchecked : outside.names;
+  return {
+    ...(outside.names.length > 0 ? { outsideNames: outside.names } : {}),
+    ...(unchecked.length > 0 ? { uncheckedOutsideNames: unchecked } : {}),
+  };
 }
 
 /** Folders the outside walk never reads: dependencies, build output, caches, virtual environments. */
@@ -4619,20 +4660,24 @@ const SPECIFIER_RE = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)['"]([^'"
 /**
  * The project's source files the run did not analyze, read in a bounded walk
  * of the project root, comments stripped: the identifiers they write
- * (CodeModel.outsideNames), and the TypeScript and JavaScript ones that import
- * an analyzed file — a composition root, a test — whose wiring the type
- * checker reads beside the analyzed files. Never throws; an unreadable folder
- * or file adds nothing.
+ * (CodeModel.outsideNames), those of the files in a language no checker reads
+ * (uncheckedOutsideNames, once the checker read the script ones), and the
+ * TypeScript and JavaScript ones that reach an analyzed file by their imports,
+ * directly or through other walked files — a composition root, a test, a test
+ * importing an unanalyzed barrel — whose wiring the type checker reads beside
+ * the analyzed files. Never throws; an unreadable folder or file adds nothing.
  */
 function outsideOf(
   projectRoot: string,
   analyzed: ReadonlySet<string>,
   packages: Readonly<Record<string, string>>,
-): { names: { outsideNames?: string[] }; wiring: string[] } {
-  if (!projectRoot) return { names: {}, wiring: [] };
+): { names: string[]; unchecked: string[]; wiring: string[] } {
+  if (!projectRoot) return { names: [], unchecked: [], wiring: [] };
   const names = new Set<string>();
+  const unchecked = new Set<string>();
   const wiring: string[] = [];
-  const known = new Set(analyzed);
+  /** Each walked script file and the module specifiers it writes. */
+  const scripts: Array<{ key: string; child: string; specifiers: string[] }> = [];
   /** Each renamed re-export of an unanalyzed barrel: the name it takes, and the name it publishes. */
   const aliases: Array<[string, string]> = [];
   let read = 0;
@@ -4673,24 +4718,39 @@ function outsideOf(
           }
         }
         const used = script ? text.replace(REEXPORT_RE, ' ') : text;
-        for (const m of used.matchAll(IDENTIFIER_RE)) names.add(m[0]);
-        if ((language === 'typescript' || language === 'javascript') && !key.endsWith('.d.ts')
-          && [...text.matchAll(SPECIFIER_RE)].some(m => resolveImport(key, m[1], known, packages) !== undefined)) {
-          wiring.push(child);
+        for (const m of used.matchAll(IDENTIFIER_RE)) {
+          names.add(m[0]);
+          if (!script) unchecked.add(m[0]);
         }
+        if (script && !key.endsWith('.d.ts')) scripts.push({ key, child, specifiers: [...text.matchAll(SPECIFIER_RE)].map(m => m[1]) });
       } catch {
         // an unreadable file adds nothing
       }
     }
   };
   descend(projectRoot);
+  // A script file reaches the run when one of its imports resolves to an
+  // analyzed file or to a walked file that reaches it, followed to a fixpoint.
+  const candidates = new Set([...analyzed, ...scripts.map(s => s.key)]);
+  const reaching = new Set(analyzed);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const script of scripts) {
+      if (reaching.has(script.key)) continue;
+      if (script.specifiers.some(spec => { const to = resolveImport(script.key, spec, candidates, packages); return to !== undefined && reaching.has(to); })) {
+        reaching.add(script.key);
+        wiring.push(script.child);
+        grew = true;
+      }
+    }
+  }
   for (let grew = true; grew;) {
     grew = false;
     for (const [local, exported] of aliases) {
       if (names.has(exported) && !names.has(local)) { names.add(local); grew = true; }
     }
   }
-  return { names: names.size > 0 ? { outsideNames: [...names].sort() } : {}, wiring };
+  return { names: [...names].sort(), unchecked: [...unchecked].sort(), wiring };
 }
 
 // ---------------------------------------------------------------------------

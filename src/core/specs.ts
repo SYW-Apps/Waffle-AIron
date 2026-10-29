@@ -8920,10 +8920,6 @@ export function deleteComponentSpec(id: string): boolean {
   return current().deleteComponentSpec(id);
 }
 
-export function normalizeComponentLayout(): string[] {
-  return current().normalizeComponentLayout();
-}
-
 export function loadInterfaceSpecs(): InterfaceSpec[] {
   return current().loadInterfaceSpecs();
 }

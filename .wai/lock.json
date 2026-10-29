@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "b432b3e23a3105e9fcbf7d949b51c6224a68859bf41659f1a71c787ee17bd592"
+    "digest": "61d535f27231f0e8047c4b52697a6a63e86e6f56b2ca124e20dc68ee7cf8142f"
   },
-  "lockedAt": "2026-10-28T20:32:55.876Z",
+  "lockedAt": "2026-10-29T08:26:57.828Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.3.1-dev.5",
+  "validatorVersion": "6.4.1-dev.1",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -360,7 +360,7 @@
     ".wai/specs/components/wiring_rules.yaml": "6a43e74cd10c15a9d5fdec9af7692de5a59d755941fd0963e20c44f373d85cdf",
     ".wai/specs/implementations/admin_orchestrator_impl.yaml": "d63aab37a40c616ece29074159eb895456b23c1c7a1f3f84078b5b88adf969a0",
     ".wai/specs/implementations/admin_portal_impl.yaml": "a10d8f2064df219bf3f97ba6c185bf0aa7a1fe22f1cf14efc5919601776d2c7d",
-    ".wai/specs/implementations/agent_context_portal_impl.yaml": "03078a9eb182ce26fa05f2ba07eb366d6a40940255d81b4a6a57d13d22b729da",
+    ".wai/specs/implementations/agent_context_portal_impl.yaml": "397c8a96743eab080c02aa2da2269deaf3bdaf300d3dbec5a68177a55bb9316f",
     ".wai/specs/implementations/agent_file_generator_impl.yaml": "ae080cb95e674f911b1fe180e6c9b18d371ee1946c943fef62c6ed928b6307bf",
     ".wai/specs/implementations/agent_resolver_impl.yaml": "f757d89740448043779222b246cca522b679cd41b6cd46a3f317faed92d424c2",
     ".wai/specs/implementations/ai_tool_guide_impl.yaml": "f7797c2ad34cbc4c584e1f0539a54c1d6ffc9ade18940bde1aea3779d8d04f23",
@@ -407,7 +407,7 @@
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "4f9617c76a4449425f61e59014f5bcb071d95400260d676ad238adbda55353f0",
     ".wai/specs/implementations/code_model_cache_impl.yaml": "318dba2d81b2c4dc8d6ea7cf6ed7998a0fd6cc705446be0e3133b966267f8163",
     ".wai/specs/implementations/code_model_loader_impl.yaml": "a5e63b37ff1ded2f3cf22df05ad776c8cd15b760db36f57ece394f59fdb6c321",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "5ccf37e604513408084ca94eee664c98d9309663b270fe8273e9cee05e794d17",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "99e6e23b4570f70e90aec33f07576598a991e3483f24765ea9446e20ca653852",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
     ".wai/specs/implementations/context_store_impl.yaml": "b8de786be17e816b1c1e2fd070f56ca7a85df41a87d389d5efbba5b2a7f9b252",
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "4aae3a65a7fffd3def98e9369fe142c344f4fad28cf9630822613397b3510412",
@@ -637,7 +637,7 @@
     ".wai/specs/implementations/skills_orchestrator_impl.yaml": "36b252ed68f6e89bf17e36fab5cf035e2859909f8f202fd9145027ea45ed23ef",
     ".wai/specs/implementations/skills_portal_impl.yaml": "e737000f0da04b078bcd52345fa8cfb56ad7448f69d04ffa113c266fba320969",
     ".wai/specs/implementations/skills_resource_orchestrator_impl.yaml": "2e3448572567042b4448b0cae1eec6355dec12bb17ec2081c06b0dd768afdb1a",
-    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "8d3013c99a84ec3e23cbc5b90c55aafb144390ffc48a4c7c18b07022431ea501",
+    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "78fe3884df00ac4d8e31302b013cf38718f964b75ae1c221c783fbb51a569d02",
     ".wai/specs/implementations/spec_canvas_impl.yaml": "d423e827d28044ab192907f2a6532ba767d7fd0079d9251158979e504f86933d",
     ".wai/specs/implementations/spec_doc_pages_impl.yaml": "58c8a02e802698b6108a1b81ccb6049f743b66e57620f04f05e2acda265236bf",
     ".wai/specs/implementations/spec_file_store_impl.yaml": "b0460257e3d16c0afbbd66a272ba79752d87c904aa4ff9bf7125ec1586ff219f",
@@ -746,7 +746,7 @@
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "4645c78004d68793b5db845ac138a62ed07c790896328bfc3a41f33241531d43",
     ".wai/specs/interfaces/icode_model_cache.yaml": "4f5e7412195596d416dbec5ebb9b26116c67947ce48d727b15aed5f9f658a5b2",
     ".wai/specs/interfaces/icode_model_loader.yaml": "105f607aa78267594c59643c11f7202c44704b180ab812347f705cdd90c54b6b",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "3f2194c8d4d519b62dbf2eed68be7ef65f41557e69fd35e8bab93623294d997f",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "41d73c592d9c1f9cd9d090ea23af70f21ebc245b1c078fcc56d2d473f4914af6",
     ".wai/specs/interfaces/icontext_composer.yaml": "320f063aca26c26decc7de0fa9815407ce244a70954cec47f580b047ec8a925d",
     ".wai/specs/interfaces/icontext_store.yaml": "12bc62a612fca3b89632fa23223eaf7089013d9bd41cd1645be15ab188432a3a",
     ".wai/specs/interfaces/icore_orchestrator.yaml": "3542a1b93adeece0e0605da23286eb858f03d431175aa4492605c3d399cf9c10",
@@ -1121,7 +1121,7 @@
     ".wai/specs/types/class_member_kind.yaml": "3959c31d36de0eaeaa252120251bd42b066409215cabec50659b8a8a2048675c",
     ".wai/specs/types/code_analysis.yaml": "46cc377cc53e7a3100721c00e7d68ff51f6dc8faeeb36ebc4abf8ec9045ab929",
     ".wai/specs/types/code_index.yaml": "bb8320e2ea630e74aa11e29a112b946d4ade8a1c3a40d7a9be0491fb9a93ea3b",
-    ".wai/specs/types/code_model.yaml": "6d11736d3b1938030a717ab898f40948038b84fbcafa53cc2de92fa6bbbf5f35",
+    ".wai/specs/types/code_model.yaml": "d8228b34c11b8c303c60294431a724f74a78e75497add0d5bd9a8c168d151918",
     ".wai/specs/types/code_reading.yaml": "e08a683a77f9ce3a44e5cc6e81e411662848643acb372abdb7ee79d3fcf9473b",
     ".wai/specs/types/compiler_identity.yaml": "5f02661d39fde59fbcf58763ed6f0ad176523f3916fdd96be2211fa52f25ff44",
     ".wai/specs/types/complexity_rule_config.yaml": "a691c08febea7ba3eb599b6974c8b1845a2db3098a29cd923e3d64b76cec0566",
@@ -1294,6 +1294,7 @@
     ".wai/specs/types/import_binding_fact.yaml": "7bed9ca126bc024af93ef991eac09cae8ba90d078f1572480f8202b7653e1745",
     ".wai/specs/types/import_graph.yaml": "e9c05cab66ca064c18a15c3c917d83ac213e1a3f3e18ab3e87bf748d013d8fcb",
     ".wai/specs/types/import_section.yaml": "81356e424f885e0b39a78b521682686c9e0b38a4731f1884f1f2000e518164e5",
+    ".wai/specs/types/imported_name.yaml": "f98d7d80bbee08be61fa8f5ef1497a9435b4b408c6ff20d68c440f61954db345",
     ".wai/specs/types/installed_pack.yaml": "2d79d124f8758bbd6b8844f47de9a456003372df3440a5471c13f55280954ede",
     ".wai/specs/types/instance_health_report.yaml": "a923081032a090cd0eeab70be244123ea44759bf9780c3fee6c904168a050e00",
     ".wai/specs/types/instance_health_status.yaml": "c93d434ce48e4d9723660040a84da32b05d7ba2a1c517829ce8f8fbabd4d75f2",
@@ -1389,7 +1390,7 @@
     ".wai/specs/types/minted_token.yaml": "2bfdda19de1f45a7222a6a4775783ce53cba8868acfb907b82f7171a0ad04f2e",
     ".wai/specs/types/model_tier.yaml": "57a477323bfb535d963851edec2e9216255c4748a2ef8d8d06b797e61c067c56",
     ".wai/specs/types/modelled_call.yaml": "7176eb0880558c8df7f22cb4f5c408f6e9a49abb9aa2462df76d1c8f52efce63",
-    ".wai/specs/types/module_imports.yaml": "8f03fcb133e062c902d3f88cc442a0d4f583cc1ad2c707b622c0fe9809de76fc",
+    ".wai/specs/types/module_imports.yaml": "7842eafe50b0e8764868e845381516321f8f14948cf19a3b5beb4013a881e1f0",
     ".wai/specs/types/mount_form.yaml": "b3e7dcd7ff7bde9823e4b28d3c932512b259a76baea4acda88515f4caafa214e",
     ".wai/specs/types/named_openapi_spec.yaml": "77e01b1442b6e9bb7e24348b81226a428fdb93ffafc2cb0b5e9b15e6a6ee37e4",
     ".wai/specs/types/naming_rule_config.yaml": "fa4187f8dd2a1a45c104500845e206c705200746d2ce7a6fc7454e12040611fd",
@@ -1764,7 +1765,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "86d1be60db8fa0612829492cd75164cb7b4004d336f7e77421f22af36a856ee0",
+    "design": "206a6393d715686dad925c08de8cae125d0c754d497d4ad9d1783653d6ad683c",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1775,12 +1776,12 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.3.1-dev.5",
+      "validatorVersion": "6.4.1-dev.1",
       "doctrineDigest": "d01f95d331513a34a66c890f92261f9af2edee7727ca86497f45ffb053daf50d",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 4,
+    "warnings": 1,
     "notices": 27
   }
 }
