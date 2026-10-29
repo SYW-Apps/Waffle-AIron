@@ -1819,29 +1819,23 @@ methods:
           components' modelled methods, and each function the file exports, that no contract,
           symbol, exportedVia, router or type of the file declares and that nothing in the project
           uses — no call or reference in its own file but its own body, no use in another analyzed
-          file, no use in an unanalyzed project file — where, in a file the type checker read (an
-          analyzed one, or an unanalyzed one the checker read for its wiring:
-          code_model.reachedCalls, with the names it imports by name in code_model.reachedImports),
-          a call or reference is a use only when the checker lands it on that very declaration (or
-          on a class realizing it) or lands it nowhere it can name (a receiver typed any, a port no
-          class realizes) under its name, and an import of the name from that file is a use, while a
-          same-named member of another class or module is no use however it is spelled; in an
-          analyzed file no checker read, any name the file writes is, as before, and of the
-          unanalyzed files only the identifiers of those no checker read count
-          (code_model.uncheckedOutsideNames), an unanalyzed script file that reaches none of the
-          run's files adding none; an exported class is still exempted by any identifier of an
-          unanalyzed file (code_model.outsideNames); and a re-export, named or star, is publication
-          and never a use: the name counts as used only when what the barrel publishes it as is
-          used, followed barrel by barrel — is reported once per file as UNDECLARED_PUBLIC_MEMBER
-          (warning; site the file; units the members). An exported CLASS is read the same way, where
-          the reader recorded the file's class references (source_file_facts.classReferences): a
-          top-level class the file exports beside the classes realizing its components, that no
-          contract, symbol, exportedVia, router or type declares, that its own file names nowhere
-          outside its own declaration and that nothing else uses — its own methods naming it, a
-          static factory, are no use — is one of those members, said as an exported class. Exempt:
-          constructors, accessors, fields, static, private, protected, #private,
-          underscore-prefixed, override, computed names, language protocol and framework lifecycle
-          hooks, Python dunders, and an implementation whose conformance dial is off
+          file, no identifier of an unanalyzed project file (code_model.outsideNames) — where, in a
+          file the type checker read, a call or reference is a use only when the checker lands it on
+          that very declaration (or on a class realizing it) or lands it nowhere it can name (a
+          receiver typed any, a port no class realizes) under its name, and an import of the name
+          from that file is a use, while a same-named member of another class or module is no use
+          however it is spelled; in a file no checker read, any name the file writes is, as before;
+          and a re-export, named or star, is publication and never a use: the name counts as used
+          only when what the barrel publishes it as is used, followed barrel by barrel — is reported
+          once per file as UNDECLARED_PUBLIC_MEMBER (warning; site the file; units the members). An
+          exported CLASS is read the same way, where the reader recorded the file's class references
+          (source_file_facts.classReferences): a top-level class the file exports beside the classes
+          realizing its components, that no contract, symbol, exportedVia, router or type declares,
+          that its own file names nowhere outside its own declaration and that nothing else uses —
+          its own methods naming it, a static factory, are no use — is one of those members, said as
+          an exported class. Exempt: constructors, accessors, fields, static, private, protected,
+          #private, underscore-prefixed, override, computed names, language protocol and framework
+          lifecycle hooks, Python dunders, and an implementation whose conformance dial is off
         type: local
       - stepNumber: 10
         description: Decide whether anything crossed
@@ -2467,4 +2461,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-28T22:51:52.127Z'
+updatedAt: '2026-10-27T18:08:10.814Z'

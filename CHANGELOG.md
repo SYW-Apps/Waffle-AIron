@@ -6,20 +6,8 @@ npm and the tags carry.
 
 ## Unreleased
 
-Upgrading: the code-vs-design gate may report exported functions or methods it used to let pass
-(see Changed), so `wairon validate --ci` may fail on code that passed under 6.4.0. Each finding
-names the verb and its file; declare it, make it private or remove it.
-
 ### Changed
 
-- **A test's uses are read like any other code's.** A test, a composition root or another
-  TypeScript or JavaScript file that no spec names used to keep an undeclared exported function or
-  method from `UNDECLARED_PUBLIC_MEMBER` by writing its name anywhere, even as a method of another
-  class. The type checker now reads such a file when its imports reach the project's code, and it
-  counts as a use only when a call or reference lands on that very declaration, through a barrel
-  included, or when the file imports the name from the file that exports it. A script file that imports none of the project's code no longer exempts anything. Files
-  in a language no checker reads still exempt a name by writing it, and an exported class is judged
-  as before.
 - **The own-key list shows less.** `GET /web/tokens` (the Agents page) answers each key's id,
   projects, creation and expiry time, label, owner and `readOnly`, and no longer the key's hash or
   who minted it.

@@ -48,8 +48,8 @@ import type { FamilyMigrationReport, MigrationPlan, MigrationRequest } from '../
 // gap belongs in the spec, and it is reported rather than papered over. The
 // re-export lands on the core portal file; this file itself calls none of them.
 //
-// buildCanvasDataModel (a spec_tree_portal method) is the model as DATA; the
-// commands reach it through the core adapter.
+// buildCanvasDataModel (a spec_tree_portal method) is the model as DATA. The
+// commands reach it through the core adapter; it stays here for the barrel.
 export {
   generateComponentDiagram,
   generateSequenceDiagram,
@@ -57,6 +57,7 @@ export {
   diagramSetIndex,
   toMarkdown,
   loadSpecGraph,
+  buildCanvasDataModel,
 } from '../core/index.js';
 
 interface MemberAddOptions {

@@ -905,17 +905,6 @@ export interface CodeModel {
    * found no such file.
    */
   outsideNames?: string[];
-  /**
-   * The identifiers of outsideNames written only in the walked files the type
-   * checker did not read: files in a language no checker reads and, when no
-   * checker reading was made, every walked file. A TypeScript or JavaScript
-   * file the checker read is judged by where its calls and references land
-   * (reachedCalls), and one reaching none of the run's files can reach no
-   * declaration of the run, so neither adds a name here. What a public
-   * function or method nothing uses is told apart by; it may only ever exempt
-   * a name. Absent when no such file was walked.
-   */
-  uncheckedOutsideNames?: string[];
 }
 
 /**
@@ -928,16 +917,6 @@ export interface ModuleImports {
   packages: string[];
   /** Each project source file an import of the file resolves to, by canonical key. */
   files: string[];
-  /** Each value name the file imports by name from a project source file, as that file exports it (`import { a as b }` takes `a`): what an import of a name from its file is read from. Absent when it imports none. */
-  names?: ImportedName[];
-}
-
-/** imported_name — one value name a source file imports by name from a project source file, as that file exports it (`import { a as b }` takes `a`). */
-export interface ImportedName {
-  /** The name as the imported file exports it. */
-  name: string;
-  /** The project source file it is imported from, by canonical key. */
-  file: string;
 }
 
 /**

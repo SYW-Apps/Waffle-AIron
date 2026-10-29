@@ -57,6 +57,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 import { bearerToken, sendJson } from './httpio.js';
+// Historical import site for this helper — republish it.
+export { bearerToken } from './httpio.js';
 import { publishChange } from './realtime.js';
 
 function projectSelector(req: IncomingMessage): string | null {

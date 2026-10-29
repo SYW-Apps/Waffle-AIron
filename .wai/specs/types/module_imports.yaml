@@ -17,13 +17,7 @@ fields:
     type: list<string>
     description: Each project source file an import of the file resolves to, by canonical key
     optional: false
-  - name: names
-    type: list<ImportedName>
-    description: >-
-      Each value name the file imports by name from a project source file (a type-only import
-      aside): what an import of a name from its file is read from. Absent when it imports none
-    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-10-08T08:30:19.357Z'
-updatedAt: '2026-10-28T22:51:43.850Z'
+updatedAt: '2026-10-08T08:30:20.112Z'
