@@ -6,11 +6,22 @@ npm and the tags carry.
 
 ## Unreleased
 
-Upgrading: the code-vs-design gate may report exported functions or methods it used to let pass
-(see Changed), so `wairon validate --ci` may fail on code that passed under 6.4.0. Each finding
-names the verb and its file; declare it, make it private or remove it.
+Upgrading: the code-vs-design gate may report exported functions or methods, and dependencies, it
+used to let pass (see Changed), so `wairon validate --ci` may fail on code that passed under 6.4.0.
+Each finding names the verb or the edge and its file; declare it, make it private or remove it.
 
 ### Changed
+
+- **A re-export is a dependency.** A file that re-exports another component's code
+  (`export { x } from`, `export * from`, `export * as ns from`) now needs the same declared relation
+  as one that imports it, and `UNDECLARED_DEPENDENCY` reports it otherwise. A name imported through a
+  barrel that no component realizes is charged to the file where the type checker finds it
+  declared. A type-only re-export republishes no code and is still never reported.
+- **The diagram API is designed.** The scoped and whole-set Mermaid diagrams behind
+  `wairon diagram --subsystem`, `--sequence` and `--all` are now declared contract methods of the
+  core Portal (`generateComponentDiagram`, `generateSequenceDiagram`, `generateDiagramSet`,
+  `diagramSetIndex`), with `ComponentDiagramOptions`, `SequenceDiagramOptions` and `DiagramFile` as
+  types. `loadSpecGraph` is no longer exported from the library entry.
 
 - **A test's uses are read like any other code's.** A test, a composition root or another
   TypeScript or JavaScript file that no spec names used to keep an undeclared exported function or
