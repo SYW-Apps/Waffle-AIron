@@ -4,15 +4,30 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
-## Unreleased
+## v6.5.0 (from v6.4.0)
 
-Upgrading: the code-vs-design gate may report exported functions or methods, and dependencies, it
-used to let pass (see Changed), so `wairon validate --ci` may fail on code that passed under 6.4.0.
-Each finding names the verb or the edge and its file; declare it, make it private or remove it.
-Python code is now checked for routes, data types and declared dependencies too, so a Python
-project may see route, type-field and `UNREALIZED_DEPENDENCY` findings it did not see before.
+Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported
+functions or methods, dependencies and parameter types it used to let pass (see Changed), so
+`wairon validate --ci` may fail on code that passed under 6.4.0. Python code is now checked for
+routes, data types and declared dependencies too. Each finding names the verb, the edge, the route,
+the field or the parameter, and its file.
+
+1. Install 6.5.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.5.0` (or `--save-dev` in the project) for npm.
+2. Run `wairon doctor --fix` once, so the generated guides (`.wai/context/wairon-guide.md`,
+   `.claude/CLAUDE.md` and their kin) describe 6.5.0, and commit the result.
+3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
+   to the new wairon.
+4. Run `wairon validate --ci` and settle what it reports: declare what the code really does, or
+   change the code to what the design says.
 
 ### Changed
+
+- **A scalar parameter's type is compared.** A parameter the code annotates as another scalar than
+  its contract declares (`authorId: number` for a `string`, a Python `text: int`) is now
+  `PARAM_TYPE_MISMATCH`, naming both types, as a return type already was. TypeScript's `number` for
+  an int, a date written as a string, an enum as a string and a named scalar as what it holds still
+  agree; a union or a type the design does not know is not compared.
 
 - **Python routes, data types and dependencies are checked.** Python's code reading used to say
   "not checked: routes, data types", and a declared edge between two Python components was never
