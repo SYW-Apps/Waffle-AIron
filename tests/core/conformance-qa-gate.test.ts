@@ -357,10 +357,11 @@ describe('an import against a Portal\'s call edge is reported once, on the impor
 });
 
 describe('the code reading says what was checked', () => {
-  it('a Python realization is read at pattern grade, its checks and its gaps named', () => {
+  it('a Python realization is read at pattern grade, its checks named', () => {
     const reading = run(dispatchTree(py(PY_DISPATCH_BODY), true)).result.codeReading ?? '';
     expect(reading).toMatch(/^Code read at grade pattern/);
-    expect(reading).toContain('python: 2 file(s) at grade pattern with its signature reader, checked methods, params, returns (where annotated), public members, imports, calls (claimed calls found by name, through declared receivers; calls the narrative does not have are not reported) — not checked: routes, data types');
+    expect(reading).toContain('python: 2 file(s) at grade pattern with its signature reader, checked methods, params, returns (where annotated), public members, imports, calls (claimed calls found by name, through declared receivers; calls the narrative does not have are not reported), routes, data types (of declarative data classes).');
+    expect(reading).not.toContain('not checked: routes');
   });
 
   it('a Portal binding HTTP endpoints with no router named is counted among what was not checked', () => {

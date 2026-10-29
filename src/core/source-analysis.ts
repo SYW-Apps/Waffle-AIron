@@ -4490,6 +4490,8 @@ export function buildCodeModel(
   // reading it. Same containment, same tiers, same dedup (N:1).
   /** Every file an implementation names, absolute: the helpers a handle's reads never follow into (another component's code is that component's). */
   const claimedFiles = new Set<string>(claimed.map(file => path.resolve(projectRoot, file)));
+  /** Each Python file's router objects, folded across modules once every file is read. */
+  const pythonRouting = new Map<string, PythonDeclarative['routers']>();
   for (const declared of declaredPaths) {
     const sourcePath = pathKey(declared);
     if (seen.has(sourcePath)) continue;
@@ -4593,8 +4595,9 @@ export function buildCodeModel(
       // pattern grade, with what it read said in `reads`.
       const base = analyzeWithPatterns(text, LANGUAGE_PATTERNS.python);
       try {
-        const read = readPython(text);
+        const { routing, ...read } = readPython(text);
         analyzed = { ...base, ...read, imports: [...new Set([...base.imports, ...read.imports])] };
+        if (routing.size > 0) pythonRouting.set(sourcePath, routing);
       } catch {
         analyzed = base;
       }
@@ -4608,6 +4611,7 @@ export function buildCodeModel(
 
     files.push({ path: sourcePath, status: 'analyzed', language, ...analyzed });
   }
+  foldPythonRoutes(files, pythonRouting);
 
   // Every call of every exact-grade file, resolved by the type checker. A
   // program that cannot be built leaves the facts without resolved calls, and
@@ -5133,14 +5137,19 @@ export function findTestsReferencing(
 // compare a signature, a public surface, an import and a call through an
 // annotated collaborator can judge Python too.
 //
+// It also reads what a module declares in its frameworks' own forms: the
+// routes of each router object (FastAPI, Flask and their kin) off its route
+// decorators, and the fields of each declarative data class (a dataclass, a
+// Pydantic model, a TypedDict, a NamedTuple, an attrs class).
+//
 // What it does NOT read it leaves unset, and the file says what it read
 // (SourceFileFacts.reads), so a check never mistakes silence for a pass:
-// inferred types, dynamic attribute access, routes and data shapes are not
-// read here.
+// inferred types, dynamic attribute access, a route or a prefix that does not
+// settle to a string, and a class built by a call are not read here.
 // ---------------------------------------------------------------------------
 
 /** The checks this reader's facts are fuel for. */
-const PYTHON_READS: CodeReading[] = ['params', 'returns', 'members', 'imports', 'calls'];
+const PYTHON_READS: CodeReading[] = ['params', 'returns', 'members', 'imports', 'calls', 'routes', 'types'];
 
 type TokenKind = 'name' | 'op' | 'string' | 'number';
 
@@ -5324,6 +5333,400 @@ function topLevelColon(tokens: Token[], from: number): number {
   return -1;
 }
 
+/** The classes whose construction makes a module-level name a router object. */
+const PYTHON_ROUTER_CLASSES = new Set(['FastAPI', 'APIRouter', 'Flask', 'Blueprint', 'Quart', 'Sanic']);
+/** A route decorator's verb, by the attribute it is written as. */
+const PYTHON_ROUTE_VERBS: Record<string, string> = { get: 'GET', post: 'POST', put: 'PUT', patch: 'PATCH', delete: 'DELETE', head: 'HEAD', options: 'OPTIONS' };
+/** The decorators taking `methods=`, GET where they state none. */
+const PYTHON_ROUTE_METHODS_DECORATORS = new Set(['route', 'api_route']);
+/** Calls on a router that add a route this reader cannot settle, or mount an application. */
+const PYTHON_ROUTER_UNREAD_CALLS = new Set(['mount', 'add_url_rule', 'add_api_route', 'add_route']);
+/** The decorators that make a class's annotated body its fields. */
+const PYTHON_DATA_DECORATORS: Record<string, 'dataclass' | 'attrs'> = {
+  'dataclass': 'dataclass', 'dataclasses.dataclass': 'dataclass', 'pydantic.dataclasses.dataclass': 'dataclass',
+  'define': 'attrs', 'frozen': 'attrs', 'mutable': 'attrs',
+  'attr.s': 'attrs', 'attr.attrs': 'attrs', 'attr.define': 'attrs', 'attr.frozen': 'attrs', 'attr.mutable': 'attrs',
+  'attrs.define': 'attrs', 'attrs.frozen': 'attrs', 'attrs.mutable': 'attrs',
+};
+/** The bases that make a class's annotated body its fields, by their last segment. */
+const PYTHON_DATA_BASES: Record<string, 'pydantic' | 'typeddict' | 'namedtuple'> = {
+  BaseModel: 'pydantic', BaseSettings: 'pydantic', TypedDict: 'typeddict', NamedTuple: 'namedtuple',
+};
+/** The field calls whose arguments say whether a field has a default. */
+const PYTHON_FIELD_CALLS = new Set(['field', 'Field', 'ib', 'attrib']);
+
+/** One router a module includes into another: what names it, and the prefix it is included under. */
+interface PythonRouteInclude {
+  /** The included router as written: a name, or `module.name` through a namespace import. */
+  ref: string;
+  /** The include's own prefix (`prefix=`, `url_prefix=`), '' where it states none. */
+  prefix: string;
+  /** True for `register_blueprint`, whose `url_prefix=` replaces the blueprint's own. */
+  replaces: boolean;
+  /** Whether the include states a prefix at all. */
+  prefixed: boolean;
+}
+
+/** One router object of a module, as its decorators and includes write it. */
+interface PythonRouter {
+  /** The prefix its construction states, '' where none. */
+  prefix: string;
+  /** Its own decorated routes, without its prefix. */
+  routes: RouteFact[];
+  includes: PythonRouteInclude[];
+  /** True when a route, prefix or include does not settle, or it mounts an application. */
+  unread: boolean;
+}
+
+/** What the declarative walk reads: each data class's shape, and each router object. */
+interface PythonDeclarative {
+  typeShapes: Record<string, TypeShapeFact>;
+  routers: Map<string, PythonRouter>;
+}
+
+/** A string literal's value, or undefined for an f-string or bytes (which no reader settles). */
+function pythonStringValue(token: Token | undefined): string | undefined {
+  if (!token || token.kind !== 'string') return undefined;
+  const prefix = /^[rRbBuUfF]*/.exec(token.text)![0];
+  if (/[fFbB]/.test(prefix)) return undefined;
+  const body = token.text.slice(prefix.length);
+  const quote = body.startsWith('"""') || body.startsWith("'''") ? body.slice(0, 3) : body[0];
+  if (!body.endsWith(quote) || body.length < quote.length * 2) return undefined;
+  return body.slice(quote.length, body.length - quote.length);
+}
+
+/** A dotted name spelled by a run of name and `.` tokens from the start of a span, and where it ends. */
+function dottedName(tokens: Token[], from = 0): { name: string; end: number } {
+  let name = '';
+  let i = from;
+  while (i < tokens.length && (tokens[i].kind === 'name' || (tokens[i].kind === 'op' && tokens[i].text === '.'))) {
+    name += tokens[i].text;
+    i++;
+  }
+  return { name, end: i };
+}
+
+/** A path's segments as a route reads them: a parameter is `*`, and a path converter leaves the length open. */
+function pythonPathSegments(pathText: string): { segments: string[]; exactLength: boolean } {
+  const segments: string[] = [];
+  for (const segment of pathText.split('/').filter(Boolean)) {
+    const param = /^\{([^}:]+)(?::([^}]*))?\}$/.exec(segment) ?? /^<(?:([^>:]+):)?([^>]+)>$/.exec(segment);
+    const converter = param ? (segment.startsWith('{') ? param[2] : param[1]) : undefined;
+    if (converter === 'path') return { segments, exactLength: false };
+    segments.push(param || /[{<]/.test(segment) ? '*' : segment);
+  }
+  return { segments, exactLength: true };
+}
+
+/** A keyword argument of a call's parts, or undefined. */
+function keywordArg(parts: Token[][], name: string): Token[] | undefined {
+  const part = parts.find(p => p[0]?.kind === 'name' && p[0].text === name && p[1]?.kind === 'op' && p[1].text === '=');
+  return part ? part.slice(2) : undefined;
+}
+
+/** The positional arguments of a call's parts. */
+function positionalArgs(parts: Token[][]): Token[][] {
+  return parts.filter(p => !(p[0]?.kind === 'name' && p[1]?.kind === 'op' && p[1].text === '=') && !(p[0]?.kind === 'op' && (p[0].text === '*' || p[0].text === '**')));
+}
+
+/** The argument parts of the call opened at `open` (a `(` token), or undefined when it does not close. */
+function callArgs(tokens: Token[], open: number): Token[][] | undefined {
+  if (tokens[open]?.text !== '(') return undefined;
+  const close = closingIndex(tokens, open);
+  if (close < 0) return undefined;
+  return splitTopLevel(tokens.slice(open + 1, close)).filter(p => p.length > 0);
+}
+
+/**
+ * Read a module's declarative surface: the fields of each data class a
+ * dataclass or attrs decorator, or a Pydantic, TypedDict or NamedTuple base,
+ * makes declarative, and the routes of each router object — its route
+ * decorators, its construction's prefix and the routers it includes. A value
+ * that does not settle to a string is never guessed: the router is unread.
+ */
+function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string, ImportBindingFact>): PythonDeclarative {
+  const typeShapes: Record<string, TypeShapeFact> = {};
+  const kinds = new Map<string, 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple'>();
+  const routers = new Map<string, PythonRouter>();
+  const constants = new Map<string, string>();
+  const routerOf = (name: string): PythonRouter | undefined => {
+    let router = routers.get(name);
+    if (!router && importBindings.has(name) && !importBindings.get(name)!.namespace) {
+      router = { prefix: '', routes: [], includes: [], unread: false };
+      routers.set(name, router);
+    }
+    return router;
+  };
+  /** A string a value spells: a literal, or a module-level constant bound to one. */
+  const settle = (tokens: Token[] | undefined): string | undefined => {
+    if (!tokens || tokens.length !== 1) return undefined;
+    if (tokens[0].kind === 'name') return constants.get(tokens[0].text);
+    return pythonStringValue(tokens[0]);
+  };
+
+  let decorators: Token[][] = [];
+  let current: { name: string; kind: 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple'; total: boolean; bodyIndent?: number; shape: TypeShapeFact } | undefined;
+
+  for (const line of lines) {
+    const t = line.tokens;
+    if (line.indent === 0) current = undefined;
+
+    // ---- a data class's direct body ----
+    if (current && line.indent > 0) {
+      current.bodyIndent ??= line.indent;
+      if (line.indent !== current.bodyIndent) continue;
+      if (t[0]?.kind === 'op' && t[0].text === '@') continue;
+      const defAt = t[0]?.text === 'async' ? 1 : 0;
+      if (t[defAt]?.kind === 'name' && t[defAt].text === 'def' && t[defAt + 1]?.kind === 'name') {
+        const name = t[defAt + 1].text;
+        if (!name.startsWith('_')) current.shape.methods.push(name);
+        continue;
+      }
+      if (t[0]?.kind !== 'name') continue;
+      const name = t[0].text;
+      const eq = t.findIndex(x => x.kind === 'op' && x.text === '=');
+      const value = eq >= 0 ? t.slice(eq + 1) : undefined;
+      if (t[1]?.kind === 'op' && t[1].text === ':') {
+        const annotation = t.slice(2, eq >= 0 ? eq : undefined);
+        const head = dottedName(annotation).name.split('.').pop() ?? '';
+        if (head === 'ClassVar' || head === 'InitVar' || head === 'KW_ONLY') continue;
+        if (current.kind === 'pydantic' && name.startsWith('_')) continue;
+        let optional: boolean;
+        if (current.kind === 'typeddict') optional = head === 'NotRequired' ? true : head === 'Required' ? false : !current.total;
+        else optional = value !== undefined && hasDefault(value);
+        current.shape.fields.push({ name, optional });
+        continue;
+      }
+      // attrs without annotations: `x = attr.ib()`, `x = field()`.
+      if (current.kind === 'attrs' && t[1]?.kind === 'op' && t[1].text === '=' && value) {
+        const call = dottedName(value);
+        if (PYTHON_FIELD_CALLS.has(call.name.split('.').pop() ?? '') && value[call.end]?.text === '(') {
+          current.shape.fields.push({ name, optional: hasDefault(value) });
+        }
+      }
+      continue;
+    }
+    if (line.indent > 0) continue;
+
+    // ---- module level ----
+    if (t[0]?.kind === 'op' && t[0].text === '@') {
+      decorators.push(t.slice(1));
+      continue;
+    }
+    const pending = decorators;
+    decorators = [];
+
+    if (t[0]?.kind === 'name' && t[0].text === 'class' && t[1]?.kind === 'name') {
+      const name = t[1].text;
+      const parts = t[2]?.text === '(' ? callArgs(t, 2) ?? [] : [];
+      const bases = positionalArgs(parts).map(p => dottedName(p).name).filter(Boolean);
+      const total = settleBool(keywordArg(parts, 'total'));
+      let kind: 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple' | undefined;
+      for (const decorator of pending) {
+        const found = PYTHON_DATA_DECORATORS[dottedName(decorator).name];
+        if (found) kind = found;
+      }
+      const roots = new Set(['Generic', 'object']);
+      let inherited = false;
+      if (kind) inherited = bases.some(base => !roots.has(base.split('.').pop() ?? ''));
+      else {
+        for (const base of bases) {
+          const last = base.split('.').pop() ?? '';
+          const root = PYTHON_DATA_BASES[last];
+          if (root) { kind = root; roots.add(last); }
+          else if (kinds.has(base)) { kind = kinds.get(base); inherited = true; }
+        }
+        if (kind) inherited = inherited || bases.some(base => !roots.has(base.split('.').pop() ?? ''));
+      }
+      if (!kind) continue;
+      kinds.set(name, kind);
+      const shape: TypeShapeFact = { origin: 'declared', fields: [], methods: [], ...(inherited ? { inherited: true } : {}) };
+      typeShapes[name] = shape;
+      current = { name, kind, total: total !== false, shape };
+      continue;
+    }
+
+    // A route-decorated top-level function: each decorator on a router object is a route.
+    const defAt = t[0]?.text === 'async' ? 1 : 0;
+    if (t[defAt]?.kind === 'name' && t[defAt].text === 'def') {
+      for (const decorator of pending) readRouteDecorator(decorator);
+      continue;
+    }
+
+    // `NAME = "literal"`: a constant a path or prefix may name.
+    if (t[0]?.kind === 'name' && t[1]?.kind === 'op' && t[1].text === '=' && t.length === 3) {
+      const value = pythonStringValue(t[2]);
+      if (value !== undefined) constants.set(t[0].text, value);
+    }
+
+    // `NAME = Router(...)`: a router object, under the prefix its construction states.
+    if (t[0]?.kind === 'name' && t[1]?.kind === 'op' && t[1].text === '=') {
+      const call = dottedName(t, 2);
+      if (PYTHON_ROUTER_CLASSES.has(call.name.split('.').pop() ?? '') && t[call.end]?.text === '(') {
+        const parts = callArgs(t, call.end) ?? [];
+        const stated = keywordArg(parts, 'prefix') ?? keywordArg(parts, 'url_prefix');
+        const prefix = stated === undefined ? '' : settle(stated);
+        routers.set(t[0].text, { prefix: prefix ?? '', routes: [], includes: [], unread: prefix === undefined });
+        continue;
+      }
+    }
+
+    // `router.include_router(r, prefix=…)`, `app.register_blueprint(bp, url_prefix=…)`, `app.mount(…)`.
+    if (t[0]?.kind === 'name' && t[1]?.text === '.' && t[2]?.kind === 'name' && t[3]?.text === '(') {
+      const router = routers.get(t[0].text) ?? (importBindings.has(t[0].text) ? routerOf(t[0].text) : undefined);
+      if (!router) continue;
+      const method = t[2].text;
+      if (PYTHON_ROUTER_UNREAD_CALLS.has(method)) { router.unread = true; continue; }
+      if (method !== 'include_router' && method !== 'register_blueprint') continue;
+      const parts = callArgs(t, 3);
+      const first = parts ? positionalArgs(parts)[0] : undefined;
+      const ref = first ? dottedName(first) : undefined;
+      if (!parts || !first || !ref || ref.end !== first.length || ref.name.split('.').length > 2) { router.unread = true; continue; }
+      const stated = keywordArg(parts, method === 'include_router' ? 'prefix' : 'url_prefix');
+      const prefix = stated === undefined ? '' : settle(stated);
+      if (prefix === undefined) { router.unread = true; continue; }
+      router.includes.push({ ref: ref.name, prefix, replaces: method === 'register_blueprint', prefixed: stated !== undefined });
+    }
+  }
+
+  return { typeShapes, routers };
+
+  /** One decorator on a top-level function, read as a route of the router object it is written on. */
+  function readRouteDecorator(decorator: Token[]): void {
+    const callee = dottedName(decorator);
+    const segments = callee.name.split('.');
+    if (segments.length !== 2) return;
+    const [receiver, attribute] = segments;
+    const verb = PYTHON_ROUTE_VERBS[attribute];
+    if (!verb && !PYTHON_ROUTE_METHODS_DECORATORS.has(attribute)) return;
+    const router = routerOf(receiver);
+    if (!router) return;
+    const parts = callArgs(decorator, callee.end);
+    if (!parts) { router.unread = true; return; }
+    const pathTokens = positionalArgs(parts)[0] ?? keywordArg(parts, 'path') ?? keywordArg(parts, 'rule');
+    const pathText = settle(pathTokens);
+    if (pathText === undefined) { router.unread = true; return; }
+    let verbs = verb ? [verb] : ['GET'];
+    if (!verb) {
+      const methods = keywordArg(parts, 'methods');
+      if (methods) {
+        const open = methods[0];
+        const close = methods[methods.length - 1];
+        const listed = open?.kind === 'op' && ['[', '(', '{'].includes(open.text) && close?.kind === 'op' && [']', ')', '}'].includes(close.text)
+          ? splitTopLevel(methods.slice(1, -1)).filter(p => p.length > 0).map(p => settle(p))
+          : [undefined];
+        if (listed.length === 0 || listed.some(v => v === undefined)) { router.unread = true; return; }
+        verbs = (listed as string[]).map(v => v.toUpperCase());
+      }
+    }
+    const { segments: path, exactLength } = pythonPathSegments(pathText);
+    for (const v of verbs) router.routes.push({ verb: v, segments: path, exactLength, fullPath: true });
+  }
+
+  /** Whether a field's default value gives it a default: any value, but a field call only with a default or a default factory. */
+  function hasDefault(value: Token[]): boolean {
+    const call = dottedName(value);
+    const last = call.name.split('.').pop() ?? '';
+    if (!PYTHON_FIELD_CALLS.has(last) || value[call.end]?.text !== '(') return value.length > 0;
+    const parts = callArgs(value, call.end) ?? [];
+    if (keywordArg(parts, 'default') || keywordArg(parts, 'default_factory') || keywordArg(parts, 'factory')) return true;
+    // Field(x) and attr.ib(x) take the default first; Field(...) is required.
+    const first = positionalArgs(parts)[0];
+    return (last === 'Field' || last === 'ib' || last === 'attrib') && !!first && !(first.length === 1 && first[0].text === '...');
+  }
+
+  /** `True` or `False` as written, else undefined. */
+  function settleBool(tokens: Token[] | undefined): boolean | undefined {
+    if (!tokens || tokens.length !== 1 || tokens[0].kind !== 'name') return undefined;
+    return tokens[0].text === 'True' ? true : tokens[0].text === 'False' ? false : undefined;
+  }
+}
+
+/** A route under a prefix's segments. */
+function underPrefix(prefix: string, route: RouteFact): RouteFact {
+  const { segments } = pythonPathSegments(prefix);
+  return { ...route, segments: [...segments, ...route.segments] };
+}
+
+/**
+ * Fold every Python router's includes across modules, and the routes
+ * decorated on an imported router object into that object in its own module:
+ * each settled router's routes become its functionRoutes, under its prefix,
+ * and an include that lands on no router of an analyzed module, or on an
+ * unread one, leaves the including router unread (unreadRouters).
+ */
+function foldPythonRoutes(files: SourceFileFacts[], routing: Map<string, PythonDeclarative['routers']>): void {
+  if (routing.size === 0) return;
+  const byPath = new Map(files.map(f => [f.path, f]));
+  const known = new Set(routing.keys());
+  /** The module and router a reference in `file` names, through its import bindings. */
+  const resolveRef = (file: string, ref: string): { file: string; name: string } | undefined => {
+    const facts = byPath.get(file);
+    const [head, attr] = ref.split('.');
+    const binding = facts?.importBindings?.[head];
+    if (attr !== undefined) {
+      if (!binding?.namespace) return undefined;
+      const target = resolveImport(file, binding.from, known);
+      return target ? { file: target, name: attr } : undefined;
+    }
+    if (!binding) return routing.get(file)?.has(head) ? { file, name: head } : undefined;
+    if (binding.namespace) return undefined;
+    const target = resolveImport(file, binding.from, known);
+    return target ? { file: target, name: binding.imported ?? head } : undefined;
+  };
+  // The routes decorated on an imported router object join it where it lives.
+  const joined = new Map<string, RouteFact[]>();
+  for (const [file, routers] of routing) {
+    for (const [name, router] of routers) {
+      const binding = byPath.get(file)?.importBindings?.[name];
+      if (!binding || binding.namespace || router.routes.length === 0) continue;
+      const home = resolveRef(file, name);
+      if (!home || home.file === file) continue;
+      const key = `${home.file}#${home.name}`;
+      joined.set(key, [...(joined.get(key) ?? []), ...router.routes]);
+    }
+  }
+  /** A router's routes beneath its own prefix (inner) and that prefix, or undefined when it is unread or not found. */
+  const memo = new Map<string, { prefix: string; inner: RouteFact[] } | null>();
+  const fold = (file: string, name: string, visiting: Set<string>): { prefix: string; inner: RouteFact[] } | undefined => {
+    const key = `${file}#${name}`;
+    if (memo.has(key)) return memo.get(key) ?? undefined;
+    const router = routing.get(file)?.get(name);
+    if (!router || router.unread || visiting.has(key)) { memo.set(key, null); return undefined; }
+    visiting.add(key);
+    const inner: RouteFact[] = [...router.routes, ...(joined.get(key) ?? [])];
+    for (const include of router.includes) {
+      const target = resolveRef(file, include.ref);
+      const sub = target ? fold(target.file, target.name, visiting) : undefined;
+      if (!sub) { visiting.delete(key); memo.set(key, null); return undefined; }
+      const mounted = include.replaces && include.prefixed ? include.prefix : `${include.prefix}/${sub.prefix}`;
+      for (const route of sub.inner) inner.push(underPrefix(mounted, route));
+    }
+    visiting.delete(key);
+    const result = { prefix: router.prefix, inner };
+    memo.set(key, result);
+    return result;
+  };
+  for (const [file, routers] of routing) {
+    const facts = byPath.get(file);
+    if (!facts) continue;
+    const routes: Record<string, RouteFact[]> = {};
+    const unread: string[] = [];
+    for (const name of routers.keys()) {
+      const folded = fold(file, name, new Set());
+      if (!folded) { unread.push(name); continue; }
+      const seen = new Map<string, RouteFact>();
+      for (const route of folded.inner) {
+        const full = underPrefix(folded.prefix, route);
+        seen.set(routeKey(full), full);
+      }
+      if (seen.size > 0) routes[name] = [...seen.values()];
+    }
+    if (Object.keys(routes).length > 0) facts.functionRoutes = { ...(facts.functionRoutes ?? {}), ...routes };
+    if (unread.length > 0) facts.unreadRouters = unread.sort();
+  }
+}
+
 /** What the Python reader adds to a file's pattern facts. */
 interface PythonFacts {
   functionParams: Record<string, ParameterFact[][]>;
@@ -5340,6 +5743,10 @@ interface PythonFacts {
   imports: string[];
   /** Module-level public functions and classes: no leading underscore, and in `__all__` where the module declares one. */
   exportedNames: string[];
+  /** The fields of each declarative data class. */
+  typeShapes?: Record<string, TypeShapeFact>;
+  /** Each router object, folded across modules once every file is read. */
+  routing: PythonDeclarative['routers'];
   reads: CodeReading[];
 }
 
@@ -5547,6 +5954,7 @@ function readPython(text: string): PythonFacts {
     functionCallSites[name] = [...seen.values()];
   }
   const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
+  const declarative = readPythonDeclarative(lines, importBindings);
 
   // The top-level classes the module names outside their own `class` block:
   // a name token anywhere else — a call constructing it, a base class, an
@@ -5580,6 +5988,8 @@ function readPython(text: string): PythonFacts {
     localTypes: Object.fromEntries([...localTypes].map(([k, v]) => [k, [...v]])),
     imports: [...imports],
     exportedNames: [...new Set(exportedNames)],
+    ...(Object.keys(declarative.typeShapes).length > 0 ? { typeShapes: declarative.typeShapes } : {}),
+    routing: declarative.routers,
     reads: PYTHON_READS,
   };
 

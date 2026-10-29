@@ -9,8 +9,29 @@ npm and the tags carry.
 Upgrading: the code-vs-design gate may report exported functions or methods, and dependencies, it
 used to let pass (see Changed), so `wairon validate --ci` may fail on code that passed under 6.4.0.
 Each finding names the verb or the edge and its file; declare it, make it private or remove it.
+Python code is now checked for routes, data types and declared dependencies too, so a Python
+project may see route, type-field and `UNREALIZED_DEPENDENCY` findings it did not see before.
 
 ### Changed
+
+- **Python routes, data types and dependencies are checked.** Python's code reading used to say
+  "not checked: routes, data types", and a declared edge between two Python components was never
+  judged. Now:
+  - A Python Portal's routes are read off the route decorators of FastAPI, APIRouter, Flask,
+    Blueprint, Quart and Sanic objects, under the prefixes of their construction and of the
+    `include_router` / `register_blueprint` calls that bring them in, across modules. They are
+    compared with the Portal's HTTP endpoints like TypeScript routes (`UNDECLARED_ROUTE`,
+    `UNROUTED_ENDPOINT`). Name the router object in `router:`. A router with a path, prefix,
+    methods list or include that is not a string literal or a module constant holding one, or that
+    mounts an application, is `UNREADABLE_ROUTER`. A Python Portal with HTTP endpoints that names
+    no router now gets `ROUTES_UNCHECKED` or `ROUTER_UNDECLARED`.
+  - The fields of dataclass, Pydantic, `TypedDict`, `NamedTuple` and attrs classes are compared
+    with their type spec's (`UNREALIZED_TYPE_FIELD`, `UNDECLARED_TYPE_FIELD`,
+    `TYPE_FIELD_OPTIONALITY`), names compared in either casing. `Optional[T]` alone means nullable,
+    not optional, as in Pydantic v2. Plain classes are not read.
+  - A declared dependency between two Python components is `UNREALIZED_DEPENDENCY` unless one
+    imports the other, or calls a method of the other's contract through a field or a variable (a
+    collaborator injected through a Protocol).
 
 - **A re-export is a dependency.** A file that re-exports another component's code
   (`export { x } from`, `export * from`, `export * as ns from`) now needs the same declared relation

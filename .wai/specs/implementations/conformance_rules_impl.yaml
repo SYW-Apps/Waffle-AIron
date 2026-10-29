@@ -101,7 +101,10 @@ methods:
           component realizes, that file's reexportBindings entry publishing the name leads to its
           module under its local name and a star to its module when that module exports the name,
           from one unrealized file to the next, each file and name followed once, and a namespace
-          binding reaches every mapped file the unrealized file republishes
+          binding reaches every mapped file the unrealized file republishes. pyFilesOf(compId) =
+          realization.filesOf narrowed to the files the Python reader read imports in
+          (source_file_facts.reads includes imports), and pyGraph = ctx.importGraph over all such
+          files
         type: local
       - stepNumber: 3
         description: >-
@@ -170,9 +173,12 @@ methods:
         over: ctx.components
         endStep: 14
       - stepNumber: 9
-        description: A component with no exact-grade file continues with the next component
+        description: >-
+          A component with no file to trace from continues with the next component: its exact-grade
+          files, else — a component realized in Python — the files the Python reader read its
+          imports in
         type: branch
-        condition: fromFiles = filesOf(component.id) is non-empty
+        condition: fromFiles = filesOf(component.id), else pyFilesOf(component.id), is non-empty
         onFalseStep: 8
       - stepNumber: 10
         label: targetLoop
@@ -193,7 +199,10 @@ methods:
           realization.filesIn(target.subsystem) minus fromFiles: UNREALIZED_DEPENDENCY accepts an
           import into any module of the target subsystem as proof the hop exists, and a shared file
           satisfies it trivially — WHERE the hop lands (the target's portal file or past it) is
-          portal-imports' question, not this one; within one subsystem, filesOf(targetId)
+          portal-imports' question, not this one; within one subsystem, filesOf(targetId). For
+          Python fromFiles each of these is read over pyFilesOf in place of the exact-grade files,
+          so an edge into a component realized only in the other language has no toFiles and is not
+          judged
         type: local
       - stepNumber: 13
         label: traceGuard
@@ -211,7 +220,12 @@ methods:
           unowned helper); and a target whose own code drifted from its contract's return
           (RETURN_TYPE_MISMATCH) only LOOKS stale, a port typed after the contract no longer
           matching the class — the drift's consequence, held under that one finding and judged again
-          once it is fixed: continue with the next target
+          once it is fixed: continue with the next target. For Python fromFiles the traces are the
+          Python ones: an import between the files on pyGraph; an import of a package's
+          `__init__.py` that no component realizes, whose folder holds a toFile; or a call site of a
+          fromFile (source_file_facts.functionCallSites) through a field or a name whose method is
+          the code name of one of the target's contract methods — the verb in snake_case, or the
+          method's symbol — the call a collaborator injected through a Protocol makes
         type: branch
         condition: >-
           the edge is not a remote link (component is an Adapter and target a Portal whose transport
@@ -219,7 +233,9 @@ methods:
           graph.connects(fromFiles, toFiles, component is a Portal or Observer that does not call
           the target) is false, no type-only import of a fromFile resolves into toFiles, and no call
           or reference reach answers for a fromFile lands in toFiles, and the target's own code has
-          no return drift (param conformance's returnDrifts)
+          no return drift (param conformance's returnDrifts), and, for Python fromFiles, no import
+          on pyGraph connects them, no unrealized package `__init__.py` a fromFile imports holds a
+          toFile in its folder, and no call site of a fromFile names a contract method of the target
         onFalseStep: 10
       - stepNumber: 14
         label: unrealizedReport
@@ -1907,7 +1923,9 @@ methods:
       - stepNumber: 3
         description: Decide whether the shape can honestly be read at all
         type: branch
-        condition: the file was read at exact grade and a shape of that name was found
+        condition: >-
+          the file was read at exact grade, or by a reader whose reads include types (the Python
+          reader), and a shape of that name was found
         onTrueStep: 4
         onFalseStep: 10
       - stepNumber: 4
@@ -1918,7 +1936,9 @@ methods:
           optional. Method-style members are not data and are left to the method axis
           `typeRealization` already judges; counting them here would accuse every behavioural
           interface of carrying undeclared state. A field the spec gives a function type that the
-          code writes as a method is one fact in two spellings, not a disagreement
+          code writes as a method is one fact in two spellings, not a disagreement. A shape the
+          Python reader read names its fields in snake_case, so each is compared with the spec's by
+          nameKey
         type: local
       - stepNumber: 5
         description: Decide whether this shape's whole membership is in front of us
@@ -1957,10 +1977,11 @@ methods:
       - stepNumber: 10
         label: silent
         description: >-
-          Say nothing. Below exact grade a member list cannot be told from a mention, and a guess
-          about somebody's data model is worse than silence; a type whose shape the file does not
-          declare at all is `typeRealization`'s finding, and reporting it here too would make one
-          absence look like two
+          Say nothing. Below exact grade — the declarative classes a reader of types reads aside — a
+          member list cannot be told from a mention, and a guess about somebody's data model is
+          worse than silence; a type whose shape the file does not declare at all is
+          `typeRealization`'s finding, and reporting it here too would make one absence look like
+          two
         type: return
         outcome: unjudged
       - stepNumber: 11
@@ -2187,30 +2208,38 @@ methods:
           off the path before matching (source_file_facts.routePrefixes), where exactly one settles.
           Routers resolving to the same entry in the same files are one router, read once against
           every Portal naming it, however each linkage spells it. A Portal that binds HTTP endpoints
-          and names no router, while a file of its implementation is read at exact grade, is
-          reported once as ROUTER_UNDECLARED (notice; site router), naming what its files hold, each
-          spelled as the linkage accepts it — an exported router or table by its name, a method of
-          an exported class as `Class.method`, an exported entry calling into a router of its file —
-          and, apart, what reads as a router or a table but is not exported, to be exported before
-          it can be named: its routes are checked against nothing, and that is said, never left
-          silent. A router linkage naming a declaration of an exact-grade file that holds neither a
-          function body nor a route table is reported as unread (step 4); one naming nothing the
-          module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router naming a route
-          TABLE that no table of the exact-grade code spreads and that spreads none itself, where a
-          sibling table spreading other tables of its module (source_file_facts.tableSpreads, in
-          that module or through an import binding in another) leaves it out, is reported as
-          ROUTER_NOT_DISPATCHED (notice; site the router): if the server dispatches the sibling,
-          none of its routes is served, while coverage reading the table itself reads them as
-          served. A Portal binding HTTP endpoints that names no router while its exact-grade files
-          hold what reads as a router or a route table is ROUTES_UNCHECKED (warning; site router;
-          units each spelling `router:` accepts) — route-bearing code no check read; only where its
-          files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method
-          by method, its realizing class's public methods judged by UNDECLARED_PUBLIC_MEMBER
+          and names no router, while a file of its implementation is read at exact grade or by a
+          reader of routes, is reported once as ROUTER_UNDECLARED (notice; site router), naming what
+          its files hold, each spelled as the linkage accepts it — an exported router or table by
+          its name, a method of an exported class as `Class.method`, an exported entry calling into
+          a router of its file — and, apart, what reads as a router or a table but is not exported,
+          to be exported before it can be named: its routes are checked against nothing, and that is
+          said, never left silent. A router linkage naming a declaration of an exact-grade file that
+          holds neither a function body nor a route table is reported as unread (step 4); one naming
+          nothing the module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router
+          naming a route TABLE that no table of the exact-grade code spreads and that spreads none
+          itself, where a sibling table spreading other tables of its module
+          (source_file_facts.tableSpreads, in that module or through an import binding in another)
+          leaves it out, is reported as ROUTER_NOT_DISPATCHED (notice; site the router): if the
+          server dispatches the sibling, none of its routes is served, while coverage reading the
+          table itself reads them as served. A Portal binding HTTP endpoints that names no router
+          while its files read at exact grade or by a reader of routes hold what reads as a router
+          or a route table is ROUTES_UNCHECKED (warning; site router; units each spelling `router:`
+          accepts) — route-bearing code no check read; only where its files hold none is it the
+          notice ROUTER_UNDECLARED, the Portal then read as served method by method, its realizing
+          class's public methods judged by UNDECLARED_PUBLIC_MEMBER. A file the Python reader read
+          routes in (source_file_facts.reads includes routes) is read the same way: a bare name or
+          `<module>#<name>` names a router object, a module alone every router object of it (the
+          keys of source_file_facts.functionRoutes and its unreadRouters), a router object listed in
+          unreadRouters is unread (step 4), and its router objects are what its files hold that
+          reads as a router
         type: local
       - stepNumber: 2
         description: Decide whether there is a router to judge
         type: branch
-        condition: the entry's file was read at exact grade
+        condition: >-
+          the entry's file was read at exact grade, or by a reader whose reads include routes (the
+          Python reader)
         onTrueStep: 3
         onFalseStep: 7
       - stepNumber: 3
@@ -2257,8 +2286,9 @@ methods:
       - stepNumber: 7
         label: silent
         description: >-
-          Say nothing. Below exact grade a guard cannot be read as a route, and the file's grade is
-          already on every other finding about it
+          Say nothing. Below exact grade a guard cannot be read as a route — a reader of routes
+          aside, which reads decorators rather than guards — and the file's grade is already on
+          every other finding about it
         type: return
         outcome: unjudged
     symbol: check
@@ -2486,4 +2516,4 @@ methods:
     exportedVia: bindingModulesRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-29T09:43:58.968Z'
+updatedAt: '2026-10-29T11:39:03.985Z'

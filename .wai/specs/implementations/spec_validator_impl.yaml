@@ -852,12 +852,13 @@ methods:
           files were read at and what that reading checked — methods, params, returns, public
           members, imports, calls, routes, data types at exact grade; below it, what the file's
           reader says it read (source_file_facts.reads) — and what it did not, said by name. Routes
-          are read only out of a router a Portal names, so a language whose exact-grade code
-          realizes a Portal binding HTTP endpoints whose implementation names no router claims
-          routes only where one is named, and counts those Portals among what it did not check (each
-          judged by its realizing class's public methods alone). And the same in a few words for the
-          closing verdict line (validation_result.codeCompact), so a passing run never implies more
-          was checked than was. A family run carries each project's reading on its verdict
+          are read only out of a router a Portal names, so a language whose code is read for routes
+          (at exact grade, or by a reader of routes) and realizes a Portal binding HTTP endpoints
+          whose implementation names no router claims routes only where one is named, and counts
+          those Portals among what it did not check (each judged by its realizing class's public
+          methods alone). And the same in a few words for the closing verdict line
+          (validation_result.codeCompact), so a passing run never implies more was checked than was.
+          A family run carries each project's reading on its verdict
         type: call
         targetComponent: source_analysis_adapter
         targetMethod: compilerIdentity
@@ -1000,4 +1001,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-24T11:37:15.938Z'
+updatedAt: '2026-10-29T11:39:06.133Z'

@@ -1,4 +1,4 @@
-import { dialectOf, parseTypePosition, pathKey, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
+import { dialectOf, nameKey, parseTypePosition, pathKey, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ function judgeNamedScalar(ctx: RuleContext, type: TypeSpec, file: string, facts:
 export const typeShapeRule: SddRule = {
   name: 'type-shape',
   judges: 'code',
-  description: 'Code-to-contract for the DATA: a type spec\'s `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a class\'s constructor parameter properties (`constructor(public readonly amount: number)`) among them, the language\'s shorthand for a field declaration, while a PRIVATE field a getter of the same class reads is that getter\'s backing storage, implementation rather than the type\'s data, and is no member — and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension\'s keys laid over the base\'s. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is the primitive it holds, compared with the right side of the type alias the file declares under its name, read through the file\'s dialect (`type PackPath = string` agrees with holds string); an object shape under that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.',
+  description: "Code-to-contract for the DATA: a type spec's `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a class's constructor parameter properties (`constructor(public readonly amount: number)`) among them, the language's shorthand for a field declaration, while a PRIVATE field a getter of the same class reads is that getter's backing storage, implementation rather than the type's data, and is no member — and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the base's. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is the primitive it holds, compared with the right side of the type alias the file declares under its name, read through the file's dialect (`type PackPath = string` agrees with holds string); an object shape under that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH. Python is read the same way by its signature reader, for a class whose body declares its fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings), a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member (ClassVar, InitVar and a Pydantic model's underscore attributes aside), absent-able when it has a default or a default factory, or in a TypedDict when it is NotRequired or the class is total=False — `Optional` alone is nullable, never absent-able. Its field names compare with the spec's by nameKey, so the spec's documentId is the code's document_id. A class with any other base is judged as one extending another. A plain class, a model built by a call (create_model, a functional TypedDict or namedtuple) and a named scalar are not read in Python, and stay silent.",
   codes: [
     {
       code: 'UNREALIZED_TYPE_FIELD',
@@ -160,7 +160,11 @@ export const typeShapeRule: SddRule = {
       }
 
       // ---- 2 / 9. silent unless the shape can honestly be read at all ----
-      if (!facts || facts.status !== 'analyzed' || facts.analysisGrade !== 'exact') continue;
+      // A reader of types (the Python one) reads the declarative classes'
+      // fields, which it names in snake_case: compared by nameKey.
+      const readsTypes = !!facts?.reads?.includes('types');
+      if (!facts || facts.status !== 'analyzed' || (facts.analysisGrade !== 'exact' && !readsTypes)) continue;
+      const key = readsTypes ? nameKey : (name: string): string => name;
       const symbol = type.symbol ?? type.name;
       const shapes = facts.typeShapes;
       // Own-property lookup: a type may legitimately be named "constructor" or
@@ -173,14 +177,14 @@ export const typeShapeRule: SddRule = {
       // the comparison only so a field written in the other spelling is never
       // accused of being missing or undeclared.
       const specFields = type.fields ?? [];
-      const specFieldNames = new Set(specFields.map(field => field.name));
-      const specMethodNames = new Set((type.methods ?? []).map(method => method.name));
-      const codeFields = new Map(shape.fields.map(field => [field.name, field.optional]));
-      const codeMethodNames = new Set(shape.methods);
+      const specFieldNames = new Set(specFields.map(field => key(field.name)));
+      const specMethodNames = new Set((type.methods ?? []).map(method => key(method.name)));
+      const codeFields = new Map(shape.fields.map(field => [key(field.name), field.optional]));
+      const codeMethodNames = new Set(shape.methods.map(key));
 
       // ---- 4 / 5. presence, spec → code (never for a shape that extends) ----
       const unrealized = shape.inherited ? [] : specFields
-        .filter(field => !codeFields.has(field.name) && !codeMethodNames.has(field.name))
+        .filter(field => !codeFields.has(key(field.name)) && !codeMethodNames.has(key(field.name)))
         .map(field => field.name);
       if (unrealized.length > 0) {
         ctx.addIssue(
@@ -200,7 +204,7 @@ export const typeShapeRule: SddRule = {
 
       // ---- 6. presence, code → spec (the same silence for an extending shape) ----
       const undeclared = shape.inherited ? [] : shape.fields
-        .filter(field => !specFieldNames.has(field.name) && !specMethodNames.has(field.name))
+        .filter(field => !specFieldNames.has(key(field.name)) && !specMethodNames.has(key(field.name)))
         .map(field => field.name);
       if (undeclared.length > 0) {
         ctx.addIssue(
@@ -220,13 +224,13 @@ export const typeShapeRule: SddRule = {
       // ---- 7. optionality, judged even for a shape that extends another ----
       // A member this file lists is a member this file answers for.
       const disagreed = specFields.filter(field => {
-        const absentable = codeFields.get(field.name);
+        const absentable = codeFields.get(key(field.name));
         return absentable !== undefined && absentable !== !!field.optional;
       });
       if (disagreed.length > 0) {
         const told = disagreed.map(field =>
           `"${field.name}" (the spec says it ${absence(!!field.optional)}, the code says it `
-          + `${absence(!!codeFields.get(field.name))})`).join('; ');
+          + `${absence(!!codeFields.get(key(field.name)))})`).join('; ');
         ctx.addIssue(
           'warning',
           'TYPE_FIELD_OPTIONALITY',
