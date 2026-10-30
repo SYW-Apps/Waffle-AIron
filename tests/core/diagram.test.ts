@@ -239,6 +239,10 @@ describe('diagram generation from the spec tree', () => {
     expect(mmd).toContain('⏎ return — invalid');
     // both regions (try + loop) end at step 4 → two closing `end` lines
     expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(2);
+    // the catch-path note sits after the critical block closes, not inside it
+    const ls = mmd.split('\n').map(l => l.trim());
+    const lastEnd = ls.lastIndexOf('end');
+    expect(ls.findIndex(l => l.includes('⚠ on StoreError → step 5'))).toBeGreaterThan(lastEnd);
   });
 
   it('renders parallel regions as par/and fragments and detached calls as async arrows with no return', () => {
@@ -306,6 +310,10 @@ describe('diagram generation from the spec tree', () => {
     expect(mmd).toContain('Note over billing_notifier: Deliver the notification');
     // …inside a labelled block, with NO return arrow to the caller.
     expect(mmd).toContain('par detached — send()');
+    // the detached arrow sits INSIDE its par block, never after an empty one
+    const dl = mmd.split('\n').map(l => l.trim());
+    const parAt = dl.indexOf('par detached — send()');
+    expect(dl[parAt + 1]).toMatch(/^billing_orchestrator-\)billing_notifier: send\(\) — detached$/);
     expect(mmd).not.toContain('billing_notifier-->>');
     expect(mmd).not.toMatch(/-->>-?billing_orchestrator/);
     // The synchronous arm call is unchanged.
@@ -350,6 +358,10 @@ describe('diagram generation from the spec tree', () => {
     const mmd = generateSequenceDiagram('billing-orchestrator', 'process');
     expect(mmd).toMatch(/billing_portal-\)billing_notifier: send\(\) — detached/);
     expect(mmd).toContain('par detached — send()');
+    {
+      const dl = mmd.split('\n').map(l => l.trim());
+      expect(dl[dl.indexOf('par detached — send()') + 1]).toMatch(/^billing_portal-\)billing_notifier: send\(\) — detached$/);
+    }
     expect(mmd).toContain('Note over billing_notifier: Deliver the notification');
     expect(mmd).not.toContain('->>+billing_notifier');
     expect(mmd).not.toContain('billing_notifier-->>');

@@ -519,11 +519,21 @@ export function generateSequenceDiagram(
     // reconstruction beyond endStep-bounded regions is deliberately not
     // attempted (mirrors the loop/critical approach).
     const parallelArms: { end: number; sepByStep: Map<number, string> }[] = [];
+    // A try's catch-path notes belong after its critical block, not inside it
+    // as if sequential: they wait here until the block closes.
+    const deferredNotes: { end: number; note: string }[] = [];
+    const flushNotesAfter = (stepNumber: number): void => {
+      for (let i = 0; i < deferredNotes.length;) {
+        if (deferredNotes[i].end <= stepNumber) lines.push(deferredNotes.splice(i, 1)[0].note);
+        else i++;
+      }
+    };
     const closeRegionsAfter = (stepNumber: number): void => {
       while (pendingEnds.length && pendingEnds[pendingEnds.length - 1] <= stepNumber) {
         pendingEnds.pop();
         lines.push('  end');
       }
+      flushNotesAfter(stepNumber);
       while (parallelArms.length && parallelArms[parallelArms.length - 1].end <= stepNumber) {
         parallelArms.pop();
       }
@@ -561,7 +571,9 @@ export function generateSequenceDiagram(
             pendingEnds.push(step.endStep);
           }
           for (const c of step.catches ?? []) {
-            lines.push(`  Note over ${selfId}: ${escapeLabel(truncate(`⚠ on ${c.error} → step ${c.step}`, 70))}`);
+            const note = `  Note over ${selfId}: ${escapeLabel(truncate(`⚠ on ${c.error} → step ${c.step}`, 70))}`;
+            if (step.endStep !== undefined) deferredNotes.push({ end: step.endStep, note });
+            else lines.push(note);
           }
           break;
         case 'parallel': {
@@ -614,11 +626,13 @@ export function generateSequenceDiagram(
               // The caller does not wait on a detached dispatch, so the server
               // hop is an async arrow and its flow sits in a labelled block
               // with no return to the caller.
-              lines.push(`  ${portalId}-)${serverId}: ${escapeLabel(binding.method)}() — detached`);
               if (expandable) {
                 lines.push(`  par detached — ${escapeLabel(binding.method)}()`);
+                lines.push(`  ${portalId}-)${serverId}: ${escapeLabel(binding.method)}() — detached`);
                 walk(server, binding.method, depth + 1, nextStack);
                 lines.push('  end');
+              } else {
+                lines.push(`  ${portalId}-)${serverId}: ${escapeLabel(binding.method)}() — detached`);
               }
             } else if (expandable) {
               lines.push(`  ${portalId}->>+${serverId}: ${escapeLabel(binding.method)}()`);
@@ -660,11 +674,13 @@ export function generateSequenceDiagram(
             // the caller continues immediately and the callee's failure does
             // not propagate back into this flow. The callee's own flow, when
             // drawn, sits in a labelled block that never returns to the caller.
-            lines.push(`  ${selfId}-)${targetId}: ${escapeLabel(step.targetMethod)}() — detached`);
             if (expandable) {
               lines.push(`  par detached — ${escapeLabel(step.targetMethod)}()`);
+              lines.push(`  ${selfId}-)${targetId}: ${escapeLabel(step.targetMethod)}() — detached`);
               walk(target, step.targetMethod, depth + 1, nextStack);
               lines.push('  end');
+            } else {
+              lines.push(`  ${selfId}-)${targetId}: ${escapeLabel(step.targetMethod)}() — detached`);
             }
           } else if (expandable) {
             lines.push(`  ${selfId}->>+${targetId}: ${escapeLabel(step.targetMethod)}()`);
@@ -680,6 +696,7 @@ export function generateSequenceDiagram(
     }
     // Force-close any region whose endStep pointed past the last step.
     while (pendingEnds.length) { pendingEnds.pop(); lines.push('  end'); }
+    flushNotesAfter(Infinity);
   };
 
   lines.push(`  Note over ${caller}: ${escapeLabel(`${methodName}()`)}`);
