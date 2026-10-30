@@ -176,8 +176,9 @@ methods:
       is entered through its header, never into the middle of its body; a backward jump is only
       idiomatic as a continue to an enclosing loop header, and otherwise models repetition that
       belongs in a loop step; and a try body must not fall through into its own catch/finally region
-      on the success path. Judged only for a narrative whose step configuration is sound
-      (narrative-step-config reports the rest).
+      on the success path — the region after the body, or a catch or finally step lying inside the
+      body itself, which the success path reaches in step order. Judged only for a narrative whose
+      step configuration is sound (narrative-step-config reports the rest).
     signature: 'narrativeJumpEdges(ctx: RuleContext): void'
     returns: void
     params:
@@ -197,7 +198,9 @@ methods:
           loop step
       - code: FALLTHROUGH_INTO_HANDLER
         severity: warning
-        summary: try body falls through into its own catch/finally region on the success path
+        summary: >-
+          try body falls through into its own catch/finally region on the success path — the region
+          after the body, or a handler step inside the body itself
   - name: meaninglessBranches
     description: >-
       Rule meaningless-branches. A branch or switch whose arms all target the same step decides
@@ -310,4 +313,4 @@ methods:
           narrative
 status: complete
 createdAt: '2026-09-14T06:06:18.256Z'
-updatedAt: '2026-09-28T17:16:46.419Z'
+updatedAt: '2026-10-30T19:35:25.363Z'
