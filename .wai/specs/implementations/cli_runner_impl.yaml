@@ -4300,8 +4300,8 @@ methods:
           - value: add
             step: 5
           - value: set-status
-            step: 8
-        defaultStep: 10
+            step: 12
+        defaultStep: 14
       - stepNumber: 3
         label: list
         description: >-
@@ -4318,28 +4318,47 @@ methods:
         outcome: listed
       - stepNumber: 5
         label: add
-        description: Require --user; build an active HostedUserRecord from --user, --name, --email and --unit
+        description: Require --user
         type: local
       - stepNumber: 6
-        description: Create or update the user via the host adapter
+        description: Read the users via the host adapter
+        type: call
+        targetComponent: cli_host_adapter
+        targetMethod: listUsers
+      - stepNumber: 7
+        description: Does the id already hold a record?
+        type: branch
+        condition: a stored user record (not a no-record row) already has the id
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          Refuse: add never replaces a record, which would drop the role bindings it carries; a
+          status changes through set-status
+        type: throw
+        error: UserExists
+      - stepNumber: 9
+        description: Build an active HostedUserRecord from --user, --name, --email and --unit
+        type: local
+      - stepNumber: 10
+        description: Create the user via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: upsertUser
-      - stepNumber: 7
+      - stepNumber: 11
         description: Return after add
         type: return
         outcome: added
-      - stepNumber: 8
+      - stepNumber: 12
         label: set-status
         description: Require --user and --status; set the status via the host adapter
         type: call
         targetComponent: cli_host_adapter
         targetMethod: setUserStatus
-      - stepNumber: 9
+      - stepNumber: 13
         description: Return after set-status
         type: return
         outcome: status set
-      - stepNumber: 10
+      - stepNumber: 14
         label: unknown
         description: Refuse an unknown action
         type: throw
@@ -4370,4 +4389,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T12:06:01.579Z'
+updatedAt: '2026-10-30T13:42:40.071Z'

@@ -283,15 +283,21 @@ describe('the user listing and `wairon host user`', () => {
     expect(out).toMatch(/bob\s+active/);
     expect(out).toMatch(/ghost\s+no user record/);
 
-    await runHostUser('set-status', { dataDir, user: 'bob', status: 'inactive' });
+    await runHostUser('set-status', { dataDir, user: 'bob', userStatus: 'inactive' });
     expect(getUserById(dataDir, 'bob')?.status).toBe('inactive');
   });
 
   it('host user refuses a missing --user, a missing --status and an unknown action', async () => {
     await expect(runHostUser('add', { dataDir })).rejects.toThrow(/--user/);
     await expect(runHostUser('set-status', { dataDir, user: 'bob' })).rejects.toThrow(/--status/);
-    await expect(runHostUser('set-status', { dataDir, user: 'nobody', status: 'inactive' })).rejects.toThrow(/not found/);
+    await expect(runHostUser('set-status', { dataDir, user: 'nobody', userStatus: 'inactive' })).rejects.toThrow(/not found/);
     await expect(runHostUser('frobnicate', { dataDir })).rejects.toThrow(/Unknown user action/);
+  });
+
+  it('host user add refuses an id that already holds a record, keeping the record', async () => {
+    await runHostUser('add', { dataDir, user: 'carol', name: 'Carol', email: 'carol@example.com' });
+    await expect(runHostUser('add', { dataDir, user: 'carol', name: 'Other' })).rejects.toThrow(/already has a record/);
+    expect(getUserById(dataDir, 'carol')).toMatchObject({ displayName: 'Carol', email: 'carol@example.com' });
   });
 
   it('host user add refuses a reserved built-in subject id', async () => {

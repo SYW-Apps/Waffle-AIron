@@ -819,7 +819,7 @@ hostCmd
       name: opts.name,
       email: opts.email,
       unit: opts.unit,
-      status: opts.status,
+      userStatus: opts.status,
       dataDir: opts.dataDir,
     });
   });

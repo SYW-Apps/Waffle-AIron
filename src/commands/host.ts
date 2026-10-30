@@ -71,7 +71,8 @@ export interface HostOptions {
   value?: string;
   name?: string;
   email?: string;
-  status?: string;
+  /** The lifecycle status `host user set-status` sets (active | inactive). */
+  userStatus?: string;
   file?: string;
   open?: boolean;
   force?: boolean;
@@ -747,6 +748,15 @@ export async function runHostUser(action: string, options: HostOptions = {}): Pr
       }
       case 'add': {
         if (!options.user) throw new WaironError('`--user <id>` is required for `host user add`.');
+        // add never replaces a record: upserting over one would drop the role
+        // bindings it carries. A no-record row is a grant's subject, not a record.
+        const held = localAdmin.listUsers(cfg, cred).find(u => !u.noRecord && (u.id === options.user || u.subject?.userId === options.user));
+        if (held) {
+          throw new WaironError(
+            `User "${options.user}" already has a record; \`host user add\` never replaces one, which would drop its role bindings. `
+            + 'Change its status with `wairon host user set-status`.',
+          );
+        }
         const stored = localAdmin.upsertUser(cfg, cred, {
           id: options.user,
           subject: { userId: options.user, kind: 'human', issuer: 'local' },
@@ -761,8 +771,8 @@ export async function runHostUser(action: string, options: HostOptions = {}): Pr
       }
       case 'set-status': {
         if (!options.user) throw new WaironError('`--user <id>` is required for `host user set-status`.');
-        if (!options.status) throw new WaironError('`--status <active|inactive>` is required for `host user set-status`.');
-        const updated = localAdmin.setUserStatus(cfg, cred, options.user, options.status);
+        if (!options.userStatus) throw new WaironError('`--status <active|inactive>` is required for `host user set-status`.');
+        const updated = localAdmin.setUserStatus(cfg, cred, options.user, options.userStatus);
         logger.success(`User "${updated.id}" is now ${updated.status}.`);
         break;
       }
