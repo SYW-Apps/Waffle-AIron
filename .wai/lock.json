@@ -2,9 +2,9 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "d450104e65f78deb17d3f00d94fe44f2d999de77bd4c0d9445449e2f49e291be"
+    "digest": "d74d3a986ef2fd7c57dd7cb36b8aeb42615b1a6d7210a5661ac91e62200cf890"
   },
-  "lockedAt": "2026-10-30T19:45:53.974Z",
+  "lockedAt": "2026-10-30T20:54:27.332Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
@@ -1595,7 +1595,7 @@
     ".wai/specs/types/score_mark.yaml": "347e89762cad1117c6a843fe3000492f744b0a5d53885f486c38fdd527a3e903",
     ".wai/specs/types/sdd_rule.yaml": "5896e5e9b902c65dcf3f5722efe535dabc9cee0e1b925abb86288800d7611e4c",
     ".wai/specs/types/sequence_diagram_options.yaml": "f83f722fa9f992a782e77b0b3046e3edde8b5fec75c7d058fd10f722d42b01c3",
-    ".wai/specs/types/shape_member_fact.yaml": "7a681a48e8a214938b912d91ce99000d7cd62c113be83d91b8fb528daf102c08",
+    ".wai/specs/types/shape_member_fact.yaml": "1232d14d463cc86d43047eec53b56aa331548ff7a3c65efa11b3a34c2e5e8935",
     ".wai/specs/types/shape_origin.yaml": "d64f9a1254d3df71ff5089588e2b41a66351d4e324395234164610eee3deab5e",
     ".wai/specs/types/share_access_entry.yaml": "7956100e9fd3a05b95accc0e3f4267334ed4dff32099b7749752694c67498433",
     ".wai/specs/types/share_access_outcome.yaml": "9535b91fb052ca3f8df1b6c1e9795ce547926463dd3529d99203d98518efd40b",
@@ -1769,7 +1769,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "d7f3fde90b1b1a0e61bdd307c6c31ac92be558bb53bbf7be7d747c204a56a666",
+    "design": "bf9c8eacb34cef053f9bb5ed040ab206111755099c67e79966c76678e3a863e6",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1781,11 +1781,11 @@
   "code": {
     "analyzer": {
       "validatorVersion": "6.5.1-dev.1",
-      "doctrineDigest": "e30370220c363ca8fa2ae19d4908edd34136ba38af8034622dc1f3aab51700e4",
+      "doctrineDigest": "18781085ddc487404dc20654ac4e797732285c4af67a0c5c5bd3b50b23a2f516",
       "grade": "exact"
     },
     "errors": 0,
-    "warnings": 5,
-    "notices": 28
+    "warnings": 0,
+    "notices": 73
   }
 }
