@@ -744,6 +744,24 @@ describe('Python guard functions are read as routers', () => {
     expect(codes(guard(body('"/orders"')), ['UNREADABLE_ROUTER'])).toEqual([]);
   });
 
+  it('reads a startswith prefix only when it ends on a segment boundary', () => {
+    const body = (prefix: string): string[] => [
+      'def handle(request) -> str:',
+      '    method = request.method',
+      '    path = request.path',
+      `    if method == "GET" and path.startswith("${prefix}"):`,
+      '        return "one"',
+      '    if method == "POST" and path == "/orders":',
+      '        return "new"',
+      '    return ""',
+      '',
+    ];
+    // "/orders/" is a whole-segment prefix: open-ended under /orders.
+    expect(codes(guard(body('/orders/')), ROUTE_CODES)).toEqual([]);
+    // "/order" also matches "/orders": it is no literal segment, so the function is unread, never a route.
+    expect(codes(guard(body('/order')), ROUTE_CODES).map(f => f.split(':')[0])).toEqual(['UNREADABLE_ROUTER']);
+  });
+
   it('names a guard function among the routers a Portal naming none could name', () => {
     const body = ['def handle(request) -> str:', '    if request.method == "GET" and request.path == "/health":', '        return "ok"', '    return ""', ''];
     const found = codes(guard(body, ''), ROUTE_CODES);

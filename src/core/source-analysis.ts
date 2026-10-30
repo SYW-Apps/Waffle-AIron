@@ -6027,7 +6027,9 @@ function readPythonGuards(lines: LogicalLine[], constants: Map<string, string>, 
         const args = callArgs(tokens, starts + 1);
         if (isPath(tokens.slice(0, starts - 1)) && args && args.length === 1 && closingIndex(tokens, starts + 1) === tokens.length - 1) {
           const prefix = settle(args[0]);
-          const segments = prefix !== undefined && prefix.startsWith('/') ? templateSegments(prefix) : undefined;
+          // Only a prefix that ends on a segment boundary is a route: "/api/it" also matches "/api/items", which no
+          // literal segment says, and reading it as an open-ended "/api" would claim routes it does not hold.
+          const segments = prefix !== undefined && prefix.startsWith('/') && prefix.endsWith('/') ? templateSegments(prefix) : undefined;
           return segments ? patterns([{ segments, exactLength: false }]) : bad;
         }
         return path ? bad : none;
