@@ -17,10 +17,14 @@ export interface FamilySwitches {
 /**
  * validation_options.selectsFamily — whether these options ask for the family
  * run rather than the owner's gate: true when `family` is set, or when the
- * bound project declares members and `memberDepth` is not 0. The one reading
- * of the flags every caller shares, so the choice cannot drift between them.
+ * bound project declares members or externals and `memberDepth` is not 0. A
+ * project that declares externals but no members therefore composes them
+ * against their live producers on a plain `validate`, as one that declares
+ * members does; `--no-recursive` (memberDepth 0) still asks for the owner's
+ * gate alone. The one reading of the flags every caller shares, so the choice
+ * cannot drift between them.
  */
-export function selectsFamily(options: FamilySwitches | undefined, declaresMembers: boolean): boolean {
+export function selectsFamily(options: FamilySwitches | undefined, declaresMembers: boolean, declaresExternals: boolean): boolean {
   if (options?.family) return true;
-  return declaresMembers && options?.memberDepth !== 0;
+  return (declaresMembers || declaresExternals) && options?.memberDepth !== 0;
 }

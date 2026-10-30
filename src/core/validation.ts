@@ -260,9 +260,10 @@ export interface ValidationResult {
   validatorVersion: string;
   /**
    * One line, never a finding. The owner's gate: present when the project
-   * declares externals, saying they were judged against their pins and the
-   * advisory live comparison reads their live producers. A family run: present when externals were left out
-   * because their producers lie outside the run's reach.
+   * declares externals, saying they were judged against their pins alone and
+   * that `validate` without `--no-recursive` composes them against their live
+   * producers. A family run: present when externals were left out because their
+   * producers lie outside the run's reach, naming what widens it.
    */
   hint?: string;
   /**
@@ -492,7 +493,11 @@ export interface ValidationOptions {
   treatAllAsComplete?: boolean;
   /**
    * Ask for the family run explicitly (`validate --family`, MCP `family:
-   * true`). Omitted, a project that declares members runs its family and any
+   * true`). It is what widens the run's reach: at a member, or at a project
+   * whose externals' producers lie outside the bound root (a `../` sibling, a
+   * git checkout), the walk up and out to them is then explicit, and still
+   * reach-gated. Omitted, a project that declares members or externals runs
+   * its family (its own externals composed within the bound root) and any
    * other project runs its owner's gate (validation_options.selectsFamily).
    */
   family?: boolean;
@@ -1025,7 +1030,7 @@ function runOwnersGate(
     // finding: it never changes the verdict.
     const count = pinnedExternals.length;
     const hint = count > 0
-      ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; the advisory live comparison reads ${count === 1 ? 'its live producer' : 'their live producers'} (offline), and \`wairon externals status\` is the live gate.`
+      ? `${count} external${count === 1 ? ' was' : 's were'} judged against ${count === 1 ? 'its pin' : 'their pins'} alone; the advisory live comparison reads ${count === 1 ? 'its live producer' : 'their live producers'} (offline); \`wairon validate\` without \`--no-recursive\` composes ${count === 1 ? 'it' : 'them'} against ${count === 1 ? 'its live producer' : 'their live producers'}, and \`wairon externals status\` is the opt-in live gate.`
       : undefined;
 
     // One broken file is one finding: references into a spec that did not parse
@@ -1611,4 +1616,15 @@ export function implementsProblem(ref: string): string | null {
  */
 export function adviseExternals(composed?: string[]): ValidationIssue[] {
   return familyValidator.advise(composed);
+}
+
+/**
+ * ivalidator_portal.adviseNetwork — the family root's network findings on a
+ * member validated on its own (family_validator.adviseNetwork), every one
+ * marked advisory. Plain `validate` and `sdd_validate_tree` append it beside a
+ * member's owner-gate findings when the run was not a family run; it never
+ * decides `valid` or `--ci`.
+ */
+export function adviseNetwork(options: ValidationOptions, already?: ValidationIssue[]): ValidationIssue[] {
+  return familyValidator.adviseNetwork(options, already);
 }
