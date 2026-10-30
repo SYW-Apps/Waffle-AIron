@@ -280,7 +280,11 @@ warnings as errors (notices are printed and counted, never fatal).
   externals judged against their pins). `--family` widens the reach: it
   walks up and out to a producer outside the root (a `../` sibling checkout, a
   member's parents) within the request's reach. An external whose producer lies
-  outside the reach is counted in a one-line hint that names `validate --family`;
+  outside the reach is counted in a one-line hint: at a member of a family above
+  it, the hint names `validate --family`; at a project with no family above it,
+  a producer it declares outside its root (a `../` sibling) keeps the advisory
+  live comparison, the pin gating it (`lock-check`), with `wairon externals
+  status` as the opt-in live gate;
   a run that was already explicit is told instead that the producer lies outside
   the request's reach or cannot be read, and that `wairon externals status`
   compares it live.

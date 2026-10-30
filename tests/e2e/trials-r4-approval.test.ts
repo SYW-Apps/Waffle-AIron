@@ -495,11 +495,17 @@ describe('8 — implements, undeclared aliases, remove dry run, the externals hi
     expect(v.all).toContain('[EXTERNAL_UNDECLARED]');
   });
 
-  it('a project with externals and no members is not sent to `validate --family` (R4-15/16)', async () => {
+  it('a project with externals and no members is not sent to `validate --family`: a sibling producer stays advisory, the pin gates (R4-15/16)', async () => {
     const p = pair('hint');
     expect((await sb.run(['externals', 'add', 'geo', '../geo'], p.studio)).code).toBe(0);
     const v = await sb.run(['validate'], p.studio);
-    expect(v.all).toContain('1 external was judged against its pin alone; the advisory live comparison reads its live producer');
-    expect(v.all).not.toContain('wairon validate --family` composes');
+    expect(v.code).toBe(0);
+    expect(v.all).toContain('outside the project\'s root and was not composed: the advisory live comparison reads it, the pin gates');
+    expect(v.all).not.toContain('--family');
+    // A used verb that changed in the sibling since the pin is advisory: the plain gate stays green.
+    writeProject(p.geo, 'geo', geoKit({ returns: 'string' }));
+    const drifted = await sb.run(['validate', '--ci'], p.studio);
+    expect(drifted.code).toBe(0);
+    expect(drifted.all).toContain('EXTERNAL_LIVE_INCOMPATIBLE');
   });
 });

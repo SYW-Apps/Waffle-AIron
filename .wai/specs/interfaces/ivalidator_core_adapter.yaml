@@ -282,8 +282,9 @@ methods:
     description: >-
       Forward to the core portal: the bound root's chaining parent (the parent root that declares it
       as a member, and its alias there), or null at a top root or when the request may not read
-      above its root. Read by the derived networking alone, to compose a member's view from its
-      enclosing family; the owner's gate never climbs.
+      above its root. Read by the derived networking, to compose a member's view from its enclosing
+      family, and by the family run's hint, to tell a member (whose left-out producer `--family`
+      reaches) from a project with no family above it; the owner's gate never climbs.
     signature: 'resolveChainingParent(): ChainingParentRef?'
     returns: ChainingParentRef?
     params: []
@@ -308,9 +309,11 @@ methods:
       family run asks before it judges a member's approval and the gate asks before it calls a tree
       empty
     signatureFrom: spec_tree_portal.holdsDesign
+    effect: read
   - name: loadGroupSpecs
     description: 'Forward to spec_tree_portal.loadGroupSpecs: the type group tree the type-groups rule judges'
     signatureFrom: spec_tree_portal.loadGroupSpecs
+    effect: read
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:34:06.485Z'
+updatedAt: '2026-10-30T18:16:08.586Z'

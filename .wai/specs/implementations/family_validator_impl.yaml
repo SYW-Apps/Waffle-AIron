@@ -113,12 +113,23 @@ methods:
         targetMethod: checkReach
       - stepNumber: 14
         description: >-
-          When externals were left out because their producers lie outside the reach, add a one-line
-          hint counting them and naming what widens the reach: `validate --family` on a plain local
-          run, and on a run already explicit or hosted that the producer lies outside the request's
-          reach or cannot be read, with `wairon externals status` for the live comparison
-        type: local
+          When externals were left out, ask whether a family above the bound root holds it — the
+          hint's choice between widening the climb and the pin's gate
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveChainingParent
       - stepNumber: 15
+        description: >-
+          When externals were left out because their producers lie outside the reach, add a one-line
+          hint counting them. On a plain local run at a member of a family above it, the hint names
+          what widens the reach, `validate --family`; at a project with no family above it, a
+          producer it declares outside its root (a `../` sibling) is named with what judges it
+          instead: the advisory live comparison reads it, the pin gates (`wairon lock-check`), and
+          `wairon externals status` is the opt-in live gate. On a run already explicit or hosted,
+          the hint says the producer lies outside the request's reach or cannot be read, with
+          `wairon externals status` for the live comparison
+        type: local
+      - stepNumber: 16
         description: >-
           Return the family verdict: valid when no project's gate and no family finding holds an
           error, with every project's totals counted from the findings listed under it — its own
@@ -1231,4 +1242,4 @@ methods:
     symbol: adviseNetwork
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-30T12:05:59.297Z'
+updatedAt: '2026-10-30T18:16:05.243Z'

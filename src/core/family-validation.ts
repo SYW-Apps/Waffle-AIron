@@ -331,21 +331,29 @@ function verdictOf(node: ProjectNode, own: ValidationResult): ProjectVerdict {
   };
 }
 
-/** Step 10: the one-line hint for the externals the reach left out; undefined when none were. */
-function notSelectedHint(left: { project: string; alias: string }[], explicit: boolean): string | undefined {
+/**
+ * Step 15: the one-line hint for the externals the reach left out; undefined when none were.
+ * `enclosed` is whether a family above the bound root holds it, so `--family` has a climb to widen.
+ */
+function notSelectedHint(left: { project: string; alias: string }[], explicit: boolean, enclosed: boolean): string | undefined {
   if (left.length === 0) return undefined;
   const byProject = new Map<string, string[]>();
   for (const { project, alias } of left) byProject.set(project, [...(byProject.get(project) ?? []), alias]);
   const where = [...byProject].map(([project, aliases]) => `${named(project)} (${aliases.map((a) => `"${a}"`).join(', ')})`).join(', ');
   const one = left.length === 1;
   const count = `${left.length} external${one ? '' : 's'} of ${where} ${one ? 'has its producer' : 'have their producers'}`;
-  // What widens the reach: the flag on a plain local run. Once the run was explicit (or is hosted) the flag is
-  // spent, so the producer lies outside the request's reach or cannot be read, and the live comparison is
-  // `wairon externals status`.
+  // Once the run was explicit (or is hosted) the flag is spent, so the producer lies outside the
+  // request's reach or cannot be read, and the live comparison is `wairon externals status`.
   if (explicit) {
     return `${count} outside this request's reach or cannot be read, so ${one ? 'it was' : 'they were'} not composed; \`wairon externals status\` compares ${one ? 'it' : 'them'} live.`;
   }
-  return `${count} outside this run's reach and ${one ? 'was' : 'were'} not composed; run \`wairon validate --family\` from the project that declares ${one ? 'it' : 'them'} to compose ${one ? 'it' : 'them'}.`;
+  // A plain local run at a member: the climb to the family above is what `--family` widens.
+  if (enclosed) {
+    return `${count} outside this run's reach and ${one ? 'was' : 'were'} not composed; run \`wairon validate --family\` from the project that declares ${one ? 'it' : 'them'} to compose ${one ? 'it' : 'them'}.`;
+  }
+  // No family above: a producer the project declares outside its root keeps the advisory live
+  // comparison, and the pin gates it.
+  return `${count} outside the project's root and ${one ? 'was' : 'were'} not composed: the advisory live comparison reads ${one ? 'it' : 'them'}, the pin gates (\`wairon lock-check\`), and \`wairon externals status\` is the opt-in live gate.`;
 }
 
 /**
@@ -407,8 +415,8 @@ export function run(options: ValidationOptions): ValidationResult {
     p.notices = mine.filter((i) => i.severity === 'notice').length;
     p.valid = p.errors === 0;
   }
-  // Step 11: the externals the reach left out.
-  const hint = notSelectedHint(left, options.family === true || getHostedLookup() !== null);
+  // Steps 14-15: the externals the reach left out, and whether a family above the bound root holds it.
+  const hint = notSelectedHint(left, options.family === true || getHostedLookup() !== null, left.length > 0 && resolveChainingParent() !== null);
   // Step 12: the family verdict, with the bound project's externals the run
   // composed as its gate — the advisory pass gives them no second word.
   const rootSelected = selected.find((s) => s.node.namespace === '');

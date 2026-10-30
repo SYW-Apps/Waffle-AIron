@@ -76,13 +76,15 @@ methods:
     description: >-
       Whether these options ask for the family run rather than the owner's gate: true when `family`
       is set, or when the bound project declares members or externals and `memberDepth` is not 0. A
-      project that declares externals but no members therefore composes them against their live
-      producers on a plain `validate`, as one that declares members does, so EXTERNAL_INCOMPATIBLE,
-      EXTERNAL_UNPINNED and EXTERNAL_CHECK_UNAVAILABLE gate it; `--no-recursive` / `recursive:
-      false` (memberDepth 0) still asks for the owner's gate alone. The one reading of the flags
-      every caller (CLI validate, the MCP validate tool, doctor) shares, so the choice cannot drift
-      between them.
+      project that declares externals but no members therefore takes the family run on a plain
+      `validate`, as one that declares members does: a producer inside the run's reach (a git
+      commit, a project under its own root) is composed as part of its gate, so
+      EXTERNAL_INCOMPATIBLE, EXTERNAL_UNPINNED and EXTERNAL_CHECK_UNAVAILABLE gate it, while a
+      producer outside its root (a `../` sibling) keeps the advisory live comparison, the pin
+      gating; `--no-recursive` / `recursive: false` (memberDepth 0) still asks for the owner's gate
+      alone. The one reading of the flags every caller (CLI validate, the MCP validate tool, doctor)
+      shares, so the choice cannot drift between them.
     sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-10-30T12:03:33.332Z'
+updatedAt: '2026-10-30T17:43:09.086Z'

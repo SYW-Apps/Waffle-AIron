@@ -18,8 +18,9 @@ finding names the step, the call or the external, and its file.
 3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
    to the new wairon.
 4. Run `wairon validate --ci` and settle what it reports. A project that declares externals but no
-   members now has them composed against their producers, so an unpinned or incompatible external
-   fails it: adapt the uses and re-pin (`wairon externals pin <alias>`).
+   members now composes the ones whose producer is inside its reach (a git commit, a project under
+   its own root), so an unpinned or incompatible one of those fails it: adapt the uses and re-pin
+   (`wairon externals pin <alias>`). A `../` sibling stays advisory, as before.
 5. On a hosted instance, nothing changes in stored data; a user listing may now show subjects that
    hold grants without a user record (see Added).
 
@@ -60,10 +61,13 @@ finding names the step, the call or the external, and its file.
 ### Changed
 
 - **Externals are composed on a plain `validate`.** A project that declares externals but no
-  members used to get only advisory live findings from `wairon validate`; it now composes its
-  externals against their producers, as a family run does, so `EXTERNAL_UNPINNED` and
-  `EXTERNAL_INCOMPATIBLE` gate it. `--family` still widens the reach to producers outside the
-  project's root, and `--no-recursive` still runs the owner's gate alone.
+  members used to get only advisory live findings from `wairon validate`; it now takes the same
+  composed run a family root does. A producer inside its reach (a git commit, a project under its
+  own root) is composed as part of the gate, so `EXTERNAL_UNPINNED` and `EXTERNAL_INCOMPATIBLE`
+  gate it. A producer outside its root, such as a `../` sibling, keeps the advisory live comparison:
+  the pin gates it through `lock-check`, and `wairon externals status` is the opt-in live gate. The
+  hint for such a producer now says that instead of sending the project to `--family`.
+  `--no-recursive` still runs the owner's gate alone.
 - **A call into another project says so.** A narrative call or declared call naming another
   project's component (`alias::name`) is now the notice `CALL_TARGET_UNJUDGED`, which says the call
   is not judged against that project's code. It used to be `CALL_TARGET_PLANNED`, which wrongly
