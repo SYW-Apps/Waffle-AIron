@@ -872,9 +872,113 @@ describe('A claim aimed at another project\'s component is not judged here', () 
       expect(codes(foreignCallTree({ calls: false, language }), UNJUDGED)).toEqual([]);
     });
   }
+});
 
-  it('is quiet when the call is made', () => {
-    const body = 'import { tileAt } from \'geokit\';\nexport function centreTile(lat: number, lon: number): string {\n  return tileAt(lat, lon);\n}\n';
-    expect(codes(foreignCallTree({ calls: true, body }), UNJUDGED)).toEqual([]);
+describe('CALL_TARGET_UNJUDGED is said for every claim on another project\'s component, the call made or not', () => {
+  const UNJUDGED = ['CALL_TARGET_UNJUDGED', 'CALL_TARGET_PLANNED', 'CALL_STEP_UNREALIZED', 'CALL_ORIGIN_UNRESOLVED'];
+  const MADE = 'import { tileAt } from \'geokit\';\nexport function centreTile(lat: number, lon: number): string {\n  return tileAt(lat, lon);\n}\n';
+
+  /** The consumer as a client Adapter, the foreign Portal reached over HTTP. */
+  const overHttp = (body?: string): FixtureTree => {
+    const tree = foreignCallTree({ calls: true, ...(body ? { body } : {}) });
+    tree.components![0].componentType = 'Adapter';
+    delete (tree.components![0] as { dependencyClass?: string }).dependencyClass;
+    const member = 'packages/geokit/.wai/specs/components/tile-library.yaml';
+    tree.files![member] = tree.files![member].replace('transport: InProcess', 'transport: HTTP');
+    return tree;
+  };
+
+  it('says a claim whose call the code makes, naming the project and not claiming the call is missing', () => {
+    const found = codes(foreignCallTree({ calls: true, body: MADE }), UNJUDGED);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^CALL_TARGET_UNJUDGED: .*geokit::tile-library\.tileAt; project "geokit".*whether the call is made in the code or not/);
+    expect(found[0]).not.toMatch(/looked for|no call/);
+  });
+
+  it('says it through a client adapter whose code makes the call, and where it does not', () => {
+    for (const body of [MADE, undefined]) {
+      const found = codes(overHttp(body), UNJUDGED);
+      expect(found.map(f => f.split(':')[0])).toEqual(['CALL_TARGET_UNJUDGED']);
+    }
+  });
+
+  it('says a Python caller\'s claim whose call the code makes', () => {
+    const body = 'from geokit import tile_at\n\n\ndef centre_tile(lat: float, lon: float) -> str:\n    return tile_at(lat, lon)\n';
+    const found = codes(foreignCallTree({ calls: true, language: 'python', body }), UNJUDGED);
+    expect(found.map(f => f.split(':')[0])).toEqual(['CALL_TARGET_UNJUDGED']);
+  });
+});
+
+// ---- a router linkage whose module only imports the name -------------------
+
+describe('a router named through a module that only imports it is read where it is defined', () => {
+  const GUARD = [
+    'def handle(request) -> str:',
+    '    method = request.method',
+    '    path = request.path',
+    '    if method == "GET" and path.startswith("/orders/"):',
+    '        return "one"',
+    '    if method == "POST" and path == "/orders":',
+    '        return "new"',
+    '    return "missing"',
+    '',
+  ];
+  const guard = (lines: string[], init = 'from .router import handle\n', router = 'src/orders/__init__.py#handle'): FixtureTree => ({
+    ...ordersPortal({ 'src/orders/__init__.py': init, 'src/orders/router.py': lines.join('\n') }, { router, sourcePath: 'src/orders/api.py' }),
+    rules: { conformance: { sourceRoots: ['src'] } },
+  });
+  const withDelete = [...GUARD.slice(0, -2), '    if method == "DELETE" and path == "/orders":', '        return "gone"', '    return "missing"', ''];
+
+  it('is silent for an honest guard function reached through the package __init__', () => {
+    expect(codes(guard(GUARD), ROUTE_CODES)).toEqual([]);
+  });
+
+  it('reports an extra route and a renamed path in a guard function reached through __init__', () => {
+    const found = codes(guard(withDelete), ROUTE_CODES);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^UNDECLARED_ROUTE: .*DELETE/);
+    const renamed = codes(guard(GUARD.map(line => line.replace('path == "/orders"', 'path == "/v1/orders"'))), ROUTE_CODES);
+    expect(renamed.map(f => f.split(':')[0]).sort()).toEqual(['UNDECLARED_ROUTE', 'UNROUTED_ENDPOINT']);
+  });
+
+  it('follows an aliased import through __init__', () => {
+    const found = codes(guard(withDelete, 'from .router import handle as serve\n', 'src/orders/__init__.py#serve'), ROUTE_CODES);
+    expect(found.map(f => f.split(':')[0])).toEqual(['UNDECLARED_ROUTE']);
+  });
+
+  it('reads a Flask app imported by __init__: an extra route is caught, an honest one is silent', () => {
+    const flask = (extra: string[]): string[] => [
+      'from flask import Flask',
+      '',
+      'app = Flask(__name__)',
+      '',
+      '',
+      '@app.route("/orders/<order_id>")',
+      'def get_order(order_id: str) -> str:',
+      '    return order_id',
+      '',
+      '',
+      '@app.route("/orders", methods=["POST"])',
+      'def place_order() -> str:',
+      '    return "new"',
+      '',
+      ...extra,
+    ];
+    const at = (lines: string[]): string[] => codes(guard(lines, 'from .router import app\n', 'src/orders/__init__.py#app'), ROUTE_CODES);
+    expect(at(flask([]))).toEqual([]);
+    const found = at(flask(['', '@app.route("/orders/<order_id>", methods=["DELETE"])', 'def cancel_order(order_id: str) -> None:', '    pass', '']));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/^UNDECLARED_ROUTE: .*DELETE/);
+  });
+
+  it('reports UNREADABLE_ROUTER when the import cannot be followed (a cycle, or a module not read)', () => {
+    const cycle = codes({
+      ...ordersPortal({ 'src/orders/__init__.py': 'from .alpha import handle\n', 'src/orders/alpha.py': 'from .beta import handle\n', 'src/orders/beta.py': 'from .alpha import handle\n' },
+        { router: 'src/orders/__init__.py#handle', sourcePath: 'src/orders/api.py' }),
+      rules: { conformance: { sourceRoots: ['src'] } },
+    }, ROUTE_CODES);
+    expect(cycle.map(f => f.split(':')[0])).toEqual(['UNREADABLE_ROUTER']);
+    const missing = codes(guard(GUARD, 'from .nowhere import handle\n'), ROUTE_CODES);
+    expect(missing.map(f => f.split(':')[0])).toEqual(['UNREADABLE_ROUTER']);
   });
 });
