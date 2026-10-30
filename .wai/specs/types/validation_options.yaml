@@ -42,11 +42,12 @@ fields:
   - name: family
     type: bool
     description: >-
-      Ask for the family run explicitly (`validate --family`, MCP `family: true`). At a member this
-      is the one way to compose its externals against their live producers: the walk up to them is
-      then explicit, and still reach-gated (hosted, the credential's reach; it never widens it).
-      Omitted, a project that declares members runs its family and any other project runs its
-      owner's gate.
+      Ask for the family run explicitly (`validate --family`, MCP `family: true`). It is what widens
+      the run's reach: at a member, or at any project whose externals' producers lie outside the
+      bound root (a `../` sibling, a git checkout), the walk up and out to them is then explicit,
+      and still reach-gated (hosted, the credential's reach; it never widens it). Omitted, a project
+      that declares members or externals runs its family (its own externals composed within the
+      bound root) and any other project runs its owner's gate.
     optional: true
   - name: packSelections
     type: list<PackSelection>
@@ -60,23 +61,30 @@ fields:
   - name: memberDepth
     type: int
     description: >-
-      At a project that declares members: how many member levels the run reaches. Absent, every
-      level — the family run over the project and all its members (the default); 0, none — the
-      owner's gate alone; n, the family run selecting that many member levels. The owner's gate
-      reads its contained members' export tables whatever this says — its own references into them
-      are judged there — and never judges a member's specs. The CLI's --no-recursive and the MCP
-      tools' `recursive: false` are 0 at the edge.
+      At a project that declares members or externals (an externals-only project has no member
+      levels, its family run is itself): how many member levels the run reaches. Absent, every level
+      — the family run over the project and all its members (the default); 0, none — the owner's
+      gate alone; n, the family run selecting that many member levels. The owner's gate reads its
+      contained members' export tables whatever this says — its own references into them are judged
+      there — and never judges a member's specs. The CLI's --no-recursive and the MCP tools'
+      `recursive: false` are 0 at the edge.
     optional: true
 methods:
   - name: selectsFamily
-    signature: 'selectsFamily(declaresMembers: boolean): boolean'
+    signature: 'selectsFamily(declaresMembers: boolean, declaresExternals: boolean): boolean'
     returns: bool
     description: >-
       Whether these options ask for the family run rather than the owner's gate: true when `family`
-      is set, or when the bound project declares members and `memberDepth` is not 0. The one reading
-      of the flags every caller (CLI validate, the MCP validate tool, doctor) shares, so the choice
-      cannot drift between them.
+      is set, or when the bound project declares members or externals and `memberDepth` is not 0. A
+      project that declares externals but no members therefore takes the family run on a plain
+      `validate`, as one that declares members does: a producer inside the run's reach (a git
+      commit, a project under its own root) is composed as part of its gate, so
+      EXTERNAL_INCOMPATIBLE, EXTERNAL_UNPINNED and EXTERNAL_CHECK_UNAVAILABLE gate it, while a
+      producer outside its root (a `../` sibling) keeps the advisory live comparison, the pin
+      gating; `--no-recursive` / `recursive: false` (memberDepth 0) still asks for the owner's gate
+      alone. The one reading of the flags every caller (CLI validate, the MCP validate tool, doctor)
+      shares, so the choice cannot drift between them.
     sourcePath: src/models/validation-options.ts
 sourcePath: src/core/validation.ts
 createdAt: '2026-09-20T14:26:35.723Z'
-updatedAt: '2026-10-04T10:53:59.173Z'
+updatedAt: '2026-10-30T17:43:09.086Z'

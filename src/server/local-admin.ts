@@ -51,8 +51,8 @@ export {
 // Permission assignments (permission_admin_orchestrator).
 export { setAssignment, removeAssignment, listAssignments, explain } from './permissionadmin.js';
 
-// Owner-bound API tokens (identity_orchestrator).
-export { mintToken } from './identity.js';
+// Owner-bound API tokens and hosted user administration (identity_orchestrator).
+export { mintToken, listUsers, upsertUser, setUserStatus } from './identity.js';
 
 // Boot-time seeding of the default identity provider from the server's own
 // environment (identity_provider_bootstrap).

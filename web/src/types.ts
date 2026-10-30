@@ -79,13 +79,16 @@ export interface EffectivePermission {
 export interface HostedUserRecord {
   id: string;
   subject: PrincipalSubject;
-  status: string;
+  /** Absent only on a no-record listing row (noRecord): no record states one. */
+  status?: string;
   createdAt: string;
   displayName?: string;
   email?: string;
   lastSeenAt?: string;
   unitId?: string;
   roleBindings?: RoleBinding[];
+  /** Listing row only: the subject holds grants but has no user record. */
+  noRecord?: boolean;
 }
 
 export interface OrganizationUnitRecord {

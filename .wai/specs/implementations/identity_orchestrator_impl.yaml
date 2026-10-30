@@ -516,11 +516,26 @@ methods:
         targetMethod: listAssignments
       - stepNumber: 9
         description: >-
+          List the DIRECT user assignments (at the project scope when a project filter was supplied,
+          else every one) through the permission repository, to find the grant holders that have no
+          record
+        type: call
+        targetComponent: permission_repository
+        targetMethod: listAssignments
+      - stepNumber: 10
+        description: >-
+          Synthesize one row, flagged noRecord, for each distinct assignment subject that matches no
+          listed record by record id or by subject id and is not a boot-reserved built-in subject:
+          id and subject id are the grant's subject id, no home unit, and no status (no record
+          states one; the row claims nothing about the grants)
+        type: local
+      - stepNumber: 11
+        description: >-
           Filter the returned users to those whose home unit is an actionable unit in the visible
           set (an instance-admin keeps every user), intersected with the grid-resolved project
           holders when a project filter was supplied
         type: local
-      - stepNumber: 10
+      - stepNumber: 12
         description: Return the hosted user records filtered to the caller's scope
         type: return
         outcome: scoped hosted user records
@@ -1164,4 +1179,4 @@ methods:
         targetMethod: appendAuditBestEffort
 status: complete
 createdAt: '2026-07-09T17:40:44.290Z'
-updatedAt: '2026-10-28T20:16:09.755Z'
+updatedAt: '2026-10-30T12:10:42.306Z'

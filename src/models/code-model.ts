@@ -156,7 +156,25 @@ export interface CallSiteFact {
    * generic grades leave it out rather than guess.
    */
   line?: number;
+  /**
+   * How many writings of this shape WAIT for the call before the function goes
+   * on (see WritingShare). Absent when none does; read only where the file's
+   * reading records `manner`.
+   */
+  awaited?: WritingShare;
+  /**
+   * How many writings of this shape are CAUGHT in the function they are written
+   * in: in the body of a try that has a catch/except, or with a rejection
+   * handler chained on. Absent when none is.
+   */
+  guarded?: WritingShare;
 }
+
+/**
+ * How many of the writings of one call site shape have a property: every one,
+ * or some but not all. A shape none of whose writings has it records no share.
+ */
+export type WritingShare = 'all' | 'some';
 
 /**
  * One function-like BODY under its name, with where it is bound — the
@@ -196,8 +214,8 @@ export interface FunctionBodyFact {
 export interface ShapeMemberFact {
   /** The member's name, as the code spells it. */
   name: string;
-  /** Whether the code lets the member be absent from a value of this shape. */
-  optional: boolean;
+  /** Whether the code lets the member be absent from a value of this shape; unset where the code does not settle it. */
+  optional?: boolean;
 }
 
 /**
@@ -764,7 +782,7 @@ export type ClassMemberKind = 'method' | 'accessor' | 'property' | 'constructor'
 export type ClassMemberAccess = 'public' | 'protected' | 'private' | 'hash';
 
 /** One conformance check a reader's facts are fuel for (SourceFileFacts.reads). */
-export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls' | 'routes' | 'types';
+export type CodeReading = 'params' | 'returns' | 'members' | 'imports' | 'calls' | 'routes' | 'types' | 'manner';
 
 /**
  * One member a top-level named class declares, as its public surface reads it:

@@ -13,7 +13,9 @@ methods:
   - name: listUsers
     description: >-
       Forward to identity_orchestrator.listUsers with the session as the credential; returns the
-      hosted users within the caller's scope, optionally narrowed to one project's grant holders.
+      hosted users within the caller's scope, optionally narrowed to one project's grant holders,
+      including subjects that hold grants but have no user record (flagged noRecord, with no
+      status), which /web/admin/users renders as having no user record.
     signature: 'listUsers(sessionId: string, project?: string): list<HostedUserRecord>'
     returns: list<HostedUserRecord>
     params:
@@ -253,4 +255,4 @@ methods:
         type: string
 status: complete
 createdAt: '2026-07-13T18:27:58.377Z'
-updatedAt: '2026-10-28T20:16:05.628Z'
+updatedAt: '2026-10-30T12:10:48.736Z'

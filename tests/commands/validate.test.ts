@@ -355,3 +355,101 @@ describe('runValidate at a member: the network proofs line', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// A project that declares externals but no members composes them on a plain
+// `validate` and `sdd_validate_tree`: the family run is itself (no member
+// levels), its externals judged against their live producers within the bound
+// root. --no-recursive / recursive: false still asks for the owner's gate
+// alone, which judges them against their pins.
+// ---------------------------------------------------------------------------
+
+describe('plain validate at a project that declares externals only', () => {
+  const cleanups: (() => void)[] = [];
+  afterEach(() => {
+    setProjectRoot(null);
+    invalidateSpecCache();
+    for (const c of cleanups.splice(0)) { try { c(); } catch { /* win file locks */ } }
+  });
+
+  /** A shop whose ledger producer is contained beside its own specs (a path external), pinned, then broken. */
+  async function brokenShop(): Promise<string> {
+    const { tempDir, writeLedger, renameLedgerMethod, writeShop } = await import('../helpers/stage8-family.js');
+    const { pinExternals } = await import('../../src/core/surfaces.js');
+    const shop = path.join(tempDir(cleanups, 'wairon-ext-only-'), 'shop');
+    const ledger = path.join(shop, 'vendor', 'ledger');
+    writeLedger(ledger);
+    writeShop(shop, { externals: { ledger: { source: { path: 'vendor/ledger' } } } });
+    setProjectRoot(shop);
+    invalidateSpecCache();
+    pinExternals();
+    renameLedgerMethod(ledger, 'record');
+    invalidateSpecCache();
+    return shop;
+  }
+
+  async function runAt(root: string, options: { recursive?: boolean } = {}): Promise<{ out: string; failed: boolean }> {
+    const { runValidate } = await import('../../src/commands/validate.js');
+    const lines: string[] = [];
+    const push = (...args: unknown[]) => { lines.push(args.map(String).join(' ')); };
+    let failed = false;
+    const spies = [
+      vi.spyOn(console, 'log').mockImplementation(push),
+      vi.spyOn(console, 'warn').mockImplementation(push),
+      vi.spyOn(console, 'error').mockImplementation(push),
+      vi.spyOn(process, 'exit').mockImplementation(((code?: number) => { failed = (code ?? 0) !== 0; }) as never),
+    ];
+    setProjectRoot(root);
+    invalidateSpecCache();
+    try { await runValidate(options); } finally {
+      for (const s of spies) s.mockRestore();
+    }
+    return { out: stripVTControlCharacters(lines.join('\n')), failed };
+  }
+
+  it('composes its externals on a plain run: a broken use gates, as it does for a project with members', async () => {
+    const shop = await brokenShop();
+    const plain = await runAt(shop);
+    expect(plain.out).toContain('Per project');
+    expect(plain.out).toMatch(/\[EXTERNAL_INCOMPATIBLE\]/);
+    expect(plain.failed).toBe(true);
+    // The producer lies inside the bound root, so nothing was left out of the run's reach.
+    expect(plain.out).not.toContain('outside this run\'s reach');
+  });
+
+  it('--no-recursive asks for the owner\'s gate alone: judged against the pin, the hint names the plain run', async () => {
+    const shop = await brokenShop();
+    const own = await runAt(shop, { recursive: false });
+    expect(own.out).not.toContain('Per project');
+    expect(own.out).not.toMatch(/\[EXTERNAL_INCOMPATIBLE\]/);
+    expect(own.out).toMatch(/`wairon validate` without `--no-recursive` composes it against its live producer/);
+    expect(own.out).toMatch(/\[EXTERNAL_LIVE_INCOMPATIBLE\]/);
+  });
+
+  it('sdd_validate_tree reads the same flags: composed by default, the owner\'s gate with recursive: false', async () => {
+    const { createMcpServer } = await import('../../src/mcp/server.js');
+    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+    const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+    const shop = await brokenShop();
+    const server = createMcpServer();
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'ext-only', version: '0.0.1' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    try {
+      setProjectRoot(shop);
+      invalidateSpecCache();
+      const plain = (await client.callTool({ name: 'sdd_validate_tree', arguments: {} })).structuredContent as { valid: boolean; errors: { code: string }[]; projects?: unknown[] };
+      expect(plain.projects).toBeDefined();
+      expect(plain.errors.some((e) => e.code === 'EXTERNAL_INCOMPATIBLE')).toBe(true);
+      expect(plain.valid).toBe(false);
+      setProjectRoot(shop);
+      invalidateSpecCache();
+      const own = (await client.callTool({ name: 'sdd_validate_tree', arguments: { recursive: false } })).structuredContent as { errors: { code: string }[]; warnings: { code: string; advisory?: boolean }[]; projects?: unknown[] };
+      expect(own.projects).toBeUndefined();
+      expect(own.errors.some((e) => e.code === 'EXTERNAL_INCOMPATIBLE')).toBe(false);
+      expect(own.warnings.some((w) => w.code === 'EXTERNAL_LIVE_INCOMPATIBLE' && w.advisory === true)).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+});

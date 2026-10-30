@@ -82,7 +82,7 @@ These ten are the **only** atomic component types.
 | **Index** | Read path; optimized derived lookup maps over a Store | derived lookup state | `get_by_<key>`, `list_by_<key>` |
 | **Query** | A **Repository member** for computed reads over its Store — results the backend computes per call (an aggregate, a ranking, a report) | dependencies only | one method per computed read |
 | **Registry** | Write path (CUD) for one aggregate | dependencies only | `create`, `update`, `delete` |
-| **Adapter** | A **client to an external system/protocol** (DB, FS, HTTP, gRPC, WS, message bus). The **only** block doing raw external I/O | a connection/resource handle | protocol-shaped (`query`/`execute`, `send`/`receive`, `publish`…) |
+| **Adapter** | A **client to an external system/protocol** (DB, FS, HTTP, gRPC, WS, message bus). The client block for an outside system: **recommended, not required** — one place to change or migrate a library, and one step for other components to make an outside call; using a library's simple API directly, or creating and using a handle, is also valid | a connection/resource handle | protocol-shaped (`query`/`execute`, `send`/`receive`, `publish`…) |
 | **Observer** | Subscribes to events and forwards them to one workflow | a subscription | `on_event(event)` |
 
 ### State vs dependencies vs workflow
@@ -328,7 +328,7 @@ finds whatever fell due while the process was down.
 
 ## 4. External I/O and emission — the Adapter
 
-The **Adapter** is the single boundary to the outside world, in two shapes:
+The **Adapter** is the recommended boundary to the outside world (a recommendation, not a requirement: using a library's simple API directly, or creating a handle such as a client or a process and using it, is valid by design; the Adapter keeps one place to change or migrate a library and lets other components make an outside call in one step), in two shapes:
 1. **Behind a Store** — a DB/FS Adapter the Store translates domain calls into
    (`store.get` → `adapter.query(...)` → deserialize → entity).
 2. **Standalone outbound** — an Orchestrator, Actor or Registry calling an

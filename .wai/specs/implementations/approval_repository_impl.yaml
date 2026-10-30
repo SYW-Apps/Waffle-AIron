@@ -65,7 +65,15 @@ methods:
         targetComponent: approval_registry
         targetMethod: cancel
     symbol: cancelApprovalRequest
+  - name: withdraw
+    narrative:
+      - stepNumber: 1
+        description: Forward to the approval registry
+        type: call
+        targetComponent: approval_registry
+        targetMethod: withdraw
+    symbol: withdrawApprovalRequest
 detail: calls-only
 status: complete
 createdAt: '2026-07-09T19:31:12.411Z'
-updatedAt: '2026-09-30T16:35:45.863Z'
+updatedAt: '2026-10-30T12:10:06.695Z'

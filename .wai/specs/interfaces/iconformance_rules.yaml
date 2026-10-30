@@ -160,59 +160,63 @@ methods:
       names exists, the normal state after the first component of a service is implemented from its
       brief through a port to a collaborator still planned — the call is planned rather than
       unresolved (CALL_TARGET_PLANNED, a notice, as SOURCE_FILE_PLANNED is), and it is judged like
-      any other claim once the target's realization begins. A finding names a landing only from the
-      PROVEN tier so that widening what a call reached can accept a claim but never accuse one, and
-      a target that names no file of its own falls back to name membership. Where a type checker
-      read the file, a claim is also realized by any call or reference in the bodies the function
-      reaches — and in the unowned code they call — that the checker lands on the target: its file
-      under a name it is realized by, a class realizing the port the call was typed by or a module
-      function an object literal typed as that port wires into it (a composition root's `threshold:
-      { isBreach }`, read in a file that imports the run's files though no spec names it), or what
-      the target forwards to by identity — whatever the receiver's spelling (a type-only or `export
-      *` barrel, a port declared in a shared module, a dependency bag typed inline); a claim it does
-      not land keeps the shape tier's answer, since the checker's landing on a declaration says what
-      a receiver is TYPED as, never where the call went instead. N:1 identity — a caller that IS the
-      target — is judged on the body, the same anchor in the same file, never on a shared name: a
-      Portal method forwarding to a same-named Orchestrator method elsewhere must make that call.
-      Converse: a call that resolves to a modelled method of ANOTHER component in the SAME file
-      crosses a component boundary while looking local, so the method must claim it — in a step or
-      in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the proven tier alone, and a same-file
-      private helper is no modelled method and is never reported; a function forwarding by identity
-      to a modelled method written in another file IS that method, so what it calls is that method's
-      subject. And a call — or a reference the code takes as a value — that the TypeScript type
-      checker resolves into ANOTHER file, onto a write- or lifecycle-effect contract method of
-      another component, or, from a Portal method whose body is its own, onto a verb of an
-      Orchestrator, Supervisor or Actor whose effect is a write — declared (write, lifecycle or io),
-      or, where its contract declares none, read off the verb's own narrative transitively: a call
-      step or declared call reaching a method that changes state makes it a write, only reads or
-      none a read, and a verb that settles nothing (no narrative and no declared calls, a dispatch
-      step, a target outside this tree, a non-workflow method declaring no effect) is reported as an
-      unnarrated call whose effect is undeclared, never as a write (a Portal changes state only by
-      dispatching to such a verb, so its narrative is the list of those it may reach), that the
-      method claims nowhere is a mutation the design says the method never makes
-      (UNDECLARED_WRITE_CALL): narrate it, declare it in `calls`, or remove it — judged in the
-      bodies the method's function reaches and in the UNOWNED code they call (a function in a file
-      no component realizes, or one that is none of its file's components' modelled methods, read as
-      if inlined at the call site, transitively to a bounded depth, the finding naming the hops —
-      but a member of the CLASS a workflow component (Orchestrator, Supervisor, Actor) is realized
-      by, one of the classes holding its modelled methods, is that component's code even where its
-      contract does not declare it, so the walk stops there: a claim the function answers by calling
-      such a member in place of the claimed method is CALL_STEP_UNREALIZED naming the method the
-      code calls instead, the shape a rename made in the code alone leaves, and a Portal's call to
-      one no missed claim names is an unnarrated call to a method whose effect no narrative settles,
-      never read through its body as the Portal's own write), never for a Portal's call into a data
-      component (PORTAL_WRITE_SHORTCUT_IN_CODE's subject), and only where a type checker was loaded.
-      A call there the checker cannot follow, or a member read by name off such a receiver and taken
-      as a value (`const f = (store as any).save; f(x)`) — its receiver typed any or unknown however
-      it came to be (a cast, an untyped or any-typed parameter of a closure, a function result typed
-      any), cast to either or to an index signature, typed by an index signature naming no member of
-      that name, or its member picked by a computed key — under the name of such a write the method
-      claims nowhere (where the checker recorded the receiver's original type — every cast, non-null
-      mark and parenthesis taken off, an `await (x)` written outside an async function read as the x
-      it means, nullability set aside so an optional field is the class it holds, a name bound once
-      by a const read through its initializer, and an interface or shape no class realizes landing
-      on the file declaring it — a write of the component that type lands on, any of its writes when
-      a computed key names none; else a write of that name in the method's own subsystem or one its
+      any other claim once the target's realization begins. A claim whose target is another
+      project's component (`alias::name`) is neither: this project's gate does not read that
+      project's code, so whether its code exists says nothing here, and the claim is said as the
+      notice CALL_TARGET_UNJUDGED — naming the project — rather than as planned. A finding names a
+      landing only from the PROVEN tier so that widening what a call reached can accept a claim but
+      never accuse one, and a target that names no file of its own falls back to name membership.
+      Where a type checker read the file, a claim is also realized by any call or reference in the
+      bodies the function reaches — and in the unowned code they call — that the checker lands on
+      the target: its file under a name it is realized by, a class realizing the port the call was
+      typed by or a module function an object literal typed as that port wires into it (a
+      composition root's `threshold: { isBreach }`, read in a file that imports the run's files
+      though no spec names it), or what the target forwards to by identity — whatever the receiver's
+      spelling (a type-only or `export *` barrel, a port declared in a shared module, a dependency
+      bag typed inline); a claim it does not land keeps the shape tier's answer, since the checker's
+      landing on a declaration says what a receiver is TYPED as, never where the call went instead.
+      N:1 identity — a caller that IS the target — is judged on the body, the same anchor in the
+      same file, never on a shared name: a Portal method forwarding to a same-named Orchestrator
+      method elsewhere must make that call. Converse: a call that resolves to a modelled method of
+      ANOTHER component in the SAME file crosses a component boundary while looking local, so the
+      method must claim it — in a step or in `calls` (UNDECLARED_COLOCATED_CALL) — judged on the
+      proven tier alone, and a same-file private helper is no modelled method and is never reported;
+      a function forwarding by identity to a modelled method written in another file IS that method,
+      so what it calls is that method's subject. And a call — or a reference the code takes as a
+      value — that the TypeScript type checker resolves into ANOTHER file, onto a write- or
+      lifecycle-effect contract method of another component, or, from a Portal method whose body is
+      its own, onto a verb of an Orchestrator, Supervisor or Actor whose effect is a write —
+      declared (write, lifecycle or io), or, where its contract declares none, read off the verb's
+      own narrative transitively: a call step or declared call reaching a method that changes state
+      makes it a write, only reads or none a read, and a verb that settles nothing (no narrative and
+      no declared calls, a dispatch step, a target outside this tree, a non-workflow method
+      declaring no effect) is reported as an unnarrated call whose effect is undeclared, never as a
+      write (a Portal changes state only by dispatching to such a verb, so its narrative is the list
+      of those it may reach), that the method claims nowhere is a mutation the design says the
+      method never makes (UNDECLARED_WRITE_CALL): narrate it, declare it in `calls`, or remove it —
+      judged in the bodies the method's function reaches and in the UNOWNED code they call (a
+      function in a file no component realizes, or one that is none of its file's components'
+      modelled methods, read as if inlined at the call site, transitively to a bounded depth, the
+      finding naming the hops — but a member of the CLASS a workflow component (Orchestrator,
+      Supervisor, Actor) is realized by, one of the classes holding its modelled methods, is that
+      component's code even where its contract does not declare it, so the walk stops there: a claim
+      the function answers by calling such a member in place of the claimed method is
+      CALL_STEP_UNREALIZED naming the method the code calls instead, the shape a rename made in the
+      code alone leaves, and a Portal's call to one no missed claim names is an unnarrated call to a
+      method whose effect no narrative settles, never read through its body as the Portal's own
+      write), never for a Portal's call into a data component (PORTAL_WRITE_SHORTCUT_IN_CODE's
+      subject), and only where a type checker was loaded. A call there the checker cannot follow, or
+      a member read by name off such a receiver and taken as a value (`const f = (store as
+      any).save; f(x)`) — its receiver typed any or unknown however it came to be (a cast, an
+      untyped or any-typed parameter of a closure, a function result typed any), cast to either or
+      to an index signature, typed by an index signature naming no member of that name, or its
+      member picked by a computed key — under the name of such a write the method claims nowhere
+      (where the checker recorded the receiver's original type — every cast, non-null mark and
+      parenthesis taken off, an `await (x)` written outside an async function read as the x it
+      means, nullability set aside so an optional field is the class it holds, a name bound once by
+      a const read through its initializer, and an interface or shape no class realizes landing on
+      the file declaring it — a write of the component that type lands on, any of its writes when a
+      computed key names none; else a write of that name in the method's own subsystem or one its
       component depends into — the design's write set, which a data component whose code is still
       planned has too; a receiver landing only on the caller's own file, a port it declares for
       itself, leaves it to that name as well) fails closed as CALL_ORIGIN_UNRESOLVED: neither proven
@@ -223,48 +227,55 @@ methods:
       names its member by that literal's value, never by the variable holding it. A method that
       claims nothing at all has no claim to find in the code (what it leaves unsaid is UNUSED_*'s
       subject); the calls its code makes are its open routes, said as OPEN_ROUTE_CALL. Order,
-      arguments and conditions stay unverified, dispatch steps (runtime-table routed) are no claim
-      about a call site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding and
-      names no target here, the conformance dial set off skips the forward direction — whether the
-      claims are found in the code — but never the converse, so off is no way past an unnarrated
-      write or a call the analysis cannot follow; a claim whose target's code is in ANOTHER language
-      than the caller's file (every file the target's implementations name is in a language a
-      TypeScript call graph does not read, or, naming none, the member or project it belongs to
-      declares such a target language) is not judged by this call graph at all, and the language
-      boundary is said once per project and language (CALL_ACROSS_LANGUAGE, a notice) — never as an
-      unrealized call no code could ever clear, since what crosses that boundary is the binding; and
-      weaker analysis grades never guess. Converse, any call, judged by how much the method STATES:
-      a narrative whose detail (full or calls-only) the method or its implementation states, or
-      declared calls, is the whole list of what the method calls, so a call its function makes in
-      its OWN body to a contract method of another component that no step and no declared call names
-      is UNNARRATED_CALL; at UNSTATED detail (a narrative read as full or calls-only by its
-      component's default) a verb of a collaborator the narrative names, left out, is
-      UNNARRATED_CALL too, since it misdescribes that collaboration. Unstated is open, never
-      assumed: a call to a collaborator its component depends on (or to a member a pattern it
-      depends on owns) that the narrative never names, or any such call from a method at intent or
-      with no narrative and no declared calls, is a route the design allows without saying the
-      method takes it — OPEN_ROUTE_CALL, a notice naming each one, so every route is seen and none
-      fails the gate. One call landing on several components (a function they share by identity) is
-      said once, under a component the design routes to. A port the method calls a claimed target
-      through (an interface no class realizes, as a collaborator whose code is planned or in another
-      project is typed) is that target's component, so another verb called on it is a call into the
-      same component, said even where its contract does not declare the verb. Neither finding judges
-      a call made inside a helper the function calls (one statement, one local step), a call to a
-      component the design does not list as a dependency at all (UNDECLARED_DEPENDENCY's), or a
-      reference taken as a value; a write said as one is UNDECLARED_WRITE_CALL's. Where no type
-      checker read the file but a reader read its calls (Python), a claim is judged forward by name,
-      by absence only: it is realized by any call of the function (closed over everything it
-      reaches) under a name the target is realized by, whatever the receiver, and reported as
-      CALL_STEP_UNREALIZED only when no call carries that name (a target in another language, with
-      no file, or whose code has not begun is not judged); and the call sites of the method's body,
-      closed over its own file's helpers and stopping at another modelled method, land through what
-      the code DECLARES: a bare call on an import binding in that module, a call through a namespace
-      binding in that module, `self.<field>` through the class the field is annotated with (or the
-      annotated parameter the constructor assigns it from), an annotated name the same way. A claim
-      on a component whose own code drifted from its contract's return (RETURN_TYPE_MISMATCH) is not
-      reported as CALL_ORIGIN_UNRESOLVED: a port typed after the contract no longer matches the
-      class, so the call no longer resolves for that reason — the drift's consequence, held under
-      that one finding and judged again once it is fixed.
+      arguments and conditions stay unverified — how a matched call runs (waited for, caught) is
+      call-manner-conformance's to judge — dispatch steps (runtime-table routed) are no claim about
+      a call site, a malformed declared reference is MALFORMED_DECLARED_CALL's finding and names no
+      target here, the conformance dial set off skips the forward direction — whether the claims are
+      found in the code — but never the converse, so off is no way past an unnarrated write or a
+      call the analysis cannot follow; a claim whose target's code is in ANOTHER language than the
+      caller's file (every file the target's implementations name is in a language a TypeScript call
+      graph does not read, or, naming none, the member or project it belongs to declares such a
+      target language) is not judged by this call graph at all, and the language boundary is said
+      once per project and language (CALL_ACROSS_LANGUAGE, a notice) — never as an unrealized call
+      no code could ever clear, since what crosses that boundary is the binding; and weaker analysis
+      grades never guess. Converse, any call, judged by how much the method STATES: a narrative
+      whose detail (full or calls-only) the method or its implementation states, or declared calls,
+      is the whole list of what the method calls, so a call its function makes in its OWN body to a
+      contract method of another component that no step and no declared call names is
+      UNNARRATED_CALL; at UNSTATED detail (a narrative read as full or calls-only by its component's
+      default) a verb of a collaborator the narrative names, left out, is UNNARRATED_CALL too, since
+      it misdescribes that collaboration. Unstated is open, never assumed: a call to a collaborator
+      its component depends on (or to a member a pattern it depends on owns) that the narrative
+      never names, or any such call from a method at intent or with no narrative and no declared
+      calls, is a route the design allows without saying the method takes it — OPEN_ROUTE_CALL, a
+      notice naming each one, so every route is seen and none fails the gate. One call landing on
+      several components (a function they share by identity) is said once, under a component the
+      design routes to. A port the method calls a claimed target through (an interface no class
+      realizes, as a collaborator whose code is planned or in another project is typed) is that
+      target's component, so another verb called on it is a call into the same component, said even
+      where its contract does not declare the verb. Neither finding judges a call made inside a
+      helper the function calls (one statement, one local step), a call to a component the design
+      does not list as a dependency at all (UNDECLARED_DEPENDENCY's), or a reference taken as a
+      value; a write said as one is UNDECLARED_WRITE_CALL's. Where no type checker read the file but
+      a reader read its calls (Python), a claim is judged forward by name, by absence only: it is
+      realized by any call of the function (closed over everything it reaches) under a name the
+      target is realized by, whatever the receiver, and reported as CALL_STEP_UNREALIZED only when
+      no call carries that name (a target in another language, with no file, or whose code has not
+      begun is not judged); and the call sites of the method's body, closed over its own file's
+      helpers and stopping at another modelled method, land through what the code DECLARES: a bare
+      call on an import binding in that module, a call through a namespace binding in that module,
+      `self.<field>` through the class the field is annotated with (or the annotated parameter the
+      constructor assigns it from), an annotated name the same way. A Python call that lands that
+      way in the method's OWN file on a modelled method of ANOTHER component — a bare call to a
+      module function that component's implementation is realized by, or a call through a field or
+      an annotated name whose declared class that component realizes — crosses a component boundary
+      as in TypeScript, and is UNDECLARED_COLOCATED_CALL when the method claims it nowhere; a
+      landing only a shared name suggests (a method of an undeclared field, a local or parameter
+      shadowing the module's function) is never one. A claim on a component whose own code drifted
+      from its contract's return (RETURN_TYPE_MISMATCH) is not reported as CALL_ORIGIN_UNRESOLVED: a
+      port typed after the contract no longer matches the class, so the call no longer resolves for
+      that reason — the drift's consequence, held under that one finding and judged again once it is
+      fixed.
     signature: 'callConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -312,8 +323,9 @@ methods:
         severity: notice
         summary: >-
           A narrative call step or declared call written by name through a receiver nothing realizes
-          yet, whose target component has no code yet (no file its implementations name exists) —
-          planned, not unresolved; judged like any other claim once the target's realization begins
+          yet, whose target component in this project has no code yet (no file its implementations
+          name exists) — planned, not unresolved; judged like any other claim once the target's
+          realization begins
       - code: CALL_ACROSS_LANGUAGE
         severity: notice
         summary: >-
@@ -336,6 +348,12 @@ methods:
           none) calls a contract method of a collaborator its component depends on that its
           narrative never names — a route the design allows but does not say the method takes, said
           so every route is seen
+      - code: CALL_TARGET_UNJUDGED
+        severity: notice
+        summary: >-
+          A narrative call step or declared call naming another project's component (alias::name):
+          this project's gate does not read that project's code, so the call is not judged against
+          it here, whether or not that code exists
   - name: hiddenState
     description: >-
       Rule hidden-state. The fields-vs-Store criterion, statically approximated: module-scope
@@ -860,13 +878,18 @@ methods:
       Python is read the same way by its signature reader, for a class whose body declares its
       fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings),
       a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member
-      (ClassVar, InitVar and a Pydantic model's underscore attributes aside), absent-able when it
-      has a default or a default factory, or in a TypedDict when it is NotRequired or the class is
-      total=False — `Optional` alone is nullable, never absent-able. Its field names compare with
-      the spec's by nameKey, so the spec's documentId is the code's document_id. A class with any
-      other base is judged as one extending another. A plain class, a model built by a call
-      (create_model, a functional TypedDict or namedtuple) and a named scalar are not read in
-      Python, and stay silent.
+      (ClassVar, InitVar and a Pydantic model's underscore attributes aside) — in a class of the
+      legacy `@attr.s` form without `auto_attribs=True`, only a field assigned `attr.ib()` —
+      absent-able when it has a default or a default factory (`Field(...)` and `Field(default=...)`
+      state none: the Ellipsis marks it required), or in a TypedDict when it is NotRequired or the
+      class is total=False; a `total=` that does not settle to a literal leaves every field it
+      governs (one marked neither Required nor NotRequired) of unknown absence, and that absence is
+      not compared — `Optional` alone is nullable, never absent-able. Its field names compare with
+      the spec's by nameKey, so the spec's documentId is the code's document_id; where two fields of
+      one class share a nameKey (order_id and orderId), the one spelled exactly as the spec's field
+      is the one compared, and neither is when none is. A class with any other base is judged as one
+      extending another. A plain class, a model built by a call (create_model, a functional
+      TypedDict or namedtuple) and a named scalar are not read in Python, and stay silent.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -1136,10 +1159,24 @@ methods:
       methods=["POST"])`, `.api_route`), each path under the prefixes stated by the object's
       construction and by the includes bringing it in (`APIRouter(prefix=…)`, `include_router(r,
       prefix=…)`, `Blueprint(…, url_prefix=…)`, `register_blueprint(bp, url_prefix=…)`), followed
-      through the modules the includes import. A router any route, prefix or include of which does
-      not settle to a string, or that mounts an application, is unread. A Python Portal naming no
-      router is ROUTES_UNCHECKED or ROUTER_UNDECLARED as above, its router objects being what reads
-      as a router.
+      through the modules the includes import, and through the re-exports a package's `__init__`
+      makes of them to the module that builds the object (a cycle of re-exports leaves the include
+      unread). A router any route, prefix or include of which does not settle to a string, that
+      places a path converter before further segments (`/<path:p>/edit`: the converter takes the
+      rest of the path, so the segments after it are never matched as written), that mounts an
+      application, or that includes an unread router, is unread — and so is the router another
+      module imports to add a route to, when that route leaves it unread. The guard idiom is read in
+      Python too: a function named as the router (`<module>#handle`, or `Class.do_GET` for a method
+      of a `BaseHTTPRequestHandler` subclass, whose verb is its name) whose `if`/`elif` chains,
+      `match` statements over the path, or dicts keyed by path or by (method, path) select a handler
+      — a method comparison (`request.method == "GET"`, `method in ("GET", "POST")`) with a
+      comparison of the whole path to a string, its split segments (`parts =
+      path.strip("/").split("/")` with `len(parts) == N` and `parts[i] == "x"`), a prefix test
+      (`path.startswith(...)`, an open-ended route) or an anchored raw regular expression matched
+      against it (`re.match`, `re.fullmatch`), each value a literal or a module constant settling to
+      one; a route needs both a verb and a path, and a function whose path comparisons do not all
+      settle is unread. A Python Portal naming no router is ROUTES_UNCHECKED or ROUTER_UNDECLARED as
+      above, its router objects and guard functions being what reads as a router.
     signature: 'routeCoverage(ctx: RuleContext): void'
     returns: void
     params:
@@ -1315,6 +1352,60 @@ methods:
           escapes the root, cannot be read, is in a language the reader does not read, declares
           nothing the reader compares (naming the export forms it cannot see into), or its component
           reaches neither a pinned external nor a member project that exports something
+  - name: callMannerConformance
+    description: >-
+      Rule call-manner-conformance. Code-to-narrative for HOW a call runs, where the narrative says
+      it: a narrative call step and the call realizing it agree on whether the method waits for the
+      call and whether an error the call raises is caught. A step marked detach is fire-and-forget,
+      so the code must not wait for the call; a step the narrative does not mark detach finishes
+      before the next step, so where the call is proven to complete later the code must wait for it;
+      and a step inside the body of a try step that catches says its error is caught, so the code
+      must catch it. Read for the call sites call-conformance matched to the claim, at exact grade
+      (or where a Python file's reading records manner), and only for sites written directly in the
+      method's own function: a call reached through a helper the method calls is not judged, nor is
+      a site whose landing is not settled, a target that plans no code or lives in another project,
+      a dispatch step (which names no call site), or a method whose conformance dial is off (its
+      own, else its implementation's). Where a claim has several realizing sites, or one shape is
+      written several times, only what every writing agrees on is reported. A detach step whose call
+      every writing waits for is DETACHED_CALL_AWAITED; a step inside a catching try whose call no
+      writing catches is CALL_NOT_CAUGHT. A step not marked detach whose target's realizing function
+      completes later (source_file_facts.asyncFunctions) and whose call no writing waits for is
+      CALL_NOT_AWAITED when the method states its detail (full or calls-only, its own or its
+      implementation's: the narrative is then the whole flow), and the notice OPEN_CALL_NOT_AWAITED
+      when it does not — the design then leaves open whether the method waits, and the notice says
+      so without failing the gate. A try the code adds around a call the narrative does not place in
+      one, and a call the code waits for that the narrative does not mark, are open routes and never
+      reported.
+    signature: 'callMannerConformance(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: DETACHED_CALL_AWAITED
+        severity: warning
+        summary: >-
+          A call step marked detach (fire-and-forget) is realized by a call the code waits for, so
+          the method does not go on until the call finishes, as its narrative says it does
+      - code: CALL_NOT_CAUGHT
+        severity: warning
+        summary: >-
+          A call step inside the body of a try step that catches is realized by a call no try/catch
+          (or try/except) encloses in the code, so an error the design says is caught escapes the
+          method
+      - code: CALL_NOT_AWAITED
+        severity: warning
+        summary: >-
+          A call step not marked detach, in a method that states its detail, is realized by a call
+          that completes later and that the code never waits for, so the next step can run before
+          the call finishes
+      - code: OPEN_CALL_NOT_AWAITED
+        severity: notice
+        summary: >-
+          A call step not marked detach, in a method that leaves its detail open, is realized by a
+          call that completes later and that the code never waits for: the design leaves open
+          whether the method waits, and this says the code does not
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-29T16:38:36.125Z'
+updatedAt: '2026-10-30T12:02:05.076Z'

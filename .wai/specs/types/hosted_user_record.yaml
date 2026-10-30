@@ -23,8 +23,10 @@ fields:
       data directory was upgraded). An inactive record is retained for audit provenance but the user
       cannot act: on deactivation every one of the user's credentials is revoked and SSO re-login is
       blocked. Returning to "active" does NOT auto-restore revoked tokens - the user re-logs in via
-      SSO or an admin mints fresh.
-    optional: false
+      SSO or an admin mints fresh. Always present on a stored record; absent only on a no-record
+      listing row (noRecord), where no record states one - such a row says nothing about whether the
+      subject's grants are in force.
+    optional: true
   - name: createdAt
     type: string
     description: ISO-8601 creation timestamp.
@@ -62,7 +64,17 @@ fields:
       name in the admin UI so admins identify users by name/email rather than the raw subject id.
       May be unset.
     optional: true
+  - name: noRecord
+    type: bool
+    description: >-
+      Set only on a LISTING row, never stored: the subject holds permission grants but has no user
+      record. The row is synthesized from the grant (id and subject id are the grant's subject id,
+      no home unit, and NO status - no record states one, so the row claims nothing about the grants
+      being on or off) so the listing shows who the grid names. Creating the record (`wairon host
+      user add`) makes the flag go away. The web admin users view (/web/admin/users) renders the
+      flag, labelling the row as having no user record.
+    optional: true
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-08T19:34:35.627Z'
-updatedAt: '2026-10-19T06:12:22.264Z'
+updatedAt: '2026-10-30T12:10:41.416Z'

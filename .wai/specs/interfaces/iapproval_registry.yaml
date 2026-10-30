@@ -76,6 +76,26 @@ methods:
         description: Why the approved request can no longer execute, recorded on it as its executionSummary
     guarantees:
       - atomic
+  - name: withdraw
+    description: >-
+      Transition a request that is PENDING at the moment of the write to cancelled, recording the
+      supplied summary as its executionSummary in the same write: the requester's withdrawal. Any
+      other status (approved, denied, completed, expired, cancelled) is refused as a validation
+      error naming it, and an absent id is a not-found error. The status check runs on the set read
+      under the store lock, so a concurrent decide cannot interleave: either the withdrawal wins and
+      the decision is then refused as not pending, or the decision wins and the withdrawal is
+      refused. Who may withdraw is the orchestrator's check, not the registry's. A withdrawn request
+      is final: it is never decided or executed, and the requester asks again.
+    signature: 'withdraw(id: string, summary: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: id
+        type: string
+      - name: summary
+        type: string
+        description: Why the request was withdrawn, recorded on it as its executionSummary
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T19:30:39.410Z'
-updatedAt: '2026-10-04T10:28:12.657Z'
+updatedAt: '2026-10-30T12:10:00.184Z'

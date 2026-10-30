@@ -476,6 +476,12 @@ methods:
     endpoint:
       transport: CLI
       command: wairon whatsnew [version]
+  - name: hostUser
+    description: '`wairon host user <action>`: list, add or set the status of a hosted user.'
+    signatureFrom: cli_runner.runHostUser
+    endpoint:
+      transport: CLI
+      command: wairon host user <action>
 status: complete
 createdAt: '2026-10-04T18:13:03.017Z'
-updatedAt: '2026-10-18T19:04:11.135Z'
+updatedAt: '2026-10-30T12:05:44.873Z'

@@ -62,6 +62,15 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: findReferences
+  - name: adviseNetwork
+    sourcePath: src/mcp/adapters/validator.ts
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's advisory network pass
+        type: call
+        targetComponent: validator_portal
+        targetMethod: adviseNetwork
+    symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:16:32.892Z'
+updatedAt: '2026-10-30T12:03:57.198Z'

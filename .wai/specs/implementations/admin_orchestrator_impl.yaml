@@ -1230,6 +1230,40 @@ methods:
         outcome: the subject's approver identity
     detail: full
     symbol: hostedApprover
+  - name: checkLockable
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Bind the root exactly as executeApprovedLock does: the project's own root, a member
+          record's derived from its parent's root and memberPath
+        type: local
+      - stepNumber: 2
+        description: Validate the bound tree as-complete
+        type: call
+        targetComponent: host_validator_adapter
+        targetMethod: validateAsComplete
+      - stepNumber: 3
+        description: >-
+          Take the design half of the result (ValidationResult.designOnly), the half that may refuse
+          a lock: code-conformance findings never refuse
+        type: local
+      - stepNumber: 4
+        description: Does the design half report errors?
+        type: branch
+        condition: the design half reports errors
+        onTrueStep: 5
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Refuse, naming the error count and each error's code with its message and spec; warnings
+          do not refuse
+        type: throw
+        error: 'Cannot lock: the spec tree does not validate as-complete (<N> error(s): <codes>)'
+      - stepNumber: 6
+        description: The tree would lock; return without writing
+        type: return
+        outcome: nothing
+    symbol: checkLockable
 status: complete
 createdAt: '2026-07-04T12:55:04.866Z'
-updatedAt: '2026-10-23T22:31:22.161Z'
+updatedAt: '2026-10-30T12:04:45.894Z'

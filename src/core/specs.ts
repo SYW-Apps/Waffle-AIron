@@ -3257,15 +3257,19 @@ export function ineffectiveDeltaPaths(
       for (const element of d) {
         if (carriesEditMarker(element)) continue;      // its own refusals and notices cover it
         if (plain.includes(element)) continue;           // judged above, value by value
-        const key = reportIdentityOf(field, element);
+        // A requirement written as text and one written as { description } are one
+        // requirement: both spellings are matched by their text.
+        const identityOf = (v: unknown): string | null => field === 'globalRequirements' ? plainReportKey(field, v) : reportIdentityOf(field, v);
+        const key = identityOf(element);
         if (key === null) {                             // no identity: compared as written
           if (!same(m, d)) say(path, 'the level does not keep this value, so the write dropped it');
           else if (same(s, d)) say(path, 'the stored spec already held this value');
           return;
         }
-        const mMatch = (m as unknown[]).find(i => reportIdentityOf(field, i) === key);
-        const sMatch = Array.isArray(s) ? s.find(i => reportIdentityOf(field, i) === key) : undefined;
+        const mMatch = (m as unknown[]).find(i => identityOf(i) === key);
+        const sMatch = Array.isArray(s) ? s.find(i => identityOf(i) === key) : undefined;
         if (mMatch === undefined) { say(at(path, key), 'the write did not store this element'); continue; }
+        if (!isPlain(mMatch)) continue;                  // stored as text: the text is all there is to compare
         walk(element as Record<string, unknown>, mMatch, sMatch, at(path, key), field);
       }
       return;
@@ -4226,7 +4230,9 @@ export class SpecWorkspace {
         // An unreadable stored document names no owner beyond the one written.
       }
     }
-    assertSpecWritesPermitted(owners, `writing ${kind} spec ${path.basename(path.dirname(file))}/${path.basename(file)}`);
+    // The spec's path relative to its project root (forward slashes): the refusal names the file, never the server's folders.
+    const shown = path.relative(raw.dir, file).split(path.sep).join('/');
+    assertSpecWritesPermitted(owners, `writing ${kind} spec ${shown}`);
   }
 
   /** The project root a spec file is homed under: the root whose specs folder, or one of whose parts' folders, holds it (deepest wins). */
@@ -5799,7 +5805,9 @@ export class SpecWorkspace {
     renamePath(fromDir, toDir);
     // The folder the group left, and each parent that leaves empty, goes too.
     let at = path.dirname(fromDir);
-    const root = path.resolve(this.paths.specsDir());
+    // The specs folder the group left: the project's, or the part's it sat in.
+    const leftPart = this.partHolding(fromIndex)?.part.directory;
+    const root = path.resolve(leftPart ? aiPathsAt(leftPart).specsDir() : this.paths.specsDir());
     while (path.resolve(at) !== root && path.resolve(at).startsWith(root) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
       fs.rmdirSync(at);
       at = path.dirname(at);

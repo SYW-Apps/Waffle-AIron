@@ -146,10 +146,14 @@ warnings as errors (notices are printed and counted, never fatal).
 - What it never checks is behaviour: the reading compares the code's structure and
   linkage with the design (which methods, signatures, imports, calls and routes exist),
   not what a method computes. A business rule deleted from a method body that keeps
-  its signature and its calls passes; tests catch that, the gate does not. The
-  same goes for HOW a narrated call runs: a call step marked `detach: true` that
-  the code awaits, and an error-isolation (`try`) step whose try/catch the code
-  dropped, both pass, since only the call itself is compared.
+  its signature and its calls passes; tests catch that, the gate does not. HOW a
+  narrated call runs is compared where the narrative says it (call-manner-conformance):
+  a call step marked `detach: true` that the code awaits is `DETACHED_CALL_AWAITED`,
+  a call step inside a `try` step that catches whose code call no try/catch encloses
+  is `CALL_NOT_CAUGHT`, and a call step not marked `detach` whose call completes
+  later and is never awaited is `CALL_NOT_AWAITED` (or the notice
+  `OPEN_CALL_NOT_AWAITED` where the method leaves its detail open). Only calls
+  written in the method's own function are judged, not those inside a helper.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -189,14 +193,25 @@ warnings as errors (notices are printed and counted, never fatal).
   and their includes state (`APIRouter(prefix=…)`, `include_router`,
   `Blueprint(url_prefix=…)`, `register_blueprint`), followed across modules; a
   Portal names the router object (`router: app`, `<module>#router`, or a module
-  alone). A router whose path, prefix, methods or include is not a string
-  literal or a module constant holding one, or that mounts an application, is
-  `UNREADABLE_ROUTER`, never read in part. Its data types are the fields of
+  alone), followed through a package `__init__` that re-exports it. A function
+  that selects its handler by the request's method and path is read as a router
+  too (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
+  method and path, or a `BaseHTTPRequestHandler`'s `do_GET`): name it
+  `<module>#handle` or `Class.do_GET`. A router whose path, prefix, methods or
+  include is not a string literal or a module constant holding one, that mounts
+  an application, that places a path converter before further segments, that
+  includes an unread router, or a guard whose comparisons do not all settle
+  (a prefix that stops inside a segment included), is `UNREADABLE_ROUTER`, never
+  read in part. Its data types are the fields of
   dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
   and attrs classes, compared with the type's by name in either casing: a field
   may be absent when it has a default or a default factory, is `NotRequired`,
   or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
-  required, as in Pydantic v2. A plain class, a model built by a call and a
+  required, as in Pydantic v2. `Field(...)` and `Field(default=...)` are required;
+  a legacy `@attr.s` class without `auto_attribs=True` has only its `attr.ib()`
+  fields; a `total=` that is not a literal leaves optionality uncompared; and of
+  two fields sharing a name in different casings, the one spelled as the spec
+  spells it is compared. A plain class, a model built by a call and a
   type alias are not read. A declared edge between two Python components is
   `UNREALIZED_DEPENDENCY` unless one imports the other (an import of a package
   whose `__init__.py` no component realizes reaches every file in it) or a file
@@ -256,16 +271,37 @@ warnings as errors (notices are printed and counted, never fatal).
   member is pinned like an external (`wairon externals pin <alias>`) and
   compared with that pin. A file of another project imported directly from its
   source tree is not a binding: it is the producer's own code.
-- At a project that declares members, `validate` is the **family run**: every
-  member's own gate, and this project's externals composed against their live
-  producers. `--no-recursive` runs this project's gate alone; `--family` runs
-  the family run from a member.
+- At a project that declares members **or externals**, `validate` is the
+  **family run**: every member's own gate, and this project's externals composed
+  against their live producers within its root - an externals-only project has
+  no member levels, so its family run is itself, and `EXTERNAL_INCOMPATIBLE`,
+  `EXTERNAL_UNPINNED` and `EXTERNAL_CHECK_UNAVAILABLE` gate it as they gate a
+  project with members. `--no-recursive` runs this project's gate alone (its
+  externals judged against their pins). `--family` widens the reach: it
+  walks up and out to a producer outside the root (a `../` sibling checkout, a
+  member's parents) within the request's reach. An external whose producer lies
+  outside the reach is counted in a one-line hint: at a member of a family above
+  it, the hint names `validate --family`; at a project with no family above it,
+  a producer it declares outside its root (a `../` sibling) keeps the advisory
+  live comparison, the pin gating it (`lock-check`), with `wairon externals
+  status` as the opt-in live gate;
+  a run that was already explicit is told instead that the producer lies outside
+  the request's reach or cannot be read, and that `wairon externals status`
+  compares it live.
 - **Where the network proofs run.** The proofs that need the whole family —
   `ENTRY_UNPROVEN` (a `network` entry no modelled caller reaches), the gateway
   rules for members, cross-project reach — are judged by the family run at the
   **family root** (the project that declares the members). A member validated on
   its own judges its own gate with its `network` entries counted as declared, and
-  says so in one line, so a green member run is never read as a proven one.
+  says so in one line, so a green member run is never read as a proven one. When
+  the family root is on disk and in reach, a member run alone also lists the
+  root's findings on it under **Network proofs, judged at the family root
+  (advisory: the root gates)**, each with the project and spec it sits on and the
+  severity the root gives it. They are **advisory**: printed and counted beside
+  the verdict, but neither the exit code nor `--ci` (nor the MCP `valid`) ever
+  decides on them - an advisory error included - so a member's verdict is the
+  same with or without its family on disk; the root's own run is where they gate.
+  Nothing is listed for a hosted request, or where no family root lies in reach.
   **In CI, run `wairon validate --ci` at the family root**, after installing
   the project's dependencies (`npm ci` or your package manager's equivalent —
   the gate reads TypeScript/JavaScript code with the project's own TypeScript
@@ -361,7 +397,8 @@ warnings as errors (notices are printed and counted, never fatal).
   A narrated call through a port to a collaborator whose code is not written
   yet (no file its implementations name exists) is `CALL_TARGET_PLANNED`, a
   notice like `SOURCE_FILE_PLANNED`, and is judged as usual once that code
-  exists. The narrative↔code and
+  exists. A narrated call to another project's component (`alias::name`) is
+  `CALL_TARGET_UNJUDGED`, a notice: that project's code is not read here. The narrative↔code and
   declared-edge checks read the checker too, so a type-only `ports.ts` barrel,
   `export *`, a port declared in a shared module and a dependency object typed
   inline realize the calls and edges they carry. And a file importing a technology's package
@@ -1642,7 +1679,10 @@ write is refused every read tool. `host permission set` warns when it grants
 `project:write` to a user who cannot read that scope, and `host key mint --owner`
 warns when the owner cannot read the project — each naming the grant that fixes
 it. An owner needs no user record — an id with no record acts as a service
-principal.
+principal — but a grant for an id with no record is not listed or deactivated
+anywhere until the record exists, so `host permission set` warns and names
+`wairon host user add --user <id>`. The user listings (`wairon host user list`,
+the Users view) show such a subject marked "no user record", with no status.
 
 **Who approves a design.** A hosted lock (`sdd_host_lock_project`, the web UI's
 Lock, `wairon lock` while attached, `POST /admin/projects/{id}/lock`) is the
@@ -1655,7 +1695,13 @@ by `project:write`:
   `yes` only **requests** the lock: the request is pending until someone else
   with `approval:decide` decides it (in the web UI under Approvals), and the
   requester can wait for it with `sdd_host_await_approval`. Nobody decides
-  their own request. `approval:decide` = `approval` requests as well.
+  their own request. `approval:decide` = `approval` requests as well. A request
+  is refused up front, naming the error count and each error's code, while the
+  tree has validation errors (warnings do not block, as at `wairon lock`).
+  The requester can take a pending request back with `sdd_host_withdraw_request`
+  (a request id and an optional reason): it becomes cancelled and is never
+  decided or executed; only the requester can withdraw it, and a request
+  already decided, completed or expired is refused.
 - Anyone else is refused, and nothing is requested.
 
 Give authors `project:write` and reviewers `approval:decide`; a single
@@ -1693,6 +1739,7 @@ decision is recorded as theirs, and their `approval:decide` grant is checked as 
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
+| `wairon host user list` / `add --user <id> [--name <n>] [--email <e>] [--unit <unitId>]` / `set-status --user <id> --status active|inactive` | List the hosted users (a subject that holds grants but has no user record is marked "no user record"), create an active user record (an id that already holds a record is refused: add never replaces one, which would drop its role bindings), or set a user's status (`inactive` revokes the user's credentials and web sessions) |
 | `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members, and a member is named by its own record id. A key never narrows to a subsystem: confine a person to one with `wairon host permission set --project <id> --subsystem <id>`. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |

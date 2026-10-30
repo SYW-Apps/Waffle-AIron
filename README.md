@@ -241,7 +241,7 @@ wairon validate --ci        # architecture-conformance gate; run it until it pas
 # 2. Approve: once `validate --ci` passes, a human approves the design.
 #    (`lock` accepts a design that still has warnings or drafts - approval is not
 #    status - but it says how many warnings CI would fail on, and CI will.)
-wairon lock                 # records the approval in .wai/lock.json
+wairon lock                 # records the approval in .wai/lock.json (CI/scripts: add --yes)
 git add .wai && git commit -m "Approve the design"
 
 # 3. Gate: in CI, check that what merges is the approved design
@@ -308,7 +308,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/dev/.github/workflows/lock-check.yml) (on `dev` and the dev tags until 6.0.0 ships it on `main`; pin a tag — see [docs/cli.md](docs/cli.md#using-it-in-github-actions)) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
-| `wairon host unit \| project \| permission \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, keys, the state-scoped lock) |
+| `wairon host unit \| project \| permission \| user \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, users, keys, the state-scoped lock) |
 | `wairon login` / `wairon remote` / `wairon mcp install --hosted` | Connect a checkout or an AI tool to a hosted instance |
 | `wairon dev` | Local single-project web UI over the current project |
 | `wairon update` / `wairon aliases` | Self-update / command aliases |

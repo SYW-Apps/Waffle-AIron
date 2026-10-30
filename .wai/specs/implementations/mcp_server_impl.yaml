@@ -240,6 +240,7 @@ lint:
         - mcp_core_adapter.composeAgentBrief
         - mcp_core_adapter.getLoaderIssues
         - mcp_core_adapter.loadGroupSpecs
+        - mcp_validator_adapter.adviseNetwork
       reason: >-
         create is the tool registry: these calls are made by the tool handlers it registers, each
         the tool's own behaviour run when an assistant calls that tool, not calls create makes. Its
@@ -248,4 +249,4 @@ lint:
         methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-24T11:38:26.843Z'
+updatedAt: '2026-10-30T13:42:41.577Z'

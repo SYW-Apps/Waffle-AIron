@@ -47,6 +47,7 @@ import {
   runHostDemo,
   runHostUnit,
   runHostPermission,
+  runHostUser,
   runHostKey,
   runHostLock,
   runHostGit,
@@ -799,6 +800,26 @@ hostCmd
       unit: opts.unit,
       instance: opts.instance,
       id: opts.id,
+      dataDir: opts.dataDir,
+    });
+  });
+
+hostCmd
+  .command('user <action>')
+  .description('list | add | set-status — hosted users (list also shows subjects that hold grants but have no user record)')
+  .option('--user <id>', 'the user id (for add and set-status)')
+  .option('--name <name>', 'display name (for add)')
+  .option('--email <email>', 'email address (for add)')
+  .option('--unit <unitId>', 'home organization unit (for add)')
+  .option('--status <status>', 'active | inactive (for set-status; inactive revokes all of the user credentials)')
+  .option('--data-dir <path>', 'data root')
+  .action(async (action: string, opts) => {
+    await runHostUser(action, {
+      user: opts.user,
+      name: opts.name,
+      email: opts.email,
+      unit: opts.unit,
+      userStatus: opts.status,
       dataDir: opts.dataDir,
     });
   });

@@ -437,6 +437,44 @@ methods:
         type: ScopeKind
       - name: scopeId
         type: string
+  - name: listUsers
+    description: >-
+      List the hosted users in the credential's scope, optionally narrowed to one project's grant
+      holders - including subjects that hold grants but have no user record, flagged noRecord
+      (project:admin over the home unit; a no-record subject has none, so only an instance-admin
+      sees it).
+    signature: 'listUsers(credential: string?, project?: string): list<HostedUserRecord>'
+    returns: list<HostedUserRecord>
+    params:
+      - name: credential
+        type: string?
+      - name: project
+        type: string
+        optional: true
+  - name: upsertUser
+    description: >-
+      Create or update a hosted user (project:admin over its home unit); audited, and a reserved
+      built-in subject id is refused.
+    signature: 'upsertUser(credential: string?, record: HostedUserRecord): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string?
+      - name: record
+        type: HostedUserRecord
+  - name: setUserStatus
+    description: >-
+      Set a hosted user's lifecycle status; a deactivation revokes every credential and web session
+      of the user.
+    signature: 'setUserStatus(credential: string?, userId: string, status: string): HostedUserRecord'
+    returns: HostedUserRecord
+    params:
+      - name: credential
+        type: string?
+      - name: userId
+        type: string
+      - name: status
+        type: string
 status: complete
 createdAt: '2026-09-25T22:39:47.086Z'
-updatedAt: '2026-10-23T22:29:32.786Z'
+updatedAt: '2026-10-30T12:05:14.883Z'

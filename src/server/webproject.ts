@@ -52,6 +52,8 @@ import type {
  * throw. A read; not audited.
  */
 export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectRecord[] {
+  // The records leave through /web/projects: the server's absolute filesystem
+  // path (rootPath) is never part of what a browser session reads.
   // step 1: resolve the browser session to a Principal (unauthenticated → sees nothing).
   const principal = authenticateSession(cfg.dataDir, sessionId);
 
@@ -65,7 +67,7 @@ export function listProjects(cfg: HostConfig, sessionId: string): HostedProjectR
     if (p.role === 'owner' && !ownerUnit.has(p.projectId)) ownerUnit.set(p.projectId, p.unitId);
   }
   const enrich = (rs: HostedProjectRecord[]): HostedProjectRecord[] =>
-    rs.map((r) => ({ ...r, unitId: ownerUnit.get(r.id) }));
+    rs.map((r) => ({ ...r, rootPath: '', unitId: ownerUnit.get(r.id) }));
 
   // step 4: an instance-admin sees the whole instance, including projects not yet
   // placed in any organization unit (which no unit-scoped permission can reach).
@@ -104,7 +106,9 @@ export function createProject(
   };
   // Steps 2-3: forward, and answer the GovernedProjectCreation — the record with
   // what the policy applied, which the web UI shows after creation.
-  return initializeProjectWithProfile(cfg, sessionId, request);
+  const creation = initializeProjectWithProfile(cfg, sessionId, request);
+  // The created record answers a browser: no absolute server path in it.
+  return { ...creation, record: { ...creation.record, rootPath: '' } };
 }
 
 /**

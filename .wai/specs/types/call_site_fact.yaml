@@ -97,7 +97,28 @@ fields:
       The 1-based line of the call, recorded at exact grade; the pattern and generic grades leave it
       out rather than guess
     optional: true
+  - name: awaited
+    type: writing_share
+    description: >-
+      How many writings of this shape WAIT for the call to finish before the function goes on: the
+      call is the operand of an await (through parentheses, a non-null assertion, satisfies or a
+      cast), or an element of an awaited joining call (Promise.all, allSettled, race or any;
+      asyncio.gather or asyncio.wait), or — in TypeScript — returned directly, so the function
+      finishes only with it. A Python coroutine returned without await is not waited for. Absent
+      when no writing waits; read only where the file's reading records manner (exact grade, or a
+      reading listing `manner`)
+    optional: true
+  - name: guarded
+    type: writing_share
+    description: >-
+      How many writings of this shape are CAUGHT in the function they are written in: inside the
+      body of a try that has a catch (TypeScript) or an except (Python) — a try with only a finally
+      catches nothing, and a call inside a catch, except or finally block is not in the body — or,
+      in TypeScript, a call with a rejection handler chained onto it (.catch(...), or .then(...)
+      with a second argument). A call inside a callback written within the try body counts as
+      caught. Absent when no writing is caught; read only where the file's reading records manner
+    optional: true
 methods: []
 sourcePath: src/models/code-model.ts
 createdAt: '2026-09-19T15:29:49.702Z'
-updatedAt: '2026-10-25T19:07:53.617Z'
+updatedAt: '2026-10-30T11:59:42.768Z'

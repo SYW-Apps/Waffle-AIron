@@ -18,8 +18,21 @@ fields:
     type: string
     description: The method on it
     optional: false
+  - name: detach
+    type: bool
+    description: >-
+      True when the claim is a call step marked detach: the method goes on without waiting for the
+      call. Absent on a declared call
+    optional: true
+  - name: caught
+    type: bool
+    description: >-
+      True when the claim is a call step inside the body of a try step that names at least one catch
+      — any enclosing one — so the design says an error the call raises is caught there. The try's
+      catch and finally regions are not its body. Absent on a declared call
+    optional: true
 methods: []
 sourcePath: src/models/specs.ts
 symbol: CallClaim
 createdAt: '2026-10-20T13:51:38.563Z'
-updatedAt: '2026-10-20T13:52:12.060Z'
+updatedAt: '2026-10-30T11:59:43.725Z'
