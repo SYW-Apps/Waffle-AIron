@@ -610,7 +610,17 @@ export function generateSequenceDiagram(
             const expandable = depth < maxDepth
               && !!findMethodImpl(server.id, binding.method)
               && server.id !== comp.id;
-            if (expandable) {
+            if (step.detach) {
+              // The caller does not wait on a detached dispatch, so the server
+              // hop is an async arrow and its flow sits in a labelled block
+              // with no return to the caller.
+              lines.push(`  ${portalId}-)${serverId}: ${escapeLabel(binding.method)}() — detached`);
+              if (expandable) {
+                lines.push(`  par detached — ${escapeLabel(binding.method)}()`);
+                walk(server, binding.method, depth + 1, nextStack);
+                lines.push('  end');
+              }
+            } else if (expandable) {
               lines.push(`  ${portalId}->>+${serverId}: ${escapeLabel(binding.method)}()`);
               walk(server, binding.method, depth + 1, nextStack);
               lines.push(`  ${serverId}-->>-${portalId}: return`);
@@ -648,9 +658,14 @@ export function generateSequenceDiagram(
           if (step.detach) {
             // Fire-and-forget: async open arrow, no activation, NO return —
             // the caller continues immediately and the callee's failure does
-            // not propagate back into this flow.
+            // not propagate back into this flow. The callee's own flow, when
+            // drawn, sits in a labelled block that never returns to the caller.
             lines.push(`  ${selfId}-)${targetId}: ${escapeLabel(step.targetMethod)}() — detached`);
-            if (expandable) walk(target, step.targetMethod, depth + 1, nextStack);
+            if (expandable) {
+              lines.push(`  par detached — ${escapeLabel(step.targetMethod)}()`);
+              walk(target, step.targetMethod, depth + 1, nextStack);
+              lines.push('  end');
+            }
           } else if (expandable) {
             lines.push(`  ${selfId}->>+${targetId}: ${escapeLabel(step.targetMethod)}()`);
             walk(target, step.targetMethod, depth + 1, nextStack);

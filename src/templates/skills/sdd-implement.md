@@ -93,7 +93,9 @@ You are the **Spec-to-Code Compiler**. Your job is to generate concrete source c
      statically proves the harness exists and its import graph wires the REAL modules
      (`SIM_FILE_MISSING` / `UNWIRED_INTEGRATION_SIM`), and holds the rest of the
      subsystem to the same bar (`MISSING_INTEGRATION_SIM` activates on first
-     adoption). CI proves it passes; the validator proves it is wired.
+     adoption: declaring the first simPath in a subsystem makes the rest of it owe
+     one; the usual answers are one shared N:1 harness for the subsystem, or a
+     reasoned `lint.allow` for a client Adapter that only wraps an outside call). CI proves it passes; the validator proves it is wired.
    - **Optionally claim path coverage** with string anchors in the harness:
      `"sim:<component-id>.<method>"` for the happy path and
      `"sim:<component-id>.<method>:<label>"` for the error path whose `throw` step
@@ -180,7 +182,7 @@ All implementation work must strictly adhere to these rules:
      - `Index` (handles read-path lookups, optimized query maps).
      - `Query` (a Repository member computing reads over its Store per call; depends only on its Store, a backend Adapter or pure logic).
      - `Actor` (owns one live thing, such as a session, connection, timer or entity instance, and its runtime state; its methods are full flowcharts, and it changes that state only after a commit).
-     - `Adapter` (the only block doing external I/O).
+     - `Adapter` (the client block for an outside system; recommended rather than required, since it keeps one place to change a library and lets other components make an outside call in one step).
      - `Observer` (subscribes to events and forwards them).
    - **Reach, transports and libraries**:
      - A Portal's verbs are reached by the callers the design models or by the outside callers its `invokedBy` entry names. Serve exactly those: the Portal's L4 `router` is the entry its file exports for whatever process hosts it. Never add a verb, route or command the contract does not declare, and never ask for an entry to make an `UNUSED_*` finding go away — report the unreached verb instead.

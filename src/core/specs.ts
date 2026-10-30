@@ -3257,15 +3257,19 @@ export function ineffectiveDeltaPaths(
       for (const element of d) {
         if (carriesEditMarker(element)) continue;      // its own refusals and notices cover it
         if (plain.includes(element)) continue;           // judged above, value by value
-        const key = reportIdentityOf(field, element);
+        // A requirement written as text and one written as { description } are one
+        // requirement: both spellings are matched by their text.
+        const identityOf = (v: unknown): string | null => field === 'globalRequirements' ? plainReportKey(field, v) : reportIdentityOf(field, v);
+        const key = identityOf(element);
         if (key === null) {                             // no identity: compared as written
           if (!same(m, d)) say(path, 'the level does not keep this value, so the write dropped it');
           else if (same(s, d)) say(path, 'the stored spec already held this value');
           return;
         }
-        const mMatch = (m as unknown[]).find(i => reportIdentityOf(field, i) === key);
-        const sMatch = Array.isArray(s) ? s.find(i => reportIdentityOf(field, i) === key) : undefined;
+        const mMatch = (m as unknown[]).find(i => identityOf(i) === key);
+        const sMatch = Array.isArray(s) ? s.find(i => identityOf(i) === key) : undefined;
         if (mMatch === undefined) { say(at(path, key), 'the write did not store this element'); continue; }
+        if (!isPlain(mMatch)) continue;                  // stored as text: the text is all there is to compare
         walk(element as Record<string, unknown>, mMatch, sMatch, at(path, key), field);
       }
       return;
