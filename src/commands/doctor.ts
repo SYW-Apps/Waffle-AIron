@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
-import { execFileSync, execSync, type ExecSyncOptionsWithStringEncoding } from 'child_process';
+import { processes } from '../io/index.js';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -174,8 +174,8 @@ function launchedVersion(entry: { command?: string; args?: unknown[] }): string 
     try {
       // Windows resolves `wairon` through its .cmd shim, which only a shell runs;
       // the command line is a constant, never built from the repository.
-      const opts: ExecSyncOptionsWithStringEncoding = { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true };
-      const out = process.platform === 'win32' ? execSync('wairon --version', opts) : execFileSync('wairon', ['--version'], opts);
+      const opts: processes.RunOptions = { timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true };
+      const out = process.platform === 'win32' ? processes.runShell('wairon --version', opts) : processes.run('wairon', ['--version'], opts);
       return valid(out.trim().split(/\s+/).pop() ?? '');
     } catch {
       return null;

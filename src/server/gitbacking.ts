@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { execFileSync } from 'child_process';
+import { processes } from '../io/index.js';
 import { authenticateCredential } from './auth.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
 import { authorize, visibleScopes, actionableUnitIds, isInstanceAdmin } from './authorization.js';
@@ -186,9 +186,8 @@ export function getBinding(dataDir: string, bindingId: string): GitBackingBindin
 // token conventions as the per-project git adapter.
 
 function git(args: string[], cwd: string): string {
-  return execFileSync('git', args, {
+  return processes.run('git', args, {
     cwd,
-    encoding: 'utf8',
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
   }).trim();
 }

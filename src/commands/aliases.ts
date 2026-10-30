@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { processes } from '../io/index.js';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
 import { SUPPORTED_ALIASES, SupportedAlias } from '../config/defaults.js';
@@ -238,7 +238,7 @@ function resolveInstallDir(): string | undefined {
 function detectConflict(alias: string, installDir: string | undefined): string | null {
   try {
     const cmd = process.platform === 'win32' ? `where ${alias}` : `which ${alias}`;
-    const result = execSync(cmd, { stdio: 'pipe' }).toString().trim().split('\n')[0].trim();
+    const result = processes.runShell(cmd, { stdio: 'pipe' }).trim().split('\n')[0].trim();
     if (!result) return null;
 
     // If it's inside our install dir it's our own file — not a conflict

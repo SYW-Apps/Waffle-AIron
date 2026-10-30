@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { processes } from '../../io/index.js';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -56,9 +56,8 @@ function cacheRoot(): string {
  * The setting is read only on Windows; elsewhere it changes nothing.
  */
 function git(args: string[], cwd?: string): string {
-  return execFileSync('git', ['-c', 'core.longpaths=true', ...args], {
+  return processes.run('git', ['-c', 'core.longpaths=true', ...args], {
     cwd,
-    encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' },
   });

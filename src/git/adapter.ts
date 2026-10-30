@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { processes } from '../io/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
@@ -16,9 +16,8 @@ import { getProjectRoot } from '../utils/fs.js';
 // ---------------------------------------------------------------------------
 
 function git(args: string[], cwd?: string): string {
-  return execFileSync('git', args, {
+  return processes.run('git', args, {
     cwd: cwd ?? getProjectRoot(),
-    encoding: 'utf8',
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
   }).trim();
 }

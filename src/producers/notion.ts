@@ -1,3 +1,4 @@
+import { http } from '../io/index.js';
 import type { DocPage } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ function authHeaders(token: string): Record<string, string> {
 }
 
 async function api(token: string, method: string, pathname: string, body?: unknown): Promise<any> {
-  const res = await fetch(`${API}${pathname}`, {
+  const res = await http.request(`${API}${pathname}`, {
     method,
     headers: authHeaders(token),
     body: body ? JSON.stringify(body) : undefined,

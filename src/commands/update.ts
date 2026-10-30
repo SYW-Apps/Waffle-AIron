@@ -1,9 +1,8 @@
-import * as https from 'https';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { http, processes } from '../io/index.js';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import {
@@ -302,37 +301,25 @@ export function releaseChannelLabel(tag: string): string {
 // GitHub API
 // ---------------------------------------------------------------------------
 
-function fetchReleases(repo: string): Promise<GithubRelease[]> {
-  return new Promise((resolve, reject) => {
-    // 100 (the GitHub maximum) rather than a page that a run of pre-releases
-    // can fill: `dev` cuts a build per merge, so a page of 20 can hold nothing
-    // but -dev.N and leave a stable install seeing no eligible release at all.
-    const url = `https://api.github.com/repos/${repo}/releases?per_page=100`;
-    const options = {
-      headers: {
-        'User-Agent': `wairon/${WAIRON_VERSION}`,
-        'Accept': 'application/vnd.github+json',
-      },
-    };
+async function fetchReleases(repo: string): Promise<GithubRelease[]> {
+  // 100 (the GitHub maximum) rather than a page that a run of pre-releases
+  // can fill: `dev` cuts a build per merge, so a page of 20 can hold nothing
+  // but -dev.N and leave a stable install seeing no eligible release at all.
+  const url = `https://api.github.com/repos/${repo}/releases?per_page=100`;
+  const headers = {
+    'User-Agent': `wairon/${WAIRON_VERSION}`,
+    'Accept': 'application/vnd.github+json',
+  };
 
-    https.get(url, { ...options, agent: false }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        res.destroy();
-        if (res.statusCode !== 200) {
-          reject(new Error(`GitHub API returned ${res.statusCode}: ${data.slice(0, 200)}`));
-          return;
-        }
-        try {
-          resolve(JSON.parse(data) as GithubRelease[]);
-        } catch {
-          reject(new Error('Failed to parse GitHub API response'));
-        }
-      });
-      res.on('error', reject);
-    }).on('error', reject);
-  });
+  const { status, body } = await http.getText(url, headers);
+  if (status !== 200) {
+    throw new Error(`GitHub API returned ${status}: ${body.slice(0, 200)}`);
+  }
+  try {
+    return JSON.parse(body) as GithubRelease[];
+  } catch {
+    throw new Error('Failed to parse GitHub API response');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -408,12 +395,12 @@ function installBinary(tmpFile: string, destPath: string): void {
   if (isZip) {
     // Use ['ignore', 'pipe', 'pipe'] — piping stdin into PowerShell causes
     // "Input redirection is not supported" on Windows PowerShell 5.x.
-    execSync(
+    processes.runShell(
       `powershell -NoProfile -NonInteractive -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force"`,
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
   } else {
-    execSync(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
+    processes.runShell(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
   }
 
   const binaryName = platform === 'win32' ? 'wairon.exe' : 'wairon';

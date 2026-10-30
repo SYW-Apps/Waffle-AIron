@@ -13,7 +13,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { processes } from '../io/index.js';
 import { isNewerVersion } from '../utils/version.js';
 
 export interface BuildStamp {
@@ -70,10 +70,10 @@ export function readBuildFingerprint(stamp: BuildStamp): string {
   const loaderFlags = modulePath.endsWith('.ts') ? process.execArgv : [];
   let printed: string;
   try {
-    printed = execFileSync(
+    printed = processes.run(
       process.execPath,
       [...loaderFlags, '-e', 'const m = require(process.argv[1]); process.stdout.write(String(m.schemaFingerprint()));', modulePath],
-      { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
+      { timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true },
     ).trim();
   } catch (e) {
     // Node prints the failing source line first; the error itself is the line
