@@ -153,7 +153,11 @@ warnings as errors (notices are printed and counted, never fatal).
   is `CALL_NOT_CAUGHT`, and a call step not marked `detach` whose call completes
   later and is never awaited is `CALL_NOT_AWAITED` (or the notice
   `OPEN_CALL_NOT_AWAITED` where the method leaves its detail open). Only calls
-  written in the method's own function are judged, not those inside a helper.
+  written in the method's own function are judged, not those inside a helper; a
+  step whose manner (detach, or inside a catching try) the code realizes only
+  through a helper, or whose target plans no code yet, is the notice
+  `CALL_MANNER_UNJUDGED` naming the step and why, so a pass is never read as a
+  judged one.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -195,7 +199,8 @@ warnings as errors (notices are printed and counted, never fatal).
   Portal names the router object (`router: app`, `<module>#router`, or a module
   alone), followed through a package `__init__` that re-exports it. A function
   that selects its handler by the request's method and path is read as a router
-  too (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
+  too (a router named through a package `__init__` re-export is followed to the
+  module that defines it; `if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
   method and path, or a `BaseHTTPRequestHandler`'s `do_GET`): name it
   `<module>#handle` or `Class.do_GET`. A router whose path, prefix, methods or
   include is not a string literal or a module constant holding one, that mounts
@@ -204,7 +209,11 @@ warnings as errors (notices are printed and counted, never fatal).
   (a prefix that stops inside a segment included), is `UNREADABLE_ROUTER`, never
   read in part. Its data types are the fields of
   dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
-  and attrs classes, compared with the type's by name in either casing: a field
+  and attrs classes, compared with the type's by name in either casing (and,
+  in either language, by a field's scalar type: `amount: str` where the spec
+  declares `float` is the warning `TYPE_FIELD_TYPE_MISMATCH`, naming both
+  types; an annotation that is a union, a list, a record or a named type the
+  design does not know is not compared): a field
   may be absent when it has a default or a default factory, is `NotRequired`,
   or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
   required, as in Pydantic v2. `Field(...)` and `Field(default=...)` are required;
