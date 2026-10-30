@@ -47,6 +47,12 @@ describe('a runtime re-export is a dependency edge', () => {
     expect(undeclared(storeWriting(['export type * from \'./dispatch_orchestrator.js\';']))).toEqual([]);
   });
 
+  it('a specifier re-exported both as a type and at run time keeps its runtime edge, whichever is written first', () => {
+    const from = "'./dispatch_orchestrator.js'";
+    expect(undeclared(storeWriting([`export type * from ${from};`, `export * from ${from};`]))).toHaveLength(1);
+    expect(undeclared(storeWriting([`export * from ${from};`, `export type * from ${from};`]))).toHaveLength(1);
+  });
+
   it('a re-export along a declared edge is justified', () => {
     const tree = dispatchTree(ts([...TS_DISPATCH_BODY], ['export { TrackingStore } from \'./tracking-store.js\';']), false);
     expect(undeclared(tree)).toEqual([]);
