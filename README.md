@@ -308,7 +308,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/dev/.github/workflows/lock-check.yml) (on `dev` and the dev tags until 6.0.0 ships it on `main`; pin a tag — see [docs/cli.md](docs/cli.md#using-it-in-github-actions)) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
-| `wairon host unit \| project \| permission \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, keys, the state-scoped lock) |
+| `wairon host unit \| project \| permission \| user \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, users, keys, the state-scoped lock) |
 | `wairon login` / `wairon remote` / `wairon mcp install --hosted` | Connect a checkout or an AI tool to a hosted instance |
 | `wairon dev` | Local single-project web UI over the current project |
 | `wairon update` / `wairon aliases` | Self-update / command aliases |

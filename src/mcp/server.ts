@@ -4086,6 +4086,13 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
         timeoutSeconds: z.number().optional().describe('How long to wait server-side (clamped; 0 returns the current state immediately)'),
       },
     }, hostedStub);
+    reg<{ requestId: string; reason?: string }>(server, 'sdd_host_withdraw_request', {
+      description: 'Hosted project lifecycle: WITHDRAW one of YOUR approval requests while it is still pending (for example a lock requested about a tree you then changed). The request becomes cancelled and is never decided or executed; only its requester may withdraw it, and a request already decided, completed or expired is refused. Ask again for a fresh one.',
+      inputSchema: {
+        requestId: z.string(),
+        reason: z.string().optional().describe('Why you withdraw it; recorded on the cancelled request'),
+      },
+    }, hostedStub);
     reg<Record<string, never>>(server, 'sdd_landscape_list_reachable_projects', {
       description: 'Hosted landscape: the projects reachable from the BOUND project through ACTIVE cross-project relations (directional, relations-only), each with the relation ids/kinds and target public interface ids.',
       inputSchema: {},

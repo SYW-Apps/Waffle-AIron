@@ -4230,7 +4230,9 @@ export class SpecWorkspace {
         // An unreadable stored document names no owner beyond the one written.
       }
     }
-    assertSpecWritesPermitted(owners, `writing ${kind} spec ${path.basename(path.dirname(file))}/${path.basename(file)}`);
+    // The spec's path relative to its project root (forward slashes): the refusal names the file, never the server's folders.
+    const shown = path.relative(raw.dir, file).split(path.sep).join('/');
+    assertSpecWritesPermitted(owners, `writing ${kind} spec ${shown}`);
   }
 
   /** The project root a spec file is homed under: the root whose specs folder, or one of whose parts' folders, holds it (deepest wins). */

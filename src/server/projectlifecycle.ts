@@ -6,11 +6,12 @@ import {
   listApprovalRequests,
   markApprovalCompleted,
   cancelApprovalRequest,
+  withdrawApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, gateIdentity, hostedApprover } from './admin.js';
+import { executeApprovedLock, gateIdentity, checkLockable, hostedApprover } from './admin.js';
 import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
@@ -416,7 +417,10 @@ function lifecycleAction(
   if (!existingProjectRoot(cfg.dataDir, projectId)) {
     throw new Error(`Unknown project "${projectId}".`);
   }
-  // Steps 13-16: pin the design the request is about: the approved execution
+  // Step 13: a tree with validation errors is refused here, before any request
+  // exists: the approved lock would refuse it, so nobody is asked to approve it.
+  checkLockable(cfg, projectId);
+  // Steps 14-17: pin the design the request is about: the approved execution
   // refuses a tree whose gate identity moved after this moment. No qualifier is
   // recorded — the record id (a member's own) confines the request.
   const gateStateId = gateIdentity(cfg, projectId);
@@ -443,6 +447,42 @@ function refuseDeniedSubsystems(cfg: HostConfig, principal: Principal, projectId
     'a lock signs the whole tree, and the caller may not change these subsystems: '
     + denied.map((s) => `${s.subsystemId} (decided by ${describeDecision(s.permission)})`).join(', '),
   );
+}
+
+/**
+ * The requester withdraws their own PENDING approval request: authenticate the
+ * caller, lazily expire overdue pending requests, require the caller to be the
+ * original requester (an approver decides, never withdraws), then move the
+ * request to cancelled in one atomic write that only succeeds while it is still
+ * pending. Its executionSummary states it was withdrawn by the requester (and
+ * their reason when given); nothing is executed. Audit at security level.
+ */
+export function withdrawRequest(
+  cfg: HostConfig,
+  credential: string | null,
+  requestId: string,
+  reason?: string,
+): ApprovalRequest {
+  const principal = requirePrincipal(cfg, credential);
+  expirePendingApprovals(cfg.dataDir, new Date().toISOString());
+
+  const req = getApprovalRequestById(cfg.dataDir, requestId);
+  if (!req) throw new Error(`Approval request "${requestId}" not found.`);
+  if (!isOriginalRequester(principal, req)) {
+    throw new ForbiddenError('Forbidden - only the original requester may withdraw this request');
+  }
+
+  const summary = reason ? `withdrawn by the requester: ${reason}` : 'withdrawn by the requester';
+  const withdrawn = withdrawApprovalRequest(cfg.dataDir, req.id, summary);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'approval.withdrawn', 'security', {
+      target: withdrawn.id,
+      projectId: withdrawn.projectId,
+    }),
+  );
+  return withdrawn;
 }
 
 /**

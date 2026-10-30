@@ -338,7 +338,12 @@ export function Users() {
               {
                 key: 'status',
                 header: 'Status',
-                cell: (u) => <Badge tone={u.status === 'active' ? 'ok' : 'neutral'}>{u.status}</Badge>,
+                cell: (u) =>
+                  u.noRecord ? (
+                    <Badge tone="warn">no user record</Badge>
+                  ) : (
+                    <Badge tone={u.status === 'active' ? 'ok' : 'neutral'}>{u.status}</Badge>
+                  ),
               },
               { key: 'unit', header: 'Home unit', cell: (u) => <span>{unitName(u.unitId)}</span> },
               {
@@ -367,7 +372,7 @@ export function Users() {
                     <Button size="sm" variant="primary" onClick={() => setEditingId(u.id)}>
                       Manage access
                     </Button>
-                    {u.status === 'active' ? (
+                    {u.noRecord ? null : u.status === 'active' ? (
                       <ConfirmButton
                         label="Deactivate"
                         title="Deactivate user"

@@ -485,7 +485,7 @@ export interface HostedUserRecord {
   /** Lifecycle status collapsed to a single axis: 'active' or inactive (any
    *  non-'active' value). An inactive record is retained for audit provenance
    *  but the user cannot act. */
-  status: string;
+  status?: string;
   createdAt: string;
   /** Human-readable display name (from the SSO id_token 'name'/'preferred_username'
    *  claim at provisioning, refreshed on re-login). Shown in the admin UI and
@@ -503,6 +503,10 @@ export interface HostedUserRecord {
    *  combined with direct assignments and everyone-defaults during resolution.
    *  Authorization is expressed ONLY here (plus the grid), never via grants. */
   roleBindings?: RoleBinding[];
+  /** Set only on a LISTING row, never stored: the subject holds permission grants
+   *  but has no user record. Such a row carries no status — no record states one,
+   *  so it claims nothing about the grants being on or off. */
+  noRecord?: boolean;
 }
 
 /** An audit event's level, lowest first; the retention policy's minimum compares in this order. */

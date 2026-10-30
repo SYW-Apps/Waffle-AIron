@@ -350,6 +350,22 @@ export function gateIdentity(cfg: HostConfig, projectId: string): string {
 }
 
 /**
+ * Pre-authorized like executeApprovedLock and for the same caller: validate the
+ * tree of this project's own record the way an approved lock would (as-complete,
+ * the design half) and refuse with a LockValidationError naming the error count
+ * and each error's code. Warnings and notices never refuse, as at the local
+ * `wairon lock`. Read-only: no sync, no lock record, no write — the project
+ * lifecycle orchestrator calls it before it creates a pending project:lock
+ * request, so a request is never made about a tree the approved lock would refuse.
+ */
+export function checkLockable(cfg: HostConfig, projectId: string): void {
+  const root = boundLifecycleRoot(cfg, projectId);
+  runWithProjectRoot(root, () => {
+    refuseDesignErrors(validateAsComplete());
+  });
+}
+
+/**
  * Pre-authorized entry for the approval workflow: the same privileged action as
  * lockProject but WITHOUT credential authentication — the caller
  * (project_lifecycle_orchestrator, or lockProject after its own authorization)

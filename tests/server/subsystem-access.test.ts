@@ -200,6 +200,9 @@ describe('a subsystem rule decides spec writes in its subsystem', () => {
     const elsewhere = await call(team, 'sdd_add_component', comp('cat_index', 'catalog'));
     expect(elsewhere.isError).toBe(true);
     expect(elsewhere.text).toMatch(/SubsystemWriteDenied/);
+    // The refusal names the spec's path relative to the project root, never the server's folders.
+    expect(elsewhere.text).toContain('writing component spec .wai/specs/catalog/cat_index/.index.yaml would change');
+    expect(elsewhere.text).not.toContain(fam.platform);
     expect(elsewhere.text).toMatch(/subsystem "catalog" of project "platform"/);
     // It says what is missing and the grant that would let the write through.
     expect(elsewhere.text).toMatch(/decided by the project rung: no project:write on the project, and no setting on this subsystem/);
