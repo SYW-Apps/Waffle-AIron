@@ -11,3 +11,6 @@ export { validateProject, validateRegistry, validateFamily, measurePackImpact, f
 export { adviseExternals } from '../../core/validation.js';
 // searchSpecs, findReferences: the lookups behind sdd_search_specs and sdd_find_references.
 export { searchSpecs, findReferences } from '../../core/validation.js';
+// adviseNetwork: the family root's network findings on a member validated on
+// its own, each marked advisory — what sdd_validate_tree appends beside them.
+export { adviseNetwork } from '../../core/validation.js';

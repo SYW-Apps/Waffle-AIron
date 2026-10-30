@@ -71,17 +71,24 @@ describe('wairon validate', () => {
     expect(own.out).not.toContain('EXTERNAL_INCOMPATIBLE');
   });
 
-  it('at a member runs its owner\'s gate with the --family hint; --family composes its externals', async () => {
+  it('at a member that declares externals runs the family run within its root; --family widens the reach to the producers; --no-recursive asks for the owner\'s gate', async () => {
     const f = contractFamily();
     bind(f.billing);
     pinExternals();
     f.setLedgerContract('record');
+    // Plain: the family run (its externals are the declaration), but the producer lies above the root - left out, counted, and the flag that widens the reach named.
     const plain = await validateAt(f.billing);
-    expect(plain.out).toMatch(/judged against its pin alone; the advisory live comparison reads its live producer/);
-    expect(plain.out).not.toContain('EXTERNAL_INCOMPATIBLE');
+    expect(plain.out).toContain('Per project');
+    expect(plain.out).toMatch(/has its producer outside this run's reach and was not composed; run `wairon validate --family`/);
+    expect(plain.out).not.toContain('[EXTERNAL_INCOMPATIBLE]');
     const composed = await validateAt(f.billing, { family: true });
     expect(composed.out).toMatch(/\[billing \(bound\)\] \[EXTERNAL_INCOMPATIBLE\]/);
     expect(composed.failed).toBe(true);
+    // --no-recursive: the owner's gate alone, judged against the pin, and the hint names the plain run that composes.
+    const own = await validateAt(f.billing, { recursive: false });
+    expect(own.out).not.toContain('Per project');
+    expect(own.out).toMatch(/judged against its pin alone; the advisory live comparison reads its live producer \(offline\); `wairon validate` without `--no-recursive` composes it/);
+    expect(own.out).not.toContain('--family');
   });
 
   it('--ci fails on an unwaived warning of the family run, as it does on the owner\'s gate', async () => {
@@ -104,7 +111,7 @@ describe('sdd_validate_tree', () => {
     return client;
   }
 
-  it('runs the family run at a parent, the owner\'s gate at a member, and the family run with `family: true`', async () => {
+  it('runs the family run at a parent and at a member that declares externals, the owner\'s gate with `recursive: false`, and the widened run with `family: true`', async () => {
     const f = contractFamily();
     bind(f.billing);
     pinExternals();
@@ -116,8 +123,13 @@ describe('sdd_validate_tree', () => {
     expect(atParent.errors.some((e: { code: string; project?: string }) => e.code === 'EXTERNAL_INCOMPATIBLE' && e.project === 'billing')).toBe(true);
     bind(f.billing);
     const atMember = (await client.callTool({ name: 'sdd_validate_tree', arguments: {} })).structuredContent as Record<string, any>;
-    expect(atMember.projects).toBeUndefined();
-    expect(atMember.hint).toMatch(/the advisory live comparison reads/);
+    // A member that declares externals runs its family within its root: the producer above it is counted, not composed.
+    expect(atMember.projects.map((p: { key: string }) => p.key)).toEqual(['']);
+    expect(atMember.hint).toMatch(/outside this run's reach and was not composed; run `wairon validate --family`/);
+    bind(f.billing);
+    const ownGate = (await client.callTool({ name: 'sdd_validate_tree', arguments: { recursive: false } })).structuredContent as Record<string, any>;
+    expect(ownGate.projects).toBeUndefined();
+    expect(ownGate.hint).toMatch(/`wairon validate` without `--no-recursive` composes/);
     bind(f.billing);
     const withFamily = (await client.callTool({ name: 'sdd_validate_tree', arguments: { family: true } })).structuredContent as Record<string, any>;
     expect(withFamily.projects.map((p: { key: string }) => p.key)).toEqual(['']);

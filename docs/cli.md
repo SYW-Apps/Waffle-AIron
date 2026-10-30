@@ -256,16 +256,33 @@ warnings as errors (notices are printed and counted, never fatal).
   member is pinned like an external (`wairon externals pin <alias>`) and
   compared with that pin. A file of another project imported directly from its
   source tree is not a binding: it is the producer's own code.
-- At a project that declares members, `validate` is the **family run**: every
-  member's own gate, and this project's externals composed against their live
-  producers. `--no-recursive` runs this project's gate alone; `--family` runs
-  the family run from a member.
+- At a project that declares members **or externals**, `validate` is the
+  **family run**: every member's own gate, and this project's externals composed
+  against their live producers within its root - an externals-only project has
+  no member levels, so its family run is itself, and `EXTERNAL_INCOMPATIBLE`,
+  `EXTERNAL_UNPINNED` and `EXTERNAL_CHECK_UNAVAILABLE` gate it as they gate a
+  project with members. `--no-recursive` runs this project's gate alone (its
+  externals judged against their pins). `--family` widens the reach: it
+  walks up and out to a producer outside the root (a `../` sibling checkout, a
+  member's parents) within the request's reach. An external whose producer lies
+  outside the reach is counted in a one-line hint that names `validate --family`;
+  a run that was already explicit is told instead that the producer lies outside
+  the request's reach or cannot be read, and that `wairon externals status`
+  compares it live.
 - **Where the network proofs run.** The proofs that need the whole family —
   `ENTRY_UNPROVEN` (a `network` entry no modelled caller reaches), the gateway
   rules for members, cross-project reach — are judged by the family run at the
   **family root** (the project that declares the members). A member validated on
   its own judges its own gate with its `network` entries counted as declared, and
-  says so in one line, so a green member run is never read as a proven one.
+  says so in one line, so a green member run is never read as a proven one. When
+  the family root is on disk and in reach, a member run alone also lists the
+  root's findings on it under **Network proofs, judged at the family root
+  (advisory: the root gates)**, each with the project and spec it sits on and the
+  severity the root gives it. They are **advisory**: printed and counted beside
+  the verdict, but neither the exit code nor `--ci` (nor the MCP `valid`) ever
+  decides on them - an advisory error included - so a member's verdict is the
+  same with or without its family on disk; the root's own run is where they gate.
+  Nothing is listed for a hosted request, or where no family root lies in reach.
   **In CI, run `wairon validate --ci` at the family root**, after installing
   the project's dependencies (`npm ci` or your package manager's equivalent —
   the gate reads TypeScript/JavaScript code with the project's own TypeScript

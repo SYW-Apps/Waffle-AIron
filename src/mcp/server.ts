@@ -96,10 +96,10 @@ import { listConsumers as externalConsumers, diffSurface as surfaceDiff } from '
 import { flows as networkFlows, explain as explainNetworkFlow, declare as declareNetwork } from './network.js';
 import type { NetworkFlow } from './adapters/network.js';
 import { relationHealth, type ExternalAddition, type ExternalRequest, type ExternalStatus } from '../models/specs.js';
-import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals } from './adapters/validator.js';
+import { validateProject, validateRegistry, validateFamily, measurePackImpact, familyApprovals, adviseExternals, adviseNetwork } from './adapters/validator.js';
 import type { PackCandidate, PackImpact } from '../models/pack-impact.js';
 import type { MemberCreation } from '../core/index.js';
-import { declaredMembers } from '../models/project.js';
+import { declaredExternals, declaredMembers } from '../models/project.js';
 import { narrowedToUses, type ExternalConsumer } from '../models/project-family.js';
 import type { ExportUse } from '../models/exports.js';
 import { selectsFamily } from '../models/validation-options.js';
@@ -1138,8 +1138,8 @@ const getStatusOutput = {
 
 const validateTreeOutput = {
   validatorVersion: z.string().describe('The wairon release of the running server process (ValidationResult.validatorVersion), so a verdict pasted into a thread can be dated.'),
-  valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false.'),
-  errors: z.array(z.object(validationIssueOutput)).describe('Every finding of severity error.'),
+  valid: z.boolean().describe('False when the tree holds at least one error; warnings and notices never make it false, and neither does an advisory finding of any severity.'),
+  errors: z.array(z.object(validationIssueOutput)).describe('Every finding of severity error (an advisory one is marked `advisory: true` and never makes the tree invalid).'),
   warnings: z.array(z.object(validationIssueOutput)).describe('Every finding of severity warning.'),
   notices: z.array(z.object(validationIssueOutput)).describe(
     'Every finding of severity notice: reported, never a failure — they never make the tree invalid and '
@@ -1147,8 +1147,8 @@ const validateTreeOutput = {
   ),
   hint: z.string().optional().describe(
     "The owner's gate: present when the project declares externals — they were judged against their pins alone, "
-    + 'and the advisory live comparison reads their live producers. A family run: present when '
-    + "externals were left out because their producers lie outside the run's reach. At a member's own root it also "
+    + 'and `validate` without `--no-recursive` composes them against their live producers. A family run: present when '
+    + "externals were left out because their producers lie outside the run's reach, naming what widens it. At a member's own root it also "
     + 'says that the member\'s network proofs are judged at the family root, as `wairon validate` prints it.',
   ),
   projects: z.array(z.object({
@@ -3319,11 +3319,11 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
   reg<{ subsystem?: string; recursive?: boolean; family?: boolean }>(server,
     'sdd_validate_tree',
     {
-      description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds. Externals the run did not compose are also compared with their LIVE producers, offline: those findings (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED) carry advisory: true and never make the tree invalid — the pin is the gate — and say what moved, who uses it and the fix.',
+      description: 'Validate the SDD spec tree, checking parent references, contract compatibility, narratives, and component type boundaries. Supports scoping and recursion controls: a project that declares members or externals runs its family by default (every member\'s own gate, and its externals composed against their live producers within the bound root), `recursive: false` asks for the owner\'s gate alone, and `family: true` widens the reach of the walk to producers outside the bound root (a sibling checkout, a member\'s parents) within the request\'s reach. At a member judged by its owner\'s gate alone, the family root\'s network findings on it are listed too, marked advisory (never part of `valid`, whatever their severity), when the root is on disk and in the request\'s reach. Findings come back as structured content too, under the schema this tool declares — errors, warnings and notices already split into three lists (a notice never makes the tree invalid and never fails --ci), each with its code, severity, message and the spec it concerns — so a caller filters them as objects instead of parsing the JSON text block and hoping its shape holds. Externals the run did not compose are also compared with their LIVE producers, offline: those findings (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED) carry advisory: true and never make the tree invalid — the pin is the gate — and say what moved, who uses it and the fix.',
       inputSchema: {
         subsystem: z.string().optional().describe('Only validate the specified subsystem (granular)'),
-        recursive: z.boolean().optional().describe("At a project that declares members: the family run (true, the default) or the owner's gate alone (false)"),
-        family: z.boolean().optional().describe("Ask for the family run explicitly: every member's own gate, and this project's externals composed against their live producers within the request's reach (`wairon validate --family`)"),
+        recursive: z.boolean().optional().describe("At a project that declares members or externals: the family run (true, the default) or the owner's gate alone (false)"),
+        family: z.boolean().optional().describe("Ask for the family run explicitly, widening its reach: every member's own gate, and this project's externals composed against their live producers within the request's reach, producers outside the bound root included (`wairon validate --family`)"),
       },
       outputSchema: validateTreeOutput,
     },
@@ -3347,18 +3347,22 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Step 2: which run — the same reading `wairon validate` makes. Steps
         // 3/5: the family run (within the request's reach, which it never
         // widens) or the owner's gate.
-        const familyRun = selectsFamily(options, declaredMembers(config).length > 0);
+        const familyRun = selectsFamily(options, declaredMembers(config).length > 0, declaredExternals(config).length > 0);
         const result = familyRun ? validateFamily(options) : validateProject(options);
         // Step 6: the advisory live comparison of every external the run did
         // not compose (a family run hands over the aliases it composed in
         // reach) — marked advisory, never part of `valid`.
         const advised = adviseExternals(familyRun ? result.composed : undefined);
-        const all = [...result.issues, ...advised];
-        // Step 7: at a member's own root, the line `wairon validate` prints:
+        // Step 7: the owner's gate of a member has no family run behind it:
+        // the family root's network findings on it, marked advisory (never a
+        // hosted request, never part of `valid`, whatever their severity).
+        const network = familyRun ? [] : adviseNetwork(options, result.issues);
+        const all = [...result.issues, ...advised, ...network];
+        // Step 8-9: at a member's own root, the line `wairon validate` prints:
         // its network proofs are judged at the family root.
         const parent = resolveChainingParent();
         const memberLine = parent
-          ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.`
+          ? `Member "${parent.alias}" of ${parent.parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there${familyRun ? ' (this family run took them from the enclosing family, narrowed to this member)' : '; here its network entries count as declared, not proven'}.${network.length > 0 ? " The root's findings on this member are listed with the findings, advisory: the root's own run gates them." : ''}`
           : undefined;
         const hint = [result.hint, memberLine, (result as { codeReading?: string }).codeReading, `Validated by wairon ${result.validatorVersion}.`].filter((h): h is string => !!h).join(' ');
         // The text block is the same JSON it has always been; the structured

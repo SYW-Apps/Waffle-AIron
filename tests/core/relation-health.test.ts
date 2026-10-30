@@ -254,7 +254,8 @@ describe('hosted: a `source.hosted` producer resolves through the caller record 
     // Out of the caller's reach: never read, never ok.
     const out = hosted(shop, ledger, false, () => validateFamily({ family: true }));
     expect(externalCodes(out)).not.toContain('EXTERNAL_INCOMPATIBLE');
-    expect(out.hint).toMatch(/outside this run's reach/);
+    // A hosted run is already explicit: the hint says the producer lies outside the request's reach, never the flag.
+    expect(out.hint).toMatch(/outside this request's reach or cannot be read/);
     expect(hosted(shop, ledger, false, () => familyRelations())[0].externals.map(relationHealth)).toEqual(['unavailable']);
   });
 });

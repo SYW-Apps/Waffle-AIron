@@ -6,14 +6,14 @@ import { ProjectNotInitializedError } from '../utils/errors.js';
 // The core reads this adapter makes land on the core portals: the configuration,
 // the agent registry, and the legacy spec filenames a migration would rename.
 import { loadProjectConfig, loadRegistry, findLegacySpecFiles, findOrphanedSpecFiles, resolveChainingParent, holdsDesign, readLockRecord } from '../core/index.js';
-import { declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
+import { declaredExternals, declaredMembers, isPart, type CarriedDebt, type ProjectConfig, type RulesConfig } from '../models/project.js';
 import type { Registry } from '../models/registry.js';
 import { selectsFamily } from '../models/validation-options.js';
 import { isCiDraftWaivable as waivable, missingTreeSentence, sameRulesNotice } from '../models/lock.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import {
   validateRegistry as registryRules, validateProjectConfig as configRules, validateAsComplete, validateProject as ownersGate, validateFamily as familyRun, computeGateStateId, familyApprovals, familyRelations,
-  adviseExternals as adviseLive,
+  adviseExternals as adviseLive, adviseNetwork as adviseNetworkLive,
   type ValidationIssue, type ValidationResult, type ValidationOptions,
 } from '../core/validation.js';
 
@@ -72,24 +72,44 @@ export function adviseExternals(composed?: string[]): ValidationIssue[] {
   return adviseLive(composed);
 }
 
+/**
+ * cli_validator_adapter.adviseNetwork — the family root's network findings on
+ * a member validated on its own, forwarded to the validator portal. Every
+ * finding is advisory, at the severity the root gives it: it never decides the
+ * exit code, `--ci` included.
+ */
+export function adviseNetwork(options: ValidationOptions, already?: ValidationIssue[]): ValidationIssue[] {
+  return adviseNetworkLive(options, already);
+}
+
 /** The heading the advisory live comparison is printed under, by `validate` and `status` alike. */
 const ADVISORY_HEADING = 'Externals, compared live (advisory: the pin gates)';
+
+/** The heading a member's family-root network findings are printed under. */
+const NETWORK_HEADING = 'Network proofs, judged at the family root (advisory: the root gates)';
 
 /**
  * Print the advisory findings in their own section — each moved external with
  * who uses it and the fix, each drifted or uncompared one — and say that none
  * of them is part of the failure decision. Prints nothing when there are none.
+ * `closing` is the sentence that says why they never fail the run.
  */
-function renderAdvisory(advised: ValidationIssue[], heading = ADVISORY_HEADING): void {
+function renderAdvisory(
+  advised: ValidationIssue[],
+  heading = ADVISORY_HEADING,
+  closing = 'the pin is the reproducible gate, so these never fail validate (nor --ci); `wairon externals status` is the live gate.',
+): void {
   if (advised.length === 0) return;
   logger.header(heading);
   for (const issue of advised) {
-    const line = `[${issue.code}] ${issue.message}`;
+    // A network finding names the project and spec it sits on; an external's finding names its alias itself.
+    const where = `${issue.project ? chalk.cyan(`[${issue.project}] `) : ''}${issue.specId ? chalk.gray(`[${issue.specId}] `) : ''}`;
+    const line = `${where}[${issue.code}] ${issue.message}`;
     if (issue.severity === 'error') logger.error(line);
     else if (issue.severity === 'notice') logger.notice(line);
     else logger.warn(line);
   }
-  logger.info(chalk.gray(`${advised.length} advisory finding(s): the pin is the reproducible gate, so these never fail validate (nor --ci); \`wairon externals status\` is the live gate.`));
+  logger.info(chalk.gray(`${advised.length} advisory finding(s): ${closing}`));
 }
 
 /** cli_validator_adapter.validateRegistry — the registry's topology rules, forwarded to the validator portal. */
@@ -107,8 +127,8 @@ export function validateProjectConfig(config: ProjectConfig): ValidationResult {
  * (ENTRY_UNPROVEN, the gateway and cross-project reach checks) are judged at
  * the family root, by the family run there.
  */
-function memberNetworkLine(alias: string, parentRoot: string): string {
-  return `Member "${alias}" of ${parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there; here its network entries count as declared, not proven.`;
+function memberNetworkLine(alias: string, parentRoot: string, listed = false): string {
+  return `Member "${alias}" of ${parentRoot}: its network proofs are judged at the family root — run \`wairon validate\` there; here its network entries count as declared, not proven.${listed ? " The root's findings on this member are listed above, advisory: the root's own run gates them." : ''}`;
 }
 
 export interface ValidateOptions {
@@ -368,7 +388,7 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     };
     // Step 6: which spec-tree check — validation_options.selectsFamily, the one
     // reading of the flags every caller shares.
-    const family = selectsFamily(sddOptions, declaredMembers(projectConfig).length > 0);
+    const family = selectsFamily(sddOptions, declaredMembers(projectConfig).length > 0, declaredExternals(projectConfig).length > 0);
     // Steps 7-9: the family run already holds the owner's gate of every
     // selected project; otherwise the owner's gate over the bound project alone.
     const sddResult = family ? validateFamily(sddOptions) : validateProject(sddOptions);
@@ -389,11 +409,17 @@ export async function runValidate(options: ValidateOptions = {}): Promise<void> 
     treeChecked = part || holdsDesign();
     if (!treeChecked) logger.info(chalk.gray('The spec tree holds the L0 and nothing below it yet: no subsystem, type, export entry or member project to check.'));
     renderAdvisory(advised);
+    // Steps 13-14: only an owner's-gate run lacks the enclosing family's
+    // network findings (a family run holds them as its own gate's); at a
+    // member whose family root is on disk and in reach they are read
+    // advisory, never part of the exit code, `--ci` included.
+    const network = family ? [] : adviseNetwork(sddOptions, sddResult.issues);
+    renderAdvisory(network, NETWORK_HEADING, "these are the family root's word on this member, shown so a green member run is never read as a proven one; the root's own `wairon validate` gates them, so they never fail this run (nor --ci).");
     // A member judged here is judged by its own gate only: its `network`
     // entries count as declared. The proofs that need the whole family run
     // at the root, so a green member run is never read as a proven one.
     const parent = resolveChainingParent();
-    if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot)));
+    if (parent) logger.info(chalk.gray(memberNetworkLine(parent.alias, parent.parentRoot, network.length > 0)));
     // Step 12: the approval line, when the approval was taken under another
     // release — the verdict lock-check exits on, never part of this decision.
     const releaseLine = approvalReleaseLine();
