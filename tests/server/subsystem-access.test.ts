@@ -215,7 +215,7 @@ describe('a subsystem rule decides spec writes in its subsystem', () => {
     // A write that is not subsystem-scoped needs the project rung, and says which rung decided.
     const pin = await call(team, 'sdd_pin_externals', {});
     expect(pin.isError).toBe(true);
-    expect(pin.text).toMatch(/Forbidden — permission project:write required for sdd_pin_externals, decided at the instance default/);
+    expect(pin.text).toMatch(/Forbidden — permission project:write required for sdd_pin_externals, decided at the instance default [(]no grant reaches this action: no[)]/);
     expect(bytes(fam.platform)).toEqual(tree);
   });
 
