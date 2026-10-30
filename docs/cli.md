@@ -146,10 +146,14 @@ warnings as errors (notices are printed and counted, never fatal).
 - What it never checks is behaviour: the reading compares the code's structure and
   linkage with the design (which methods, signatures, imports, calls and routes exist),
   not what a method computes. A business rule deleted from a method body that keeps
-  its signature and its calls passes; tests catch that, the gate does not. The
-  same goes for HOW a narrated call runs: a call step marked `detach: true` that
-  the code awaits, and an error-isolation (`try`) step whose try/catch the code
-  dropped, both pass, since only the call itself is compared.
+  its signature and its calls passes; tests catch that, the gate does not. HOW a
+  narrated call runs is compared where the narrative says it (call-manner-conformance):
+  a call step marked `detach: true` that the code awaits is `DETACHED_CALL_AWAITED`,
+  a call step inside a `try` step that catches whose code call no try/catch encloses
+  is `CALL_NOT_CAUGHT`, and a call step not marked `detach` whose call completes
+  later and is never awaited is `CALL_NOT_AWAITED` (or the notice
+  `OPEN_CALL_NOT_AWAITED` where the method leaves its detail open). Only calls
+  written in the method's own function are judged, not those inside a helper.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -189,14 +193,25 @@ warnings as errors (notices are printed and counted, never fatal).
   and their includes state (`APIRouter(prefix=…)`, `include_router`,
   `Blueprint(url_prefix=…)`, `register_blueprint`), followed across modules; a
   Portal names the router object (`router: app`, `<module>#router`, or a module
-  alone). A router whose path, prefix, methods or include is not a string
-  literal or a module constant holding one, or that mounts an application, is
-  `UNREADABLE_ROUTER`, never read in part. Its data types are the fields of
+  alone), followed through a package `__init__` that re-exports it. A function
+  that selects its handler by the request's method and path is read as a router
+  too (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
+  method and path, or a `BaseHTTPRequestHandler`'s `do_GET`): name it
+  `<module>#handle` or `Class.do_GET`. A router whose path, prefix, methods or
+  include is not a string literal or a module constant holding one, that mounts
+  an application, that places a path converter before further segments, that
+  includes an unread router, or a guard whose comparisons do not all settle
+  (a prefix that stops inside a segment included), is `UNREADABLE_ROUTER`, never
+  read in part. Its data types are the fields of
   dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
   and attrs classes, compared with the type's by name in either casing: a field
   may be absent when it has a default or a default factory, is `NotRequired`,
   or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
-  required, as in Pydantic v2. A plain class, a model built by a call and a
+  required, as in Pydantic v2. `Field(...)` and `Field(default=...)` are required;
+  a legacy `@attr.s` class without `auto_attribs=True` has only its `attr.ib()`
+  fields; a `total=` that is not a literal leaves optionality uncompared; and of
+  two fields sharing a name in different casings, the one spelled as the spec
+  spells it is compared. A plain class, a model built by a call and a
   type alias are not read. A declared edge between two Python components is
   `UNREALIZED_DEPENDENCY` unless one imports the other (an import of a package
   whose `__init__.py` no component realizes reaches every file in it) or a file
@@ -378,7 +393,8 @@ warnings as errors (notices are printed and counted, never fatal).
   A narrated call through a port to a collaborator whose code is not written
   yet (no file its implementations name exists) is `CALL_TARGET_PLANNED`, a
   notice like `SOURCE_FILE_PLANNED`, and is judged as usual once that code
-  exists. The narrative↔code and
+  exists. A narrated call to another project's component (`alias::name`) is
+  `CALL_TARGET_UNJUDGED`, a notice: that project's code is not read here. The narrative↔code and
   declared-edge checks read the checker too, so a type-only `ports.ts` barrel,
   `export *`, a port declared in a shared module and a dependency object typed
   inline realize the calls and edges they carry. And a file importing a technology's package
