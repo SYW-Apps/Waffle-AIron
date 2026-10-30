@@ -482,6 +482,27 @@ export type ColdChainConsignment = z.infer<typeof ColdChainConsignmentSchema>;
     scenario: 'The seal number is a named scalar holding a string, and the consignment module declares SealNumber as an alias of string.',
     tree: sealNumberTree('string'),
   }),
+  // -------------------------------------------------------------------------
+  // TYPE_FIELD_TYPE_MISMATCH — a field present on both sides whose code
+  // annotation reads as another scalar than the spec's. Fire and control differ
+  // only in the annotation.
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'TYPE_FIELD_TYPE_MISMATCH',
+    severity: 'warning',
+    anchoredTo: 'cold-chain-parcel',
+    expectFire: true,
+    scenario:
+      'The parcel type declares its weight as a float, but the parcel module annotates the weight as a string.',
+    tree: parcelWeightTree('string'),
+  }),
+  defineRuleFixture({
+    code: 'TYPE_FIELD_TYPE_MISMATCH',
+    expectFire: false,
+    reason: 'TypeScript writes a float as a number, so the annotation holds the value the spec declares.',
+    scenario: 'The parcel type declares its weight as a float, and the parcel module annotates the weight as a number.',
+    tree: parcelWeightTree('number'),
+  }),
 ];
 
 /** A named scalar realized by a type alias whose right side is the one under test. */
@@ -501,6 +522,32 @@ function sealNumberTree(aliasOf: string): FixtureTree {
       'src/cold-chain/planner.ts': PLANNER_MODULE,
       'src/cold-chain/consignment.ts': `
 export type SealNumber = ${aliasOf};
+`,
+    },
+  };
+}
+
+/** A parcel whose weight the spec declares a float, annotated in code as `annotation`. */
+function parcelWeightTree(annotation: string): FixtureTree {
+  return {
+    ...plannerSpecs,
+    types: [{
+      id: 'cold-chain-parcel',
+      name: 'ColdChainParcel',
+      subsystem: 'cold-chain',
+      sourcePath: 'src/cold-chain/parcel.ts',
+      fields: [
+        { name: 'id', type: 'string', key: 'primary', description: 'The parcel reference printed on the label.' },
+        { name: 'weightKg', type: 'float', description: 'What the parcel weighs on the depot scale.' },
+      ],
+    }],
+    files: {
+      'src/cold-chain/planner.ts': PLANNER_MODULE,
+      'src/cold-chain/parcel.ts': `
+export interface ColdChainParcel {
+  id: string;
+  weightKg: ${annotation};
+}
 `,
     },
   };
