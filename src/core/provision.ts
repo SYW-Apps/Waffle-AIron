@@ -56,6 +56,7 @@ import {
   type SpecRefKind,
   type WritableSpecKind,
   assertSpecsInReach,
+  PartReadOnly,
   signatureFacts,
   crossProjectWriteRefusal,
   foreignSpecRefusal,
@@ -3749,12 +3750,61 @@ export function moveSpec(kind: WritableSpecKind, id: string, subsystem?: string,
   const subsystems = loadSubsystemSpecs().filter((s) => !s.id.includes('::'));
   const target = subsystem === undefined || subsystem === '' ? undefined : subsystem;
   if (target !== undefined && !subsystems.some((s) => s.id === target)) {
-    throw new WaironError(`subsystem-missing: this project has no subsystem "${target}"${target.includes('::') ? ' — a spec never moves into another project' : ''}. Known subsystems: ${subsystems.map((s) => s.id).join(', ') || 'none'}.`);
+    throw new WaironError(`subsystem-missing: this project has no subsystem "${target}"${target.includes('::') ? partAliasHint(target) : ''}. Known subsystems: ${subsystems.map((s) => s.id).join(', ') || 'none'}.`);
   }
-  // Step 4.
+  // Steps 6-7: a git part's checkout is read-only here, so a move that leaves
+  // or enters one of its subsystems is refused before anything is written.
+  assertNoGitPartMove(kind, id, target);
+  // Step 8.
   if (kind === 'group') return moveGroupSpec(id, target, parent, dryRun === true);
   if (parent !== undefined && parent !== '') throw new WaironError(`invalid-parent: parent names the group a moved GROUP goes under; a ${kind} does not take one.`);
   return kind === 'component' ? moveComponentSpec(id, target, subsystems, dryRun === true) : moveTypeSpec(id, target, subsystems, dryRun === true);
+}
+
+/**
+ * What an `alias::subsystem` target is refused with: it names another project -
+ * unless the alias is a part of the bound project, whose subsystems are this
+ * project's own and are named by their local ids.
+ */
+function partAliasHint(target: string): string {
+  const cut = target.indexOf('::');
+  const alias = target.slice(0, cut);
+  const local = target.slice(cut + 2);
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  if (!parts.some((p) => p.alias === alias)) return ' — a spec never moves into another project';
+  return ` — "${alias}" is a part of this project, not another project, so its subsystems are this project's own and are named by their local ids: write the local id "${local}" instead of "${target}"`;
+}
+
+/** The part of the bound project, read from a git checkout, whose folder holds a file; undefined when none does. */
+function gitPartHolding(file: string): { alias: string; commit?: string } | undefined {
+  const parts = graph().nodes.find((n) => n.namespace === '')?.parts ?? [];
+  const held = parts.find((p) => p.storage === 'git' && p.directory !== undefined && isWithinDir(p.directory, file));
+  return held ? { alias: held.alias, ...(held.commit !== undefined ? { commit: held.commit } : {}) } : undefined;
+}
+
+/** Where a spec a move addresses is stored now; null when the bound project holds no such spec (a later step refuses that). */
+function movingSpecFile(kind: WritableSpecKind, id: string): string | null {
+  if (id.includes('::')) return null;
+  if (kind === 'component') return loadComponentSpecs().some((c) => c.id === id) ? getComponentPath(id) : null;
+  if (kind === 'group') return loadGroupSpec(id) ? getGroupPath(id) : null;
+  const matching = loadTypeSpecs().filter((t) => t.id === id);
+  return matching.length === 1 ? getTypePath(id, matching[0].subsystem, matching[0].group) : null;
+}
+
+/**
+ * Steps 6-7 of moveSpec: a part read from a git checkout is read-only here, so
+ * a move out of one of its subsystems, or into one, is refused before the
+ * first write (a dry run included) and says where it is changed instead.
+ */
+function assertNoGitPartMove(kind: WritableSpecKind, id: string, target: string | undefined): void {
+  const from = movingSpecFile(kind, id);
+  const into = target === undefined ? null : getSubsystemPath(target);
+  const held = (from !== null ? gitPartHolding(from) : undefined) ?? (into !== null ? gitPartHolding(into) : undefined);
+  if (!held) return;
+  throw new PartReadOnly(
+    `part-read-only: ${kind} "${id}" cannot move ${from !== null && gitPartHolding(from) ? 'out of' : 'into'} the part "${held.alias}", fetched from git at ${held.commit ?? 'its pinned commit'}: `
+    + `a git part is read-only here. Change it in its own repository, commit it there, and take it in with \`wairon member update ${held.alias}\`. Nothing was written.`,
+  );
 }
 
 /** The spec ids a group's folder carries along: its types and every group beneath it. */
@@ -3942,22 +3992,42 @@ const REHEARSAL_SKIPS: ReadonlySet<string> = new Set(['generated', 'docs', 'cont
 /**
  * core_orchestrator.rehearsalCopy — a private copy of the bound project's
  * tree in a temporary folder, for a write to be rehearsed on and judged: its
- * .wai without what no judgement reads, and a specs folder configured
- * outside .wai at the same place relative to the copy.
+ * .wai without what no judgement reads, a specs folder configured
+ * outside .wai at the same place relative to the copy, and the folder of each
+ * local part the project declares (contained, or a sibling beside it) with the
+ * same leaves left out of its own .wai - so a write rehearsed into or out of a
+ * part's subsystem reads the part as the real tree does. A part read from a
+ * git checkout is never copied: nothing writes to it.
  */
 export function rehearsalCopy(): string {
   const root = getProjectRoot();
   const paths = aiPathsAt(root);
+  // The local parts the copy must carry, each at its place relative to the root.
+  const parts = (graph().nodes.find((n) => n.namespace === '')?.parts ?? [])
+    .filter((p) => p.storage !== 'git' && p.directory !== undefined)
+    .map((p) => ({ dir: p.directory!, rel: path.relative(root, p.directory!) }))
+    .filter((p) => p.rel !== '' && !path.isAbsolute(p.rel));
+  // A sibling part lies above the root (`../x`): the copy's root is nested as deep as the climb, so the declared source still resolves inside the temporary folder.
+  const climb = Math.max(0, ...parts.map((p) => { const segs = p.rel.split(path.sep); const stop = segs.findIndex((s) => s !== '..'); return stop < 0 ? segs.length : stop; }));
   // Step 1.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rehearsal-'));
+  const holder = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rehearsal-'));
+  const dir = climb === 0 ? holder : path.join(holder, ...Array.from({ length: climb }, () => 'up'), 'root');
+  fs.mkdirSync(dir, { recursive: true });
+  const copyWai = (from: string, to: string): void => {
+    fs.cpSync(from, to, {
+      recursive: true,
+      filter: (src) => {
+        const top = path.relative(from, src).split(path.sep)[0];
+        return !REHEARSAL_SKIPS.has(top) && !top.startsWith('.spec-write.lock');
+      },
+    });
+  };
   const wai = paths.root();
-  fs.cpSync(wai, path.join(dir, path.relative(root, wai)), {
-    recursive: true,
-    filter: (src) => {
-      const top = path.relative(wai, src).split(path.sep)[0];
-      return !REHEARSAL_SKIPS.has(top) && !top.startsWith('.spec-write.lock');
-    },
-  });
+  copyWai(wai, path.join(dir, path.relative(root, wai)));
+  for (const part of parts) {
+    const partWai = aiPathsAt(part.dir).root();
+    if (fs.existsSync(partWai)) copyWai(partWai, path.join(dir, path.relative(root, partWai)));
+  }
   const specs = paths.specsDir();
   const rel = path.relative(root, specs);
   if (!isWithinDir(wai, specs) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && fs.existsSync(specs)) {
@@ -3969,8 +4039,11 @@ export function rehearsalCopy(): string {
 
 /** core_orchestrator.discardRehearsal — remove a copy rehearsalCopy made. */
 export function discardRehearsal(directory: string): void {
-  // Step 1.
-  fs.rmSync(directory, { recursive: true, force: true });
+  // Step 1: the copy, and the temporary folder that holds it (and the sibling parts beside it).
+  let holder = path.resolve(directory);
+  for (let up = 0; up < 8 && !path.basename(holder).startsWith('wairon-rehearsal-') && path.dirname(holder) !== holder; up++) holder = path.dirname(holder);
+  const own = path.basename(holder).startsWith('wairon-rehearsal-') ? holder : directory;
+  fs.rmSync(own, { recursive: true, force: true });
 }
 
 /** Steps 14-24 of moveSpec: a type, its export entries and every reference qualified by its subsystem. */
@@ -3995,7 +4068,9 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   const type = matching[0];
   const from = type.subsystem ?? '';
   if ((target ?? '') === from) throw new WaironError(`same-subsystem: type "${id}" already lives ${from ? `in "${from}"` : 'at system level'} — nothing to move.`);
-  if (types.some((t) => t !== type && t.id === bare && (t.subsystem ?? '') === (target ?? ''))) {
+  // A destination already holding this very type is an interrupted move's copy, written before the source was removed: re-running settles it.
+  const held = types.find((t) => t !== type && t.id === bare && (t.subsystem ?? '') === (target ?? ''));
+  if (held !== undefined && !sameTypeApartFromHome(held, type)) {
     throw new WaironError(`id-taken: ${target ? `subsystem "${target}"` : 'the system level'} already holds a type with the id "${bare}".`);
   }
   // Step 18: the rewrites — a type reference naming the type through the old
@@ -4107,12 +4182,15 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   const current = loadTypeSpecs().find((t) => t.id === bare && (t.subsystem ?? '') === from) ?? type;
   const oldFile = typeFileOf(bare, current);
   const backup = fs.existsSync(oldFile) ? fs.readFileSync(oldFile) : null;
+  // Between two homes the destination is written before the source is removed.
+  const seeded = backup && current.group === undefined ? seedAcrossHomes(oldFile, target) : null;
   if (backup) removeSpecFile(oldFile, bare);
   invalidateSpecCache();
   try {
     const { subsystem: _old, ...rest } = current;
     saveSpec('type', (target !== undefined ? { ...rest, subsystem: target } : rest) as TypeSpec);
   } catch (e) {
+    if (seeded) removeFile(seeded);
     if (backup) restoreFile(oldFile, backup);
     invalidateSpecCache();
     throw e;
@@ -4136,6 +4214,35 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   files.unshift(path.resolve(oldFile) === path.resolve(newFile) ? shown(newFile) : `${shown(oldFile)} → ${shown(newFile)}`);
   // Step 24.
   return { ...report, files: [...new Set(files)], references };
+}
+
+/** Whether two stored types are one spec, apart from the subsystem they sit in and their stamps. */
+function sameTypeApartFromHome(a: TypeSpec, b: TypeSpec): boolean {
+  const bare = (t: TypeSpec): string => JSON.stringify({ ...t, subsystem: undefined, createdAt: undefined, updatedAt: undefined });
+  return bare(a) === bare(b);
+}
+
+/**
+ * Step 22, between two homes (the project and a part, or two parts): write
+ * the type at its destination - the stored document, restated into the target
+ * subsystem - before the source is removed, so an interrupted move leaves it
+ * in both homes (a duplicate id the next validation names, which re-running
+ * the move settles) and never in neither. Answers the file it wrote; null
+ * when the move stays in one home, leaves no nested folder to write into, or
+ * the destination already holds a file.
+ */
+function seedAcrossHomes(oldFile: string, target: string | undefined): string | null {
+  if (target === undefined) return null;
+  const subsystemFile = getSubsystemPath(target);
+  if (!subsystemFile.endsWith('.index.yaml')) return null;
+  const destination = path.join(path.dirname(subsystemFile), 'types', path.basename(oldFile));
+  const homes = ownSpecsDirs().map((d) => path.resolve(d)).sort((a, b) => b.length - a.length);
+  const homeOf = (file: string): string | undefined => homes.find((d) => isWithinDir(d, file));
+  if (homeOf(destination) === undefined || homeOf(destination) === homeOf(oldFile) || fs.existsSync(destination)) return null;
+  const document = readYamlFile(oldFile) as Record<string, unknown>;
+  ensureDir(path.dirname(destination));
+  writeYamlFile(destination, { ...document, subsystem: target });
+  return destination;
 }
 
 /** The type-position keys a qualified type reference is respelled in; prose and rename traces never are. */

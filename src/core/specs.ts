@@ -5799,7 +5799,9 @@ export class SpecWorkspace {
     renamePath(fromDir, toDir);
     // The folder the group left, and each parent that leaves empty, goes too.
     let at = path.dirname(fromDir);
-    const root = path.resolve(this.paths.specsDir());
+    // The specs folder the group left: the project's, or the part's it sat in.
+    const leftPart = this.partHolding(fromIndex)?.part.directory;
+    const root = path.resolve(leftPart ? aiPathsAt(leftPart).specsDir() : this.paths.specsDir());
     while (path.resolve(at) !== root && path.resolve(at).startsWith(root) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
       fs.rmdirSync(at);
       at = path.dirname(at);
