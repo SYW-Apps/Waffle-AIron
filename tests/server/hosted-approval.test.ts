@@ -8,14 +8,14 @@ import { ComponentSpecSchema, ImplementationSpecSchema, InterfaceSpecSchema } fr
 import * as admin from '../../src/server/admin.js';
 import { executeApprovedLock, gateIdentity } from '../../src/server/admin.js';
 import { LockValidationError } from '../../src/server/errors.js';
-import { lockProject, decideRequest, executeApprovedRequest } from '../../src/server/projectlifecycle.js';
+import { lockProject, decideRequest, executeApprovedRequest, getApprovalStatus, listPendingRequests, withdrawRequest } from '../../src/server/projectlifecycle.js';
 import * as hostCore from '../../src/server/adapters/core.js';
 import { computeGateStateId, validateAsComplete } from '../../src/server/adapters/validator.js';
 import { registerProjectRecord } from '../../src/server/projects.js';
 import { upgradeMembers as upgradeMemberRecords } from '../../src/server/members.js';
 import { createCredential, hashToken } from '../../src/server/credentials.js';
 import { setAssignment } from '../../src/server/permissions.js';
-import { decideApprovalRequest, getApprovalRequestById } from '../../src/server/approvals.js';
+import { decideApprovalRequest, getApprovalRequestById, listApprovalRequests } from '../../src/server/approvals.js';
 import { runWithProjectRoot, setProjectRoot } from '../../src/utils/fs.js';
 import { invalidateSpecCache } from '../../src/core/specs.js';
 import { readLockRecordAt, type LockRecord } from '../../src/core/lockfile.js';
@@ -408,6 +408,42 @@ describe('hosted approval requests pin the gate identity at request time', () =>
     expect(() => approve(decider, id)).toThrow(MOVED_REASON);
     expect(fs.existsSync(lockFile(fam.top))).toBe(false);
     expectCancelled(id);
+  });
+
+  it('a second lock request for the same design returns the pending one: same id, no second record', () => {
+    const { id, requester } = requestLock();
+    const again = lockProject(cfg, requester, 'top');
+    expect(again.status).toBe('pending-approval');
+    expect(again.approval!.id).toBe(id);
+    expect(listApprovalRequests(dataDir, 'pending', 'top')).toHaveLength(1);
+  });
+
+  it('a moved design cancels the stale request on a pending list, with the reason; an unmoved one stays', () => {
+    const { id } = requestLock();
+    expect(listPendingRequests(cfg, MASTER, 'top').map((r) => r.id)).toEqual([id]);
+    expect(getApprovalRequestById(dataDir, id)!.status).toBe('pending');
+    touch(fam.top, 'edited after the request');
+    expect(listPendingRequests(cfg, MASTER, 'top')).toEqual([]);
+    expectCancelled(id);
+  });
+
+  it('a moved design cancels the stale request on a status read, which returns the cancelled request', () => {
+    const { id, requester } = requestLock();
+    expect(getApprovalStatus(cfg, requester, id).status).toBe('pending');
+    touch(fam.top, 'edited after the request');
+    const read = getApprovalStatus(cfg, requester, id);
+    expect(read.status).toBe('cancelled');
+    expect(read.executionSummary).toMatch(MOVED_REASON);
+    expectCancelled(id);
+    // Asking again for the moved design makes a new request.
+    expect(lockProject(cfg, requester, 'top').approval!.id).not.toBe(id);
+  });
+
+  it('the requester can still withdraw a pending request normally', () => {
+    const { id, requester } = requestLock();
+    const withdrawn = withdrawRequest(cfg, requester, id, 'changed my mind');
+    expect(withdrawn.status).toBe('cancelled');
+    expect(withdrawn.executionSummary).toBe('withdrawn by the requester: changed my mind');
   });
 
   it('a direct executeApprovedLock with a stale expected identity says why, writes nothing', () => {
