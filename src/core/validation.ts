@@ -589,7 +589,7 @@ export function validateProject(
 const CHECKED_AT_EXACT = ['methods', 'params', 'returns (where annotated)', 'public members', 'imports', 'calls', 'routes', 'data types'];
 const NOT_CHECKED_EVER = [
   'calls inside helpers and to collaborators a narrative never names (summarized by its detail)',
-  'libraries and platform I/O a component uses (a file read, fetch, an HTTP client, a helper class no component realizes) — only a bound technology\'s packages are compared, so I/O outside an Adapter passes',
+  'libraries and platform I/O a component uses (a file read, fetch, an HTTP client, a helper class no component realizes) — a library a component uses is not compared beyond a bound technology\'s packages',
 ];
 const READING_CHECKS: Record<string, string> = {
   params: 'params', returns: 'returns (where annotated)', members: 'public members', imports: 'imports', calls: 'calls (claimed calls found by name, through declared receivers; calls the narrative does not have are not reported)',

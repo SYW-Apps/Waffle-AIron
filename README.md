@@ -241,7 +241,7 @@ wairon validate --ci        # architecture-conformance gate; run it until it pas
 # 2. Approve: once `validate --ci` passes, a human approves the design.
 #    (`lock` accepts a design that still has warnings or drafts - approval is not
 #    status - but it says how many warnings CI would fail on, and CI will.)
-wairon lock                 # records the approval in .wai/lock.json
+wairon lock                 # records the approval in .wai/lock.json (CI/scripts: add --yes)
 git add .wai && git commit -m "Approve the design"
 
 # 3. Gate: in CI, check that what merges is the approved design

@@ -297,17 +297,62 @@ describe('diagram generation from the spec tree', () => {
     expect(mmd).toContain('par Fan out side effects — notify');
     // …the second arm's entry starts its `and` block…
     expect(mmd).toContain('and audit');
-    // …and the region closes exactly once after endStep.
-    expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(1);
+    // …and the region closes after endStep; the detached callee's block closes too.
+    expect(mmd.split('\n').filter(l => l.trim() === 'end')).toHaveLength(2);
     // Detached call: async OPEN arrow, annotated, no activation…
     expect(mmd).toMatch(/billing_orchestrator-\)billing_notifier: send\(\) — detached/);
     expect(mmd).not.toContain('->>+billing_notifier');
     // …still expanded (the callee's own steps show)…
     expect(mmd).toContain('Note over billing_notifier: Deliver the notification');
-    // …but NO return arrow — failure does not propagate to the caller's flow.
-    expect(mmd).not.toContain('billing_notifier-->>-');
+    // …inside a labelled block, with NO return arrow to the caller.
+    expect(mmd).toContain('par detached — send()');
+    expect(mmd).not.toContain('billing_notifier-->>');
+    expect(mmd).not.toMatch(/-->>-?billing_orchestrator/);
     // The synchronous arm call is unchanged.
     expect(mmd).toMatch(/billing_orchestrator->>billing_repo: save\(\)/);
+  });
+
+  it('draws a detached dispatch hop as an async arrow with its flow in a block that never returns', () => {
+    buildFixture();
+    saveComponentSpec({
+      id: 'billing-notifier', name: 'Billing Notifier', description: 'd', subsystem: 'billing',
+      componentType: 'Actor', owns: [], dependsOn: [], createdAt: now, updatedAt: now,
+    } as any);
+    saveComponentSpec({
+      id: 'billing-portal', name: 'Billing Portal', description: 'd', subsystem: 'billing',
+      componentType: 'Portal', transport: 'HTTP', owns: [], dependsOn: ['billing-orchestrator', 'billing-notifier'],
+      dispatch: [{ capability: 'notify', component: 'billing-notifier', method: 'send' }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    saveInterfaceSpec({
+      id: 'ibilling-notifier', name: 'IBillingNotifier', description: 'contract', component: 'billing-notifier',
+      methods: [{ name: 'send', description: 'send', signature: 'send(): void', returns: 'void' }],
+      createdAt: now, updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'billing-notifier-impl', name: 'Notifier Impl', description: 'impl', contract: 'ibilling-notifier',
+      methods: [{ name: 'send', narrative: [{ stepNumber: 1, description: 'Deliver the notification', type: 'local' }] }],
+      createdAt: now, updatedAt: now,
+    });
+    saveImplementationSpec({
+      id: 'billing-orchestrator-impl', name: 'Orchestrator Impl', description: 'impl', contract: 'ibilling-orchestrator',
+      methods: [{
+        name: 'process',
+        narrative: [
+          { stepNumber: 1, description: 'Hand off the notification', type: 'dispatch', targetComponent: 'billing-portal', capability: 'notify', detach: true },
+          { stepNumber: 2, description: 'done', type: 'return', outcome: 'done' },
+        ],
+      }],
+      createdAt: now, updatedAt: now,
+    } as any);
+    invalidateSpecCache();
+
+    const mmd = generateSequenceDiagram('billing-orchestrator', 'process');
+    expect(mmd).toMatch(/billing_portal-\)billing_notifier: send\(\) — detached/);
+    expect(mmd).toContain('par detached — send()');
+    expect(mmd).toContain('Note over billing_notifier: Deliver the notification');
+    expect(mmd).not.toContain('->>+billing_notifier');
+    expect(mmd).not.toContain('billing_notifier-->>');
   });
 
   it('renders a nested parallel (parallel inside an arm) as properly nested par/and/end fragments', () => {
