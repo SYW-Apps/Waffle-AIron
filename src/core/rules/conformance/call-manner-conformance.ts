@@ -10,6 +10,7 @@ import {
 import { RuleContext, SddRule } from '../types.js';
 import {
   bodyKey,
+  closedCallSites,
   declaredLandings,
   describeSite,
   invokedAs,
@@ -41,13 +42,18 @@ import {
 // agrees on, so a doubt is never an accusation. The reverse is never reported
 // either: a try the code adds, and a call it waits for that the narrative does
 // not mark, are routes the design leaves open.
+//
+// What it does not judge it says, where the narrative states a manner (detach,
+// or inside a catching try): a call reached only through a helper, or to a
+// target that plans no code yet, is CALL_MANNER_UNJUDGED — a pass that judged
+// nothing must never read as a judged one.
 // ---------------------------------------------------------------------------
 
 export const callMannerConformanceRule: SddRule = {
   name: 'call-manner-conformance',
   judges: 'code',
   description:
-    "Code-to-narrative for HOW a call runs, where the narrative says it: a narrative call step and the call realizing it agree on whether the method waits for the call and whether an error the call raises is caught. A step marked detach is fire-and-forget, so the code must not wait for the call; a step the narrative does not mark detach finishes before the next step, so where the call is proven to complete later the code must wait for it; and a step inside the body of a try step that catches says its error is caught, so the code must catch it. Read for the call sites call-conformance matched to the claim, at exact grade (or where a Python file's reading records manner), and only for sites written directly in the method's own function: a call reached through a helper the method calls is not judged, nor is a site whose landing is not settled, a target that plans no code or lives in another project, a dispatch step (which names no call site), or a method whose conformance dial is off (its own, else its implementation's). Where a claim has several realizing sites, or one shape is written several times, only what every writing agrees on is reported. A detach step whose call every writing waits for is DETACHED_CALL_AWAITED; a step inside a catching try whose call no writing catches is CALL_NOT_CAUGHT. A step not marked detach whose target's realizing function completes later (source_file_facts.asyncFunctions) and whose call no writing waits for is CALL_NOT_AWAITED when the method states its detail (full or calls-only, its own or its implementation's: the narrative is then the whole flow), and the notice OPEN_CALL_NOT_AWAITED when it does not — the design then leaves open whether the method waits, and the notice says so without failing the gate. A try the code adds around a call the narrative does not place in one, and a call the code waits for that the narrative does not mark, are open routes and never reported.",
+    "Code-to-narrative for HOW a call runs, where the narrative says it: a narrative call step and the call realizing it agree on whether the method waits for the call and whether an error the call raises is caught. A step marked detach is fire-and-forget, so the code must not wait for the call; a step the narrative does not mark detach finishes before the next step, so where the call is proven to complete later the code must wait for it; and a step inside the body of a try step that catches says its error is caught, so the code must catch it. Read for the call sites call-conformance matched to the claim, at exact grade (or where a Python file's reading records manner), and only for sites written directly in the method's own function: a call reached through a helper the method calls is not judged, nor is a site whose landing is not settled, a target that plans no code or lives in another project, a dispatch step (which names no call site), or a method whose conformance dial is off (its own, else its implementation's). A step whose manner the narrative states — marked detach, or inside a catching try — whose call is reached only through a helper the method calls, or whose target plans no code yet, is not judged either, and that is said rather than left silent: the notice CALL_MANNER_UNJUDGED names the step and why, so a pass is never read as a judged one (a call into another project is CALL_TARGET_UNJUDGED's to say, and a call the code does not make at all is call-conformance's CALL_STEP_UNREALIZED). Where a claim has several realizing sites, or one shape is written several times, only what every writing agrees on is reported. A detach step whose call every writing waits for is DETACHED_CALL_AWAITED; a step inside a catching try whose call no writing catches is CALL_NOT_CAUGHT. A step not marked detach whose target's realizing function completes later (source_file_facts.asyncFunctions) and whose call no writing waits for is CALL_NOT_AWAITED when the method states its detail (full or calls-only, its own or its implementation's: the narrative is then the whole flow), and the notice OPEN_CALL_NOT_AWAITED when it does not — the design then leaves open whether the method waits, and the notice says so without failing the gate. A try the code adds around a call the narrative does not place in one, and a call the code waits for that the narrative does not mark, are open routes and never reported.",
   codes: [
     {
       code: 'DETACHED_CALL_AWAITED',
@@ -71,6 +77,11 @@ export const callMannerConformanceRule: SddRule = {
       code: 'OPEN_CALL_NOT_AWAITED',
       defaultSeverity: 'notice',
       summary: 'A call step not marked detach, in a method that leaves its detail open, is realized by a call that completes later and that the code never waits for: the design leaves open whether the method waits, and this says the code does not',
+    },
+    {
+      code: 'CALL_MANNER_UNJUDGED',
+      defaultSeverity: 'notice',
+      summary: 'A call step whose manner the narrative states (detach, or inside a catching try) is realized only through a helper the method calls, or targets a component that plans no code yet, so whether the code runs it that way is not judged',
     },
   ],
 
@@ -115,9 +126,22 @@ export const callMannerConformanceRule: SddRule = {
         // ---- 4. a claim that can be judged: a target of this project that plans code ----
         if (!callee || claim.component.includes('::') || isRemoteLink(component, callee)) continue;
         const target = resolveCallTarget(ctx, claim.component, claim.method);
-        if (target.files.size === 0) continue;
+        const ref = `${claim.component}.${claim.method}`;
+        const unit = `${claim.step}:${ref}`;
+        const manner = claim.detach ? 'detach (fire-and-forget)' : claim.caught ? 'inside a try that catches' : undefined;
+        /** Says a stated manner was not judged: the step, the target, the manner, and why. */
+        const unjudged = (why: string): void => {
+          ctx.addIssue('notice', 'CALL_MANNER_UNJUDGED', `Method "${method.name}" in implementation "${impl.id}": step ${claim.step} → ${ref} states its manner (${manner}), which is not judged — ${why}. The pass says nothing about whether the code runs the call that way.`, impl.id, draftContext, undefined, { at: method.name, covers: [unit] });
+        };
+        if (target.files.size === 0) {
+          if (manner) unjudged('the target plans no code yet');
+          continue;
+        }
         if (![...target.files].every(f => languageOfSourcePath(f) === languageOfSourcePath(file))) continue;
-        if (!code.holdsAny([...target.files])) continue;
+        if (!code.holdsAny([...target.files])) {
+          if (manner) unjudged('the target plans no code yet');
+          continue;
+        }
         // N:1 identity: the caller IS the target, so there is no call to read.
         if (target.bodies.has(bodyKey(here, fnSymbol, method.exportedVia))) continue;
         const sharedBody = targetForwards(code, target);
@@ -126,19 +150,25 @@ export const callMannerConformanceRule: SddRule = {
         if (isTarget(code.forwardsOf(file, fnSymbol, method.exportedVia), target)) continue;
 
         // ---- 3. the sites call-conformance matched to the claim ----
-        const matched = sites.filter((s) => {
+        const landsOnTarget = (s: (typeof sites)[number]): boolean => {
           if (isTarget(invokedAs(code, s, file), target)) return true;
           if (!target.accepted.has(s.name)) return false;
           if (exact) {
             return [...code.originOf(s, file)].some(o => target.files.has(o))
               || [...code.possibleOriginsOf(s, file)].some(o => target.files.has(o));
           }
-          return declaredLandings(code, s, here, facts).some(o => target.files.has(o));
-        });
-        if (matched.length === 0) continue;
+          const scope = pathKey(s.from ?? here);
+          return declaredLandings(code, s, scope, code.factsAt(scope) ?? facts).some(o => target.files.has(o));
+        };
+        const matched = sites.filter(landsOnTarget);
+        if (matched.length === 0) {
+          // ---- 4-5. a stated manner whose call is written only in a helper is said, not judged ----
+          if (manner && (closedCallSites(code, file, fnSymbol, undefined, method.exportedVia) ?? []).some(landsOnTarget)) {
+            unjudged(`the call is reached through a helper the function "${fnSymbol}" calls, not written in the function itself`);
+          }
+          continue;
+        }
 
-        const ref = `${claim.component}.${claim.method}`;
-        const unit = `${claim.step}:${ref}`;
         const line = matched.find(s => s.line !== undefined)?.line;
         const where = `step ${claim.step} → ${ref}, written as ${[...new Set(matched.map(s => `\`${describeSite(s, file)}\``))].sort().join(' / ')} in the function "${fnSymbol}" in "${file}"${line !== undefined ? ` (line ${line})` : ''}`;
         const report = (severity: 'warning' | 'notice', codeName: string, message: string): void => {

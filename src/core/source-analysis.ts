@@ -1750,7 +1750,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         for (const param of member.parameters) {
           if (!isParameterProperty(param) || !ts.isIdentifier(param.name)) continue;
           if (isBacking(param, param.name.text)) continue;
-          fields.push({ name: param.name.text, optional: !!param.questionToken });
+          fields.push({ name: param.name.text, optional: !!param.questionToken, ...(param.type ? { type: param.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}) });
         }
         continue;
       }
@@ -1761,7 +1761,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         methods.push(memberName);
       } else if (ts.isPropertySignature(member) || ts.isPropertyDeclaration(member)) {
         if (isBacking(member, memberName)) continue;
-        fields.push({ name: memberName, optional: !!member.questionToken });
+        fields.push({ name: memberName, optional: !!member.questionToken, ...(member.type ? { type: member.type.getText(sf).replace(/\s+/g, ' ').trim() } : {}) });
       }
     }
     const shape: TypeShapeFact = { origin: 'declared', fields, methods };
@@ -5604,7 +5604,10 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
         // A TypedDict field marked neither way follows total=; where that does not settle, its absence is not recorded.
         if (current.kind === 'typeddict') optional = head === 'NotRequired' ? true : head === 'Required' ? false : current.total === undefined ? undefined : !current.total;
         else optional = value !== undefined && hasDefault(value);
-        current.shape.fields.push(optional === undefined ? { name } : { name, optional });
+        // The annotation as written, a TypedDict's Required/NotRequired wrapper read through to the type it holds.
+        const wrapped = (head === 'NotRequired' || head === 'Required') && annotation[annotation.length - 1]?.text === ']' && annotation.some(x => x.text === '[') ? annotation.slice(annotation.findIndex(x => x.text === '[') + 1, -1) : annotation;
+        const written = annotationText(wrapped);
+        current.shape.fields.push({ name, ...(optional === undefined ? {} : { optional }), ...(written ? { type: written } : {}) });
         continue;
       }
       // attrs without annotations: `x = attr.ib()`, `x = field()`.

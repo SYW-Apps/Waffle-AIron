@@ -6,11 +6,11 @@
 import { describe, expect, it } from 'vitest';
 import { defineRuleFixture, runRuleFixture, type FixtureTree } from '../rules-matrix/harness.js';
 import {
-  localStep, mannerTree, pyBody, recordStep, returnStep, tsBody, TRY_STEPS,
+  localStep, mannerTree, pyBody, recordStep, returnStep, tsBody, TRY_STEPS, TS_PERSIST_HELPER,
   type MannerStep, type MannerTreeOptions,
 } from '../rules-matrix/families/conformance-call-manner.fixtures.js';
 
-const MANNER = ['DETACHED_CALL_AWAITED', 'CALL_NOT_CAUGHT', 'CALL_NOT_AWAITED', 'OPEN_CALL_NOT_AWAITED'];
+const MANNER = ['DETACHED_CALL_AWAITED', 'CALL_NOT_CAUGHT', 'CALL_NOT_AWAITED', 'OPEN_CALL_NOT_AWAITED', 'CALL_MANNER_UNJUDGED'];
 
 function found(tree: FixtureTree): string[] {
   const run = runRuleFixture(defineRuleFixture({ code: 'CALL_NOT_AWAITED', expectFire: false, reason: 'probe', scenario: 'A service whose calls the gate reads.', tree }));
@@ -51,10 +51,40 @@ describe('TypeScript: a detach step', () => {
       steps: DETACH, stated: true,
     })).toEqual([]);
   });
-  it('is quiet when the call is made in a helper the method calls', () => {
+  it('says CALL_MANNER_UNJUDGED, not a pass, when the call is made in a helper the method calls', () => {
     const body = tsBody('await this.persist(parcelId, routeId);');
     const after = [''];
     const tree = mannerTree(false, { members: [...body, '', 'async persist(parcelId: string, routeId: string): Promise<void> {', '  await this.store.record(parcelId, routeId);', '}'], steps: DETACH, stated: true, after });
+    expect(found(tree)).toEqual(['CALL_MANNER_UNJUDGED']);
+  });
+  it('names the step, the target, the manner and the helper in the notice', () => {
+    const tree = mannerTree(false, { members: [...tsBody('await this.persist(parcelId, routeId);'), '', ...TS_PERSIST_HELPER], steps: DETACH, stated: true });
+    const run = runRuleFixture(defineRuleFixture({ code: 'CALL_NOT_AWAITED', expectFire: false, reason: 'probe', scenario: 'A service whose calls the gate reads.', tree }));
+    const notice = run.issues.find(i => i.code === 'CALL_MANNER_UNJUDGED');
+    expect(notice?.severity).toBe('notice');
+    expect(notice?.message).toMatch(/step 1 → tracking-store\.record/);
+    expect(notice?.message).toMatch(/detach/);
+    expect(notice?.message).toMatch(/helper/);
+  });
+  it('says CALL_MANNER_UNJUDGED for a catching try step whose call is made in a helper', () => {
+    const tree = mannerTree(false, { members: [...tsBody('await this.persist(parcelId, routeId);'), '', ...TS_PERSIST_HELPER], steps: TRY_STEPS, stated: true });
+    expect(found(tree)).toEqual(['CALL_MANNER_UNJUDGED']);
+  });
+  it('says nothing for a helper call under a step that states no manner', () => {
+    const tree = mannerTree(false, { members: [...tsBody('await this.persist(parcelId, routeId);'), '', ...TS_PERSIST_HELPER], steps: PLAIN, stated: true });
+    expect(found(tree)).toEqual([]);
+  });
+  it('says nothing for a detach step whose code makes no call at all (call-conformance reports that)', () => {
+    expect(ts({ body: tsBody('routeId.trim();'), steps: DETACH, stated: true })).toEqual([]);
+  });
+  it('says CALL_MANNER_UNJUDGED for a detach step whose target plans no code yet', () => {
+    const tree = mannerTree(false, { members: tsBody('void this.store.record(parcelId, routeId);'), steps: DETACH, stated: true });
+    delete tree.files!['src/dispatch/tracking-store.ts'];
+    expect(found(tree)).toEqual(['CALL_MANNER_UNJUDGED']);
+  });
+  it('says nothing for a step that states no manner whose target plans no code yet', () => {
+    const tree = mannerTree(false, { members: tsBody('void this.store.record(parcelId, routeId);'), steps: PLAIN, stated: true });
+    delete tree.files!['src/dispatch/tracking-store.ts'];
     expect(found(tree)).toEqual([]);
   });
 });
@@ -122,6 +152,15 @@ describe('TypeScript: a step not marked detach', () => {
 });
 
 describe('Python', () => {
+  it('says CALL_MANNER_UNJUDGED when the detach call is made in a helper the method calls', () => {
+    const body = [
+      ...pyBody('await self._persist(parcel_id, route_id)'),
+      '',
+      'async def _persist(self, parcel_id: str, route_id: str) -> None:',
+      '    await self._store.record(parcel_id, route_id)',
+    ];
+    expect(py({ body, steps: DETACH, stated: true })).toEqual(['CALL_MANNER_UNJUDGED']);
+  });
   it('fires DETACHED_CALL_AWAITED for an awaited detach step', () => {
     expect(py({ body: pyBody('await self._store.record(parcel_id, route_id)'), steps: DETACH, stated: true })).toEqual(['DETACHED_CALL_AWAITED']);
   });

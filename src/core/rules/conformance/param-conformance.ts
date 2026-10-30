@@ -703,7 +703,7 @@ export interface ReturnDrift {
  * read as one scalar, or not compared). True, false, or undefined where
  * either side is not read — only a false accuses.
  */
-function annotationAgreement(ctx: RuleContext): (language: string | undefined, annotation: string, declaredText: string, position?: 'returns' | 'param', scalarOnly?: boolean) => boolean | undefined {
+export function annotationAgreement(ctx: RuleContext): (language: string | undefined, annotation: string, declaredText: string, position?: 'returns' | 'param', scalarOnly?: boolean) => boolean | undefined {
   const { codeNameOf, typeOf, externalCodeName } = typeReading(ctx);
   /**
    * Whether a return annotation describes the contract's `returns`: true,
