@@ -941,6 +941,15 @@ describe('a router named through a module that only imports it is read where it 
     expect(renamed.map(f => f.split(':')[0]).sort()).toEqual(['UNDECLARED_ROUTE', 'UNROUTED_ENDPOINT']);
   });
 
+  it('follows the import to a router module no spec names, with no source root declared', () => {
+    const bare = (lines: string[]): FixtureTree => {
+      const { rules: _rules, ...tree } = guard(lines);
+      return tree;
+    };
+    expect(codes(bare(GUARD), ROUTE_CODES)).toEqual([]);
+    expect(codes(bare(withDelete), ROUTE_CODES).map(f => f.split(':')[0])).toEqual(['UNDECLARED_ROUTE']);
+  });
+
   it('follows an aliased import through __init__', () => {
     const found = codes(guard(withDelete, 'from .router import handle as serve\n', 'src/orders/__init__.py#serve'), ROUTE_CODES);
     expect(found.map(f => f.split(':')[0])).toEqual(['UNDECLARED_ROUTE']);

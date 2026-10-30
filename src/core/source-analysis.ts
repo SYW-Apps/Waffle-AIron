@@ -4501,10 +4501,67 @@ function sourceFileSet(
     // file route coverage reads, whatever spec otherwise names it.
     const routerFile = impl.router ? routerLinkage(impl.router).file : undefined;
     if (routerFile) declaredPaths.push(routerFile);
+    // The module a router linkage only imports or re-exports its router from
+    // (a package `__init__.py`, an `index.ts` barrel) is read too, so route
+    // coverage can follow the binding to the file that declares the router.
+    if (impl.router) {
+      const seeds = routerFile ? [routerFile] : implementationSourceFiles(impl);
+      declaredPaths.push(...importChain(seeds, projectRoot));
+    }
   }
   for (const type of types) declaredPaths.push(...typeSourceFiles(type));
   declaredPaths.push(...rootFiles);
   return { rootFiles, declaredPaths, claimed };
+}
+
+/** How many import hops past a router linkage's module the file set follows. */
+const ROUTER_IMPORT_HOPS = 4;
+
+/** The project's existing source files, asked one path at a time: what resolveImport resolves against before the code model exists. */
+class ExistingSourceFiles extends Set<string> {
+  constructor(private readonly projectRoot: string) { super(); }
+  override has(key: string): boolean {
+    if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') return false;
+    const absolute = path.resolve(this.projectRoot, key);
+    if (path.relative(this.projectRoot, absolute).startsWith('..')) return false;
+    try { return fs.statSync(absolute).isFile(); } catch { return false; }
+  }
+}
+
+/**
+ * The project files the seed modules import, followed up to
+ * ROUTER_IMPORT_HOPS hops: each import specifier the pattern table reads,
+ * resolved like resolveImport resolves it against the files that exist. A
+ * specifier naming no project file (a third-party module) ends there.
+ */
+function importChain(seeds: readonly string[], projectRoot: string): string[] {
+  const existing = new ExistingSourceFiles(projectRoot);
+  const found: string[] = [];
+  const seen = new Set<string>(seeds.map(pathKey));
+  let frontier = [...seen];
+  for (let hop = 0; hop < ROUTER_IMPORT_HOPS && frontier.length > 0; hop++) {
+    const next: string[] = [];
+    for (const file of frontier) {
+      const language = languageOfSourcePath(file);
+      const patterns = language ? LANGUAGE_PATTERNS[language] : undefined;
+      if (!patterns || !existing.has(file)) continue;
+      let text: string;
+      try { text = fs.readFileSync(path.resolve(projectRoot, file), 'utf8'); } catch { continue; }
+      if (text.length > PATTERN_ANALYSIS_MAX_BYTES) continue;
+      const stripped = stripComments(text, patterns);
+      for (const re of patterns.imports) {
+        for (const m of stripped.matchAll(re)) {
+          const target = m[1] ? resolveImport(file, m[1], existing) : undefined;
+          if (target === undefined || seen.has(target)) continue;
+          seen.add(target);
+          found.push(target);
+          next.push(target);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return found;
 }
 
 /**
