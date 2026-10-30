@@ -58,7 +58,18 @@ methods:
       and is never executed.
     calls:
       - approval_store.update
+  - name: withdraw
+    narrative: []
+    intent: >-
+      In one store update: locate the request by id - failing with a not-found error when absent -
+      and transition it to cancelled only when it is pending in the set read under the lock (any
+      other status is a validation error naming it), recording the supplied summary as its
+      executionSummary. Because the check and the write share one store update, a concurrent decide
+      cannot interleave. A withdrawn request is final and is never decided or executed.
+    calls:
+      - approval_store.update
+    symbol: withdraw
 detail: intent
 status: complete
 createdAt: '2026-07-09T19:31:03.633Z'
-updatedAt: '2026-10-23T22:18:03.222Z'
+updatedAt: '2026-10-30T12:10:04.988Z'

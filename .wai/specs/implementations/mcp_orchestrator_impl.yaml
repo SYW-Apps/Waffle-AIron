@@ -735,14 +735,16 @@ methods:
       - stepNumber: 1
         description: >-
           Read the bound project's configuration through the core adapter: its rule severities and
-          projectType govern the gate, and whether it declares members decides the default run
+          projectType govern the gate, and whether it declares members or externals decides the
+          default run
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: loadProjectConfig
       - stepNumber: 2
         description: >-
-          Which run? validation_options.selectsFamily(the configuration declares members) over the
-          tool's `family` and `recursive` flags — the same reading `wairon validate` makes
+          Which run? validation_options.selectsFamily(the configuration declares members, the
+          configuration declares externals) over the tool's `family` and `recursive` flags — the
+          same reading `wairon validate` makes
         type: branch
         condition: the options select the family run
         onFalseStep: 5
@@ -775,23 +777,41 @@ methods:
         targetComponent: mcp_validator_adapter
         targetMethod: adviseExternals
       - stepNumber: 7
+        description: A family run already holds the enclosing family's network findings as its own gate's
+        type: branch
+        condition: the run was the owner's gate (step 5 ran)
+        onFalseStep: 9
+      - stepNumber: 8
+        description: >-
+          At a member whose family root is on disk and in the request's reach (never a hosted
+          request), read the root's network findings on it as `wairon validate` does, marked
+          advisory with their own severity: they appear among the answer's findings, never change
+          `valid` - the member's verdict is the same with or without its family on disk - and the
+          root's own run gates them
+        type: call
+        targetComponent: mcp_validator_adapter
+        targetMethod: adviseNetwork
+      - stepNumber: 9
         description: >-
           At a member's own root, read the chaining parent within the request's reach: the owner's
           gate there counts the member's network entries as declared, and the answer must say so as
-          `wairon validate` does — its network proofs are judged at the family root (a family run
+          `wairon validate` does, and when step 8 listed the root's findings, say they are the
+          root's, shown advisory — its network proofs are judged at the family root (a family run
           asked here gets them from the enclosing family, narrowed to the member)
         type: call
         targetComponent: mcp_core_adapter
         targetMethod: resolveChainingParent
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
           Answer the verdict — the family run's (each finding under its project, each project's
           totals counted from the findings listed under it) or the owner's gate's — split into
           errors, warnings and notices, the advisory findings among them marked advisory
           (EXTERNAL_LIVE_INCOMPATIBLE, EXTERNAL_DRIFTED, EXTERNAL_LIVE_UNCOMPARED: what moved live,
-          who uses it, the fix), which never make the tree invalid, with the run's hint — which
-          carries the code-reading line `wairon validate` prints, word for word — and, at a member's
-          root, the member line `wairon validate` prints
+          who uses it, the fix; and, at a member, the family root's network findings at their own
+          severity), which never make the tree invalid and are never counted toward `valid`, even an
+          advisory error, with the run's hint — which carries the code-reading line `wairon
+          validate` prints, word for word — and, at a member's root, the member line `wairon
+          validate` prints
         type: return
         outcome: ValidationResult
     symbol: sdd_validate_tree
@@ -1024,4 +1044,4 @@ lint:
         once.
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-25T19:09:12.921Z'
+updatedAt: '2026-10-30T12:04:01.822Z'

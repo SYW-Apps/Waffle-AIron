@@ -984,6 +984,18 @@ methods:
       caller: >-
         The commander program's preAction hook in src/cli/index.ts (cli_portal), before every
         command's action — a hook the framework calls, not an action endpoint.
+  - name: runHostUser
+    description: >-
+      Hosted users of the instance (list | add | set-status), reading the master credential from the
+      environment. `list` shows each user with its status and home unit, and marks a subject that
+      holds grants but has no user record ("no user record"); `add --user <id> [--name] [--email]
+      [--unit]` creates (or updates) an active user record; `set-status --user <id> --status
+      <active|inactive>` sets the lifecycle status (an inactive status revokes the user's
+      credentials). All forward to the host adapter's user operations.
+    signature: >-
+      runHostUser(action: string, options: { user?: string; name?: string; email?: string; unit?:
+      string; status?: string; dataDir?: string }): Promise<void>
+    returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-22T09:35:45.517Z'
+updatedAt: '2026-10-30T12:05:39.817Z'

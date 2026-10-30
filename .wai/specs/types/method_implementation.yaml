@@ -143,8 +143,10 @@ methods:
     returns: list<CallClaim>
     description: >-
       Everything this method states it calls: its narrative call steps, then its declared calls. A
-      dispatch step names a capability routed through a runtime table, not a method, so it is no
-      claim; a declared reference that is not "<component>.<method>" names no target.
+      step's claim also carries how the narrative says the call runs: marked detach, and inside the
+      body of a try step that catches. A dispatch step names a capability routed through a runtime
+      table, not a method, so it is no claim; a declared reference that is not
+      "<component>.<method>" names no target.
   - name: claimSite
     signature: 'claimSite(claim: CallClaim): string'
     params:
@@ -170,4 +172,4 @@ methods:
       open, never assumed.
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-13T16:59:08.774Z'
-updatedAt: '2026-10-20T14:02:38.313Z'
+updatedAt: '2026-10-30T11:59:54.699Z'

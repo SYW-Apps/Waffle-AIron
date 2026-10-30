@@ -114,7 +114,9 @@ methods:
       - stepNumber: 14
         description: >-
           When externals were left out because their producers lie outside the reach, add a one-line
-          hint counting them and naming `validate --family` from the member that declares them
+          hint counting them and naming what widens the reach: `validate --family` on a plain local
+          run, and on a run already explicit or hosted that the producer lies outside the request's
+          reach or cannot be read, with `wairon externals status` for the live comparison
         type: local
       - stepNumber: 15
         description: >-
@@ -1173,6 +1175,60 @@ methods:
         description: 'Not a change of the release: answer none, and the caller judges the staleness as before'
         type: return
         outcome: none
+  - name: adviseNetwork
+    sourcePath: src/core/family-validation.ts
+    narrative:
+      - stepNumber: 1
+        description: >-
+          A hosted request never walks to a family root: its credential's reach is the grant, and
+          this read neither widens nor adds to it
+        type: branch
+        condition: the request carries a hosted record lookup
+        onFalseStep: 3
+      - stepNumber: 2
+        description: 'Answer no findings: the caller''s member note stands alone'
+        type: return
+        outcome: none
+      - stepNumber: 3
+        description: >-
+          Read the bound root's chaining parent within the request's reach: none when it is a
+          top-level project or its parent is not on disk
+        type: call
+        targetComponent: validator_core_adapter
+        targetMethod: resolveChainingParent
+      - stepNumber: 4
+        description: Without a parent there is no family root to hear from
+        type: branch
+        condition: no chaining parent is in reach
+        onFalseStep: 6
+      - stepNumber: 5
+        description: 'Answer no findings: the caller''s member note stands alone'
+        type: return
+        outcome: none
+      - stepNumber: 6
+        description: >-
+          Read the enclosing family's model as reachModel's steps 1-4 do, whatever memberDepth the
+          run took: climb to the family's top root, bind it, and derive its judged reach model
+          focused on the member's key - the root's network findings, tuned and lint.allow filtered
+          at the root
+        type: local
+      - stepNumber: 7
+        description: >-
+          Narrow the root's findings to the bound project and its own members, re-keyed relative to
+          the bound root, dropping any that `already` holds - the narrowing run's step 13 makes
+        type: local
+      - stepNumber: 8
+        description: >-
+          Mark each remaining finding advisory, severity unchanged: it is a word from the family
+          root, not this member's gate
+        type: local
+      - stepNumber: 9
+        description: >-
+          Return the advisory findings; the caller lists them apart and counts them, and neither
+          `valid` nor `--ci` reads them
+        type: return
+        outcome: ValidationIssue[] (advisory)
+    symbol: adviseNetwork
 status: complete
 createdAt: '2026-09-28T06:06:31.589Z'
-updatedAt: '2026-10-24T11:37:17.974Z'
+updatedAt: '2026-10-30T12:05:59.297Z'

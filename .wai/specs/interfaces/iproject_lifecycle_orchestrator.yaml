@@ -39,6 +39,9 @@ methods:
       approval:decide decides, and gets a pending-approval outcome; anyone else -> Forbidden. A lock
       signs the whole tree, so a request is refused - naming each subsystem and the rung that
       decided it - when a subsystem rule denies the caller write on any subsystem of the project. A
+      request is also refused while the tree has validation errors: it is validated the way the
+      approved lock would validate it, and the refusal names the error count and each error's code;
+      warnings do not block, as at the local `wairon lock`, and no pending request is created. A
       member is a record of its own, so locking a member is locking its record.
     signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
@@ -81,15 +84,16 @@ methods:
       Authenticate the caller and resolve their approval:decide permission over the decided
       request's project (must be yes); reject self-approval (decidedBy MUST differ from requestedBy
       - a yes-permission caller executes directly and never enters the approval path, so this guard
-      cannot deadlock); record the approve/deny decision; then AUTO-EXECUTE an approved request
-      immediately by dispatching by kind to the pre-authorized entrypoints (project:init ->
-      executeApprovedInit; project:lock -> the admin plane on the request's record id - a member's
-      own record for a member lock - with the request's gateStateId as the expected identity) and
-      mark it completed. Audit at security level. A project:lock whose pinned identity no longer
-      matches the tree is CANCELLED, with the reason recorded on it ("the design changed since it
-      was requested (requested <id>, now <id>); request the lock again"), and the call refuses with
-      that reason. Any other failure at execution leaves the approval approved, not completed
-      (retryable via executeApprovedRequest).
+      cannot deadlock); record the approve/deny decision, which is refused for a request no longer
+      pending (a withdrawn one included); then AUTO-EXECUTE an approved request immediately by
+      dispatching by kind to the pre-authorized entrypoints (project:init -> executeApprovedInit;
+      project:lock -> the admin plane on the request's record id - a member's own record for a
+      member lock - with the request's gateStateId as the expected identity) and mark it completed.
+      Audit at security level. A project:lock whose pinned identity no longer matches the tree is
+      CANCELLED, with the reason recorded on it ("the design changed since it was requested
+      (requested <id>, now <id>); request the lock again"), and the call refuses with that reason.
+      Any other failure at execution leaves the approval approved, not completed (retryable via
+      executeApprovedRequest).
     signature: 'decideRequest(credential: string, decision: ApprovalDecision): ApprovalRequest'
     returns: ApprovalRequest
     params:
@@ -135,6 +139,31 @@ methods:
         type: string
       - name: timeoutSeconds
         type: int
+  - name: withdrawRequest
+    description: >-
+      The requester withdraws their own PENDING approval request. Authenticate the caller, lazily
+      expire overdue pending requests, and require the caller to be the request's original requester
+      (matching subject or requesting token id) - anyone else is refused, an approver included,
+      whose path is decideRequest. The withdrawal is one atomic write in the approval repository
+      that moves the request to cancelled only if it is still pending at that moment: one already
+      decided, completed, expired or cancelled is refused naming its status, and a decision racing
+      the withdrawal either lands first (the withdrawal is refused) or is refused as not pending.
+      The cancelled request carries an executionSummary stating it was withdrawn by the requester
+      and the optional reason; nothing is executed. A later decideRequest on it is refused, and
+      getApprovalStatus shows it as cancelled with that summary. Audit at security level.
+    signature: 'withdrawRequest(credential: string, requestId: string, reason?: string): ApprovalRequest'
+    returns: ApprovalRequest
+    params:
+      - name: credential
+        type: string
+      - name: requestId
+        type: string
+      - name: reason
+        type: string
+        description: Why the requester withdraws it, recorded on the cancelled request
+        optional: true
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-19T06:11:39.785Z'
+updatedAt: '2026-10-30T12:10:40.004Z'

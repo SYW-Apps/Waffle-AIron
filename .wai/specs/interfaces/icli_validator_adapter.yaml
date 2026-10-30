@@ -47,14 +47,18 @@ methods:
       spec-tree checks, render their findings (notices listed and counted apart from warnings), and
       exit non-zero when the tree is invalid (or, under --ci, carries warnings — never for notices,
       never for advisory findings). The spec-tree check is the family run at a project that declares
-      members or when --family is given, and the owner's gate otherwise (--no-recursive at a parent
-      asks for the owner's gate alone) — validation_options.selectsFamily decides, as it does for
-      the MCP tool. Then, either way, the advisory live comparison of every external the run did not
-      compose (validator_portal.adviseExternals), rendered in its own section — "Externals, compared
-      live (advisory: the pin gates)" — with each moved member, who uses it and the fix; it never
-      changes the exit code. A family run prints each project's findings verbatim under its project.
-      The runner delegates here rather than orchestrating the checks itself, so the composition
-      lives with the checks it composes.
+      members or externals or when --family is given, and the owner's gate otherwise (--no-recursive
+      at a parent asks for the owner's gate alone) — validation_options.selectsFamily decides, as it
+      does for the MCP tool. Then, either way, the advisory live comparison of every external the
+      run did not compose (validator_portal.adviseExternals), and - when the run was the owner's
+      gate of a member - the family root's network findings on it (validator_portal.adviseNetwork),
+      each rendered in its own section, the first — "Externals, compared live (advisory: the pin
+      gates)" — with each moved member, who uses it and the fix; and the second "Network proofs,
+      judged at the family root (advisory: the root gates)", each finding marked advisory with its
+      own severity; neither changes the exit code, under --ci or without it, whatever the severity.
+      A family run prints each project's findings verbatim under its project. The runner delegates
+      here rather than orchestrating the checks itself, so the composition lives with the checks it
+      composes.
     signature: >-
       runValidation(options: { ci?: boolean; subsystem?: string; recursive?: boolean; family?:
       boolean }): Promise<void>
@@ -112,6 +116,22 @@ methods:
         type: list<string>
         description: Aliases the run already composed as part of its gate
         optional: true
+  - name: adviseNetwork
+    description: >-
+      Forward to validator_portal.adviseNetwork: the family root's network findings on a member
+      validated on its own, each marked advisory.
+    signature: >-
+      adviseNetwork(options: ValidationOptions, already?: list<ValidationIssue>):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The run's switches
+      - name: already
+        type: list<ValidationIssue>
+        description: The findings the member's own gate carried
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-06T10:18:16.159Z'
+updatedAt: '2026-10-30T12:03:50.581Z'

@@ -25,5 +25,9 @@ values:
     description: >-
       The fields of each declarative data class: a dataclass, a Pydantic model, a TypedDict, a
       NamedTuple, an attrs class
+  - name: manner
+    description: >-
+      How each call site runs: whether the function waits for it, and whether a try that catches
+      encloses it
 createdAt: '2026-10-17T15:42:11.519Z'
-updatedAt: '2026-10-29T11:38:49.123Z'
+updatedAt: '2026-10-30T11:59:44.686Z'

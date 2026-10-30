@@ -157,7 +157,8 @@ methods:
       path: /web/canvas
   - name: adminListUsers
     description: >-
-      List hosted users in the caller's scope; forwards the session to
+      List hosted users in the caller's scope, including grant holders with no user record (flagged
+      noRecord, no status), which the users view renders as such; forwards the session to
       web_admin_orchestrator.listUsers.
     signature: 'adminListUsers(sessionId: string, project?: string): list<HostedUserRecord>'
     returns: list<HostedUserRecord>
@@ -1627,4 +1628,4 @@ methods:
       path: /web/dev/status
 status: complete
 createdAt: '2026-07-11T11:33:26.673Z'
-updatedAt: '2026-10-28T20:16:08.519Z'
+updatedAt: '2026-10-30T12:10:51.907Z'

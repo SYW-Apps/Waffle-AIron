@@ -153,7 +153,7 @@ methods:
       - stepNumber: 6
         description: Executed — continue to auditing
         type: jump
-        toStep: 17
+        toStep: 18
       - stepNumber: 7
         description: >-
           Resolve the caller's project:write permission over the project: only a writer may request
@@ -203,47 +203,56 @@ methods:
           <each, decided at its rung>
       - stepNumber: 13
         description: >-
+          Validate the project's tree the way the approved lock would (as-complete, the design half)
+          through the admin plane: a tree with errors is refused, naming the error count and each
+          error's code, and no request is created. Warnings do not block, as at the local `wairon
+          lock`
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: checkLockable
+      - stepNumber: 14
+        description: >-
           Approval required: capture the gate identity of the project's tree (a member's own tree
           when the project is a member) through the admin plane, so the approved execution can
           refuse a tree that moved after the request
         type: call
         targetComponent: admin_orchestrator
         targetMethod: gateIdentity
-      - stepNumber: 14
+      - stepNumber: 15
         description: >-
           Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
           member's when a member is locked), the requester's subject and token id, expiry, a
           redacted human summary naming the project, and gateStateId = the identity just captured.
           No qualifier is recorded: the record id alone confines the approved action
         type: local
-      - stepNumber: 15
+      - stepNumber: 16
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 16
+      - stepNumber: 17
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 17
+      - stepNumber: 18
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 19
+        endStep: 20
         catches:
           - error: audit append failure
-            step: 20
-      - stepNumber: 18
+            step: 21
+      - stepNumber: 19
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 19
+      - stepNumber: 20
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 21
-      - stepNumber: 20
+        toStep: 22
+      - stepNumber: 21
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 21
+      - stepNumber: 22
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -709,6 +718,80 @@ methods:
         type: return
         outcome: the request's current state
     detail: full
+  - name: withdrawRequest
+    narrative:
+      - stepNumber: 1
+        description: Authenticate the caller credential
+        type: call
+        targetComponent: authentication
+        targetMethod: authenticateCredential
+      - stepNumber: 2
+        description: >-
+          Lazily expire overdue pending requests before reading (pass the current timestamp), so an
+          overdue request is expired, not withdrawable
+        type: call
+        targetComponent: approval_repository
+        targetMethod: expirePending
+      - stepNumber: 3
+        description: Look up the approval request by id
+        type: call
+        targetComponent: approval_repository
+        targetMethod: getById
+      - stepNumber: 4
+        description: If no request matches the id, reject as not found
+        type: branch
+        condition: no request matches the id
+        onFalseStep: 6
+      - stepNumber: 5
+        description: Reject as not found
+        type: throw
+        error: not found
+      - stepNumber: 6
+        description: >-
+          Only the original requester (matching subject or requesting token id) may withdraw; an
+          approver decides, never withdraws
+        type: branch
+        condition: the caller is not the original requester
+        onTrueStep: 7
+        onFalseStep: 8
+      - stepNumber: 7
+        description: Reject the withdrawal
+        type: throw
+        error: Forbidden - only the original requester may withdraw this request
+      - stepNumber: 8
+        description: >-
+          Withdraw the request atomically, recording "withdrawn by the requester" and the optional
+          reason as its executionSummary: the registry moves it to cancelled only if it is still
+          pending at the moment of the write and refuses any other status naming it (a request
+          decided in between is refused, never cancelled); nothing is executed
+        type: call
+        targetComponent: approval_repository
+        targetMethod: withdraw
+      - stepNumber: 9
+        description: Append a redacted audit event without letting a failure fail the action
+        type: try
+        endStep: 11
+        catches:
+          - error: audit append failure
+            step: 12
+      - stepNumber: 10
+        description: Append the redacted audit event (security level)
+        type: call
+        targetComponent: audit_repository
+        targetMethod: append
+      - stepNumber: 11
+        description: On a successful append, continue to the return and skip the audit-failure handler
+        type: jump
+        toStep: 13
+      - stepNumber: 12
+        description: Record the audit append failure as a server diagnostic and continue
+        type: local
+      - stepNumber: 13
+        description: Return the cancelled approval request
+        type: return
+        outcome: the withdrawn approval request
+    detail: full
+    symbol: withdrawRequest
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-28T20:16:10.990Z'
+updatedAt: '2026-10-30T12:10:36.887Z'

@@ -4,8 +4,9 @@ description: >-
   Per-request data-plane workflow: authenticate the bearer token, resolve and bind the authorized
   project scope, then dispatch the sdd_* call — routing the execute-primary project-lifecycle tools
   (sdd_host_initialize_project, sdd_host_lock_project, sdd_host_get_approval_status,
-  sdd_host_await_approval) to the project lifecycle orchestrator, and every other tool to the scoped
-  MCP server after enforcing the granular data-plane permission over the bound project.
+  sdd_host_await_approval, sdd_host_withdraw_request) to the project lifecycle orchestrator, and
+  every other tool to the scoped MCP server after enforcing the granular data-plane permission over
+  the bound project.
 subsystem: sdd_host
 componentType: Orchestrator
 owns: []
@@ -22,4 +23,4 @@ dependsOn:
   - member_registration
 status: complete
 createdAt: '2026-07-04T12:33:41.786Z'
-updatedAt: '2026-10-03T13:41:29.427Z'
+updatedAt: '2026-10-30T12:08:04.448Z'

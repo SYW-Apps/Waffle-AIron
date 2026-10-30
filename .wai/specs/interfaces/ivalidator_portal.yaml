@@ -309,6 +309,13 @@ methods:
         type: bool
         description: Include text mentions; true when omitted
         optional: true
+  - name: adviseNetwork
+    description: >-
+      Published: the family root's network findings on a member validated on its own
+      (family_validator.adviseNetwork), every one marked advisory. Plain `validate` and
+      `sdd_validate_tree` append it beside a member's owner-gate findings when the run was not a
+      family run; it never decides `valid` or `--ci`.
+    signatureFrom: family_validator.adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:08:34.261Z'
+updatedAt: '2026-10-30T12:03:46.249Z'

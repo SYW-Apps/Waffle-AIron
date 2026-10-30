@@ -167,6 +167,15 @@ methods:
         type: call
         targetComponent: reference_finder
         targetMethod: collect
+  - name: adviseNetwork
+    sourcePath: src/core/validation.ts
+    narrative:
+      - stepNumber: 1
+        description: Forward adviseNetwork to the family validator's advisory network pass
+        type: call
+        targetComponent: family_validator
+        targetMethod: adviseNetwork
+    symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:16:24.312Z'
+updatedAt: '2026-10-30T12:03:47.399Z'

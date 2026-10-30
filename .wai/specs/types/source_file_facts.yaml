@@ -163,9 +163,10 @@ fields:
       answers that no contract declares cannot go unnoticed again. EXACT grade, and the Python
       reader: the routes each router object (a FastAPI, APIRouter, Flask, Blueprint, Quart or Sanic
       instance the module constructs or imports) answers through its route decorators, by the
-      object's name, with the routers it includes folded in under their prefixes. Elsewhere below
-      exact grade reading a guard as a route needs the conditions as expressions, not as text. A
-      function with no recognisable route records none rather than an empty guess.
+      object's name, with the routers it includes folded in under their prefixes — and the routes a
+      guard function selects by method and path, under the function's name. Elsewhere below exact
+      grade reading a guard as a route needs the conditions as expressions, not as text. A function
+      with no recognisable route records none rather than an empty guess.
     optional: true
   - name: reexportBindings
     type: list<ReexportBindingFact>
@@ -358,10 +359,11 @@ fields:
     description: >-
       The router objects the Python reader found — constructed from a router class, or written on by
       a route decorator — whose routes it could not all settle: a path, a prefix or a methods list
-      that is not a string literal or a module-level constant bound to one, an included router it
-      cannot follow to an analyzed module's router, or an application it mounts. Such a router
-      records no routes at all, never a part of them, so a router linkage naming it is reported as
-      unread
+      that is not a string literal or a module-level constant bound to one, a path converter
+      followed by further segments, an included router it cannot follow to an analyzed module's
+      router or that is itself unread, or an application it mounts — and the guard functions whose
+      path comparisons it could not all settle. Such a router records no routes at all, never a part
+      of them, so a router linkage naming it is reported as unread
     optional: true
 methods:
   - name: resolveImport
@@ -481,4 +483,4 @@ methods:
       alias or its right side names no single type
 sourcePath: src/models/code-model.ts
 createdAt: '2026-07-11T17:51:42.278Z'
-updatedAt: '2026-10-29T11:38:50.146Z'
+updatedAt: '2026-10-30T12:07:25.027Z'

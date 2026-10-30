@@ -838,8 +838,9 @@ methods:
           Add the one-line hint to the result: its externals were judged against their pins alone;
           the advisory live comparison beside this verdict reads their live producers (offline), and
           `wairon externals status` is the opt-in live gate. A hint, not a finding: it never changes
-          the verdict — and it never sends a project without members to `validate --family`, which
-          composes nothing more for it
+          the verdict — and it names `validate` without `--no-recursive`, the plain run that
+          composes them against their live producers (a project that declares externals runs its
+          family run whether or not it declares members)
         type: local
       - stepNumber: 56
         label: code-reading
@@ -1001,4 +1002,4 @@ lint:
         has, and stage 4 removed the parent walk rather than adding to it.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-29T11:39:06.133Z'
+updatedAt: '2026-10-30T12:04:06.459Z'

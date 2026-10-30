@@ -49,8 +49,11 @@ methods:
   - name: validateTree
     description: >-
       Run the architecture-conformance gate and return the result: the family run or the owner's
-      gate, as validation_options.selectsFamily reads the tool's flags — the same choice `wairon
-      validate` makes
+      gate, as validation_options.selectsFamily reads the tool's flags (a project that declares
+      members or externals runs its family unless `recursive` is false) - the same choice `wairon
+      validate` makes. At a member judged by its owner's gate alone, the family root's network
+      findings on it are listed too, marked advisory (never part of `valid`, whatever their
+      severity), when the root is on disk and in the request's reach; never in a hosted request.
     signature: 'validateTree(): ValidationResult'
     returns: ValidationResult
   - name: getStatus
@@ -614,4 +617,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-07-02T00:00:00Z'
-updatedAt: '2026-10-25T19:09:11.585Z'
+updatedAt: '2026-10-30T12:04:00.390Z'

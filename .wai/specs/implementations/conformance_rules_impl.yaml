@@ -1491,7 +1491,9 @@ methods:
           whose target component has no code yet — code.holdsAny over every file its implementations
           name is false, the normal state after the first component of a service is implemented from
           its brief through a port to a collaborator still planned — is appended to plannedClaims
-          instead: planned, not unresolved
+          instead: planned, not unresolved. A miss of any kind whose target is another project's
+          component (`alias::name`) is appended to foreignClaims instead: this gate does not read
+          that project's code, so the miss says nothing about it
         type: local
       - stepNumber: 15
         label: unrealizedReport
@@ -1514,18 +1516,22 @@ methods:
           shape its call was written in and the files the target plans: the call is in the function
           by name through a receiver nothing written yet realizes — planned, not missing, said as
           SOURCE_FILE_PLANNED says it — and it is judged like any other claim once the target's
-          realization begins. When missed holds an unresolved entry whose target component's own
-          code did not drift from its contract's return — a claim on a drifted component
-          (RETURN_TYPE_MISMATCH) no longer resolves for that reason, a port typed after the contract
-          no longer matching the class: the drift's consequence, held under that one finding and
-          judged again once it is fixed — report CALL_ORIGIN_UNRESOLVED (warning; spec impl.id;
-          draft context the entry's draftContext), one finding per method listing each such claim
-          with the shape its call sites were written in: the target name IS called inside fnSymbol,
-          but from no site this analysis can resolve to a file — so the claim is neither proven
-          realized nor accused of being missing, and no working call is asked to be rewritten to
-          suit the analysis. The finding names its sites and says that much and no more; which
-          receiver forms resolve and which do not is the code's summary and the rule's description,
-          stated ONCE where `wairon rules list` reads it, never repeated per finding
+          realization begins. When foreignClaims is non-empty, report CALL_TARGET_UNJUDGED (notice;
+          spec impl.id; draft context the entry's draftContext), one finding per method naming each
+          such claim and the project its target belongs to: the call is not judged against that
+          project's code here, whether or not that code exists. When missed holds an unresolved
+          entry whose target component's own code did not drift from its contract's return — a claim
+          on a drifted component (RETURN_TYPE_MISMATCH) no longer resolves for that reason, a port
+          typed after the contract no longer matching the class: the drift's consequence, held under
+          that one finding and judged again once it is fixed — report CALL_ORIGIN_UNRESOLVED
+          (warning; spec impl.id; draft context the entry's draftContext), one finding per method
+          listing each such claim with the shape its call sites were written in: the target name IS
+          called inside fnSymbol, but from no site this analysis can resolve to a file — so the
+          claim is neither proven realized nor accused of being missing, and no working call is
+          asked to be rewritten to suit the analysis. The finding names its sites and says that much
+          and no more; which receiver forms resolve and which do not is the code's summary and the
+          rule's description, stated ONCE where `wairon rules list` reads it, never repeated per
+          finding
         type: local
       - stepNumber: 17
         description: >-
@@ -2521,6 +2527,62 @@ methods:
     detail: full
     symbol: check
     exportedVia: bindingModulesRule
+  - name: callMannerConformance
+    sourcePath: src/core/rules/conformance/call-manner-conformance.ts
+    narrative:
+      - stepNumber: 1
+        label: gather
+        description: >-
+          For each implementation method whose conformance dial (its own, else its implementation's,
+          else the component's default) is not off, take its call claims that come from narrative
+          call steps, each with whether the step is marked detach and whether it lies inside the
+          body of a try step that catches (method_implementation.callClaims)
+        type: local
+      - stepNumber: 2
+        description: For each claim
+        type: loop
+        loopKind: forEach
+        over: the method's step claims
+        endStep: 8
+      - stepNumber: 3
+        description: >-
+          Find the call sites call-conformance matched to the claim — those that land on the
+          target's code, by the same resolution — and keep only those written directly in the
+          method's own function in its own file, read where the file's reading records manner
+        type: local
+      - stepNumber: 4
+        description: Decide whether the claim can be judged
+        type: branch
+        condition: at least one such site remains, and the claim's target plans code in this project
+        onFalseStep: 8
+      - stepNumber: 5
+        description: >-
+          For a detach claim, report DETACHED_CALL_AWAITED when every remaining site records awaited
+          as all
+        type: local
+      - stepNumber: 6
+        description: For a caught claim, report CALL_NOT_CAUGHT when no remaining site records guarded
+        type: local
+      - stepNumber: 7
+        description: >-
+          For a claim not marked detach whose target method's realizing function completes later
+          (source_file_facts.asyncFunctions at the target's file), when no remaining site records
+          awaited: report CALL_NOT_AWAITED if the method states its detail
+          (method_implementation.statesCalls), else the notice OPEN_CALL_NOT_AWAITED; each finding
+          names the step, the target, the function and the line
+        type: local
+      - stepNumber: 8
+        description: >-
+          Go on to the next claim; a claim with no site to read is call-conformance's to report,
+          never this rule's
+        type: local
+      - stepNumber: 9
+        description: Done
+        type: return
+        outcome: judged
+    detail: full
+    symbol: check
+    exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-29T16:38:43.742Z'
+updatedAt: '2026-10-30T12:03:05.626Z'
