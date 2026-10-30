@@ -1524,6 +1524,29 @@ export interface CallClaim {
   step?: number;
   component: string;
   method: string;
+  /** A step marked detach: the method goes on without waiting for the call. Absent on a declared call. */
+  detach?: boolean;
+  /**
+   * A step inside the body of a try step that names a catch — any enclosing one —
+   * so the design says an error the call raises is caught there. The try's catch
+   * and finally regions are not its body. Absent on a declared call.
+   */
+  caught?: boolean;
+}
+
+/**
+ * The try steps of a narrative that catch, each with the steps of its BODY:
+ * after the header, up to the first handler region (a catch's first step or the
+ * finally step) or the try's endStep.
+ */
+function catchingBodies(narrative: readonly NarrativeStep[]): { from: number; to: number }[] {
+  const bodies: { from: number; to: number }[] = [];
+  for (const step of narrative) {
+    if (step.type !== 'try' || step.endStep === undefined || !(step.catches?.length)) continue;
+    const handlers = [...step.catches.map(c => c.step), ...(step.finallyStep !== undefined ? [step.finallyStep] : [])];
+    bodies.push({ from: step.stepNumber + 1, to: Math.min(step.endStep, ...handlers.map(h => h - 1)) });
+  }
+  return bodies;
 }
 
 /**
@@ -1536,9 +1559,15 @@ export interface CallClaim {
  */
 export function callClaims(method: Pick<MethodImplementation, 'narrative' | 'calls'>): CallClaim[] {
   const claims: CallClaim[] = [];
+  const bodies = catchingBodies(method.narrative ?? []);
   for (const step of method.narrative ?? []) {
     if (step.type !== 'call' || !step.targetComponent || !step.targetMethod) continue;
-    claims.push({ step: step.stepNumber, component: step.targetComponent, method: step.targetMethod });
+    const caught = bodies.some(b => step.stepNumber >= b.from && step.stepNumber <= b.to);
+    claims.push({
+      step: step.stepNumber, component: step.targetComponent, method: step.targetMethod,
+      ...(step.detach ? { detach: true } : {}),
+      ...(caught ? { caught: true } : {}),
+    });
   }
   for (const ref of method.calls ?? []) {
     const parsed = parseDeclaredCall(ref);

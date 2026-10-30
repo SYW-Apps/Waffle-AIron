@@ -27,9 +27,29 @@ import {
   type SourceFileFacts,
   type TypeShapeFact,
   type TypeSpec,
+  type WritingShare,
   languageOfSourcePath,
   resolveImport,
 } from '../models/index.js';
+
+/** The share of `n` writings of one call shape that have a property: all, some, or none (undefined). */
+function shareOf(have: number, n: number): WritingShare | undefined {
+  return have === 0 ? undefined : have === n ? 'all' : 'some';
+}
+
+/** The share over the writings of two groups of one shape, an absent share meaning no writing has the property. */
+function mergeShares(a: WritingShare | undefined, b: WritingShare | undefined): WritingShare | undefined {
+  if (a === undefined && b === undefined) return undefined;
+  return a === 'all' && b === 'all' ? 'all' : 'some';
+}
+
+/** Fold the manner shares of `from` into `into` (one shape written in several bodies of one name). */
+function mergeMannerInto(into: CallSiteFact, from: CallSiteFact): CallSiteFact {
+  const awaited = mergeShares(into.awaited, from.awaited);
+  const guarded = mergeShares(into.guarded, from.guarded);
+  const { awaited: _a, guarded: _g, ...rest } = into;
+  return { ...rest, ...(awaited ? { awaited } : {}), ...(guarded ? { guarded } : {}) };
+}
 
 // ---------------------------------------------------------------------------
 // Source Analysis Adapter — the validator subsystem's only source-code I/O.
@@ -2002,11 +2022,77 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     // The 1-based line of the call being read (exact grade only); the first
     // writing of a shape keeps its line.
     let callLine: number | undefined;
+    // How the call being read runs, and how many writings of each shape run
+    // that way: the shares are settled once the whole body has been read.
+    let callManner = { awaited: false, guarded: false };
+    const tally = new Map<string, { n: number; awaited: number; guarded: number }>();
     const addSite = (site: CallSiteFact): void => {
       const key = siteKey(site);
       const prior = callees.get(key);
       const line = prior?.line ?? callLine;
       callees.set(key, line !== undefined ? { ...site, line } : site);
+      const seen = tally.get(key) ?? { n: 0, awaited: 0, guarded: 0 };
+      seen.n++;
+      if (callManner.awaited) seen.awaited++;
+      if (callManner.guarded) seen.guarded++;
+      tally.set(key, seen);
+    };
+    // The expression a call is, taken through what only the type checker cares
+    // about: parentheses, a non-null assertion, satisfies, a cast.
+    const seeThrough = (node: import('typescript').Node): boolean =>
+      ts.isParenthesizedExpression(node) || ts.isNonNullExpression(node)
+      || (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(node))
+      || ts.isAsExpression(node) || ts.isTypeAssertionExpression(node);
+    const joinsPromises = (callee: import('typescript').Expression): boolean =>
+      ts.isPropertyAccessExpression(callee) && ts.isIdentifier(callee.expression) && callee.expression.text === 'Promise'
+      && ['all', 'allSettled', 'race', 'any'].includes(callee.name.text);
+    const nearestFunction = (node: import('typescript').Node): import('typescript').Node | undefined => {
+      for (let at = node.parent; at; at = at.parent) if (ts.isFunctionLike(at)) return at;
+      return undefined;
+    };
+    // The promise chain a call heads: `.then(...)`, `.catch(...)`, `.finally(...)`
+    // each wrap the call, and the chain's end is what is awaited or returned.
+    const chainStep = (at: import('typescript').Node): import('typescript').CallExpression | undefined => {
+      const up = at.parent;
+      if (!up || !ts.isPropertyAccessExpression(up) || up.expression !== at) return undefined;
+      if (!['then', 'catch', 'finally'].includes(up.name.text)) return undefined;
+      return up.parent && ts.isCallExpression(up.parent) && up.parent.expression === up ? up.parent : undefined;
+    };
+    // Whether the function waits for the call: it is the operand of an await, an
+    // element of an awaited joining call, or returned directly.
+    const isAwaited = (call: import('typescript').CallExpression): boolean => {
+      let at: import('typescript').Node = call;
+      for (;;) {
+        while (at.parent && seeThrough(at.parent)) at = at.parent;
+        const up = at.parent;
+        if (!up) return false;
+        if (ts.isAwaitExpression(up)) return true;
+        if (ts.isReturnStatement(up)) return nearestFunction(up) === fn;
+        if (ts.isArrowFunction(up) && up.body === at) return up === fn;
+        const chained = chainStep(at);
+        if (chained) { at = chained; continue; }
+        if (ts.isArrayLiteralExpression(up) && up.parent && ts.isCallExpression(up.parent)
+          && up.parent.arguments[0] === up && joinsPromises(up.parent.expression)) { at = up.parent; continue; }
+        return false;
+      }
+    };
+    // Whether the call is caught where it is written: a rejection handler chained
+    // onto it, or the body of a try that has a catch in its function.
+    const isGuarded = (call: import('typescript').CallExpression): boolean => {
+      let at: import('typescript').Node = call;
+      for (;;) {
+        while (at.parent && seeThrough(at.parent)) at = at.parent;
+        const chained = chainStep(at);
+        if (!chained) break;
+        const name = (chained.expression as import('typescript').PropertyAccessExpression).name.text;
+        if (name === 'catch' || (name === 'then' && chained.arguments.length >= 2)) return true;
+        at = chained;
+      }
+      let child: import('typescript').Node = call;
+      for (let up = call.parent; up && up !== fn; child = up, up = up.parent) {
+        if (ts.isTryStatement(up) && up.catchClause && up.tryBlock === child) return true;
+      }
+      return false;
     };
     // A receiver is read through what only the type checker cares about — a
     // non-null assertion, parentheses, `satisfies`, a cast to a NAMED type —
@@ -2072,6 +2158,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
         // names right there, and a member access through anything else
         // (`getStore().x()`) resolves nowhere without a type checker.
         const callee = node.expression;
+        callManner = { awaited: isAwaited(node), guarded: isGuarded(node) };
         callLine = sf.getLineAndCharacterOfPosition(
           (ts.isPropertyAccessExpression(callee) ? callee.name : node).getStart(sf),
         ).line + 1;
@@ -2124,6 +2211,13 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     // expression body may BE the decision point (`x => x ? a : b`). A body is
     // never itself a named function, so the skip guard cannot short-circuit it.
     if (fn.body) count(fn.body);
+    for (const [key, site] of callees) {
+      const seen = tally.get(key)!;
+      const awaited = shareOf(seen.awaited, seen.n);
+      const guarded = shareOf(seen.guarded, seen.n);
+      if (awaited) site.awaited = awaited;
+      if (guarded) site.guarded = guarded;
+    }
     return { score, callees };
   };
 
@@ -2188,7 +2282,10 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
       const facts = collectFunctionFacts(node as { body?: import('typescript').Node } & import('typescript').Node);
       complexity.set(fnName, Math.max(complexity.get(fnName) ?? 0, facts.score));
       const sites = calls.get(fnName) ?? new Map<string, CallSiteFact>();
-      for (const [key, site] of facts.callees) sites.set(key, site);
+      for (const [key, site] of facts.callees) {
+        const prior = sites.get(key);
+        sites.set(key, prior ? { ...mergeMannerInto(prior, site), ...(site.line !== undefined ? { line: site.line } : {}) } : site);
+      }
       calls.set(fnName, sites);
       // And this body's own sites, under where it is bound, so a reader can
       // tell it from the other bodies of its name.
@@ -5149,7 +5246,7 @@ export function findTestsReferencing(
 // ---------------------------------------------------------------------------
 
 /** The checks this reader's facts are fuel for. */
-const PYTHON_READS: CodeReading[] = ['params', 'returns', 'members', 'imports', 'calls', 'routes', 'types'];
+const PYTHON_READS: CodeReading[] = ['params', 'returns', 'members', 'imports', 'calls', 'routes', 'types', 'manner'];
 
 type TokenKind = 'name' | 'op' | 'string' | 'number';
 
@@ -5761,6 +5858,17 @@ interface Block {
   paramTypes?: Map<string, string>;
   /** For a def: the class it is a DIRECT member of (a method), when it is one. */
   methodOf?: string;
+  /** For a def: the try statements the walk is inside, innermost last. */
+  tries?: PythonTry[];
+}
+
+/** One `try` the walk is inside: its indent, whether the walk is in its body, and whether it has an `except`. */
+interface PythonTry {
+  indent: number;
+  inBody: boolean;
+  hasExcept: boolean;
+  /** The call writings in its body. */
+  writings: { awaited: boolean; guarded: boolean }[];
 }
 
 /** Words a call-shaped `word(` can be that are no call. */
@@ -5788,6 +5896,9 @@ function readPython(text: string): PythonFacts {
   let declaredAll: Set<string> | undefined;
   const stack: Block[] = [];
   let decorators: string[] = [];
+  // How each call site was written: one record per writing, by site.
+  const writingsOf = new Map<CallSiteFact, { awaited: boolean; guarded: boolean }[]>();
+  const allTries: PythonTry[] = [];
 
   const addType = (map: Map<string, Set<string>>, name: string, type: string | undefined): void => {
     const named = type ? typeHead(type) : undefined;
@@ -5943,14 +6054,34 @@ function readPython(text: string): PythonFacts {
 
     // ---- a statement inside a function ----
     const fn = [...stack].reverse().find(b => b.kind === 'def');
-    if (fn) readStatement(t, fn);
+    if (fn) {
+      trackTry(fn, line.indent, t);
+      readStatement(t, fn);
+    }
+  }
+
+  // The shares of each site: of its writings, those awaited and those in the body of a try with an except.
+  for (const attempt of allTries) {
+    if (attempt.hasExcept) for (const w of attempt.writings) w.guarded = true;
+  }
+  for (const [site, writings] of writingsOf) {
+    const awaited = shareOf(writings.filter(w => w.awaited).length, writings.length);
+    if (awaited) site.awaited = awaited;
+    const guarded = shareOf(writings.filter(w => w.guarded).length, writings.length);
+    if (guarded) site.guarded = guarded;
   }
 
   // Each body's call sites, unioned per name.
   const functionCallSites: Record<string, CallSiteFact[]> = {};
   for (const [name, bodies] of functionBodies) {
     const seen = new Map<string, CallSiteFact>();
-    for (const body of bodies) for (const site of body.sites) seen.set(JSON.stringify(site), site);
+    for (const body of bodies) {
+      for (const site of body.sites) {
+        const key = JSON.stringify({ ...site, awaited: undefined, guarded: undefined });
+        const prior = seen.get(key);
+        seen.set(key, prior ? mergeMannerInto(prior, site) : { ...site });
+      }
+    }
     functionCallSites[name] = [...seen.values()];
   }
   const exportedNames = moduleNames.filter(name => !name.startsWith('_') && (declaredAll ? declaredAll.has(name) : true));
@@ -5992,6 +6123,90 @@ function readPython(text: string): PythonFacts {
     routing: declarative.routers,
     reads: PYTHON_READS,
   };
+
+  /**
+   * Keep the try statements of a function body: a `try:` line opens one, an
+   * `except` / `finally` / `else` line at its indent ends its body (an `except`
+   * makes it catch), and any other line at or above its indent closes it.
+   */
+  function trackTry(fn: Block, indent: number, tokens: Token[]): void {
+    const tries = fn.tries ?? (fn.tries = []);
+    const word = tokens[0]?.kind === 'name' ? tokens[0].text : '';
+    while (tries.length > 0) {
+      const top = tries[tries.length - 1];
+      if (indent > top.indent) break;
+      if (indent === top.indent && (word === 'except' || word === 'finally' || word === 'else')) {
+        top.inBody = false;
+        if (word === 'except') top.hasExcept = true;
+        break;
+      }
+      tries.pop();
+    }
+    if (word === 'try' && tokens[1]?.text === ':' && tokens.length === 2) {
+      const attempt: PythonTry = { indent, inBody: true, hasExcept: false, writings: [] };
+      tries.push(attempt);
+      allTries.push(attempt);
+    }
+  }
+
+  /**
+   * Whether the call whose name is token `at` is waited for: `await` is the word
+   * before the expression it ends, or the expression is an argument of an awaited
+   * `asyncio.gather` / `asyncio.wait` (bare or qualified). A returned coroutine is
+   * not waited for.
+   */
+  function awaitedAt(tokens: Token[], at: number): boolean {
+    const matchOpen = (close: number): number => {
+      let depth = 0;
+      for (let k = close; k >= 0; k--) {
+        const x = tokens[k];
+        if (x.kind !== 'op') continue;
+        if (x.text === ')' || x.text === ']') depth++;
+        else if (x.text === '(' || x.text === '[') { depth--; if (depth === 0) return k; }
+      }
+      return -1;
+    };
+    // The call must end its expression: a further member, call or index makes it a receiver.
+    let close = at + 1;
+    let depth = 0;
+    for (; close < tokens.length; close++) {
+      const x = tokens[close];
+      if (x.kind !== 'op') continue;
+      if (x.text === '(' || x.text === '[') depth++;
+      else if (x.text === ')' || x.text === ']') { depth--; if (depth === 0) break; }
+    }
+    const after = tokens[close + 1];
+    if (after?.kind === 'op' && (after.text === '.' || after.text === '(' || after.text === '[')) return false;
+    // The start of the expression the call ends.
+    let start = at;
+    while (tokens[start - 1]?.text === '.') {
+      let prior = start - 2;
+      if (tokens[prior]?.text === ')' || tokens[prior]?.text === ']') {
+        const open = matchOpen(prior);
+        if (open < 0) return false;
+        prior = open - 1;
+      }
+      if (tokens[prior]?.kind !== 'name') return false;
+      start = prior;
+    }
+    const before = tokens[start - 1];
+    if (before?.kind === 'name' && before.text === 'await') return true;
+    // An argument of an awaited gather / wait: step out to the enclosing open paren.
+    let nest = 0;
+    for (let k = start - 1; k >= 0; k--) {
+      const x = tokens[k];
+      if (x.kind !== 'op') continue;
+      if (x.text === ')' || x.text === ']') nest++;
+      else if (x.text === '(' || x.text === '[') {
+        if (nest > 0) { nest--; continue; }
+        const callee = tokens[k - 1];
+        if (x.text !== '(' || callee?.kind !== 'name' || (callee.text !== 'gather' && callee.text !== 'wait')) return false;
+        const head = tokens[k - 2]?.text === '.' && tokens[k - 3]?.kind === 'name' ? k - 3 : k - 1;
+        return tokens[head - 1]?.kind === 'name' && tokens[head - 1].text === 'await';
+      }
+    }
+    return false;
+  }
 
   /**
    * One statement of a function body: its call sites, written by shape, and
@@ -6040,7 +6255,17 @@ function readPython(text: string): PythonFacts {
         site = { name, member: true, receiverPath: chain };
       }
       const key = JSON.stringify(site);
-      if (!fn.body!.sites.some(s => JSON.stringify(s) === key)) fn.body!.sites.push(site);
+      let kept = fn.body!.sites.find(s => JSON.stringify({ ...s, awaited: undefined, guarded: undefined }) === key);
+      if (!kept) {
+        kept = site;
+        fn.body!.sites.push(site);
+      }
+      // How this writing runs: waited for, and inside the body of a try that is still open.
+      const writing = { awaited: awaitedAt(tokens, i), guarded: false };
+      const writings = writingsOf.get(kept) ?? [];
+      writings.push(writing);
+      writingsOf.set(kept, writings);
+      for (const attempt of fn.tries ?? []) if (attempt.inBody) attempt.writings.push(writing);
     }
   }
 }
