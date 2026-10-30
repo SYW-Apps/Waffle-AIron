@@ -416,7 +416,11 @@ export const routeCoverageRule: SddRule = {
             + 'contract at all. A Python router is read off its route decorators (`@app.get("/x")`, `@bp.route("/x", '
             + 'methods=["POST"])`), its construction\'s `prefix=` or `url_prefix=`, and the routers it includes '
             + '(`include_router`, `register_blueprint`): each path, prefix and verb a string literal or a module constant bound '
-            + 'to one, each included router one an analyzed module constructs; a mounted application is never followed. Write '
+            + 'to one, each included router one an analyzed module constructs; a mounted application is never followed. A Python '
+            + 'guard function (`if method == "GET" and path.startswith("/api/")`) is read the same way, and is left unread by a '
+            + 'path comparison that does not settle (a call, a prefix that stops inside a segment); a path converter '
+            + '(`{rest:path}`, `<path:rest>`) followed by further segments, and an include of a router that is itself unread, '
+            + 'leave the router unread too. Write '
             + 'it so, or carry this finding with the reason it cannot be.',
             impl.id,
             ctx.isComponentDraft(portal.id) || ctx.isImplementationDraft(impl),

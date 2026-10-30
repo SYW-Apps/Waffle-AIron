@@ -762,6 +762,14 @@ describe('Python guard functions are read as routers', () => {
     expect(codes(guard(body('/order')), ROUTE_CODES).map(f => f.split(':')[0])).toEqual(['UNREADABLE_ROUTER']);
   });
 
+  it('says which Python forms leave a router unread', () => {
+    const body = ['def handle(request) -> str:', '    if request.method == "GET" and request.path == compute():', '        return "x"', '    return ""', ''];
+    const message = codes(guard(body), ['UNREADABLE_ROUTER'])[0];
+    expect(message).toMatch(/guard function/);
+    expect(message).toMatch(/path converter/);
+    expect(message).toMatch(/include of a router that is itself unread/);
+  });
+
   it('names a guard function among the routers a Portal naming none could name', () => {
     const body = ['def handle(request) -> str:', '    if request.method == "GET" and request.path == "/health":', '        return "ok"', '    return ""', ''];
     const found = codes(guard(body, ''), ROUTE_CODES);
