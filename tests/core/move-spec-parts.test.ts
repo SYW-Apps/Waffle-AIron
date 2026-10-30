@@ -6,13 +6,13 @@ import * as yaml from 'js-yaml';
 import { setProjectRoot, listFilesRecursive, removeFile } from '../../src/utils/fs.js';
 import { writeSpecFile, readSpecFile } from '../../src/core/spec-files.js';
 import {
-  invalidateSpecCache, listProjectRoots, loadComponentSpec, loadTypeSpec, loadGroupSpec, loadSubsystemSpec, PartReadOnly,
+  invalidateSpecCache, listProjectRoots, loadComponentSpec, loadImplementationSpec, loadTypeSpec, loadGroupSpec, loadSubsystemSpec, PartReadOnly,
 } from '../../src/core/specs.js';
 import { moveSpec } from '../../src/core/authoring.js';
 import { validateProject } from '../../src/core/validation.js';
 import { moveSpec as coreMoveSpec, rehearsalCopy, discardRehearsal } from '../../src/core/provision.js';
 import {
-  ComponentSpecSchema, GroupSpecSchema, SubsystemSpecSchema, SystemSpecSchema, TypeSpecSchema,
+  ComponentSpecSchema, GroupSpecSchema, ImplementationSpecSchema, InterfaceSpecSchema, SubsystemSpecSchema, SystemSpecSchema, TypeSpecSchema,
 } from '../../src/models/index.js';
 import { bareFrom, isolateGlobals, tempDir as tempDirIn } from '../helpers/stage8-family.js';
 
@@ -327,5 +327,112 @@ describe('a move between two homes writes the destination before removing the so
     expect(fs.existsSync(path.join(path.dirname(holder), 'up', 'scheduling', '.wai'))).toBe(true);
     discardRehearsal(copy);
     expect(fs.existsSync(path.dirname(holder))).toBe(false);
+  });
+});
+
+describe.each(['contained', 'sibling'] as const)('the code linkage of a moved component in a %s part', (storage) => {
+  /** The check-in desk gets a contract and an implementation naming three files that live under the project root. */
+  function withImplementation(root: string): Record<string, string> {
+    const files = { source: 'src/check-in.ts', method: 'src/check-in-method.ts', sim: 'sim/check-in.sim.ts' };
+    for (const rel of Object.values(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      fs.writeFileSync(path.join(root, rel), 'export function checkIn(): void {}\n');
+    }
+    writeSpecFile(specs(root, 'frontdesk', 'check-in-desk', '.interface.yaml'), InterfaceSpecSchema.parse({
+      id: 'icheck_in_desk', name: 'i', description: 'd', component: 'check-in-desk', createdAt: STAMP, updatedAt: STAMP,
+      methods: [{ name: 'checkIn', description: 'd', signature: 'checkIn(): void', returns: 'void' }],
+    }));
+    writeSpecFile(specs(root, 'frontdesk', 'check-in-desk', '.implementation.yaml'), ImplementationSpecSchema.parse({
+      id: 'check_in_desk_impl', name: 'impl', description: 'd', contract: 'icheck_in_desk', createdAt: STAMP, updatedAt: STAMP,
+      sourcePath: files.source, simPath: files.sim,
+      methods: [{ name: 'checkIn', sourcePath: files.method, narrative: [{ stepNumber: 1, description: 'r', type: 'return', outcome: 'success' }] }],
+    }));
+    return files;
+  }
+
+  /** The files the loaded implementation names, resolved against the project root the way the gate reads them. */
+  const resolved = (root: string): string[] => {
+    const impl = loadImplementationSpec('check_in_desk_impl')!;
+    return [impl.sourcePath, impl.simPath, impl.methods[0].sourcePath].map((p) => path.resolve(root, p!));
+  };
+  const sourceFindings = (): string[] => validateProject({}).issues
+    .filter((i) => /^(MISSING_SOURCE_FILE|MISSING_SOURCE_PATH|METHOD_SOURCE_PATH_MISSING|SOURCE_PATH_ESCAPES_ROOT|UNCLAIMED_SOURCE_FILE)$/.test(i.code))
+    .map((i) => `${i.code}: ${i.message}`);
+
+  it('keeps sourcePath, method sourcePath and simPath on the same files after a move into the part and back', () => {
+    const { root } = clinic(storage);
+    const files = withImplementation(root);
+    bind(root);
+    const expected = [files.source, files.sim, files.method].map((p) => path.resolve(root, p));
+    expect(resolved(root)).toEqual(expected);
+    const before = sourceFindings();
+
+    moveSpec('component', 'check-in-desk', 'scheduling');
+    invalidateSpecCache();
+    expect(resolved(root)).toEqual(expected);
+    expect(sourceFindings()).toEqual(before);
+
+    moveSpec('component', 'check-in-desk', 'frontdesk');
+    invalidateSpecCache();
+    expect(resolved(root)).toEqual(expected);
+    expect(sourceFindings()).toEqual(before);
+  });
+
+  /** The two frontdesk types gain a sourcePath each, under the project root. */
+  function withTypeSources(root: string): Record<string, string> {
+    const files: Record<string, string> = { patient_note: 'src/patient-note.ts', visit_note: 'src/visit-note.ts' };
+    typeSpec(specs(root, 'frontdesk', 'types', 'patient_note.yaml'), 'patient_note', 'frontdesk', { sourcePath: files.patient_note });
+    typeSpec(specs(root, 'frontdesk', 'types', 'notes', 'visit_note.yaml'), 'visit_note', undefined, { group: 'notes', sourcePath: files.visit_note });
+    return files;
+  }
+  const typePath = (root: string, id: string): string => path.resolve(root, loadTypeSpec(id)!.sourcePath!);
+
+  it('keeps the sourcePath of a type on the same file after a move into the part and back', () => {
+    const { root } = clinic(storage);
+    const files = withTypeSources(root);
+    bind(root);
+    const expected = path.resolve(root, files.patient_note);
+    moveSpec('type', 'patient_note', 'scheduling');
+    invalidateSpecCache();
+    expect(typePath(root, 'patient_note')).toBe(expected);
+    moveSpec('type', 'patient_note', 'frontdesk');
+    invalidateSpecCache();
+    expect(typePath(root, 'patient_note')).toBe(expected);
+  });
+
+  it('keeps the sourcePath of the types of a group on the same files after the group moves into the part and back', () => {
+    const { root } = clinic(storage);
+    const files = withTypeSources(root);
+    bind(root);
+    const expected = path.resolve(root, files.visit_note);
+    moveSpec('group', 'notes', 'scheduling');
+    invalidateSpecCache();
+    expect(typePath(root, 'visit_note')).toBe(expected);
+    moveSpec('group', 'notes', 'frontdesk');
+    invalidateSpecCache();
+    expect(typePath(root, 'visit_note')).toBe(expected);
+  });
+
+  it('says in a dry run that the code paths are re-expressed, and writes nothing', () => {
+    const { root } = clinic(storage);
+    withImplementation(root);
+    bind(root);
+    const file = specs(root, 'frontdesk', 'check-in-desk', '.implementation.yaml');
+    const was = fs.readFileSync(file, 'utf8');
+    const planned = moveSpec('component', 'check-in-desk', 'scheduling', true);
+    expect(planned.references?.join(' ')).toMatch(/implementation check_in_desk_impl: code paths .* re-expressed/);
+    expect(fs.readFileSync(file, 'utf8')).toBe(was);
+  });
+
+  it('leaves the paths alone when the move stays in one home', () => {
+    const { root } = clinic(storage);
+    withImplementation(root);
+    subsystem(root, 'billing');
+    bind(root);
+    const planned = moveSpec('component', 'check-in-desk', 'billing', true);
+    expect(planned.references ?? []).toEqual([]);
+    moveSpec('component', 'check-in-desk', 'billing');
+    invalidateSpecCache();
+    expect(loadImplementationSpec('check_in_desk_impl')!.sourcePath).toBe('src/check-in.ts');
   });
 });

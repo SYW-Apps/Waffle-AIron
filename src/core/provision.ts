@@ -3876,11 +3876,33 @@ function moveGroupSpec(id: string, target: string | undefined, parent: string | 
       ...(to !== from ? [`group ${id}: home ${from || '(shared types folder)'} → ${to || '(shared types folder)'}`] : []),
     ],
   };
+  const fromRoot = homeRootOf(from);
+  const toRoot = homeRootOf(to);
+  const rebased = rebaseNote('type', types, fromRoot, toRoot);
+  report.references!.push(...rebased);
   if (dryRun) return { ...report, files: [`${shown(oldFile)} → (${types.length} type${types.length === 1 ? '' : 's'} and ${groups.length} child group${groups.length === 1 ? '' : 's'} move with it)`], dryRun: true };
   // The folder moves with the group's restated placement; a move is placement, so updatedAt is kept.
   moveGroup(placed, to !== from ? groups : []);
   invalidateSpecCache();
+  if (rebased.length > 0) {
+    const inGroups = loadTypeSpecs().filter((x) => types.includes(x.id));
+    rebaseImplementationPaths(aiPathsAt(root).specsDir(), fromRoot, toRoot, inGroups.map((x) => typeFileOf(x.id, x)));
+  }
   return { ...report, files: [`${shown(oldFile)} → ${shown(getGroupPath(id))}`] };
+}
+
+/** The root a subsystem's specs and code paths are read against: its part's directory, else the bound project's root. */
+function homeRootOf(subsystemId: string | undefined): string {
+  const part = subsystemId === undefined || subsystemId === '' ? undefined
+    : graph().nodes.find((n) => n.namespace === '')?.parts.find((p) => p.directory !== undefined && p.subsystems.includes(subsystemId));
+  return part?.directory ?? getProjectRoot();
+}
+
+/** What a move between two homes does to the code paths of the specs that move: said by the dry run, done by the move. */
+function rebaseNote(kind: string, ids: string[], fromRoot: string, toRoot: string): string[] {
+  if (ids.length === 0 || path.resolve(fromRoot) === path.resolve(toRoot)) return [];
+  const shown = (r: string): string => toPosixPath(path.relative(getProjectRoot(), r)) || '.';
+  return [`${kind} ${ids.join(', ')}: code paths (sourcePath, simPath, method sourcePaths) re-expressed from the root of ${shown(fromRoot)} to the root of ${shown(toRoot)}; the files they name do not move`];
 }
 
 /** Steps 5-12 of moveSpec: a component with the members it owns, its contracts and implementations. */
@@ -3939,9 +3961,12 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
     ...(repointed.length + added.length > 0 ? ['system'] : []),
   ];
   assertSpecsInReach([...moved, ...rewritten.map((s) => (s === 'system' ? { kind: 'system', id: 'system' } : { kind: 'subsystem', id: s }))], `moving component "${id}"`);
+  const fromRoot = homeRootOf(from);
+  const toRoot = homeRootOf(target);
+  const rebased = rebaseNote('implementation', implementations.map((impl) => impl.id), fromRoot, toRoot);
   const report: SpecMove = { kind: 'component', id, from, to: target, moved, rewritten: [...new Set(rewritten)], notices: [] };
   // Steps 10-11: a dry run stops here.
-  if (dryRun) return { ...report, dryRun: true };
+  if (dryRun) return { ...report, ...(rebased.length > 0 ? { references: rebased } : {}), dryRun: true };
   // Step 12: the subsystems and the L0 first, then each moved component under its new subsystem.
   if (exportsMoving.length + lifecycleMoving.length > 0 && fromSpec) {
     saveSpec('subsystem', {
@@ -3970,6 +3995,10 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
     if (current) saveComponentSpec({ ...current, subsystem: target });
     invalidateSpecCache();
   }
+  // Between two homes the code paths of the moved implementations are re-expressed against the new root; the files stay.
+  if (rebased.length > 0) {
+    rebaseImplementationPaths(aiPathsAt(root).specsDir(), fromRoot, toRoot, implementations.flatMap((impl) => fileOf({ kind: 'implementation', id: impl.id }) ?? []));
+  }
   // Steps 22-23.
   invalidateSpecCache();
   const files = [
@@ -3978,6 +4007,7 @@ function moveComponentSpec(id: string, target: string | undefined, subsystems: S
     ...(repointed.length + added.length > 0 ? [shown(aiPathsAt(root).specsSystem())] : []),
   ];
   const references = [
+    ...rebased,
     ...exportsMoving.map((e) => `${from}: L1 export ${e.as ?? e.interface ?? e.component} → moved to ${target}`),
     ...lifecycleMoving.map((e) => `${from}: lifecycle entrypoint ${e.component} → moved to ${target}`),
     ...repointed.map((e) => `system: L0 export ${l0ExportName(e) ?? e.interface ?? e.component} from ${from} → ${target}`),
