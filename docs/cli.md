@@ -1642,7 +1642,10 @@ write is refused every read tool. `host permission set` warns when it grants
 `project:write` to a user who cannot read that scope, and `host key mint --owner`
 warns when the owner cannot read the project — each naming the grant that fixes
 it. An owner needs no user record — an id with no record acts as a service
-principal.
+principal — but a grant for an id with no record is not listed or deactivated
+anywhere until the record exists, so `host permission set` warns and names
+`wairon host user add --user <id>`. The user listings (`wairon host user list`,
+the Users view) show such a subject marked "no user record", with no status.
 
 **Who approves a design.** A hosted lock (`sdd_host_lock_project`, the web UI's
 Lock, `wairon lock` while attached, `POST /admin/projects/{id}/lock`) is the
@@ -1655,7 +1658,13 @@ by `project:write`:
   `yes` only **requests** the lock: the request is pending until someone else
   with `approval:decide` decides it (in the web UI under Approvals), and the
   requester can wait for it with `sdd_host_await_approval`. Nobody decides
-  their own request. `approval:decide` = `approval` requests as well.
+  their own request. `approval:decide` = `approval` requests as well. A request
+  is refused up front, naming the error count and each error's code, while the
+  tree has validation errors (warnings do not block, as at `wairon lock`).
+  The requester can take a pending request back with `sdd_host_withdraw_request`
+  (a request id and an optional reason): it becomes cancelled and is never
+  decided or executed; only the requester can withdraw it, and a request
+  already decided, completed or expired is refused.
 - Anyone else is refused, and nothing is requested.
 
 Give authors `project:write` and reviewers `approval:decide`; a single
@@ -1693,6 +1702,7 @@ decision is recorded as theirs, and their `approval:decide` grant is checked as 
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
+| `wairon host user list` / `add --user <id> [--name <n>] [--email <e>] [--unit <unitId>]` / `set-status --user <id> --status active|inactive` | List the hosted users (a subject that holds grants but has no user record is marked "no user record"), create an active user record (an existing record with that id is replaced), or set a user's status (`inactive` revokes the user's credentials and web sessions) |
 | `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members, and a member is named by its own record id. A key never narrows to a subsystem: confine a person to one with `wairon host permission set --project <id> --subsystem <id>`. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |

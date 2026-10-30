@@ -24,6 +24,7 @@ import {
   lockProject,
   getApprovalStatus,
   awaitApproval,
+  withdrawRequest,
 } from './projectlifecycle.js';
 import * as projectops from './projectops.js';
 import {
@@ -152,7 +153,7 @@ export function auditToolCall(
 
 // ── Data-plane project-lifecycle + surface-exchange dispatch (steps 10–28) ───
 
-/** The five execute-primary project-lifecycle tools the data plane handles
+/** The five execute-primary project-lifecycle tools (initialize, lock, approval status, await approval, withdraw request) the data plane handles
  *  directly, bypassing the scoped sdd_* MCP server. Every other tool falls
  *  through to it. */
 const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
@@ -160,6 +161,7 @@ const PROJECT_LIFECYCLE_TOOLS = new Set<string>([
   'sdd_host_lock_project',
   'sdd_host_get_approval_status',
   'sdd_host_await_approval',
+  'sdd_host_withdraw_request',
 ]);
 
 /** The four hosted landscape tools the data plane handles directly, routing
@@ -203,6 +205,7 @@ const PROJECT_RECORD_TOOLS = new Set<string>([
   'sdd_host_initialize_project',
   'sdd_host_get_approval_status',
   'sdd_host_await_approval',
+  'sdd_host_withdraw_request',
   ...PROJECT_OPS_TOOLS,
   ...LANDSCAPE_DISCOVERY_TOOLS,
 ]);
@@ -402,6 +405,7 @@ const MUTATING_HOST_TOOLS = new Set([
   'sdd_host_initialize_project',
   'sdd_host_lock_project',
   'sdd_host_await_approval', // a decided approval may have executed the action
+  'sdd_host_withdraw_request', // a withdrawn request leaves the pending lists
   'sdd_host_policy_reconcile',
   'sdd_host_import_tree', // replaces the whole spec tree — every open view is stale
 ]);
@@ -461,12 +465,17 @@ function dataPlanePermissionError(
     return undefined;
   }
 
-  // Step 19.
+  // Step 19. A write held only as `approval` is not a refusal of the person but of
+  // the write: say what the grant does allow (requesting the lock) and what lets them write.
+  const text = decided.value === 'approval' && needed === 'project:write'
+    ? `Forbidden — permission ${needed} required for ${name}: you hold \`approval\` here, which lets you request the lock `
+      + `(sdd_host_lock_project) but not write; \`project:write = yes\` lets you write (decided at ${describeDecision(decided)})`
+    : `Forbidden — permission ${needed} required for ${name}, decided at ${describeDecision(decided)}`;
   return {
     jsonrpc: '2.0',
     id: msg.id ?? null,
     result: {
-      content: [{ type: 'text', text: `Forbidden — permission ${needed} required for ${name}, decided at ${describeDecision(decided)}` }],
+      content: [{ type: 'text', text }],
       isError: true,
     },
   };
@@ -533,6 +542,16 @@ export async function dispatchProjectLifecycleTool(
           credential,
           String(args.requestId ?? ''),
           Number(args.timeoutSeconds ?? 0),
+        );
+        break;
+      case 'sdd_host_withdraw_request':
+        // The requester withdraws their own pending request; the orchestrator
+        // refuses anyone else. The reason is optional.
+        value = withdrawRequest(
+          cfg,
+          credential,
+          String(args.requestId ?? ''),
+          typeof args.reason === 'string' && args.reason ? args.reason : undefined,
         );
         break;
       case 'sdd_landscape_list_reachable_projects':

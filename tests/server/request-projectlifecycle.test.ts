@@ -312,6 +312,25 @@ describe('handleMcpRequest project-lifecycle dispatch (end-to-end)', () => {
     expect(got.status).toBe('pending');
   }, 20_000);
 
+  it('sdd_host_withdraw_request: the requester withdraws a pending request; a stranger is refused', async () => {
+    const token = mintToken({ id: 'agent-withdraw', projects: ['demo'], userId: 'u-withdraw' });
+    allow('u-withdraw', 'project:write', 'project', 'demo', 'approval');
+    const stranger = mintToken({ id: 'stranger-withdraw', projects: ['demo'], userId: 'u-stranger2' });
+    allow('u-stranger2', 'project:read', 'project', 'demo', 'yes');
+    const seeded = lockProject(cfg, token, 'demo').approval!;
+
+    const refused = (await (await post(call('sdd_host_withdraw_request', { requestId: seeded.id }), stranger)).json()) as RpcResponse;
+    expect(refused.result?.isError).toBe(true);
+    expect(toolText(refused)).toContain('only the original requester may withdraw');
+
+    const res = await post(call('sdd_host_withdraw_request', { requestId: seeded.id, reason: 'changed my mind' }), token);
+    const jsonBody = (await res.json()) as RpcResponse;
+    expect(jsonBody.result?.isError).toBeFalsy();
+    const got = JSON.parse(toolText(jsonBody)) as { id: string; status: string; executionSummary?: string };
+    expect(got).toMatchObject({ id: seeded.id, status: 'cancelled', executionSummary: 'withdrawn by the requester: changed my mind' });
+    expect(listApprovalRequests(dataDir).filter((r) => r.status === 'pending')).toHaveLength(0);
+  }, 20_000);
+
   it('denies reading another caller’s approval request → isError tool result, HTTP still 200', async () => {
     const ownerTok = mintToken({ id: 'owner-tok', projects: ['demo'], userId: 'u-owner' });
     allow('u-owner', 'project:write', 'project', 'demo', 'approval');

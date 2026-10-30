@@ -1950,7 +1950,7 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
       else {
         html += '<table class="grid"><thead><tr><th>User</th><th>Status</th><th>Unit</th><th>Roles</th><th></th></tr></thead><tbody>';
         users.forEach(function (u, i) {
-          var st = u.status === 'active' ? 'ok' : 'warn';
+          var st = u.noRecord || u.status !== 'active' ? 'warn' : 'ok';
           // Permissions live in role bindings + the assignment grid — the record
           // carries no grants. (A dedicated roles/assignments editor is the next
           // UI phase; bindings are shown read-only here.)
@@ -1961,11 +1961,13 @@ details.adv summary { cursor:pointer; color:var(--dim); font-size:12px; margin-b
           var who = esc(u.displayName || u.email || (u.subject && u.subject.userId) || '')
             + (u.email && u.displayName ? ' <span class="hint">' + esc(u.email) + '</span>' : '');
           html += '<tr><td>' + who + '</td>'
-            + '<td><span class="pill ' + st + '">' + esc(u.status) + '</span></td>'
+            + '<td><span class="pill ' + st + '">' + (u.noRecord ? 'no user record' : esc(u.status)) + '</span></td>'
             + '<td>' + esc(u.unitId || '—') + '</td>'
             + '<td>' + (roles || '<span class="hint">none</span>') + '</td>'
-            + '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
-            + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>';
+            + (u.noRecord
+              ? '<td><span class="hint">holds grants, no record</span></td></tr>'
+              : '<td style="white-space:nowrap"><button class="mini" data-edit="' + i + '">Edit</button> '
+                + '<button class="mini" data-setstatus="' + i + '">Status</button></td></tr>');
         });
         html += '</tbody></table>';
       }

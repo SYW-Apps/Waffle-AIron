@@ -482,7 +482,12 @@ describe('identity orchestrator (sdd_host)', () => {
 
     // a DELEGATED instance-level project:admin is authorized instance-wide.
     const userAdmin = tokenWith('project:admin', 'instance');
-    expect(identity.listUsers(cfg, userAdmin)).toHaveLength(2);
+    const listed = identity.listUsers(cfg, userAdmin);
+    expect(listed.filter((u) => !u.noRecord)).toHaveLength(2);
+    // The token's own owner holds a grant but has no user record: listed, flagged, with no status.
+    const noRecord = listed.filter((u) => u.noRecord);
+    expect(noRecord).toHaveLength(1);
+    expect(noRecord[0]).not.toHaveProperty('status');
 
     // a caller without project:admin reach is denied.
     const plain = tokenWith('project:read', 'project', 'proj-a');
@@ -571,7 +576,9 @@ describe('identity orchestrator (sdd_host)', () => {
     expect(identity.listUsers(cfg, caller).map((u) => u.id)).toEqual(['u-web']);
 
     // A user with no home unit is visible only to an instance-level admin.
-    expect(identity.listUsers(cfg, MASTER).map((u) => u.id).sort()).toEqual(['u-nounit', 'u-sales', 'u-web']);
+    expect(identity.listUsers(cfg, MASTER).filter((u) => !u.noRecord).map((u) => u.id).sort()).toEqual(['u-nounit', 'u-sales', 'u-web']);
+    // ...and so is a grant holder with no record (the unit-scoped caller above); a scoped admin never sees it.
+    expect(identity.listUsers(cfg, MASTER).filter((u) => u.noRecord)).toHaveLength(1);
   });
 
   it('setUserStatus: a unit-scoped admin may act on an in-scope user but is 403 on an out-of-scope one; MASTER may do both', () => {
