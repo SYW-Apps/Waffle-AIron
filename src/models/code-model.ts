@@ -196,8 +196,8 @@ export interface FunctionBodyFact {
 export interface ShapeMemberFact {
   /** The member's name, as the code spells it. */
   name: string;
-  /** Whether the code lets the member be absent from a value of this shape. */
-  optional: boolean;
+  /** Whether the code lets the member be absent from a value of this shape; unset where the code does not settle it. */
+  optional?: boolean;
 }
 
 /**

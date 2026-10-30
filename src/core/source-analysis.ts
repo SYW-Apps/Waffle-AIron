@@ -1346,6 +1346,8 @@ interface ExactFacts {
   namespaceReexports: string[];
   /** The `export type * from` specifiers among starExports: they republish types, never code. */
   typeOnlyStars: Set<string>;
+  /** The runtime `export * from` specifiers: a specifier written both ways still republishes code. */
+  runtimeStars: Set<string>;
   /**
    * The forwarding bindings the file publishes with no specifier of its own
    * (see SourceFileFacts.exportAliases): runtime export specifiers, and the
@@ -1485,6 +1487,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
   const namedReexports: { exported: string; local: string; from: string }[] = [];
   const namespaceReexports: string[] = [];
   const typeOnlyStars = new Set<string>();
+  const runtimeStars = new Set<string>();
   const exportAliases: ExportAliasFact[] = [];
   /** Property aliases of top-level object literals, kept until the walk knows which objects are exported. */
   const propertyAliases: ExportAliasFact[] = [];
@@ -2430,6 +2433,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
       } else if (!node.exportClause && spec) {
         starExports.push(spec);
         if (node.isTypeOnly) typeOnlyStars.add(spec);
+        else runtimeStars.add(spec);
       } else if (node.exportClause && ts.isNamespaceExport(node.exportClause) && spec && !node.isTypeOnly) {
         namespaceReexports.push(spec);
       }
@@ -2691,7 +2695,7 @@ function walkExact(ts: TsModule, sourceText: string, fileName: string, decorator
     visitReference(sf);
   }
 
-  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, namespaceReexports, typeOnlyStars, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
+  return { declared, anchors, exported, imports, reexports, starExports, namedReexports, namespaceReexports, typeOnlyStars, runtimeStars, exportAliases, returnTypes, complexity, calls, bodies, importBindings, typeOnlyBindings, typePositionOnlyBindings, fieldTypes, localTypes, memberTypes, aliasTargets, implementsClauses, typeShapes, functionParams, paramSites, functionRoutes, routePrefixes, tableSpreads, asyncFunctions, functionReturns, classMembers, classReferences, enumValues, aliasTypes, mutableBindings, reexportOnly };
 }
 
 /**
@@ -4549,7 +4553,7 @@ export function buildCodeModel(
             reexports: [...facts.reexports],
             reexportBindings: [
               ...facts.namedReexports.map(({ exported, local, from }) => ({ exported, local, from })),
-              ...facts.starExports.filter((from) => !facts.typeOnlyStars.has(from)).map((from) => ({ exported: '*', local: '*', from })),
+              ...[...facts.runtimeStars].map((from) => ({ exported: '*', local: '*', from })),
             ],
             ...(facts.namespaceReexports.length ? { namespaceReexports: [...facts.namespaceReexports] } : {}),
             exportAliases: facts.exportAliases.map(alias => ({ ...alias })),
@@ -5407,15 +5411,18 @@ function dottedName(tokens: Token[], from = 0): { name: string; end: number } {
 }
 
 /** A path's segments as a route reads them: a parameter is `*`, and a path converter leaves the length open. */
-function pythonPathSegments(pathText: string): { segments: string[]; exactLength: boolean } {
+function pythonPathSegments(pathText: string): { segments: string[]; exactLength: boolean; trailing: boolean } {
   const segments: string[] = [];
-  for (const segment of pathText.split('/').filter(Boolean)) {
+  const written = pathText.split('/').filter(Boolean);
+  for (let at = 0; at < written.length; at++) {
+    const segment = written[at];
     const param = /^\{([^}:]+)(?::([^}]*))?\}$/.exec(segment) ?? /^<(?:([^>:]+):)?([^>]+)>$/.exec(segment);
     const converter = param ? (segment.startsWith('{') ? param[2] : param[1]) : undefined;
-    if (converter === 'path') return { segments, exactLength: false };
+    // A path converter takes the rest of the path: segments written after it are never matched as written.
+    if (converter === 'path') return { segments, exactLength: false, trailing: at < written.length - 1 };
     segments.push(param || /[{<]/.test(segment) ? '*' : segment);
   }
-  return { segments, exactLength: true };
+  return { segments, exactLength: true, trailing: false };
 }
 
 /** A keyword argument of a call's parts, or undefined. */
@@ -5465,7 +5472,7 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
   };
 
   let decorators: Token[][] = [];
-  let current: { name: string; kind: 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple'; total: boolean; bodyIndent?: number; shape: TypeShapeFact } | undefined;
+  let current: { name: string; kind: 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple'; total: boolean | undefined; annotated: boolean; bodyIndent?: number; shape: TypeShapeFact } | undefined;
 
   for (const line of lines) {
     const t = line.tokens;
@@ -5491,10 +5498,16 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
         const head = dottedName(annotation).name.split('.').pop() ?? '';
         if (head === 'ClassVar' || head === 'InitVar' || head === 'KW_ONLY') continue;
         if (current.kind === 'pydantic' && name.startsWith('_')) continue;
-        let optional: boolean;
-        if (current.kind === 'typeddict') optional = head === 'NotRequired' ? true : head === 'Required' ? false : !current.total;
+        // An attrs class of the legacy form (or one that turned auto_attribs off) has only its field calls as fields.
+        if (current.kind === 'attrs' && !current.annotated) {
+          const call = value ? dottedName(value) : undefined;
+          if (!value || !call || !PYTHON_FIELD_CALLS.has(call.name.split('.').pop() ?? '') || value[call.end]?.text !== '(') continue;
+        }
+        let optional: boolean | undefined;
+        // A TypedDict field marked neither way follows total=; where that does not settle, its absence is not recorded.
+        if (current.kind === 'typeddict') optional = head === 'NotRequired' ? true : head === 'Required' ? false : current.total === undefined ? undefined : !current.total;
         else optional = value !== undefined && hasDefault(value);
-        current.shape.fields.push({ name, optional });
+        current.shape.fields.push(optional === undefined ? { name } : { name, optional });
         continue;
       }
       // attrs without annotations: `x = attr.ib()`, `x = field()`.
@@ -5520,11 +5533,19 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
       const name = t[1].text;
       const parts = t[2]?.text === '(' ? callArgs(t, 2) ?? [] : [];
       const bases = positionalArgs(parts).map(p => dottedName(p).name).filter(Boolean);
-      const total = settleBool(keywordArg(parts, 'total'));
+      const totalArg = keywordArg(parts, 'total');
+      const total = totalArg === undefined ? true : settleBool(totalArg);
       let kind: 'dataclass' | 'attrs' | 'pydantic' | 'typeddict' | 'namedtuple' | undefined;
+      let annotated = true;
       for (const decorator of pending) {
-        const found = PYTHON_DATA_DECORATORS[dottedName(decorator).name];
+        const callee = dottedName(decorator);
+        const found = PYTHON_DATA_DECORATORS[callee.name];
         if (found) kind = found;
+        if (found === 'attrs') {
+          // The legacy attr.s makes only attr.ib() fields unless auto_attribs is True; the newer APIs keep annotations unless it is False.
+          const auto = settleBool(keywordArg(decorator[callee.end]?.text === '(' ? callArgs(decorator, callee.end) ?? [] : [], 'auto_attribs'));
+          annotated = callee.name === 'attr.s' || callee.name === 'attr.attrs' ? auto === true : auto !== false;
+        }
       }
       const roots = new Set(['Generic', 'object']);
       let inherited = false;
@@ -5542,7 +5563,7 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
       kinds.set(name, kind);
       const shape: TypeShapeFact = { origin: 'declared', fields: [], methods: [], ...(inherited ? { inherited: true } : {}) };
       typeShapes[name] = shape;
-      current = { name, kind, total: total !== false, shape };
+      current = { name, kind, total, annotated, shape };
       continue;
     }
 
@@ -5589,6 +5610,7 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
     }
   }
 
+  readPythonGuards(lines, constants, routers);
   return { typeShapes, routers };
 
   /** One decorator on a top-level function, read as a route of the router object it is written on. */
@@ -5619,7 +5641,8 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
         verbs = (listed as string[]).map(v => v.toUpperCase());
       }
     }
-    const { segments: path, exactLength } = pythonPathSegments(pathText);
+    const { segments: path, exactLength, trailing } = pythonPathSegments(pathText);
+    if (trailing) { router.unread = true; return; }
     for (const v of verbs) router.routes.push({ verb: v, segments: path, exactLength, fullPath: true });
   }
 
@@ -5629,10 +5652,14 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
     const last = call.name.split('.').pop() ?? '';
     if (!PYTHON_FIELD_CALLS.has(last) || value[call.end]?.text !== '(') return value.length > 0;
     const parts = callArgs(value, call.end) ?? [];
-    if (keywordArg(parts, 'default') || keywordArg(parts, 'default_factory') || keywordArg(parts, 'factory')) return true;
+    const isEllipsis = (tokens: Token[] | undefined): boolean => !!tokens && tokens.length === 1 && tokens[0].text === '...';
+    // Pydantic's Field takes the Ellipsis as its required marker: Field(...) and Field(default=...).
+    const stated = keywordArg(parts, 'default');
+    if (stated) return !(last === 'Field' && isEllipsis(stated));
+    if (keywordArg(parts, 'default_factory') || keywordArg(parts, 'factory')) return true;
     // Field(x) and attr.ib(x) take the default first; Field(...) is required.
     const first = positionalArgs(parts)[0];
-    return (last === 'Field' || last === 'ib' || last === 'attrib') && !!first && !(first.length === 1 && first[0].text === '...');
+    return (last === 'Field' || last === 'ib' || last === 'attrib') && !!first && !(last === 'Field' && isEllipsis(first));
   }
 
   /** `True` or `False` as written, else undefined. */
@@ -5640,6 +5667,514 @@ function readPythonDeclarative(lines: LogicalLine[], importBindings: Map<string,
     if (!tokens || tokens.length !== 1 || tokens[0].kind !== 'name') return undefined;
     return tokens[0].text === 'True' ? true : tokens[0].text === 'False' ? false : undefined;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Guard-style routers (Python).
+//
+// A function whose body selects a handler by the request's method and path —
+// `if`/`elif` chains, `match` statements, dicts keyed by path or by (method,
+// path) — answers a route for each method comparison joined with a path
+// comparison, as TypeScript's readRoutes reads it: a branch inherits the
+// conditions of every enclosing `if` on the path taken, an `else` none of them,
+// and a route needs both a verb and a path. Each such function is recorded as a
+// router of its own (under its name, `Class.method` for a method), so folding
+// and the route check treat it like a router object. A function whose path
+// comparisons do not all settle is unread, never a part of its routes.
+// ---------------------------------------------------------------------------
+
+/** A request path, as a name or the last attribute of a chain (`path`, `self.path`, `urlparse(x).path`). */
+const PYTHON_PATH_NAMES = new Set(['path', 'pathname', 'path_info']);
+
+/** One condition a branch of a guard function fixes. */
+type GuardConstraint =
+  | { kind: 'verbs'; verbs: string[] }
+  | { kind: 'patterns'; patterns: { segments: string[]; exactLength: boolean }[] }
+  | { kind: 'length'; length: number }
+  | { kind: 'index'; index: number; literal: string };
+
+/** One statement of a function body and the statements nested under it. */
+interface GuardNode {
+  tokens: Token[];
+  indent: number;
+  children: GuardNode[];
+}
+
+/** One entry of a route dict: a path (and the verb its key states, when it does). */
+interface GuardTableEntry {
+  verb?: string;
+  pattern: { segments: string[]; exactLength: boolean };
+}
+
+/** The statements of a function body as a tree, by indentation. */
+function guardTree(body: LogicalLine[]): GuardNode[] {
+  const root: GuardNode = { tokens: [], indent: -1, children: [] };
+  const stack: GuardNode[] = [root];
+  for (const line of body) {
+    while (stack.length > 1 && line.indent <= stack[stack.length - 1].indent) stack.pop();
+    const node: GuardNode = { tokens: line.tokens, indent: line.indent, children: [] };
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+  return root.children;
+}
+
+/** The tokens of a span split at a top-level word (`and`, `or`), outside every bracket. */
+function splitAtWord(tokens: Token[], word: string): Token[][] {
+  const parts: Token[][] = [];
+  let current: Token[] = [];
+  let depth = 0;
+  for (const t of tokens) {
+    if (t.kind === 'op' && (t.text === '(' || t.text === '[' || t.text === '{')) depth++;
+    else if (t.kind === 'op' && (t.text === ')' || t.text === ']' || t.text === '}')) depth--;
+    if (depth === 0 && t.kind === 'name' && t.text === word) { parts.push(current); current = []; continue; }
+    current.push(t);
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** The inside of a span that is one bracketed group `( … )`, or undefined. */
+function wholeGroup(tokens: Token[], open = '('): Token[] | undefined {
+  if (tokens.length < 2 || tokens[0].kind !== 'op' || tokens[0].text !== open) return undefined;
+  return closingIndex(tokens, 0) === tokens.length - 1 ? tokens.slice(1, -1) : undefined;
+}
+
+/** An anchored raw regular expression of Python as a route path, through the JavaScript reading of one. */
+function pythonRegexRoute(source: string, whole: boolean): { segments: string[]; exactLength: boolean } | undefined {
+  let s = source.replace(/\(\?P</g, '(?<');
+  if (whole) {
+    if (!s.startsWith('^')) s = `^${s}`;
+    if (!s.endsWith('$') || s.endsWith('\\$')) s = `${s}$`;
+  } else if (!s.startsWith('^')) return undefined;
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\' && i + 1 < s.length) { out += s[i] + s[i + 1]; i++; continue; }
+    out += s[i] === '/' ? '\\/' : s[i];
+  }
+  return regexRoute(`/${out}/`);
+}
+
+/** A string token's value as a regular expression: a raw string, or one with no backslash. */
+function pythonRegexSource(token: Token | undefined): string | undefined {
+  if (!token || token.kind !== 'string') return undefined;
+  const value = pythonStringValue(token);
+  if (value === undefined) return undefined;
+  return /^[rR]/.test(token.text) || !value.includes('\\') ? value : undefined;
+}
+
+/**
+ * Read the guard functions of a module and record each as a router in
+ * `routers`: its routes where it states any, itself as unread where it
+ * selects by method and path but a path comparison does not settle.
+ */
+function readPythonGuards(lines: LogicalLine[], constants: Map<string, string>, routers: Map<string, PythonRouter>): void {
+  const settle = (tokens: Token[] | undefined): string | undefined => {
+    if (!tokens || tokens.length !== 1) return undefined;
+    if (tokens[0].kind === 'name') return constants.get(tokens[0].text);
+    return pythonStringValue(tokens[0]);
+  };
+  // Module-level regular expressions (`ORDER = re.compile(r"^/orders/(\d+)$")`) and route dicts.
+  const compiled = new Map<string, string>();
+  const tables = new Map<string, GuardTableEntry[] | 'unsettled'>();
+  // A string constant that holds a raw pattern, and a pattern held in a plain string.
+  const sourceConstants = new Map<string, string>();
+  for (const line of lines) {
+    const t = line.tokens;
+    if (line.indent !== 0 || t[0]?.kind !== 'name' || t[1]?.text !== '=') continue;
+    if (t.length === 3) {
+      const plain = pythonRegexSource(t[2]);
+      if (plain !== undefined) sourceConstants.set(t[0].text, plain);
+    }
+    if (t[2]?.text === 're' && t[3]?.text === '.' && t[4]?.text === 'compile' && t[5]?.text === '(') {
+      const source = pythonRegexSource(t[6]);
+      if (source !== undefined) compiled.set(t[0].text, source);
+      continue;
+    }
+    if (t[2]?.text === '{') {
+      const table = routeDict(t.slice(2), settle);
+      if (table) tables.set(t[0].text, table);
+    }
+  }
+
+  let currentClass: { name: string; handler: boolean; bodyIndent?: number } | undefined;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const t = line.tokens;
+    if (line.indent === 0) currentClass = undefined;
+    else if (currentClass && currentClass.bodyIndent === undefined) currentClass.bodyIndent = line.indent;
+    if (t[0]?.kind === 'name' && t[0].text === 'class' && t[1]?.kind === 'name' && line.indent === 0) {
+      const parts = t[2]?.text === '(' ? callArgs(t, 2) ?? [] : [];
+      const handler = positionalArgs(parts).some(p => (dottedName(p).name.split('.').pop() ?? '').endsWith('RequestHandler'));
+      currentClass = { name: t[1].text, handler };
+      continue;
+    }
+    const defAt = t[0]?.text === 'async' ? 1 : 0;
+    if (!(t[defAt]?.kind === 'name' && t[defAt].text === 'def' && t[defAt + 1]?.kind === 'name')) continue;
+    const method = currentClass !== undefined && line.indent === currentClass.bodyIndent;
+    if (line.indent !== 0 && !method) continue;
+    let end = i + 1;
+    while (end < lines.length && lines[end].indent > line.indent) end++;
+    const name = t[defAt + 1].text;
+    const key = method ? `${currentClass!.name}.${name}` : name;
+    const named = method && currentClass!.handler ? /^do_([A-Z]+)$/.exec(name)?.[1] : undefined;
+    readGuardFunction(key, named, lines.slice(i + 1, end));
+  }
+
+  /** One function body, read for the routes its guards state. */
+  function readGuardFunction(key: string, namedVerb: string | undefined, body: LogicalLine[]): void {
+    if (body.length === 0 || routers.has(key)) return;
+    const routes = new Map<string, RouteFact>();
+    let sawVerb = namedVerb !== undefined && HTTP_VERBS.has(namedVerb);
+    let unsettled = false;
+    // Locals that hold the path's split segments, and a regular expression matched against the path.
+    const parts = new Set<string>();
+    const held = new Map<string, { segments: string[]; exactLength: boolean }>();
+    const isPath = (tokens: Token[]): boolean => {
+      const last = tokens[tokens.length - 1];
+      return last?.kind === 'name' && PYTHON_PATH_NAMES.has(last.text) && (tokens.length === 1 || tokens[tokens.length - 2].text === '.');
+    };
+    const isMethod = (tokens: Token[]): boolean => {
+      const last = tokens[tokens.length - 1];
+      if (last?.kind !== 'name') return false;
+      if (tokens.length === 1) return last.text === 'method';
+      return tokens[tokens.length - 2].text === '.' && (last.text === 'method' || last.text === 'command');
+    };
+    const isParts = (tokens: Token[]): boolean => tokens.length === 1 && tokens[0].kind === 'name' && parts.has(tokens[0].text);
+    const touchesPath = (tokens: Token[]): boolean => tokens.some(x => x.kind === 'name' && (PYTHON_PATH_NAMES.has(x.text) || parts.has(x.text) || held.has(x.text)));
+    const touchesMethod = (tokens: Token[]): boolean => tokens.some((x, at) => x.kind === 'name' && (x.text === 'method' || (x.text === 'command' && tokens[at - 1]?.text === '.')));
+    const verbOf = (tokens: Token[]): string | undefined => {
+      const text = settle(tokens);
+      return text !== undefined && HTTP_VERBS.has(text.toUpperCase()) ? text.toUpperCase() : undefined;
+    };
+    const exact = (text: string | undefined): { segments: string[]; exactLength: boolean } | undefined => {
+      const segments = text !== undefined ? templateSegments(text) : undefined;
+      return segments ? { segments, exactLength: true } : undefined;
+    };
+    /** The regular expression a call matches against the path: `re.match(R, path)`, `ORDER.fullmatch(path)`. */
+    const regexMatch = (tokens: Token[]): { segments: string[]; exactLength: boolean } | undefined => {
+      // `(m := re.match(R, path))`: what is matched is what follows the walrus.
+      const walrus = tokens.findIndex(x => x.kind === 'op' && x.text === ':=');
+      const at = walrus > 0 ? tokens.slice(walrus + 1) : tokens;
+      let source: string | undefined;
+      let subject: Token[] | undefined;
+      let fn: string | undefined;
+      if (at[0]?.text === 're' && at[1]?.text === '.' && at[3]?.text === '(' && (at[2]?.text === 'match' || at[2]?.text === 'fullmatch')) {
+        const args = callArgs(at, 3);
+        if (!args || args.length !== 2 || closingIndex(at, 3) !== at.length - 1) return undefined;
+        const pattern = args[0];
+        source = pattern.length !== 1 ? undefined
+          : pattern[0].kind === 'name' ? compiled.get(pattern[0].text) ?? sourceConstants.get(pattern[0].text) : pythonRegexSource(pattern[0]);
+        subject = args[1];
+        fn = at[2].text;
+      } else if (at[0]?.kind === 'name' && compiled.has(at[0].text) && at[1]?.text === '.' && at[3]?.text === '(' && (at[2]?.text === 'match' || at[2]?.text === 'fullmatch')) {
+        const args = callArgs(at, 3);
+        if (!args || args.length !== 1 || closingIndex(at, 3) !== at.length - 1) return undefined;
+        source = compiled.get(at[0].text);
+        subject = args[0];
+        fn = at[2].text;
+      }
+      if (source === undefined || !subject || !isPath(subject)) return undefined;
+      return pythonRegexRoute(source, fn === 'fullmatch');
+    };
+    for (const line of body) {
+      const t = line.tokens;
+      if (t[0]?.kind !== 'name' || t[1]?.text !== '=' || t[0].text === 'self') continue;
+      const rest = t.slice(2);
+      const split = rest.findIndex((x, at) => x.text === 'split' && rest[at - 1]?.text === '.' && rest[at + 1]?.text === '(' && pythonStringValue(rest[at + 2]) === '/');
+      if (split > 0 && touchesPath(rest)) { parts.add(t[0].text); continue; }
+      const matched = regexMatch(rest);
+      if (matched) held.set(t[0].text, matched);
+    }
+
+    /** What one condition span fixes, and whether it compares the path in a way that does not settle. */
+    const conditionOf = (tokens: Token[]): { constraints: GuardConstraint[]; unsettled: boolean } => {
+      const inner = wholeGroup(tokens);
+      if (inner) return conditionOf(inner);
+      const alternatives = splitAtWord(tokens, 'or');
+      if (alternatives.length > 1) {
+        const each = alternatives.map(conditionOf);
+        const single = each.map(x => (!x.unsettled && x.constraints.length === 1 ? x.constraints[0] : undefined));
+        if (single.every(c => c?.kind === 'verbs')) {
+          return { constraints: [{ kind: 'verbs', verbs: single.flatMap(c => (c as { verbs: string[] }).verbs) }], unsettled: false };
+        }
+        if (single.every(c => c?.kind === 'patterns')) {
+          return { constraints: [{ kind: 'patterns', patterns: single.flatMap(c => (c as { patterns: { segments: string[]; exactLength: boolean }[] }).patterns) }], unsettled: false };
+        }
+        return { constraints: [], unsettled: touchesPath(tokens) };
+      }
+      const conjuncts = splitAtWord(tokens, 'and');
+      if (conjuncts.length > 1) {
+        const each = conjuncts.map(conditionOf);
+        return { constraints: each.flatMap(x => x.constraints), unsettled: each.some(x => x.unsettled) };
+      }
+      return atom(tokens);
+    };
+    const atom = (tokens: Token[]): { constraints: GuardConstraint[]; unsettled: boolean } => {
+      const none = { constraints: [] as GuardConstraint[], unsettled: false };
+      const bad = { constraints: [] as GuardConstraint[], unsettled: true };
+      if (tokens.length === 0) return none;
+      const path = touchesPath(tokens);
+      if (!path && !touchesMethod(tokens)) return none;
+      const verbs = (list: string[]): { constraints: GuardConstraint[]; unsettled: boolean } => ({ constraints: [{ kind: 'verbs', verbs: list }], unsettled: false });
+      const patterns = (list: { segments: string[]; exactLength: boolean }[]): { constraints: GuardConstraint[]; unsettled: boolean } => ({ constraints: [{ kind: 'patterns', patterns: list }], unsettled: false });
+      // A held match tested for truth: `m`, `m is not None`.
+      const bare = tokens.length === 1 ? tokens
+        : tokens.length === 4 && tokens[1].text === 'is' && tokens[2].text === 'not' && tokens[3].text === 'None' ? tokens.slice(0, 1) : undefined;
+      if (bare && bare[0].kind === 'name' && held.has(bare[0].text)) return patterns([held.get(bare[0].text)!]);
+      const matched = regexMatch(tokens);
+      if (matched) return patterns([matched]);
+      // `path.startswith("/api/")`: the route is open at its end.
+      const starts = tokens.findIndex((x, at) => x.text === 'startswith' && tokens[at - 1]?.text === '.' && tokens[at + 1]?.text === '(');
+      if (starts > 0) {
+        const args = callArgs(tokens, starts + 1);
+        if (isPath(tokens.slice(0, starts - 1)) && args && args.length === 1 && closingIndex(tokens, starts + 1) === tokens.length - 1) {
+          const prefix = settle(args[0]);
+          const segments = prefix !== undefined && prefix.startsWith('/') ? templateSegments(prefix) : undefined;
+          return segments ? patterns([{ segments, exactLength: false }]) : bad;
+        }
+        return path ? bad : none;
+      }
+      // A comparison: the first top-level `==`, `in`, or any other comparison operator.
+      let depth = 0;
+      let at = -1;
+      for (let k = 0; k < tokens.length; k++) {
+        const x = tokens[k];
+        if (x.kind === 'op' && (x.text === '(' || x.text === '[' || x.text === '{')) depth++;
+        else if (x.kind === 'op' && (x.text === ')' || x.text === ']' || x.text === '}')) depth--;
+        else if (depth === 0 && ((x.kind === 'op' && ['==', '!=', '<', '>', '<=', '>='].includes(x.text)) || (x.kind === 'name' && (x.text === 'in' || x.text === 'is')))) { at = k; break; }
+      }
+      if (at < 0) return path ? bad : none;
+      const op = tokens[at].text;
+      const negated = tokens[at - 1]?.text === 'not';
+      const left = tokens.slice(0, negated ? at - 1 : at);
+      const right = tokens.slice(at + 1);
+      const list = (side: Token[]): Token[][] | undefined => {
+        const group = wholeGroup(side) ?? wholeGroup(side, '[') ?? wholeGroup(side, '{');
+        return group ? splitTopLevel(group).filter(p => p.length > 0) : undefined;
+      };
+      const equal = (op === '==' && !negated);
+      const member = (op === 'in' && !negated);
+      const orientations: [Token[], Token[], boolean][] = [[left, right, true], [right, left, false]];
+      for (const [a, b, isLeft] of orientations) {
+        if (isMethod(a)) {
+          if (equal) { const verb = verbOf(b); if (verb) return verbs([verb]); }
+          if (member && isLeft) {
+            const items = list(b)?.map(verbOf);
+            if (items && items.length > 0 && items.every(v => v !== undefined)) return verbs(items as string[]);
+          }
+          return none;
+        }
+        if (isPath(a)) {
+          if (equal) { const pattern = exact(settle(b)); return pattern ? patterns([pattern]) : bad; }
+          if (member && isLeft) {
+            const items = list(b)?.map(item => exact(settle(item)));
+            return items && items.length > 0 && items.every(p => p !== undefined) ? patterns(items as { segments: string[]; exactLength: boolean }[]) : bad;
+          }
+          return bad;
+        }
+        // `len(parts) == 2`
+        if (a[0]?.text === 'len' && a[1]?.text === '(' && a.length >= 4 && isParts(a.slice(2, -1)) && a[a.length - 1].text === ')') {
+          if (equal && b.length === 1 && b[0].kind === 'number' && /^\d+$/.test(b[0].text)) return { constraints: [{ kind: 'length', length: Number(b[0].text) }], unsettled: false };
+          return bad;
+        }
+        // `parts[1] == "items"`
+        if (a[0]?.kind === 'name' && parts.has(a[0].text) && a[1]?.text === '[' && a[a.length - 1]?.text === ']') {
+          const index = a.slice(2, -1);
+          if (equal && index.length === 1 && index[0].kind === 'number' && /^\d+$/.test(index[0].text)) {
+            const literal = settle(b);
+            if (literal !== undefined) return { constraints: [{ kind: 'index', index: Number(index[0].text), literal }], unsettled: false };
+          }
+          return bad;
+        }
+        // `parts == ["items", "1"]`
+        if (isParts(a)) {
+          const items = equal ? list(b)?.map(settle) : undefined;
+          if (items && items.every(v => v !== undefined && LITERAL_SEGMENT.test(v))) return patterns([{ segments: items as string[], exactLength: true }]);
+          return bad;
+        }
+      }
+      return path ? bad : none;
+    };
+
+    /** The routes a set of enclosing conditions state. */
+    const emit = (constraints: GuardConstraint[], entry?: GuardTableEntry): void => {
+      let verbList: string[] | undefined = namedVerb !== undefined && HTTP_VERBS.has(namedVerb) ? [namedVerb] : undefined;
+      let patternList: { segments: string[]; exactLength: boolean }[] | undefined;
+      let length: number | undefined;
+      const fixed = new Map<number, string>();
+      for (const c of constraints) {
+        if (c.kind === 'verbs') verbList = c.verbs;
+        else if (c.kind === 'patterns') patternList = c.patterns;
+        else if (c.kind === 'length') length = c.length;
+        else fixed.set(c.index, c.literal);
+      }
+      if (entry) {
+        if (entry.verb !== undefined) verbList = [entry.verb];
+        patternList = [entry.pattern];
+      }
+      if (!verbList) return;
+      const add = (verb: string, segments: string[], exactLength: boolean): void => {
+        const route: RouteFact = { verb, segments, exactLength, fullPath: true };
+        routes.set(routeKey(route), route);
+      };
+      if (patternList) {
+        for (const verb of verbList) for (const p of patternList) add(verb, p.segments, p.exactLength);
+        return;
+      }
+      if (length === undefined && fixed.size === 0) return;
+      const count = length ?? Math.max(...fixed.keys()) + 1;
+      const segments: string[] = [];
+      for (let index = 0; index < count; index++) segments.push(fixed.get(index) ?? '*');
+      for (const verb of verbList) add(verb, segments, length !== undefined);
+    };
+
+    /** The route dicts a statement writes in place, and the module's route dicts it names. */
+    const tablesIn = (tokens: Token[], enclosing: GuardConstraint[]): void => {
+      for (let k = 0; k < tokens.length; k++) {
+        const x = tokens[k];
+        if (x.kind === 'op' && x.text === '{') {
+          const close = closingIndex(tokens, k);
+          if (close < 0) return;
+          const table = routeDict(tokens.slice(k, close + 1), settle);
+          if (table === 'unsettled') unsettled = true;
+          else if (table) { sawVerb = true; for (const entry of table) emit(enclosing, entry); }
+          k = close;
+        } else if (x.kind === 'name' && tables.has(x.text) && tokens[k - 1]?.text !== '.') {
+          const table = tables.get(x.text)!;
+          if (table === 'unsettled') unsettled = true;
+          else { sawVerb = true; for (const entry of table) emit(enclosing, entry); }
+        }
+      }
+    };
+
+    const branch = (enclosing: GuardConstraint[], condition: Token[]): GuardConstraint[] => {
+      const read = conditionOf(condition);
+      if (read.unsettled) unsettled = true;
+      if (read.constraints.some(c => c.kind === 'verbs')) sawVerb = true;
+      const next = [...enclosing, ...read.constraints];
+      emit(next);
+      return next;
+    };
+
+    const matchOf = (node: GuardNode, enclosing: GuardConstraint[]): void => {
+      const colon = topLevelColon(node.tokens, 1);
+      const subject = node.tokens.slice(1, colon < 0 ? undefined : colon);
+      const group = wholeGroup(subject);
+      const elements = splitTopLevel(group ?? subject).filter(p => p.length > 0);
+      const kinds = elements.map(e => (isMethod(e) ? 'method' : isPath(e) ? 'path' : 'other'));
+      if (!kinds.some(k => k !== 'other')) {
+        if (touchesPath(subject)) unsettled = true;
+        walk(node.children, enclosing);
+        return;
+      }
+      if (kinds.includes('method')) sawVerb = true;
+      for (const child of node.children) {
+        if (child.tokens[0]?.text !== 'case') { walk([child], enclosing); continue; }
+        const at = topLevelColon(child.tokens, 1);
+        let pattern = child.tokens.slice(1, at < 0 ? undefined : at);
+        const guard = pattern.findIndex(x => x.kind === 'name' && x.text === 'if');
+        if (guard >= 0) { pattern = pattern.slice(0, guard); if (kinds.includes('path')) unsettled = true; }
+        const alternatives = splitTopLevel(pattern, '|');
+        const cases: GuardConstraint[][] = [];
+        const verbAlternatives: string[] = [];
+        const patternAlternatives: { segments: string[]; exactLength: boolean }[] = [];
+        for (const alternative of alternatives) {
+          const inside = wholeGroup(alternative);
+          const cells = elements.length > 1 ? splitTopLevel(inside ?? alternative).filter(p => p.length > 0) : [alternative];
+          if (cells.length !== elements.length) { if (kinds.includes('path')) unsettled = true; continue; }
+          const fixedHere: GuardConstraint[] = [];
+          cells.forEach((cell, index) => {
+            if (cell.length === 1 && cell[0].text === '_') return;
+            if (kinds[index] === 'method') {
+              const verb = verbOf(cell);
+              if (verb) fixedHere.push({ kind: 'verbs', verbs: [verb] });
+            } else if (kinds[index] === 'path') {
+              const exactPath = cell.length === 1 && cell[0].kind === 'string' ? exact(pythonStringValue(cell[0])) : undefined;
+              if (exactPath) fixedHere.push({ kind: 'patterns', patterns: [exactPath] });
+              else unsettled = true;
+            }
+          });
+          if (elements.length > 1) { cases.push(fixedHere); continue; }
+          for (const c of fixedHere) {
+            if (c.kind === 'verbs') verbAlternatives.push(...c.verbs);
+            else if (c.kind === 'patterns') patternAlternatives.push(...c.patterns);
+          }
+        }
+        if (verbAlternatives.length > 0) cases.push([{ kind: 'verbs', verbs: verbAlternatives }]);
+        if (patternAlternatives.length > 0) cases.push([{ kind: 'patterns', patterns: patternAlternatives }]);
+        if (cases.length === 0) cases.push([]);
+        for (const fixedCase of cases) {
+          const next = [...enclosing, ...fixedCase];
+          if (fixedCase.length > 0) emit(next);
+          walk(child.children, next);
+        }
+      }
+    };
+
+    const walk = (nodes: GuardNode[], enclosing: GuardConstraint[]): void => {
+      for (const node of nodes) {
+        const t = node.tokens;
+        const head = t[0]?.kind === 'name' ? t[0].text : '';
+        if (head === 'def' || head === 'class' || (head === 'async' && t[1]?.text === 'def')) continue;
+        if (head === 'if' || head === 'elif') {
+          const colon = topLevelColon(t, 1);
+          const next = branch(enclosing, t.slice(1, colon < 0 ? undefined : colon));
+          if (colon >= 0) tablesIn(t.slice(colon + 1), next);
+          walk(node.children, next);
+          continue;
+        }
+        if (head === 'else') { walk(node.children, enclosing); continue; }
+        if (head === 'match' && t[1] && t[1].text !== '=' && t[1].text !== '.' && node.children.length > 0 && topLevelColon(t, 1) > 0) { matchOf(node, enclosing); continue; }
+        tablesIn(t, enclosing);
+        walk(node.children, enclosing);
+      }
+    };
+    walk(guardTree(body), []);
+
+    if (unsettled && sawVerb) routers.set(key, { prefix: '', routes: [], includes: [], unread: true });
+    else if (routes.size > 0) routers.set(key, { prefix: '', routes: [...routes.values()], includes: [], unread: false });
+  }
+}
+
+/**
+ * A dict written as a route table: keys that are a path (`"/orders"`) or a
+ * (method, path) pair, each value a handler — a name, a dotted name or a
+ * lambda. Undefined for any other dict, `unsettled` where a key reads as a
+ * route but its path does not settle.
+ */
+function routeDict(tokens: Token[], settle: (tokens: Token[] | undefined) => string | undefined): GuardTableEntry[] | 'unsettled' | undefined {
+  if (tokens[0]?.text !== '{' || closingIndex(tokens, 0) !== tokens.length - 1) return undefined;
+  const entries: GuardTableEntry[] = [];
+  let unsettled = false;
+  let routeLike = 0;
+  for (const part of splitTopLevel(tokens.slice(1, -1)).filter(p => p.length > 0)) {
+    const colon = topLevelColon(part, 0);
+    if (colon <= 0) return undefined;
+    const key = part.slice(0, colon);
+    const value = part.slice(colon + 1);
+    const handler = value[0]?.text === 'lambda' || (value.length > 0 && dottedName(value).end === value.length);
+    let verb: string | undefined;
+    let pathTokens: Token[] = key;
+    const group = wholeGroup(key);
+    if (group) {
+      const pair = splitTopLevel(group).filter(p => p.length > 0);
+      if (pair.length !== 2) continue;
+      const stated = settle(pair[0]);
+      if (stated === undefined || !HTTP_VERBS.has(stated.toUpperCase())) continue;
+      verb = stated.toUpperCase();
+      pathTokens = pair[1];
+    }
+    const text = settle(pathTokens);
+    if (verb === undefined && (text === undefined || !text.startsWith('/'))) continue;
+    if (!handler) return undefined;
+    routeLike++;
+    const segments = text !== undefined && text.startsWith('/') ? templateSegments(text) : undefined;
+    if (!segments) { unsettled = true; continue; }
+    entries.push({ ...(verb !== undefined ? { verb } : {}), pattern: { segments, exactLength: true } });
+  }
+  if (routeLike === 0) return undefined;
+  return unsettled ? 'unsettled' : entries;
 }
 
 /** A route under a prefix's segments. */
@@ -5658,7 +6193,24 @@ function underPrefix(prefix: string, route: RouteFact): RouteFact {
 function foldPythonRoutes(files: SourceFileFacts[], routing: Map<string, PythonDeclarative['routers']>): void {
   if (routing.size === 0) return;
   const byPath = new Map(files.map(f => [f.path, f]));
-  const known = new Set(routing.keys());
+  // Every analyzed module: an include may land on a package's __init__ that only re-exports the router.
+  const known = new Set(byPath.keys());
+  /**
+   * The module and router `name` is in `file`: the router the module builds, or
+   * what it imports under that name, followed hop by hop through the
+   * re-exports of a package's __init__. A name met twice is a cycle, which
+   * settles on nothing.
+   */
+  const lookup = (file: string, name: string, visited: Set<string>): { file: string; name: string } | undefined => {
+    const key = `${file}#${name}`;
+    if (visited.has(key)) return undefined;
+    visited.add(key);
+    const binding = byPath.get(file)?.importBindings?.[name];
+    if (!binding) return routing.get(file)?.has(name) ? { file, name } : undefined;
+    if (binding.namespace) return undefined;
+    const target = resolveImport(file, binding.from, known);
+    return target ? lookup(target, binding.imported ?? name, visited) : undefined;
+  };
   /** The module and router a reference in `file` names, through its import bindings. */
   const resolveRef = (file: string, ref: string): { file: string; name: string } | undefined => {
     const facts = byPath.get(file);
@@ -5667,42 +6219,46 @@ function foldPythonRoutes(files: SourceFileFacts[], routing: Map<string, PythonD
     if (attr !== undefined) {
       if (!binding?.namespace) return undefined;
       const target = resolveImport(file, binding.from, known);
-      return target ? { file: target, name: attr } : undefined;
+      return target ? lookup(target, attr, new Set()) : undefined;
     }
-    if (!binding) return routing.get(file)?.has(head) ? { file, name: head } : undefined;
-    if (binding.namespace) return undefined;
-    const target = resolveImport(file, binding.from, known);
-    return target ? { file: target, name: binding.imported ?? head } : undefined;
+    return lookup(file, head, new Set());
   };
   // The routes decorated on an imported router object join it where it lives.
   const joined = new Map<string, RouteFact[]>();
+  // And what the importing module adds that does not settle leaves the object unread in its own module.
+  const joinedUnread = new Set<string>();
   for (const [file, routers] of routing) {
     for (const [name, router] of routers) {
       const binding = byPath.get(file)?.importBindings?.[name];
-      if (!binding || binding.namespace || router.routes.length === 0) continue;
+      if (!binding || binding.namespace) continue;
       const home = resolveRef(file, name);
       if (!home || home.file === file) continue;
       const key = `${home.file}#${home.name}`;
+      if (router.unread) joinedUnread.add(key);
+      if (router.routes.length === 0) continue;
       joined.set(key, [...(joined.get(key) ?? []), ...router.routes]);
     }
   }
+  /** Whether a prefix holds a path converter, which takes the rest of the path: the routes under it are never matched as written. */
+  const open = (prefix: string): boolean => !pythonPathSegments(prefix).exactLength;
   /** A router's routes beneath its own prefix (inner) and that prefix, or undefined when it is unread or not found. */
   const memo = new Map<string, { prefix: string; inner: RouteFact[] } | null>();
   const fold = (file: string, name: string, visiting: Set<string>): { prefix: string; inner: RouteFact[] } | undefined => {
     const key = `${file}#${name}`;
     if (memo.has(key)) return memo.get(key) ?? undefined;
     const router = routing.get(file)?.get(name);
-    if (!router || router.unread || visiting.has(key)) { memo.set(key, null); return undefined; }
+    if (!router || router.unread || joinedUnread.has(key) || visiting.has(key)) { memo.set(key, null); return undefined; }
     visiting.add(key);
     const inner: RouteFact[] = [...router.routes, ...(joined.get(key) ?? [])];
     for (const include of router.includes) {
       const target = resolveRef(file, include.ref);
       const sub = target ? fold(target.file, target.name, visiting) : undefined;
-      if (!sub) { visiting.delete(key); memo.set(key, null); return undefined; }
+      if (!sub || (sub.inner.length > 0 && open(include.prefix))) { visiting.delete(key); memo.set(key, null); return undefined; }
       const mounted = include.replaces && include.prefixed ? include.prefix : `${include.prefix}/${sub.prefix}`;
       for (const route of sub.inner) inner.push(underPrefix(mounted, route));
     }
     visiting.delete(key);
+    if (inner.length > 0 && open(router.prefix)) { memo.set(key, null); return undefined; }
     const result = { prefix: router.prefix, inner };
     memo.set(key, result);
     return result;
