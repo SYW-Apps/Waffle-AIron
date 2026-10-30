@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "d74d3a986ef2fd7c57dd7cb36b8aeb42615b1a6d7210a5661ac91e62200cf890"
+    "digest": "396ff95f6e092089d48ed95283fac85080e6a696feb14817d6925e3d8f32b22e"
   },
-  "lockedAt": "2026-10-30T20:54:27.332Z",
+  "lockedAt": "2026-10-30T22:58:14.342Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.5.1-dev.1",
+  "validatorVersion": "6.5.1-dev.2",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -637,7 +637,7 @@
     ".wai/specs/implementations/skills_orchestrator_impl.yaml": "36b252ed68f6e89bf17e36fab5cf035e2859909f8f202fd9145027ea45ed23ef",
     ".wai/specs/implementations/skills_portal_impl.yaml": "e737000f0da04b078bcd52345fa8cfb56ad7448f69d04ffa113c266fba320969",
     ".wai/specs/implementations/skills_resource_orchestrator_impl.yaml": "2e3448572567042b4448b0cae1eec6355dec12bb17ec2081c06b0dd768afdb1a",
-    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "1782943831cea7a96e5ea2da8e6f0a17163ef1181733e56836f61b45a14300db",
+    ".wai/specs/implementations/source_analysis_adapter_impl.yaml": "71d5fa3c325789910069f09cfe9cd7a50b5b252d1afb87e35c6cac34e5483bf0",
     ".wai/specs/implementations/spec_canvas_impl.yaml": "d423e827d28044ab192907f2a6532ba767d7fd0079d9251158979e504f86933d",
     ".wai/specs/implementations/spec_doc_pages_impl.yaml": "58c8a02e802698b6108a1b81ccb6049f743b66e57620f04f05e2acda265236bf",
     ".wai/specs/implementations/spec_file_store_impl.yaml": "b0460257e3d16c0afbbd66a272ba79752d87c904aa4ff9bf7125ec1586ff219f",
@@ -976,7 +976,7 @@
     ".wai/specs/interfaces/iskills_orchestrator.yaml": "cdea90ca2108eda8038d9c31da1331b481bfc2a2ed099e4adf554b3026243ce7",
     ".wai/specs/interfaces/iskills_portal.yaml": "d8789756fec180178a1fb44123f92296ae75eecb7adcb81bf007846eccc55a9d",
     ".wai/specs/interfaces/iskills_resource_orchestrator.yaml": "2eb11e70022ba193ed27e6a62c18a55726c1d930e48cedde1938b317d01c0ec4",
-    ".wai/specs/interfaces/isource_analysis_adapter.yaml": "98d94cb306b0b8a0031f51bf0304d7ea710ebd4af9faad98230ab3c834e144f3",
+    ".wai/specs/interfaces/isource_analysis_adapter.yaml": "b210e290f96b4f2e12a2f230c85f5f116b908ab1cf7f77b59c17e1ab6b768486",
     ".wai/specs/interfaces/ispec_canvas.yaml": "34a94ab17ca10cd56df3fd9fa7341aa3ffdbdc4e94929b9a06264ed44fd1563c",
     ".wai/specs/interfaces/ispec_doc_pages.yaml": "c5dc0aaacd4fd43160a0d1344ce264a0acd09026f12a3b7a981c23e8ba8406fb",
     ".wai/specs/interfaces/ispec_file_store.yaml": "e26c1b2b788100d72062bf546b8595be6651730b38934fea3f18fac6a57e9626",
@@ -1769,7 +1769,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "bf9c8eacb34cef053f9bb5ed040ab206111755099c67e79966c76678e3a863e6",
+    "design": "85e4221b0f26a50a406ab60bf620664ba01dfc0a39a7e06a6b8b2ac36d958432",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1780,7 +1780,7 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.5.1-dev.1",
+      "validatorVersion": "6.5.1-dev.2",
       "doctrineDigest": "18781085ddc487404dc20654ac4e797732285c4af67a0c5c5bd3b50b23a2f516",
       "grade": "exact"
     },
