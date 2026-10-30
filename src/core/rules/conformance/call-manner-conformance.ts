@@ -2,20 +2,15 @@ import {
   bodySitesOf,
   callClaims,
   defaultConformanceTier,
-  fieldTypesOf,
-  importBindingOf,
   languageOfSourcePath,
-  localTypesOf,
   pathKey,
-  resolveImport,
   statesCalls,
   type CallClaim,
-  type CallSiteFact,
-  type SourceFileFacts,
 } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
 import {
   bodyKey,
+  declaredLandings,
   describeSite,
   invokedAs,
   isRemoteLink,
@@ -47,34 +42,6 @@ import {
 // either: a try the code adds, and a call it waits for that the narrative does
 // not mark, are routes the design leaves open.
 // ---------------------------------------------------------------------------
-
-/** Where a Python call site lands, through what the code DECLARES (import bindings, annotated fields and names). */
-function declaredLandings(
-  code: ReturnType<RuleContext['codeIndex']>,
-  site: CallSiteFact,
-  file: string,
-  facts: SourceFileFacts,
-): string[] {
-  const resolve = (specifier: string | undefined): string[] => {
-    if (specifier === undefined) return [];
-    const target = resolveImport(file, specifier, code.paths, code.packages);
-    return target ? [target] : [];
-  };
-  const throughType = (typeName: string): string[] => {
-    const binding = importBindingOf(facts, typeName);
-    if (binding) return resolve(binding.from);
-    return code.declarationsAt(file).has(typeName) ? [file] : [];
-  };
-  if (!site.member) return resolve(importBindingOf(facts, site.name)?.from);
-  if (site.enclosingClass) return [file];
-  if (site.field) return fieldTypesOf(facts, site.field).flatMap(throughType);
-  if (site.via) {
-    const binding = importBindingOf(facts, site.via);
-    if (binding?.namespace) return resolve(binding.from);
-    return localTypesOf(facts, site.via).flatMap(throughType);
-  }
-  return [];
-}
 
 export const callMannerConformanceRule: SddRule = {
   name: 'call-manner-conformance',

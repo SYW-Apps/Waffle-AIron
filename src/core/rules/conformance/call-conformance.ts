@@ -464,6 +464,43 @@ const claimNoun = (implMethod: MethodImplementation): string =>
   (implMethod.narrative.length ? 'narrative call step(s)' : 'declared call(s)');
 
 /**
+ * The files a call site in a file read without a type checker (Python)
+ * lands in, through what the code DECLARES: a bare call on an import
+ * binding is that module's; a call through a namespace binding is that
+ * module's; a call through `self.<field>` is the module the field's
+ * annotated class came from (an annotation, or the annotated parameter
+ * the constructor assigns it from); a call through an annotated name the
+ * same; `self.<method>()` is this file. A receiver nothing declares lands
+ * nowhere — the silence of a pure model, never a guess.
+ */
+export function declaredLandings(
+  code: ReturnType<RuleContext['codeIndex']>,
+  site: CallSiteFact,
+  file: string,
+  facts: SourceFileFacts,
+): string[] {
+  const resolve = (specifier: string | undefined): string[] => {
+    if (specifier === undefined) return [];
+    const target = resolveImport(file, specifier, code.paths, code.packages);
+    return target ? [target] : [];
+  };
+  const throughType = (typeName: string): string[] => {
+    const binding = importBindingOf(facts, typeName);
+    if (binding) return resolve(binding.from);
+    return code.declarationsAt(file).has(typeName) ? [file] : [];
+  };
+  if (!site.member) return resolve(importBindingOf(facts, site.name)?.from);
+  if (site.enclosingClass) return [file];
+  if (site.field) return fieldTypesOf(facts, site.field).flatMap(throughType);
+  if (site.via) {
+    const binding = importBindingOf(facts, site.via);
+    if (binding?.namespace) return resolve(binding.from);
+    return localTypesOf(facts, site.via).flatMap(throughType);
+  }
+  return [];
+}
+
+/**
  * How a call site was WRITTEN, read off its shape alone — the subject of the
  * unresolved answer. The shape is all this reports: naming the form it could
  * not follow is the honest content of "I cannot say", where advice to write
@@ -775,37 +812,6 @@ export const callConformanceRule: SddRule = {
         { at: implMethod.name, covers: [...unnarrated.keys()] },
       );
     };
-    /**
-     * The files a call site in a file read without a type checker (Python)
-     * lands in, through what the code DECLARES: a bare call on an import
-     * binding is that module's; a call through a namespace binding is that
-     * module's; a call through `self.<field>` is the module the field's
-     * annotated class came from (an annotation, or the annotated parameter
-     * the constructor assigns it from); a call through an annotated name the
-     * same; `self.<method>()` is this file. A receiver nothing declares lands
-     * nowhere — the silence of a pure model, never a guess.
-     */
-    const declaredLandings = (site: CallSiteFact, file: string, facts: SourceFileFacts): string[] => {
-      const resolve = (specifier: string | undefined): string[] => {
-        if (specifier === undefined) return [];
-        const target = resolveImport(file, specifier, code.paths, code.packages);
-        return target ? [target] : [];
-      };
-      const throughType = (typeName: string): string[] => {
-        const binding = importBindingOf(facts, typeName);
-        if (binding) return resolve(binding.from);
-        return code.declarationsAt(file).has(typeName) ? [file] : [];
-      };
-      if (!site.member) return resolve(importBindingOf(facts, site.name)?.from);
-      if (site.enclosingClass) return [file];
-      if (site.field) return fieldTypesOf(facts, site.field).flatMap(throughType);
-      if (site.via) {
-        const binding = importBindingOf(facts, site.via);
-        if (binding?.namespace) return resolve(binding.from);
-        return localTypesOf(facts, site.via).flatMap(throughType);
-      }
-      return [];
-    };
     /** The claims aimed at another project's component, said once per method: not judged here, whether or not that code exists. */
     const reportForeign = (entry: (typeof methods)[number], fnSymbol: string, file: string, foreignClaims: MissedClaim[]): void => {
       if (!foreignClaims.length) return;
@@ -937,7 +943,7 @@ export const callConformanceRule: SddRule = {
           const ref = `${crossed.component}.${crossed.method}`;
           if (!declared.has(ref) && !crossings.has(ref)) crossings.set(ref, site.name);
         }
-        for (const landing of declaredLandings(site, scope, scopeFacts)) {
+        for (const landing of declaredLandings(code, site, scope, scopeFacts)) {
           if (landing === here) continue;
           const routed = routedVerb(component, landing, site.name);
           if (routed !== undefined) {
