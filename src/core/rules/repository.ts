@@ -104,6 +104,7 @@ import { typeShapeRule } from './conformance/type-shape.js';
 import { enumValuesRule } from './conformance/enum-values.js';
 import { paramConformanceRule } from './conformance/param-conformance.js';
 import { asyncConformanceRule } from './conformance/async-conformance.js';
+import { callMannerConformanceRule } from './conformance/call-manner-conformance.js';
 import { bindingModulesRule } from './conformance/binding-modules.js';
 import { routeCoverageRule } from './conformance/route-coverage.js';
 import { unclaimedSourceRule } from './conformance/unclaimed-source.js';
@@ -344,6 +345,8 @@ export const SDD_RULES: SddRule[] = [
   enumValuesRule,
   paramConformanceRule,
   asyncConformanceRule,
+  // How a realized call runs, where the narrative says it: waited for, detached, caught.
+  callMannerConformanceRule,
   routeCoverageRule,
   unclaimedSourceRule,
   exportConformanceRule,
