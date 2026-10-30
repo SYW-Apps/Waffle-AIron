@@ -820,7 +820,7 @@ export const callConformanceRule: SddRule = {
       ctx.addIssue(
         'notice',
         'CALL_TARGET_UNJUDGED',
-        `Method "${implMethod.name}" in implementation "${impl.id}": ${foreignClaims.length} ${claimNoun(implMethod)} reach a component of another project — ${foreignClaims.map(m => `${describeMiss(m)}; project "${foreignProjectOf(m.component!)}"`).join('; ')}. The function "${fnSymbol}" in "${file}" is not judged against ${projects.length === 1 ? 'that project\'s' : 'those projects\''} code here, whether or not it exists: this gate reads only this project's own code.`,
+        `Method "${implMethod.name}" in implementation "${impl.id}": ${foreignClaims.length} ${claimNoun(implMethod)} reach a component of another project — ${foreignClaims.map(m => `${m.step === undefined ? 'declared call' : `step ${m.step}`} → ${m.target}; project "${foreignProjectOf(m.component!)}"`).join('; ')}. The function "${fnSymbol}" in "${file}" is not judged against ${projects.length === 1 ? 'that project\'s' : 'those projects\''} code here, whether the call is made in the code or not and whether or not that code exists: this gate reads only this project's own code.`,
         impl.id,
         entry.draftContext,
         undefined,
@@ -869,11 +869,9 @@ export const callConformanceRule: SddRule = {
           const callee = ctx.componentMap.get(claim.component);
           if (!callee || isRemoteLink(component, callee)) continue;
           const target = resolveCallTarget(ctx, claim.component, claim.method);
-          // Another project's component: its code is not read here, whether or not it exists.
+          // Another project's component: its code is not read here, so the claim is said whether or not the call is made.
           if (foreignProjectOf(claim.component) !== undefined) {
-            if (!forwardSites!.some(site => target.accepted.has(site.name))) {
-              foreignClaims.push({ step: claim.step, target: `${claim.component}.${claim.method}`, accepted: [...target.accepted], miss: { kind: 'absent' }, component: claim.component });
-            }
+            foreignClaims.push({ step: claim.step, target: `${claim.component}.${claim.method}`, accepted: [...target.accepted], miss: { kind: 'absent' }, component: claim.component });
             continue;
           }
           if (target.files.size === 0) continue;
@@ -1057,6 +1055,13 @@ export const callConformanceRule: SddRule = {
         // A target this tree does not contain is cross-tree-references'
         // finding (and surface-reference-backing's once it resolves).
         if (!ctx.componentMap.has(claim.component)) continue;
+        // A claim on another project's component is said, present in the code
+        // or not (CALL_TARGET_UNJUDGED): this gate reads only this project's
+        // code, so it neither accepts nor accuses it - and the transport it
+        // crosses or the call the code makes changes nothing about that.
+        if (foreignProjectOf(claim.component) !== undefined) {
+          foreignClaims.push({ step: claim.step, target: `${claim.component}.${claim.method}`, accepted: [], miss: { kind: 'absent' }, component: claim.component });
+        }
         // An Adapter's call on a verb of a Portal reached over an out-of-process
         // transport (HTTP, gRPC, a database, a bus, a CLI…) is the LINK the
         // design models: what realizes it is the transport client the Adapter
@@ -1079,6 +1084,8 @@ export const callConformanceRule: SddRule = {
           boundaries.set(key, boundary);
           continue;
         }
+        // Said above; nothing below judges a project's code this gate does not read.
+        if (foreignProjectOf(claim.component) !== undefined) continue;
 
         // N:1 identity forwarding: when the caller's realized function IS the
         // target's — the same body in the same file — facade and target
@@ -1117,9 +1124,7 @@ export const callConformanceRule: SddRule = {
         // falls back to the name membership this check has always had.
         if (target.files.size === 0) {
           if (matching.length === 0) {
-            const absent: MissedClaim = { step: claim.step, target: ref, accepted: [...target.accepted], miss: { kind: 'absent' }, component: claim.component };
-            if (foreignProjectOf(claim.component) !== undefined) foreignClaims.push(absent);
-            else missed.push({ step: claim.step, target: ref, accepted: [...target.accepted], miss: { kind: 'absent' } });
+            missed.push({ step: claim.step, target: ref, accepted: [...target.accepted], miss: { kind: 'absent' } });
           }
           continue;
         }
@@ -1174,10 +1179,6 @@ export const callConformanceRule: SddRule = {
         // brief, typed by a port to the collaborator still planned — planned
         // code, said as SOURCE_FILE_PLANNED says it, and judged like any
         // other claim the day the target's realization begins.
-        if (foreignProjectOf(claim.component) !== undefined) {
-          foreignClaims.push({ step: claim.step, target: ref, accepted: [...target.accepted], miss, component: claim.component });
-          continue;
-        }
         if (miss.kind === 'unresolved' && !targetBegun(claim.component)) {
           plannedClaims.push({ step: claim.step, target: ref, accepted: [...target.accepted], miss, component: claim.component });
           continue;
