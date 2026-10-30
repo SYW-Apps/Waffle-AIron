@@ -153,7 +153,11 @@ warnings as errors (notices are printed and counted, never fatal).
   is `CALL_NOT_CAUGHT`, and a call step not marked `detach` whose call completes
   later and is never awaited is `CALL_NOT_AWAITED` (or the notice
   `OPEN_CALL_NOT_AWAITED` where the method leaves its detail open). Only calls
-  written in the method's own function are judged, not those inside a helper.
+  written in the method's own function are judged, not those inside a helper; a
+  step whose manner (detach, or inside a catching try) the code realizes only
+  through a helper, or whose target plans no code yet, is the notice
+  `CALL_MANNER_UNJUDGED` naming the step and why, so a pass is never read as a
+  judged one.
 - **The code's own surface, signature and calls** (warnings, so `--ci` fails on
   them). A function annotated to return another type than its contract's
   `returns` is `RETURN_TYPE_MISMATCH` on that method, naming both types (a caller
@@ -195,7 +199,8 @@ warnings as errors (notices are printed and counted, never fatal).
   Portal names the router object (`router: app`, `<module>#router`, or a module
   alone), followed through a package `__init__` that re-exports it. A function
   that selects its handler by the request's method and path is read as a router
-  too (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
+  too (a router named through a package `__init__` re-export is followed to the
+  module that defines it; `if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
   method and path, or a `BaseHTTPRequestHandler`'s `do_GET`): name it
   `<module>#handle` or `Class.do_GET`. A router whose path, prefix, methods or
   include is not a string literal or a module constant holding one, that mounts
@@ -204,7 +209,11 @@ warnings as errors (notices are printed and counted, never fatal).
   (a prefix that stops inside a segment included), is `UNREADABLE_ROUTER`, never
   read in part. Its data types are the fields of
   dataclass, Pydantic (`BaseModel`, `BaseSettings`), `TypedDict`, `NamedTuple`
-  and attrs classes, compared with the type's by name in either casing: a field
+  and attrs classes, compared with the type's by name in either casing (and,
+  in either language, by a field's scalar type: `amount: str` where the spec
+  declares `float` is the warning `TYPE_FIELD_TYPE_MISMATCH`, naming both
+  types; an annotation that is a union, a list, a record or a named type the
+  design does not know is not compared): a field
   may be absent when it has a default or a default factory, is `NotRequired`,
   or sits in a `total=False` TypedDict, and `Optional[T]` alone is nullable but
   required, as in Pydantic v2. `Field(...)` and `Field(default=...)` are required;
@@ -1739,7 +1748,7 @@ decision is recorded as theirs, and their `approval:decide` grant is checked as 
 | `wairon host demo [--id <id>] [--unit <unitId>] [--force]` | Provision a project seeded with an example spec tree (default id and unit `demo`; the unit is created if absent), so the canvas has content |
 | `wairon host permission set --user <userId> --capability <cap> [--value yes\|approval\|no\|inherit] [--project <id> [--subsystem <id>] \| --unit <unitId> \| --instance]` | Set one assignment. Capabilities: `project:read`, `project:create`, `project:write`, `project:admin`, `approval:decide`. The scope defaults to the instance |
 | `wairon host permission list [--user <userId>] [scope flags]` / `remove --id <assignmentId>` | List or remove assignments |
-| `wairon host user list` / `add --user <id> [--name <n>] [--email <e>] [--unit <unitId>]` / `set-status --user <id> --status active|inactive` | List the hosted users (a subject that holds grants but has no user record is marked "no user record"), create an active user record (an id that already holds a record is refused: add never replaces one, which would drop its role bindings), or set a user's status (`inactive` revokes the user's credentials and web sessions) |
+| `wairon host user list` / `add --user <id> [--name <n>] [--email <e>] [--unit <unitId>]` / `set-status --user <id> --status active|inactive` | List the hosted users (a subject that holds grants but has no user record is marked "no user record"), create an active user record (an id that already holds a record is refused: add never replaces one, which would drop its role bindings), or set a user's status (`inactive` revokes the user's API keys and web sessions, and the command says so; setting a user back to `active` restores none, and the command says new keys are minted with `wairon host key mint`) |
 | `wairon host key mint --project <id\|*> --owner <userId> [--label <label>]` | Mint an API key acting as the owner's live permissions (plaintext shown once). The project must exist (`*` aside); a token naming a project covers its members, and a member is named by its own record id. A key never narrows to a subsystem: confine a person to one with `wairon host permission set --project <id> --subsystem <id>`. Without `--owner` (the legacy `--role editor\|admin` mint) the key resolves to **zero** permissions and the command warns |
 | `wairon host key list [--project <id>]` | List API keys |
 | `wairon host key revoke --id <id>` | Revoke a key |

@@ -216,6 +216,8 @@ export interface ShapeMemberFact {
   name: string;
   /** Whether the code lets the member be absent from a value of this shape; unset where the code does not settle it. */
   optional?: boolean;
+  /** The member's annotation as the code writes it (whitespace-normalized), where it is annotated and the reading records it; unset otherwise. */
+  type?: string;
 }
 
 /**

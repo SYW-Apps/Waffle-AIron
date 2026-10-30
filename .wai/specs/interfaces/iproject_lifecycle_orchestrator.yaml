@@ -41,8 +41,10 @@ methods:
       decided it - when a subsystem rule denies the caller write on any subsystem of the project. A
       request is also refused while the tree has validation errors: it is validated the way the
       approved lock would validate it, and the refusal names the error count and each error's code;
-      warnings do not block, as at the local `wairon lock`, and no pending request is created. A
-      member is a record of its own, so locking a member is locking its record.
+      warnings do not block, as at the local `wairon lock`, and no pending request is created. Nor
+      is a second one created when the caller already holds a pending lock request for the same
+      design: that request is returned as the pending outcome. A member is a record of its own, so
+      locking a member is locking its record.
     signature: 'lockProject(credential: string, projectId: string): ProjectActionOutcome'
     returns: ProjectActionOutcome
     params:
@@ -54,7 +56,8 @@ methods:
       - atomic
   - name: getApprovalStatus
     description: >-
-      Authenticate the caller, lazily expire overdue pending requests, then return one approval
+      Authenticate the caller, lazily expire overdue pending requests and cancel a pending
+      project:lock request whose design moved since it was requested, then return one approval
       request visible only to its original requester (matching subject or requesting token id) or to
       a caller whose resolved approval:decide permission over the request's project is yes; never
       exposes unrelated requests.
@@ -67,10 +70,12 @@ methods:
         type: string
   - name: listPendingRequests
     description: >-
-      Authenticate the caller, gather the permission world, expire overdue pending requests, then
-      list pending approval requests the caller may decide: an instance-admin sees all; otherwise a
-      request is included only when the caller's resolved approval:decide permission over the
-      request's project is yes. Optionally narrowed to one project.
+      Authenticate the caller, gather the permission world, expire overdue pending requests and
+      cancel each pending project:lock request whose design moved since it was requested (no one can
+      approve it any more, as deciding it would say), then list pending approval requests the caller
+      may decide: an instance-admin sees all; otherwise a request is included only when the caller's
+      resolved approval:decide permission over the request's project is yes. Optionally narrowed to
+      one project.
     signature: 'listPendingRequests(credential: string, projectId?: string): list<ApprovalRequest>'
     returns: list<ApprovalRequest>
     params:
@@ -166,4 +171,4 @@ methods:
       - atomic
 status: complete
 createdAt: '2026-07-16T00:08:59.412Z'
-updatedAt: '2026-10-30T12:10:40.004Z'
+updatedAt: '2026-10-30T19:40:24.141Z'

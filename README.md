@@ -54,7 +54,7 @@ off by default, on with `rules.materializeAgentFiles: true`.
 | Layer | What is checked | What is not |
 |-------|-----------------|-------------|
 | **Specs** | The design rules `wairon validate` / `sdd_validate_tree` enforce: reference integrity, contract↔implementation symmetry, narrative-call resolution and control flow, stereotype dependency rules, technology fencing, cycles, reachability | Whether the design is a good one for your problem |
-| **Code against the design** | **TypeScript** is read by the compiler (grade `exact`): methods, params, returns where annotated, public members, imports, calls, routes, data types. **Python** and other languages are read by pattern readers (grade `pattern`): methods, params, returns where annotated, public members, imports, calls through declared receivers — **not** routes or data types. A language with only a pattern table checks methods only (grade `generic` is the floor). `validate` prints the grade and the unchecked list per language | At any grade: calls inside helpers and to collaborators a narrative never names; libraries and platform I/O a component uses (a file read, fetch, an HTTP client) — only a bound technology's packages are compared, so I/O outside an Adapter passes. This is a known limitation |
+| **Code against the design** | **TypeScript** is read by the compiler (grade `exact`): methods, params, returns where annotated, public members, imports, calls, routes, data types. **Python** and other languages are read by pattern readers (grade `pattern`): methods, params, returns where annotated, public members, imports, calls through declared receivers; Python also checks routes (decorator routers, guard functions, routers named through package re-exports) and data types (dataclass, Pydantic, `TypedDict`, `NamedTuple`, attrs fields). Data types are compared by field name, optionality and a field's scalar type, in both languages. A language with only a pattern table checks methods only (grade `generic` is the floor). `validate` prints the grade and the unchecked list per language | At any grade: calls inside helpers and to collaborators a narrative never names; libraries and platform I/O a component uses (a file read, fetch, an HTTP client) — only a bound technology's packages are compared, so I/O outside an Adapter passes. This is a known limitation |
 | **Behaviour** | Tests and code review. A deleted business rule passes the gate while the signatures and calls remain | Anything about what the code does at run time |
 | **Agent guidance** | Generated briefs and file fences instruct the AI tool which files are its own | They are guidance, not enforcement: they do not restrict the tool's filesystem permissions |
 
@@ -229,7 +229,7 @@ merge to `dev`. Installing from npm, the channels are the dist-tags:
 
 ```sh
 cd my-project
-wairon init                 # bootstrap .wai/ (spec tree, context, skills, MCP registration)
+wairon init                 # bootstrap .wai/ (spec tree, context, skills, MCP registration; a non-interactive shell needs --yes)
 
 # 1. Design: in your AI tool, use the sdd-architect skill, which authors the
 #    spec tree through the sdd_* MCP tools.

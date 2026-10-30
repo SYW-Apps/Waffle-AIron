@@ -51,6 +51,7 @@ describe('a pin over a rename', () => {
     expect(pin.outcome).toBe('refused');
     expect(pin.detail).toContain('"ledger-portal.post" (renamed to "ledger-portal.record")');
     expect(pin.detail).toContain('follow it in the uses first');
+    expect(pin.detail).toContain('reads as not in the pin until the re-pin records it');
     expect(lockText(p)).toBe(before);
   });
 

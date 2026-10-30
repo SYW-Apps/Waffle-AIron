@@ -13,6 +13,9 @@
  *    waits for.
  *  - OPEN_CALL_NOT_AWAITED (notice): the same where the method leaves its detail
  *    open, so the design does not say whether it waits.
+ *  - CALL_MANNER_UNJUDGED (notice): a step whose manner the narrative states
+ *    (detach, or inside a catching try) whose call is written only in a helper
+ *    the method calls, or whose target plans no code yet — said, not judged.
  *
  * Each control is the same tree with the defect corrected.
  */
@@ -110,6 +113,13 @@ export const pyBody = (...recording: string[]): string[] => [
   '    return route_id',
 ];
 
+/** A private helper that makes the recording call on the method's behalf. */
+export const TS_PERSIST_HELPER = [
+  'async persist(parcelId: string, routeId: string): Promise<void> {',
+  '  await this.store.record(parcelId, routeId);',
+  '}',
+];
+
 const DETACH_STEPS = [recordStep(1, { detach: true }), returnStep(2)];
 const PLAIN_STEPS = [recordStep(1), returnStep(2)];
 
@@ -200,5 +210,26 @@ export default [
     scenario:
       'The dispatch narrative leaves its detail open, and the orchestrator awaits the asynchronous recording before it answers the route.',
     tree: mannerTree(false, { members: tsBody('await this.store.record(parcelId, routeId);'), steps: PLAIN_STEPS }),
+  }),
+
+  // -------------------------------------------------------------------------
+  // CALL_MANNER_UNJUDGED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'CALL_MANNER_UNJUDGED',
+    severity: 'notice',
+    anchoredTo: 'dispatch_orchestrator_impl',
+    expectFire: true,
+    scenario:
+      'The dispatch narrative says the booking is recorded fire-and-forget, but the orchestrator makes the call in a private helper it calls, so the manner of the call is not judged and the notice says so.',
+    tree: mannerTree(false, { members: [...tsBody('await this.persist(parcelId, routeId);'), '', ...TS_PERSIST_HELPER], steps: DETACH_STEPS, stated: true }),
+  }),
+  defineRuleFixture({
+    code: 'CALL_MANNER_UNJUDGED',
+    expectFire: false,
+    reason: "The call is written in the orchestrator's own function, so its manner is judged (and honoured here) rather than left unjudged.",
+    scenario:
+      'The dispatch narrative says the booking is recorded fire-and-forget, and the orchestrator starts the recording itself and answers the route at once.',
+    tree: mannerTree(false, { members: tsBody('void this.store.record(parcelId, routeId);'), steps: DETACH_STEPS, stated: true }),
   }),
 ];

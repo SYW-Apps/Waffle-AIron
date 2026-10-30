@@ -774,6 +774,13 @@ export async function runHostUser(action: string, options: HostOptions = {}): Pr
         if (!options.userStatus) throw new WaironError('`--status <active|inactive>` is required for `host user set-status`.');
         const updated = localAdmin.setUserStatus(cfg, cred, options.user, options.userStatus);
         logger.success(`User "${updated.id}" is now ${updated.status}.`);
+        if (updated.status === 'inactive') {
+          logger.info(`The API keys and web sessions of "${updated.id}" were revoked.`);
+        } else if (updated.status === 'active') {
+          logger.info(
+            `No revoked key comes back: mint new keys for "${updated.id}" with \`wairon host key mint --owner ${updated.id}\`.`,
+          );
+        }
         break;
       }
       default:

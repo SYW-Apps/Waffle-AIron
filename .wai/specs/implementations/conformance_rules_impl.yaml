@@ -2227,7 +2227,11 @@ methods:
           its name, a method of an exported class as `Class.method`, an exported entry calling into
           a router of its file — and, apart, what reads as a router or a table but is not exported,
           to be exported before it can be named: its routes are checked against nothing, and that is
-          said, never left silent. A router linkage naming a declaration of an exact-grade file that
+          said, never left silent. A linkage whose module only imports or re-exports the name (a
+          package `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from
+          './router'`) is followed, binding by binding, to the module that declares it, and the
+          router is read there; a binding it cannot follow (a cycle, a module not read) is reported
+          as unread (step 4). A router linkage naming a declaration of an exact-grade file that
           holds neither a function body nor a route table is reported as unread (step 4); one naming
           nothing the module declares is export-conformance's UNREALIZED_EXPORT_HANDLE. A router
           naming a route TABLE that no table of the exact-grade code spreads and that spreads none
@@ -2543,7 +2547,7 @@ methods:
         type: loop
         loopKind: forEach
         over: the method's step claims
-        endStep: 8
+        endStep: 10
       - stepNumber: 3
         description: >-
           Find the call sites call-conformance matched to the claim — those that land on the
@@ -2551,19 +2555,33 @@ methods:
           method's own function in its own file, read where the file's reading records manner
         type: local
       - stepNumber: 4
+        description: Is the claim's stated manner unjudgeable here?
+        type: branch
+        condition: >-
+          the claim is marked detach or caught, its target lies in this project, and either its
+          target plans no code yet or call-conformance matched it only to sites outside the method's
+          own function (in a helper the function calls)
+        onFalseStep: 6
+      - stepNumber: 5
+        description: >-
+          Report the notice CALL_MANNER_UNJUDGED naming the step, the target, the manner the
+          narrative states and why it was not judged (reached through a helper, or the target plans
+          no code yet), so the pass is not read as a judged one
+        type: local
+      - stepNumber: 6
         description: Decide whether the claim can be judged
         type: branch
         condition: at least one such site remains, and the claim's target plans code in this project
-        onFalseStep: 8
-      - stepNumber: 5
+        onFalseStep: 10
+      - stepNumber: 7
         description: >-
           For a detach claim, report DETACHED_CALL_AWAITED when every remaining site records awaited
           as all
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: For a caught claim, report CALL_NOT_CAUGHT when no remaining site records guarded
         type: local
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           For a claim not marked detach whose target method's realizing function completes later
           (source_file_facts.asyncFunctions at the target's file), when no remaining site records
@@ -2571,12 +2589,12 @@ methods:
           (method_implementation.statesCalls), else the notice OPEN_CALL_NOT_AWAITED; each finding
           names the step, the target, the function and the line
         type: local
-      - stepNumber: 8
+      - stepNumber: 10
         description: >-
-          Go on to the next claim; a claim with no site to read is call-conformance's to report,
-          never this rule's
+          Go on to the next claim; a claim the code makes no call for at all is call-conformance's
+          to report (CALL_STEP_UNREALIZED), never this rule's
         type: local
-      - stepNumber: 9
+      - stepNumber: 11
         description: Done
         type: return
         outcome: judged
@@ -2585,4 +2603,4 @@ methods:
     exportedVia: callMannerConformanceRule
 status: complete
 createdAt: '2026-09-14T23:15:29.785Z'
-updatedAt: '2026-10-30T12:03:05.626Z'
+updatedAt: '2026-10-30T19:36:40.872Z'

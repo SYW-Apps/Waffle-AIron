@@ -7,9 +7,10 @@ npm and the tags carry.
 ## v6.6.0 (from v6.5.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now compares how a
-narrated call runs, reads more Python, and composes a project's externals on a plain `validate`
-(see Changed), so `wairon validate --ci` may fail on code or pins that passed under 6.5.0. Each
-finding names the step, the call or the external, and its file.
+narrated call runs and the type of a data field, reads more Python (a router named through a
+package re-export among it), and composes a project's externals on a plain `validate` (see Added
+and Changed), so `wairon validate --ci` may fail on code or pins that passed under 6.5.0. Each
+finding names the step, the call, the field or the external, and its file.
 
 1. Install 6.6.0 the way you installed wairon: `wairon update` for the binary,
    `npm install --global @wairon/cli@6.6.0` (or `--save-dev` in the project) for npm.
@@ -34,8 +35,16 @@ finding names the step, the call or the external, and its file.
   - `CALL_NOT_AWAITED`: a call step not marked `detach` whose call completes later and is never
     awaited, in a method that states its detail. Where the method leaves its detail open it is the
     notice `OPEN_CALL_NOT_AWAITED` instead, which never fails the gate.
-  Only calls written in the method's own function are judged; a call through a helper, a dispatch
-  step and a call into another project are not.
+  Only calls written in the method's own function are judged. A step marked `detach`, or inside a
+  catching `try`, whose call is reached only through a helper the method calls, or whose target
+  has no code yet, is the notice `CALL_MANNER_UNJUDGED`, so a pass is never read as a judged one.
+  A dispatch step and a call into another project are not judged.
+- **A data field's type is compared.** A field a type spec declares whose code annotation is
+  another simple type (`amount: string` where the spec says `float`, a Python `count: str` where it
+  says `int`) is `TYPE_FIELD_TYPE_MISMATCH`, in TypeScript and Python. The honest spellings agree as
+  they do for parameters (`number` for int and float, a `Date`, string or number for a datetime, an
+  optional field by the type it holds); a union, a list, a record or a type the design does not know
+  is not compared.
 - **Python guard-style routers are read.** A function that selects its handler from the request's
   method and path (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
   method and path, or a `BaseHTTPRequestHandler`'s `do_GET`) is read as a router: name it in
@@ -57,6 +66,14 @@ finding names the step, the call or the external, and its file.
   - The user listings (`wairon host user list`, `/web/admin/users`) also show subjects that hold
     grants but have no user record, marked "no user record". `wairon host permission set --user`
     warns when that user has no record.
+  - Asking again for the lock of a design you already have a pending request for returns that
+    request instead of making a second one.
+  - A pending lock request whose design has moved since it was made is cancelled when the pending
+    list or its status is read, with the reason, instead of showing as pending until someone tries
+    to decide it.
+  - `wairon host user set-status` says that an inactive status revoked the user's API keys and web
+    sessions, and that a status set back to active restores none (`wairon host key mint` makes new
+    ones).
 
 ### Changed
 
@@ -93,7 +110,11 @@ finding names the step, the call or the external, and its file.
   no pending request is created. Warnings do not block it, as with `wairon lock`.
 - **Hosted refusals say more.** A caller holding only the `approval` grant is told it may request
   the lock but not write. A refused subsystem write names the spec's path relative to the project.
-  `/web/projects` no longer shows the server's absolute paths.
+  `/web/projects` no longer shows the server's absolute paths. A refusal decided by no grant at all
+  says so ("the instance default (no grant reaches this action: no)").
+- **Following a producer's rename reads as one path.** The live advisory, the `externals pin`
+  refusal and `SURFACE_REF_NOT_EXPOSED` now all say the order: edit the uses to the new name (the
+  tree reports the new name as not in the pin until the re-pin records it), then re-pin.
 
 ### Fixed
 
@@ -101,7 +122,18 @@ finding names the step, the call or the external, and its file.
   dependency on X.
 - `sdd_update_spec` no longer reports an L0 requirement written as `{description: …}` as not stored
   when the tree holds it as plain text.
-- `wairon diagram --sequence` draws a detached call's callee without returning to the caller.
+- A router named through a module that only imports or re-exports it (a Python package
+  `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from './router'`) was
+  never route-checked and said nothing. It is now followed to the file that defines it; one that
+  cannot be followed (a cycle, a module not read) is `UNREADABLE_ROUTER`.
+- `CALL_TARGET_UNJUDGED` is now said for every call into another project's component, not only for
+  one the code does not make.
+- A `try` step whose catch or finally step lies inside its own body (so the handler runs on the
+  success path) is `FALLTHROUGH_INTO_HANDLER`, as a body falling into the handler after it already
+  was.
+- `wairon diagram --sequence` draws a detached call's callee without returning to the caller, draws
+  the detached arrow inside its `par` block (no empty block when the callee is not expanded), and
+  places a `try` step's catch-path note after the critical block.
 
 ### Docs
 
@@ -109,7 +141,10 @@ finding names the step, the call or the external, and its file.
   who is affected by a rename or a removal, and never to answer "no consumers" without it.
 - The `MISSING_INTEGRATION_SIM` message and the implement skill explain that the first `simPath` in a
   subsystem makes the rest of it owe one, and the usual answers.
-- The README's quick start says scripts pass `wairon lock --yes`.
+- The README's quick start says scripts pass `--yes` to `wairon init` and `wairon lock`, and its
+  language table now says Python is checked for routes and data types.
+- The architect skill tells the assistant to state the detail of a method whose narrative has a
+  `detach` or `try` step, so how its calls run is held to the narrative.
 
 ### Known limitations
 

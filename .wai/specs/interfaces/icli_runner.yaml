@@ -992,12 +992,13 @@ methods:
       [--unit]` creates an active user record, and refuses an id that already holds one — add never
       replaces a record, which would drop the role bindings it carries (a status changes through
       set-status); `set-status --user <id> --status <active|inactive>` sets the lifecycle status (an
-      inactive status revokes the user's credentials). All forward to the host adapter's user
-      operations.
+      inactive status revokes the user's API keys, and its web sessions, and the command says so; a
+      status set back to active restores none, so it says new keys are minted with `wairon host key
+      mint`). All forward to the host adapter's user operations.
     signature: >-
       runHostUser(action: string, options: { user?: string; name?: string; email?: string; unit?:
       string; status?: string; dataDir?: string }): Promise<void>
     returns: async void
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T13:42:38.537Z'
+updatedAt: '2026-10-30T19:37:18.889Z'

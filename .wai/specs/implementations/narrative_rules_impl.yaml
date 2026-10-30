@@ -222,14 +222,16 @@ methods:
         type: branch
         condition: >-
           the body's last step (the narrative's step numbered endStep) is a local, call, register or
-          dispatch step, and the step number following endStep is one of the try's catch steps or
-          its finallyStep
+          dispatch step and the step number following endStep is one of the try's catch steps or its
+          finallyStep; or a catch step or the finallyStep lies inside the body itself (after the try
+          step, at or before endStep), so the success path reaches it in step order
         onFalseStep: 10
       - stepNumber: 12
         label: reportFallthrough
         description: >-
           Report FALLTHROUGH_INTO_HANDLER (warning; draft context isDraftCtx) naming the body's last
-          step and the handler step it falls into: end the body with a jump, return or throw
+          step, or the handler step inside the body, and the handler the success path runs into: end
+          the body with a jump, return or throw, and place the handler after the body
         type: local
     symbol: check
     exportedVia: narrativeJumpEdgesRule
@@ -1043,4 +1045,4 @@ methods:
     exportedVia: detailSufficiencyRule
 status: complete
 createdAt: '2026-09-14T23:18:39.432Z'
-updatedAt: '2026-10-27T18:08:09.571Z'
+updatedAt: '2026-10-30T19:35:26.896Z'

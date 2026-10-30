@@ -58,7 +58,7 @@ export function parseSubsystemScope(scopeId: string): { projectId: string; subsy
 
 /** The rung that decided an effective permission, in words a refusal or an explanation can quote. */
 export function describeDecision(p: EffectivePermission): string {
-  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default', 'key-narrowing': 'the API key narrowing (the key is not narrowed to this project)', 'key-read-only': 'the API key being read-only' }[p.source];
+  const setting = { 'instance-admin': 'the instance-admin bypass', user: 'a user setting', role: 'a role', 'everyone-default': 'the everyone-default', 'instance-default': 'the instance default (no grant reaches this action: no)', 'key-narrowing': 'the API key narrowing (the key is not narrowed to this project)', 'key-read-only': 'the API key being read-only' }[p.source];
   if (p.source === 'instance-admin' || p.source === 'instance-default' || p.source === 'key-narrowing' || p.source === 'key-read-only') return setting;
   if (p.decidedScopeKind === 'subsystem' && p.decidedScopeId) {
     const parsed = parseSubsystemScope(p.decidedScopeId);

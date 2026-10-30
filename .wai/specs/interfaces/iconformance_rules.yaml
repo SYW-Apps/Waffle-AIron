@@ -856,40 +856,49 @@ methods:
   - name: typeShape
     description: >-
       Rule type-shape. Code-to-contract for the DATA: a type spec's `fields` are compared, name by
-      name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a
-      type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec
-      could describe two fields of a six-field record — and call the two that are optional required
-      — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer
-      read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature
-      eventually breaks at a call site and a type spec that lies is only ever read by humans and
-      agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a
-      class's constructor parameter properties (`constructor(public readonly amount: number)`) among
-      them, the language's shorthand for a field declaration, while a PRIVATE field a getter of the
-      same class reads is that getter's backing storage, implementation rather than the type's data,
-      and is no member — and a DERIVED one, an alias followed one hop to the object literal its
-      schema is built from, where the keys are the members — and on through a composition the same
-      file writes out (`Base.extend({…})` on a schema constant it declares), the extension's keys
-      laid over the base's. A shape that extends another is judged on what it shows and never on
-      what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a
-      value-object declaring `holds`) has no field list: its shape is the primitive it holds,
-      compared with the right side of the type alias the file declares under its name, read through
-      the file's dialect (`type PackPath = string` agrees with holds string); an object shape under
-      that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH.
-      Python is read the same way by its signature reader, for a class whose body declares its
-      fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings),
-      a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member
-      (ClassVar, InitVar and a Pydantic model's underscore attributes aside) — in a class of the
-      legacy `@attr.s` form without `auto_attribs=True`, only a field assigned `attr.ib()` —
-      absent-able when it has a default or a default factory (`Field(...)` and `Field(default=...)`
-      state none: the Ellipsis marks it required), or in a TypedDict when it is NotRequired or the
-      class is total=False; a `total=` that does not settle to a literal leaves every field it
-      governs (one marked neither Required nor NotRequired) of unknown absence, and that absence is
-      not compared — `Optional` alone is nullable, never absent-able. Its field names compare with
-      the spec's by nameKey, so the spec's documentId is the code's document_id; where two fields of
-      one class share a nameKey (order_id and orderId), the one spelled exactly as the spec's field
-      is the one compared, and neither is when none is. A class with any other base is judged as one
-      extending another. A plain class, a model built by a call (create_model, a functional
-      TypedDict or namedtuple) and a named scalar are not read in Python, and stay silent.
+      name, against the shape its `sourcePath` actually declares: each field's presence, whether it
+      may be absent, and its type. `typeRealization` asks whether a type EXISTS in code; nothing
+      asked whether it is the shape the spec claims, so a type spec could describe two fields of a
+      six-field record — and call the two that are optional required — straight through a lock and a
+      CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the
+      worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and
+      a type spec that lies is only ever read by humans and agents. Two origins answer at exact
+      grade: a DECLARED shape, whose members the file lists — a class's constructor parameter
+      properties (`constructor(public readonly amount: number)`) among them, the language's
+      shorthand for a field declaration, while a PRIVATE field a getter of the same class reads is
+      that getter's backing storage, implementation rather than the type's data, and is no member —
+      and a DERIVED one, an alias followed one hop to the object literal its schema is built from,
+      where the keys are the members — and on through a composition the same file writes out
+      (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the
+      base's. A shape that extends another is judged on what it shows and never on what it omits,
+      since its inherited members are not in this file to count. A NAMED SCALAR (a value-object
+      declaring `holds`) has no field list: its shape is the primitive it holds, compared with the
+      right side of the type alias the file declares under its name, read through the file's dialect
+      (`type PackPath = string` agrees with holds string); an object shape under that name, or an
+      alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH. Python is read the
+      same way by its signature reader, for a class whose body declares its fields in its
+      framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings), a TypedDict, a
+      NamedTuple or an attrs class: each annotated field of the body is a member (ClassVar, InitVar
+      and a Pydantic model's underscore attributes aside) — in a class of the legacy `@attr.s` form
+      without `auto_attribs=True`, only a field assigned `attr.ib()` — absent-able when it has a
+      default or a default factory (`Field(...)` and `Field(default=...)` state none: the Ellipsis
+      marks it required), or in a TypedDict when it is NotRequired or the class is total=False; a
+      `total=` that does not settle to a literal leaves every field it governs (one marked neither
+      Required nor NotRequired) of unknown absence, and that absence is not compared — `Optional`
+      alone is nullable, never absent-able. Its field names compare with the spec's by nameKey, so
+      the spec's documentId is the code's document_id; where two fields of one class share a nameKey
+      (order_id and orderId), the one spelled exactly as the spec's field is the one compared, and
+      neither is when none is. A class with any other base is judged as one extending another. A
+      plain class, a model built by a call (create_model, a functional TypedDict or namedtuple) and
+      a named scalar are not read in Python, and stay silent. A field present on both sides whose
+      code annotation reads as a scalar other than the one the spec declares — read through the
+      file's dialect as a parameter's is, a named scalar as what it holds and an enum as a string,
+      TypeScript's `number` agreeing with int and float alike and a date, a datetime or a duration
+      with the string, Date or number the code writes it as, an optional field compared on the type
+      it holds — holds a different value than the design says: TYPE_FIELD_TYPE_MISMATCH, naming both
+      types (`amount: string` where the spec declares `amount: float`, a Python `count: str` where
+      it declares int). An annotation either side does not read as one scalar — a union, a list, a
+      record, a named type the design does not know, any — is not compared, in either language.
     signature: 'typeShape(ctx: RuleContext): void'
     returns: void
     params:
@@ -919,6 +928,12 @@ methods:
           A named scalar's holds disagrees with what its sourcePath declares under its name — an
           alias of another type, or a record — so every reader is told one value of it is something
           the code says it is not
+      - code: TYPE_FIELD_TYPE_MISMATCH
+        severity: warning
+        summary: >-
+          A field a type spec declares is annotated in the shape at its sourcePath as another scalar
+          than the spec says — the design tells every reader the data holds one kind of value and
+          the code holds another
   - name: paramConformance
     description: >-
       Rule param-conformance. Code-to-contract for the SIGNATURE, the last of the three readings a
@@ -1131,7 +1146,11 @@ methods:
       contract's endpoint paths are written beneath; a leading path segment a guard router never
       checks is completed from the first segments of the Portal's own HTTP endpoint paths, the
       segments whatever serves the Portal routes on. Which process serves which Portal is
-      implementation, so no listener is consulted. Route coverage is never silently off: a router
+      implementation, so no listener is consulted. A linkage whose module only imports or re-exports
+      the name it gives (a package `__init__.py`'s `from .router import handle`, a TypeScript
+      `export { handle } from './router'`) names the router where it is defined: the binding is
+      followed, module by module, to the file that declares it, and one the analysis cannot follow
+      (a cycle, a module it did not read) is unread. Route coverage is never silently off: a router
       that yields no route in either idiom, or a linkage naming a declaration that holds neither a
       function body nor a route table this analysis reads, is reported as unread; and a Portal
       binding HTTP endpoints whose implementation names no router while its code is read at exact
@@ -1365,17 +1384,22 @@ methods:
       method's own function: a call reached through a helper the method calls is not judged, nor is
       a site whose landing is not settled, a target that plans no code or lives in another project,
       a dispatch step (which names no call site), or a method whose conformance dial is off (its
-      own, else its implementation's). Where a claim has several realizing sites, or one shape is
-      written several times, only what every writing agrees on is reported. A detach step whose call
-      every writing waits for is DETACHED_CALL_AWAITED; a step inside a catching try whose call no
-      writing catches is CALL_NOT_CAUGHT. A step not marked detach whose target's realizing function
-      completes later (source_file_facts.asyncFunctions) and whose call no writing waits for is
-      CALL_NOT_AWAITED when the method states its detail (full or calls-only, its own or its
-      implementation's: the narrative is then the whole flow), and the notice OPEN_CALL_NOT_AWAITED
-      when it does not — the design then leaves open whether the method waits, and the notice says
-      so without failing the gate. A try the code adds around a call the narrative does not place in
-      one, and a call the code waits for that the narrative does not mark, are open routes and never
-      reported.
+      own, else its implementation's). A step whose manner the narrative states — marked detach, or
+      inside a catching try — whose call is reached only through a helper the method calls, or whose
+      target plans no code yet, is not judged either, and that is said rather than left silent: the
+      notice CALL_MANNER_UNJUDGED names the step and why, so a pass is never read as a judged one (a
+      call into another project is CALL_TARGET_UNJUDGED's to say, and a call the code does not make
+      at all is call-conformance's CALL_STEP_UNREALIZED). Where a claim has several realizing sites,
+      or one shape is written several times, only what every writing agrees on is reported. A detach
+      step whose call every writing waits for is DETACHED_CALL_AWAITED; a step inside a catching try
+      whose call no writing catches is CALL_NOT_CAUGHT. A step not marked detach whose target's
+      realizing function completes later (source_file_facts.asyncFunctions) and whose call no
+      writing waits for is CALL_NOT_AWAITED when the method states its detail (full or calls-only,
+      its own or its implementation's: the narrative is then the whole flow), and the notice
+      OPEN_CALL_NOT_AWAITED when it does not — the design then leaves open whether the method waits,
+      and the notice says so without failing the gate. A try the code adds around a call the
+      narrative does not place in one, and a call the code waits for that the narrative does not
+      mark, are open routes and never reported.
     signature: 'callMannerConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1406,6 +1430,12 @@ methods:
           A call step not marked detach, in a method that leaves its detail open, is realized by a
           call that completes later and that the code never waits for: the design leaves open
           whether the method waits, and this says the code does not
+      - code: CALL_MANNER_UNJUDGED
+        severity: notice
+        summary: >-
+          A call step whose manner the narrative states (detach, or inside a catching try) is
+          realized only through a helper the method calls, or targets a component that plans no code
+          yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-10-30T12:02:05.076Z'
+updatedAt: '2026-10-30T19:35:19.468Z'

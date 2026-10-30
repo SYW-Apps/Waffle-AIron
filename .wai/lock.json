@@ -2,14 +2,14 @@
   "format": 3,
   "stateId": {
     "algorithm": "sha256+design-2+doctrine+inputs+members",
-    "digest": "ea63ac08a64e1e96abd9fc9435fbef8385fa8c17960fc1ae2c55583a83be10c7"
+    "digest": "d74d3a986ef2fd7c57dd7cb36b8aeb42615b1a6d7210a5661ac91e62200cf890"
   },
-  "lockedAt": "2026-10-30T18:21:05.890Z",
+  "lockedAt": "2026-10-30T20:54:27.332Z",
   "lockedBy": {
     "id": "Robbe-Vr <robbe.vrijenhoek@kpnmail.nl>",
     "source": "git"
   },
-  "validatorVersion": "6.4.1-dev.9",
+  "validatorVersion": "6.5.1-dev.1",
   "validationResult": {
     "valid": true,
     "errors": 0,
@@ -407,7 +407,7 @@
     ".wai/specs/implementations/cli_variants_adapter_impl.yaml": "4f9617c76a4449425f61e59014f5bcb071d95400260d676ad238adbda55353f0",
     ".wai/specs/implementations/code_model_cache_impl.yaml": "318dba2d81b2c4dc8d6ea7cf6ed7998a0fd6cc705446be0e3133b966267f8163",
     ".wai/specs/implementations/code_model_loader_impl.yaml": "a5e63b37ff1ded2f3cf22df05ad776c8cd15b760db36f57ece394f59fdb6c321",
-    ".wai/specs/implementations/conformance_rules_impl.yaml": "9c514b41f4df511529b2e2bf735ee6ec09bb113fa7586daead1050b7d5a19b1f",
+    ".wai/specs/implementations/conformance_rules_impl.yaml": "bf735e748b8cc1b0014b48877418fe396b4a9f6e91940fbc86ef9d0d173baea7",
     ".wai/specs/implementations/context_composer_impl.yaml": "f839aa8f55e33ebe754bf4cf7c3a391cd3ca9e76c9a5867fc4c559d9278a0d59",
     ".wai/specs/implementations/context_store_impl.yaml": "b8de786be17e816b1c1e2fd070f56ca7a85df41a87d389d5efbba5b2a7f9b252",
     ".wai/specs/implementations/core_orchestrator_impl.yaml": "bc56957a1cc2342de955455bf64150a05635f63855f8145385997bdd984df5bc",
@@ -523,7 +523,7 @@
     ".wai/specs/implementations/migration_validator_adapter_impl.yaml": "ebeb89de0a0c6ed5f3d8f0f32384ba5d64ac3309c234dcb69aba00c284796c96",
     ".wai/specs/implementations/miro_adapter_impl.yaml": "c1a7001855e53cb9834fdea606980023a39c709ed8add57d7e1c058574735709",
     ".wai/specs/implementations/narrative_graph_projector_impl.yaml": "e83f3ab3a4d4c3b4fd028d1a40853855ac505cb4aaa1b82024dc4cafcd8172ad",
-    ".wai/specs/implementations/narrative_rules_impl.yaml": "a343a5c1338eabb2ecb0ffac01ee3a38789ecb882b7f7ba12b36bd1dc65fafb2",
+    ".wai/specs/implementations/narrative_rules_impl.yaml": "aa216e73a6e6802c2a828810c7cb53fd59e8bdc901a0c8db7bfc59a871fb8394",
     ".wai/specs/implementations/network_arbiter_impl.yaml": "47f5bbeaba39e8aaf1bdf5df523a206cef757103758351805f630d33543133e5",
     ".wai/specs/implementations/network_codec_impl.yaml": "0cb7a831c4add6fdcf6036498cd0e6e4d2b76db367e847a1172fe28615ada052",
     ".wai/specs/implementations/network_diagram_projector_impl.yaml": "6a731b502cde63aa1ac70ed1684f00b66469deb494baae5c8d487101e0f99304",
@@ -575,7 +575,7 @@
     ".wai/specs/implementations/project_config_store_impl.yaml": "7f6ced0759279b6d1746d6fc1bdcafa21ccd7355f565273e6d1cb4ee0d9288ac",
     ".wai/specs/implementations/project_family_index_impl.yaml": "1d390d84f75dd10da95fa7d7313021b972c0121fd353016f481b6a32cc1a03d8",
     ".wai/specs/implementations/project_index_impl.yaml": "9204750e0dccad3d35ef2b67034eafd0d528db2bad3eba53151c0f2923551225",
-    ".wai/specs/implementations/project_lifecycle_orchestrator_impl.yaml": "0d80df3305d178ba73cf6430a794515865f5d4ed3d1e3cb69e9f4b9ada70ced6",
+    ".wai/specs/implementations/project_lifecycle_orchestrator_impl.yaml": "0eb6e9ce6ece7bbc469fbc56745eb96f53c13229fbd9ccc0a2307d7e5ac7a6c0",
     ".wai/specs/implementations/project_ops_orchestrator_impl.yaml": "323c5a96e2fb7fcabf85a959b379a67e3c5ceea0e3ff0892c3477db4dc35a16d",
     ".wai/specs/implementations/project_policy_orchestrator_impl.yaml": "994a480384669177fe2e6bb7cbca78b7e11a0d12c8c54cf282e86ed083afa8c2",
     ".wai/specs/implementations/project_policy_portal_impl.yaml": "78c4f891141c174e54ba36e43bd66913b83237643c9b59716a8c75d1343eff38",
@@ -738,7 +738,7 @@
     ".wai/specs/interfaces/icli_producer_adapter.yaml": "2be030e4031a21b0c8fe3880c13b53aad03beb367a9ebc310375a56b7f6f64d7",
     ".wai/specs/interfaces/icli_remote_adapter.yaml": "2c1421758d8d980920992b3be80215bccf8b5d76c6226b0e9cf52841a49469e5",
     ".wai/specs/interfaces/icli_rules_adapter.yaml": "e052f4054fd739cf1104381e281a824f8d63f135855e6795a3d7770b1ab9d05b",
-    ".wai/specs/interfaces/icli_runner.yaml": "5b41659b3e963e9bc7d4e3574d80d9e7832d5fab83c5a45f92bf0b045135cc4e",
+    ".wai/specs/interfaces/icli_runner.yaml": "aa5841f17f8708270235f091b3da435cd5262c311be355a43b2b3ed93063fdd6",
     ".wai/specs/interfaces/icli_skills_adapter.yaml": "1fd0a12cb18882cd4e69bb970ea4cb2873bf6947101f404c30ee47b30436bd25",
     ".wai/specs/interfaces/icli_surfaces_client_adapter.yaml": "9dd9dfde23242794d6635681158f9aa16769265f2e02a817a1164f1369e2be83",
     ".wai/specs/interfaces/icli_upgrade_adapter.yaml": "2a527789292b61f341509f1e74f199f9126cec56afc0b9f489c4738156860251",
@@ -746,7 +746,7 @@
     ".wai/specs/interfaces/icli_variants_adapter.yaml": "4645c78004d68793b5db845ac138a62ed07c790896328bfc3a41f33241531d43",
     ".wai/specs/interfaces/icode_model_cache.yaml": "4f5e7412195596d416dbec5ebb9b26116c67947ce48d727b15aed5f9f658a5b2",
     ".wai/specs/interfaces/icode_model_loader.yaml": "105f607aa78267594c59643c11f7202c44704b180ab812347f705cdd90c54b6b",
-    ".wai/specs/interfaces/iconformance_rules.yaml": "b3b3327d47c11f94cf1b146643938f03f9a74582f652b5865ae444cbeb37b26a",
+    ".wai/specs/interfaces/iconformance_rules.yaml": "1ce4a031ef2a2f3379e70e19f65f6e916ef97114e2ebe7df041c3964bcaa0273",
     ".wai/specs/interfaces/icontext_composer.yaml": "320f063aca26c26decc7de0fa9815407ce244a70954cec47f580b047ec8a925d",
     ".wai/specs/interfaces/icontext_store.yaml": "12bc62a612fca3b89632fa23223eaf7089013d9bd41cd1645be15ab188432a3a",
     ".wai/specs/interfaces/icore_orchestrator.yaml": "4cc1aac170e01cf8ab4a4e86757d4ac0ac4d5d1fe9cff8ebad8511f35011c087",
@@ -862,7 +862,7 @@
     ".wai/specs/interfaces/imigration_validator_adapter.yaml": "daa906aff535d8fe33e16413823b669042a327ba7909353b90da5d243a00e0fe",
     ".wai/specs/interfaces/imiro_adapter.yaml": "60b40f2e609a4581840ab3bbaa72304b460d162882582ff3dd23ed3aa2ce4df7",
     ".wai/specs/interfaces/inarrative_graph_projector.yaml": "83a9f06ee893c905b8e5a29bd5f4dcfc3d6cf8a1c3d7d966d669946f31057976",
-    ".wai/specs/interfaces/inarrative_rules.yaml": "44dc2739f619c208f32049b8ed53318fc02e9938582ca79f9c97b3336d0e1480",
+    ".wai/specs/interfaces/inarrative_rules.yaml": "ebb96814b6207e43bdfa143cce478eaac19d3ae848770b495f64ad8daff0e672",
     ".wai/specs/interfaces/inetwork_arbiter.yaml": "e05a3213ea6be446823aed392b144392f2fdf509da2aa92a510bb4437a9208bd",
     ".wai/specs/interfaces/inetwork_codec.yaml": "e8e516b39b65df031c0d170ec6189e2a9a6ec309bc3ec5799229aa960686d676",
     ".wai/specs/interfaces/inetwork_diagram_projector.yaml": "6edb1c2ee6b3fd3f3f154dd208902526d3bddc4fe993ad3cba61b5f563562fbc",
@@ -914,7 +914,7 @@
     ".wai/specs/interfaces/iproject_config_store.yaml": "a0261bed17a5754d2a9755912e76d291add6725b53546e306eed62920ace5c1c",
     ".wai/specs/interfaces/iproject_family_index.yaml": "a341f9b297344677afe96940dd6f86e75a39b6256b81746239399c9705eab472",
     ".wai/specs/interfaces/iproject_index.yaml": "32888766e22345f1cd576387c8ff5bedd985b8143c190dc1821ef0e2bbe89d60",
-    ".wai/specs/interfaces/iproject_lifecycle_orchestrator.yaml": "5554abee712bf5f0876c0d11a539190b1cfe5cfa9502c77f86627388649dd237",
+    ".wai/specs/interfaces/iproject_lifecycle_orchestrator.yaml": "d39830bfc92a438b378fc579bae9ed1e066c171917239256730dc2befb18de90",
     ".wai/specs/interfaces/iproject_ops_orchestrator.yaml": "610d8dac3db170c9389f80ac6d00d44171710004a612fd659ce02afa95bd684c",
     ".wai/specs/interfaces/iproject_policy_orchestrator.yaml": "714c44075afcf5304e589f4d261f5456edb116d63e5fd4c22e854d04ba9d7ac6",
     ".wai/specs/interfaces/iproject_policy_portal.yaml": "36d24ac31ba9adf669ba3d55e9771f6b71c07dc145a60796e1ef300ab2c5aad4",
@@ -1595,7 +1595,7 @@
     ".wai/specs/types/score_mark.yaml": "347e89762cad1117c6a843fe3000492f744b0a5d53885f486c38fdd527a3e903",
     ".wai/specs/types/sdd_rule.yaml": "5896e5e9b902c65dcf3f5722efe535dabc9cee0e1b925abb86288800d7611e4c",
     ".wai/specs/types/sequence_diagram_options.yaml": "f83f722fa9f992a782e77b0b3046e3edde8b5fec75c7d058fd10f722d42b01c3",
-    ".wai/specs/types/shape_member_fact.yaml": "7a681a48e8a214938b912d91ce99000d7cd62c113be83d91b8fb528daf102c08",
+    ".wai/specs/types/shape_member_fact.yaml": "1232d14d463cc86d43047eec53b56aa331548ff7a3c65efa11b3a34c2e5e8935",
     ".wai/specs/types/shape_origin.yaml": "d64f9a1254d3df71ff5089588e2b41a66351d4e324395234164610eee3deab5e",
     ".wai/specs/types/share_access_entry.yaml": "7956100e9fd3a05b95accc0e3f4267334ed4dff32099b7749752694c67498433",
     ".wai/specs/types/share_access_outcome.yaml": "9535b91fb052ca3f8df1b6c1e9795ce547926463dd3529d99203d98518efd40b",
@@ -1769,7 +1769,7 @@
   },
   "specsReading": "design",
   "gateParts": {
-    "design": "20fa5c52879f371980f7c6600eae0eb4235585c28c0b2e4e669c1b794c56002e",
+    "design": "bf9c8eacb34cef053f9bb5ed040ab206111755099c67e79966c76678e3a863e6",
     "release": "1aeac00c65278873991d16d17ce74f510ae7a959cfe435aeec1c325b238e8e59",
     "rules": "4a60b488dd62b4e35c19f985d3270f68efb5079a629a91ce3f665cd87a51c0c4",
     "packs": "e58a07166d3239b3e4dddbc10594d72ee7e7e564bb94b2b08d9eadfc80279119",
@@ -1780,12 +1780,12 @@
   "members": {},
   "code": {
     "analyzer": {
-      "validatorVersion": "6.4.1-dev.9",
-      "doctrineDigest": "e30370220c363ca8fa2ae19d4908edd34136ba38af8034622dc1f3aab51700e4",
+      "validatorVersion": "6.5.1-dev.1",
+      "doctrineDigest": "18781085ddc487404dc20654ac4e797732285c4af67a0c5c5bd3b50b23a2f516",
       "grade": "exact"
     },
     "errors": 0,
     "warnings": 0,
-    "notices": 28
+    "notices": 73
   }
 }

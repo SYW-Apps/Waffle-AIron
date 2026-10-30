@@ -287,6 +287,17 @@ describe('the user listing and `wairon host user`', () => {
     expect(getUserById(dataDir, 'bob')?.status).toBe('inactive');
   });
 
+  it('host user set-status says keys and sessions were revoked, and that active restores none', async () => {
+    await runHostUser('add', { dataDir, user: 'dave' });
+    const lines: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((...a: unknown[]) => { lines.push(a.join(' ')); });
+    await runHostUser('set-status', { dataDir, user: 'dave', userStatus: 'inactive' });
+    expect(lines.join('\n')).toMatch(/API keys and web sessions of "dave" were revoked/);
+    lines.length = 0;
+    await runHostUser('set-status', { dataDir, user: 'dave', userStatus: 'active' });
+    expect(lines.join('\n')).toMatch(/No revoked key comes back.*wairon host key mint/);
+  });
+
   it('host user refuses a missing --user, a missing --status and an unknown action', async () => {
     await expect(runHostUser('add', { dataDir })).rejects.toThrow(/--user/);
     await expect(runHostUser('set-status', { dataDir, user: 'bob' })).rejects.toThrow(/--status/);

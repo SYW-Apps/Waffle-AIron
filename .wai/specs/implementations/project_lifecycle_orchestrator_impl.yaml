@@ -153,7 +153,7 @@ methods:
       - stepNumber: 6
         description: Executed — continue to auditing
         type: jump
-        toStep: 18
+        toStep: 21
       - stepNumber: 7
         description: >-
           Resolve the caller's project:write permission over the project: only a writer may request
@@ -220,39 +220,63 @@ methods:
         targetMethod: gateIdentity
       - stepNumber: 15
         description: >-
+          List the caller's pending project:lock requests over this project's record (the same
+          record id the request would carry), to find one already made about the design just
+          captured
+        type: call
+        targetComponent: approval_repository
+        targetMethod: list
+      - stepNumber: 16
+        description: >-
+          Does the caller already hold a pending lock request for this same design? One of them
+          records a gateStateId equal to the identity just captured
+        type: branch
+        condition: >-
+          a listed pending project:lock request records a gateStateId equal to the gate identity
+          captured in the previous step
+        onTrueStep: 17
+        onFalseStep: 18
+      - stepNumber: 17
+        description: >-
+          Return that existing request as the pending-approval ProjectActionOutcome, rather than
+          creating a second one for the same design; nothing new happened, so nothing is audited
+        type: return
+        outcome: a pending-approval ProjectActionOutcome carrying the caller's existing pending request
+      - stepNumber: 18
+        description: >-
           Build the pending project:lock ApprovalRequest: kind, the project's own record id (a
           member's when a member is locked), the requester's subject and token id, expiry, a
           redacted human summary naming the project, and gateStateId = the identity just captured.
           No qualifier is recorded: the record id alone confines the approved action
         type: local
-      - stepNumber: 16
+      - stepNumber: 19
         description: Create the pending approval request
         type: call
         targetComponent: approval_repository
         targetMethod: create
-      - stepNumber: 17
+      - stepNumber: 20
         description: Build a pending-approval ProjectActionOutcome carrying the created request
         type: local
-      - stepNumber: 18
+      - stepNumber: 21
         description: Append a redacted audit event without letting a failure fail the action
         type: try
-        endStep: 20
+        endStep: 23
         catches:
           - error: audit append failure
-            step: 21
-      - stepNumber: 19
+            step: 24
+      - stepNumber: 22
         description: Append the redacted project-lifecycle audit event (security level)
         type: call
         targetComponent: audit_repository
         targetMethod: append
-      - stepNumber: 20
+      - stepNumber: 23
         description: On a successful append, continue to the return and skip the audit-failure handler
         type: jump
-        toStep: 22
-      - stepNumber: 21
+        toStep: 25
+      - stepNumber: 24
         description: Record the audit append failure as a server diagnostic and continue
         type: local
-      - stepNumber: 22
+      - stepNumber: 25
         description: Return the project action outcome
         type: return
         outcome: the project action outcome
@@ -284,27 +308,56 @@ methods:
         type: throw
         error: not found
       - stepNumber: 6
+        description: >-
+          Is it a pending project:lock request carrying a gateStateId? Only such a request can be
+          overtaken by a moved design
+        type: branch
+        condition: the request is pending, of kind project:lock, and records a gateStateId
+        onFalseStep: 10
+      - stepNumber: 7
+        description: >-
+          Capture the gate identity of the request's project tree as it stands now, through the
+          admin plane (a member's own tree when the request is about a member)
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: gateIdentity
+      - stepNumber: 8
+        description: Did the design move since the request was made?
+        type: branch
+        condition: the identity captured now differs from the request's gateStateId
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          The design moved: cancel the pending request (no one can approve it any more) recording on
+          it as its executionSummary "the design changed since it was requested (requested <id>, now
+          <id>); request the lock again", and read the cancelled request in its place, so this read
+          and awaitApproval readers see why. A request found no longer pending at that moment is
+          simply read again as it now stands
+        type: call
+        targetComponent: approval_repository
+        targetMethod: withdraw
+      - stepNumber: 10
         description: The original requester (matching subject or requesting token id) always sees it
         type: branch
         condition: the caller is the original requester
-        onTrueStep: 10
-        onFalseStep: 7
-      - stepNumber: 7
+        onTrueStep: 14
+        onFalseStep: 11
+      - stepNumber: 11
         description: Resolve the caller's approval:decide permission over the request's project
         type: call
         targetComponent: authorization
         targetMethod: authorize
-      - stepNumber: 8
+      - stepNumber: 12
         description: If the resolved value is not yes, deny
         type: branch
         condition: the resolved approval:decide value is not yes
-        onTrueStep: 9
-        onFalseStep: 10
-      - stepNumber: 9
+        onTrueStep: 13
+        onFalseStep: 14
+      - stepNumber: 13
         description: Reject the status read
         type: throw
         error: Forbidden — caller may not view this approval request
-      - stepNumber: 10
+      - stepNumber: 14
         description: Return the approval request
         type: return
         outcome: the approval request
@@ -345,10 +398,33 @@ methods:
         targetMethod: list
       - stepNumber: 7
         description: >-
+          For each listed pending project:lock request carrying a gateStateId, capture the gate
+          identity of its project's tree as it stands now through the admin plane
+        type: call
+        targetComponent: admin_orchestrator
+        targetMethod: gateIdentity
+      - stepNumber: 8
+        description: Did any of those requests' design move since it was requested?
+        type: branch
+        condition: >-
+          a listed project:lock request's gateStateId differs from the identity captured now for its
+          project
+        onFalseStep: 10
+      - stepNumber: 9
+        description: >-
+          Cancel each such request (no one can approve it any more), recording on it as its
+          executionSummary "the design changed since it was requested (requested <id>, now <id>);
+          request the lock again", and drop it from the list; a request found no longer pending at
+          that moment is dropped as well
+        type: call
+        targetComponent: approval_repository
+        targetMethod: withdraw
+      - stepNumber: 10
+        description: >-
           Filter to the requests whose project is in the caller's decidable set (an instance-admin
           keeps all; a request with no project id is instance-admin-only — fail closed)
         type: local
-      - stepNumber: 8
+      - stepNumber: 11
         description: Return the pending approval requests the caller may decide
         type: return
         outcome: pending approval requests
@@ -794,4 +870,4 @@ methods:
     symbol: withdrawRequest
 status: complete
 createdAt: '2026-07-16T00:10:14.534Z'
-updatedAt: '2026-10-30T12:10:36.887Z'
+updatedAt: '2026-10-30T19:38:21.293Z'
