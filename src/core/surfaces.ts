@@ -1284,7 +1284,7 @@ function pinBinding(binding: ExternalBinding, lock: ExternalsLock): { pin: Exter
       pin: {
         alias: external.alias, outcome: 'refused', project: external.project, usedNames: 0,
         unexported: [...unexported, ...usedDigests(binding.usage, snapshot, external.alias).uncarried],
-        detail: `the producer no longer has ${gone.join(', ')}, which this project uses and the last pin records — follow it in the uses first (\`wairon validate\` names each use), then pin; its previous pin stays`,
+        detail: `the producer no longer has ${gone.join(', ')}, which this project uses and the last pin records — follow it in the uses first (\`wairon validate\` names each use; a use edited to the producer's new name reads as not in the pin until the re-pin records it), then pin; its previous pin stays`,
       },
       changed: false,
     };

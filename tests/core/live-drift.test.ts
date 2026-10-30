@@ -84,6 +84,7 @@ describe('the advisory live comparison (family_validator.advise)', () => {
     expect(advised[0].message).toContain('invoice-poster');
     expect(advised[0].message).toContain('`wairon externals pin ledger`');
     expect(advised[0].message).toContain('follow the rename');
+    expect(advised[0].message).toContain('not in the pin until the re-pin records it');
     // The status names the rename, and its health is incompatible: `externals status` exits 1.
     bind(p.billing);
     const [status] = getExternalsStatus();

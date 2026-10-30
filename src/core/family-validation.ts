@@ -672,7 +672,7 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
         + (bindings.length
           ? `Binding module(s) declared there: ${bindings.map((b) => `"${b}"`).join(', ')} — compared with the pin, not the live producer, so ${bindings.length === 1 ? 'it draws' : 'they draw'} BINDING_DRIFT once the re-pin lands; follow the move there too. `
           : '')
-        + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
+        + `Adapt the uses${renamed ? ' (follow the rename: edit them to the new name — validate then reports the new name as not in the pin until the re-pin records it)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
     }
     case 'drifted': {
       // Step 8: nothing used moved — a used verb whose wire route moved is a break, judged above.
