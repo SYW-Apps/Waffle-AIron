@@ -714,6 +714,7 @@ Portals are where requests enter a subsystem; Adapters are where calls leave it.
     *   *Design check:* A subsystem another subsystem calls lists those callers in its \`publicInterfaces[].consumers\`.
 *   [ ] **Define Outbound Adapters (third-party clients / publishers):**
     *   *AI Action:* Declare an \`Adapter\` for each external API, database driver or event publisher the subsystem calls.
+    *   *Design check:* Generic I/O several subsystems need (files, processes, outbound HTTP) is one Adapter published with \`shared: true\`; any subsystem depends on it directly. It holds no state and depends only on pure logic and other shared Adapters.
 
 ---
 

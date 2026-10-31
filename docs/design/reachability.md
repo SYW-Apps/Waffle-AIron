@@ -29,6 +29,7 @@ Direction, as decided:
 | Gateway | `variant: gateway` on a Portal (`src/templates/variants/portal-shapes.yaml`) | guidance only. No rule reads it beyond "a gateway is a Portal" in `EXPORT_UNCONSUMABLE` |
 | Design visibility | L0 `publicInterfaces[].audience` | `project < department < instance < partner < external`, a hosted/org ceiling on who may **design against** an export. `EXPORT_WIDENS_AUDIENCE` stops a re-export from widening it |
 | Subsystem consumers | L1 `publicInterfaces[].consumers` | restricts which subsystems may depend on a surface |
+| Shared Adapter | L1 `publicInterfaces[].shared` | an own Adapter entry with `shared: true` (generic I/O) may be depended on directly from any subsystem of the project; it holds no state and depends only on pure logic and other shared Adapters |
 | Boundary crossing | `subsystem-boundary-dependencies` | any cross-subsystem or cross-project edge is client **Adapter → published Portal** (`CROSS_SUBSYSTEM_NON_ADAPTER`), unless a `trustedLink` on the source subsystem licenses a direct edge (in-project only) |
 
 ### 1.2 Reachability today
@@ -215,7 +216,7 @@ The reverse is not a finding. An `outside` entry with no export is normal: brows
 **A library call** is an edge from **any** component to an `InProcess` Portal's verb **of another project**, written `alias::portal` in `dependsOn` and `alias::portal.verb` in a `call` step (or a `calls` entry). The producer may be a member (part or project) or a declared external; either way the verb must be in its L0 exports, as every cross-project reference must. Libraries are libraries: no client Adapter is required, and none is nagged for.
 
 - `CROSS_SUBSYSTEM_NON_ADAPTER` and `ARCHITECTURE_VIOLATION_PORTAL_DEP` exempt exactly this edge: the target is an `InProcess` Portal in another project.
-- Within one project nothing changes: a sibling subsystem's `InProcess` Portal is still reached through a client Adapter or a `trustedLink`, as today.
+- Within one project nothing changes: a sibling subsystem's `InProcess` Portal is still reached through a client Adapter or a `trustedLink`, as today. The one direct edge is into an Adapter the subsystem publishes as shared (generic I/O: files, processes, outbound HTTP), which holds no state and depends only on pure logic and other shared Adapters.
 - Wrapping a volatile third-party API in an Adapter stays a **recommended pattern** in the guide: an anti-corruption layer that insulates the design from upstream contract changes. It is never enforced or reported.
 
 Two honest checks replace the Adapter:

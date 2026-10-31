@@ -54,6 +54,22 @@ const INVOICE_API_INTERFACE = {
   ],
 };
 
+const DOCUMENT_STORAGE_ADAPTER = {
+  id: 'document-storage-adapter',
+  componentType: 'Adapter',
+  subsystem: 'billing',
+  description: 'Generic file I/O over the billing documents on local disk.',
+};
+
+/** billing publishes the document storage adapter as shared, optionally only to some subsystems. */
+const SHARED_STORAGE_SUB = (consumers?: string[]) => ({
+  id: 'billing',
+  description: 'Invoicing and payment collection for booked visits.',
+  publicInterfaces: [
+    { details: 'Document file I/O for every subsystem.', component: 'document-storage-adapter', shared: true, ...(consumers ? { consumers } : {}) },
+  ],
+});
+
 export default [
   // -------------------------------------------------------------------------
   // PUBLIC_INTERFACE_UNBOUND
@@ -362,6 +378,134 @@ export default [
       ],
       components: [INVOICE_PORTAL],
       interfaces: [INVOICE_API_INTERFACE],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // PUBLIC_INTERFACE_NOT_PORTAL — the shared Adapter exemption
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_NOT_PORTAL',
+    expectFire: false,
+    reason: 'An Adapter the subsystem publishes as shared is called directly by every subsystem; public-surface-shared judges it instead of the Portal question.',
+    scenario: 'The billing subsystem publishes its document storage adapter as shared generic file I/O.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SHARED_STORAGE_SUB()],
+      components: [DOCUMENT_STORAGE_ADAPTER],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // PUBLIC_INTERFACE_SHARED_NOT_ADAPTER
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_SHARED_NOT_ADAPTER',
+    severity: 'error',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its invoicing orchestrator as shared, though only generic I/O is safe to hand every subsystem.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{
+        id: 'billing',
+        description: 'Invoicing and payment collection for booked visits.',
+        publicInterfaces: [{ details: 'Invoicing workflow.', component: 'invoice-drafting-orchestrator', shared: true }],
+      }],
+      components: [INVOICE_ORCH],
+    },
+  }),
+  defineRuleFixture({
+    code: 'PUBLIC_INTERFACE_SHARED_NOT_ADAPTER',
+    expectFire: false,
+    reason: 'The shared entry publishes an Adapter, the generic I/O a shared surface is for.',
+    scenario: 'The billing subsystem publishes its document storage adapter as shared.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SHARED_STORAGE_SUB()],
+      components: [DOCUMENT_STORAGE_ADAPTER],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // SHARED_ADAPTER_OWNED
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SHARED_ADAPTER_OWNED',
+    severity: 'error',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its document storage adapter as shared although the document repository owns it as a private member.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SHARED_STORAGE_SUB()],
+      components: [
+        DOCUMENT_STORAGE_ADAPTER,
+        { id: 'document-store', componentType: 'Store', subsystem: 'billing', description: 'Holds the stored billing documents.' },
+        {
+          id: 'document-repository',
+          componentType: 'Repository',
+          subsystem: 'billing',
+          description: 'Facade over the billing document data blocks.',
+          owns: ['document-store', 'document-storage-adapter'],
+        },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'SHARED_ADAPTER_OWNED',
+    expectFire: false,
+    reason: 'No pattern or Supervisor owns the Adapter, so it is no one\'s private member and may be every subsystem\'s.',
+    scenario: 'The billing subsystem publishes a standalone document storage adapter as shared.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SHARED_STORAGE_SUB()],
+      components: [DOCUMENT_STORAGE_ADAPTER],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // SHARED_ADAPTER_DEPENDENCY
+  // -------------------------------------------------------------------------
+  defineRuleFixture({
+    code: 'SHARED_ADAPTER_DEPENDENCY',
+    severity: 'error',
+    anchoredTo: 'billing',
+    expectFire: true,
+    scenario:
+      'The billing subsystem\'s shared document storage adapter depends on the invoice drafting workflow, which a deployable would have to share with it.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [SHARED_STORAGE_SUB()],
+      components: [
+        { ...DOCUMENT_STORAGE_ADAPTER, dependsOn: ['invoice-drafting-orchestrator'] },
+        INVOICE_ORCH,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'SHARED_ADAPTER_DEPENDENCY',
+    expectFire: false,
+    reason: 'A shared Adapter may depend on pure logic and on other shared Adapters: neither holds state.',
+    scenario:
+      'The billing subsystem\'s shared document storage adapter depends on a pure path-normalizing orchestrator and on a shared compression adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [{
+        id: 'billing',
+        description: 'Invoicing and payment collection for booked visits.',
+        publicInterfaces: [
+          { details: 'Document file I/O for every subsystem.', component: 'document-storage-adapter', shared: true },
+          { details: 'Archive compression for every subsystem.', component: 'archive-compression-adapter', shared: true },
+        ],
+      }],
+      components: [
+        { ...DOCUMENT_STORAGE_ADAPTER, dependsOn: ['path-normalizing-arbiter', 'archive-compression-adapter'] },
+        { id: 'archive-compression-adapter', componentType: 'Adapter', subsystem: 'billing', description: 'Compresses and expands document archives on disk.' },
+        { id: 'path-normalizing-arbiter', componentType: 'Orchestrator', dependencyClass: 'pure', subsystem: 'billing', description: 'Pure logic normalizing document paths from the values it is handed.' },
+      ],
     },
   }),
 ];
