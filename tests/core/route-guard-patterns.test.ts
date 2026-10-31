@@ -134,6 +134,24 @@ describe('a router named through a module that only re-exports it', () => {
     expect(routeFindings(issues).map(i => i.code), said(issues)).toEqual(['UNDECLARED_ROUTE']);
   });
 
+  it('follows `export *` to the module that declares the router, through a second star too', () => {
+    const tree = routerTree(guardRouter(HONEST));
+    const at = (guards: string[], index: string): ValidationIssue[] => {
+      tree.files!['src/http/router.ts'] = guardRouter(guards);
+      tree.files!['src/http/index.ts'] = "export * from './router';\n";
+      tree.files!['src/index.ts'] = index;
+      tree.implementations![0].router = 'src/index.ts#routeHabitRequest';
+      return run(tree);
+    };
+    const extra = [...HONEST, "if (req.method === 'DELETE' && req.path === '/habits') return listHabits();"];
+    for (const index of ["export * from './http/router';\n", "export * from './http';\n"]) {
+      const honest = at(HONEST, index);
+      expect(routeFindings(honest), said(honest)).toEqual([]);
+      const issues = at(extra, index);
+      expect(routeFindings(issues).map(i => i.code), said(issues)).toEqual(['UNDECLARED_ROUTE']);
+    }
+  });
+
   it('reports a re-export cycle as an unread router', () => {
     const tree = through("export { routeHabitRequest } from './other';\n", 'src/index.ts#routeHabitRequest');
     tree.files!['src/other.ts'] = "export { routeHabitRequest } from './index';\n";
