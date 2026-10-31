@@ -420,8 +420,9 @@ methods:
       naming another subsystem in `from` with one component, interface narrowing or type, optionally
       renamed with `as` — `from` alone re-exports everything that subsystem exports. `type` and
       `details` are required on an own component item and optional on a re-export, which inherits
-      its target's. The tool for backfilling bindings once a subsystem's components exist, because a
-      cross-subsystem dependency may only target a published public component.
+      its target's. An own Adapter item may say `shared: true` to publish the Adapter to every
+      subsystem of the project. The tool for backfilling bindings once a subsystem's components
+      exist, because a cross-subsystem dependency may only target a published public component.
     signature: >-
       setPublicInterfaces(subsystemId: string, publicInterfaces: list<PublicInterface>):
       SpecChangeReport
@@ -1409,4 +1410,4 @@ methods:
       method: tools/call sdd_find_references
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:09:01.854Z'
+updatedAt: '2026-10-31T21:52:08.622Z'

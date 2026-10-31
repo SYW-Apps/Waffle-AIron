@@ -34,5 +34,11 @@ values:
       import): project-boundaries' single finding
   - name: missing
     description: A local id that names nothing
+  - name: shared
+    description: >-
+      A component of this tree in another subsystem, an Adapter that subsystem publishes as shared
+      (ctx.sharedSet): judged by the stereotype matrix as an internal edge is, and by the boundary
+      rule only for the consumers its entries name — no client Adapter, trustedLink or Portal is
+      asked for
 createdAt: '2026-10-04T23:13:45.977Z'
-updatedAt: '2026-10-06T13:01:24.103Z'
+updatedAt: '2026-10-31T21:51:46.526Z'

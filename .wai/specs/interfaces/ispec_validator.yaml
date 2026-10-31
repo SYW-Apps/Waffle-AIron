@@ -212,12 +212,13 @@ methods:
       edge crossing into another subsystem whose target is not a Portal
       (CROSS_SUBSYSTEM_NON_ADAPTER, CROSS_SUBSYSTEM_PRIVATE_ACCESS and
       CROSS_SUBSYSTEM_TARGET_NON_PORTAL on it: no trustedLink and no export makes a non-Portal a
-      subsystem's front door), and two bound methods sharing one HTTP route
-      (ENDPOINT_ROUTE_DUPLICATE). A cross-subsystem edge into a Portal is curable — a client
-      Adapter, a trustedLink on the source subsystem, the target's export — so its findings ride
-      along as warnings, never refuse. Completeness findings never run here, so a component authored
-      before its collaborators is never refused for it. The project's severity overrides apply as
-      they do in validate, so a code tuned down is a warning here too.
+      subsystem's front door; an Adapter its subsystem publishes as shared is no front door but a
+      shared edge, judged by the matrix like an internal one), and two bound methods sharing one
+      HTTP route (ENDPOINT_ROUTE_DUPLICATE). A cross-subsystem edge into a Portal is curable — a
+      client Adapter, a trustedLink on the source subsystem, the target's export — so its findings
+      ride along as warnings, never refuse. Completeness findings never run here, so a component
+      authored before its collaborators is never refused for it. The project's severity overrides
+      apply as they do in validate, so a code tuned down is a warning here too.
     signature: >-
       introducedFindings(kind: WritableSpecKind, candidate: ComponentSpec | InterfaceSpec, opts?:
       CandidateOptions, others?: list<ComponentSpec>): CandidateVerdict
@@ -241,4 +242,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T12:04:05.122Z'
+updatedAt: '2026-10-31T21:51:59.877Z'

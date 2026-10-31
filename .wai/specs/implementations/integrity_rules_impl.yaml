@@ -581,15 +581,18 @@ methods:
         description: >-
           Branch: is the backing component something other than a Portal? Nothing can use it: a hop
           from another subsystem enters through a published Portal, and another project consumes
-          only a Portal's verbs
+          only a Portal's verbs — unless it is an Adapter the subsystem publishes as shared, which
+          every subsystem calls directly (public-surface-shared judges it)
         type: branch
-        condition: backing.componentType is not Portal
+        condition: >-
+          backing.componentType is not Portal, and ctx.sharedSet for sub.id does not contain
+          backing.id
         onFalseStep: 3
       - stepNumber: 15
         description: >-
           Report PUBLIC_INTERFACE_NOT_PORTAL (warning; isDraftCtx) naming the subsystem, the
-          component and its type, and the remedy: publish the Portal that dispatches to it, or drop
-          the entry.
+          component and its type, and the remedy: publish the Portal that dispatches to it, publish
+          an Adapter as shared, or drop the entry.
         type: local
     symbol: check
     exportedVia: publicSurfaceBindingRule
@@ -1606,6 +1609,86 @@ methods:
     detail: full
     symbol: check
     exportedVia: typeGroupsRule
+  - name: publicSurfaceShared
+    sourcePath: src/core/rules/integrity/public-surface-shared.ts
+    narrative:
+      - stepNumber: 1
+        label: pssSubStart
+        description: For each loaded subsystem, judge every entry that publishes its component as shared.
+        type: loop
+        loopKind: forEach
+        over: ctx.subsystems
+        endStep: 12
+      - stepNumber: 2
+        description: isDraftCtx = sub.isDraft().
+        type: local
+      - stepNumber: 3
+        label: pssEntry
+        description: >-
+          For each OWN component entry of the subsystem that says shared — neither `from` nor
+          `typeDef`, shared: true; a re-export publishes nothing of its own.
+        type: loop
+        loopKind: forEach
+        over: the subsystem's own component entries whose shared is true
+        endStep: 12
+      - stepNumber: 4
+        description: backing = ctx.componentMap.get(pi.component).
+        type: local
+      - stepNumber: 5
+        description: >-
+          Branch: is the entry unbound, its component missing, or a component the subsystem does not
+          own? public-surface-binding reports each, so nothing reliable is said here.
+        type: branch
+        condition: >-
+          pi.component is unset, backing is undefined, or backing.subsystem is neither sub.id nor
+          starts with sub.id + "::"
+        onFalseStep: 7
+      - stepNumber: 6
+        description: Continue with the next entry.
+        type: jump
+        toStep: 3
+      - stepNumber: 7
+        label: pssNotAdapter
+        description: >-
+          Branch: is the component something other than an Adapter? Only an Adapter is the generic
+          I/O every subsystem may call directly
+        type: branch
+        condition: backing.componentType is not Adapter
+        onFalseStep: 10
+      - stepNumber: 8
+        description: >-
+          Report PUBLIC_INTERFACE_SHARED_NOT_ADAPTER (error; isDraftCtx) naming the subsystem, the
+          component and its type: only an Adapter may be published as shared — publish a Portal for
+          anything else, or drop shared.
+        type: local
+      - stepNumber: 9
+        description: Continue with the next entry.
+        type: jump
+        toStep: 3
+      - stepNumber: 10
+        label: pssOwned
+        description: 'Branch: does a pattern or a Supervisor own the Adapter?'
+        type: branch
+        condition: ctx.ownershipIndex() names an owner of backing.id
+        onFalseStep: 12
+      - stepNumber: 11
+        description: >-
+          Report SHARED_ADAPTER_OWNED (error; isDraftCtx) naming the subsystem, the Adapter and its
+          owner: a member is private to its owner, so it cannot be every subsystem's — publish an
+          Adapter no pattern owns, or drop shared.
+        type: local
+      - stepNumber: 12
+        label: pssDeps
+        description: >-
+          For each id in backing.dependsOn that resolves in ctx.componentMap to neither an
+          Orchestrator whose dependencyClass is pure nor an Adapter ctx.sharedSet holds for its
+          subsystem, report SHARED_ADAPTER_DEPENDENCY (error; isDraftCtx) naming the subsystem, the
+          Adapter and the dependency with its type: a shared Adapter holds no state and reaches
+          nothing a deployable would have to share. An id resolving nothing is
+          INVALID_DEPENDENCY_REFERENCE's, never reported here.
+        type: local
+    symbol: check
+    exportedVia: publicSurfaceSharedRule
 status: complete
 createdAt: '2026-09-14T23:14:34.746Z'
-updatedAt: '2026-10-23T22:26:11.676Z'
+updatedAt: '2026-10-31T21:55:10.713Z'
