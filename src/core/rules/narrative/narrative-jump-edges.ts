@@ -26,11 +26,11 @@ export const narrativeJumpEdgesRule: SddRule = {
   name: 'narrative-jump-edges',
   judges: 'design',
   description:
-    'Where an L5 narrative\'s jump edges land: a loop/try/parallel region is entered through its header, never into the middle of its body; a backward jump is only idiomatic as a continue to an enclosing loop header, and otherwise models repetition that belongs in a loop step; and a try body must not fall through into its own catch/finally region on the success path. Judged only for a narrative whose step configuration is sound (narrative-step-config reports the rest).',
+    "Where an L5 narrative's jump edges land: a loop/try/parallel region is entered through its header, never into the middle of its body; a backward jump is only idiomatic as a continue to an enclosing loop header, and otherwise models repetition that belongs in a loop step; and a try body must not fall through into its own catch/finally region on the success path — the region after the body, or a catch or finally step lying inside the body itself, which the success path reaches in step order. Judged only for a narrative whose step configuration is sound (narrative-step-config reports the rest).",
   codes: [
     { code: 'JUMP_INTO_REGION', defaultSeverity: 'warning', summary: 'Jump lands in the middle of a loop/try body from outside — regions are entered through their header' },
     { code: 'BACKWARD_JUMP', defaultSeverity: 'warning', summary: 'Backward jump that is not a continue to an enclosing loop header — model repetition with a loop step' },
-    { code: 'FALLTHROUGH_INTO_HANDLER', defaultSeverity: 'warning', summary: 'try body falls through into its own catch/finally region on the success path' },
+    { code: 'FALLTHROUGH_INTO_HANDLER', defaultSeverity: 'warning', summary: 'try body falls through into its own catch/finally region on the success path — the region after the body, or a handler step inside the body itself' },
   ],
   check(ctx) {
     for (const impl of ctx.implementations) {
@@ -88,6 +88,18 @@ export const narrativeJumpEdgesRule: SddRule = {
           if (s.type !== 'try' || s.endStep === undefined) continue;
           const handlerStarts = new Set<number>((s.catches ?? []).map(c => c.step));
           if (s.finallyStep !== undefined) handlerStarts.add(s.finallyStep);
+          // A handler step lying inside the body is reached by the success path in step order.
+          const inside = [...handlerStarts].filter(h => h > s.stepNumber && h <= s.endStep!).sort((x, y) => x - y)[0];
+          if (inside !== undefined) {
+            ctx.addIssue(
+              'warning',
+              'FALLTHROUGH_INTO_HANDLER',
+              `${where}the try at step ${s.stepNumber} has its handler at step ${inside} inside its own body (steps ${s.stepNumber}..${s.endStep}), so the success path runs into it — end the body with a jump, return, or throw and place the handler after the body.`,
+              impl.id,
+              isDraftCtx,
+            );
+            continue;
+          }
           const last = byNum.get(s.endStep);
           const nxt = nextOf(s.endStep);
           if (last && (last.type === 'local' || last.type === 'call' || last.type === 'register' || last.type === 'dispatch') && nxt !== undefined && handlerStarts.has(nxt)) {

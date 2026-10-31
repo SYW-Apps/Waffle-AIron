@@ -6,11 +6,12 @@ import {
   listApprovalRequests,
   markApprovalCompleted,
   cancelApprovalRequest,
+  withdrawApprovalRequest,
   expirePendingApprovals,
 } from './approvals.js';
 import { appendAuditEvent, effectiveAuditPolicy } from './audit.js';
 import { UnauthenticatedError, ForbiddenError } from './errors.js';
-import { executeApprovedLock, gateIdentity, hostedApprover } from './admin.js';
+import { executeApprovedLock, gateIdentity, checkLockable, hostedApprover } from './admin.js';
 import type { ApproverIdentity } from '../models/lock.js';
 import type { LockRecord } from '../core/lockfile.js';
 import { evaluateInitRequest, executeApprovedInit } from './policy.js';
@@ -416,10 +417,26 @@ function lifecycleAction(
   if (!existingProjectRoot(cfg.dataDir, projectId)) {
     throw new Error(`Unknown project "${projectId}".`);
   }
-  // Steps 13-16: pin the design the request is about: the approved execution
+  // Step 13: a tree with validation errors is refused here, before any request
+  // exists: the approved lock would refuse it, so nobody is asked to approve it.
+  checkLockable(cfg, projectId);
+  // Steps 14-17: pin the design the request is about: the approved execution
   // refuses a tree whose gate identity moved after this moment. No qualifier is
   // recorded — the record id (a member's own) confines the request.
   const gateStateId = gateIdentity(cfg, projectId);
+  // Steps 15-17: a caller who already holds a pending lock request for this very
+  // design is handed that request back, not a second one; nothing new happened,
+  // so nothing is audited.
+  const existing = listApprovalRequests(cfg.dataDir, 'pending', projectId, principalSubject(principal).userId, opts.action)
+    .find((r) => r.gateStateId === gateStateId);
+  if (existing) {
+    return {
+      status: 'pending-approval',
+      action: opts.action,
+      summary: `Approval required: request ${existing.id} is already pending for this design and awaiting a decision.`,
+      approval: existing,
+    };
+  }
   const pending = buildPendingRequest(
     principal,
     opts.action,
@@ -428,6 +445,31 @@ function lifecycleAction(
     { gateStateId },
   );
   return createPendingOutcome(cfg, principal, pending, opts.action);
+}
+
+/**
+ * A pending project:lock request recording a gateStateId that differs from its
+ * project's gate identity now can never be approved: cancel it through the
+ * repository's atomic withdraw, recording why, and return it as it now stands.
+ * A request found no longer pending at that moment is simply read again. Null
+ * when the request is not such a request or its design has not moved.
+ */
+function cancelIfDesignMoved(cfg: HostConfig, req: ApprovalRequest): ApprovalRequest | null {
+  if (req.status !== 'pending' || req.kind !== 'project:lock' || !req.gateStateId || !req.projectId) return null;
+  let now: string;
+  try {
+    now = gateIdentity(cfg, req.projectId);
+  } catch {
+    return null; // a tree that cannot be read now is not proof the design moved
+  }
+  if (now === req.gateStateId) return null;
+  const reason = `the design changed since it was requested (requested ${req.gateStateId}, now ${now}); `
+    + 'request the lock again';
+  try {
+    return withdrawApprovalRequest(cfg.dataDir, req.id, reason);
+  } catch {
+    return getApprovalRequestById(cfg.dataDir, req.id) ?? null;
+  }
 }
 
 /**
@@ -446,6 +488,42 @@ function refuseDeniedSubsystems(cfg: HostConfig, principal: Principal, projectId
 }
 
 /**
+ * The requester withdraws their own PENDING approval request: authenticate the
+ * caller, lazily expire overdue pending requests, require the caller to be the
+ * original requester (an approver decides, never withdraws), then move the
+ * request to cancelled in one atomic write that only succeeds while it is still
+ * pending. Its executionSummary states it was withdrawn by the requester (and
+ * their reason when given); nothing is executed. Audit at security level.
+ */
+export function withdrawRequest(
+  cfg: HostConfig,
+  credential: string | null,
+  requestId: string,
+  reason?: string,
+): ApprovalRequest {
+  const principal = requirePrincipal(cfg, credential);
+  expirePendingApprovals(cfg.dataDir, new Date().toISOString());
+
+  const req = getApprovalRequestById(cfg.dataDir, requestId);
+  if (!req) throw new Error(`Approval request "${requestId}" not found.`);
+  if (!isOriginalRequester(principal, req)) {
+    throw new ForbiddenError('Forbidden - only the original requester may withdraw this request');
+  }
+
+  const summary = reason ? `withdrawn by the requester: ${reason}` : 'withdrawn by the requester';
+  const withdrawn = withdrawApprovalRequest(cfg.dataDir, req.id, summary);
+
+  tryAppendAudit(
+    cfg,
+    buildAuditEvent(principal, 'approval.withdrawn', 'security', {
+      target: withdrawn.id,
+      projectId: withdrawn.projectId,
+    }),
+  );
+  return withdrawn;
+}
+
+/**
  * Authenticate the caller, lazily expire overdue pending requests first, look up
  * the request by id (not-found error when absent), and return it only to its
  * original requester (matching subject or requesting token id) or to a caller
@@ -461,8 +539,9 @@ export function getApprovalStatus(
   const principal = requirePrincipal(cfg, credential);
   expirePendingApprovals(cfg.dataDir, new Date().toISOString());
 
-  const req = getApprovalRequestById(cfg.dataDir, requestId);
+  let req = getApprovalRequestById(cfg.dataDir, requestId);
   if (!req) throw new Error(`Approval request "${requestId}" not found.`);
+  req = cancelIfDesignMoved(cfg, req) ?? req;
 
   // Visible to the original requester, or to a caller whose resolved
   // approval:decide scope permits the request's project (a request with no
@@ -495,7 +574,10 @@ export function listPendingRequests(
     throw new ForbiddenError('deciding approvals requires approval:decide over at least one project');
   }
   expirePendingApprovals(cfg.dataDir, new Date().toISOString());
-  const pending = listApprovalRequests(cfg.dataDir, 'pending', projectId);
+  // A lock request whose design moved is cancelled (and so dropped); one found
+  // no longer pending at that moment is dropped as well.
+  const pending = listApprovalRequests(cfg.dataDir, 'pending', projectId)
+    .filter((r) => cancelIfDesignMoved(cfg, r) === null);
   if (admin) return pending;
   // Filter to requests whose project the caller may decide (honoring any optional
   // project narrowing already applied above). A request with no projectId is

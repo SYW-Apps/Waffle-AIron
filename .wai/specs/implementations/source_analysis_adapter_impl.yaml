@@ -27,10 +27,15 @@ methods:
       - stepNumber: 2
         description: >-
           Deduplicate the distinct source paths the specs name — each implementation's sourcePath,
-          each method's own sourcePath and each simPath, then each type's sourcePath and each type
-          method's own sourcePath — append the walked rootFiles, and resolve each against the
-          project root, classifying absolute or parent-escaping paths as escaped (containment,
-          mirroring the projectPath rule) and nonexistent files as missing
+          each method's own sourcePath, each simPath and the module its router linkage names, and,
+          for a Portal that names a router, the project modules the router's module imports (the
+          module the linkage names, else the implementation's own files), followed import by import
+          up to four hops, each specifier resolved as resolveImport resolves it against the files
+          that exist — so a router named through a module that only imports or re-exports it is read
+          where it is defined, then each type's sourcePath and each type method's own sourcePath —
+          append the walked rootFiles, and resolve each against the project root, classifying
+          absolute or parent-escaping paths as escaped (containment, mirroring the projectPath rule)
+          and nonexistent files as missing
         type: local
       - stepNumber: 3
         label: readLocalPackages
@@ -69,7 +74,10 @@ methods:
           sits in and that class's members (a leading underscore private, @staticmethod and
           @classmethod static, @property an accessor, `__init__` the constructor), each body's call
           sites by receiver shape (a bare call, `self.<method>()`, `self.<field>.<method>()`, a call
-          through a name), the annotated type of each instance field (an annotation, or the
+          through a name), each with how it runs — whether an `await` waits for it, directly or as
+          an element of an awaited `asyncio.gather` or `asyncio.wait`, and whether the body of a
+          `try` with an `except` encloses it in its function (call_site_fact.awaited and guarded,
+          the `manner` reading) —, the annotated type of each instance field (an annotation, or the
           annotated constructor parameter it is assigned from) and of each annotated name, and the
           module's imports with the local name each binds (`from .x import Y`, `from . import x`,
           `import a.b as c`), which top-level classes the module names outside their own `class`
@@ -87,20 +95,37 @@ methods:
           prefix (folded across modules in step 12). Every path, prefix and verb is a string literal
           or a module-level constant bound to one; a router any of whose routes, prefixes or
           includes does not settle, or that mounts an application (`.mount`), records no route and
-          is listed as unread (source_file_facts.unreadRouters). DATA TYPES: the fields of each
+          is listed as unread (source_file_facts.unreadRouters), as is one with a route that places
+          a path converter before further segments (`/<path:p>/edit`). GUARDS: a function whose body
+          selects a handler by the request's method and path — `if`/`elif` conditions joined by
+          `and` (a branch inherits its enclosing conditions, an `else` none of them), `match` over
+          the path with string `case`s, or a dict keyed by path or by (method, path) whose values
+          are handlers — answers a route for each method comparison (`request.method == "GET"`,
+          `method in ("GET", "POST")`; a `do_GET`-style method of a `BaseHTTPRequestHandler`
+          subclass takes its verb from its name) joined with a path comparison: the whole path to a
+          string, its split segments (`parts = path.strip("/").split("/")` with `len(parts) == N`
+          and `parts[i] == "x"`), a prefix (`path.startswith(...)`, an open-ended route) or an
+          anchored raw regular expression (`re.match`, `re.fullmatch`), each value a literal or a
+          module-level constant bound to one, recorded under the function's name (or
+          `Class.method`); a route needs a verb and a path, and a function whose path comparisons do
+          not all settle records none and is listed as unread. DATA TYPES: the fields of each
           top-level class that a dataclass or attrs decorator (dataclass, define, frozen, mutable,
           attr.s, attrs.define and their dotted forms) or a base (BaseModel, BaseSettings,
           TypedDict, NamedTuple) makes declarative, as source_file_facts.typeShapes: each annotated
           name of its body — ClassVar, InitVar and KW_ONLY aside, and on a Pydantic model an
-          underscore name — and on an attrs class each `x = attr.ib()` or `field()` too. A field is
+          underscore name — and on an attrs class each `x = attr.ib()` or `field()` too — on a class
+          of the legacy `@attr.s` form whose `auto_attribs` is not `True`, only those. A field is
           absent-able when it has a default — a value, or a field call (field, Field, attr.ib,
-          attrs.field) given a default or a default factory, while `Field(...)` and a field call
-          naming neither leave it required — and in a TypedDict when the annotation is
-          `NotRequired[…]`, or the class is `total=False` and the annotation is not `Required[…]`;
-          `Optional[T]` alone never makes it absent-able, since a Pydantic v2 field so annotated is
-          required and merely nullable. Its public methods are its methods, and a base beyond the
-          framework's own (Generic aside) marks it inherited. What it cannot read it leaves unset,
-          so a check never reads silence as a pass
+          attrs.field) given a default or a default factory, while `Field(...)`,
+          `Field(default=...)` (the Ellipsis is the required marker) and a field call naming neither
+          leave it required — and in a TypedDict when the annotation is `NotRequired[…]`, or the
+          class is `total=False` and the annotation is not `Required[…]` — where `total=` does not
+          settle to a literal, a field marked neither way records no absence at all
+          (shape_member_fact.optional unset), never a guess; `Optional[T]` alone never makes it
+          absent-able, since a Pydantic v2 field so annotated is required and merely nullable. Its
+          public methods are its methods, and a base beyond the framework's own (Generic aside)
+          marks it inherited. What it cannot read it leaves unset, so a check never reads silence as
+          a pass
         type: local
       - stepNumber: 6
         label: decoratorMetadata
@@ -147,11 +172,16 @@ methods:
           name, a plain-identifier receiver, the this.<field> receiver whose declared type can be
           followed, the new Class(...) receiver whose class name can be, the fn(...) receiver whose
           function's return can be, or the this receiver inside a top-level named class's own method
-          — unioned per name AND kept body by body with where each body is bound (module scope, a
-          member of a top-level named class or of an object literal a top-level variable is bound
-          to, or nested), so same-named functions in one file stay apart, and, before any
-          republication is folded in, whether the file declared nothing of its own and only
-          re-exported, which is what makes it a pure re-export barrel
+          — and how each runs: whether the function waits for it (the operand of an await through
+          parentheses, a non-null assertion, satisfies or a cast; an element of an awaited
+          Promise.all, allSettled, race or any; or returned directly) and whether it is caught there
+          (in the body of a try that has a catch, or with a rejection handler chained onto it:
+          `.catch(...)`, or `.then(...)` with a second argument), shares merged across the writings
+          of one shape (call_site_fact.awaited, guarded) — unioned per name AND kept body by body
+          with where each body is bound (module scope, a member of a top-level named class or of an
+          object literal a top-level variable is bound to, or nested), so same-named functions in
+          one file stay apart, and, before any republication is folded in, whether the file declared
+          nothing of its own and only re-exported, which is what makes it a pure re-export barrel
         type: local
       - stepNumber: 8
         label: readSignaturesAndRoutes
@@ -338,10 +368,13 @@ methods:
           Fold each Python router's includes across modules: an included router bound by an import
           (`from .orders import router as orders_router`, or `orders.router` through a namespace
           import) is followed through the import's resolution to the router of that name in the
-          analyzed module it lands in, its routes taken under the include's prefix, transitively,
-          each router once; and the routes decorated on an imported router object in another module
-          join that object's routes in its own module. An include that lands on no router of an
-          analyzed module, or on an unread one, makes the including router unread
+          analyzed module it lands in — through a package `__init__` that re-exports the name from
+          the module building it, hop by hop with a visited set, a cycle leaving the include unread
+          — its routes taken under the include's prefix, transitively, each router once; and the
+          routes decorated on an imported router object in another module join that object's routes
+          in its own module — and when what that module adds to it does not settle, the object
+          itself is unread in its own module. An include that lands on no router of an analyzed
+          module, or on an unread one, makes the including router unread
           (source_file_facts.unreadRouters), its routes removed
         type: local
       - stepNumber: 13
@@ -448,12 +481,14 @@ methods:
         description: >-
           Take the file set buildCodeModel takes, on the same terms: the declared roots walked
           (containment-checked, node_modules and dot-directories skipped, known source extensions
-          only, exclude entries left out) and every spec-named path resolved and classified
+          only, exclude entries left out) and every spec-named path resolved and classified, with
+          the modules a router linkage's module imports followed as buildCodeModel follows them
         type: local
       - stepNumber: 2
         description: >-
-          Stat each readable file for its size and modification time, reading no content; a missing
-          or escaped file contributes its classification instead
+          Stat each readable file for its size and modification time, reading no content beyond the
+          router modules' import lines step 1 followed; a missing or escaped file contributes its
+          classification instead
         type: local
       - stepNumber: 3
         description: >-
@@ -466,4 +501,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-29T11:38:52.185Z'
+updatedAt: '2026-10-30T22:18:34.483Z'

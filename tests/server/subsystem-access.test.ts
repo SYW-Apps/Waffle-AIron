@@ -200,6 +200,9 @@ describe('a subsystem rule decides spec writes in its subsystem', () => {
     const elsewhere = await call(team, 'sdd_add_component', comp('cat_index', 'catalog'));
     expect(elsewhere.isError).toBe(true);
     expect(elsewhere.text).toMatch(/SubsystemWriteDenied/);
+    // The refusal names the spec's path relative to the project root, never the server's folders.
+    expect(elsewhere.text).toContain('writing component spec .wai/specs/catalog/cat_index/.index.yaml would change');
+    expect(elsewhere.text).not.toContain(fam.platform);
     expect(elsewhere.text).toMatch(/subsystem "catalog" of project "platform"/);
     // It says what is missing and the grant that would let the write through.
     expect(elsewhere.text).toMatch(/decided by the project rung: no project:write on the project, and no setting on this subsystem/);
@@ -212,7 +215,7 @@ describe('a subsystem rule decides spec writes in its subsystem', () => {
     // A write that is not subsystem-scoped needs the project rung, and says which rung decided.
     const pin = await call(team, 'sdd_pin_externals', {});
     expect(pin.isError).toBe(true);
-    expect(pin.text).toMatch(/Forbidden — permission project:write required for sdd_pin_externals, decided at the instance default/);
+    expect(pin.text).toMatch(/Forbidden — permission project:write required for sdd_pin_externals, decided at the instance default [(]no grant reaches this action: no[)]/);
     expect(bytes(fam.platform)).toEqual(tree);
   });
 

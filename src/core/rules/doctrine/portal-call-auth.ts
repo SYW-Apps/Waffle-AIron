@@ -19,7 +19,7 @@ export const portalCallAuthRule: SddRule = {
   name: 'portal-call-auth',
   judges: 'design',
   description:
-    "Hardens authenticated cross-service calls. An OUTBOUND narrative `call` into ANOTHER component's Portal whose auth is not `none` must (a) be made by an Adapter — the only block that does external I/O — and (b) declare the credential source it presents via the step's `auth.from`. Absence of a source warns PORTAL_AUTH_UNMET; a non-Adapter presenter warns AUTH_PRESENTER_NOT_ADAPTER. The actual secret is never stored in the spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service calls and are excluded.",
+    "Hardens authenticated cross-service calls. An OUTBOUND narrative `call` into ANOTHER component's Portal whose auth is not `none` must (a) be made by an Adapter — the client block a call to another service goes through, so its transport and the credential it presents are kept in one place — and (b) declare the credential source it presents via the step's `auth.from`. Absence of a source warns PORTAL_AUTH_UNMET; a non-Adapter presenter warns AUTH_PRESENTER_NOT_ADAPTER. The actual secret is never stored in the spec. Dispatch steps (a portal's OWN inbound routing) and self-calls are not cross-service calls and are excluded.",
   codes: [
     { code: 'PORTAL_AUTH_UNMET', defaultSeverity: 'warning', summary: 'A narrative call into another component\'s authed Portal does not declare where its credential loads from' },
     { code: 'AUTH_PRESENTER_NOT_ADAPTER', defaultSeverity: 'warning', summary: 'A non-Adapter component authenticates an outbound call to a portal (external I/O must go through an Adapter)' },
@@ -42,13 +42,13 @@ export const portalCallAuthRule: SddRule = {
 
           // (1) The credential PRESENTER — the component making the authenticated
           // outbound call — must be an Adapter. An authenticated cross-service call
-          // is external I/O, and the vocabulary reserves external I/O to Adapters
+          // is an outside call, and the client block for one is an Adapter
           // (the presenter of an authenticated outbound call is a client Adapter).
           if (presenter && presenter.componentType !== 'Adapter') {
             ctx.addIssue(
               'warning',
               'AUTH_PRESENTER_NOT_ADAPTER',
-              `Narrative step ${step.stepNumber} of "${method.name}" in "${impl.id}": "${presenter.id}" (${presenter.componentType}) authenticates an outbound call to portal "${target.id}". An authenticated cross-service call is external I/O and must be made by an Adapter (the only block that does external I/O) — route it through a client Adapter.`,
+              `Narrative step ${step.stepNumber} of "${method.name}" in "${impl.id}": "${presenter.id}" (${presenter.componentType}) authenticates an outbound call to portal "${target.id}". An authenticated cross-service call should be made by an Adapter, the client block a call to another service goes through, so its transport and the credential it presents are kept in one place.`,
               impl.id,
               draft,
             );

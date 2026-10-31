@@ -16,19 +16,23 @@ methods:
       without entering node_modules or a dot-directory, keeping each file whose extension names a
       language the analyzer knows and that is not at, or under, an exclude entry — then resolve each
       distinct source file the specs name (every implementation sourcePath, every method's own
-      sourcePath, every simPath, and every type sourcePath and type-method sourcePath) on the same
-      terms (absolute or parent-escaping paths classify as escaped, nonexistent files as missing,
-      binary/unreadable content as unreadable), analyze every readable file with the best available
-      analyzer — exact AST when the TypeScript compiler module resolves dynamically for ts/js, else
-      the language's declarative pattern table (built-in or extension-pack registered), else the
-      generic word-boundary scan — and return per-file facts (declaration-tier names, string-literal
-      and property-access anchors, exported names, import specifiers, and — at exact grade only —
-      per-named-function cyclomatic complexity, per-named-function direct callee names and whether
-      the file is a pure re-export barrel that declares nothing of its own; lower grades omit all
-      three rather than guess) graded exact | pattern | generic, beside the walked file list the
-      unclaimed-source rule judges. Declaring no source root walks nothing, which is what keeps that
-      rule opt-in. Deterministic over file contents; a single file's analysis failure degrades that
-      file, never the run.
+      sourcePath, every simPath, the module a router linkage names, every type sourcePath and
+      type-method sourcePath, and, for a Portal that names a router, the project modules the
+      router's module imports (the module the linkage names, else the implementation's own files),
+      followed import by import up to four hops, each specifier resolved as resolveImport resolves
+      it against the files that exist — so a router named through a module that only imports or
+      re-exports it is read where it is defined) on the same terms (absolute or parent-escaping
+      paths classify as escaped, nonexistent files as missing, binary/unreadable content as
+      unreadable), analyze every readable file with the best available analyzer — exact AST when the
+      TypeScript compiler module resolves dynamically for ts/js, else the language's declarative
+      pattern table (built-in or extension-pack registered), else the generic word-boundary scan —
+      and return per-file facts (declaration-tier names, string-literal and property-access anchors,
+      exported names, import specifiers, and — at exact grade only — per-named-function cyclomatic
+      complexity, per-named-function direct callee names and whether the file is a pure re-export
+      barrel that declares nothing of its own; lower grades omit all three rather than guess) graded
+      exact | pattern | generic, beside the walked file list the unclaimed-source rule judges.
+      Declaring no source root walks nothing, which is what keeps that rule opt-in. Deterministic
+      over file contents; a single file's analysis failure degrades that file, never the run.
     signature: >-
       buildCodeModel(implementations: list<ImplementationSpec>, types: list<TypeSpec>, projectRoot:
       string, sourceRoots?: list<string>, exclude?: list<string>): CodeModel
@@ -117,14 +121,15 @@ methods:
     effect: io
   - name: fingerprintSources
     description: >-
-      Fingerprint the source files buildCodeModel would read, without reading them: the same file
-      set on the same containment terms (the declared roots walked, every spec-named path resolved),
-      each file's project-relative path, size and modification time folded into one string in a
-      stable order. A file that is missing or escaped contributes its classification instead, so a
-      file appearing or vanishing changes the fingerprint. Stat-only: no file content is read, which
-      is what makes it cheap enough to run before every lookup. A size- and time-preserving edit
-      within the clock's resolution is not seen; the fingerprint says the files look unchanged, not
-      that their contents are.
+      Fingerprint the source files buildCodeModel would read, without reading their content: the
+      same file set on the same containment terms (the declared roots walked, every spec-named path
+      resolved), each file's project-relative path, size and modification time folded into one
+      string in a stable order. A file that is missing or escaped contributes its classification
+      instead, so a file appearing or vanishing changes the fingerprint. Stat-only but for the
+      modules a router linkage names and the modules they import, whose import lines are read to
+      find the files the set follows (a handful, not the tree), which is what makes it cheap enough
+      to run before every lookup. A size- and time-preserving edit within the clock's resolution is
+      not seen; the fingerprint says the files look unchanged, not that their contents are.
     signature: >-
       fingerprintSources(implementations: list<ImplementationSpec>, types: list<TypeSpec>,
       projectRoot: string, sourceRoots?: list<string>, exclude?: list<string>): string
@@ -149,4 +154,4 @@ methods:
     effect: io
 status: complete
 createdAt: '2026-07-11T17:52:00.756Z'
-updatedAt: '2026-10-25T19:08:09.179Z'
+updatedAt: '2026-10-30T22:18:26.703Z'

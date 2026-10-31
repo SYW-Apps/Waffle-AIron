@@ -556,16 +556,35 @@ export function listUsers(
     );
     return users.filter((u) => holders.has(u.id));
   };
+  // Subjects holding a DIRECT user grant (at the project scope when filtered)
+  // that match no record by record id or subject id surface as synthesized
+  // noRecord rows: no home unit, no status — a record states the status, and
+  // there is none. The boot-reserved built-in subjects are never listed.
+  const withNoRecordRows = (records: HostedUserRecord[]): HostedUserRecord[] => {
+    const known = new Set<string>();
+    for (const r of records) {
+      known.add(r.id);
+      if (r.subject?.userId) known.add(r.subject.userId);
+    }
+    const rows: HostedUserRecord[] = [];
+    for (const a of listAssignments(cfg.dataDir, project ? [project] : undefined, 'user')) {
+      const id = a.subjectId;
+      if (id === undefined || known.has(id) || isReservedSubject(cfg.dataDir, id)) continue;
+      known.add(id);
+      rows.push({ id, subject: { userId: id, kind: 'human', issuer: 'local' }, createdAt: '', noRecord: true });
+    }
+    return [...records, ...rows];
+  };
   // An instance-level admin (bypass OR delegated) sees every user, including
   // no-home-unit users a unit filter could never surface.
   if (hasInstanceProjectAdmin(cfg, principal)) {
-    return narrowToProject(userRepo.listUsers(cfg.dataDir));
+    return withNoRecordRows(narrowToProject(userRepo.listUsers(cfg.dataDir)));
   }
   const units = new Set(actionableUnitIds(visibleScopes(cfg.dataDir, principal, PROJECT_ADMIN_CAPABILITY)));
   if (units.size === 0) {
     throw new ForbiddenError('user administration requires project:admin over at least one unit');
   }
-  const users = narrowToProject(userRepo.listUsers(cfg.dataDir));
+  const users = withNoRecordRows(narrowToProject(userRepo.listUsers(cfg.dataDir)));
   return users.filter((u) => u.unitId !== undefined && units.has(u.unitId));
 }
 

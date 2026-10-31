@@ -89,7 +89,8 @@ methods:
       - stepNumber: 8
         description: >-
           Which spec-tree check? validation_options.selectsFamily(the configuration declares
-          members): the family run at a parent or with --family, the owner's gate otherwise
+          members, the configuration declares externals): the family run at a parent, at a project
+          declaring externals, or with --family, the owner's gate otherwise
         type: branch
         condition: the options select the family run
         onFalseStep: 11
@@ -123,14 +124,33 @@ methods:
         targetMethod: adviseExternals
       - stepNumber: 13
         description: >-
+          A family run already holds the enclosing family's network findings as its own gate's; only
+          an owner's-gate run lacks them
+        type: branch
+        condition: the run was the owner's gate (step 11 ran)
+        onFalseStep: 15
+      - stepNumber: 14
+        description: >-
+          At a member whose family root is on disk and in the run's reach (never hosted, never
+          widening the reach), read the root's network findings on it, advisory: GATEWAY_BYPASSED,
+          EXPORT_BEYOND_NETWORK, ENTRY_UNPROVEN and the like, none the member's own gate carries.
+          They never change the member's verdict - the same with or without its family on disk - and
+          the root's own run still gates them
+        type: call
+        targetComponent: cli_validator_adapter
+        targetMethod: adviseNetwork
+      - stepNumber: 15
+        description: >-
           Find the parent this project is a member of, if any, through the core portal: a member
           judged here is judged by its own gate only, so one line says its network entries count as
-          declared and the proofs that need the whole family run at the root — a green member run is
-          never read as a proven one
+          declared and the proofs that need the whole family run at the root - a green member run is
+          never read as a proven one. When step 14 listed the root's findings, the line says they
+          are the root's, shown advisory; when the root is not on disk or not in reach, the line
+          stands as it is
         type: call
         targetComponent: spec_tree_portal
         targetMethod: resolveChainingParent
-      - stepNumber: 14
+      - stepNumber: 16
         description: >-
           The approval line: read the bound project's own approval entry (depth 0). When its
           approval was taken under another wairon release, say so in one line beside the findings —
@@ -142,7 +162,7 @@ methods:
         type: call
         targetComponent: cli_validator_adapter
         targetMethod: familyApprovals
-      - stepNumber: 15
+      - stepNumber: 17
         label: design-held
         description: >-
           Ask the shared predicate whether the tree holds design (a subsystem, a type anywhere, an
@@ -152,20 +172,22 @@ methods:
         type: call
         targetComponent: spec_tree_portal
         targetMethod: holdsDesign
-      - stepNumber: 16
+      - stepNumber: 18
         label: render
         description: >-
           Render every finding — errors, warnings and notices each as their own kind, with a count
           of the notices; in a family run each project's findings under its project key, the
-          composition and family findings after them — then the advisory findings in their own
-          section, "Externals, compared live (advisory: the pin gates)", each naming the moved
+          composition and family findings after them — then the advisory findings, each kind in its
+          own section - "Externals, compared live (advisory: the pin gates)", each naming the moved
           member, the specs that use it and the fix (adapt, then `wairon externals pin <alias>`),
-          and the not-compared ones with the command that compares them; say out loud how much
-          conformance debt the project's register carries; print the running wairon version
-          (ValidationResult.validatorVersion) on the closing verdict line, so a pasted reading dates
-          itself; and exit non-zero when errors were reported — or, under --ci, when warnings were.
-          Notices and advisory findings never fail the run, under --ci or without it. The 'the spec
-          tree is empty' wording is used only when step 14 answered false.
+          and the not-compared ones with the command that compares them, and "Network proofs, judged
+          at the family root (advisory: the root gates)", each finding with the project and spec it
+          sits on and its own severity; say out loud how much conformance debt the project's
+          register carries; print the running wairon version (ValidationResult.validatorVersion) on
+          the closing verdict line, so a pasted reading dates itself; and exit non-zero when errors
+          were reported — or, under --ci, when warnings were. Notices and advisory findings, of any
+          severity, never fail the run and never count toward the failure decision, under --ci or
+          without it. The 'the spec tree is empty' wording is used only when step 17 answered false.
         type: local
     symbol: runValidate
   - name: computeGateStateId
@@ -203,6 +225,15 @@ methods:
         type: call
         targetComponent: validator_portal
         targetMethod: adviseExternals
+  - name: adviseNetwork
+    sourcePath: src/commands/validate.ts
+    narrative:
+      - stepNumber: 1
+        description: Forward to the validator portal's advisory network pass
+        type: call
+        targetComponent: validator_portal
+        targetMethod: adviseNetwork
+    symbol: adviseNetwork
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-24T11:32:13.504Z'
+updatedAt: '2026-10-30T12:03:52.196Z'

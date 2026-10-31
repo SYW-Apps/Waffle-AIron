@@ -24,7 +24,8 @@ export class ForbiddenError extends Error {
  */
 export class LockValidationError extends Error {
   constructor(public readonly errors: { code: string; message: string; specId?: string }[]) {
-    super(`Cannot lock: the spec tree does not validate as-complete (${errors.length} error(s)).`);
+    // The message names the count and every error's code, so a refusal read without the list still says why.
+    super(`Cannot lock: the spec tree does not validate as-complete (${errors.length} error(s): ${[...new Set(errors.map((e) => e.code))].join(', ')}).`);
     this.name = 'LockValidationError';
   }
 }

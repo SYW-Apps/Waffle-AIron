@@ -65,7 +65,7 @@ export const integrationSimDeclarationRule: SddRule = {
       ctx.addIssue(
         'warning',
         'MISSING_INTEGRATION_SIM',
-        `Implementation "${impl.id}" (component "${comp.id}") is complete with ${deps.length} declared dependenc${deps.length === 1 ? 'y' : 'ies'}, its subsystem "${comp.subsystem}" has adopted integration sims, but it declares no simPath — its unit suite proves contract shape against mocks, not that the wired components run together. Declare the committed harness that constructs it with its REAL dependencies (N:1 sharing allowed), or lint.allow with the reason.`,
+        `Implementation "${impl.id}" (component "${comp.id}") is complete with ${deps.length} declared dependenc${deps.length === 1 ? 'y' : 'ies'}, its subsystem "${comp.subsystem}" has adopted integration sims, but it declares no simPath — its unit suite proves contract shape against mocks, not that the wired components run together. Declaring the first simPath in a subsystem makes the rest of it owe one; the usual answers are one shared N:1 harness that constructs it with its REAL dependencies, or a reasoned lint.allow for a client Adapter that only wraps an outside call.`,
         impl.id,
       );
     }

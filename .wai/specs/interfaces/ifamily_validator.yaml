@@ -14,12 +14,14 @@ methods:
       project key, verbatim; then the composition findings of each project's externals; then the
       family checks; then the governance checks (checkPolicies). A plain run narrows the request's
       reach to the bound root before any read, so an external whose producer lies above the family
-      is not composed and is counted in a one-line hint instead; with `family` set the reach stays
-      the request's (locally an explicit walk up, hosted the credential's), never widened. A
-      requirement placed by a project above the bound root is not in the selection and is not
-      judged: governance, like composition, sees only what the run reaches. The result is valid when
-      no project's gate and no family or governance finding holds an error, and lists each project's
-      totals.
+      is not composed and is counted in a one-line hint instead, which names what widens the reach
+      (a plain local run: `validate --family`; a run already explicit or hosted: that the producer
+      lies outside the request's reach or cannot be read, with `wairon externals status` for the
+      live comparison, never the flag already used); with `family` set the reach stays the request's
+      (locally an explicit walk up, hosted the credential's), never widened. A requirement placed by
+      a project above the bound root is not in the selection and is not judged: governance, like
+      composition, sees only what the run reaches. The result is valid when no project's gate and no
+      family or governance finding holds an error, and lists each project's totals.
     signature: 'run(options: ValidationOptions): ValidationResult'
     returns: ValidationResult
     params:
@@ -443,6 +445,38 @@ methods:
       - name: current
         type: StateId
         description: Its gate identity as computed now, with its parts
+  - name: adviseNetwork
+    description: >-
+      THE MEMBER'S VERDICT IS THE SAME WITH OR WITHOUT ITS FAMILY ON DISK; ITS FAMILY'S WORD IS
+      VISIBLE. With the bound project's root bound and the run being its owner's gate alone (a
+      member with no members of its own, or `--no-recursive`; a family run already takes the
+      enclosing family's findings as a gate, run step 13), read the family root's network findings
+      on this member: the enclosing family's reach model, composed and judged at its top root
+      exactly as reachModel and checkReach do (tuned by the owning projects' sddRuleSeverity,
+      lint.allow filtered), narrowed to the bound project and its own members and re-keyed relative
+      to the bound root (GATEWAY_BYPASSED, EXPORT_BEYOND_NETWORK, ENTRY_UNPROVEN and the like).
+      Every finding is marked advisory and keeps the severity the root gives it, so it is printed
+      and counted beside the verdict but never decides `valid` or `validate --ci`; the family root's
+      own run is where it gates. A finding the member's own gate already carried (`already`) is not
+      repeated. Answers none when no chaining parent lies in the request's reach (a top-level
+      project, a root not on disk) and for a hosted request, which never walks to a root: the
+      credential's reach is the grant, and this read never widens it or writes. The caller's
+      one-line member note stands when none is answered.
+    signature: >-
+      adviseNetwork(options: ValidationOptions, already?: list<ValidationIssue>):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The run's switches, as the owner's gate took them
+      - name: already
+        type: list<ValidationIssue>
+        description: >-
+          The findings the member's own gate carried; a family finding equal to one of them is not
+          repeated
+        optional: true
+    effect: read
 status: complete
 createdAt: '2026-09-28T06:06:08.804Z'
-updatedAt: '2026-10-23T22:14:55.452Z'
+updatedAt: '2026-10-30T12:03:38.529Z'

@@ -393,6 +393,21 @@ methods:
         type: PrincipalSubject
         description: The resolved subject of the approving credential; absent for the master credential.
         optional: true
+  - name: checkLockable
+    description: >-
+      Pre-authorized, like executeApprovedLock and for the same caller: validate the tree of this
+      project's own record the way an approved lock would (as-complete, the design half), and refuse
+      with a LockValidationError naming the error count and each error's code when it has errors.
+      Warnings and notices never refuse, matching the local `wairon lock`. Read-only: no sync, no
+      lock record, no write. project_lifecycle_orchestrator calls it before it creates a pending
+      project:lock request, so a request is never made about a tree the approved lock would refuse.
+    signature: 'checkLockable(projectId: string): void'
+    returns: void
+    params:
+      - name: projectId
+        type: string
+    guarantees:
+      - idempotent
 status: complete
 createdAt: '2026-07-04T12:50:13.046Z'
-updatedAt: '2026-10-23T22:31:21.399Z'
+updatedAt: '2026-10-30T12:04:44.478Z'

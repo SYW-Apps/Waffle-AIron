@@ -1,5 +1,6 @@
-import { dialectOf, nameKey, parseTypePosition, pathKey, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
+import { dialectOf, nameKey, parseTypePosition, pathKey, type ShapeMemberFact, type SourceFileFacts, type TypeShapeFact, type TypeSpec } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { annotationAgreement } from './param-conformance.js';
 
 // ---------------------------------------------------------------------------
 // Code↔spec for the DATA: is the type the SHAPE the spec claims?
@@ -110,7 +111,7 @@ function judgeNamedScalar(ctx: RuleContext, type: TypeSpec, file: string, facts:
 export const typeShapeRule: SddRule = {
   name: 'type-shape',
   judges: 'code',
-  description: "Code-to-contract for the DATA: a type spec's `fields` are compared, name by name, against the shape its `sourcePath` actually declares. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a class's constructor parameter properties (`constructor(public readonly amount: number)`) among them, the language's shorthand for a field declaration, while a PRIVATE field a getter of the same class reads is that getter's backing storage, implementation rather than the type's data, and is no member — and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the base's. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is the primitive it holds, compared with the right side of the type alias the file declares under its name, read through the file's dialect (`type PackPath = string` agrees with holds string); an object shape under that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH. Python is read the same way by its signature reader, for a class whose body declares its fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings), a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member (ClassVar, InitVar and a Pydantic model's underscore attributes aside), absent-able when it has a default or a default factory, or in a TypedDict when it is NotRequired or the class is total=False — `Optional` alone is nullable, never absent-able. Its field names compare with the spec's by nameKey, so the spec's documentId is the code's document_id. A class with any other base is judged as one extending another. A plain class, a model built by a call (create_model, a functional TypedDict or namedtuple) and a named scalar are not read in Python, and stay silent.",
+  description: "Code-to-contract for the DATA: a type spec's `fields` are compared, name by name, against the shape its `sourcePath` actually declares: each field's presence, whether it may be absent, and its type. `typeRealization` asks whether a type EXISTS in code; nothing asked whether it is the shape the spec claims, so a type spec could describe two fields of a six-field record — and call the two that are optional required — straight through a lock and a CI gate, while the ERD, the agent briefs and every implementer read it as truth. That is the worst of the code-to-spec gaps, because a wrong signature eventually breaks at a call site and a type spec that lies is only ever read by humans and agents. Two origins answer at exact grade: a DECLARED shape, whose members the file lists — a class's constructor parameter properties (`constructor(public readonly amount: number)`) among them, the language's shorthand for a field declaration, while a PRIVATE field a getter of the same class reads is that getter's backing storage, implementation rather than the type's data, and is no member — and a DERIVED one, an alias followed one hop to the object literal its schema is built from, where the keys are the members — and on through a composition the same file writes out (`Base.extend({…})` on a schema constant it declares), the extension's keys laid over the base's. A shape that extends another is judged on what it shows and never on what it omits, since its inherited members are not in this file to count. A NAMED SCALAR (a value-object declaring `holds`) has no field list: its shape is the primitive it holds, compared with the right side of the type alias the file declares under its name, read through the file's dialect (`type PackPath = string` agrees with holds string); an object shape under that name, or an alias the dialect does not read as that primitive, is TYPE_HOLDS_MISMATCH. Python is read the same way by its signature reader, for a class whose body declares its fields in its framework's own form — a dataclass, a Pydantic model (BaseModel, BaseSettings), a TypedDict, a NamedTuple or an attrs class: each annotated field of the body is a member (ClassVar, InitVar and a Pydantic model's underscore attributes aside) — in a class of the legacy `@attr.s` form without `auto_attribs=True`, only a field assigned `attr.ib()` — absent-able when it has a default or a default factory (`Field(...)` and `Field(default=...)` state none: the Ellipsis marks it required), or in a TypedDict when it is NotRequired or the class is total=False; a `total=` that does not settle to a literal leaves every field it governs (one marked neither Required nor NotRequired) of unknown absence, and that absence is not compared — `Optional` alone is nullable, never absent-able. Its field names compare with the spec's by nameKey, so the spec's documentId is the code's document_id; where two fields of one class share a nameKey (order_id and orderId), the one spelled exactly as the spec's field is the one compared, and neither is when none is. A class with any other base is judged as one extending another. A plain class, a model built by a call (create_model, a functional TypedDict or namedtuple) and a named scalar are not read in Python, and stay silent. A field present on both sides whose code annotation reads as a scalar other than the one the spec declares — read through the file's dialect as a parameter's is, a named scalar as what it holds and an enum as a string, TypeScript's `number` agreeing with int and float alike and a date, a datetime or a duration with the string, Date or number the code writes it as, an optional field compared on the type it holds — holds a different value than the design says: TYPE_FIELD_TYPE_MISMATCH, naming both types (`amount: string` where the spec declares `amount: float`, a Python `count: str` where it declares int). An annotation either side does not read as one scalar — a union, a list, a record, a named type the design does not know, any — is not compared, in either language.",
   codes: [
     {
       code: 'UNREALIZED_TYPE_FIELD',
@@ -133,6 +134,12 @@ export const typeShapeRule: SddRule = {
       carryable: true,
     },
     {
+      code: 'TYPE_FIELD_TYPE_MISMATCH',
+      defaultSeverity: 'warning',
+      summary: 'A field a type spec declares is annotated in the shape at its sourcePath as another scalar than the spec says — the design tells every reader the data holds one kind of value and the code holds another',
+      carryable: true,
+    },
+    {
       code: 'TYPE_FIELD_OPTIONALITY',
       defaultSeverity: 'warning',
       summary: 'A type spec and the shape at its sourcePath disagree about whether a field may be absent — one of them is telling a reader the data is guaranteed when it is not, or the reverse',
@@ -142,6 +149,7 @@ export const typeShapeRule: SddRule = {
 
   check(ctx: RuleContext): void {
     const code = ctx.codeIndex();
+    const scalarAgrees = annotationAgreement(ctx);
 
     for (const type of ctx.types) {
       // ---- 1. gather: the shape declared under the type's own code name ----
@@ -179,7 +187,14 @@ export const typeShapeRule: SddRule = {
       const specFields = type.fields ?? [];
       const specFieldNames = new Set(specFields.map(field => key(field.name)));
       const specMethodNames = new Set((type.methods ?? []).map(method => key(method.name)));
-      const codeFields = new Map(shape.fields.map(field => [key(field.name), field.optional]));
+      // Two fields may share a nameKey (order_id and orderId): every one is kept, and the comparison below
+      // reads the one spelled exactly as the spec's field is, neither when none is.
+      const codeFields = new Map<string, ShapeMemberFact[]>();
+      for (const field of shape.fields) codeFields.set(key(field.name), [...(codeFields.get(key(field.name)) ?? []), field]);
+      const codeAbsence = (name: string): boolean | undefined => {
+        const held = codeFields.get(key(name)) ?? [];
+        return (held.length === 1 ? held[0] : held.find(field => field.name === name))?.optional;
+      };
       const codeMethodNames = new Set(shape.methods.map(key));
 
       // ---- 4 / 5. presence, spec → code (never for a shape that extends) ----
@@ -224,13 +239,13 @@ export const typeShapeRule: SddRule = {
       // ---- 7. optionality, judged even for a shape that extends another ----
       // A member this file lists is a member this file answers for.
       const disagreed = specFields.filter(field => {
-        const absentable = codeFields.get(key(field.name));
+        const absentable = codeAbsence(field.name);
         return absentable !== undefined && absentable !== !!field.optional;
       });
       if (disagreed.length > 0) {
         const told = disagreed.map(field =>
           `"${field.name}" (the spec says it ${absence(!!field.optional)}, the code says it `
-          + `${absence(!!codeFields.get(key(field.name)))})`).join('; ');
+          + `${absence(!!codeAbsence(field.name))})`).join('; ');
         ctx.addIssue(
           'warning',
           'TYPE_FIELD_OPTIONALITY',
@@ -245,7 +260,30 @@ export const typeShapeRule: SddRule = {
           { at: symbol, covers: disagreed.map(field => field.name) },
         );
       }
-      // ---- 8. done: the type's data was compared to the code's ----
+      // ---- 8. a field's type, where both sides read as one scalar ----
+      // The same reading a parameter's annotation is judged by (param-conformance), so a
+      // number agrees with int and float, a date with the string or Date the code writes it as.
+      const retyped = specFields.flatMap(field => {
+        const held = codeFields.get(key(field.name)) ?? [];
+        const written = (held.length === 1 ? held[0] : held.find(member => member.name === field.name))?.type;
+        if (written === undefined || scalarAgrees(facts.language, written, field.type, 'param', true) !== false) return [];
+        return [{ name: field.name, declared: field.type, written }];
+      });
+      if (retyped.length > 0) {
+        const told = retyped.map(field => `"${field.name}" (the spec says ${field.declared}, the code says ${field.written})`).join('; ');
+        ctx.addIssue(
+          'warning',
+          'TYPE_FIELD_TYPE_MISMATCH',
+          `Type "${type.id}" and the ${originOf(shape)} "${symbol}" in "${file}" disagree about the type of `
+          + `${retyped.length} field(s) — ${told}. The design tells every reader the data holds one kind of value `
+          + 'and the code holds another. Change the annotation in the code, or the type of the field in the spec.',
+          type.id,
+          undefined,
+          undefined,
+          { at: symbol, covers: retyped.map(field => field.name) },
+        );
+      }
+      // ---- 9. done: the type's data was compared to the code's ----
     }
   },
 };

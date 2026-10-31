@@ -3700,60 +3700,72 @@ methods:
       - stepNumber: 5
         label: subsystem-missing
         description: >-
-          Refuse before anything is written, naming the known subsystems (a spec never moves into
-          another project)
+          Refuse before anything is written, naming the known subsystems — a part's subsystem by its
+          local id; an `alias::subsystem` spelling names another project, and when the alias is a
+          part the refusal names the local id to use instead
         type: throw
         error: subsystem-missing
       - stepNumber: 6
+        description: Does the move leave or enter a subsystem of a part read from a git checkout?
+        type: branch
+        condition: the spec's home or the target subsystem's home is a git part
+        onFalseStep: 8
+      - stepNumber: 7
+        description: >-
+          Refuse before anything is written: a git part's checkout is read-only here, so it is
+          changed in its own repository
+        type: throw
+        error: PartReadOnly
+      - stepNumber: 8
         description: Route on the kind
         type: switch
         'on': the kind moving
         cases:
           - value: group
-            step: 7
+            step: 9
           - value: component
-            step: 9
+            step: 11
           - value: type
-            step: 9
-        defaultStep: 7
-      - stepNumber: 7
+            step: 11
+        defaultStep: 9
+      - stepNumber: 9
         label: group
         description: Move the group as a folder, under the parent given, and answer what that move answers
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveGroup
-      - stepNumber: 8
+      - stepNumber: 10
         description: Return the group's move
         type: return
         outcome: SpecMove
-      - stepNumber: 9
+      - stepNumber: 11
         label: parent-check
         description: 'Guard: parent names the group a moved GROUP goes under; a component or a type takes none'
         type: branch
         condition: a parent is named
-        onFalseStep: 11
-      - stepNumber: 10
+        onFalseStep: 13
+      - stepNumber: 12
         description: Refuse before anything is written
         type: throw
         error: invalid-parent
-      - stepNumber: 11
+      - stepNumber: 13
         label: route
         description: Is a component moving?
         type: branch
         condition: the kind is component
-        onFalseStep: 14
-      - stepNumber: 12
+        onFalseStep: 16
+      - stepNumber: 14
         description: >-
           Move the component with the members it owns, their contracts and implementations, and
           answer what that move answers
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveComponent
-      - stepNumber: 13
+      - stepNumber: 15
         description: Return the component's move
         type: return
         outcome: SpecMove
-      - stepNumber: 14
+      - stepNumber: 16
         label: type
         description: >-
           Move the type, its export entries and the references qualified by its old subsystem, and
@@ -3761,7 +3773,7 @@ methods:
         type: call
         targetComponent: core_orchestrator
         targetMethod: moveType
-      - stepNumber: 15
+      - stepNumber: 17
         description: Return the type's move
         type: return
         outcome: SpecMove
@@ -3773,8 +3785,11 @@ methods:
           Make a temporary folder and copy the bound project's .wai into it — the specs, the
           configuration, the lock record and pins, the rules — leaving out what no judgement reads
           and a copy must never carry: the generated outputs, the derived context, an unfinished
-          transaction and the write lock; a specs folder configured outside .wai is copied to the
-          same place relative to the copy
+          transaction and the write lock; a specs folder configured outside .wai, and the folder of
+          each local part the project declares (contained, or a sibling beside it, with the same
+          leaves left out of its own .wai), are copied to the same place relative to the copy, so a
+          write rehearsed into or out of a part's subsystem reads the part as the real tree does; a
+          part read from a git checkout is never copied
         type: local
       - stepNumber: 2
         description: Answer the copy's root
@@ -4199,4 +4214,4 @@ methods:
         targetMethod: renderTypeDiagrams
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-27T18:08:13.877Z'
+updatedAt: '2026-10-30T12:05:29.325Z'

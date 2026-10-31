@@ -95,7 +95,7 @@ export const surfaceReferenceBackingRule: SddRule = {
             const hint = renamedTo !== undefined
               ? ` It was renamed to "${renamedTo}" (the producer's rename trace records "${step.targetMethod}") — follow the rename.`
               : alias !== undefined
-                ? ` If the producer added it after this pin was taken, the pin cannot know it: re-pin (\`wairon externals pin ${alias}\`) once the producer exports it.`
+                ? ` If the producer added or renamed it after this pin was taken, the pin cannot know it: re-pin (\`wairon externals pin ${alias}\`) to record it — a use just moved to a producer's new name reads this way until the re-pin.`
                 : '';
             ctx.addIssue(
               'error',

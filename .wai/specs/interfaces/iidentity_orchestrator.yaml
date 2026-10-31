@@ -53,7 +53,10 @@ methods:
       Authenticate the caller and compute their project:admin visible scopes over the organization
       tree (the units they may administer); deny when that set is empty. List hosted users, keeping
       only those whose home unit is an actionable unit in the visible set (an instance-admin sees
-      all), optionally narrowed to one project's holders.
+      all), optionally narrowed to one project's holders. The listing also names every subject that
+      holds a direct user grant but matches no user record (by record id or by subject id), as a
+      synthesized row flagged noRecord with no status; such a row has no home unit, so only an
+      instance-admin sees it, and the boot-reserved built-in subjects are never listed.
     signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
     returns: list<HostedUserRecord>
     params:
@@ -311,4 +314,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-07-08T20:17:23.976Z'
-updatedAt: '2026-10-28T20:15:58.099Z'
+updatedAt: '2026-10-30T12:10:45.523Z'

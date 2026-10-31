@@ -34,7 +34,9 @@ methods:
       method: DELETE
       path: /identity/tokens/{tokenId}
   - name: listUsers
-    description: List hosted users or service principals, optionally filtered by project.
+    description: >-
+      List hosted users or service principals, optionally filtered by project, including subjects
+      that hold grants but have no user record (flagged noRecord).
     signature: 'listUsers(credential: string, project?: string): list<HostedUserRecord>'
     returns: list<HostedUserRecord>
     params:
@@ -189,4 +191,4 @@ methods:
       path: /identity/audit/count
 status: complete
 createdAt: '2026-07-08T20:19:45.785Z'
-updatedAt: '2026-10-19T22:11:45.962Z'
+updatedAt: '2026-10-30T12:05:32.731Z'

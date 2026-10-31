@@ -54,7 +54,7 @@ off by default, on with `rules.materializeAgentFiles: true`.
 | Layer | What is checked | What is not |
 |-------|-----------------|-------------|
 | **Specs** | The design rules `wairon validate` / `sdd_validate_tree` enforce: reference integrity, contract↔implementation symmetry, narrative-call resolution and control flow, stereotype dependency rules, technology fencing, cycles, reachability | Whether the design is a good one for your problem |
-| **Code against the design** | **TypeScript** is read by the compiler (grade `exact`): methods, params, returns where annotated, public members, imports, calls, routes, data types. **Python** and other languages are read by pattern readers (grade `pattern`): methods, params, returns where annotated, public members, imports, calls through declared receivers — **not** routes or data types. A language with only a pattern table checks methods only (grade `generic` is the floor). `validate` prints the grade and the unchecked list per language | At any grade: calls inside helpers and to collaborators a narrative never names; libraries and platform I/O a component uses (a file read, fetch, an HTTP client) — only a bound technology's packages are compared, so I/O outside an Adapter passes. This is a known limitation |
+| **Code against the design** | **TypeScript** is read by the compiler (grade `exact`): methods, params, returns where annotated, public members, imports, calls, routes, data types. **Python** and other languages are read by pattern readers (grade `pattern`): methods, params, returns where annotated, public members, imports, calls through declared receivers; Python also checks routes (decorator routers, guard functions, routers named through package re-exports) and data types (dataclass, Pydantic, `TypedDict`, `NamedTuple`, attrs fields). Data types are compared by field name, optionality and a field's scalar type, in both languages. A language with only a pattern table checks methods only (grade `generic` is the floor). `validate` prints the grade and the unchecked list per language | At any grade: calls inside helpers and to collaborators a narrative never names; libraries and platform I/O a component uses (a file read, fetch, an HTTP client) — only a bound technology's packages are compared, so I/O outside an Adapter passes. This is a known limitation |
 | **Behaviour** | Tests and code review. A deleted business rule passes the gate while the signatures and calls remain | Anything about what the code does at run time |
 | **Agent guidance** | Generated briefs and file fences instruct the AI tool which files are its own | They are guidance, not enforcement: they do not restrict the tool's filesystem permissions |
 
@@ -229,7 +229,7 @@ merge to `dev`. Installing from npm, the channels are the dist-tags:
 
 ```sh
 cd my-project
-wairon init                 # bootstrap .wai/ (spec tree, context, skills, MCP registration)
+wairon init                 # bootstrap .wai/ (spec tree, context, skills, MCP registration; a non-interactive shell needs --yes)
 
 # 1. Design: in your AI tool, use the sdd-architect skill, which authors the
 #    spec tree through the sdd_* MCP tools.
@@ -241,7 +241,7 @@ wairon validate --ci        # architecture-conformance gate; run it until it pas
 # 2. Approve: once `validate --ci` passes, a human approves the design.
 #    (`lock` accepts a design that still has warnings or drafts - approval is not
 #    status - but it says how many warnings CI would fail on, and CI will.)
-wairon lock                 # records the approval in .wai/lock.json
+wairon lock                 # records the approval in .wai/lock.json (CI/scripts: add --yes)
 git add .wai && git commit -m "Approve the design"
 
 # 3. Gate: in CI, check that what merges is the approved design
@@ -308,7 +308,7 @@ See [docs/cli.md](docs/cli.md). Summary:
 | `wairon lock-check [--strict]` | Merge gate: is the design in this tree the design that was approved? Importable as a [reusable workflow](https://github.com/SYW-Apps/Waffle-AIron/blob/dev/.github/workflows/lock-check.yml) (on `dev` and the dev tags until 6.0.0 ships it on `main`; pin a tag — see [docs/cli.md](docs/cli.md#using-it-in-github-actions)) |
 | `wairon mcp serve \| install \| status` | The wairon MCP server (`sdd_*` tools) |
 | `wairon serve [--port] [--data-dir] [--no-auth]` | Self-host: HTTP MCP for many isolated projects + admin plane |
-| `wairon host unit \| project \| permission \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, keys, the state-scoped lock) |
+| `wairon host unit \| project \| permission \| user \| key \| lock \| doctor \| packs \| git \| producer \| secret \| demo` | Administer the hosting server (units, projects, permissions, users, keys, the state-scoped lock) |
 | `wairon login` / `wairon remote` / `wairon mcp install --hosted` | Connect a checkout or an AI tool to a hosted instance |
 | `wairon dev` | Local single-project web UI over the current project |
 | `wairon update` / `wairon aliases` | Self-update / command aliases |

@@ -60,7 +60,7 @@ type LockRecord = NonNullable<ReturnType<typeof approvalRecord>>;
 // ---------------------------------------------------------------------------
 // family_validator — the family run (stage 4).
 //
-// `validate` at a project that declares members, `validate --family` anywhere,
+// `validate` at a project that declares members or externals, `validate --family` anywhere,
 // and the MCP validate tool with the same flags. It composes; it never
 // re-judges. For the root and every selected member it binds that project's
 // root and runs the project's OWN gate (spec_validator.validateProject) under
@@ -331,13 +331,29 @@ function verdictOf(node: ProjectNode, own: ValidationResult): ProjectVerdict {
   };
 }
 
-/** Step 10: the one-line hint for the externals the reach left out; undefined when none were. */
-function notSelectedHint(left: { project: string; alias: string }[]): string | undefined {
+/**
+ * Step 15: the one-line hint for the externals the reach left out; undefined when none were.
+ * `enclosed` is whether a family above the bound root holds it, so `--family` has a climb to widen.
+ */
+function notSelectedHint(left: { project: string; alias: string }[], explicit: boolean, enclosed: boolean): string | undefined {
   if (left.length === 0) return undefined;
   const byProject = new Map<string, string[]>();
   for (const { project, alias } of left) byProject.set(project, [...(byProject.get(project) ?? []), alias]);
   const where = [...byProject].map(([project, aliases]) => `${named(project)} (${aliases.map((a) => `"${a}"`).join(', ')})`).join(', ');
-  return `${left.length} external${left.length === 1 ? '' : 's'} of ${where} ${left.length === 1 ? 'has its producer' : 'have their producers'} outside this run's reach and ${left.length === 1 ? 'was' : 'were'} not composed; run \`wairon validate --family\` from the project that declares ${left.length === 1 ? 'it' : 'them'} to compose ${left.length === 1 ? 'it' : 'them'}.`;
+  const one = left.length === 1;
+  const count = `${left.length} external${one ? '' : 's'} of ${where} ${one ? 'has its producer' : 'have their producers'}`;
+  // Once the run was explicit (or is hosted) the flag is spent, so the producer lies outside the
+  // request's reach or cannot be read, and the live comparison is `wairon externals status`.
+  if (explicit) {
+    return `${count} outside this request's reach or cannot be read, so ${one ? 'it was' : 'they were'} not composed; \`wairon externals status\` compares ${one ? 'it' : 'them'} live.`;
+  }
+  // A plain local run at a member: the climb to the family above is what `--family` widens.
+  if (enclosed) {
+    return `${count} outside this run's reach and ${one ? 'was' : 'were'} not composed; run \`wairon validate --family\` from the project that declares ${one ? 'it' : 'them'} to compose ${one ? 'it' : 'them'}.`;
+  }
+  // No family above: a producer the project declares outside its root keeps the advisory live
+  // comparison, and the pin gates it.
+  return `${count} outside the project's root and ${one ? 'was' : 'were'} not composed: the advisory live comparison reads ${one ? 'it' : 'them'}, the pin gates (\`wairon lock-check\`), and \`wairon externals status\` is the opt-in live gate.`;
 }
 
 /**
@@ -399,8 +415,8 @@ export function run(options: ValidationOptions): ValidationResult {
     p.notices = mine.filter((i) => i.severity === 'notice').length;
     p.valid = p.errors === 0;
   }
-  // Step 11: the externals the reach left out.
-  const hint = notSelectedHint(left);
+  // Steps 14-15: the externals the reach left out, and whether a family above the bound root holds it.
+  const hint = notSelectedHint(left, options.family === true || getHostedLookup() !== null, left.length > 0 && resolveChainingParent() !== null);
   // Step 12: the family verdict, with the bound project's externals the run
   // composed as its gate — the advisory pass gives them no second word.
   const rootSelected = selected.find((s) => s.node.namespace === '');
@@ -656,7 +672,7 @@ function adviseOn(status: ExternalStatus, family: ProjectFamily, config: Project
         + (bindings.length
           ? `Binding module(s) declared there: ${bindings.map((b) => `"${b}"`).join(', ')} — compared with the pin, not the live producer, so ${bindings.length === 1 ? 'it draws' : 'they draw'} BINDING_DRIFT once the re-pin lands; follow the move there too. `
           : '')
-        + `Adapt the uses${renamed ? ' (follow the rename)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
+        + `Adapt the uses${renamed ? ' (follow the rename: edit them to the new name — validate then reports the new name as not in the pin until the re-pin records it)' : ''}, then re-pin with ${repin(status.alias)}. Advisory: the pin still gates.`);
     }
     case 'drifted': {
       // Step 8: nothing used moved — a used verb whose wire route moved is a break, judged above.
@@ -718,6 +734,32 @@ export function advise(composed?: string[]): ValidationIssue[] {
   } catch {
     // An unreadable tree or configuration is the owner's gate's to report;
     // the advisory pass never fails a run.
+    return [];
+  }
+}
+
+/**
+ * ifamily_validator.adviseNetwork — the family root's network findings on a
+ * member validated on its own, every one marked advisory. THE MEMBER'S VERDICT
+ * IS THE SAME WITH OR WITHOUT ITS FAMILY ON DISK; ITS FAMILY'S WORD IS VISIBLE:
+ * the findings keep the severity the root gives them, are printed and counted
+ * beside the verdict, and never decide `valid` or `--ci`. Nothing for a hosted
+ * request (its credential's reach is the grant) or with no chaining parent in
+ * reach. Writes nothing.
+ */
+export function adviseNetwork(options: ValidationOptions, already?: ValidationIssue[]): ValidationIssue[] {
+  // Steps 1-2: a hosted request never walks to a family root.
+  if (getHostedLookup() !== null) return [];
+  try {
+    // Steps 3-5: without a chaining parent in reach there is no family root to hear from.
+    if (!resolveChainingParent()) return [];
+    // Step 6: the enclosing family's model, judged at its top root.
+    const enclosing = enclosingFamilyModel(options);
+    if (!enclosing) return [];
+    // Steps 7-9: narrowed to the bound project, re-keyed, minus what its own gate carried, marked advisory.
+    return memberReachFindings(enclosing, already ?? []).map((i) => ({ ...i, advisory: true }));
+  } catch {
+    // An unreadable family is the family root's run to report; the advisory pass never fails a run.
     return [];
   }
 }

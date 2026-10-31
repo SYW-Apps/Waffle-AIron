@@ -1,0 +1,17 @@
+kind: enum
+id: writing_share
+name: WritingShare
+description: >-
+  How many of the writings of one call site shape have a property: every one, or some but not all. A
+  shape none of whose writings has it records no share at all.
+subsystem: sdd_validator
+fields: []
+methods: []
+sourcePath: src/models/code-model.ts
+values:
+  - name: all
+    description: Every writing of the shape has the property
+  - name: some
+    description: At least one writing has it and at least one does not
+createdAt: '2026-10-30T11:59:41.012Z'
+updatedAt: '2026-10-30T11:59:41.827Z'

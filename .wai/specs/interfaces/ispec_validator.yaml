@@ -35,7 +35,8 @@ methods:
       (PART_JUDGED_ALONE, notice), or — with no pin — judges nothing and says "part of <parent>;
       validate from the parent" (PART_UNPINNED, warning). A --subsystem scope that names no loaded
       subsystem fails fast with SUBSYSTEM_NOT_FOUND. When the project declares externals the result
-      carries a one-line hint that `validate --family` composes them against their live producers.
+      carries a one-line hint that the gate judged them against the pins alone and that `validate`
+      without `--no-recursive` composes them against their live producers.
     signature: 'validateProject(options?: ValidationOptions, projectType?: string): ValidationResult'
     returns: ValidationResult
     params:
@@ -240,4 +241,4 @@ methods:
         optional: true
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-09T00:30:18.521Z'
+updatedAt: '2026-10-30T12:04:05.122Z'

@@ -168,7 +168,9 @@ describe('the family run — what it carries', () => {
     // A credential narrowed to billing: --family composes nothing above it.
     const narrowed = runWithProjectBinding(f.billing, { topRoot: f.top, parentReach: false }, () => validateFamily({ family: true }));
     expect(family(narrowed, 'EXTERNAL_INCOMPATIBLE')).toEqual([]);
-    expect(narrowed.hint).toMatch(/outside this run's reach/);
+    // The run was already explicit (`family: true`): the hint never sends it back to the flag it used.
+    expect(narrowed.hint).toMatch(/outside this request's reach or cannot be read, so it was not composed; `wairon externals status` compares it live/);
+    expect(narrowed.hint).not.toContain('validate --family');
     // The same member under a credential for the whole family: composed.
     invalidateSpecCache();
     const whole = runWithProjectBinding(f.billing, { topRoot: f.top, parentReach: true }, () => validateFamily({ family: true }));
@@ -323,5 +325,22 @@ describe('approval context', () => {
     // And the family run reads the lock as current.
     expect(family(familyAt(f.top), 'MEMBER_DRIFTED')).toEqual([]);
     expect(family(familyAt(f.top), 'MEMBER_UNAPPROVED').map((i) => i.project)).toEqual(['billing']);
+  });
+});
+
+describe('validation_options.selectsFamily — members or externals', () => {
+  it('selects the family run for a project that declares members or externals unless memberDepth is 0, and for family: true anywhere', async () => {
+    const { selectsFamily } = await import('../../src/models/validation-options.js');
+    // Nothing declared: the owner's gate, unless the family run is asked for.
+    expect(selectsFamily(undefined, false, false)).toBe(false);
+    expect(selectsFamily({ family: true }, false, false)).toBe(true);
+    // Members or externals alone select it.
+    expect(selectsFamily(undefined, true, false)).toBe(true);
+    expect(selectsFamily(undefined, false, true)).toBe(true);
+    expect(selectsFamily({ memberDepth: 1 }, false, true)).toBe(true);
+    // --no-recursive (memberDepth 0) asks for the owner's gate alone, either way.
+    expect(selectsFamily({ memberDepth: 0 }, true, false)).toBe(false);
+    expect(selectsFamily({ memberDepth: 0 }, false, true)).toBe(false);
+    expect(selectsFamily({ memberDepth: 0, family: true }, false, true)).toBe(true);
   });
 });

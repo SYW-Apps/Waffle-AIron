@@ -177,7 +177,7 @@ export const routeCoverageRule: SddRule = {
   name: 'route-coverage',
   judges: 'code',
   description:
-    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router (`router`, code linkage) — the table or function the server actually dispatches: an entry its own files export, a class's method as `Class.method` (the class the export, the method's body inside it), an entry or route table another module exports (`<module>#<name>`, or `<module>#Class.method`, a central routes.ts), or a module alone, every route-bearing export of which is read as one router; the routes are read out of that entry and the functions of its file it calls by name. A router several Portals name — the same entry or table in the same file, however each linkage spells it — is read once against them all: a route is declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards (a method comparison with comparisons on the path's split segments, or with a test of the whole path — the path compared with a string, or an anchored regular expression tested against it by `.test`, `.exec` or `.match`, directly or through a const holding the match, whose own condition guards it too; an endpoint no route answers names the forms read), where a prefix the router strips before splitting the path is folded in front; and a route table — a const the router names, one it returns or states in place unnamed, or the table the linkage names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`, a key written as a template literal or a concatenation over constants settling like any other value; an array may spread other tables and an object other objects, `[...ingestRoutes, ...statsRoutes]`, each followed through the type checker to the table it names in any module), read only when every entry settles. A table is written under the ONE prefix its router strips off the path before matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of every entry that does not already state it, so a stripped prefix that is not the Portal's basePath is read as the different URL it is, and the finding names both. Every compared value is a literal or one the code's constants, concatenations and template literals settle — through the type checker, any module's constant and any expression it types as one string literal — and never a guess. A route that states the whole path is read under the Portal's basePath, which the contract's endpoint paths are written beneath; a leading path segment a guard router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. Route coverage is never silently off: a router that yields no route in either idiom, or a linkage naming a declaration that holds neither a function body nor a route table this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose implementation names no router while its code is read at exact grade is said as a notice (ROUTER_UNDECLARED) naming `router:` and what its files hold, each spelled as the linkage accepts it — an exported router or table by its name, a method of an exported class as `Class.method`, an exported entry calling into a router of its file — with what reads as a router or a table but is not exported named apart, to be exported before it can be named — a check that cannot see a router must say so rather than stay quiet. A router naming a route table that a sibling table — one spreading other tables of its module, written in that module or in one importing them, `routes = [...ingestRoutes]` — leaves out, while no table of the code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if the server dispatches the sibling, no route of the named table is served, while coverage reading the named table reads its routes as served. A notice, because which process dispatches which table is never read: a module may serve two aggregates to two servers. A Portal binding HTTP endpoints whose implementation names no router while its files, read at exact grade, hold what reads as a router or a route table is ROUTES_UNCHECKED — a warning that fails --ci, naming each spelling `router:` accepts — since route-bearing code no check read is a hole, not a choice; only where its files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method by method, every public method of its realizing class answering to its contract (export-conformance's UNDECLARED_PUBLIC_MEMBER). Python is read the same way by its signature reader, in the decorator idiom: a router is a router object — a FastAPI, APIRouter, Flask, Blueprint, Quart or Sanic instance — named by its variable (`router: app`, `<module>#router`, or the module alone, every router object of it), and its routes are its route decorators (`@app.get(\"/orders/{id}\")`, `@bp.route(\"/x\", methods=[\"POST\"])`, `.api_route`), each path under the prefixes stated by the object's construction and by the includes bringing it in (`APIRouter(prefix=…)`, `include_router(r, prefix=…)`, `Blueprint(…, url_prefix=…)`, `register_blueprint(bp, url_prefix=…)`), followed through the modules the includes import. A router any route, prefix or include of which does not settle to a string, or that mounts an application, is unread. A Python Portal naming no router is ROUTES_UNCHECKED or ROUTER_UNDECLARED as above, its router objects being what reads as a router.",
+    "Code-to-contract for the ROUTES: does every route a router actually answers have a contract endpoint, and does every contract endpoint have a route that answers it? A portal's endpoints are what its contract promises; the router is what the code serves; nothing compared the two, so a route with no contract (including a write) could run for months without a single rule noticing. The Portal's own implementation names its router (`router`, code linkage) — the table or function the server actually dispatches: an entry its own files export, a class's method as `Class.method` (the class the export, the method's body inside it), an entry or route table another module exports (`<module>#<name>`, or `<module>#Class.method`, a central routes.ts), or a module alone, every route-bearing export of which is read as one router; the routes are read out of that entry and the functions of its file it calls by name. A router several Portals name — the same entry or table in the same file, however each linkage spells it — is read once against them all: a route is declared when any of them declares it, and an endpoint is unrouted per Portal. Two idioms are read: guards (a method comparison with comparisons on the path's split segments, or with a test of the whole path — the path compared with a string, or an anchored regular expression tested against it by `.test`, `.exec` or `.match`, directly or through a const holding the match, whose own condition guards it too; an endpoint no route answers names the forms read), where a prefix the router strips before splitting the path is folded in front; and a route table — a const the router names, one it returns or states in place unnamed, or the table the linkage names itself — (an array of objects pairing a method with a `/a/:b` template or an anchored regular expression, or an object keyed `VERB /path`, a key written as a template literal or a concatenation over constants settling like any other value; an array may spread other tables and an object other objects, `[...ingestRoutes, ...statsRoutes]`, each followed through the type checker to the table it names in any module), read only when every entry settles. A table is written under the ONE prefix its router strips off the path before matching it (`path.slice(BASE.length)`, `.replace(BASE, '')`), which is folded in front of every entry that does not already state it, so a stripped prefix that is not the Portal's basePath is read as the different URL it is, and the finding names both. Every compared value is a literal or one the code's constants, concatenations and template literals settle — through the type checker, any module's constant and any expression it types as one string literal — and never a guess. A route that states the whole path is read under the Portal's basePath, which the contract's endpoint paths are written beneath; a leading path segment a guard router never checks is completed from the first segments of the Portal's own HTTP endpoint paths, the segments whatever serves the Portal routes on. Which process serves which Portal is implementation, so no listener is consulted. A linkage whose module only imports or re-exports the name it gives (a package `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from './router'`) names the router where it is defined: the binding is followed, module by module, to the file that declares it, and one the analysis cannot follow (a cycle, a module it did not read) is unread. Route coverage is never silently off: a router that yields no route in either idiom, or a linkage naming a declaration that holds neither a function body nor a route table this analysis reads, is reported as unread; and a Portal binding HTTP endpoints whose implementation names no router while its code is read at exact grade is said as a notice (ROUTER_UNDECLARED) naming `router:` and what its files hold, each spelled as the linkage accepts it — an exported router or table by its name, a method of an exported class as `Class.method`, an exported entry calling into a router of its file — with what reads as a router or a table but is not exported named apart, to be exported before it can be named — a check that cannot see a router must say so rather than stay quiet. A router naming a route table that a sibling table — one spreading other tables of its module, written in that module or in one importing them, `routes = [...ingestRoutes]` — leaves out, while no table of the code spreads it and it spreads none itself, is said as a notice (ROUTER_NOT_DISPATCHED): if the server dispatches the sibling, no route of the named table is served, while coverage reading the named table reads its routes as served. A notice, because which process dispatches which table is never read: a module may serve two aggregates to two servers. A Portal binding HTTP endpoints whose implementation names no router while its files, read at exact grade, hold what reads as a router or a route table is ROUTES_UNCHECKED — a warning that fails --ci, naming each spelling `router:` accepts — since route-bearing code no check read is a hole, not a choice; only where its files hold none is it the notice ROUTER_UNDECLARED, the Portal then read as served method by method, every public method of its realizing class answering to its contract (export-conformance's UNDECLARED_PUBLIC_MEMBER). Python is read the same way by its signature reader, in the decorator idiom: a router is a router object — a FastAPI, APIRouter, Flask, Blueprint, Quart or Sanic instance — named by its variable (`router: app`, `<module>#router`, or the module alone, every router object of it), and its routes are its route decorators (`@app.get(\"/orders/{id}\")`, `@bp.route(\"/x\", methods=[\"POST\"])`, `.api_route`), each path under the prefixes stated by the object's construction and by the includes bringing it in (`APIRouter(prefix=…)`, `include_router(r, prefix=…)`, `Blueprint(…, url_prefix=…)`, `register_blueprint(bp, url_prefix=…)`), followed through the modules the includes import, and through the re-exports a package's `__init__` makes of them to the module that builds the object (a cycle of re-exports leaves the include unread). A router any route, prefix or include of which does not settle to a string, that places a path converter before further segments (`/<path:p>/edit`: the converter takes the rest of the path, so the segments after it are never matched as written), that mounts an application, or that includes an unread router, is unread — and so is the router another module imports to add a route to, when that route leaves it unread. The guard idiom is read in Python too: a function named as the router (`<module>#handle`, or `Class.do_GET` for a method of a `BaseHTTPRequestHandler` subclass, whose verb is its name) whose `if`/`elif` chains, `match` statements over the path, or dicts keyed by path or by (method, path) select a handler — a method comparison (`request.method == \"GET\"`, `method in (\"GET\", \"POST\")`) with a comparison of the whole path to a string, its split segments (`parts = path.strip(\"/\").split(\"/\")` with `len(parts) == N` and `parts[i] == \"x\"`), a prefix test (`path.startswith(...)`, an open-ended route) or an anchored raw regular expression matched against it (`re.match`, `re.fullmatch`), each value a literal or a module constant settling to one; a route needs both a verb and a path, and a function whose path comparisons do not all settle is unread. A Python Portal naming no router is ROUTES_UNCHECKED or ROUTER_UNDECLARED as above, its router objects and guard functions being what reads as a router.",
   codes: [
     {
       code: 'UNDECLARED_ROUTE',
@@ -389,7 +389,7 @@ export const routeCoverageRule: SddRule = {
           );
           continue;
         }
-        const linkage = routerLinkage(via);
+        let linkage = routerLinkage(via);
 
         // ---- 2. is there a router to judge? ----
         // The entry's file is the exact-grade file that holds a BODY (or a
@@ -399,11 +399,101 @@ export const routeCoverageRule: SddRule = {
         // (step 7): below exact grade a guard cannot be read as a route, and a
         // `router` nobody exports is export-conformance's finding.
         const files = linkage.file ? [pathKey(linkage.file)] : realization.filesOf(portal.id).map(pathKey);
-        const exact = files.filter(exactAt);
+        let exact = files.filter(exactAt);
+        // A linkage whose module only imports or re-exports the name (a
+        // package `__init__.py`'s `from .router import handle`, a TypeScript
+        // `export { handle } from './router'`) names the router where it is
+        // defined: the binding is followed, module by module, to the file
+        // that declares it. A binding that cannot be followed (a cycle, a
+        // module not read) is a router the analysis cannot see — said, never
+        // passed.
+        const heldAt = (file: string, owner: string | undefined, name: string): boolean => {
+          const facts = code.factsAt(file);
+          if (!facts) return false;
+          if (owner !== undefined) {
+            return !!facts.functionBodies && Object.prototype.hasOwnProperty.call(facts.functionBodies, name)
+              && facts.functionBodies[name].some(body => body.container === owner);
+          }
+          return (!!facts.functionParams && Object.prototype.hasOwnProperty.call(facts.functionParams, name))
+            || (!!facts.functionRoutes && Object.prototype.hasOwnProperty.call(facts.functionRoutes, name))
+            || (pythonRoutesAt(file) && (facts.unreadRouters ?? []).includes(name));
+        };
+        const followed = (file: string): { file: string; name: string } | 'unread' | undefined => {
+          const entry = linkage.owner ?? linkage.name;
+          if (entry === undefined) return undefined;
+          let at = file;
+          let name = entry;
+          const visited = new Set<string>();
+          for (;;) {
+            if (visited.has(`${at}#${name}`)) return 'unread';
+            visited.add(`${at}#${name}`);
+            const facts = code.factsAt(at);
+            if (!facts) return 'unread';
+            if (linkage.owner !== undefined ? heldAt(at, name, linkage.name as string) : heldAt(at, undefined, name)) {
+              return at === file && name === entry ? undefined : { file: at, name };
+            }
+            const hasOwn = (o: object | undefined, key: string): boolean => !!o && Object.prototype.hasOwnProperty.call(o, key);
+            let from: string | undefined;
+            let next = name;
+            if (hasOwn(facts.importBindings, name) && !facts.importBindings![name].namespace) {
+              from = facts.importBindings![name].from;
+              next = facts.importBindings![name].imported ?? name;
+            } else {
+              const re = (facts.reexportBindings ?? []).find(b => b.exported === name);
+              if (re) { from = re.from; next = re.local; }
+            }
+            if (from === undefined) {
+              // `export * from './x'` republishes every name x exports: the
+              // binding goes to the star module that declares or binds it.
+              for (const star of (facts.reexportBindings ?? []).filter(b => b.exported === '*')) {
+                const target = resolveImport(at, star.from, code.paths, code.packages);
+                const there = target !== undefined ? code.factsAt(pathKey(target)) : undefined;
+                if (there && (heldAt(pathKey(target!), undefined, name) || (there.exportedNames ?? []).includes(name)
+                  || hasOwn(there.importBindings, name) || (there.reexportBindings ?? []).some(b => b.exported === name || b.exported === '*'))) {
+                  from = star.from;
+                  break;
+                }
+              }
+            }
+            if (from === undefined) return at === file && name === entry ? undefined : 'unread';
+            const target = resolveImport(at, from, code.paths, code.packages);
+            if (target === undefined || !exactAt(pathKey(target))) return 'unread';
+            at = pathKey(target);
+            name = next;
+          }
+        };
+        if (linkage.name !== undefined && files.length > 0) {
+          const outcomes = files.filter(exactAt).map(file => ({ file, result: followed(file) }));
+          const lost = outcomes.filter(o => o.result === 'unread');
+          if (lost.length > 0) {
+            ctx.addIssue(
+              'warning',
+              'UNREADABLE_ROUTER',
+              `Portal "${portal.id}" names its router "${via}" (in ${lost.map(o => `"${o.file}"`).join(', ')}), but that module only imports or `
+              + 're-exports it, and the binding cannot be followed to the module that declares it (an import cycle, or a module this '
+              + 'analysis did not read) — so none of its routes were checked against the contract at all. Name the module that '
+              + 'declares the router (`<module>#<name>`), or carry this finding with the reason it cannot be.',
+              impl.id,
+              ctx.isComponentDraft(portal.id) || ctx.isImplementationDraft(impl),
+              undefined,
+              { at: via },
+            );
+            continue;
+          }
+          const moved = outcomes.flatMap(o => (o.result && o.result !== 'unread' ? [o.result] : []));
+          if (moved.length > 0) {
+            exact = outcomes.map(o => (o.result && o.result !== 'unread' ? o.result.file : o.file));
+            const names = new Set(moved.map(m => m.name));
+            if (names.size === 1) linkage = { ...linkage, ...(linkage.owner !== undefined ? { owner: [...names][0] } : { name: [...names][0] }) };
+          }
+        }
         // A router object the Python reader could not settle in full records
         // no route: said as unread, naming what it reads.
+        // A Python method is recorded under `Class.method`, so two handler classes of one file stay apart.
+        const entryAt = (file: string): string | undefined => (pythonRoutesAt(file) && linkage.owner !== undefined && linkage.name !== undefined
+          ? `${linkage.owner}.${linkage.name}` : linkage.name);
         const unsettled = exact.filter(file => pythonRoutesAt(file)
-          && (code.factsAt(file)?.unreadRouters ?? []).some(name => linkage.name === undefined || name === linkage.name));
+          && (code.factsAt(file)?.unreadRouters ?? []).some(name => linkage.name === undefined || name === entryAt(file)));
         if (unsettled.length > 0) {
           ctx.addIssue(
             'warning',
@@ -413,7 +503,11 @@ export const routeCoverageRule: SddRule = {
             + 'contract at all. A Python router is read off its route decorators (`@app.get("/x")`, `@bp.route("/x", '
             + 'methods=["POST"])`), its construction\'s `prefix=` or `url_prefix=`, and the routers it includes '
             + '(`include_router`, `register_blueprint`): each path, prefix and verb a string literal or a module constant bound '
-            + 'to one, each included router one an analyzed module constructs; a mounted application is never followed. Write '
+            + 'to one, each included router one an analyzed module constructs; a mounted application is never followed. A Python '
+            + 'guard function (`if method == "GET" and path.startswith("/api/")`) is read the same way, and is left unread by a '
+            + 'path comparison that does not settle (a call, a prefix that stops inside a segment); a path converter '
+            + '(`{rest:path}`, `<path:rest>`) followed by further segments, and an include of a router that is itself unread, '
+            + 'leave the router unread too. Write '
             + 'it so, or carry this finding with the reason it cannot be.',
             impl.id,
             ctx.isComponentDraft(portal.id) || ctx.isImplementationDraft(impl),
@@ -481,7 +575,9 @@ export const routeCoverageRule: SddRule = {
             const stripped = facts.routePrefixes?.[name];
             if (stripped !== undefined && Object.prototype.hasOwnProperty.call(facts.routePrefixes, name)) prefixes.add(stripped);
           }
-          return [...names].flatMap(name => (Object.prototype.hasOwnProperty.call(routes, name) ? routes[name] : []));
+          const entryKey = linkage.name !== undefined ? entryAt(file) : undefined;
+          return [...new Set([...names, ...(entryKey !== undefined ? [entryKey] : [])])]
+            .flatMap(name => (Object.prototype.hasOwnProperty.call(routes, name) ? routes[name] : []));
         });
         // Only HTTP endpoints: no other transport is routed by a path.
         const endpoints = httpEndpoints(portal);

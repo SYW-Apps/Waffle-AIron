@@ -4,6 +4,159 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.6.0 (from v6.5.0)
+
+Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now compares how a
+narrated call runs and the type of a data field, reads more Python (a router named through a
+package re-export among it), and composes a project's externals on a plain `validate` (see Added
+and Changed), so `wairon validate --ci` may fail on code or pins that passed under 6.5.0. Each
+finding names the step, the call, the field or the external, and its file.
+
+1. Install 6.6.0 the way you installed wairon: `wairon update` for the binary,
+   `npm install --global @wairon/cli@6.6.0` (or `--save-dev` in the project) for npm.
+2. Run `wairon doctor --fix` once, so the generated guides (`.wai/context/wairon-guide.md`,
+   `.claude/CLAUDE.md` and their kin) describe 6.6.0, and commit the result.
+3. Restart your AI tool, or reconnect its MCP server (`/mcp` in Claude Code), so the assistant talks
+   to the new wairon.
+4. Run `wairon validate --ci` and settle what it reports. A project that declares externals but no
+   members now composes the ones whose producer is inside its reach (a git commit, a project under
+   its own root), so an unpinned or incompatible one of those fails it: adapt the uses and re-pin
+   (`wairon externals pin <alias>`). A `../` sibling stays advisory, as before.
+5. On a hosted instance, nothing changes in stored data; a user listing may now show subjects that
+   hold grants without a user record (see Added).
+
+### Added
+
+- **How a call runs is compared.** A new rule, `call-manner-conformance`, reads what a narrative
+  says about how a call runs against the call that realizes it, in TypeScript and Python:
+  - `DETACHED_CALL_AWAITED`: a call step marked `detach: true` whose code awaits the call.
+  - `CALL_NOT_CAUGHT`: a call step inside a `try` step that catches, whose code call no try/catch
+    (or try/except) encloses.
+  - `CALL_NOT_AWAITED`: a call step not marked `detach` whose call completes later and is never
+    awaited, in a method that states its detail. Where the method leaves its detail open it is the
+    notice `OPEN_CALL_NOT_AWAITED` instead, which never fails the gate.
+  Only calls written in the method's own function are judged. A step marked `detach`, or inside a
+  catching `try`, whose call is reached only through a helper the method calls, or whose target
+  has no code yet, is the notice `CALL_MANNER_UNJUDGED`, so a pass is never read as a judged one.
+  A dispatch step and a call into another project are not judged.
+- **A data field's type is compared.** A field a type spec declares whose code annotation is
+  another simple type (`amount: string` where the spec says `float`, a Python `count: str` where it
+  says `int`) is `TYPE_FIELD_TYPE_MISMATCH`, in TypeScript and Python. The honest spellings agree as
+  they do for parameters (`number` for int and float, a `Date`, string or number for a datetime, an
+  optional field by the type it holds); a union, a list, a record or a type the design does not know
+  is not compared.
+- **Python guard-style routers are read.** A function that selects its handler from the request's
+  method and path (`if`/`elif` comparisons, `match` over the path, a dict keyed by path or by
+  method and path, or a `BaseHTTPRequestHandler`'s `do_GET`) is read as a router: name it in
+  `router:` (`<module>#handle`, or `Class.do_GET`). A comparison that does not settle to a literal,
+  or a prefix that stops inside a path segment, leaves it `UNREADABLE_ROUTER`.
+- **Python calls across components in one file are reported.** A Python method that calls another
+  component's modelled method written in the same file, without its narrative naming the call, is
+  now `UNDECLARED_COLOCATED_CALL`, as in TypeScript. Only a call the code settles is reported, never
+  one a shared name merely suggests.
+- **A member's own run shows the family root's network findings.** When the family root is on
+  disk, a member's plain `wairon validate` (and `sdd_validate_tree`) lists the root's
+  `GATEWAY_BYPASSED` and `EXPORT_BEYOND_NETWORK` findings on it, marked advisory. They never change
+  the member's verdict or fail its `--ci`; the root's own run still gates them.
+- **Hosted:**
+  - The requester of a pending lock request can withdraw it (`sdd_host_withdraw_request`). Anyone
+    else is refused, and a request decided in the meantime cannot be withdrawn.
+  - `wairon host user list | add | set-status` manages hosted users from the CLI. `add` refuses an id
+    that already has a record, so it never drops a user's role bindings.
+  - The user listings (`wairon host user list`, `/web/admin/users`) also show subjects that hold
+    grants but have no user record, marked "no user record". `wairon host permission set --user`
+    warns when that user has no record.
+  - Asking again for the lock of a design you already have a pending request for returns that
+    request instead of making a second one.
+  - A pending lock request whose design has moved since it was made is cancelled when the pending
+    list or its status is read, with the reason, instead of showing as pending until someone tries
+    to decide it.
+  - `wairon host user set-status` says that an inactive status revoked the user's API keys and web
+    sessions, and that a status set back to active restores none (`wairon host key mint` makes new
+    ones).
+
+### Changed
+
+- **Externals are composed on a plain `validate`.** A project that declares externals but no
+  members used to get only advisory live findings from `wairon validate`; it now takes the same
+  composed run a family root does. A producer inside its reach (a git commit, a project under its
+  own root) is composed as part of the gate, so `EXTERNAL_UNPINNED` and `EXTERNAL_INCOMPATIBLE`
+  gate it. A producer outside its root, such as a `../` sibling, keeps the advisory live comparison:
+  the pin gates it through `lock-check`, and `wairon externals status` is the opt-in live gate. The
+  hint for such a producer now says that instead of sending the project to `--family`.
+  `--no-recursive` still runs the owner's gate alone.
+- **A call into another project says so.** A narrative call or declared call naming another
+  project's component (`alias::name`) is now the notice `CALL_TARGET_UNJUDGED`, which says the call
+  is not judged against that project's code. It used to be `CALL_TARGET_PLANNED`, which wrongly
+  said the target had no code yet.
+- **An Adapter is recommended for I/O, not required.** The architecture standard and the generated
+  guides no longer call the Adapter the only block that may do external I/O. Using a library's API
+  directly, or creating a client and using it, is a valid pattern. An Adapter is still recommended:
+  one place to change or replace a library, and a one-call method for the components that need it.
+- **`sdd_move_spec` moves specs into and out of a part.** A component, a type or a group now moves
+  between the project's subsystems and a local part's (contained, or a sibling beside the project),
+  and the code paths of what moves are re-expressed so they still name the same files. A move into
+  or out of a part read from a git checkout is refused before anything is written.
+- **Python reading is more precise.**
+  - A router included through a package `__init__` re-export is followed to the module that builds it.
+  - A route with a path converter followed by more segments (`/<path:p>/edit`) leaves its router
+    unread, and so does including an unread router.
+  - A legacy attrs class (`@attr.s` without `auto_attribs=True`) has only its `attr.ib()` fields.
+  - `Field(default=...)` is required.
+  - A `TypedDict` whose `total=` is not a literal has its optionality left uncompared.
+  - When two fields share a name in different casings, the one spelled as the spec spells it is
+    compared.
+- **A hosted lock request is refused while the tree has errors**, naming the error count and codes;
+  no pending request is created. Warnings do not block it, as with `wairon lock`.
+- **Hosted refusals say more.** A caller holding only the `approval` grant is told it may request
+  the lock but not write. A refused subsystem write names the spec's path relative to the project.
+  `/web/projects` no longer shows the server's absolute paths. A refusal decided by no grant at all
+  says so ("the instance default (no grant reaches this action: no)").
+- **Following a producer's rename reads as one path.** The live advisory, the `externals pin`
+  refusal and `SURFACE_REF_NOT_EXPOSED` now all say the order: edit the uses to the new name (the
+  tree reports the new name as not in the pin until the re-pin records it), then re-pin.
+
+### Fixed
+
+- `export type * from X` beside `export * from X` in one file no longer loses the runtime
+  dependency on X.
+- `sdd_update_spec` no longer reports an L0 requirement written as `{description: …}` as not stored
+  when the tree holds it as plain text.
+- A router named through a module that only imports or re-exports it (a Python package
+  `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from './router'`
+  or `export * from './router'`, through another star module too) was never route-checked and said
+  nothing. It is now followed to the file that defines it; one that cannot be followed (a cycle, a
+  module not read) is `UNREADABLE_ROUTER`.
+- `CALL_TARGET_UNJUDGED` is now said for every call into another project's component, not only for
+  one the code does not make.
+- A `try` step whose catch or finally step lies inside its own body (so the handler runs on the
+  success path) is `FALLTHROUGH_INTO_HANDLER`, as a body falling into the handler after it already
+  was.
+- `wairon diagram --sequence` draws a detached call's callee without returning to the caller, draws
+  the detached arrow inside its `par` block (no empty block when the callee is not expanded), and
+  places a `try` step's catch-path note after the critical block.
+
+### Docs
+
+- The guides tell the assistant to pass `search` (the folder holding sibling checkouts) when asked
+  who is affected by a rename or a removal, and never to answer "no consumers" without it.
+- The `MISSING_INTEGRATION_SIM` message and the implement skill explain that the first `simPath` in a
+  subsystem makes the rest of it owe one, and the usual answers.
+- The README's quick start says scripts pass `--yes` to `wairon init` and `wairon lock`, and its
+  language table now says Python is checked for routes and data types.
+- The architect skill tells the assistant to state the detail of a method whose narrative has a
+  `detach` or `try` step, so how its calls run is held to the narrative.
+
+### Known limitations
+
+- A call to another project's component is not judged against that project's code
+  (`CALL_TARGET_UNJUDGED` says so).
+- A lock holder that stalls longer than the lock's stale age (15 s for hosted stores and the CLI's
+  own files, 60 s for the spec tree) can be taken over while it still works; its final write is
+  refused, which narrows the window but does not close it. (Carried from 6.2.0.)
+- `wairon mcp install` does not lock the agent's configuration file, which the agent tools write
+  without wairon's lock; it re-reads the file just before writing. (Carried from 6.3.0.)
+
 ## v6.5.0 (from v6.4.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now reports exported

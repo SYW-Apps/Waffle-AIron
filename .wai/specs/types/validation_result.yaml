@@ -21,10 +21,13 @@ fields:
     type: string
     description: >-
       One line, never a finding. The owner's gate: present when the project declares externals,
-      saying that `validate --family` composes them against their live producers — the gate itself
-      judged them against the pins alone. A family run: present when externals were left out because
-      their producers lie outside the run's reach, counting them and naming `validate --family` from
-      the project that declares them.
+      saying that the gate judged them against the pins alone and that `validate` without
+      `--no-recursive` composes them against their live producers. A family run: present when
+      externals were left out because their producers lie outside the run's reach, counting them and
+      naming what widens the reach: on a plain local run, `validate --family`; on a run that was
+      already explicit or is hosted, that the producer lies outside the request's reach or cannot be
+      read, with `wairon externals status` for the live comparison - never the flag the run already
+      used.
     optional: true
   - name: projects
     type: list<ProjectVerdict>
@@ -107,4 +110,4 @@ methods:
     symbol: ciBlockingIssues
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-24T00:37:53.064Z'
+updatedAt: '2026-10-30T12:03:35.708Z'

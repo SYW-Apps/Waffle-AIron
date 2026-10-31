@@ -166,6 +166,22 @@ describe('handleMcpRequest granular data-plane permissions (end-to-end)', () => 
     }
   }, 20_000);
 
+  it('a write held only as approval says what it allows (request the lock) and what lets them write; a no keeps the plain refusal', async () => {
+    allow(dataDir, 'u-approval', 'project:read', 'project', 'demo');
+    allow(dataDir, 'u-approval', 'project:write', 'project', 'demo', 'approval');
+    const approvalTok = mintUserToken(dataDir, { id: 'approval-only', userId: 'u-approval', projects: ['demo'] });
+    const body = (await (await post(call('sdd_add_subsystem'), approvalTok)).json()) as RpcResponse;
+    expect(body.result?.isError).toBe(true);
+    expect(toolText(body)).toContain('you hold `approval` here');
+    expect(toolText(body)).toContain('sdd_host_lock_project');
+    expect(toolText(body)).toContain('`project:write = yes` lets you write');
+
+    const noTok = readOnly();
+    const plain = (await (await post(call('sdd_add_subsystem'), noTok)).json()) as RpcResponse;
+    expect(toolText(plain)).toContain('project:write required for sdd_add_subsystem, decided at');
+    expect(toolText(plain)).not.toContain('you hold');
+  }, 20_000);
+
   it('SECURITY: a read-only token cannot smuggle a write in a JSON-RPC batch (bypass refused)', async () => {
     const tok = readOnly();
 

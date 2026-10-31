@@ -22,7 +22,9 @@ fields:
     description: >-
       Lifecycle status. An approved request is cancelled when its execution refused because the
       request no longer describes what would be done (a project:lock whose gateStateId no longer
-      matches the tree); executionSummary then says why, and the requester asks again.
+      matches the tree); executionSummary then says why, and the requester asks again. A pending
+      request its requester withdrew also reads as cancelled, its executionSummary stating it was
+      withdrawn by the requester (with their reason when given).
     optional: false
   - name: requestedBy
     type: PrincipalSubject
@@ -98,4 +100,4 @@ fields:
 methods: []
 sourcePath: src/server/types.ts
 createdAt: '2026-07-09T07:18:44.031Z'
-updatedAt: '2026-10-19T06:11:41.979Z'
+updatedAt: '2026-10-30T12:10:08.269Z'

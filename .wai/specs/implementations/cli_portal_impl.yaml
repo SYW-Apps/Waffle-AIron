@@ -685,6 +685,16 @@ methods:
         type: call
         targetComponent: cli_runner
         targetMethod: runWhatsNew
+  - name: hostUser
+    narrative:
+      - stepNumber: 1
+        description: >-
+          Dispatch `wairon host user <action>` with its parsed arguments and flags to
+          cli_runner.runHostUser.
+        type: call
+        targetComponent: cli_runner
+        targetMethod: runHostUser
+    symbol: user <action>
 status: complete
 createdAt: '2026-10-04T18:14:22.930Z'
-updatedAt: '2026-10-18T19:04:05.174Z'
+updatedAt: '2026-10-30T12:05:46.030Z'

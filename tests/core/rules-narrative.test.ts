@@ -205,6 +205,71 @@ methods:
     } finally { proj.cleanup(); }
   });
 
+  it('flags a catch handler placed inside the try body', () => {
+    const proj = createTempProject();
+    proj.component('orch-h', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-h', `schemaVersion: 1.0.0
+id: iorch-h
+name: IOrchH
+description: d
+component: orch-h
+methods:
+  - name: run
+    description: Prices the quote with a guarded call.
+    signature: "run(): void"
+    returns: "void"`);
+    proj.writeSpec('implementation', 'impl-orch-h', `schemaVersion: 1.0.0
+id: impl-orch-h
+name: ImplOrchH
+description: d
+contract: iorch-h
+methods:
+  - name: run
+    narrative:
+      - { stepNumber: 5, description: guard the pricing call, type: try, endStep: 7, catches: [{ error: PricingFailure, step: 7 }] }
+      - { stepNumber: 6, description: price the quote, type: local }
+      - { stepNumber: 7, description: fail the pricing, type: throw, error: PricingFailure }`);
+    proj.activate();
+    try {
+      const res = validateProject();
+      const hits = res.issues.filter(i => i.code === 'FALLTHROUGH_INTO_HANDLER');
+      expect(hits).toHaveLength(1);
+      expect(hits[0].message).toContain('step 7 inside its own body');
+    } finally { proj.cleanup(); }
+  });
+
+  it('stays silent when the handler follows the body and the body ends with a return', () => {
+    const proj = createTempProject();
+    proj.component('orch-h', 'Orchestrator');
+    proj.writeSpec('interface', 'iorch-h', `schemaVersion: 1.0.0
+id: iorch-h
+name: IOrchH
+description: d
+component: orch-h
+methods:
+  - name: run
+    description: Prices the quote with a guarded call.
+    signature: "run(): void"
+    returns: "void"`);
+    proj.writeSpec('implementation', 'impl-orch-h', `schemaVersion: 1.0.0
+id: impl-orch-h
+name: ImplOrchH
+description: d
+contract: iorch-h
+methods:
+  - name: run
+    narrative:
+      - { stepNumber: 5, description: guard the pricing call, type: try, endStep: 6, catches: [{ error: PricingFailure, step: 7 }] }
+      - { stepNumber: 6, description: price the quote, type: return, outcome: success }
+      - { stepNumber: 7, description: fail the pricing, type: throw, error: PricingFailure }`);
+    proj.activate();
+    try {
+      const res = validateProject();
+      const hits = res.issues.filter(i => i.code === 'FALLTHROUGH_INTO_HANDLER');
+      expect(hits).toHaveLength(0);
+    } finally { proj.cleanup(); }
+  });
+
   it('allows continue-to-loop-header backward jumps and properly nested regions', () => {
     const proj = createTempProject();
     proj.component('orch-t', 'Orchestrator');

@@ -70,6 +70,9 @@ export interface HostOptions {
   key?: string;
   value?: string;
   name?: string;
+  email?: string;
+  /** The lifecycle status `host user set-status` sets (active | inactive). */
+  userStatus?: string;
   file?: string;
   open?: boolean;
   force?: boolean;
@@ -604,8 +607,8 @@ function resolveScopeOptions(options: HostOptions): { kind: ScopeKind; id?: stri
  * Warn when a user's effective project:read at a scope is not yes. Read and write
  * are separate capabilities the resolver decides independently, so a write grant
  * (or a token owned by someone) can cover a project its subject cannot open; this
- * says so at the moment it is created, with the grant that fixes it. A user with
- * no record, or a check that fails, warns nothing — the write already succeeded.
+ * says so at the moment it is created, with the grant that fixes it. A check
+ * that fails warns nothing — the write already succeeded.
  */
 function warnIfUnreadable(
   cfg: HostConfig,
@@ -630,6 +633,25 @@ function warnIfUnreadable(
   logger.warn(
     `project:read for "${userId}" at ${where} resolves to ${read} — ${why}. `
       + `Grant it with \`wairon host permission set --user ${userId} --capability project:read ${flag}\`.`,
+  );
+}
+
+/**
+ * Warn when the user a grant names has no user record, matched by record id or
+ * subject id through the host adapter's user listing: the assignment is stored,
+ * but the subject is not a known user. A listing that fails warns nothing.
+ */
+function warnIfNoUserRecord(cfg: HostConfig, cred: string | null, userId: string): void {
+  let users;
+  try {
+    users = localAdmin.listUsers(cfg, cred);
+  } catch {
+    return;
+  }
+  if (users.some((u) => !u.noRecord && (u.id === userId || u.subject?.userId === userId))) return;
+  logger.warn(
+    `"${userId}" has no user record: the grant is stored, but the subject is not a known user, so nothing lists or deactivates it. `
+      + `Create the record with: wairon host user add --user ${userId}`,
   );
 }
 
@@ -661,6 +683,9 @@ export async function runHostPermission(action: string, options: HostOptions = {
         logger.success(
           `Assignment ${stored.id}: ${options.user} ${options.capability}=${value} @ ${scope.kind}${scope.id ? ` ${scope.id}` : ''}`,
         );
+        // A grant for a subject that has no user record is stored, but nothing lists or
+        // deactivates the subject until the record exists: say so, never refuse.
+        warnIfNoUserRecord(cfg, cred, options.user);
         // Read and write are separate capabilities: a write grant over a scope the
         // subject cannot read leaves them unable to open what they may change.
         if (options.capability === 'project:write' && (value === 'yes' || value === 'approval')) {
@@ -696,6 +721,70 @@ export async function runHostPermission(action: string, options: HostOptions = {
       }
       default:
         throw new WaironError(`Unknown permission action "${action}" (set | list | remove).`);
+    }
+  } catch (e) {
+    throw mapAdminError(e);
+  }
+}
+
+// ── wairon host user <action> ────────────────────────────────────────────────
+
+export async function runHostUser(action: string, options: HostOptions = {}): Promise<void> {
+  const cfg = resolveHostConfig(options);
+  const cred = masterCredential();
+  try {
+    switch (action) {
+      case 'list': {
+        const users = localAdmin.listUsers(cfg, cred);
+        if (!users.length) {
+          logger.info('No users.');
+          break;
+        }
+        for (const u of users) {
+          const status = u.noRecord ? 'no user record' : (u.status ?? '');
+          logger.info(`  ${u.id.padEnd(24)} ${status.padEnd(15)} ${u.unitId ?? '—'}`);
+        }
+        break;
+      }
+      case 'add': {
+        if (!options.user) throw new WaironError('`--user <id>` is required for `host user add`.');
+        // add never replaces a record: upserting over one would drop the role
+        // bindings it carries. A no-record row is a grant's subject, not a record.
+        const held = localAdmin.listUsers(cfg, cred).find(u => !u.noRecord && (u.id === options.user || u.subject?.userId === options.user));
+        if (held) {
+          throw new WaironError(
+            `User "${options.user}" already has a record; \`host user add\` never replaces one, which would drop its role bindings. `
+            + 'Change its status with `wairon host user set-status`.',
+          );
+        }
+        const stored = localAdmin.upsertUser(cfg, cred, {
+          id: options.user,
+          subject: { userId: options.user, kind: 'human', issuer: 'local' },
+          status: 'active',
+          createdAt: '',
+          ...(options.name ? { displayName: options.name } : {}),
+          ...(options.email ? { email: options.email } : {}),
+          ...(options.unit ? { unitId: options.unit } : {}),
+        });
+        logger.success(`User "${stored.id}" is recorded (active).`);
+        break;
+      }
+      case 'set-status': {
+        if (!options.user) throw new WaironError('`--user <id>` is required for `host user set-status`.');
+        if (!options.userStatus) throw new WaironError('`--status <active|inactive>` is required for `host user set-status`.');
+        const updated = localAdmin.setUserStatus(cfg, cred, options.user, options.userStatus);
+        logger.success(`User "${updated.id}" is now ${updated.status}.`);
+        if (updated.status === 'inactive') {
+          logger.info(`The API keys and web sessions of "${updated.id}" were revoked.`);
+        } else if (updated.status === 'active') {
+          logger.info(
+            `No revoked key comes back: mint new keys for "${updated.id}" with \`wairon host key mint --owner ${updated.id}\`.`,
+          );
+        }
+        break;
+      }
+      default:
+        throw new WaironError(`Unknown user action "${action}" (list | add | set-status).`);
     }
   } catch (e) {
     throw mapAdminError(e);

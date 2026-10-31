@@ -51,10 +51,13 @@ fields:
   - name: advisory
     type: bool
     description: >-
-      True on a finding reported beside a gate rather than by it — the live comparison of an
-      external with its producer (family_validator.advise). Printed and counted with its severity,
-      but never part of a failure decision: `valid` and `validate --ci` both ignore it, because the
-      pin is the reproducible gate and a live producer is not.
+      True on a finding reported beside a gate rather than by it: the live comparison of an external
+      with its producer (family_validator.advise), and the family root's network findings on a
+      member validated on its own (family_validator.adviseNetwork). Printed and counted with its
+      severity, but never part of a failure decision at any severity: `valid` and `validate --ci`
+      both ignore it, because the pin is the reproducible gate and a live producer is not, and
+      because a member's verdict is the same whether or not its family is on disk. The family root's
+      own run is where the network findings gate.
     optional: true
   - name: target
     type: string
@@ -96,4 +99,4 @@ methods:
     symbol: unparsedSpecSentence
 sourcePath: src/core/validation.ts
 createdAt: '2026-06-10T22:00:00.000Z'
-updatedAt: '2026-10-20T19:16:13.519Z'
+updatedAt: '2026-10-30T12:03:34.796Z'

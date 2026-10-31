@@ -252,6 +252,36 @@ class ApprovalRegistry {
   }
 
   /**
+   * Transition a request that is PENDING at the moment of the write to
+   * cancelled, recording the summary as its executionSummary in the same write:
+   * the requester's withdrawal. The status check runs on the set read under the
+   * store lock, so a concurrent decide cannot interleave: either the withdrawal
+   * wins (the decision is then refused as not pending) or the decision wins and
+   * the withdrawal is refused naming the status. Who may withdraw is the
+   * orchestrator's check. A withdrawn request is final: never decided or executed.
+   */
+  withdraw(id: string, summary: string): ApprovalRequest {
+    let withdrawn: ApprovalRequest | undefined;
+    this.store.update((requests) => {
+      const idx = requests.findIndex((r) => r.id === id);
+      if (idx === -1) {
+        throw new Error(`Approval request "${id}" not found.`);
+      }
+      const current = requests[idx];
+      if (current.status !== 'pending') {
+        throw new Error(
+          `Approval request "${id}" is ${current.status}, not pending; only a pending request can be withdrawn.`,
+        );
+      }
+      withdrawn = { ...current, status: 'cancelled', executionSummary: summary };
+      const next = [...requests];
+      next[idx] = withdrawn;
+      return next;
+    });
+    return withdrawn as ApprovalRequest;
+  }
+
+  /**
    * Flip every pending request whose expiresAt is at or before the supplied
    * now-timestamp to expired and return the count flipped. A set with no overdue
    * pending requests changes nothing and returns zero.
@@ -356,6 +386,12 @@ export function markApprovalCompleted(dataDir: string, id: string, executionSumm
 export function cancelApprovalRequest(dataDir: string, id: string, reason: string): ApprovalRequest {
   const store = new ApprovalStore(dataDir);
   return new ApprovalRegistry(store).cancel(id, reason);
+}
+
+/** Withdraw a request that is still pending at the moment of the write, recording the summary (atomic). */
+export function withdrawApprovalRequest(dataDir: string, id: string, summary: string): ApprovalRequest {
+  const store = new ApprovalStore(dataDir);
+  return new ApprovalRegistry(store).withdraw(id, summary);
 }
 
 /** Expire pending requests at or past their expiresAt; returns the count expired (atomic). */

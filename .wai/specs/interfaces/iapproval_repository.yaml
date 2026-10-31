@@ -44,6 +44,14 @@ methods:
     signatureFrom: approval_registry.cancel
     guarantees:
       - atomic
+  - name: withdraw
+    description: >-
+      Withdraw a request that is still pending at the moment of the write: it becomes cancelled with
+      the summary recorded as its executionSummary, atomically, and any other status is refused. A
+      withdrawn request is never decided or executed.
+    signatureFrom: approval_registry.withdraw
+    guarantees:
+      - atomic
 status: complete
 createdAt: '2026-07-09T07:19:42.563Z'
-updatedAt: '2026-10-03T21:09:39.106Z'
+updatedAt: '2026-10-30T12:10:03.550Z'

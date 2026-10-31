@@ -77,6 +77,22 @@ methods:
   - name: findReferences
     description: Calls findReferences on the validator portal.
     signatureFrom: validator_portal.findReferences
+  - name: adviseNetwork
+    description: >-
+      Forward to validator_portal.adviseNetwork: the family root's network findings on a member
+      validated on its own, each marked advisory.
+    signature: >-
+      adviseNetwork(options: ValidationOptions, already?: list<ValidationIssue>):
+      list<ValidationIssue>
+    returns: list<ValidationIssue>
+    params:
+      - name: options
+        type: ValidationOptions
+        description: The run's switches
+      - name: already
+        type: list<ValidationIssue>
+        description: The findings the member's own gate carried
+        optional: true
 status: complete
 createdAt: '2026-06-19T12:00:00Z'
-updatedAt: '2026-10-25T19:08:36.854Z'
+updatedAt: '2026-10-30T12:03:56.082Z'
