@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
@@ -209,11 +209,11 @@ async function runInitAsMember(
  */
 function defaultProjectNameAt(cwd: string): string {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(cwd, 'package.json'), 'utf8')) as { name?: unknown };
+    const pkg = JSON.parse(files.readText(path.join(cwd, 'package.json'))) as { name?: unknown };
     if (typeof pkg.name === 'string' && pkg.name.trim() !== '') return pkg.name.trim().replace(/^@[^/]+\//, '');
   } catch { /* no package.json, or not JSON */ }
   try {
-    const cargo = fs.readFileSync(path.join(cwd, 'Cargo.toml'), 'utf8');
+    const cargo = files.readText(path.join(cwd, 'Cargo.toml'));
     const section = cargo.split(/^\[/m).find((s) => s.startsWith('package]'));
     const name = section?.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
     if (name) return name;

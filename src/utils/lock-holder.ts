@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ let ownNamespace: string | null | undefined;
 export function ownPidNamespace(): string | undefined {
   if (ownNamespace === undefined) {
     try {
-      ownNamespace = process.platform === 'linux' ? fs.readlinkSync('/proc/self/ns/pid') : null;
+      ownNamespace = process.platform === 'linux' ? files.readLink('/proc/self/ns/pid') : null;
     } catch {
       ownNamespace = null;
     }

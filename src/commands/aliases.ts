@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { processes } from '../io/index.js';
 import chalk from 'chalk';
@@ -56,7 +56,7 @@ export async function runAliasesList(): Promise<void> {
       note = `  ← ${chalk.yellow(conflict)}`;
     } else {
       const filePath = aliasFilePath(alias, installDir);
-      const exists = filePath ? fs.existsSync(filePath) : false;
+      const exists = filePath ? files.exists(filePath) : false;
       statusLabel = exists ? chalk.green('active') : chalk.red('missing');
       if (!exists && !isDisabled) {
         note = '  ← run `wairon aliases enable ' + alias + '` to create';
@@ -159,7 +159,7 @@ async function disableBinaryAlias(alias: SupportedAlias): Promise<void> {
   if (!installDir) return; // nothing to remove
 
   const filePath = aliasFilePath(alias, installDir);
-  if (!filePath || !fs.existsSync(filePath)) {
+  if (!filePath || !files.exists(filePath)) {
     logger.info(`Alias file not found — nothing to remove.`);
     return;
   }
@@ -170,34 +170,34 @@ async function disableBinaryAlias(alias: SupportedAlias): Promise<void> {
     return;
   }
 
-  fs.unlinkSync(filePath);
+  files.removeFile(filePath);
   logger.success(`Removed alias file: ${filePath}`);
 }
 
 function writeWindowsWrapper(_alias: string, _installDir: string, filePath: string): void {
   // Standard Windows .cmd wrapper: passes all args through to the main binary
   const wrapper = `@echo off\r\n"%~dp0wairon.exe" %*\r\n`;
-  fs.writeFileSync(filePath, wrapper, 'utf-8');
+  files.writeText(filePath, wrapper);
 }
 
 function writeUnixSymlink(_alias: string, installDir: string, filePath: string): void {
   const target = path.join(installDir, 'wairon');
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  fs.symlinkSync(target, filePath);
-  fs.chmodSync(filePath, 0o755);
+  if (files.exists(filePath)) files.removeFile(filePath);
+  files.symlink(target, filePath);
+  files.chmod(filePath, 0o755);
 }
 
 function isOurAlias(filePath: string, installDir: string): boolean {
   try {
     if (process.platform === 'win32') {
       // Check if the .cmd file calls wairon.exe from the same directory
-      const content = fs.readFileSync(filePath, 'utf-8');
+      const content = files.readText(filePath);
       return content.includes('wairon.exe');
     } else {
       // Check if it's a symlink pointing to our wairon binary
-      const stat = fs.lstatSync(filePath);
+      const stat = files.lstat(filePath);
       if (stat.isSymbolicLink()) {
-        const target = fs.readlinkSync(filePath);
+        const target = files.readLink(filePath);
         const resolvedTarget = path.resolve(path.dirname(filePath), target);
         return resolvedTarget === path.join(installDir, 'wairon');
       }

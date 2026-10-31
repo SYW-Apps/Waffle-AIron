@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import type { ProfileFamily } from '../core/extensions.js';
 import * as path from 'path';
 import { runWithProjectRoot, getProjectRoot, replaceFile } from '../utils/fs.js';
@@ -113,9 +113,9 @@ function assertNotCodeArchive(info: PackArchiveInfo): void {
 function extractDeclarativeArchive(archive: Uint8Array, destDir: string): void {
   const result = hostSdk.extractArchive(archive, destDir, HOSTED_STRICT_LIMITS);
   try {
-    assertDeclarative(fs.readFileSync(path.join(result.directory, result.entryPath), 'utf8'));
+    assertDeclarative(files.readText(path.join(result.directory, result.entryPath)));
   } catch (e) {
-    fs.rmSync(destDir, { recursive: true, force: true });
+    files.remove(destDir);
     throw e;
   }
 }
@@ -144,7 +144,7 @@ function probe(loadRef: string, baseRoot: string, scope: PackScope, displayRef: 
 
 /** Write a file atomically (tmp + rename), creating parent dirs. */
 function writeFileAtomic(file: string, content: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  files.ensureDir(path.dirname(file));
   replaceFile(file, content);
 }
 
@@ -326,12 +326,12 @@ function storeListProjectProfiles(config?: ProjectConfig | null): AvailableProfi
  *  install extracts). Null when a directory carries no declarative entry (e.g. a
  *  code-only pack) — the caller treats that as unresolved rather than vendoring it. */
 function readPackContent(full: string): string | null {
-  const st = fs.statSync(full);
-  if (st.isFile()) return fs.readFileSync(full, 'utf8');
+  const st = files.stat(full);
+  if (st.isFile()) return files.readText(full);
   if (st.isDirectory()) {
     for (const entry of ['pack.yaml', 'pack.yml']) {
       const p = path.join(full, entry);
-      if (fs.existsSync(p) && fs.statSync(p).isFile()) return fs.readFileSync(p, 'utf8');
+      if (files.exists(p) && files.stat(p).isFile()) return files.readText(p);
     }
   }
   return null;
@@ -465,7 +465,7 @@ function storeRemoveGlobalPack(name: string): void {
         : `No server-global instance pack named "${name}".`,
     );
   }
-  fs.rmSync(match, { recursive: true, force: true });
+  files.remove(match);
 }
 
 // ── pack_store: bound-project store (assumes a project root is bound) ───────
@@ -536,7 +536,7 @@ function storeRemoveProjectPack(name: string, ref?: string): void {
   const resolved = path.resolve(root, ref ?? path.join('.wai', 'packs', name));
   const vendorDir = path.resolve(root, '.wai', 'packs');
   if (resolved.startsWith(vendorDir + path.sep)) {
-    fs.rmSync(resolved, { recursive: true, force: true });
+    files.remove(resolved);
   }
 }
 

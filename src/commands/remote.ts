@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
@@ -473,11 +473,11 @@ function writeArchiveIfAsked(
   if (!archivePath) return undefined;
   const resolved = path.resolve(archivePath);
   // A directory target keeps the archive's own suggested name.
-  const target = fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()
+  const target = files.exists(resolved) && files.stat(resolved).isDirectory()
     ? path.join(resolved, suggestedFileName)
     : resolved;
-  fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.writeFileSync(target, Buffer.from(archive));
+  files.ensureDir(path.dirname(target));
+  files.writeBytes(target, Buffer.from(archive));
   return target;
 }
 

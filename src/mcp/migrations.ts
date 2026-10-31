@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as migrations from './adapters/migrations.js';
 import { loadProjectConfig, reinjectLocalGuides, registerProjectServer } from './adapters/core.js';
@@ -39,7 +39,7 @@ function madeProjectRoot(report: FamilyMigrationReport): string | null {
   if (!(request.verb === 'promote' || (request.verb === 'externalize' && request.as === 'project'))) return null;
   const created = changes.find((c) => c.action === 'create' && c.path.replace(/\\/g, '/') ==='.wai/specs/.index.yaml');
   const root = created?.project ?? null;
-  return root !== null && fs.existsSync(path.join(root, '.wai', 'project.yaml')) ? root : null;
+  return root !== null && files.exists(path.join(root, '.wai', 'project.yaml')) ? root : null;
 }
 
 /**

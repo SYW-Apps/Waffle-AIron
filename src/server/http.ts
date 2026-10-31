@@ -2,7 +2,7 @@ import * as http from 'http';
 import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { AddressInfo } from 'net';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
@@ -209,7 +209,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
   if (req.method === 'GET' && url.pathname === '/readyz') {
     let ready = false;
     try {
-      fs.accessSync(cfg.dataDir, fs.constants.W_OK);
+      files.checkWritable(cfg.dataDir);
       ready = true;
     } catch {
       /* not writable */

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
@@ -1029,7 +1029,7 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
       case 'install': {
         if (!options.file) throw new WaironError('`--file <path>` (a declarative pack YAML) is required for install.');
         const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
-        const content = fs.readFileSync(path.resolve(options.file), 'utf8');
+        const content = files.readText(path.resolve(options.file));
         // Steps 10-14: into a project, the impact first — then install only on yes.
         if (project && !hostPackWriteUnattended(options.yes)) {
           printHostPackImpact(localAdmin.previewProjectPack(cfg, cred, project, name, content));

@@ -1,5 +1,5 @@
 import { processes } from '../io/index.js';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { getProjectRoot } from '../utils/fs.js';
 
@@ -70,7 +70,7 @@ export function integrateDefault(defaultBranch: string): void {
  */
 export function commitScoped(subpaths: string[], message: string): string | null {
   if (subpaths.length === 0) throw new Error('commitScoped needs at least one pathspec');
-  const live = subpaths.filter((p) => fs.existsSync(path.join(getProjectRoot(), p)) || git(['ls-files', '--', p]) !== '');
+  const live = subpaths.filter((p) => files.exists(path.join(getProjectRoot(), p)) || git(['ls-files', '--', p]) !== '');
   if (live.length === 0) return null;
   git(['add', '--', ...live]);
   const staged = git(['diff', '--cached', '--name-only', '--', ...live]);
@@ -110,8 +110,8 @@ export function compareUrl(remote: string, defaultBranch: string, workingBranch:
 export function excludeLocalFiles(): void {
   const excludePath = path.join(getProjectRoot(), '.git', 'info', 'exclude');
   try {
-    fs.mkdirSync(path.dirname(excludePath), { recursive: true });
-    const existing = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, 'utf8') : '';
+    files.ensureDir(path.dirname(excludePath));
+    const existing = files.exists(excludePath) ? files.readText(excludePath) : '';
     const lines = existing.split(/\r?\n/).filter((line) => line.length > 0);
 
     const hadLegacyLockExclusion = lines.some((line) => line.trim() === '.wai/lock.json');
@@ -119,7 +119,7 @@ export function excludeLocalFiles(): void {
     if (!kept.some((line) => line.trim() === '.wai/git.json')) {
       kept.push('.wai/git.json');
     }
-    fs.writeFileSync(excludePath, kept.join('\n') + '\n');
+    files.writeText(excludePath, kept.join('\n') + '\n');
 
     if (hadLegacyLockExclusion) {
       console.warn(

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -38,15 +38,15 @@ export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): vo
   const resolved = path.resolve(dir);
   const agent = backend === 'claude' ? 'Claude' : 'Gemini/Antigravity';
 
-  if (!fs.existsSync(resolved)) {
+  if (!files.exists(resolved)) {
     const parent = path.dirname(resolved);
-    if (!fs.existsSync(parent)) {
+    if (!files.exists(parent)) {
       throw new WaironError(`--config-dir "${dir}" does not exist and its parent is missing — check the path.`);
     }
     logger.warn(`Config dir "${resolved}" does not exist yet; it will be created.`);
     return;
   }
-  if (!fs.statSync(resolved).isDirectory()) {
+  if (!files.stat(resolved).isDirectory()) {
     throw new WaironError(`--config-dir "${dir}" is not a directory.`);
   }
 
@@ -54,12 +54,12 @@ export function validateConfigDir(dir: string, backend: 'claude' | 'gemini'): vo
     ? ['settings.json', 'settings.local.json', '.credentials.json', 'projects', 'statsig', 'todos', 'shell-snapshots', 'CLAUDE.md']
     : ['settings.json', 'GEMINI.md', 'oauth_creds.json', 'antigravity-cli', 'tmp'];
 
-  const entries = fs.readdirSync(resolved);
+  const entries = files.list(resolved);
   if (entries.length === 0) {
     logger.warn(`Config dir "${resolved}" is empty; proceeding (treating it as a fresh ${agent} config dir).`);
     return;
   }
-  if (!markers.some((m) => fs.existsSync(path.join(resolved, m)))) {
+  if (!markers.some((m) => files.exists(path.join(resolved, m)))) {
     throw new WaironError(
       `"${dir}" does not look like a ${agent} config directory (none of ${markers.slice(0, 4).join(', ')} found). ` +
       `Point --config-dir at the agent's config directory.`,
@@ -88,14 +88,14 @@ function bindingLine(root: string): string {
  * its own (not yet bootstrapped), else the cwd.
  */
 function serveRoot(cwd: string, envDir: string | undefined): { root: string; how: string } {
-  if (envDir && fs.existsSync(path.join(envDir, '.wai'))) return { root: path.resolve(envDir), how: 'WAIRON_PROJECT_DIR (pinned at install)' };
+  if (envDir && files.exists(path.join(envDir, '.wai'))) return { root: path.resolve(envDir), how: 'WAIRON_PROJECT_DIR (pinned at install)' };
   const binding = resolveProjectBinding(cwd);
   // An ancestor binding is observable here; roots (if the client sends them)
   // can still correct it post-connect via scopeToClientWorkspace.
   if (binding?.via === 'here') return { root: binding.root, how: 'cwd' };
   if (binding?.via === 'ancestor') return { root: binding.root, how: `walked up to ancestor inside the repository — cwd (${cwd}) holds no project` };
   if (binding) return { root: binding.root, how: `walked up past the repository root to the project that declares it as a member — cwd (${cwd})` };
-  if (fs.existsSync(path.join(cwd, '.wai'))) return { root: cwd, how: 'cwd (its .wai holds no L0 yet)' };
+  if (files.exists(path.join(cwd, '.wai'))) return { root: cwd, how: 'cwd (its .wai holds no L0 yet)' };
   return { root: cwd, how: 'cwd (no project binds this folder)' };
 }
 
@@ -188,8 +188,8 @@ export function detectHostedMcpSource(cwd: string = process.cwd()): DetectedMcpS
   for (const configPath of mcpConfigCandidates(cwd)) {
     let entry: Record<string, unknown> | undefined;
     try {
-      if (!fs.existsSync(configPath)) continue;
-      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as {
+      if (!files.exists(configPath)) continue;
+      const parsed = JSON.parse(files.readText(configPath)) as {
         mcpServers?: Record<string, Record<string, unknown>>;
       };
       entry = parsed.mcpServers?.['wairon'];
@@ -348,9 +348,9 @@ function resolveInstallTargets(options: McpInstallOptions): InstallTarget[] {
 
     // ── Read existing settings (or start fresh) ───────────────────────────────
     let settings: Record<string, unknown> = {};
-    if (fs.existsSync(settingsPath)) {
+    if (files.exists(settingsPath)) {
       try {
-        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as Record<string, unknown>;
+        settings = JSON.parse(files.readText(settingsPath)) as Record<string, unknown>;
       } catch {
         logger.warn(`Could not parse ${settingsPath} — starting fresh.`);
       }
@@ -456,8 +456,8 @@ function writeInstallTarget(target: InstallTarget): void {
   const mcpServers = (settings['mcpServers'] ?? {}) as Record<string, unknown>;
   mcpServers['wairon'] = target.after;
   settings['mcpServers'] = mcpServers;
-  if (!fs.existsSync(target.configBase)) fs.mkdirSync(target.configBase, { recursive: true });
-  if (target.outsideProject && fs.existsSync(target.path)) {
+  if (!files.exists(target.configBase)) files.ensureDir(target.configBase);
+  if (target.outsideProject && files.exists(target.path)) {
     logger.info(`Backed up ${chalk.gray(target.path)} to ${chalk.cyan(backupBeside(target.path))} before replacing it (outside the project root).`);
   }
   // Atomic, and keeps the file's line endings: a committed .mcp.json checked out with CRLF stays CRLF.
@@ -468,7 +468,7 @@ function writeInstallTarget(target: InstallTarget): void {
 function settingsAsTheyStand(file: string): Record<string, unknown> | null {
   let text: string;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    text = files.readText(file);
   } catch (e) {
     return (e as NodeJS.ErrnoException).code === 'ENOENT' ? {} : null;
   }
@@ -549,12 +549,12 @@ export function runMcpStatus(): void {
   ];
 
   for (const { label, filePath, fallbackName } of checks) {
-    if (!fs.existsSync(filePath)) {
+    if (!files.exists(filePath)) {
       console.log(`  ${label}: ${chalk.gray(`${fallbackName} not found`)}`);
       continue;
     }
     try {
-      const s = JSON.parse(fs.readFileSync(filePath, 'utf8')) as Record<string, unknown>;
+      const s = JSON.parse(files.readText(filePath)) as Record<string, unknown>;
       const registered = !!(s['mcpServers'] as Record<string, unknown> | undefined)?.['wairon'];
       const mark = registered ? chalk.green('✓ registered') : chalk.gray('not registered');
       console.log(`  ${label}: ${mark}  ${chalk.gray(filePath)}`);
@@ -573,7 +573,7 @@ export function runMcpStatus(): void {
 
   // Also show wai dir location so user knows where context comes from
   const mcpDir = aiDir('mcp');
-  if (fs.existsSync(mcpDir)) {
+  if (files.exists(mcpDir)) {
     logger.info(`MCP state dir: ${chalk.gray(mcpDir)}`);
   }
 }
@@ -622,7 +622,7 @@ function legacyPluginDir(): string {
  */
 export function findLegacyPlugin(): string | null {
   const dir = legacyPluginDir();
-  return fs.existsSync(dir) ? dir : null;
+  return files.exists(dir) ? dir : null;
 }
 
 /**
@@ -636,7 +636,7 @@ export function retireLegacyPlugin(): string | null {
   if (!dir) return null;
   const backup = path.join(path.dirname(path.dirname(dir)), `wairon-plugin.wairon-backup-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   try {
-    fs.renameSync(dir, backup);
+    files.rename(dir, backup);
     logger.info(`Moved the legacy global Antigravity plugin ${chalk.gray(dir)} aside to ${chalk.cyan(backup)} (it collides with the wairon MCP server).`);
     return backup;
   } catch (e) {

@@ -1,6 +1,6 @@
 import { processes } from '../../io/index.js';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { WaironError } from '../../utils/errors.js';
@@ -79,7 +79,7 @@ export function cacheEntryOf(url: string, commit: string): string {
 /** `dir` inside an entry, refused when the commit does not hold it. */
 function within(entry: string, url: string, commit: string, dir: string | undefined): string {
   const at = dir ? path.join(entry, dir) : entry;
-  if (!fs.existsSync(at)) {
+  if (!files.exists(at)) {
     throw new SourceUnavailable(`the commit ${commit} of ${url} holds no "${dir}"`);
   }
   return at;
@@ -96,7 +96,7 @@ function fetchInto(tmp: string, url: string, commit: string): void {
   }
   git(['-c', 'advice.detachedHead=false', 'checkout', '-q', commit], tmp);
   // The entry is content only: the commit's tree, never a repository a later read could move.
-  fs.rmSync(path.join(tmp, '.git'), { recursive: true, force: true });
+  files.remove(path.join(tmp, '.git'));
 }
 
 /**
@@ -108,23 +108,23 @@ function fetchInto(tmp: string, url: string, commit: string): void {
  */
 export function fetch(url: string, commit: string, dir?: string): string {
   const entry = cacheEntryOf(url, commit);
-  if (fs.existsSync(entry)) return within(entry, url, commit, dir);
-  fs.mkdirSync(path.dirname(entry), { recursive: true });
+  if (files.exists(entry)) return within(entry, url, commit, dir);
+  files.ensureDir(path.dirname(entry));
   const tmp = `${entry}.tmp-${process.pid}-${crypto.randomBytes(4).toString('hex')}`;
-  fs.mkdirSync(tmp, { recursive: true });
+  files.ensureDir(tmp);
   try {
     fetchInto(tmp, url, commit);
     try {
-      fs.renameSync(tmp, entry);
+      files.rename(tmp, entry);
     } catch (e) {
       // A concurrent fetch that won the rename holds the same content.
-      if (!fs.existsSync(entry)) throw e;
-      fs.rmSync(tmp, { recursive: true, force: true });
+      if (!files.exists(entry)) throw e;
+      files.remove(tmp);
     }
   } catch (e) {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    files.remove(tmp);
     // A repository folder this fetch created and nothing filled goes with it.
-    if (fs.readdirSync(path.dirname(entry)).length === 0) fs.rmdirSync(path.dirname(entry));
+    if (files.list(path.dirname(entry)).length === 0) files.removeEmptyDir(path.dirname(entry));
     throw e instanceof SourceUnavailable ? e : new SourceUnavailable(`cannot fetch ${commit} of ${url}: ${reasonOf(e)}`);
   }
   return within(entry, url, commit, dir);
@@ -182,7 +182,7 @@ export function head(directory: string): string | null {
 export function repositoryRoot(directory: string): string | null {
   let at = path.resolve(directory);
   for (;;) {
-    if (fs.existsSync(path.join(at, '.git'))) return at;
+    if (files.exists(path.join(at, '.git'))) return at;
     const up = path.dirname(at);
     if (up === at) return null;
     at = up;

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
@@ -16,8 +16,8 @@ function loadAssets(): { css: string; js: string } | null {
   try {
     const dir = path.dirname(require.resolve('swagger-ui-dist/package.json'));
     cache = {
-      css: fs.readFileSync(path.join(dir, 'swagger-ui.css'), 'utf8'),
-      js: fs.readFileSync(path.join(dir, 'swagger-ui-bundle.js'), 'utf8'),
+      css: files.readText(path.join(dir, 'swagger-ui.css')),
+      js: files.readText(path.join(dir, 'swagger-ui-bundle.js')),
     };
   } catch {
     cache = null;

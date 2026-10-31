@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import { runWithProjectRoot } from '../utils/fs.js';
 import {
   EXTERNAL_ALIAS_RE,
@@ -156,7 +156,7 @@ function readProducer(binding: ExternalBinding): { read: ProducerRead } | { why:
   const { external } = binding;
   const directory = external.directory;
   if (external.sourceKind === 'unresolved' || directory === undefined) return { why: external.problem ?? 'it does not resolve' };
-  if (!fs.existsSync(directory)) return { why: `its root ${directory} does not exist` };
+  if (!files.exists(directory)) return { why: `its root ${directory} does not exist` };
   try {
     return runWithProjectRoot(directory, () => {
       // Step 6: the id it answers to.

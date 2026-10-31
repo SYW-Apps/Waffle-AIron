@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as validator from './adapters/validator.js';
@@ -423,7 +423,7 @@ function broughtIn(plan: MigrationPlan, family: ProjectFamily): string[] {
     const at = (e.write.args[1] as { source?: unknown } | undefined)?.source;
     if (typeof at !== 'string') return [];
     const dir = path.resolve(e.write.root, at);
-    return fs.existsSync(path.join(dir, '.wai')) ? [dir] : [];
+    return files.exists(path.join(dir, '.wai')) ? [dir] : [];
   });
   return [...new Set([...plan.edits.flatMap((e) => (e.write ? [path.resolve(e.write.root)] : [])), ...declared])].filter((r) => !known.has(r));
 }

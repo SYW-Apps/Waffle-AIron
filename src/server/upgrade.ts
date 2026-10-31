@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as hostUpgrade from './adapters/upgrade.js';
 import { migratePermissionModel, run as migrateRetiredValues } from './migration.js';
@@ -93,10 +93,10 @@ function versionFile(dataDir: string): string {
  */
 export function readVersion(dataDir: string): number | null {
   const file = versionFile(dataDir);
-  if (!fs.existsSync(file)) return null;
+  if (!files.exists(file)) return null;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    parsed = JSON.parse(files.readText(file));
   } catch (e) {
     throw new Error(`${file} does not parse (${e instanceof Error ? e.message : String(e)}) — it should read { "major": <number> }`);
   }
@@ -110,10 +110,10 @@ export function readVersion(dataDir: string): number | null {
 /** iinstance_version_store.write — record the major: a temporary file beside it, renamed over version.json. */
 export function writeVersion(dataDir: string, major: number): void {
   const file = versionFile(dataDir);
-  fs.mkdirSync(dataDir, { recursive: true });
+  files.ensureDir(dataDir);
   const tmp = `${file}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify({ major }, null, 2) + '\n', 'utf-8');
-  fs.renameSync(tmp, file);
+  files.writeText(tmp, JSON.stringify({ major }, null, 2) + '\n');
+  files.rename(tmp, file);
 }
 
 // ── instance_backup_adapter ─────────────────────────────────────────────────
@@ -128,10 +128,10 @@ export function copyDataDir(dataDir: string, fromMajor: number, toMajor: number)
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
   const target = `${path.resolve(dataDir)}.backup-v${fromMajor}-to-v${toMajor}-${stamp}`;
   try {
-    fs.cpSync(dataDir, target, { recursive: true, errorOnExist: true, force: false });
+    files.copy(dataDir, target, { recursive: true, errorOnExist: true, force: false });
   } catch (e) {
     try {
-      fs.rmSync(target, { recursive: true, force: true });
+      files.remove(target);
     } catch {
       /* the cause below is the one to report */
     }
@@ -154,14 +154,14 @@ export function discardDataDir(dataDir: string): string[] {
   if (name === '' || parent === dir) throw new Error(`refusing to discard ${dir}: it is a filesystem root`);
   const removed: string[] = [];
   const targets = [dir];
-  if (fs.existsSync(parent)) {
-    for (const entry of fs.readdirSync(parent)) {
+  if (files.exists(parent)) {
+    for (const entry of files.list(parent)) {
       if (entry.startsWith(`${name}.backup-`)) targets.push(path.join(parent, entry));
     }
   }
   for (const target of targets) {
-    if (!fs.existsSync(target)) continue;
-    fs.rmSync(target, { recursive: true, force: true });
+    if (!files.exists(target)) continue;
+    files.remove(target);
     removed.push(target);
   }
   return removed;
@@ -292,7 +292,7 @@ export function upgradeTrees(cfg: Pick<HostConfig, 'dataDir' | 'auditPolicy'>): 
     if (seen.has(root)) continue;
     seen.add(root);
     // A record whose root holds no project yet (created, not yet initialized) has no tree to upgrade.
-    if (!['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')))) continue;
+    if (!['.wai', '.wairon'].some((dir) => files.exists(path.join(root, dir, 'project.yaml')))) continue;
     try {
       // Step 6.
       const stand = runWithProjectRoot(root, () => hostUpgrade.standing(root));

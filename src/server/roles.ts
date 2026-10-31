@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { SSO_ADMIN_ROLE_ID } from './types.js';
 import type { Role } from './types.js';
@@ -71,7 +71,7 @@ function load(dataDir: string): Role[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Cannot read role store at ${p}: ${(err as Error).message}`);
@@ -95,7 +95,7 @@ function load(dataDir: string): Role[] {
  */
 function update(dataDir: string, change: (roles: Role[]) => Role[]): Role[] {
   const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const current = readJsonForUpdate<unknown>(p, []);
     if (!Array.isArray(current)) {

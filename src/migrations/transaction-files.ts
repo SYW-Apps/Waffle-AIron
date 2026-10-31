@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as nodePath from 'path';
 import * as yaml from 'js-yaml';
@@ -30,7 +30,7 @@ function pause(ms: number): void {
 function removeTree(dir: string): void {
   for (let attempt = 1; ; attempt++) {
     try {
-      fs.rmSync(dir, { recursive: true, force: true });
+      files.remove(dir);
       return;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
@@ -42,20 +42,20 @@ function removeTree(dir: string): void {
 
 /** Write bytes durably: a temporary sibling, fsynced, renamed over the target, the directory fsynced where it can be. */
 function writeDurably(file: string, bytes: Uint8Array | string): void {
-  fs.mkdirSync(nodePath.dirname(file), { recursive: true });
+  files.ensureDir(nodePath.dirname(file));
   const tmp = `${file}.tmp`;
   try {
-    const fd = fs.openSync(tmp, 'w');
+    const fd = files.openForWrite(tmp);
     try {
-      fs.writeSync(fd, typeof bytes === 'string' ? Buffer.from(bytes, 'utf8') : bytes);
-      fs.fsyncSync(fd);
+      files.writeDescriptor(fd, typeof bytes === 'string' ? Buffer.from(bytes, 'utf8') : bytes);
+      files.syncDescriptor(fd);
     } finally {
-      fs.closeSync(fd);
+      files.closeDescriptor(fd);
     }
-    fs.renameSync(tmp, file);
+    files.rename(tmp, file);
   } catch (e) {
     // A failed write leaves the previous file intact and no temporary sibling behind.
-    try { fs.unlinkSync(tmp); } catch { /* never written, or already renamed */ }
+    try { files.removeFile(tmp); } catch { /* never written, or already renamed */ }
     throw e;
   }
   syncDirectory(nodePath.dirname(file));
@@ -64,8 +64,8 @@ function writeDurably(file: string, bytes: Uint8Array | string): void {
 function syncDirectory(dir: string): void {
   if (process.platform === 'win32') return;
   try {
-    const fd = fs.openSync(dir, 'r');
-    try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    const fd = files.openForRead(dir);
+    try { files.syncDescriptor(fd); } finally { files.closeDescriptor(fd); }
   } catch { /* a platform that cannot fsync a directory: the rename is the barrier */ }
 }
 
@@ -73,7 +73,7 @@ function syncDirectory(dir: string): void {
 export function openRehearsal(id: string): string {
   const dir = rehearsalDir(id);
   // Refuses when it exists already: two plans never share a rehearsal.
-  fs.mkdirSync(dir);
+  files.makeDir(dir);
   return dir;
 }
 
@@ -89,7 +89,7 @@ export function dropRehearsal(id: string): void {
 /** itransaction_file_adapter.saveJournal — journal.yaml durably, the .gitignore first when absent. */
 export function saveJournal(journal: TransactionJournal): void {
   const ignore = nodePath.join(transactionsDir(journal.owner), '.gitignore');
-  if (!fs.existsSync(ignore)) writeDurably(ignore, '*\n');
+  if (!files.exists(ignore)) writeDurably(ignore, '*\n');
   writeDurably(nodePath.join(transactionDir(journal.owner, journal.id), 'journal.yaml'), yaml.dump(journal, { noRefs: true, lineWidth: 200 }));
 }
 
@@ -98,7 +98,7 @@ export function readJournal(owner: string, id: string): TransactionJournal | nul
   const file = nodePath.join(transactionDir(owner, id), 'journal.yaml');
   let text: string;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    text = files.readText(file);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw e;
@@ -119,7 +119,7 @@ export function listJournals(owner: string): TransactionJournal[] {
   const dir = transactionsDir(owner);
   let names: string[];
   try {
-    names = fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
+    names = files.listEntries(dir).filter((d) => d.isDirectory()).map((d) => d.name).sort();
   } catch {
     return [];
   }
@@ -136,7 +136,7 @@ export function putFile(owner: string, id: string, area: TransactionArea, path: 
 /** itransaction_file_adapter.readFile — the bytes held in an area, or null. */
 export function readFile(owner: string, id: string, area: TransactionArea, path: string): Buffer | null {
   try {
-    return fs.readFileSync(locate(owner, id, area, path));
+    return files.readBytes(locate(owner, id, area, path));
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw e;
@@ -160,7 +160,7 @@ export function close(owner: string, id: string): void {
   const dir = transactionsDir(owner);
   let left: string[];
   try {
-    left = fs.readdirSync(dir);
+    left = files.list(dir);
   } catch {
     return;
   }
@@ -168,7 +168,7 @@ export function close(owner: string, id: string): void {
   removeTree(dir);
   const wai = nodePath.dirname(dir);
   try {
-    if (fs.readdirSync(wai).length === 0) fs.rmdirSync(wai);
+    if (files.list(wai).length === 0) files.removeEmptyDir(wai);
   } catch {
     // already gone, or not empty after all: nothing to prune
   }
@@ -176,7 +176,7 @@ export function close(owner: string, id: string): void {
   // holds nothing at all now: no empty directory is left behind for a later
   // move to find in its way.
   try {
-    if (fs.readdirSync(owner).length === 0) fs.rmdirSync(owner);
+    if (files.list(owner).length === 0) files.removeEmptyDir(owner);
   } catch {
     // already gone, or not empty: nothing to prune
   }

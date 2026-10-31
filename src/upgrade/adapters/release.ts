@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as ioFiles } from '../../io/index.js';
 import * as path from 'path';
 import { WAIRON_VERSION } from '../../config/defaults.js';
 import type { ReleaseNote } from '../types.js';
@@ -45,14 +45,14 @@ function newer(a: string, b: string): boolean {
 export function notesIn(dir: string): ReleaseNote[] {
   let files: string[];
   try {
-    files = fs.readdirSync(dir).filter((f) => /^\d+\.\d+\.\d+.*\.md$/.test(f));
+    files = ioFiles.list(dir).filter((f) => /^\d+\.\d+\.\d+.*\.md$/.test(f));
   } catch {
     return [];
   }
   const notes: ReleaseNote[] = [];
   for (const file of files) {
     try {
-      const text = fs.readFileSync(path.join(dir, file), 'utf-8');
+      const text = ioFiles.readText(path.join(dir, file));
       const highlights = text.split(/\r?\n/)
         .map((l) => /^\s*[-*]\s+(.*\S)\s*$/.exec(l)?.[1])
         .filter((l): l is string => !!l)
@@ -67,7 +67,7 @@ export function notesIn(dir: string): ReleaseNote[] {
 
 /** iinstalled_release_adapter.notes — every bundled release note, newest version first. */
 export function notes(): ReleaseNote[] {
-  const dir = candidateDirs().find((d) => fs.existsSync(d));
+  const dir = candidateDirs().find((d) => ioFiles.exists(d));
   return dir ? notesIn(dir) : [];
 }
 

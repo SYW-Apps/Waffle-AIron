@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { processes } from '../io/index.js';
@@ -68,7 +68,7 @@ class GitBackingStore {
     const p = storePath(this.dataDir);
     let raw: string;
     try {
-      raw = fs.readFileSync(p, 'utf8');
+      raw = files.readText(p);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw new Error(`Cannot read git-backing store at ${p}: ${(err as Error).message}`);
@@ -93,7 +93,7 @@ class GitBackingStore {
    */
   update(change: (bindings: GitBackingBinding[]) => GitBackingBinding[]): GitBackingBinding[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     return withFileLock(p, () => {
       const current = readJsonForUpdate<unknown>(p, []);
       if (!Array.isArray(current)) {
@@ -232,8 +232,8 @@ function checkoutBranch(workdir: string, branch: string): void {
  *  git-token authenticates the clone). A brand-new EMPTY remote is supported —
  *  the branch is created on the first sync rather than the clone failing. */
 export function cloneOrOpen(remote: string, branch: string, workdir: string, credentialRef?: string): string {
-  if (!fs.existsSync(path.join(workdir, '.git'))) {
-    fs.mkdirSync(workdir, { recursive: true });
+  if (!files.exists(path.join(workdir, '.git'))) {
+    files.ensureDir(workdir);
     // Clone WITHOUT --branch so a brand-new EMPTY remote clones cleanly (git only
     // warns) instead of failing "Remote branch <b> not found in upstream origin".
     git(['clone', authRemote(remote, credentialRef), '.'], workdir);
@@ -251,11 +251,11 @@ export function cloneOrOpen(remote: string, branch: string, workdir: string, cre
  *  working copy — replace semantics: the target reflects the source exactly,
  *  deletions included. */
 export function mirrorTree(sourceDir: string, targetDir: string): void {
-  fs.rmSync(targetDir, { recursive: true, force: true });
-  const stat = fs.statSync(sourceDir, { throwIfNoEntry: false });
+  files.remove(targetDir);
+  const stat = files.statOrNull(sourceDir);
   if (!stat) return; // an absent source mirrors as an absent target
-  fs.mkdirSync(path.dirname(targetDir), { recursive: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  files.ensureDir(path.dirname(targetDir));
+  files.copy(sourceDir, targetDir, { recursive: true });
 }
 
 /** Stage the working copy's mirrored content, commit with the bot identity, and
@@ -456,7 +456,7 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
         }),
     );
     const projectsDir = path.join(workdir, 'projects');
-    fs.rmSync(projectsDir, { recursive: true, force: true });
+    files.remove(projectsDir);
     for (const rec of listProjectRecords(cfg.dataDir)) {
       if (!placedIds.has(rec.id) || !rec.rootPath) continue;
       mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
@@ -468,16 +468,16 @@ function runMirrorSync(cfg: HostConfig, binding: GitBackingBinding): boolean {
     // specs. Hashed credentials are opt-in (includeCredentials); rebuild the
     // instance/ dir each sync so a de-selected file actually leaves the repo.
     const instanceDir = path.join(workdir, 'instance');
-    fs.rmSync(instanceDir, { recursive: true, force: true });
-    const files = binding.includeCredentials
+    files.remove(instanceDir);
+    const structureFiles = binding.includeCredentials
       ? INSTANCE_STRUCTURE_FILES
       : INSTANCE_STRUCTURE_FILES.filter((rel) => rel !== 'auth/credentials.json');
-    for (const rel of files) {
+    for (const rel of structureFiles) {
       mirrorTree(path.join(cfg.dataDir, rel), path.join(instanceDir, rel));
     }
     // All project spec trees (a whole-instance backup is a FULL backup).
     const projectsDir = path.join(workdir, 'projects');
-    fs.rmSync(projectsDir, { recursive: true, force: true });
+    files.remove(projectsDir);
     for (const rec of listProjectRecords(cfg.dataDir)) {
       mirrorTree(path.join(rec.rootPath, '.wai'), path.join(projectsDir, rec.id, '.wai'));
     }

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { DetectedDomainCandidate, DomainType } from '../models/domain.js';
 import { SCAN_EXCLUDE_DIRS } from '../config/defaults.js';
@@ -125,7 +125,7 @@ interface GitSubmoduleEntry {
 }
 
 function parseGitmodules(filePath: string): GitSubmoduleEntry[] {
-  const content = fs.readFileSync(filePath, 'utf-8');
+  const content = files.readText(filePath);
   const entries: GitSubmoduleEntry[] = [];
   let current: Partial<GitSubmoduleEntry> = {};
 
@@ -153,7 +153,7 @@ function parseGitmodules(filePath: string): GitSubmoduleEntry[] {
 
 function detectGitSubmodules(projectRoot: string): DetectedDomainCandidate[] {
   const gitmodulesPath = path.join(projectRoot, '.gitmodules');
-  if (!fs.existsSync(gitmodulesPath)) return [];
+  if (!files.exists(gitmodulesPath)) return [];
 
   return parseGitmodules(gitmodulesPath).map((entry) => ({
     suggestedId: pathToId(entry.path),
@@ -182,9 +182,9 @@ function walkForGit(
 ): void {
   if (depth > MAX_SCAN_DEPTH) return;
 
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    entries = files.listEntries(currentDir);
   } catch {
     return;
   }
@@ -200,7 +200,7 @@ function walkForGit(
     if (relPath === '' || relPath === '.') continue;
 
     const gitPath = path.join(fullPath, '.git');
-    if (fs.existsSync(gitPath)) {
+    if (files.exists(gitPath)) {
       results.push({
         suggestedId: pathToId(relPath),
         suggestedName: pathToName(relPath),
@@ -234,9 +234,9 @@ function walkForPackages(
 ): void {
   if (depth > MAX_SCAN_DEPTH) return;
 
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    entries = files.listEntries(currentDir);
   } catch {
     return;
   }
@@ -249,7 +249,7 @@ function walkForPackages(
     const relPath = normalizePath(path.relative(projectRoot, fullPath));
     if (relPath === '' || relPath === '.') continue;
 
-    const hasMarker = PACKAGE_MARKERS.some((m) => fs.existsSync(path.join(fullPath, m)));
+    const hasMarker = PACKAGE_MARKERS.some((m) => files.exists(path.join(fullPath, m)));
     if (hasMarker) {
       results.push({
         suggestedId: pathToId(relPath),

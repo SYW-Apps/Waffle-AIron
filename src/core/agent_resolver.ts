@@ -1,5 +1,5 @@
 import * as path from 'path';
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import { AgentBrief, AgentRecord } from '../models/agent.js';
 // The topology configuration, through the Repository facade that owns it —
 // never ../config/loader.js, which is one of its members. The narrative says
@@ -44,7 +44,7 @@ import { loadProjectVariants, composeVariantGuidance, type VariantDef } from './
 const projectFilesCache = new Map<string, string[]>();
 
 function listFilesRecursiveSafe(dirPath: string, ext: string): string[] {
-  if (!fs.existsSync(dirPath)) return [];
+  if (!ioFiles.exists(dirPath)) return [];
   const nameLower = path.basename(dirPath).toLowerCase();
   const IGNORED_DIRS = new Set([
     'node_modules',
@@ -61,7 +61,7 @@ function listFilesRecursiveSafe(dirPath: string, ext: string): string[] {
   ]);
   if (IGNORED_DIRS.has(nameLower)) return [];
 
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  const entries = ioFiles.listEntries(dirPath);
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
@@ -548,7 +548,7 @@ function resolveLayer(delegate: boolean, implementers = false): AgentRecord[] {
       const depFiles = implementations
         .filter((impl) => depInterfaces.some((i) => i.id === impl.contract))
         .flatMap((impl) => implementationSourceFiles(impl))
-        .filter((file) => fs.existsSync(path.resolve(getProjectRoot(), file)));
+        .filter((file) => ioFiles.exists(path.resolve(getProjectRoot(), file)));
       const readPaths = [...new Set([
         rel(AI_PATHS.specsSystem()),
         rel(getComponentPath(comp.id, comp.subsystem)),
@@ -685,7 +685,7 @@ export function composeAgentBrief(agentId: string): AgentBrief {
   if (codeFence) {
     // A planned file (named, not on disk yet) is marked, so the implementer
     // writes it rather than looks for it.
-    const shown = (p: string): string => (fs.existsSync(path.resolve(getProjectRoot(), p))
+    const shown = (p: string): string => (ioFiles.exists(path.resolve(getProjectRoot(), p))
       ? `- \`${p}\``
       : `- \`${p}\` (planned — create it)`);
     const ownSection = codeFence.length > 0
@@ -1132,7 +1132,7 @@ function sharedFilesOf(record: AgentRecord, fence: string[]): string[] {
   }
   const join = (dir: string, file: string): string => (dir === '.' ? file : `${dir}/${file}`);
   for (const dir of [...chain].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))) {
-    for (const file of SHARED_SETUP_FILES) if (fs.existsSync(path.join(root, dir, file))) add(join(dir, file));
+    for (const file of SHARED_SETUP_FILES) if (ioFiles.exists(path.join(root, dir, file))) add(join(dir, file));
   }
   // The package or crate roots of its folders — existing, or PLANNED where a
   // spec names one (a Portal's mod.rs): a first-wave module beside it needs
@@ -1142,15 +1142,15 @@ function sharedFilesOf(record: AgentRecord, fence: string[]): string[] {
   for (const dir of ownFolders) {
     for (const file of SHARED_ROOT_FILES) {
       const rootFile = join(dir, file);
-      if (named.has(rootFile) || fs.existsSync(path.join(root, dir, file))) add(rootFile);
+      if (named.has(rootFile) || ioFiles.exists(path.join(root, dir, file))) add(rootFile);
     }
   }
   // The unnamed source files beside its own: shared helpers, a composition root.
   let siblings = 0;
   for (const dir of ownFolders) {
-    let entries: fs.Dirent[] = [];
+    let entries: ioFiles.DirEntry[] = [];
     try {
-      entries = fs.readdirSync(path.join(root, dir), { withFileTypes: true });
+      entries = ioFiles.listEntries(path.join(root, dir));
     } catch {
       continue; // a planned folder: nothing beside it yet
     }

@@ -11,7 +11,7 @@
 // mistakes its own in-memory schemas for the new ones.
 // ---------------------------------------------------------------------------
 
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { processes } from '../io/index.js';
 import { isNewerVersion } from '../utils/version.js';
@@ -25,7 +25,7 @@ export interface BuildStamp {
 /** Stamp a build entry file; null when it cannot be stat'd (e.g. pkg snapshot fs). */
 export function captureBuildStamp(entryPath: string): BuildStamp | null {
   try {
-    const s = fs.statSync(entryPath);
+    const s = files.stat(entryPath);
     return { path: entryPath, mtimeMs: s.mtimeMs, size: s.size };
   } catch {
     return null;
@@ -36,7 +36,7 @@ export function captureBuildStamp(entryPath: string): BuildStamp | null {
 export function isBuildStale(stamp: BuildStamp | null): boolean {
   if (!stamp) return false;
   try {
-    const s = fs.statSync(stamp.path);
+    const s = files.stat(stamp.path);
     return s.mtimeMs !== stamp.mtimeMs || s.size !== stamp.size;
   } catch {
     return false;
@@ -58,7 +58,7 @@ const fingerprintCache = new Map<string, string>();
  * fingerprint itself. The caller decides what an unreadable build means.
  */
 export function readBuildFingerprint(stamp: BuildStamp): string {
-  const current = fs.statSync(stamp.path);
+  const current = files.stat(stamp.path);
   const key = `${stamp.path}|${current.mtimeMs}|${current.size}`;
   const cached = fingerprintCache.get(key);
   if (cached !== undefined) return cached;
@@ -97,9 +97,9 @@ function fingerprintModuleFor(entryPath: string): string {
   let dir = path.dirname(entryPath);
   for (;;) {
     const manifest = path.join(dir, 'package.json');
-    if (fs.existsSync(manifest)) {
+    if (files.exists(manifest)) {
       try {
-        const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { name?: string; main?: string };
+        const pkg = JSON.parse(files.readText(manifest)) as { name?: string; main?: string };
         const inDist = path.relative(path.join(dir, 'dist'), entryPath);
         if (pkg.name === '@wairon/cli' && pkg.main && !inDist.startsWith('..') && !path.isAbsolute(inDist)) {
           return path.resolve(dir, pkg.main);
@@ -147,7 +147,7 @@ const MARKED_FILES = ['.wai/lock.json', '.claude/CLAUDE.md', '.wai/context/wairo
 /** The release a marked file names (the approval's validatorVersion, a guide's stamp), or null when the file is missing, unreadable or names no wairon version. */
 function markedVersion(root: string, file: string): string | null {
   try {
-    const text = fs.readFileSync(path.join(root, ...file.split('/')), 'utf8');
+    const text = files.readText(path.join(root, ...file.split('/')));
     const version = file.endsWith('.json') ? (JSON.parse(text) as { validatorVersion?: unknown }).validatorVersion : STAMP_IN_FILE.exec(text)?.[1];
     return typeof version === 'string' && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version) ? version : null;
   } catch {

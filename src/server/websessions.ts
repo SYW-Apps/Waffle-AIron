@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { WebSession } from './types.js';
@@ -52,7 +52,7 @@ function readSessions(dataDir: string): WebSession[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read web session store at ${p}: ${(e as Error).message}`);
@@ -104,7 +104,7 @@ class WebSessionStore {
    */
   update(change: (sessions: WebSession[]) => WebSession[]): WebSession[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     this.sessions = withFileLock(p, () => {
       const current = readCurrent(p);
       const before = JSON.stringify(current);

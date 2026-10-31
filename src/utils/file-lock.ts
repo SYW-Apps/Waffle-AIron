@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { setPreRenameCheck } from './fs.js';
 import { currentHolder, holderIsLocal, parseHolder, pidAlive, serializeHolder, type LockHolder } from './lock-holder.js';
@@ -127,7 +127,7 @@ function list(file: string): Listing {
   const ends = new Set<number>();
   let names: string[] = [];
   try {
-    names = fs.readdirSync(path.dirname(file));
+    names = files.list(path.dirname(file));
   } catch { /* no folder, no lock */ }
   for (const name of names) {
     const parsed = parseName(file, name);
@@ -142,7 +142,7 @@ function list(file: string): Listing {
 function createExclusive(target: string, text: string): boolean {
   let fd: number;
   try {
-    fd = fs.openSync(target, 'wx');
+    fd = files.openNew(target);
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
     if (code === 'EEXIST') return false;
@@ -150,9 +150,9 @@ function createExclusive(target: string, text: string): boolean {
     throw e;
   }
   try {
-    if (text !== '') fs.writeSync(fd, text);
+    if (text !== '') files.writeDescriptor(fd, text);
   } finally {
-    fs.closeSync(fd);
+    files.closeDescriptor(fd);
   }
   return true;
 }
@@ -179,8 +179,8 @@ function judge(file: string, g: number, o: FileLockOptions): Judgement | null {
   let text: string;
   let age: number;
   try {
-    text = fs.readFileSync(lockFile, 'utf8');
-    age = now - fs.statSync(lockFile).mtimeMs;
+    text = files.readText(lockFile);
+    age = now - files.stat(lockFile).mtimeMs;
   } catch (e) {
     // Gone, or refused for a moment: not judged, the caller looks again.
     return (e as NodeJS.ErrnoException).code === 'ENOENT' ? null : { holder: null, ageMs: 0, state: 'unreadable', breaks: false };
@@ -216,17 +216,17 @@ function cleanup(file: string, g: number, o: FileLockOptions): void {
   const dir = path.dirname(file);
   let names: string[] = [];
   try {
-    names = fs.readdirSync(dir);
+    names = files.list(dir);
   } catch { return; }
   for (const name of names) {
     const parsed = parseName(file, name);
     if (parsed === null || parsed.g >= g) continue;
-    try { fs.unlinkSync(path.join(dir, name)); } catch { /* EPERM, EACCES, EBUSY on Windows, or anything else: cleanup never fails an acquire */ }
+    try { files.removeFile(path.join(dir, name)); } catch { /* EPERM, EACCES, EBUSY on Windows, or anything else: cleanup never fails an acquire */ }
   }
   const legacy = `${file}.lock`;
   try {
     const now = (o.now ?? Date.now)();
-    if (now - fs.statSync(legacy).mtimeMs > limitsOf(o).staleMs) fs.unlinkSync(legacy);
+    if (now - files.stat(legacy).mtimeMs > limitsOf(o).staleMs) files.removeFile(legacy);
   } catch { /* none, or not removable now */ }
 }
 
@@ -244,7 +244,7 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): Fi
   const timeout = (g: number): Error => {
     const lockFile = lockPathOf(file, g);
     let holder: LockHolder | null = null;
-    try { holder = parseHolder(fs.readFileSync(lockFile, 'utf8')); } catch { /* none */ }
+    try { holder = parseHolder(files.readText(lockFile)); } catch { /* none */ }
     const info: LockTimeout = {
       file,
       lockFile,
@@ -303,7 +303,7 @@ export function acquireFileLock(file: string, options: FileLockOptions = {}): Fi
  * A generation whose lock file is gone was ended too: only a later holder's cleanup removes a lower generation, and one exists only once it is over.
  */
 export function assertLockHeld(handle: FileLockHandle): void {
-  if (fs.existsSync(handle.endFile) || !fs.existsSync(handle.lockFile)) {
+  if (files.exists(handle.endFile) || !files.exists(handle.lockFile)) {
     throw new Error(
       `${handle.file}: the write lock (${handle.lockFile}) was reclaimed as stale while this write was held up, `
       + 'so the write is abandoned and nothing was written. Try again.',
@@ -314,7 +314,7 @@ export function assertLockHeld(handle: FileLockHandle): void {
 /** Release: create the generation's end marker (an existing one means a reclaimer ended it already). Nothing is deleted. */
 export function releaseFileLock(handle: FileLockHandle): void {
   // A generation a later holder's cleanup already removed is over: no marker is left behind for it.
-  if (!fs.existsSync(handle.lockFile)) return;
+  if (!files.exists(handle.lockFile)) return;
   endGeneration(handle.file, handle.generation);
 }
 

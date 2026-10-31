@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import type { ExternalConsumer } from '../models/project-family.js';
@@ -199,7 +199,7 @@ export function provisionProject(name: string): void {
 export function ensureProjectInitialized(fallbackName: string, id?: string, vision?: string): { wroteConfig: boolean; wroteSystem: boolean } {
   const now = new Date().toISOString();
   const paths = aiPathsAt(getProjectRoot());
-  const hasSystem = fs.existsSync(paths.specsSystem());
+  const hasSystem = ioFiles.exists(paths.specsSystem());
   let name = fallbackName;
   if (hasSystem) {
     const existing = loadSystemSpec();
@@ -232,7 +232,7 @@ export function ensureProjectInitialized(fallbackName: string, id?: string, visi
 
 /** Whether an existing member directory holds a part: no id, no L0 and no lock (stage 8). */
 function isPartDirectory(dir: string): boolean {
-  return fs.existsSync(dir) && !holdsProjectContent(dir);
+  return ioFiles.exists(dir) && !holdsProjectContent(dir);
 }
 
 /** One member a project declares, as the discovery helpers below read it. */
@@ -267,7 +267,7 @@ function memberDeclarationsAt(dir: string): MemberAt[] {
   }
   // A legacy L1 mount (a subsystem carrying projectPath) is a wairon 5 form, read only in the v5 reading.
   const specsDir = aiPathsAt(dir).specsDir();
-  if (!readsV5Forms() || !fs.existsSync(specsDir)) return out;
+  if (!readsV5Forms() || !ioFiles.exists(specsDir)) return out;
   for (const file of listFilesRecursive(specsDir, '.yaml')) {
     let raw: unknown;
     try {
@@ -338,7 +338,7 @@ export function listDirectChainedSubprojects(projectRoot: string): { dir: string
 
 /** True when a member dir has a spec tree but no project.yaml (un-runnable standalone). */
 function childHasSpecsButNoConfig(childDir: string): boolean {
-  return fs.existsSync(aiPathsAt(childDir).specsDir()) && !projectConfigRepositoryAt(childDir).exists();
+  return ioFiles.exists(aiPathsAt(childDir).specsDir()) && !projectConfigRepositoryAt(childDir).exists();
 }
 
 /**
@@ -552,16 +552,16 @@ function plannedMember(alias: string, root: string, relPath: string, memberDir: 
     if (holdsProjectContent(memberDir)) {
       throw new WaironError(`Refusing to create the part "${alias}": ${memberDir} already holds a project (an id, an L0 or a lock) — declare it with \`wairon member attach\`, or pass --project.`);
     }
-    if (!fs.existsSync(paths.specsDir())) creates.push(`${shown(paths.specsDir())}/ — the part's specs folder`);
+    if (!ioFiles.exists(paths.specsDir())) creates.push(`${shown(paths.specsDir())}/ — the part's specs folder`);
     if (storage !== 'contained') {
       const parentId = effectiveProjectId(projectConfigRepository.load() ?? { name: loadSystemSpec()?.name ?? '' });
       if (parentId === null) throw new WaironError(`Refusing to create the part "${alias}" outside this project: it must name what it is a part of, and this project has no id. Declare one first (\`wairon id set\`).`);
       const config = path.join(paths.root(), 'project.yaml');
-      if (!fs.existsSync(config)) creates.push(`${shown(config)} — its configuration, holding only partOf: ${parentId}`);
+      if (!ioFiles.exists(config)) creates.push(`${shown(config)} — its configuration, holding only partOf: ${parentId}`);
     }
   } else {
-    if (!fs.existsSync(path.join(paths.root(), 'project.yaml'))) creates.push(`${shown(path.join(paths.root(), 'project.yaml'))} — its configuration, id "${alias}"`);
-    if (!fs.existsSync(paths.specsSystem())) creates.push(`${shown(paths.specsSystem())} — its L0`);
+    if (!ioFiles.exists(path.join(paths.root(), 'project.yaml'))) creates.push(`${shown(path.join(paths.root(), 'project.yaml'))} — its configuration, id "${alias}"`);
+    if (!ioFiles.exists(paths.specsSystem())) creates.push(`${shown(paths.specsSystem())} — its L0`);
   }
   const declared = ownGet(projectConfigRepository.load()?.members, alias) !== undefined;
   if (!declared) creates.push(`.wai/project.yaml — members: ${alias}: ${relPath}`);
@@ -571,7 +571,7 @@ function plannedMember(alias: string, root: string, relPath: string, memberDir: 
 /** Whether a root holds a project's content: an id, an L0 or a lock (stage 8). */
 function holdsProjectContent(dir: string): boolean {
   const paths = aiPathsAt(dir);
-  if (fs.existsSync(paths.specsSystem()) || fs.existsSync(path.join(paths.root(), 'lock.json'))) return true;
+  if (ioFiles.exists(paths.specsSystem()) || ioFiles.exists(path.join(paths.root(), 'lock.json'))) return true;
   try {
     return projectConfigRepositoryAt(dir).load()?.id !== undefined;
   } catch {
@@ -794,10 +794,10 @@ export function moveMember(alias: string, newPath: string): void {
   const oldDir = assertContainedProjectPath(root, currentPath);
   const newDir = assertContainedProjectPath(root, nextPath);
   if (oldDir !== newDir) {
-    if (!fs.existsSync(oldDir)) {
+    if (!ioFiles.exists(oldDir)) {
       throw new WaironError(`Member directory not found at its current path: ${oldDir}`);
     }
-    if (fs.existsSync(newDir)) {
+    if (ioFiles.exists(newDir)) {
       throw new WaironError(`Target directory already exists: ${newDir}`);
     }
     ensureDir(path.dirname(newDir));
@@ -822,10 +822,10 @@ function moveSibling(alias: string, currentPath: string, newPath: string, isPart
   }
   const oldDir = path.resolve(root, currentPath);
   const newDir = path.resolve(root, nextPath);
-  if (!fs.existsSync(oldDir)) throw new WaironError(`Member directory not found at its current path: ${oldDir}`);
-  if (fs.existsSync(newDir)) throw new WaironError(`Target directory already exists: ${newDir}`);
+  if (!ioFiles.exists(oldDir)) throw new WaironError(`Member directory not found at its current path: ${oldDir}`);
+  if (ioFiles.exists(newDir)) throw new WaironError(`Target directory already exists: ${newDir}`);
   ensureDir(path.dirname(newDir));
-  if (fs.statSync(oldDir).dev !== fs.statSync(path.dirname(newDir)).dev) {
+  if (ioFiles.stat(oldDir).dev !== ioFiles.stat(path.dirname(newDir)).dev) {
     throw new WaironError(`Refusing to move the member "${alias}" to ${newDir}: it lies on another volume, and a rename across volumes is not atomic.`);
   }
   renamePath(oldDir, newDir);
@@ -931,7 +931,7 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   if (holdsProjectContent(partDir)) throw new WaironError(`cannot externalize "${subsystemId}": ${partDir} already holds a project.`);
   const joined = bound?.parts.find((p) => p.directory !== undefined && path.resolve(p.directory) === path.resolve(partDir));
   const alias = joined?.alias ?? subsystemId;
-  if (!joined && fs.existsSync(aiPathsAt(partDir).projectConfig())) {
+  if (!joined && ioFiles.exists(aiPathsAt(partDir).projectConfig())) {
     throw new WaironError(`cannot externalize "${subsystemId}": ${partDir} already holds a configuration (.wai/project.yaml) — a new part's directory holds none; creating one never overwrites it.`);
   }
   if (!joined && (declaredMembers(projectConfigRepository.load() ?? {}).some((m) => m.alias === alias) || ownGet(projectConfigRepository.load()?.externals, alias) !== undefined)) {
@@ -939,10 +939,10 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
   }
   const partSpecsDir = aiPathsAt(partDir).specsDir();
   const targetDir = path.join(partSpecsDir, subsystemId);
-  if (owned.home !== undefined && fs.existsSync(targetDir)) throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${targetDir}`);
+  if (owned.home !== undefined && ioFiles.exists(targetDir)) throw new WaironError(`target already contains a "${subsystemId}" subsystem: ${targetDir}`);
   const destinationOf = (file: string): string => path.join(partSpecsDir, path.relative(parentSpecsDir, file));
   const strays = owned.files.filter((f) => !(owned.home !== undefined && isWithinDir(owned.home, f)));
-  const taken = strays.filter((f) => fs.existsSync(destinationOf(f)));
+  const taken = strays.filter((f) => ioFiles.exists(destinationOf(f)));
   if (taken.length > 0) throw new WaironError(`cannot externalize "${subsystemId}": the part already holds ${taken.map((f) => toPosixPath(path.relative(partDir, destinationOf(f)))).join(', ')}.`);
   // Step 8 checked first: an externalize as project is one write or none.
   if (as === 'project') {
@@ -987,10 +987,10 @@ function externalizeInto(subsystemId: string, partPath: string, as: string | und
  */
 function subsystemFiles(subsystemId: string, specsDir: string): { home?: string; files: string[] } {
   const subPath = getSubsystemPath(subsystemId);
-  const nested = subPath.endsWith('.index.yaml') && path.resolve(path.dirname(subPath)) === path.resolve(path.join(specsDir, subsystemId)) && fs.existsSync(subPath);
+  const nested = subPath.endsWith('.index.yaml') && path.resolve(path.dirname(subPath)) === path.resolve(path.join(specsDir, subsystemId)) && ioFiles.exists(subPath);
   const home = nested ? path.dirname(subPath) : undefined;
   const files = new Set<string>(home !== undefined ? specFilesUnder(home).map((f) => path.resolve(f)) : []);
-  if (!nested && fs.existsSync(subPath)) files.add(path.resolve(subPath));
+  if (!nested && ioFiles.exists(subPath)) files.add(path.resolve(subPath));
   const l0 = path.resolve(aiPathsAt(getProjectRoot()).specsSystem());
   const others = (): string[] => specFilesUnder(specsDir).filter((f) => path.resolve(f) !== l0 && !files.has(path.resolve(f)));
   const add = (file: string): void => {
@@ -1023,8 +1023,8 @@ function subsystemFiles(subsystemId: string, specsDir: string): { home?: string;
 function removeEmptyDirsUpTo(dir: string, stop: string): void {
   let at = path.resolve(dir);
   const end = path.resolve(stop);
-  while (at !== end && isWithinDir(end, at) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
-    fs.rmdirSync(at);
+  while (at !== end && isWithinDir(end, at) && ioFiles.exists(at) && ioFiles.list(at).length === 0) {
+    ioFiles.removeEmptyDir(at);
     at = path.dirname(at);
   }
 }
@@ -1039,7 +1039,7 @@ function removeEmptyDirsUpTo(dir: string, stop: string): void {
 
 /** Every spec file under a specs folder. */
 function specFilesUnder(dir: string): string[] {
-  return fs.existsSync(dir) ? listFilesRecursive(dir, '.yaml') : [];
+  return ioFiles.exists(dir) ? listFilesRecursive(dir, '.yaml') : [];
 }
 
 /** The bound project's own spec files outside `except`: its own specs folder and every part's but the L0. */
@@ -1260,7 +1260,7 @@ function rewriteRefsIn(specs: RawSpec[], remap: (ref: string, position: RefPosit
 
 /** A spec file patched in place with its updatedAt kept: a structural edit, never an authored one. */
 function patchKeepingStamp(file: string, mutate: (raw: any) => boolean): void {
-  if (!fs.existsSync(file)) return;
+  if (!ioFiles.exists(file)) return;
   const raw = readYamlFile(file) as any;
   if (mutate(raw)) writeYamlFile(file, raw);
 }
@@ -1776,7 +1776,7 @@ function respellQualified(inside: RawSpec[], outside: RawSpec[], names: Boundary
   };
   for (const [specs, side] of [[inside, 'inside'], [outside, 'outside']] as const) {
     for (const spec of specs) {
-      if (!fs.existsSync(spec.file)) continue;
+      if (!ioFiles.exists(spec.file)) continue;
       const raw = readYamlFile(spec.file) as any;
       if (!raw || typeof raw !== 'object') continue;
       const edits: ReferenceEdit[] = [];
@@ -2151,7 +2151,7 @@ const PLACED_WAI_ENTRIES: ReadonlySet<string> = new Set(['variants', 'packs']);
 function placedWaiFiles(memberDir: string, homeRoot: string): { rel: string; from: string; to: string }[] {
   const wai = path.join(memberDir, '.wai');
   const home = path.join(homeRoot, '.wai');
-  return [...PLACED_WAI_ENTRIES].filter((entry) => fs.existsSync(path.join(wai, entry)))
+  return [...PLACED_WAI_ENTRIES].filter((entry) => ioFiles.exists(path.join(wai, entry)))
     .flatMap((entry) => listFilesRecursive(path.join(wai, entry), ''))
     .map((from) => {
       const rel = toPosixPath(path.relative(wai, from));
@@ -2167,12 +2167,12 @@ function placedWaiFiles(memberDir: string, homeRoot: string): { rel: string; fro
 function waiRefusals(memberDir: string, homeRoot: string): string[] {
   const out: string[] = [];
   const wai = path.join(memberDir, '.wai');
-  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
+  for (const entry of ioFiles.exists(wai) ? ioFiles.list(wai) : []) {
     if (entry === 'specs' || entry === 'transactions' || entry.startsWith('.spec-write.lock') || MEMBER_WAI_GROUPS.has(entry)) continue;
     out.push(`its .wai holds "${entry}", which this write does not recognise — move or delete it by hand`);
   }
   for (const f of placedWaiFiles(memberDir, homeRoot)) {
-    if (fs.existsSync(f.to) && !fs.readFileSync(f.to).equals(fs.readFileSync(f.from))) {
+    if (ioFiles.exists(f.to) && !ioFiles.readBytes(f.to).equals(ioFiles.readBytes(f.from))) {
       out.push(`its .wai/${f.rel} differs from this project's file of that name — reconcile the two by hand first`);
     }
   }
@@ -2187,21 +2187,21 @@ function waiRefusals(memberDir: string, homeRoot: string): string[] {
  */
 function placeWaiEntries(memberDir: string, homeRoot: string, result: InternalizeResult): void {
   for (const f of placedWaiFiles(memberDir, homeRoot)) {
-    if (fs.existsSync(f.to)) continue;
-    fs.mkdirSync(path.dirname(f.to), { recursive: true });
-    fs.copyFileSync(f.from, f.to);
+    if (ioFiles.exists(f.to)) continue;
+    ioFiles.ensureDir(path.dirname(f.to));
+    ioFiles.copyFile(f.from, f.to);
     result.placed.push(`.wai/${f.rel} → this project's .wai/${f.rel}`);
   }
   const workbook = path.join(memberDir, '.wai', 'phased_design.md');
-  if (!fs.existsSync(workbook)) return;
+  if (!ioFiles.exists(workbook)) return;
   // A workbook is written for one project's name: compared with the home's, names aside.
   const named = (dir: string, text: string): string => {
     const name = configAt(dir)?.name;
     return (name ? text.split(name).join('<project>') : text).replace(/\r\n/g, '\n');
   };
   const homeWorkbook = path.join(homeRoot, '.wai', 'phased_design.md');
-  const theirs = named(memberDir, fs.readFileSync(workbook, 'utf8'));
-  const ours = fs.existsSync(homeWorkbook) ? named(homeRoot, fs.readFileSync(homeWorkbook, 'utf8')) : null;
+  const theirs = named(memberDir, ioFiles.readText(workbook));
+  const ours = ioFiles.exists(homeWorkbook) ? named(homeRoot, ioFiles.readText(homeWorkbook)) : null;
   if (ours !== theirs) {
     result.notCarried.push('.wai/phased_design.md: the member\'s design workbook differs from this project\'s — it is deleted with the boundary (the design itself is its specs, which move); copy what you want to keep from it first');
   }
@@ -2373,8 +2373,8 @@ function internalizeRefusals(scan: InternalizeScan, destination: InternalizeDest
   const memberSpecs = aiPathsAt(scan.memberDir).specsDir();
   // A moved spec file landing on an existing one.
   const skip = path.resolve(aiPathsAt(scan.memberDir).specsSystem());
-  const taken = (fs.existsSync(memberSpecs) ? listFilesRecursive(memberSpecs, '') : [])
-    .filter((f) => path.resolve(f) !== skip && fs.existsSync(path.join(specsDir, path.relative(memberSpecs, f))))
+  const taken = (ioFiles.exists(memberSpecs) ? listFilesRecursive(memberSpecs, '') : [])
+    .filter((f) => path.resolve(f) !== skip && ioFiles.exists(path.join(specsDir, path.relative(memberSpecs, f))))
     .map((f) => toPosixPath(path.relative(memberSpecs, f)));
   if (taken.length > 0) out.push(`its specs would land on this project's ${taken.join(', ')}`);
   // A carried alias declared differently here.
@@ -2665,7 +2665,7 @@ function carryPacks(scan: InternalizeScan, destination: InternalizeDestination, 
 /** Step 21: delete what remains of the member's .wai, every file listed under its group. */
 function deleteMemberWai(memberDir: string): string[] {
   const wai = path.join(memberDir, '.wai');
-  if (!fs.existsSync(wai)) return [];
+  if (!ioFiles.exists(wai)) return [];
   const deleted = listFilesRecursive(wai, '')
     .filter((f) => { const segs = path.relative(wai, f).split(path.sep); return !segs.includes('transactions') && segs[0] !== '.spec-write.lock'; })
     .map((f) => {
@@ -2673,10 +2673,10 @@ function deleteMemberWai(memberDir: string): string[] {
       // What is left under specs/ once its subsystems and types moved is its L0, whose pieces were placed above.
       return `${MEMBER_WAI_GROUPS.get(rel.split('/')[0]) ?? 'L0 (its pieces placed)'}: .wai/${rel}`;
     });
-  for (const entry of fs.readdirSync(wai)) {
-    if (entry !== 'transactions') fs.rmSync(path.join(wai, entry), { recursive: true, force: true });
+  for (const entry of ioFiles.list(wai)) {
+    if (entry !== 'transactions') ioFiles.remove(path.join(wai, entry));
   }
-  if (fs.readdirSync(wai).length === 0) fs.rmdirSync(wai);
+  if (ioFiles.list(wai).length === 0) ioFiles.removeEmptyDir(wai);
   return deleted.sort();
 }
 
@@ -2697,7 +2697,7 @@ function memberToDemote(family: ProjectFamily, alias: string): { dir: string; co
     throw new WaironError(`demote refused: the member "${alias}" is fetched from git — its files are the fetch cache's. Demote it from a checkout of its repository.`);
   }
   if (referenced?.sourceKind === 'hosted') throw new WaironError(`demote refused: the member "${alias}" is a hosted record of its own — a part is part of its parent's record, so it must live in this project's tree.`);
-  if (referenced?.directory !== undefined && fs.existsSync(referenced.directory)) return { dir: referenced.directory, contained: false };
+  if (referenced?.directory !== undefined && ioFiles.exists(referenced.directory)) return { dir: referenced.directory, contained: false };
   throw new WaironError(`demote refused: this project declares no project member "${alias}".`);
 }
 
@@ -2871,7 +2871,7 @@ function respellQualifiedBack(
       return to;
     };
     for (const spec of specs) {
-      if (!fs.existsSync(spec.file)) continue;
+      if (!ioFiles.exists(spec.file)) continue;
       const raw = readYamlFile(spec.file) as any;
       if (!raw || typeof raw !== 'object') continue;
       let changed = false;
@@ -2946,16 +2946,16 @@ function deleteProjectContent(memberDir: string): string[] {
   const wai = path.join(memberDir, '.wai');
   const deleted: string[] = [];
   const l0 = aiPathsAt(memberDir).specsSystem();
-  if (fs.existsSync(l0)) {
-    fs.rmSync(l0);
+  if (ioFiles.exists(l0)) {
+    ioFiles.removeExisting(l0);
     deleted.push(`L0 (its pieces placed): .wai/${toPosixPath(path.relative(wai, l0))}`);
   }
-  for (const entry of fs.existsSync(wai) ? fs.readdirSync(wai) : []) {
+  for (const entry of ioFiles.exists(wai) ? ioFiles.list(wai) : []) {
     if (entry === 'specs' || entry === 'transactions') continue;
     const at = path.join(wai, entry);
-    const files = fs.statSync(at).isDirectory() ? listFilesRecursive(at, '') : [at];
+    const files = ioFiles.stat(at).isDirectory() ? listFilesRecursive(at, '') : [at];
     for (const f of files) deleted.push(`${MEMBER_WAI_GROUPS.get(entry) ?? 'derived outputs'}: .wai/${toPosixPath(path.relative(wai, f))}`);
-    fs.rmSync(at, { recursive: true, force: true });
+    ioFiles.remove(at);
   }
   return deleted.sort();
 }
@@ -3014,7 +3014,7 @@ function specContents(dir: string | null): Map<string, string> {
   const out = new Map<string, string>();
   if (dir === null) return out;
   const specsDir = aiPathsAt(dir).specsDir();
-  for (const f of specFilesUnder(specsDir)) out.set(toPosixPath(path.relative(dir, f)), fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n'));
+  for (const f of specFilesUnder(specsDir)) out.set(toPosixPath(path.relative(dir, f)), ioFiles.readText(f).replace(/\r\n/g, '\n'));
   return out;
 }
 
@@ -3087,10 +3087,10 @@ function crossingReferences(family: ProjectFamily, from: string, to: string): Ma
  * an existing file. Returns the files at their new place.
  */
 function moveTreeInto(src: string, dst: string, skip: ReadonlySet<string>): string[] {
-  if (!fs.existsSync(src)) return [];
+  if (!ioFiles.exists(src)) return [];
   const files = listFilesRecursive(src, '').filter((f) => !skip.has(path.resolve(f)));
   const targets = files.map((f) => path.join(dst, path.relative(src, f)));
-  const taken = targets.filter((t) => fs.existsSync(t));
+  const taken = targets.filter((t) => ioFiles.exists(t));
   if (taken.length > 0) {
     throw new WaironError(`cannot internalize: the member's specs would overwrite ${taken.map((t) => path.relative(dst, t)).join(', ')} in this project.`);
   }
@@ -3255,7 +3255,7 @@ function rebaseImplementationPaths(specsDir: string, fromRoot: string, toRoot: s
 
 /** Load, mutate, and re-persist a subsystem `.index.yaml` in place. */
 function patchSubsystemIndex(indexPath: string, mutate: (spec: any) => void): void {
-  if (!fs.existsSync(indexPath)) return;
+  if (!ioFiles.exists(indexPath)) return;
   const raw = readYamlFile(indexPath) as any;
   mutate(raw);
   raw.updatedAt = new Date().toISOString();
@@ -3514,8 +3514,8 @@ function moveRenamedSpecs(
  * the save fails. A spec stored anywhere else is left as it is.
  */
 function relocateSpec(kind: 'interface' | 'implementation', spec: InterfaceSpec | ImplementationSpec, file: string, fromDir: string): void {
-  if (!fs.existsSync(file) || path.dirname(path.resolve(file)) !== fromDir) return;
-  const backup = fs.readFileSync(file);
+  if (!ioFiles.exists(file) || path.dirname(path.resolve(file)) !== fromDir) return;
+  const backup = ioFiles.readBytes(file);
   removeFile(file);
   invalidateSpecCache();
   try {
@@ -3603,7 +3603,7 @@ function keepPublicNames(
  * else — or nothing any more — is left alone.
  */
 function removeSpecFile(file: string, id: string): void {
-  if (!fs.existsSync(file)) return;
+  if (!ioFiles.exists(file)) return;
   try {
     if ((readYamlFile(file) as { id?: unknown } | null)?.id !== id) return;
   } catch {
@@ -3614,8 +3614,8 @@ function removeSpecFile(file: string, id: string): void {
   const specsRoot = ownSpecsDirs().map((d) => path.resolve(d)).find((d) => isWithinDir(d, file))
     ?? path.resolve(aiPathsAt(getProjectRoot()).specsDir());
   for (let dir = path.dirname(path.resolve(file)); dir !== specsRoot && isWithinDir(specsRoot, dir); dir = path.dirname(dir)) {
-    if (fs.readdirSync(dir).length > 0) break;
-    fs.rmdirSync(dir);
+    if (ioFiles.list(dir).length > 0) break;
+    ioFiles.removeEmptyDir(dir);
   }
 }
 
@@ -4040,11 +4040,11 @@ export function rehearsalCopy(): string {
   // A sibling part lies above the root (`../x`): the copy's root is nested as deep as the climb, so the declared source still resolves inside the temporary folder.
   const climb = Math.max(0, ...parts.map((p) => { const segs = p.rel.split(path.sep); const stop = segs.findIndex((s) => s !== '..'); return stop < 0 ? segs.length : stop; }));
   // Step 1.
-  const holder = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-rehearsal-'));
+  const holder = ioFiles.makeTempDir(path.join(os.tmpdir(), 'wairon-rehearsal-'));
   const dir = climb === 0 ? holder : path.join(holder, ...Array.from({ length: climb }, () => 'up'), 'root');
-  fs.mkdirSync(dir, { recursive: true });
+  ioFiles.ensureDir(dir);
   const copyWai = (from: string, to: string): void => {
-    fs.cpSync(from, to, {
+    ioFiles.copy(from, to, {
       recursive: true,
       filter: (src) => {
         const top = path.relative(from, src).split(path.sep)[0];
@@ -4056,12 +4056,12 @@ export function rehearsalCopy(): string {
   copyWai(wai, path.join(dir, path.relative(root, wai)));
   for (const part of parts) {
     const partWai = aiPathsAt(part.dir).root();
-    if (fs.existsSync(partWai)) copyWai(partWai, path.join(dir, path.relative(root, partWai)));
+    if (ioFiles.exists(partWai)) copyWai(partWai, path.join(dir, path.relative(root, partWai)));
   }
   const specs = paths.specsDir();
   const rel = path.relative(root, specs);
-  if (!isWithinDir(wai, specs) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && fs.existsSync(specs)) {
-    fs.cpSync(specs, path.join(dir, rel), { recursive: true });
+  if (!isWithinDir(wai, specs) && rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel) && ioFiles.exists(specs)) {
+    ioFiles.copy(specs, path.join(dir, rel), { recursive: true });
   }
   // Step 2.
   return dir;
@@ -4073,7 +4073,7 @@ export function discardRehearsal(directory: string): void {
   let holder = path.resolve(directory);
   for (let up = 0; up < 8 && !path.basename(holder).startsWith('wairon-rehearsal-') && path.dirname(holder) !== holder; up++) holder = path.dirname(holder);
   const own = path.basename(holder).startsWith('wairon-rehearsal-') ? holder : directory;
-  fs.rmSync(own, { recursive: true, force: true });
+  ioFiles.remove(own);
 }
 
 /** Steps 14-24 of moveSpec: a type, its export entries and every reference qualified by its subsystem. */
@@ -4150,7 +4150,7 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   const fromFile = from !== '' ? getSubsystemPath(from) : null;
   const toFile = target !== undefined ? getSubsystemPath(target) : null;
   const l0File = aiPathsAt(root).specsSystem();
-  const rawOf = (file: string | null): any => (file && fs.existsSync(file) ? readYamlFile(file) : null);
+  const rawOf = (file: string | null): any => (file && ioFiles.exists(file) ? readYamlFile(file) : null);
   const fromDoc = rawOf(fromFile);
   const l0Doc = rawOf(l0File);
   const l1Entries = (doc: any): any[] => (Array.isArray(doc?.publicInterfaces) ? doc.publicInterfaces : []);
@@ -4211,7 +4211,7 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   // removed first (and each folder that leaves empty), restored on a failure.
   const current = loadTypeSpecs().find((t) => t.id === bare && (t.subsystem ?? '') === from) ?? type;
   const oldFile = typeFileOf(bare, current);
-  const backup = fs.existsSync(oldFile) ? fs.readFileSync(oldFile) : null;
+  const backup = ioFiles.exists(oldFile) ? ioFiles.readBytes(oldFile) : null;
   // Between two homes the destination is written before the source is removed.
   const seeded = backup && current.group === undefined ? seedAcrossHomes(oldFile, target) : null;
   if (backup) removeSpecFile(oldFile, bare);
@@ -4228,15 +4228,15 @@ function moveTypeSpec(id: string, target: string | undefined, subsystems: Subsys
   // Step 23: a move is placement, not an edit — the stamp it had is kept.
   invalidateSpecCache();
   const newFile = typeFileOf(bare, { ...current, ...(target !== undefined ? { subsystem: target } : { subsystem: undefined }) } as TypeSpec);
-  const written = fs.existsSync(newFile) ? (readYamlFile(newFile) as any) : null;
+  const written = ioFiles.exists(newFile) ? (readYamlFile(newFile) as any) : null;
   if (written && current.updatedAt && written.updatedAt !== current.updatedAt) {
     written.updatedAt = current.updatedAt;
     writeYamlFile(newFile, written);
   }
   // The file keeps the line endings it had where it was, as any re-save does.
-  if (backup && fs.existsSync(newFile)) {
+  if (backup && ioFiles.exists(newFile)) {
     const crlf = backup.includes('\r\n');
-    const text = fs.readFileSync(newFile, 'utf8');
+    const text = ioFiles.readText(newFile);
     const spelled = crlf ? text.replace(/\r?\n/g, '\r\n') : text.replace(/\r\n/g, '\n');
     if (spelled !== text) restoreFile(newFile, Buffer.from(spelled, 'utf8'));
   }
@@ -4268,7 +4268,7 @@ function seedAcrossHomes(oldFile: string, target: string | undefined): string | 
   const destination = path.join(path.dirname(subsystemFile), 'types', path.basename(oldFile));
   const homes = ownSpecsDirs().map((d) => path.resolve(d)).sort((a, b) => b.length - a.length);
   const homeOf = (file: string): string | undefined => homes.find((d) => isWithinDir(d, file));
-  if (homeOf(destination) === undefined || homeOf(destination) === homeOf(oldFile) || fs.existsSync(destination)) return null;
+  if (homeOf(destination) === undefined || homeOf(destination) === homeOf(oldFile) || ioFiles.exists(destination)) return null;
   const document = readYamlFile(oldFile) as Record<string, unknown>;
   ensureDir(path.dirname(destination));
   writeYamlFile(destination, { ...document, subsystem: target });
@@ -4524,7 +4524,7 @@ function shouldPinSymbol(implementation: ImplementationSpec, methodName: string,
   if (!realization || realization.symbol !== undefined || pinSymbol === false) return false;
   if (pinSymbol === true) return true;
   const file = realization.sourcePath ?? implementation.sourcePath;
-  return file !== undefined && file !== '' && fs.existsSync(path.resolve(getProjectRoot(), file));
+  return file !== undefined && file !== '' && ioFiles.exists(path.resolve(getProjectRoot(), file));
 }
 
 /**

@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectBinding, runWithProjectRoot, type HostedRecordLookup } from '../utils/fs.js';
@@ -249,7 +249,7 @@ function referencedOf(nodes: ProjectNode[]): Referenced[] {
         if (root) directory = path.resolve(root);
         else problem = lookup ? `the hosted member \`${e.hosted}\` is unknown or outside this request's reach` : `hosted-only member \`${e.hosted}\`: available only through the hosted server`;
       }
-      if (directory !== undefined && !fs.existsSync(directory)) {
+      if (directory !== undefined && !files.exists(directory)) {
         problem = `its root ${directory} does not exist`;
         directory = undefined;
       }
@@ -1110,7 +1110,7 @@ export function releaseVerdict(record: LockRecord, current: StateId): ReleaseVer
 /** This build's own stamp — the entry script this process runs, which a rebuild writes anew — so a rebuilt wairon of one version never reads an older build's verdict. */
 const BUILD_STAMP: string = (() => {
   try {
-    return String(fs.statSync(process.argv[1] ?? '').mtimeMs);
+    return String(files.stat(process.argv[1] ?? '').mtimeMs);
   } catch {
     return 'unknown';
   }
@@ -1139,7 +1139,7 @@ function verdictCacheFile(root: string): string {
 /** The verdict an earlier command recorded under exactly this key, or null. Never fails: a missing or unreadable cache is a miss. */
 function readCachedVerdict(root: string, key: string): ReleaseVerdict | null {
   try {
-    const held = JSON.parse(fs.readFileSync(verdictCacheFile(root), 'utf8')) as { key?: unknown; verdict?: ReleaseVerdict };
+    const held = JSON.parse(files.readText(verdictCacheFile(root))) as { key?: unknown; verdict?: ReleaseVerdict };
     return held.key === key && held.verdict && typeof held.verdict.carried === 'boolean' ? held.verdict : null;
   } catch {
     return null;
@@ -1150,8 +1150,8 @@ function readCachedVerdict(root: string, key: string): ReleaseVerdict | null {
 function writeCachedVerdict(root: string, key: string, verdict: ReleaseVerdict): void {
   try {
     const file = verdictCacheFile(root);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify({ key, verdict }));
+    files.ensureDir(path.dirname(file));
+    files.writeText(file, JSON.stringify({ key, verdict }));
   } catch { /* the next command re-validates */ }
 }
 
@@ -1473,7 +1473,7 @@ export function familyRelations(): ProjectRelations[] {
   for (const node of family.nodes) {
     // Step 4: can its root be opened within the reach?
     const unreachable = outsideReach(node);
-    if (unreachable || !fs.existsSync(node.directory)) {
+    if (unreachable || !files.exists(node.directory)) {
       out.push(unopened(node.namespace, unreachable ?? `its root ${node.directory} does not exist`));
       continue;
     }

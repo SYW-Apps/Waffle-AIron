@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ApprovalRequest, ApprovalDecision } from './types.js';
@@ -48,7 +48,7 @@ function readRequests(dataDir: string): ApprovalRequest[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read approval store at ${p}: ${(e as Error).message}`);
@@ -101,7 +101,7 @@ class ApprovalStore {
    */
   update(change: (requests: ApprovalRequest[]) => ApprovalRequest[]): ApprovalRequest[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     this.requests = withFileLock(p, () => {
       const current = readCurrent(p);
       const before = JSON.stringify(current);

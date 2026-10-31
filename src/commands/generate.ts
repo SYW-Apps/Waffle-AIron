@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
@@ -57,7 +57,7 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
     if (outside && !reach!.global) continue;
     let entries: string[];
     try {
-      entries = fs.readdirSync(dir);
+      entries = files.list(dir);
     } catch {
       continue;
     }
@@ -68,14 +68,14 @@ export function pruneStaleAgents(expectedPaths: Set<string>, scanDirs?: Iterable
       let owned = WAIRON_AGENT_FILE.test(name);
       if (!owned) {
         try {
-          owned = fs.readFileSync(full, 'utf8').includes(WAIRON_MANAGED_MARKER);
+          owned = files.readText(full).includes(WAIRON_MANAGED_MARKER);
         } catch {
           owned = false;
         }
       }
       if (!owned) continue; // hand-authored — leave it alone
       if (outside) logger.info(`Backed up ${full} to ${backupBeside(full)} before pruning it (outside the project root).`);
-      fs.unlinkSync(full);
+      files.removeFile(full);
       pruned++;
       logger.verbose(`Pruned stale: ${full}`);
     }
@@ -379,7 +379,7 @@ function materializeAgentLayer(
     }
   }
   // A backup of a file this run did not replace records nothing: drop it.
-  for (const backup of backups.values()) fs.rmSync(backup, { force: true });
+  for (const backup of backups.values()) files.removeFileIfPresent(backup);
 
   // Reconcile: prune wairon-owned agent files no longer in the topology (removed
   // components, or the old flat pile after the switch to layered). ALWAYS runs,

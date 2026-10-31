@@ -11,7 +11,7 @@ import {
   McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { getProjectRoot, setProjectRoot } from '../utils/fs.js';
@@ -1629,7 +1629,7 @@ function standingRefusal(name: string): string | null {
   } catch {
     return null;
   }
-  const hasConfig = ['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')));
+  const hasConfig = ['.wai', '.wairon'].some((dir) => ioFiles.exists(path.join(root, dir, 'project.yaml')));
   if (!hasConfig) return null;
   const tree = treeStanding(root);
   if (tree.state === 'current') return null;
@@ -2301,7 +2301,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const dir = typeof source === 'string' && !/^[a-z][a-z0-9+.-]*:|^git@|#/i.test(source.trim()) ? path.resolve(root, source.trim()) : null;
         const relToRoot = dir === null ? null : path.relative(root, dir);
         const outside = dir !== null && relToRoot !== null && (relToRoot.startsWith('..') || path.isAbsolute(relToRoot));
-        const createdOutside = outside && !fs.existsSync(dir!);
+        const createdOutside = outside && !ioFiles.exists(dir!);
         // Step 2: create and declare via core; the answer states what was
         // created and, for a project, its packs.
         const creation = createMember(alias, source, description, as);
@@ -2311,7 +2311,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Step 3: a project in a folder on disk is set up for its own sessions,
         // as `wairon member add` sets it up: without them a session opened there
         // has no tools to design it with.
-        const files = creation.as === 'project' && dir !== null && fs.existsSync(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
+        const files = creation.as === 'project' && dir !== null && ioFiles.exists(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
         const sessions = files === null ? ''
           : files.some((f) => f.startsWith('not set up'))
             ? ` Its own sessions are ${files.join('; ')}.`
@@ -4199,7 +4199,7 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
   for (const r of roots) {
     let dir: string | null = null;
     try { dir = r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri; } catch { dir = null; }
-    if (dir && (fs.existsSync(path.join(dir, '.wai')) || fs.existsSync(path.join(dir, '.wairon')))) {
+    if (dir && (ioFiles.exists(path.join(dir, '.wai')) || ioFiles.exists(path.join(dir, '.wairon')))) {
       setProjectRoot(dir);
       process.stderr.write(`[wairon mcp] scoped to client workspace root: ${dir}\n`);
       return;
@@ -4219,7 +4219,7 @@ export async function startMcpServer(): Promise<void> {
   // The session's folder until the client names its own: the pinned project
   // dir, else the folder the process was launched in.
   const pinned = process.env['WAIRON_PROJECT_DIR'];
-  sessionFolder = path.resolve(pinned && fs.existsSync(path.join(pinned, '.wai')) ? pinned : process.cwd());
+  sessionFolder = path.resolve(pinned && ioFiles.exists(path.join(pinned, '.wai')) ? pinned : process.cwd());
   const server    = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

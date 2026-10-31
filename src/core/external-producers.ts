@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { parseYaml } from '../utils/yaml.js';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, runWithProjectRoot } from '../utils/fs.js';
@@ -296,20 +296,20 @@ const ENCLOSING_FOLDER_LIMIT = 256;
 
 /** The project roots directly under an enclosing folder — none when it holds more folders than a checkout folder would. */
 function enclosedRoots(folder: string): string[] {
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(folder, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules');
+    entries = files.listEntries(folder).filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules');
   } catch {
     return [];
   }
   if (entries.length > ENCLOSING_FOLDER_LIMIT) return [];
-  return entries.map((d) => path.join(folder, d.name)).filter((dir) => fs.existsSync(path.join(dir, '.wai', 'project.yaml')));
+  return entries.map((d) => path.join(folder, d.name)).filter((dir) => files.exists(path.join(dir, '.wai', 'project.yaml')));
 }
 
 /** A root's configuration when it declares members — read straight from its file, never a scan; null otherwise. */
 function membersConfigAt(root: string): Pick<ProjectConfig, 'members' | 'externals'> | null {
   try {
-    const text = fs.readFileSync(path.join(root, '.wai', 'project.yaml'), 'utf8');
+    const text = files.readText(path.join(root, '.wai', 'project.yaml'));
     if (!/^members\s*:/m.test(text)) return null;
     const parsed = parseYaml(text) as Pick<ProjectConfig, 'members' | 'externals'> | null;
     return parsed && typeof parsed === 'object' ? parsed : null;
@@ -364,11 +364,11 @@ function usesOf(usage: { used: ExternalConsumer['uses'] & object }): { uses?: No
 
 /** The project roots a searched folder holds: itself when it is one, else each folder directly under it that is. */
 function projectRootsUnder(folder: string): string[] {
-  const isRoot = (dir: string): boolean => fs.existsSync(path.join(dir, '.wai', 'project.yaml'));
+  const isRoot = (dir: string): boolean => files.exists(path.join(dir, '.wai', 'project.yaml'));
   const at = path.resolve(folder);
-  if (!fs.existsSync(at)) return [];
+  if (!files.exists(at)) return [];
   if (isRoot(at)) return [at];
-  return fs.readdirSync(at, { withFileTypes: true })
+  return files.listEntries(at)
     .filter((d) => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'node_modules')
     .map((d) => path.join(at, d.name))
     .filter(isRoot);
@@ -446,7 +446,7 @@ export interface MemberRevision {
 /** The composition subjects the bound project's lock records for its members, by alias (`<algorithm>:<digest>`). */
 function recordedMemberSubjects(root: string): Map<string, string> {
   try {
-    const record = JSON.parse(fs.readFileSync(path.join(root, '.wai', 'lock.json'), 'utf8')) as { members?: Record<string, { subject?: unknown }> };
+    const record = JSON.parse(files.readText(path.join(root, '.wai', 'lock.json'))) as { members?: Record<string, { subject?: unknown }> };
     return new Map(Object.entries(record.members ?? {}).filter(([, m]) => typeof m?.subject === 'string').map(([alias, m]) => [alias, m.subject as string]));
   } catch {
     return new Map();

@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { projectConfigRepository } from '../config/project-config.js';
 import { effectiveProjectId, isPart, memberLocationOf, parseMemberSource, type ProjectConfig } from '../models/project.js';
@@ -54,7 +54,7 @@ export class PartContextUnavailable extends WaironError {
 function sameDirectory(a: string, b: string): boolean {
   const canonical = (d: string): string => {
     try {
-      return fs.realpathSync.native(d);
+      return files.realPathNative(d);
     } catch {
       return path.resolve(d);
     }
@@ -221,7 +221,7 @@ export function excerpt(): ParentExcerpt {
   if (!isPart(config) || !partOf) throw new PartContextUnavailable(`${partRoot} is not a part: its configuration declares no partOf`);
   if (partOf.path === undefined) throw new PartContextUnavailable(`the part at ${partRoot} records no path to its parent "${partOf.project}"`);
   const parentRoot = path.resolve(partRoot, partOf.path);
-  if (!fs.existsSync(parentRoot)) throw new PartContextUnavailable(`the parent "${partOf.project}" is not on disk at ${parentRoot}`);
+  if (!files.exists(parentRoot)) throw new PartContextUnavailable(`the parent "${partOf.project}" is not on disk at ${parentRoot}`);
   // Step 3: the parent's root, bound read-only; the caller's binding comes back on every path.
   const read = runWithProjectRoot(parentRoot, () => readParent(parentRoot, partRoot, partOf.project));
   // Steps 10-11: the excerpt, its digest over everything but the commit.

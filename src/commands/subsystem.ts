@@ -17,7 +17,7 @@ import * as migrations from './adapters/migrations.js';
 import { runGenerate } from './generate.js';
 import { runMcpInstall } from './mcp.js';
 import { getProjectRoot, runWithProjectRoot, pathExists } from '../utils/fs.js';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import { listSkillNames } from './adapters/skills.js';
 import type { MemberCreation } from '../core/index.js';
 import type { InternalizeDestination } from '../models/project.js';
@@ -264,7 +264,7 @@ const CLAUDE_POINTER_HEAD = '@.claude/CLAUDE.md';
 
 /** A file's text with its line endings normalized and trailing space trimmed. */
 function normalizedText(file: string): string {
-  return fs.readFileSync(file, 'utf-8').replace(/\r\n/g, '\n').trim();
+  return files.readText(file).replace(/\r\n/g, '\n').trim();
 }
 
 /**
@@ -284,15 +284,15 @@ function removeDemotedScaffold(alias: string): void {
   const mcpJson = nodePath.join(dir, '.mcp.json');
   if (pathExists(mcpJson)) {
     try {
-      const parsed = JSON.parse(fs.readFileSync(mcpJson, 'utf-8')) as { mcpServers?: Record<string, unknown> } & Record<string, unknown>;
+      const parsed = JSON.parse(files.readText(mcpJson)) as { mcpServers?: Record<string, unknown> } & Record<string, unknown>;
       if (parsed.mcpServers && 'wairon' in parsed.mcpServers) {
         delete parsed.mcpServers.wairon;
         const otherKeys = Object.keys(parsed).filter((k) => k !== 'mcpServers');
         if (Object.keys(parsed.mcpServers).length === 0 && otherKeys.length === 0) {
-          fs.rmSync(mcpJson);
+          files.removeExisting(mcpJson);
           removed.push(shown(mcpJson));
         } else {
-          fs.writeFileSync(mcpJson, JSON.stringify(parsed, null, 2) + '\n');
+          files.writeText(mcpJson, JSON.stringify(parsed, null, 2) + '\n');
           kept.push(`${shown(mcpJson)} (its wairon entry removed; other servers are configured there)`);
         }
       }
@@ -303,12 +303,12 @@ function removeDemotedScaffold(alias: string): void {
   // .claude/CLAUDE.md: the wairon guide section goes; the file only when nothing else is in it.
   const guide = nodePath.join(dir, '.claude', 'CLAUDE.md');
   if (pathExists(guide)) {
-    const rest = withoutGuideSection(fs.readFileSync(guide, 'utf-8'));
+    const rest = withoutGuideSection(files.readText(guide));
     if (rest.trim() === '') {
-      fs.rmSync(guide);
+      files.removeExisting(guide);
       removed.push(shown(guide));
     } else {
-      fs.writeFileSync(guide, rest.trimEnd() + '\n');
+      files.writeText(guide, rest.trimEnd() + '\n');
       kept.push(`${shown(guide)} (the wairon guide removed; someone else's text is in it)`);
     }
   }
@@ -316,15 +316,15 @@ function removeDemotedScaffold(alias: string): void {
   for (const name of listSkillNames()) {
     const skill = nodePath.join(dir, '.claude', 'skills', name);
     if (!pathExists(skill)) continue;
-    fs.rmSync(skill, { recursive: true, force: true });
+    files.remove(skill);
     removed.push(shown(skill));
   }
   for (const empty of [nodePath.join(dir, '.claude', 'skills'), nodePath.join(dir, '.claude')]) {
-    if (pathExists(empty) && fs.readdirSync(empty).length === 0) fs.rmdirSync(empty);
+    if (pathExists(empty) && files.list(empty).length === 0) files.removeEmptyDir(empty);
   }
   // CLAUDE.md: the root pointer generate writes — removed only when it is exactly that.
   const pointer = nodePath.join(dir, 'CLAUDE.md');
-  const raw = pathExists(pointer) ? fs.readFileSync(pointer, 'utf-8') : null;
+  const raw = pathExists(pointer) ? files.readText(pointer) : null;
   const rootStart = raw === null ? -1 : raw.indexOf(ROOT_START);
   const rootEnd = raw === null || rootStart < 0 ? -1 : raw.indexOf(ROOT_END, rootStart);
   if (raw !== null && rootStart >= 0 && rootEnd > rootStart) {
@@ -332,16 +332,16 @@ function removeDemotedScaffold(alias: string): void {
     const after = raw.slice(rootEnd + ROOT_END.length).replace(/^\r?\n/, '');
     const rest = raw.slice(0, rootStart) + after;
     if (rest.trim() === '') {
-      fs.rmSync(pointer);
+      files.removeExisting(pointer);
       removed.push(shown(pointer));
     } else {
-      fs.writeFileSync(pointer, rest);
+      files.writeText(pointer, rest);
       kept.push(`${shown(pointer)} (the wairon block removed; someone else's text is in it)`);
     }
   } else if (raw !== null) {
     const text = normalizedText(pointer);
     if (text.startsWith(CLAUDE_POINTER_HEAD) && text.includes('# Wairon SDD Project') && text.split('\n').length <= 12) {
-      fs.rmSync(pointer);
+      files.removeExisting(pointer);
       removed.push(shown(pointer));
     } else if (text.includes(CLAUDE_POINTER_HEAD)) {
       kept.push(`${shown(pointer)} (it points at the wairon guide, but someone else's text is in it — remove the pointer by hand)`);

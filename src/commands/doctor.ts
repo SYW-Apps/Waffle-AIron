@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import { processes } from '../io/index.js';
 import * as path from 'path';
@@ -116,10 +116,10 @@ function stampVerdict(content: string | null): { mark: Mark; note: string } {
  * silently fails to launch, leaving the agent with zero wairon tools.
  */
 function mcpEntryHealth(settingsPath: string, checkLaunched = true, projectScoped = true): { mark: Mark; note: string; remedy?: string } {
-  if (!fs.existsSync(settingsPath)) return { mark: 'warn', note: 'not registered' };
+  if (!files.exists(settingsPath)) return { mark: 'warn', note: 'not registered' };
   let entry: { command?: string; args?: unknown[] } | undefined;
   try {
-    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as { mcpServers?: Record<string, { command?: string; args?: unknown[] }> };
+    const s = JSON.parse(files.readText(settingsPath)) as { mcpServers?: Record<string, { command?: string; args?: unknown[] }> };
     entry = s.mcpServers?.['wairon'];
   } catch {
     return { mark: 'error', note: 'parse error' };
@@ -129,7 +129,7 @@ function mcpEntryHealth(settingsPath: string, checkLaunched = true, projectScope
     // A project-scoped entry names the CLI relative to the project (the host
     // starts it there); a machine-wide one by its absolute path.
     const scriptPath = entry.args[0];
-    if (!fs.existsSync(path.resolve(getProjectRoot(), scriptPath))) {
+    if (!files.exists(path.resolve(getProjectRoot(), scriptPath))) {
       return { mark: 'error', note: `registered but the server path is missing — ${scriptPath}` };
     }
   }
@@ -185,9 +185,9 @@ function launchedVersion(entry: { command?: string; args?: unknown[] }): string 
     let dir = path.dirname(path.resolve(getProjectRoot(), entry.args[0]));
     for (;;) {
       const manifest = path.join(dir, 'package.json');
-      if (fs.existsSync(manifest)) {
+      if (files.exists(manifest)) {
         try {
-          const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { name?: string; version?: string };
+          const pkg = JSON.parse(files.readText(manifest)) as { name?: string; version?: string };
           return pkg.name === '@wairon/cli' && typeof pkg.version === 'string' ? valid(pkg.version) : null;
         } catch {
           return null;
@@ -497,7 +497,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
   // data and removing it is their call, not a health check's.
   try {
     const legacy = path.join(os.homedir(), '.wairon', 'baselines');
-    const leftovers = fs.existsSync(legacy) ? fs.readdirSync(legacy).filter((f) => f.endsWith('.json')) : [];
+    const leftovers = files.exists(legacy) ? files.list(legacy).filter((f) => f.endsWith('.json')) : [];
     if (leftovers.length) {
       console.log(chalk.bold('Approvals'));
       line(tally, 'warn',
@@ -563,7 +563,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     // Antigravity loads MCP from its GLOBAL mcp_config.json — that's the file that
     // actually controls whether the agy agent sees the sdd_* tools.
     const agyHome = path.join(os.homedir(), '.gemini', 'antigravity-cli');
-    if (!fs.existsSync(agyHome)) {
+    if (!files.exists(agyHome)) {
       // No Antigravity on this machine: nothing reads that file, so a missing
       // registration is not something to fix here.
       line(tally, 'ok', `Antigravity: not installed on this machine (no ${agyHome}) — nothing to register. `
@@ -574,7 +574,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<void> {
     }
     // The project .gemini/settings.json is the Gemini-CLI convention; Antigravity ignores it.
     const projPath = fromProjectRoot('.gemini', 'settings.json');
-    if (fs.existsSync(projPath)) {
+    if (files.exists(projPath)) {
       const hp = mcpEntryHealth(projPath);
       line(tally, hp.mark, `Gemini CLI (project): ${hp.note}${hp.mark === 'ok' ? '' : ` — ${hp.remedy ?? 'run `wairon mcp install --backend gemini`'}`} ${chalk.gray('(Antigravity ignores this file)')}`);
     }
@@ -1015,7 +1015,7 @@ async function repairMcpRegistration(options: DoctorOptions, targets: string[]):
   // An Antigravity install writes only the machine-wide file; a project
   // .gemini/settings.json that is already there is registered and reported by
   // doctor too, so --fix repairs it with the same install (the project-scoped one).
-  if (targets.includes('agy') && fs.existsSync(fromProjectRoot('.gemini', 'settings.json'))) {
+  if (targets.includes('agy') && files.exists(fromProjectRoot('.gemini', 'settings.json'))) {
     installs.push({ backend: 'gemini', global: false });
   }
 

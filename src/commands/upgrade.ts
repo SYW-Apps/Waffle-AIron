@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import { lastSeenVersion, setLastSeenVersion } from '../config/userconfig.js';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { getProjectRootOverride, resolveProjectBinding } from '../utils/fs.js';
 import { isSilent, logger } from '../utils/logger.js';
@@ -62,7 +62,7 @@ function boundRoot(): string | null {
 
 /** Whether the root holds a project.yaml (under .wai, or the legacy .wairon) for a stamp to be read from. */
 function holdsConfig(root: string): boolean {
-  return ['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')));
+  return ['.wai', '.wairon'].some((dir) => files.exists(path.join(root, dir, 'project.yaml')));
 }
 
 /** Whether the plan only stamps: no step rewrites or reports anything. */
@@ -150,8 +150,8 @@ function printOutcome(report: TreeUpgradeReport): void {
   try {
     // Written whole or not at all: a failed write never leaves a partial report.
     const staged = `${file}.tmp`;
-    fs.writeFileSync(staged, reportMarkdown(report.plan));
-    fs.renameSync(staged, file);
+    files.writeText(staged, reportMarkdown(report.plan));
+    files.rename(staged, file);
     logger.info(`Every rewrite and decision is written to ${file}.`);
   } catch (err) {
     logger.warn(`The upgrade is applied, but its report could not be written to ${file} (${(err as Error).message}); the plan above is the whole of it.`);

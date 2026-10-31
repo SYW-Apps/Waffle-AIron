@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as nodePath from 'path';
 import type { FileChange, Rehearsal, TransactionScope } from './types.js';
 import { removeFile, renamePath } from '../utils/fs.js';
@@ -43,7 +43,7 @@ function pause(ms: number): void {
 /** A target carrying the read-only attribute: a retry would never clear it. */
 function readOnly(target: string): boolean {
   try {
-    return (fs.statSync(target).mode & 0o200) === 0;
+    return (files.stat(target).mode & 0o200) === 0;
   } catch {
     return false;
   }
@@ -71,9 +71,9 @@ function retrying(operation: string, file: string, run: () => void): void {
 function waiFiles(owner: string): string[] {
   const out: string[] = [];
   const walk = (dir: string, rel: string): void => {
-    let entries: fs.Dirent[];
+    let entries: files.DirEntry[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = files.listEntries(dir);
     } catch {
       return;
     }
@@ -94,9 +94,9 @@ function waiFiles(owner: string): string[] {
 function waiOwners(root: string): string[] {
   const out: string[] = [];
   const walk = (dir: string): void => {
-    let entries: fs.Dirent[];
+    let entries: files.DirEntry[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = files.listEntries(dir);
     } catch {
       return;
     }
@@ -121,9 +121,9 @@ function areaFiles(owner: string, area: string): string[] {
   const walk = (rel: string): void => {
     if (momentary(rel)) return;
     const abs = nodePath.join(owner, ...rel.split('/'));
-    let stat: fs.Stats;
+    let stat: files.FileStat;
     try {
-      stat = fs.lstatSync(abs);
+      stat = files.lstat(abs);
     } catch {
       return;
     }
@@ -134,7 +134,7 @@ function areaFiles(owner: string, area: string): string[] {
       return;
     }
     if (!stat.isDirectory()) return;
-    for (const name of fs.readdirSync(abs)) walk(`${rel}/${name}`);
+    for (const name of files.list(abs)) walk(`${rel}/${name}`);
   };
   walk(area.split(nodePath.sep).join('/').replace(/\/+$/, ''));
   return out.sort();
@@ -144,9 +144,9 @@ function areaFiles(owner: string, area: string): string[] {
 function everyFile(owner: string): string[] {
   const out: string[] = [];
   const walk = (dir: string, rel: string): void => {
-    let entries: fs.Dirent[];
+    let entries: files.DirEntry[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = files.listEntries(dir);
     } catch {
       return;
     }
@@ -209,24 +209,24 @@ function assertPlaceable(familyRoot: string, base: string, owner: string): void 
 /** A path, or its nearest ancestor that exists. */
 function nearestExisting(p: string): string {
   let at = nodePath.resolve(p);
-  while (!fs.existsSync(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
+  while (!files.exists(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
   return at;
 }
 
 /** Copy an owner's files (relative paths) to the same paths under `at`, recording each live file's digest. */
 function copyFiles(owner: string, rels: string[], at: string, digests: Map<string, string>): void {
-  fs.mkdirSync(at, { recursive: true });
+  files.ensureDir(at);
   for (const rel of rels) {
     const live = nodePath.join(owner, ...rel.split('/'));
     let bytes: Buffer;
     try {
-      bytes = fs.readFileSync(live);
+      bytes = files.readBytes(live);
     } catch (e) {
       throw new Error(`could not copy ${live} into the rehearsal: ${e instanceof Error ? e.message : String(e)}`);
     }
     const copy = nodePath.join(at, ...rel.split('/'));
-    fs.mkdirSync(nodePath.dirname(copy), { recursive: true });
-    fs.writeFileSync(copy, bytes);
+    files.ensureDir(nodePath.dirname(copy));
+    files.writeBytes(copy, bytes);
     digests.set(live, sha256(bytes));
   }
 }
@@ -238,7 +238,7 @@ export function compare(rehearsal: Rehearsal): FileChange[] {
   // Each compared file: live owner, its rehearsal image, the file relative to both.
   for (const [live, copyRoot, rel] of comparedFiles(rehearsal)) {
     seen.add(nodePath.join(live, ...rel.split('/')));
-    const change = changeOf(rehearsal, live, rel, sha256(fs.readFileSync(nodePath.join(copyRoot, ...rel.split('/')))));
+    const change = changeOf(rehearsal, live, rel, sha256(files.readBytes(nodePath.join(copyRoot, ...rel.split('/')))));
     if (change) changes.push(change);
   }
   // A copied live file the rehearsal no longer holds is a delete.
@@ -296,7 +296,7 @@ function ownerOf(rehearsal: Rehearsal, liveFile: string): string {
  */
 export function move(from: string, to: string): void {
   const rels = everyFile(from);
-  const taken = rels.find((rel) => fs.existsSync(nodePath.join(to, ...rel.split('/'))));
+  const taken = rels.find((rel) => files.exists(nodePath.join(to, ...rel.split('/'))));
   if (taken !== undefined) throw new Error(`cannot move ${from} to ${to}: ${nodePath.join(to, ...taken.split('/'))} already exists`);
   for (const rel of rels) {
     const target = nodePath.join(to, ...rel.split('/'));
@@ -310,7 +310,7 @@ export function move(from: string, to: string): void {
 /** ifamily_file_adapter.read — a file's bytes, or null when it is absent. */
 export function read(path: string): Buffer | null {
   try {
-    return fs.readFileSync(path);
+    return files.readBytes(path);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new Error(`could not read ${path}: ${e instanceof Error ? e.message : String(e)}`);
@@ -331,19 +331,19 @@ export function replace(source: string, target: string): void {
 
 /** ifamily_file_adapter.place — bytes onto a live path the way a swap does: temporary sibling, fsync, rename. */
 export function place(path: string, bytes: Uint8Array): void {
-  fs.mkdirSync(nodePath.dirname(path), { recursive: true });
+  files.ensureDir(nodePath.dirname(path));
   const tmp = `${path}.wairon-restore`;
-  const fd = fs.openSync(tmp, 'w');
+  const fd = files.openForWrite(tmp);
   try {
-    fs.writeSync(fd, bytes);
-    fs.fsyncSync(fd);
+    files.writeDescriptor(fd, bytes);
+    files.syncDescriptor(fd);
   } finally {
-    fs.closeSync(fd);
+    files.closeDescriptor(fd);
   }
   try {
     retrying('place', path, () => renamePath(tmp, path));
   } catch (e) {
-    try { fs.unlinkSync(tmp); } catch { /* already gone */ }
+    try { files.removeFile(tmp); } catch { /* already gone */ }
     throw e;
   }
 }
@@ -357,13 +357,13 @@ export function remove(path: string): void {
 export function makeDirs(dir: string): string[] {
   const missing: string[] = [];
   let at = nodePath.resolve(dir);
-  while (!fs.existsSync(at)) {
+  while (!files.exists(at)) {
     missing.unshift(at);
     const up = nodePath.dirname(at);
     if (up === at) break;
     at = up;
   }
-  for (const d of missing) fs.mkdirSync(d);
+  for (const d of missing) files.makeDir(d);
   return missing;
 }
 
@@ -380,17 +380,17 @@ export function prune(dir: string, stopAt: string): string[] {
   while (at !== stop && within(stop, at)) {
     let entries: string[];
     try {
-      entries = fs.readdirSync(at);
+      entries = files.list(at);
     } catch {
       break;
     }
     // A .wai holding only the tree lock's generation files (they stay on disk by design) is empty: the project it belonged to is gone.
     if (holdsOnlyLock(at, entries)) {
-      for (const name of entries) fs.rmSync(nodePath.join(at, name), { recursive: true, force: true });
+      for (const name of entries) files.remove(nodePath.join(at, name));
       entries = [];
     }
     if (entries.length > 0) break;
-    fs.rmdirSync(at);
+    files.removeEmptyDir(at);
     removed.push(at);
     at = nodePath.dirname(at);
   }
@@ -424,10 +424,10 @@ function lexicalTarget(root: string, path: string): string | null {
 /** Through links: the directory's nearest existing ancestor lands at or below the root's real path. */
 function landsWithin(root: string, dir: string): boolean {
   let at = dir;
-  while (!fs.existsSync(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
+  while (!files.exists(at) && at !== nodePath.dirname(at)) at = nodePath.dirname(at);
   try {
-    const real = fs.realpathSync(at);
-    const realRoot = fs.realpathSync(root);
+    const real = files.realPath(at);
+    const realRoot = files.realPath(root);
     return real === realRoot || strictlyWithin(realRoot, real);
   } catch {
     return false;
@@ -436,13 +436,13 @@ function landsWithin(root: string, dir: string): boolean {
 
 /** ifamily_file_adapter.holdsProject — whether a directory already holds a wairon project (a .wai/project.yaml). Writes nothing. */
 export function holdsProject(dir: string): boolean {
-  return fs.existsSync(nodePath.join(dir, '.wai', 'project.yaml'));
+  return files.exists(nodePath.join(dir, '.wai', 'project.yaml'));
 }
 
 /** ifamily_file_adapter.sameVolume — whether two existing paths share a device; a missing path answers false. */
 export function sameVolume(a: string, b: string): boolean {
   try {
-    return fs.statSync(a).dev === fs.statSync(b).dev;
+    return files.stat(a).dev === files.stat(b).dev;
   } catch {
     return false;
   }

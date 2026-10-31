@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../../io/index.js';
 import * as path from 'path';
 import * as YAML from 'yaml';
 
@@ -20,7 +20,7 @@ const STAMP_LINE = /^waironMajor:[ \t]*([^#\r\n]*?)[ \t]*(#[^\r\n]*)?$/m;
 function configFile(root: string): string {
   const wai = path.join(root, '.wai');
   const legacy = path.join(root, '.wairon');
-  return !fs.existsSync(wai) && fs.existsSync(legacy) ? path.join(legacy, 'project.yaml') : path.join(wai, 'project.yaml');
+  return !files.exists(wai) && files.exists(legacy) ? path.join(legacy, 'project.yaml') : path.join(wai, 'project.yaml');
 }
 
 /** A file whose top-level mapping is written in flow style, `{ ... }`, rather than one key per line. */
@@ -66,22 +66,22 @@ function stamped(text: string, major: number, root: string): string {
 /** iproject_stamp_adapter.read — the `waironMajor` the project.yaml under the root names, or nothing. */
 export function read(root: string): number | null {
   const file = configFile(root);
-  if (!fs.existsSync(file)) return null;
-  const text = fs.readFileSync(file, 'utf-8');
+  if (!files.exists(file)) return null;
+  const text = files.readText(file);
   if (isFlow(text)) return integer(flowMapping(text, root).waironMajor);
   return integer(STAMP_LINE.exec(text)?.[1]);
 }
 
 /** iproject_stamp_adapter.holdsConfig — whether the root holds a project.yaml (a part holds none). */
 export function holdsConfig(root: string): boolean {
-  return fs.existsSync(configFile(root));
+  return files.exists(configFile(root));
 }
 
 /** iproject_stamp_adapter.write — set `waironMajor`, adding the line when missing and changing no other byte. */
 export function write(root: string, major: number): void {
   const file = configFile(root);
-  if (!fs.existsSync(file)) throw new Error(`Cannot stamp ${root}: it has no project.yaml.`);
-  const text = fs.readFileSync(file, 'utf-8');
+  if (!files.exists(file)) throw new Error(`Cannot stamp ${root}: it has no project.yaml.`);
+  const text = files.readText(file);
   const next = stamped(text, major, root);
-  if (next !== text) fs.writeFileSync(file, next);
+  if (next !== text) files.writeText(file, next);
 }

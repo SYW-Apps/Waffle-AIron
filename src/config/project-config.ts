@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as YAML from 'yaml';
 import { z } from 'zod';
@@ -137,7 +137,7 @@ export function projectConfigFsAdapterAt(rootDir: string): ProjectConfigFsAdapte
     },
     documentExists() {
       // existsSync answers false for an unreadable directory too.
-      return fs.existsSync(file());
+      return files.exists(file());
     },
     readText() {
       // The bytes as they are — comments, quoting and line endings included.

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { z } from 'zod';
 import { aiPathsAt, WaiPaths } from '../config/paths.js';
@@ -544,7 +544,7 @@ function canonicalPath(target: string): string | null {
   const rest: string[] = [];
   for (;;) {
     try {
-      fs.lstatSync(existing);
+      ioFiles.lstat(existing);
       break;
     } catch {
       const up = path.dirname(existing);
@@ -554,7 +554,7 @@ function canonicalPath(target: string): string | null {
     }
   }
   try {
-    return path.join(fs.realpathSync.native(existing), ...rest);
+    return path.join(ioFiles.realPathNative(existing), ...rest);
   } catch {
     return null;
   }
@@ -918,7 +918,7 @@ export function inspectChainedRoots(rootDir: string = getProjectRoot()): Chained
       let reason: ChainedRootSkipReason | undefined;
       if (projectPathEscapesRoot(projectDir, member.path, childDir)) reason = 'escapes';
       else if (ancestors.has(chainDirKey(childDir))) reason = 'cyclic';
-      else if (!fs.existsSync(childDir)) reason = 'missing';
+      else if (!ioFiles.exists(childDir)) reason = 'missing';
       else if (depth >= 32) reason = 'too-deep'; // the bound on chain depth
       if (reason) {
         inspection.skipped.push({ mount: key, alias: member.alias, form: member.form, projectPath: member.path, reason });
@@ -1650,7 +1650,7 @@ function exportMethodsOf(raws: RawRoot[]): Map<string, MethodSignature> {
       let snapshot: SurfaceSnapshot;
       try {
         const file = path.join(aiPathsAt(raw.dir).root(), 'externals', `${declared.alias}.yaml`);
-        if (!fs.existsSync(file)) continue;
+        if (!ioFiles.exists(file)) continue;
         snapshot = SurfaceSnapshotSchema.parse(readYamlFile(file));
       } catch {
         continue;
@@ -1993,7 +1993,7 @@ function findOwner(id: string, components: ComponentSpec[]): ComponentSpec | nul
 
 function moveComponentFolder(fromDir: string, toDir: string): boolean {
   if (path.normalize(fromDir) === path.normalize(toDir)) return false;
-  if (!fs.existsSync(fromDir) || fs.existsSync(toDir)) return false; // don't clobber
+  if (!ioFiles.exists(fromDir) || ioFiles.exists(toDir)) return false; // don't clobber
   ensureDir(path.dirname(toDir));
   renamePath(fromDir, toDir);
   return true;
@@ -2109,20 +2109,20 @@ function computeSpecTreeSignature(dirs: string[], files: string[] = []): string 
   // Each walked root's .wai/project.yaml: an edit to a root's externals re-scans.
   for (const f of files) {
     try {
-      const st = fs.statSync(f);
+      const st = ioFiles.stat(f);
       parts.push(`${f}:${st.mtimeMs}:${st.size}`);
     } catch {
       parts.push(`${f}:missing`);
     }
   }
   for (const dir of dirs) {
-    if (!fs.existsSync(dir)) {
+    if (!ioFiles.exists(dir)) {
       parts.push(`${dir}:missing`);
       continue;
     }
     for (const f of listSpecFiles(dir)) {
       try {
-        const st = fs.statSync(f);
+        const st = ioFiles.stat(f);
         parts.push(`${f}:${st.mtimeMs}:${st.size}`);
       } catch {
         parts.push(`${f}:gone`);
@@ -3601,7 +3601,7 @@ export class SpecWorkspace {
       });
       return null;
     }
-    if (!fs.existsSync(childDir)) {
+    if (!ioFiles.exists(childDir)) {
       // No loader issue (stage 4 retires SUBPROJECT_NOT_FOUND): a family run
       // reports the absent member, and the declaring project's own gate reports
       // its references into it as unavailable.
@@ -3738,11 +3738,11 @@ export class SpecWorkspace {
     }
     const dir = path.resolve(raw.dir, decl.path);
     if (decl.storage === 'path') {
-      return fs.existsSync(dir) ? { dir } : { unavailable: `the part "${decl.alias}" declared at "${decl.path}" has no directory there (${dir})` };
+      return ioFiles.exists(dir) ? { dir } : { unavailable: `the part "${decl.alias}" declared at "${decl.path}" has no directory there (${dir})` };
     }
     // Contained: the containment guard, lexically and through links.
     if (projectPathEscapesRoot(raw.dir, decl.path, dir)) return null;
-    if (!fs.existsSync(dir)) {
+    if (!ioFiles.exists(dir)) {
       return decl.as === 'part' ? { unavailable: `the part "${decl.alias}" declared at "${decl.path}" has no directory there` } : null;
     }
     return { dir };
@@ -5012,7 +5012,7 @@ export class SpecWorkspace {
       return `it is not valid YAML (${first})`;
     }
     if (raw === undefined || raw === null || raw === '') {
-      const text = fs.readFileSync(p, 'utf8');
+      const text = ioFiles.readText(p);
       return text.trim() === '' ? 'the file is empty' : 'it holds null, not an L0 mapping';
     }
     if (typeof raw !== 'object' || Array.isArray(raw)) return `it holds ${Array.isArray(raw) ? 'a list' : `a ${typeof raw}`}, not an L0 mapping`;
@@ -5671,7 +5671,7 @@ export class SpecWorkspace {
     const target = groupIndex ? path.join(path.dirname(groupIndex), `${spec.id.split('::').pop()}.yaml`) : undefined;
     // The file must move, and another file already holds its new home: refused before anything is written, never left behind.
     for (const destination of [leavingTarget, target]) {
-      if (destination === undefined || path.resolve(destination) === path.resolve(stored) || !fs.existsSync(destination)) continue;
+      if (destination === undefined || path.resolve(destination) === path.resolve(stored) || !ioFiles.exists(destination)) continue;
       throw new Error(
         `Refusing to move type "${spec.id}" ${leavingTarget !== undefined ? `out of group "${existing!.group}"` : `into group "${spec.group}"`}: `
         + `its file ${path.relative(this.rootDir, stored)} would move to ${path.relative(this.rootDir, destination)}, which already holds another file. `
@@ -5709,7 +5709,7 @@ export class SpecWorkspace {
     }
     specToWrite.updatedAt = opts?.preserveUpdatedAt && existing?.updatedAt ? existing.updatedAt : new Date().toISOString();
     this.writeHome(p, parseOrThrow(TypeSpecSchema, specToWrite, 'type', spec.id), 'type');
-    if (relocating && fs.existsSync(stored)) {
+    if (relocating && ioFiles.exists(stored)) {
       this.removeHome(stored, 'type');
       notices.push(leaving
         ? `type "${spec.id}" left group "${existing!.group}": its file is now ${path.relative(this.rootDir, p)}.`
@@ -5797,10 +5797,10 @@ export class SpecWorkspace {
     if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) {
       throw new Error(`Refusing to move the group folder ${fromDir} into itself (${toDir}).`);
     }
-    if (fs.existsSync(toDir) && fs.readdirSync(toDir).length > 0) {
+    if (ioFiles.exists(toDir) && ioFiles.list(toDir).length > 0) {
       throw new Error(`Refusing to move the group folder ${fromDir}: ${toDir} already holds files.`);
     }
-    if (fs.existsSync(toDir)) fs.rmdirSync(toDir);
+    if (ioFiles.exists(toDir)) ioFiles.removeEmptyDir(toDir);
     ensureDir(path.dirname(toDir));
     renamePath(fromDir, toDir);
     // The folder the group left, and each parent that leaves empty, goes too.
@@ -5808,8 +5808,8 @@ export class SpecWorkspace {
     // The specs folder the group left: the project's, or the part's it sat in.
     const leftPart = this.partHolding(fromIndex)?.part.directory;
     const root = path.resolve(leftPart ? aiPathsAt(leftPart).specsDir() : this.paths.specsDir());
-    while (path.resolve(at) !== root && path.resolve(at).startsWith(root) && fs.existsSync(at) && fs.readdirSync(at).length === 0) {
-      fs.rmdirSync(at);
+    while (path.resolve(at) !== root && path.resolve(at).startsWith(root) && ioFiles.exists(at) && ioFiles.list(at).length === 0) {
+      ioFiles.removeEmptyDir(at);
       at = path.dirname(at);
     }
     registryInvalidateCache();
@@ -6346,8 +6346,8 @@ export class SpecWorkspace {
     }
 
     for (const file of files) {
-      if (fs.existsSync(file)) {
-        snapshot.set(file, fs.readFileSync(file, 'utf8'));
+      if (ioFiles.exists(file)) {
+        snapshot.set(file, ioFiles.readText(file));
       }
     }
 
@@ -9073,7 +9073,7 @@ function snapshotInputKey(snapshot: SurfaceSnapshot): string {
 function snapshotInputsIn(dir: string, kind: 'surface' | 'external'): string[] {
   if (!pathExists(dir)) return [];
   const keys: string[] = [];
-  for (const file of fs.readdirSync(dir).sort()) {
+  for (const file of ioFiles.list(dir).sort()) {
     if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
     try {
       keys.push(`${kind}:${snapshotInputKey(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))))}`);
@@ -9408,7 +9408,7 @@ export function retiredReachFacts(): RetiredReachFact[] {
 /** Restore files captured by snapshotSpecFiles(). Caller invalidates the cache. */
 export function restoreSpecFiles(snapshot: Map<string, string>): void {
   for (const [file, content] of snapshot) {
-    fs.writeFileSync(file, content);
+    ioFiles.writeText(file, content);
   }
 }
 

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import {
   declaredSubsystemIds,
@@ -803,7 +803,7 @@ function detachUnfit(dataDir: string, family: HostedProjectRecord[], member: Pla
 /** Whether the new root is taken: it exists and is not an empty directory (an empty one a cut-short cleanup left is free). */
 function occupied(dir: string): boolean {
   try {
-    return !fs.statSync(dir).isDirectory() || fs.readdirSync(dir).length > 0;
+    return !files.stat(dir).isDirectory() || files.list(dir).length > 0;
   } catch {
     return false;
   }
@@ -965,7 +965,7 @@ function adoptUnfit(dataDir: string, principal: Principal, binding: ProjectBindi
   }
   // Step 5: the members it carries, at the roots they would derive under the target.
   const from = adopted[0].rootPath;
-  const blocked = adopted.slice(1).find((m) => m.rootPath && fs.existsSync(path.join(target, path.relative(from, m.rootPath))));
+  const blocked = adopted.slice(1).find((m) => m.rootPath && files.exists(path.join(target, path.relative(from, m.rootPath))));
   return blocked ? { code: 'relocation-target-exists', project: '', detail: `the member ${blocked.id} it carries cannot be held at ${path.join(target, path.relative(from, blocked.rootPath))}` } : null;
 }
 

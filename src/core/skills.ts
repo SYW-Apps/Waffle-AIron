@@ -1,5 +1,5 @@
 import * as path from 'path';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import { ensureDir, fromProjectRoot, writeFileIfChanged } from '../utils/fs.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
 import { activeTargetTypes as configActiveTargetTypes } from '../models/project.js';
@@ -48,7 +48,7 @@ function packNamespace(pack: string): string {
 
 /** The pack sections extending one builtin skill, in pack load order. */
 function extensionsFor(builtin: string, packSkills: LoadedPackSkill[]): LoadedPackSkill[] {
-  return packSkills.filter((s) => s.extends === builtin && fs.existsSync(s.sourcePath));
+  return packSkills.filter((s) => s.extends === builtin && files.exists(s.sourcePath));
 }
 
 /**
@@ -58,7 +58,7 @@ function extensionsFor(builtin: string, packSkills: LoadedPackSkill[]): LoadedPa
  */
 function composeBuiltinSkill(name: string, packSkills: LoadedPackSkill[]): string {
   const srcPath = skillTemplatePath(name);
-  const base = fs.existsSync(srcPath) ? fs.readFileSync(srcPath, 'utf-8') : '';
+  const base = files.exists(srcPath) ? files.readText(srcPath) : '';
   const sections = extensionsFor(name, packSkills);
   if (sections.length === 0) return base;
 
@@ -66,7 +66,7 @@ function composeBuiltinSkill(name: string, packSkills: LoadedPackSkill[]): strin
   for (const section of sections) {
     // Strip the extending file's own frontmatter: the composed skill keeps the
     // BUILTIN's frontmatter, so its name/description stay wairon's.
-    const body = fs.readFileSync(section.sourcePath, 'utf-8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
+    const body = files.readText(section.sourcePath).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '');
     parts.push(`## Platform: ${section.pack}`, body.trim());
   }
   return `${parts.join('\n\n')}\n`;
@@ -165,7 +165,7 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     destinations.push(destDir);
 
     for (const name of SKILL_NAMES) {
-      if (!fs.existsSync(skillTemplatePath(name))) continue;
+      if (!files.exists(skillTemplatePath(name))) continue;
       // The builtin, plus any pack sections extending it. Otherwise copied
       // verbatim — skills are agent-facing and reference MCP tools, not the
       // `wairon` CLI, so there is no dev-path command to substitute.
@@ -184,9 +184,9 @@ export function exportSddSkills(targetTypes?: string[]): SkillsExportResult {
     for (const skill of packSkills) {
       if (skill.extends !== undefined) continue;
       if (!skill.targets.includes(type)) continue;
-      if (!fs.existsSync(skill.sourcePath)) continue;
+      if (!files.exists(skill.sourcePath)) continue;
       const id = packSkillId(skill);
-      const content = fs.readFileSync(skill.sourcePath, 'utf-8');
+      const content = files.readText(skill.sourcePath);
       const destPath = skillDestPath(type, destDir, id);
       ensureDir(path.dirname(destPath));
       // Through the shared helper: the installed file keeps its line endings
@@ -227,9 +227,9 @@ export function checkSkillFreshness(type: string): SkillFreshness {
 
   for (const name of SKILL_NAMES) {
     const destPath = skillDestPath(type, dir, name);
-    if (!fs.existsSync(destPath)) { result.missing.push(name); continue; }
+    if (!files.exists(destPath)) { result.missing.push(name); continue; }
     const want = composeBuiltinSkill(name, packSkills);
-    const have = fs.readFileSync(destPath, 'utf-8');
+    const have = files.readText(destPath);
     // Line endings are the checkout's, not content: compare them normalised.
     if (have.replace(/\r\n/g, '\n') === want.replace(/\r\n/g, '\n')) result.ok.push(name);
     else result.stale.push(name);
@@ -296,7 +296,7 @@ export class SkillResourceNotFoundError extends Error {
 
 /** Parse a skill template's YAML frontmatter for its name and description. */
 function readSkillFrontmatter(name: string): { name: string; description: string } {
-  return readFrontmatter(fs.readFileSync(skillTemplatePath(name), 'utf-8'), name);
+  return readFrontmatter(files.readText(skillTemplatePath(name)), name);
 }
 
 // ── skill_resources ─────────────────────────────────────────────────────────
@@ -318,10 +318,10 @@ export function listSkillResources(): SkillResourceDescriptor[] {
   // built-ins. An `extends` skill gets no resource of its own — it composed into
   // its builtin's content above, which is the point: one coherent instruction.
   const pack: SkillResourceDescriptor[] = loadProjectExtensions().skills
-    .filter((s) => s.extends === undefined && fs.existsSync(s.sourcePath))
+    .filter((s) => s.extends === undefined && files.exists(s.sourcePath))
     .map((skill) => {
       const id = packSkillId(skill);
-      const fm = readFrontmatter(fs.readFileSync(skill.sourcePath, 'utf-8'), id);
+      const fm = readFrontmatter(files.readText(skill.sourcePath), id);
       return {
         id,
         name: fm.name,
@@ -344,8 +344,8 @@ export function readSkillResource(resourceId: string): string {
   const packSkills = loadProjectExtensions().skills;
   if (SKILL_NAMES.includes(resourceId)) return composeBuiltinSkill(resourceId, packSkills);
   const packSkill = packSkills.find((s) => s.extends === undefined && packSkillId(s) === resourceId);
-  if (packSkill) return fs.readFileSync(packSkill.sourcePath, 'utf-8');
-  return fs.readFileSync(skillTemplatePath(resourceId), 'utf-8');
+  if (packSkill) return files.readText(packSkill.sourcePath);
+  return files.readText(skillTemplatePath(resourceId));
 }
 
 // ── skills_resource_orchestrator (the portal forwards from ./skills-portal.ts) ─

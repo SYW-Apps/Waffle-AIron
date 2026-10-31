@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ProjectRelationRecord } from './types.js';
@@ -50,7 +50,7 @@ function readRelations(dataDir: string): ProjectRelationRecord[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read relation store at ${p}: ${(e as Error).message}`);
@@ -92,7 +92,7 @@ class ProjectRelationStore {
    */
   update(change: (relations: ProjectRelationRecord[]) => ProjectRelationRecord[]): ProjectRelationRecord[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     this.relations = withFileLock(p, () => {
       const next = change(readCurrent(p));
       replaceFile(p, JSON.stringify(next, null, 2) + '\n');
