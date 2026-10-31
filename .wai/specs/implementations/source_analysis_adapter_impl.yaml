@@ -27,10 +27,15 @@ methods:
       - stepNumber: 2
         description: >-
           Deduplicate the distinct source paths the specs name — each implementation's sourcePath,
-          each method's own sourcePath and each simPath, then each type's sourcePath and each type
-          method's own sourcePath — append the walked rootFiles, and resolve each against the
-          project root, classifying absolute or parent-escaping paths as escaped (containment,
-          mirroring the projectPath rule) and nonexistent files as missing
+          each method's own sourcePath, each simPath and the module its router linkage names, and,
+          for a Portal that names a router, the project modules the router's module imports (the
+          module the linkage names, else the implementation's own files), followed import by import
+          up to four hops, each specifier resolved as resolveImport resolves it against the files
+          that exist — so a router named through a module that only imports or re-exports it is read
+          where it is defined, then each type's sourcePath and each type method's own sourcePath —
+          append the walked rootFiles, and resolve each against the project root, classifying
+          absolute or parent-escaping paths as escaped (containment, mirroring the projectPath rule)
+          and nonexistent files as missing
         type: local
       - stepNumber: 3
         label: readLocalPackages
@@ -476,12 +481,14 @@ methods:
         description: >-
           Take the file set buildCodeModel takes, on the same terms: the declared roots walked
           (containment-checked, node_modules and dot-directories skipped, known source extensions
-          only, exclude entries left out) and every spec-named path resolved and classified
+          only, exclude entries left out) and every spec-named path resolved and classified, with
+          the modules a router linkage's module imports followed as buildCodeModel follows them
         type: local
       - stepNumber: 2
         description: >-
-          Stat each readable file for its size and modification time, reading no content; a missing
-          or escaped file contributes its classification instead
+          Stat each readable file for its size and modification time, reading no content beyond the
+          router modules' import lines step 1 followed; a missing or escaped file contributes its
+          classification instead
         type: local
       - stepNumber: 3
         description: >-
@@ -494,4 +501,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-30T12:07:23.602Z'
+updatedAt: '2026-10-30T22:18:34.483Z'

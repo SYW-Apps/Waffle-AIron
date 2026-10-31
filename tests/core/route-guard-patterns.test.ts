@@ -120,6 +120,20 @@ describe('a router named through a module that only re-exports it', () => {
     }
   });
 
+  it('follows a re-export to a router module no spec names, with no source root declared', () => {
+    const tree = routerTree(guardRouter(HONEST));
+    const at = (guards: string[]): ValidationIssue[] => {
+      tree.files!['src/http/router.ts'] = guardRouter(guards);
+      tree.files!['src/index.ts'] = "export { routeHabitRequest as dispatch } from './http/router';\n";
+      tree.implementations![0].router = 'src/index.ts#dispatch';
+      return run(tree);
+    };
+    const honest = at(HONEST);
+    expect(routeFindings(honest), said(honest)).toEqual([]);
+    const issues = at([...HONEST, "if (req.method === 'DELETE' && req.path === '/habits') return listHabits();"]);
+    expect(routeFindings(issues).map(i => i.code), said(issues)).toEqual(['UNDECLARED_ROUTE']);
+  });
+
   it('reports a re-export cycle as an unread router', () => {
     const tree = through("export { routeHabitRequest } from './other';\n", 'src/index.ts#routeHabitRequest');
     tree.files!['src/other.ts'] = "export { routeHabitRequest } from './index';\n";
