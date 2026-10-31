@@ -123,9 +123,10 @@ finding names the step, the call, the field or the external, and its file.
 - `sdd_update_spec` no longer reports an L0 requirement written as `{description: …}` as not stored
   when the tree holds it as plain text.
 - A router named through a module that only imports or re-exports it (a Python package
-  `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from './router'`) was
-  never route-checked and said nothing. It is now followed to the file that defines it; one that
-  cannot be followed (a cycle, a module not read) is `UNREADABLE_ROUTER`.
+  `__init__.py`'s `from .router import handle`, a TypeScript `export { handle } from './router'`
+  or `export * from './router'`, through another star module too) was never route-checked and said
+  nothing. It is now followed to the file that defines it; one that cannot be followed (a cycle, a
+  module not read) is `UNREADABLE_ROUTER`.
 - `CALL_TARGET_UNJUDGED` is now said for every call into another project's component, not only for
   one the code does not make.
 - A `try` step whose catch or finally step lies inside its own body (so the handler runs on the
