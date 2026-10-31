@@ -442,6 +442,19 @@ export const routeCoverageRule: SddRule = {
               const re = (facts.reexportBindings ?? []).find(b => b.exported === name);
               if (re) { from = re.from; next = re.local; }
             }
+            if (from === undefined) {
+              // `export * from './x'` republishes every name x exports: the
+              // binding goes to the star module that declares or binds it.
+              for (const star of (facts.reexportBindings ?? []).filter(b => b.exported === '*')) {
+                const target = resolveImport(at, star.from, code.paths, code.packages);
+                const there = target !== undefined ? code.factsAt(pathKey(target)) : undefined;
+                if (there && (heldAt(pathKey(target!), undefined, name) || (there.exportedNames ?? []).includes(name)
+                  || hasOwn(there.importBindings, name) || (there.reexportBindings ?? []).some(b => b.exported === name || b.exported === '*'))) {
+                  from = star.from;
+                  break;
+                }
+              }
+            }
             if (from === undefined) return at === file && name === entry ? undefined : 'unread';
             const target = resolveImport(at, from, code.paths, code.packages);
             if (target === undefined || !exactAt(pathKey(target))) return 'unread';
