@@ -115,11 +115,17 @@ describe('io/http download', () => {
     expect(fs.readFileSync(dest, 'utf8')).toBe('file-bytes');
   });
 
-  it('names the status of a refused download', async () => {
-    await expect(io.download(`${base}/missing`, tmpFile())).rejects.toThrow('Download returned 404');
+  it('names the status of a refused download, and leaves no file', async () => {
+    const dest = tmpFile();
+    await expect(io.download(`${base}/missing`, dest)).rejects.toThrow('Download returned 404');
+    await new Promise(r => setTimeout(r, 50)); // a stream opened early would have created it by now
+    expect(fs.existsSync(dest)).toBe(false);
   });
 
-  it('rejects when the server cannot be reached', async () => {
-    await expect(io.download('http://127.0.0.1:1/', tmpFile())).rejects.toThrow();
+  it('rejects when the server cannot be reached, and leaves no file', async () => {
+    const dest = tmpFile();
+    await expect(io.download('http://127.0.0.1:1/', dest)).rejects.toThrow();
+    await new Promise(r => setTimeout(r, 50));
+    expect(fs.existsSync(dest)).toBe(false);
   });
 });

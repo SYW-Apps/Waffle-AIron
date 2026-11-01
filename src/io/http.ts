@@ -51,41 +51,42 @@ export function getText(url: string, headers: Record<string, string>): Promise<T
   });
 }
 
-/** Download `url` to `dest`, following one level of redirect at a time. */
+/**
+ * Download `url` to `dest`, following one level of redirect at a time. `dest` is
+ * opened only once the answer is a 200: a refused or unreachable download leaves
+ * no file behind and no stream still opening after the promise has settled.
+ */
 export function download(url: string, dest: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const file = files.openWriteStream(dest);
     const get = url.startsWith('https://') ? https.get : http.get;
 
     // agent: false disables keep-alive so the socket closes as soon as the
     // response is done, preventing the event loop from hanging afterwards.
     get(url, { headers: { 'User-Agent': `wairon/${WAIRON_VERSION}` }, agent: false }, (res) => {
       if (res.statusCode === 301 || res.statusCode === 302) {
-        file.close();
         res.destroy();
         download(res.headers.location!, dest).then(resolve).catch(reject);
         return;
       }
       if (res.statusCode !== 200) {
-        file.close();
         res.destroy();
         reject(new Error(`Download returned ${res.statusCode}`));
         return;
       }
 
-      res.pipe(file);
-      file.on('finish', () => {
-        res.destroy();
-        file.close(() => resolve());
-      });
+      const file = files.openWriteStream(dest);
+      // A failure on either side ends both and removes the partial file.
+      res.on('error', (err) => file.destroy(err));
       file.on('error', (err) => {
         res.destroy();
         files.removeFileLater(dest);
         reject(err);
       });
-    }).on('error', (err) => {
-      files.removeFileLater(dest);
-      reject(err);
-    });
+      file.on('finish', () => {
+        res.destroy();
+        file.close(() => resolve());
+      });
+      res.pipe(file);
+    }).on('error', reject);
   });
 }
