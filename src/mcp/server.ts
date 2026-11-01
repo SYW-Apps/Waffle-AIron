@@ -4172,6 +4172,15 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
 // ---------------------------------------------------------------------------
 
 /**
+ * mcp_server.holdsTree — whether a folder holds a spec tree: a .wai/ folder, or
+ * a v5 .wairon/ one that wairon upgrade moves. How the stdio server picks the
+ * folder it binds among the ones it is offered.
+ */
+export function holdsTree(dir: string): boolean {
+  return ioFiles.exists(path.join(dir, '.wai')) || ioFiles.exists(path.join(dir, '.wairon'));
+}
+
+/**
  * Scope the server to the client's actual workspace via MCP "roots". This is how
  * a server launched with an unrelated cwd (e.g. a single global Antigravity
  * registration) attaches to the right project — and it stays correct per client
@@ -4199,7 +4208,7 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
   for (const r of roots) {
     let dir: string | null = null;
     try { dir = r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri; } catch { dir = null; }
-    if (dir && (ioFiles.exists(path.join(dir, '.wai')) || ioFiles.exists(path.join(dir, '.wairon')))) {
+    if (dir && holdsTree(dir)) {
       setProjectRoot(dir);
       process.stderr.write(`[wairon mcp] scoped to client workspace root: ${dir}\n`);
       return;
@@ -4219,7 +4228,7 @@ export async function startMcpServer(): Promise<void> {
   // The session's folder until the client names its own: the pinned project
   // dir, else the folder the process was launched in.
   const pinned = process.env['WAIRON_PROJECT_DIR'];
-  sessionFolder = path.resolve(pinned && ioFiles.exists(path.join(pinned, '.wai')) ? pinned : process.cwd());
+  sessionFolder = path.resolve(pinned && holdsTree(pinned) ? pinned : process.cwd());
   const server    = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

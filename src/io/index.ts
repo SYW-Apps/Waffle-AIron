@@ -7,7 +7,8 @@
 //   import { files } from '../io/index.js';
 //   files.readText(path);
 //
-// Not spec components: a helper reached by code, like path or os.
+// The three shared Adapters of subsystem sdd_io (files_adapter, process_adapter,
+// http_client_adapter): any component may depend on one directly and call it.
 // ---------------------------------------------------------------------------
 
 export * as files from './files.js';

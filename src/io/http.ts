@@ -16,8 +16,14 @@ import * as files from './files.js';
 // operations; none is reachable from validate, status or generate.
 // ---------------------------------------------------------------------------
 
+/** What a fetch-style request takes: the platform's RequestInit. */
+export type HttpRequestInit = RequestInit;
+
+/** What a fetch-style request answers: the platform's Response. */
+export type HttpFetchResponse = Response;
+
 /** An outbound request with fetch semantics: the Response, whatever its status. Rejects when the server cannot be reached. */
-export function request(url: string, init?: RequestInit): Promise<Response> {
+export function request(url: string, init?: HttpRequestInit): Promise<HttpFetchResponse> {
   return fetch(url, init);
 }
 

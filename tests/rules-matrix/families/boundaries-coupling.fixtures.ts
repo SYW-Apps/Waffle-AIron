@@ -336,6 +336,37 @@ export default [
       ],
     },
   }),
+  defineRuleFixture({
+    code: 'GOD_COMPONENT',
+    expectFire: false,
+    reason:
+      'A shared Adapter is generic I/O every subsystem calls, not a collaborator the orchestrator coordinates: its fourth dependency is the records file Adapter, so it has three collaborators, at the threshold, not over it.',
+    scenario:
+      'With the project capping component dependencies at three, the visit intake orchestrator coordinates three collaborators and also reads files through the records subsystem\'s shared file Adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' },
+        {
+          id: 'records',
+          description: 'Patient records on local disk.',
+          publicInterfaces: [{ details: 'File I/O for every subsystem.', component: 'records-file-adapter', shared: true }],
+        },
+      ],
+      rules: { complexity: { maxComponentDependencies: 3 } },
+      components: [
+        {
+          id: 'visit-intake-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'patient-intake',
+          description: 'Coordinates the intake flow from eligibility to notifications.',
+          dependsOn: [...INTAKE_COLLABORATORS.slice(0, 3).map(c => c.id), 'records-file-adapter'],
+        },
+        ...INTAKE_COLLABORATORS.slice(0, 3).map(c => ({ ...c, subsystem: 'patient-intake' })),
+        { id: 'records-file-adapter', componentType: 'Adapter', subsystem: 'records', description: 'Generic file I/O over the patient record files.' },
+      ],
+    },
+  }),
   // -------------------------------------------------------------------------
   // GOD_COMPONENT — the pure-forwarder exemption, and its two boundaries
   // -------------------------------------------------------------------------

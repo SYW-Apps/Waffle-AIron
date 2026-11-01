@@ -200,6 +200,16 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/destroy',
 ]);
 
+/** host_server.isReady — whether the instance can serve requests: its data directory is writable. */
+export function isReady(config: HostConfig): boolean {
+  try {
+    files.checkWritable(config.dataDir);
+    return true;
+  } catch {
+    return false; // not writable
+  }
+}
+
 export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -207,13 +217,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     return;
   }
   if (req.method === 'GET' && url.pathname === '/readyz') {
-    let ready = false;
-    try {
-      files.checkWritable(cfg.dataDir);
-      ready = true;
-    } catch {
-      /* not writable */
-    }
+    const ready = isReady(cfg);
     sendJson(res, ready ? 200 : 503, { ready });
     return;
   }

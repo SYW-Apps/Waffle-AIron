@@ -25,15 +25,9 @@ describe('io/files reading', () => {
     expect(files.readBytes(p).equals(Buffer.from('héllo'))).toBe(true);
   });
 
-  it('readText throws on an absent file; readTextOrNull answers null only for absence', () => {
+  it('readText throws on an absent file', () => {
     const dir = tmp();
     expect(() => files.readText(path.join(dir, 'nope'))).toThrow(/ENOENT/);
-    expect(files.readTextOrNull(path.join(dir, 'nope'))).toBeNull();
-    fs.writeFileSync(path.join(dir, 'f'), 'x');
-    expect(files.readTextOrNull(path.join(dir, 'f', 'deeper'))).toBeNull();
-    expect(files.readTextOrNull(path.join(dir, 'f'))).toBe('x');
-    // a folder is not absent: the read error surfaces
-    expect(() => files.readTextOrNull(dir)).toThrow();
   });
 
   it('lists names and typed entries', () => {

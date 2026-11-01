@@ -706,7 +706,9 @@ depends on an Adapter, pure logic never does), and `consumers` still restricts w
 may. A shared Adapter must be an Adapter (`PUBLIC_INTERFACE_SHARED_NOT_ADAPTER`),
 owned by no pattern or Supervisor (`SHARED_ADAPTER_OWNED`), and depend only on pure
 Orchestrators and other shared Adapters (`SHARED_ADAPTER_DEPENDENCY`), so it holds no
-state and each deployable runs its own copy in-process.
+state and each deployable runs its own copy in-process. Generic I/O is no
+responsibility, so the fan-out caps (`GOD_COMPONENT`, `EXCESSIVE_DEPENDENCIES`) do
+not count a dependency on a shared Adapter.
 
 ### Transports: how callers reach a Portal
 A Portal states its **`transport`**, one vocabulary shared with its endpoint

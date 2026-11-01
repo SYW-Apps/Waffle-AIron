@@ -1,5 +1,6 @@
 import { isDraftSubsystem } from '../../../models/index.js';
 import { RuleContext, SddRule } from '../types.js';
+import { collaboratorCount } from './coupling-health.js';
 import { routingTableComponents } from './method-cohesion.js';
 
 function checkDescription(
@@ -36,7 +37,7 @@ export const complexityRule: SddRule = {
   name: 'complexity-and-metadata',
   judges: 'design',
   description:
-    'Enforces metadata documentation completeness (checking if descriptions are missing or too short) and structural complexity caps (limits on methods per interface, parameters per method, dependencies per component, and components per subsystem) configured globally or in architectural profiles. A narrative\'s own length and shape are judged by narrative-complexity.',
+    'Enforces metadata documentation completeness (checking if descriptions are missing or too short) and structural complexity caps (limits on methods per interface, parameters per method, dependencies per component — shared Adapters, generic I/O, not counted —, and components per subsystem) configured globally or in architectural profiles. A narrative\'s own length and shape are judged by narrative-complexity.',
   codes: [
     { code: 'MISSING_DESCRIPTION', defaultSeverity: 'warning', summary: 'Required description field is missing or empty' },
     { code: 'DESCRIPTION_TOO_SHORT', defaultSeverity: 'warning', summary: 'Description is shorter than the configured minimum length' },
@@ -94,13 +95,13 @@ export const complexityRule: SddRule = {
 
       if (
         complexityConfig?.maxComponentDependencies !== undefined
-        && comp.dependsOn.length > complexityConfig.maxComponentDependencies
+        && collaboratorCount(ctx, comp) > complexityConfig.maxComponentDependencies
         && !routingTables.has(comp.id)
       ) {
         ctx.addIssue(
           'warning',
           'EXCESSIVE_DEPENDENCIES',
-          `Component "${comp.id}" has ${comp.dependsOn.length} dependencies, exceeding the configured limit of ${complexityConfig.maxComponentDependencies}.`,
+          `Component "${comp.id}" has ${collaboratorCount(ctx, comp)} dependencies, exceeding the configured limit of ${complexityConfig.maxComponentDependencies}.`,
           comp.id,
           isDraft
         );

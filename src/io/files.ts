@@ -32,18 +32,7 @@ export function readText(path: string): string {
   return fs.readFileSync(path, 'utf8');
 }
 
-/** A file's content as UTF-8 text, or null when the file (or a folder above it) is absent; any other error throws. */
-export function readTextOrNull(path: string): string | null {
-  try {
-    return fs.readFileSync(path, 'utf8');
-  } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT' || code === 'ENOTDIR') return null;
-    throw e;
-  }
-}
-
-/** A file's content as bytes. */
+/** A file's content as bytes, unchanged. Throws as readFileSync does (an absent file, a folder). */
 export function readBytes(path: string): Buffer {
   return fs.readFileSync(path);
 }
@@ -95,13 +84,18 @@ export function checkWritable(path: string): void {
 
 // -- Writing ----------------------------------------------------------------
 
+/** What a file write takes: `mode` sets the permission bits of a file the write creates. */
+export interface WriteOptions {
+  mode?: number;
+}
+
 /** Write text (UTF-8) to a file, replacing it; `mode` sets the permission bits of a file this creates. */
-export function writeText(path: string, text: string, options?: { mode?: number }): void {
+export function writeText(path: string, text: string, options?: WriteOptions): void {
   fs.writeFileSync(path, text, options);
 }
 
 /** Write bytes to a file, replacing it; `mode` sets the permission bits of a file this creates. */
-export function writeBytes(path: string, bytes: Uint8Array, options?: { mode?: number }): void {
+export function writeBytes(path: string, bytes: Uint8Array, options?: WriteOptions): void {
   fs.writeFileSync(path, bytes, options);
 }
 
@@ -125,17 +119,20 @@ export function rename(from: string, to: string): void {
   fs.renameSync(from, to);
 }
 
-/** Copy one file. */
+/** Copy one file, replacing the destination when it exists. Throws as copyFileSync does. */
 export function copyFile(from: string, to: string): void {
   fs.copyFileSync(from, to);
 }
+
+/** Whether a copy takes one source path to its destination. */
+export type CopyFilter = (source: string, destination: string) => boolean;
 
 /** What a folder copy takes; the same names as fs.cpSync's, passed through. */
 export interface CopyOptions {
   recursive?: boolean;
   force?: boolean;
   errorOnExist?: boolean;
-  filter?: (source: string, destination: string) => boolean;
+  filter?: CopyFilter;
 }
 
 /** Copy a file or (with `recursive`) a folder. */
@@ -143,7 +140,7 @@ export function copy(from: string, to: string, options?: CopyOptions): void {
   fs.cpSync(from, to, options);
 }
 
-/** Set a file's permission bits. */
+/** Set a file's permission bits (mode). Throws as chmodSync does, an absent file among it. */
 export function chmod(path: string, mode: number): void {
   fs.chmodSync(path, mode);
 }
@@ -165,8 +162,13 @@ export function removeFileIfPresent(path: string): void {
   fs.rmSync(path, { force: true });
 }
 
+/** What removing an existing path takes: `recursive` removes a folder tree. */
+export interface RemoveOptions {
+  recursive?: boolean;
+}
+
 /** Remove a path that must exist: a file, or with `recursive` a folder tree. Throws when it is absent. */
-export function removeExisting(path: string, options?: { recursive?: boolean }): void {
+export function removeExisting(path: string, options?: RemoveOptions): void {
   if (options?.recursive) fs.rmSync(path, { recursive: true });
   else fs.rmSync(path);
 }
@@ -191,7 +193,7 @@ export function removeEmptyDir(dir: string): void {
 /** An open file: the number the operating system gives it. Close it with closeDescriptor. */
 export type Descriptor = number;
 
-/** Open a file for reading. */
+/** Open an existing file (or folder) for reading and answer its descriptor. Throws when it is absent. */
 export function openForRead(path: string): Descriptor {
   return fs.openSync(path, 'r');
 }
@@ -222,12 +224,15 @@ export function syncDescriptor(fd: Descriptor): void {
   fs.fsyncSync(fd);
 }
 
-/** Close an open file. */
+/** Close an open descriptor; it must not be used again. Throws as closeSync does. */
 export function closeDescriptor(fd: Descriptor): void {
   fs.closeSync(fd);
 }
 
+/** A stream that writes a file, as node fs answers it. */
+export type WriteStream = fs.WriteStream;
+
 /** A stream that writes a file, creating or emptying it. */
-export function openWriteStream(path: string): fs.WriteStream {
+export function openWriteStream(path: string): WriteStream {
   return fs.createWriteStream(path);
 }
