@@ -4,6 +4,42 @@ The releases headed 6.1.3 and 6.1.4 were prepared as 6.2.0 and 6.2.1 and shipped
 6.1.3 and 6.1.4 (their merges carried no `[minor]`); they are listed under the versions
 npm and the tags carry.
 
+## v6.7.0 (from v6.6.0)
+
+Upgrading: nothing in a spec tree has to change. The new `shared` field is optional and the new
+rule judges only entries that use it.
+
+### Added
+
+- **Shared Adapters.** A subsystem can publish one of its own Adapters as shared, with
+  `shared: true` on its `publicInterfaces` entry: a generic I/O layer (files, processes, outbound
+  HTTP) that every subsystem of the project calls directly, instead of each reaching it through
+  a client Adapter or a Portal.
+  - Any component of any subsystem may depend on a shared Adapter, with no `trustedLink` and no
+    Portal in front. The edge is judged like one inside a subsystem: a Portal never depends on an
+    Adapter, and pure logic never does. The entry's `consumers` still restrict who may.
+  - A shared Adapter is not reported as `PUBLIC_INTERFACE_NOT_PORTAL`.
+  - A new rule, `public-surface-shared`, says what a shared Adapter must be. It must be an Adapter
+    (`PUBLIC_INTERFACE_SHARED_NOT_ADAPTER`). No pattern or Supervisor may own it
+    (`SHARED_ADAPTER_OWNED`). It may depend only on pure Orchestrators and other shared Adapters
+    (`SHARED_ADAPTER_DEPENDENCY`), so it holds no state and each deployable runs its own copy.
+  - A shared Adapter is reachable only inside its project. Another project still calls a
+    library (an InProcess Portal).
+  - `sdd_set_public_interfaces` and `sdd_add_subsystem` accept the field.
+
+### Changed
+
+- **Fan-out does not count shared Adapters.** `GOD_COMPONENT` and `EXCESSIVE_DEPENDENCIES`
+  count a component's collaborators without the shared Adapters it depends on: generic I/O is
+  not a responsibility, so a component pays no fan-out for reading a file.
+- **wairon's own design models its I/O.** All of wairon's file, process and outbound-HTTP
+  access now goes through one internal module, designed as three shared Adapters (files,
+  processes, HTTP client). Every component that does I/O depends on them, and its narratives
+  name the calls. Nothing changes for a spec tree.
+- **The MCP server's project check reads a v5 tree too.** A folder pinned with
+  `WAIRON_PROJECT_DIR` that holds only a v5 `.wairon/` tree is now taken as a project, as a
+  client root already was.
+
 ## v6.6.0 (from v6.5.0)
 
 Upgrading: nothing in a spec tree has to change, but the code-vs-design gate now compares how a

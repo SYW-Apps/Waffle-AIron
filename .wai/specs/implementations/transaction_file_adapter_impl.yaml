@@ -27,6 +27,9 @@ methods:
       <owner>/.wai/transactions/<id>/, fsyncs it, and renames it over journal.yaml; creates the
       directories first, and writes `.wai/transactions/.gitignore` holding `*` when absent. A
       failure at any point leaves the previous journal intact.
+    calls:
+      - files_adapter.openForRead
+      - files_adapter.exists
   - name: readJournal
     narrative: []
     detail: intent
@@ -61,6 +64,9 @@ methods:
       Removes <owner>/.wai/transactions/<id>/ recursively (ENOENT is success, a Windows EBUSY/EPERM
       retried briefly), then .wai/transactions/ when only its .gitignore remains, then <owner>/.wai/
       when that left it empty, then <owner> itself when that left it empty.
+    calls:
+      - files_adapter.list
+      - files_adapter.removeEmptyDir
 status: complete
 createdAt: '2026-09-30T20:26:54.730Z'
-updatedAt: '2026-10-01T18:07:48.560Z'
+updatedAt: '2026-10-31T23:49:20.000Z'

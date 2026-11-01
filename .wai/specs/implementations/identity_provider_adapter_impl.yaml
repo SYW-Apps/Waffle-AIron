@@ -82,7 +82,9 @@ methods:
           config.clientSecretRef via the host secret mechanism, the supplied redirectUri, and
           grant_type=authorization_code — never logging the raw code, client secret, or returned
           provider tokens
-        type: local
+        type: call
+        targetComponent: http_client_adapter
+        targetMethod: request
       - stepNumber: 2
         description: >-
           Summarize the provider response into redacted serialized metadata (issuer, subject,
@@ -142,4 +144,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-10T08:19:10.907Z'
-updatedAt: '2026-10-19T22:11:29.392Z'
+updatedAt: '2026-10-31T23:35:16.674Z'

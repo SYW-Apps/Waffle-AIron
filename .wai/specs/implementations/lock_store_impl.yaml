@@ -21,13 +21,33 @@ methods:
   - name: write
     narrative:
       - stepNumber: 1
+        description: Make the .wai folder
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
+      - stepNumber: 2
         description: >-
-          Serialize the LockRecord and write it atomically to .wai/lock.json for the bound project,
-          replacing any prior record wholesale — the single lock file is the only lock location, so
-          no stale record can survive a write.
-        type: local
+          Sample the start of the existing lock.json, so the record keeps the line endings it is
+          checked out with
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readDescriptorHead
+      - stepNumber: 3
+        description: >-
+          Serialize the LockRecord and write it to a temporary sibling of .wai/lock.json for the
+          bound project
+        type: call
+        targetComponent: files_adapter
+        targetMethod: writeText
         assertsInvariants:
           - lock_record.single-record-per-project
+      - stepNumber: 4
+        description: >-
+          Rename the temporary file over .wai/lock.json, replacing any prior record wholesale — the
+          single lock file is the only lock location, so no stale record can survive a write
+        type: call
+        targetComponent: files_adapter
+        targetMethod: rename
     intent: >-
       Serializes the LockRecord and writes it atomically to .wai/lock.json for the bound project,
       overwriting any prior record.
@@ -44,4 +64,4 @@ methods:
     symbol: readLockRecordAt
 status: complete
 createdAt: '2026-07-04T12:53:38.524Z'
-updatedAt: '2026-10-09T00:18:29.104Z'
+updatedAt: '2026-10-31T23:47:49.204Z'

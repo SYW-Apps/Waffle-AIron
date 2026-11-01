@@ -8,7 +8,8 @@ description: >-
 subsystem: sdd_git
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 durability: read-through
 lint:
   allow:
@@ -20,4 +21,4 @@ lint:
         level3 branch merges (the enum value does not exist in this branch's schema).
 status: complete
 createdAt: '2026-07-04T16:31:20.264Z'
-updatedAt: '2026-09-17T16:37:00.555Z'
+updatedAt: '2026-10-31T23:20:16.587Z'

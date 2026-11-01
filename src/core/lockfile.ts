@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { aiDir, aiDirAt, readsV5Forms, withLineEndings } from '../utils/fs.js';
 import type { StateId } from './statehash.js';
@@ -185,7 +185,7 @@ export function readLockRecordAt(root: string): LockRecord | null {
 function readRecordFile(file: string): LockRecord | null {
   let text: string;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    text = files.readText(file);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new LockRecordUnreadableError(displayPath(file), `the file cannot be read (${(e as Error).message})`);
@@ -301,11 +301,11 @@ function normalizeRecord(raw: unknown): LockRecord {
  */
 export function writeLockRecord(record: LockRecord): void {
   const p = lockPath();
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   const tmp = `${p}.tmp`;
   // The record keeps the line endings it is checked out with (CRLF stays CRLF).
-  fs.writeFileSync(tmp, withLineEndings(p, JSON.stringify(withSortedMaps(record), null, 2) + '\n'));
-  fs.renameSync(tmp, p);
+  files.writeText(tmp, withLineEndings(p, JSON.stringify(withSortedMaps(record), null, 2) + '\n'));
+  files.rename(tmp, p);
 }
 
 /**

@@ -1,0 +1,14 @@
+kind: value-object
+id: dir_entry
+name: DirEntry
+description: 'One entry of a folder listing, as node fs answers it: its name and what kind of entry it is.'
+subsystem: sdd_io
+fields:
+  - name: name
+    type: string
+    description: The entry's name inside its folder
+    optional: false
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:24.873Z'
+updatedAt: '2026-10-31T23:14:25.995Z'

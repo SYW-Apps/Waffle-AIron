@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import * as files from './family-files.js';
 import * as core from './adapters/core.js';
@@ -159,7 +159,7 @@ function lockHostStores(rehearsal: Rehearsal, changes: FileChange[]): FileLockHa
       changes
         .filter((c) => !c.path.startsWith('.wai/') && !c.path.startsWith('.wairon/') && !whole.has(path.resolve(c.project)))
         .map((c) => path.resolve(c.project, c.path))
-        .filter((file) => fs.existsSync(path.dirname(file))),
+        .filter((file) => ioFiles.exists(path.dirname(file))),
     ),
   ].sort();
   const taken: FileLockHandle[] = [];
@@ -192,8 +192,8 @@ function dropLockFilesOfEmptiedWai(wai: string): void {
   try {
     const inLock = (file: string): boolean => path.relative(wai, file).split(path.sep)[0].startsWith('.spec-write.lock');
     if (!listFilesRecursive(wai, '').every(inLock)) return;
-    for (const name of fs.readdirSync(wai)) {
-      if (name.startsWith('.spec-write.lock')) fs.rmSync(path.join(wai, name), { recursive: true, force: true });
+    for (const name of ioFiles.list(wai)) {
+      if (name.startsWith('.spec-write.lock')) ioFiles.remove(path.join(wai, name));
     }
   } catch {
     // Gone already, or not removable now: the prune below leaves the folder.
@@ -218,11 +218,11 @@ function unlockOwners(taken: string[], familyRoot?: string): void {
       const resolved = path.resolve(at);
       if (stop === undefined || resolved === stop || !resolved.startsWith(stop + path.sep)) break;
       try {
-        if (fs.readdirSync(resolved).length > 0) break;
-        fs.rmSync(resolved, { recursive: true, force: true });
+        if (ioFiles.list(resolved).length > 0) break;
+        ioFiles.remove(resolved);
       } catch {
         // Gone already: keep walking up only from a folder that existed.
-        if (fs.existsSync(resolved)) break;
+        if (ioFiles.exists(resolved)) break;
       }
     }
   }
@@ -334,7 +334,7 @@ function missingDirs(owner: string, entries: FileChange[]): string[] {
   for (const entry of entries.filter((e) => e.action === 'create')) {
     const missing: string[] = [];
     let at = path.dirname(liveOf(owner, entry.path));
-    while (!fs.existsSync(at) && at !== path.dirname(at)) {
+    while (!ioFiles.exists(at) && at !== path.dirname(at)) {
       missing.unshift(at);
       at = path.dirname(at);
     }
@@ -379,7 +379,7 @@ function stageBytes(rehearsal: Rehearsal, journal: TransactionJournal, entry: Fi
 function checkVolume(journal: TransactionJournal, entry: FileChange, target: string): void {
   const staged = repository.locate(journal.owner, journal.id, 'staged', entry.path);
   let nearest = path.dirname(target);
-  while (!fs.existsSync(nearest) && nearest !== path.dirname(nearest)) nearest = path.dirname(nearest);
+  while (!ioFiles.exists(nearest) && nearest !== path.dirname(nearest)) nearest = path.dirname(nearest);
   if (!files.sameVolume(staged, nearest)) {
     throw new StagingError(`cross-volume: ${target} lies on another volume than its staged copy; a rename across volumes is not atomic`);
   }
@@ -502,7 +502,7 @@ const coordinatorRoot = (journal: TransactionJournal): string => path.resolve(jo
 /** Read a journal where a path says it lives, re-based on that path; null when absent or unreadable. */
 function journalAt(owner: string, id: string): TransactionJournal | null {
   try {
-    const journal = fs.existsSync(owner) ? repository.readJournal(owner, id) : null;
+    const journal = ioFiles.exists(owner) ? repository.readJournal(owner, id) : null;
     return journal ? { ...journal, owner } : null;
   } catch {
     return null;
@@ -545,7 +545,7 @@ function resolveOne(journal: TransactionJournal): RecoveredTransaction {
   // Step 12: every owner's journal; an owner whose root is gone refuses the
   // transaction — unless the coordinator never left staging: nothing live moved,
   // so an owner whose root does not exist yet (a relocation's new root) staged nothing.
-  const absent = phase === 'staging' ? [] : owners.filter((o) => !fs.existsSync(o));
+  const absent = phase === 'staging' ? [] : owners.filter((o) => !ioFiles.exists(o));
   if (absent.length > 0) {
     return { ...base, owners, phase, action: 'refused', detail: `owner(s) out of reach: ${absent.join(', ')}` };
   }

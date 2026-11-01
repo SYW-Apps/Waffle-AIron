@@ -16,6 +16,9 @@ methods:
       `<dataDir>.backup-v<from>-to-v<to>-<UTC timestamp>` beside it, and answer that path. A copy
       that fails removes what it wrote and refuses with the cause, so no upgrade runs without a
       complete backup.
+    calls:
+      - files_adapter.copy
+      - files_adapter.remove
     symbol: copyDataDir
   - name: discard
     narrative: []
@@ -32,4 +35,4 @@ previousIds:
   - data_dir_backup_adapter_impl
 status: draft
 createdAt: '2026-10-18T14:27:59.122Z'
-updatedAt: '2026-10-23T22:28:31.865Z'
+updatedAt: '2026-10-31T23:43:36.176Z'

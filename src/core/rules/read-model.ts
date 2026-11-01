@@ -692,7 +692,7 @@ export function buildDependencyEdges(ctx: RuleContext): DependencyEdges {
       }
       const edge = resolvedEdge(ctx, from, ref, to, fromDraft, profile);
       all.push(edge);
-      if (edge.reach === 'internal' && !edge.licensed) matrix.push(edge);
+      if ((edge.reach === 'internal' || edge.reach === 'shared') && !edge.licensed) matrix.push(edge);
     }
   }
 
@@ -734,7 +734,7 @@ export function resolvedEdge(
     from,
     ref,
     to,
-    reach: (to.subsystem === from.subsystem ? 'internal' : 'cross-subsystem') as EdgeReachResolved,
+    reach: edgeReachInTree(ctx, from, to),
     draftContext: fromDraft || ctx.isComponentDraft(to.id),
     licensed: profile?.allowedEdges?.some(
       e => e.from.includes(from.componentType) && e.to.includes(to.componentType),
@@ -808,8 +808,14 @@ export function buildImplementationMethods(ctx: RuleContext): ResolvedMethod[] {
   return out;
 }
 
-/** The two reaches a ref that resolved in this tree can have. */
-type EdgeReachResolved = 'internal' | 'cross-subsystem';
+/** The three reaches a ref that resolved in this tree (and stayed a tree edge) can have. */
+type EdgeReachResolved = 'internal' | 'shared' | 'cross-subsystem';
+
+/** Inside one subsystem, into another's shared Adapter, or across a boundary. */
+function edgeReachInTree(ctx: RuleContext, from: ComponentSpec, to: ComponentSpec): EdgeReachResolved {
+  if (to.subsystem === from.subsystem) return 'internal';
+  return ctx.sharedSet.get(to.subsystem)?.has(to.id) ? 'shared' : 'cross-subsystem';
+}
 
 /** Whether a component is a library surface: a Portal entered in-process. */
 function isLibraryTarget(to: ComponentSpec): boolean {

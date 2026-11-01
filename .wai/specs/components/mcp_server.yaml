@@ -17,8 +17,9 @@ dependsOn:
   - mcp_skills_adapter
   - mcp_build_adapter
   - mcp_upgrade_adapter
+  - files_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-18T14:23:52.297Z'
+updatedAt: '2026-10-31T23:23:01.496Z'

@@ -19,8 +19,9 @@ dependsOn:
   - host_upgrade_adapter
   - project_repository
   - retired_value_migration
+  - files_adapter
 previousIds:
   - data_dir_upgrade
 status: complete
 createdAt: '2026-10-18T14:29:20.735Z'
-updatedAt: '2026-10-19T06:18:00.921Z'
+updatedAt: '2026-10-31T23:22:57.303Z'

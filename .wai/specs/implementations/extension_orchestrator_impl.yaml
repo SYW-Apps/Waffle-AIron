@@ -320,6 +320,11 @@ methods:
   - name: discoverPacks
     narrative:
       - stepNumber: 1
+        description: List the directory's entries
+        type: call
+        targetComponent: files_adapter
+        targetMethod: listEntries
+      - stepNumber: 2
         description: List the directory's pack refs through the pack source
         type: call
         targetComponent: pack_source_adapter
@@ -331,17 +336,22 @@ methods:
         type: loop
         loopKind: forEach
         over: the pack entry-file names
-        endStep: 3
+        endStep: 4
       - stepNumber: 2
+        description: Look for a file of that name in the directory
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 3
         description: Does the directory hold a file of that name?
         type: branch
         condition: the file exists in the directory
         onFalseStep: 1
-      - stepNumber: 3
+      - stepNumber: 4
         description: Return that entry file
         type: return
         outcome: found
-      - stepNumber: 4
+      - stepNumber: 5
         description: The directory is not a pack
         type: return
         outcome: not a pack
@@ -498,4 +508,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T19:01:00.434Z'
-updatedAt: '2026-10-18T19:09:43.862Z'
+updatedAt: '2026-10-31T23:34:08.189Z'

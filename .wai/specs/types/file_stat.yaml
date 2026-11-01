@@ -1,0 +1,20 @@
+kind: value-object
+id: file_stat
+name: FileStat
+description: >-
+  What the file system says about a path, as node fs answers it: its size, its times and what kind
+  of entry it is.
+subsystem: sdd_io
+fields:
+  - name: size
+    type: int
+    description: The size in bytes
+    optional: false
+  - name: mtimeMs
+    type: int
+    description: When it was last modified, in milliseconds since the epoch
+    optional: false
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:28.283Z'
+updatedAt: '2026-10-31T23:14:29.480Z'

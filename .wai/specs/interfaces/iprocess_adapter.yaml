@@ -1,0 +1,51 @@
+id: iprocess_adapter
+name: Process Adapter Interface
+description: >-
+  Child processes, one call per action. run and runShell answer the standard output as UTF-8 text
+  and throw as execFileSync and execSync do; start never fails, since what it starts is
+  fire-and-forget.
+component: process_adapter
+methods:
+  - name: run
+    description: >-
+      Run a program with arguments and answer its standard output as UTF-8 text. Throws as
+      execFileSync does (a non-zero exit, a timeout, a missing program).
+    signature: 'run(command: string, args: list<string>, options?: RunOptions): string'
+    returns: string
+    params:
+      - name: command
+        type: string
+      - name: args
+        type: list<string>
+      - name: options
+        type: RunOptions
+        optional: true
+    effect: io
+  - name: runShell
+    description: >-
+      Run a command line through the shell and answer its standard output as UTF-8 text. Throws as
+      execSync does.
+    signature: 'runShell(commandLine: string, options?: RunOptions): string'
+    returns: string
+    params:
+      - name: commandLine
+        type: string
+      - name: options
+        type: RunOptions
+        optional: true
+    effect: io
+  - name: start
+    description: >-
+      Start a program detached with its streams ignored and leave it running (opening a browser). A
+      program that cannot be started is not an error here: it is fire-and-forget.
+    signature: 'start(command: string, args: list<string>): void'
+    returns: void
+    params:
+      - name: command
+        type: string
+      - name: args
+        type: list<string>
+    effect: io
+status: draft
+createdAt: '2026-10-31T23:15:22.584Z'
+updatedAt: '2026-10-31T23:15:26.178Z'

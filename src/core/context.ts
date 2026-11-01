@@ -1,4 +1,5 @@
 import { aiDir, writeFileIfChanged, readFileOrNull, pathExists, fromProjectRoot } from '../utils/fs.js';
+import { files } from '../io/index.js';
 import { guideBody } from '../utils/ai-guide.js';
 import { versionStamp } from './stamp.js';
 // STATIC: the lazy require this replaced was documented as breaking a circular
@@ -235,7 +236,7 @@ export function renderWaironGuide(): string {
   const mcpSettingsPath = fromProjectRoot('.claude', 'settings.json');
   let mcpInstalled = false;
   try {
-    const s = JSON.parse(require('fs').readFileSync(mcpSettingsPath, 'utf8'));
+    const s = JSON.parse(files.readText(mcpSettingsPath));
     mcpInstalled = !!(s?.mcpServers?.wairon);
   } catch { /* not installed */ }
 

@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as fileIo } from '../io/index.js';
 import * as path from 'path';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as yaml from 'js-yaml';
@@ -11,7 +11,7 @@ import * as yaml from 'js-yaml';
  * Ensure a directory exists, creating it (and parents) if needed.
  */
 export function ensureDir(dirPath: string): void {
-  fs.mkdirSync(dirPath, { recursive: true });
+  fileIo.ensureDir(dirPath);
 }
 
 // ---------------------------------------------------------------------------
@@ -58,10 +58,10 @@ function rewrite(filePath: string, content: string | Uint8Array): void {
   let target = filePath;
   let mode: number | undefined;
   try {
-    target = fs.realpathSync(filePath);
-    mode = fs.statSync(target).mode & 0o7777;
+    target = fileIo.realPath(filePath);
+    mode = fileIo.stat(target).mode & 0o7777;
     // A rename would replace a file its owner made read-only; refuse it as a write in place does.
-    fs.accessSync(target, fs.constants.W_OK);
+    fileIo.checkWritable(target);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
   }
@@ -93,7 +93,7 @@ export const WRITE_LOCK_IGNORE = '.spec-write.lock*';
  */
 export function ignoreWriteLock(waiDir: string): boolean {
   const file = path.join(waiDir, '.gitignore');
-  const held = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  const held = fileIo.exists(file) ? fileIo.readText(file) : null;
   if (held !== null && held.split(/\r?\n/).some((l) => l.trim() === WRITE_LOCK_IGNORE)) return false;
   const body = held === null
     ? `# The spec tree's write lock: held for the moment of a write, never committed.\n${WRITE_LOCK_IGNORE}\n`
@@ -110,8 +110,8 @@ export function ignoreWriteLock(waiDir: string): boolean {
  */
 export function writeFileIfChanged(filePath: string, content: string): boolean {
   const text = withLineEndings(filePath, content);
-  if (fs.existsSync(filePath)) {
-    const existing = fs.readFileSync(filePath, 'utf-8');
+  if (fileIo.exists(filePath)) {
+    const existing = fileIo.readText(filePath);
     if (existing === text) return false;
   }
   ensureDir(path.dirname(filePath));
@@ -125,7 +125,7 @@ export function writeFileIfChanged(filePath: string, content: string): boolean {
 /** Rename a file or a folder, under the guard of both places. */
 export function renamePath(from: string, to: string): void {
   guarded([from, to], () => {
-    fs.renameSync(from, to);
+    fileIo.rename(from, to);
     treeFileGuard?.noteWritten(from, null);
     treeFileGuard?.noteWritten(to, null);
   });
@@ -135,7 +135,7 @@ export function renamePath(from: string, to: string): void {
 export function removeFile(filePath: string): void {
   guarded([filePath], () => {
     try {
-      fs.unlinkSync(filePath);
+      fileIo.removeFile(filePath);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
     }
@@ -181,14 +181,14 @@ function endingsOf(text: string): LineEnding | null {
 function sampleOf(file: string): string | null {
   let fd: number | undefined;
   try {
-    fd = fs.openSync(file, 'r');
+    fd = fileIo.openForRead(file);
     const buffer = Buffer.alloc(EOL_SAMPLE_BYTES);
-    const read = fs.readSync(fd, buffer, 0, EOL_SAMPLE_BYTES, 0);
+    const read = fileIo.readDescriptorHead(fd, buffer, EOL_SAMPLE_BYTES);
     return buffer.subarray(0, read).toString('utf-8');
   } catch {
     return null;
   } finally {
-    if (fd !== undefined) fs.closeSync(fd);
+    if (fd !== undefined) fileIo.closeDescriptor(fd);
   }
 }
 
@@ -226,7 +226,7 @@ function conventionFolders(dir: string): string[] {
   let at = path.resolve(dir);
   for (let depth = 0; depth < 8; depth++) {
     folders.push(at);
-    if (fs.existsSync(path.join(at, '.git')) || fs.existsSync(path.join(at, '.wai'))) return folders;
+    if (fileIo.exists(path.join(at, '.git')) || fileIo.exists(path.join(at, '.wai'))) return folders;
     const parent = path.dirname(at);
     if (parent === at) break;
     at = parent;
@@ -239,7 +239,7 @@ function conventionFolders(dir: string): string[] {
 function folderEndings(folder: string, ext: string, exclude: string): LineEnding | null {
   let names: string[];
   try {
-    names = fs.readdirSync(folder);
+    names = fileIo.list(folder);
   } catch {
     return null;
   }
@@ -252,7 +252,7 @@ function folderEndings(folder: string, ext: string, exclude: string): LineEnding
   for (const name of candidates) {
     const full = path.join(folder, name);
     try {
-      if (!fs.statSync(full).isFile()) continue;
+      if (!fileIo.stat(full).isFile()) continue;
     } catch {
       continue;
     }
@@ -300,7 +300,7 @@ export function withLineEndings(filePath: string, content: string): string {
 export function readFileOrNull(filePath: string): string | null {
   let text: string;
   try {
-    text = fs.readFileSync(filePath, 'utf-8');
+    text = fileIo.readText(filePath);
   } catch {
     return null;
   }
@@ -312,7 +312,7 @@ export function readFileOrNull(filePath: string): string | null {
  * Check whether a path exists.
  */
 export function pathExists(targetPath: string): boolean {
-  return fs.existsSync(targetPath);
+  return fileIo.exists(targetPath);
 }
 
 /**
@@ -334,7 +334,7 @@ export function isOutsideRoot(root: string, target: string): boolean {
  */
 export function backupBeside(file: string, at: Date = new Date()): string {
   const backup = `${file}.wairon-backup-${at.toISOString().replace(/[:.]/g, '-')}`;
-  fs.copyFileSync(file, backup);
+  fileIo.copyFile(file, backup);
   return backup;
 }
 
@@ -343,9 +343,9 @@ export function backupBeside(file: string, at: Date = new Date()): string {
  * Returns an empty array if the directory does not exist.
  */
 export function listFiles(dirPath: string, ext: string): string[] {
-  if (!fs.existsSync(dirPath)) return [];
-  return fs
-    .readdirSync(dirPath)
+  if (!fileIo.exists(dirPath)) return [];
+  return fileIo
+    .list(dirPath)
     .filter((f) => f.endsWith(ext))
     .map((f) => path.join(dirPath, f));
 }
@@ -355,8 +355,8 @@ export function listFiles(dirPath: string, ext: string): string[] {
  * Returns an empty array if the directory does not exist.
  */
 export function listFilesRecursive(dirPath: string, ext: string): string[] {
-  if (!fs.existsSync(dirPath)) return [];
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  if (!fileIo.exists(dirPath)) return [];
+  const entries = fileIo.listEntries(dirPath);
   const files: string[] = [];
   for (const entry of entries) {
     const fullPath = path.join(dirPath, entry.name);
@@ -608,8 +608,8 @@ export interface ProjectBinding {
 function holdsSystemSpec(dir: string): boolean {
   for (const base of ['.wai', '.wairon']) {
     const specs = path.join(dir, base, 'specs');
-    if (fs.existsSync(path.join(specs, '.index.yaml')) || fs.existsSync(path.join(specs, 'system.yaml'))) return true;
-    if (base === '.wai' && fs.existsSync(path.join(dir, '.wai'))) break; // .wai present: never fall back to .wairon
+    if (fileIo.exists(path.join(specs, '.index.yaml')) || fileIo.exists(path.join(specs, 'system.yaml'))) return true;
+    if (base === '.wai' && fileIo.exists(path.join(dir, '.wai'))) break; // .wai present: never fall back to .wairon
   }
   return false;
 }
@@ -619,7 +619,7 @@ function findRepositoryRoot(startDir: string): string | null {
   let dir = path.resolve(startDir);
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir;
+    if (fileIo.exists(path.join(dir, '.git'))) return dir;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -641,7 +641,7 @@ function isAtOrBelow(outer: string, inner: string): boolean {
 function declaredMemberDirs(projectRoot: string): string[] {
   let parsed: unknown;
   try {
-    const text = fs.readFileSync(path.join(projectRoot, '.wai', 'project.yaml'), 'utf-8');
+    const text = fileIo.readText(path.join(projectRoot, '.wai', 'project.yaml'));
     parsed = yaml.load(text);
   } catch {
     return [];
@@ -728,7 +728,7 @@ export function findProjectRoot(startDir: string): string | null {
   let dir = path.resolve(startDir);
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    if (fs.existsSync(path.join(dir, '.wai')) || fs.existsSync(path.join(dir, '.wairon'))) {
+    if (fileIo.exists(path.join(dir, '.wai')) || fileIo.exists(path.join(dir, '.wairon'))) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -770,7 +770,7 @@ export function legacyFolderAt(root: string): string | null {
   if (!readsV5Forms()) return null;
   const waiPath = path.join(root, '.wai');
   const waironPath = path.join(root, '.wairon');
-  return !fs.existsSync(waiPath) && fs.existsSync(waironPath) ? waironPath : null;
+  return !fileIo.exists(waiPath) && fileIo.exists(waironPath) ? waironPath : null;
 }
 
 /** Sleep the calling thread without spinning: these helpers are synchronous end to end. */
@@ -811,7 +811,7 @@ export function readJsonForUpdate<T>(file: string, absent: T): T {
   for (;;) {
     let text: string;
     try {
-      text = fs.readFileSync(file, 'utf8');
+      text = fileIo.readText(file);
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') return absent;
@@ -842,7 +842,7 @@ function renameOver(from: string, to: string): void {
   const deadline = Date.now() + RENAME_RETRY_MS;
   for (;;) {
     try {
-      fs.renameSync(from, to);
+      fileIo.rename(from, to);
       return;
     } catch (e) {
       const code = (e as NodeJS.ErrnoException).code;
@@ -860,11 +860,13 @@ function renameOver(from: string, to: string): void {
 export function replaceFile(file: string, text: string | Uint8Array, mode?: number): void {
   const tmp = `${file}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
   try {
-    fs.writeFileSync(tmp, text, mode === undefined ? undefined : { mode });
+    const options = mode === undefined ? undefined : { mode };
+    if (typeof text === 'string') fileIo.writeText(tmp, text, options);
+    else fileIo.writeBytes(tmp, text, options);
     preRenameChecks.get(renameCheckKey(file))?.();
     renameOver(tmp, file);
   } catch (e) {
-    try { fs.rmSync(tmp, { force: true }); } catch { /* nothing left to clean */ }
+    try { fileIo.removeFileIfPresent(tmp); } catch { /* nothing left to clean */ }
     throw e;
   }
 }

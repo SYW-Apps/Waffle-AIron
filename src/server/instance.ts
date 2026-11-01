@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import type { InstanceIdentity } from './types.js';
@@ -57,7 +57,7 @@ class InstanceIdentityStore {
     const p = storePath(this.dataDir);
     let raw: string;
     try {
-      raw = fs.readFileSync(p, 'utf8');
+      raw = files.readText(p);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
       throw new Error(`Cannot read instance identity at ${p}: ${(err as Error).message}`);
@@ -79,7 +79,7 @@ class InstanceIdentityStore {
    */
   update(change: (identity: InstanceIdentity | null) => InstanceIdentity): InstanceIdentity {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     return withFileLock(p, () => {
       const raw = readJsonForUpdate<unknown>(p, null);
       const current = raw === null ? null : checkIdentity(raw, p);

@@ -1,0 +1,18 @@
+kind: value-object
+id: text_response
+name: TextResponse
+description: 'What a plain GET answers: the status code and the body as text.'
+subsystem: sdd_io
+fields:
+  - name: status
+    type: int?
+    description: The HTTP status code, when the server sent one
+    optional: false
+  - name: body
+    type: string
+    description: The body as text
+    optional: false
+methods: []
+sourcePath: src/io/http.ts
+createdAt: '2026-10-31T23:14:51.982Z'
+updatedAt: '2026-10-31T23:14:53.078Z'

@@ -25,7 +25,8 @@ methods:
       writes nothing.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
     symbol: update
 status: complete
 createdAt: '2026-07-19T09:00:07.147Z'
-updatedAt: '2026-10-23T22:24:25.827Z'
+updatedAt: '2026-10-31T23:34:38.722Z'

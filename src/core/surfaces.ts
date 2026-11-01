@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { getHostedLookup, getProjectRoot, getRequestParentReach, readsV5Forms, runWithProjectRoot } from '../utils/fs.js';
 import { canonicalize, compareOrdinal } from '../utils/canonical-json.js';
@@ -433,11 +433,11 @@ function writeSnapshotIfChanged(
   rootDir: string,
 ): { path: string; changed: boolean } {
   const dir = surfacesDir(rootDir);
-  fs.mkdirSync(dir, { recursive: true });
+  files.ensureDir(dir);
   const p = path.join(dir, snapshotFilename(snapshot.projectName));
   const next = SurfaceSnapshotSchema.parse(snapshot);
 
-  if (fs.existsSync(p)) {
+  if (files.exists(p)) {
     try {
       const existing = SurfaceSnapshotSchema.parse(readYamlFile(p));
       if (surfaceContentKey(existing) === surfaceContentKey(next)) {
@@ -465,9 +465,9 @@ export interface SurfaceFsAdapter {
 export const surfaceFsAdapter: SurfaceFsAdapter = {
   readAllSnapshots() {
     const dir = surfacesDir(getProjectRoot());
-    if (!fs.existsSync(dir)) return [];
+    if (!files.exists(dir)) return [];
     const out: SurfaceSnapshot[] = [];
-    for (const file of fs.readdirSync(dir)) {
+    for (const file of files.list(dir)) {
       if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
       try {
         out.push(SurfaceSnapshotSchema.parse(readYamlFile(path.join(dir, file))));
@@ -483,20 +483,20 @@ export const surfaceFsAdapter: SurfaceFsAdapter = {
   deleteSnapshot(projectName) {
     const dir = surfacesDir(getProjectRoot());
     const direct = path.join(dir, snapshotFilename(projectName));
-    if (fs.existsSync(direct)) {
-      fs.unlinkSync(direct);
+    if (files.exists(direct)) {
+      files.removeFile(direct);
       return true;
     }
     // Legacy files written before filename sanitization (raw project names):
     // locate by the snapshot's stored key, not the filename.
-    if (!fs.existsSync(dir)) return false;
-    for (const file of fs.readdirSync(dir)) {
+    if (!files.exists(dir)) return false;
+    for (const file of files.list(dir)) {
       if (!file.endsWith('.yaml') && !file.endsWith('.yml')) continue;
       const p = path.join(dir, file);
       try {
         const snap = SurfaceSnapshotSchema.parse(readYamlFile(p));
         if (snap.projectName === projectName) {
-          fs.unlinkSync(p);
+          files.removeFile(p);
           return true;
         }
       } catch {
@@ -714,21 +714,21 @@ function perPortalPath(resolvedOut: string, portalId: string): string {
  *  the first, which would silently drop the other APIs. */
 function writeSurfaceFile(targetPath: string, snapshot: SurfaceSnapshot, renderedSet?: NamedOpenApiSpec[]): string[] {
   const resolved = path.resolve(targetPath);
-  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  files.ensureDir(path.dirname(resolved));
   if (!renderedSet || renderedSet.length === 0) {
     // A file is what its name says: `--out x.json` gets JSON (import reads it
     // back too — JSON is YAML), anything else the YAML snapshot.
-    if (path.extname(resolved).toLowerCase() === '.json') fs.writeFileSync(resolved, `${JSON.stringify(snapshot, null, 2)}\n`);
+    if (path.extname(resolved).toLowerCase() === '.json') files.writeText(resolved, `${JSON.stringify(snapshot, null, 2)}\n`);
     else writeYamlFile(resolved, snapshot);
     return [resolved];
   }
   if (renderedSet.length === 1) {
-    fs.writeFileSync(resolved, renderedSet[0].document);
+    files.writeText(resolved, renderedSet[0].document);
     return [resolved];
   }
   return renderedSet.map(spec => {
     const target = perPortalPath(resolved, spec.portalId);
-    fs.writeFileSync(target, spec.document);
+    files.writeText(target, spec.document);
     return target;
   });
 }
@@ -909,7 +909,7 @@ export function withForeignTypes(snapshot: SurfaceSnapshot, foreign: ReadonlyMap
 function declaredVersion(root: string): string | undefined {
   const read = (file: string): string | null => {
     try {
-      return fs.readFileSync(path.join(root, file), 'utf8');
+      return files.readText(path.join(root, file));
     } catch {
       return null;
     }
@@ -974,8 +974,8 @@ function withSortedKeys(value: unknown): unknown {
 export function writeDesignTo(targetPath: string, design: DesignExport): string {
   const resolved = path.resolve(targetPath);
   try {
-    fs.mkdirSync(path.dirname(resolved), { recursive: true });
-    fs.writeFileSync(resolved, `${JSON.stringify(withSortedKeys(design), null, 2)}\n`, 'utf8');
+    files.ensureDir(path.dirname(resolved));
+    files.writeText(resolved, `${JSON.stringify(withSortedKeys(design), null, 2)}\n`);
   } catch (e) {
     throw new Error(`Cannot write the design export to ${resolved}: ${(e as Error).message}`);
   }
@@ -997,10 +997,10 @@ export function exportDesign(outPath?: string, approval?: DesignApproval): Desig
  *  decoding is the caller's concern. Fails naming the path when it is missing. */
 function readSurfaceDocument(sourcePath: string): string {
   const resolved = path.resolve(sourcePath);
-  if (!fs.existsSync(resolved)) {
+  if (!files.exists(resolved)) {
     throw new Error(`Surface document not found: ${resolved}`);
   }
-  return fs.readFileSync(resolved, 'utf8');
+  return files.readText(resolved);
 }
 
 export function importSurface(sourcePath: string, origin: SurfaceOrigin): SurfaceSnapshot {
@@ -1113,7 +1113,7 @@ function producerUnreadable(external: ResolvedExternal): string | null {
     const ceiling = reach.parentReach ? reach.topRoot ?? bound : bound;
     if (!isWithinDir(ceiling, directory)) return OUT_OF_REACH;
   }
-  if (!fs.existsSync(directory)) return `its root ${directory} does not exist`;
+  if (!files.exists(directory)) return `its root ${directory} does not exist`;
   return null;
 }
 
@@ -1990,7 +1990,7 @@ export function diff(against?: string): SurfaceDiff {
   // Portals with it (its service API, which both sides project alike; a saved
   // snapshot carries only what the table exported), and the types they name
   // from other projects expanded from the pins and members of each tree.
-  const saved = against !== undefined && fs.existsSync(against) && fs.statSync(against).isFile();
+  const saved = against !== undefined && files.exists(against) && files.stat(against).isFile();
   const ownSurface = (): SurfaceSnapshot => withForeignTypes(projectOwnSurface('project', !saved), foreignSurfaces());
   const current = ownSurface();
   // Steps 2-4: the baseline — a saved snapshot file, else the tree at the revision.
@@ -2050,7 +2050,7 @@ function membersAsRecordedIn(recordedIn: string): Map<string, SurfaceSnapshot> {
  * read, names what --against takes instead of dumping the schema's errors.
  */
 function savedSnapshot(file: string): SurfaceSnapshot {
-  const body = fs.readFileSync(file, 'utf8');
+  const body = files.readText(file);
   const shown = path.resolve(file);
   if (isOpenApiDocument(body)) {
     throw new Error(`${shown} is an OpenAPI document; --against compares with a native surface snapshot (\`wairon surface export --format native --out <file>\`) or a git revision, never an OpenAPI document. Nothing was compared.`);

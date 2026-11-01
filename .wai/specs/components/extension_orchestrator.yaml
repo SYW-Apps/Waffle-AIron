@@ -21,8 +21,9 @@ dependsOn:
   - pack_source_adapter
   - pack_store_adapter
   - project_config_repository
+  - files_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-14T18:58:45.602Z'
-updatedAt: '2026-09-25T21:08:34.201Z'
+updatedAt: '2026-10-31T23:20:12.512Z'

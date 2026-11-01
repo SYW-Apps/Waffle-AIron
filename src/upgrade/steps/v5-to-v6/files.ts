@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../../../io/index.js';
 import * as path from 'path';
 import { parseYaml } from '../../../utils/yaml.js';
 import type { LockRecord } from '../../../core/index.js';
@@ -18,7 +18,7 @@ import { v5FormsIn, type V5FormHolder } from '../../../models/index.js';
 function configDir(root: string): string | null {
   for (const name of ['.wai', '.wairon']) {
     const dir = path.join(root, name);
-    if (fs.existsSync(dir)) return dir;
+    if (files.exists(dir)) return dir;
   }
   return null;
 }
@@ -34,10 +34,10 @@ function localLocation(location: string): boolean {
 /** The local folders a project.yaml's `members` name, short and long form. */
 function memberLocations(root: string, dir: string): string[] {
   const file = path.join(dir, 'project.yaml');
-  if (!fs.existsSync(file)) return [];
+  if (!files.exists(file)) return [];
   let doc: unknown;
   try {
-    doc = parseYaml(fs.readFileSync(file, 'utf-8'));
+    doc = parseYaml(files.readText(file));
   } catch {
     return [];
   }
@@ -58,7 +58,7 @@ function memberLocations(root: string, dir: string): string[] {
 /** Every yaml file under a folder. */
 function yamlFiles(dir: string): string[] {
   const out: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  for (const entry of files.listEntries(dir)) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...yamlFiles(full));
     else if (/\.ya?ml$/.test(entry.name)) out.push(full);
@@ -69,10 +69,10 @@ function yamlFiles(dir: string): string[] {
 /** The folders the L1 subsystem files of a project mount through `projectPath`. */
 function mountLocations(root: string, dir: string): string[] {
   const specs = path.join(dir, 'specs');
-  if (!fs.existsSync(specs)) return [];
+  if (!files.exists(specs)) return [];
   const found: string[] = [];
   for (const file of yamlFiles(specs)) {
-    const text = fs.readFileSync(file, 'utf-8');
+    const text = files.readText(file);
     if (!text.includes('projectPath')) continue;
     try {
       const doc = parseYaml(text) as { projectPath?: unknown } | null;
@@ -90,7 +90,7 @@ export function familyRoots(root: string): string[] {
   const order: string[] = [];
   const visit = (at: string): void => {
     const resolved = path.resolve(at);
-    if (seen.has(resolved) || !fs.existsSync(resolved)) return;
+    if (seen.has(resolved) || !files.exists(resolved)) return;
     seen.add(resolved);
     order.push(resolved);
     const dir = configDir(resolved);
@@ -103,7 +103,7 @@ export function familyRoots(root: string): string[] {
 
 /** iv5_tree_file_adapter.holdsLegacyFolder — whether the root holds a .wairon folder and no .wai folder. */
 export function holdsLegacyFolder(root: string): boolean {
-  return fs.existsSync(path.join(root, '.wairon')) && !fs.existsSync(path.join(root, '.wai'));
+  return files.exists(path.join(root, '.wairon')) && !files.exists(path.join(root, '.wai'));
 }
 
 /** iv5_tree_file_adapter.moveLegacyFolder — move the root's .wairon folder to .wai; a root holding .wai already is left as it is. */
@@ -112,18 +112,18 @@ export function moveLegacyFolder(root: string): void {
   const from = path.join(root, '.wairon');
   const to = path.join(root, '.wai');
   try {
-    fs.renameSync(from, to);
+    files.rename(from, to);
   } catch {
     // A rename can be refused (an open handle on Windows); a copy then a removal moves it just as well.
-    fs.cpSync(from, to, { recursive: true });
-    fs.rmSync(from, { recursive: true, force: true });
+    files.copy(from, to, { recursive: true });
+    files.remove(from);
   }
 }
 
 /** iv5_tree_file_adapter.renameSpecFile — rename one spec file to the name the current layout expects. */
 export function renameSpecFile(from: string, to: string): void {
-  fs.mkdirSync(path.dirname(to), { recursive: true });
-  fs.renameSync(from, to);
+  files.ensureDir(path.dirname(to));
+  files.rename(from, to);
 }
 
 /**
@@ -139,8 +139,8 @@ export function renameSpecFile(from: string, to: string): void {
 export function keepStaleRecord(root: string): LockRecord | null {
   const dir = configDir(root);
   const file = dir ? path.join(dir, 'lock.json') : null;
-  if (!file || !fs.existsSync(file)) return null;
-  const raw = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')) as Record<string, unknown> & { stateId: { algorithm: string } };
+  if (!file || !files.exists(file)) return null;
+  const raw = JSON.parse(files.readText(file).replace(/^﻿/, '')) as Record<string, unknown> & { stateId: { algorithm: string } };
   if (raw.format === 3) return null;
   const { specs: _specs, children: _children, specsReading: _reading, format: _format, ...kept } = raw;
   const lockedBy = typeof raw.lockedBy === 'string' ? { id: raw.lockedBy, source: 'legacy' } : raw.lockedBy;
@@ -161,7 +161,7 @@ export interface V5FormsLeft {
 /** A spec file's raw document, or null when it is no mapping or no YAML. */
 function rawDocument(file: string): Record<string, unknown> | null {
   try {
-    const doc = parseYaml(fs.readFileSync(file, 'utf-8'));
+    const doc = parseYaml(files.readText(file));
     return doc && typeof doc === 'object' && !Array.isArray(doc) ? (doc as Record<string, unknown>) : null;
   } catch {
     return null;
@@ -184,7 +184,7 @@ function holderOf(file: string, specs: string, doc: Record<string, unknown>): V5
 export function v5FormsLeft(root: string): V5FormsLeft[] {
   const dir = configDir(root);
   const specs = dir ? path.join(dir, 'specs') : null;
-  if (!specs || !fs.existsSync(specs)) return [];
+  if (!specs || !files.exists(specs)) return [];
   const out: V5FormsLeft[] = [];
   for (const file of yamlFiles(specs)) {
     const doc = rawDocument(file);

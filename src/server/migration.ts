@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { ensureInstanceIdentity, getInstanceIdentity } from './instance.js';
 import { setAssignment, remapScope } from './permissions.js';
@@ -111,14 +111,14 @@ function scopeOf(grant: LegacyGrant): { scopeKind: ScopeKind; scopeId?: string }
 
 function readRaw<T>(file: string): T | null {
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
+    return JSON.parse(files.readText(file)) as T;
   } catch {
     return null; // missing or unreadable — that store simply isn't migrated
   }
 }
 
 function writeRaw(file: string, value: unknown): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  files.ensureDir(path.dirname(file));
   replaceFile(file, JSON.stringify(value, null, 2) + '\n');
 }
 
@@ -556,7 +556,7 @@ export function run(
   const snapshotsDir = path.join(dataDir, 'share-snapshots');
   let snapshotFiles: string[] = [];
   try {
-    snapshotFiles = fs.readdirSync(snapshotsDir).filter((f) => f.endsWith('.json')).sort();
+    snapshotFiles = files.list(snapshotsDir).filter((f) => f.endsWith('.json')).sort();
   } catch {
     /* no share snapshots */
   }

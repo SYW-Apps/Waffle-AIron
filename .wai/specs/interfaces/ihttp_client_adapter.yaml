@@ -1,0 +1,45 @@
+id: ihttp_client_adapter
+name: HTTP Client Adapter Interface
+description: >-
+  Outbound HTTP, one call per action. Each rejects when the server cannot be reached and otherwise
+  answers whatever the server said; none is reachable from validate, status or generate.
+component: http_client_adapter
+methods:
+  - name: request
+    description: >-
+      An outbound request with fetch semantics: the Response, whatever its status. Rejects when the
+      server cannot be reached.
+    signature: 'request(url: string, init?: HttpRequestInit): async HttpFetchResponse'
+    returns: async HttpFetchResponse
+    params:
+      - name: url
+        type: string
+      - name: init
+        type: HttpRequestInit
+        optional: true
+    effect: io
+  - name: getText
+    description: >-
+      GET a URL (http or https by its scheme), no redirects followed, and answer its status and
+      body. Rejects when the server cannot be reached.
+    signature: 'getText(url: string, headers: map<string, string>): async TextResponse'
+    returns: async TextResponse
+    params:
+      - name: url
+        type: string
+      - name: headers
+        type: map<string, string>
+    effect: io
+  - name: download
+    description: Download `url` to `dest`, following one level of redirect at a time.
+    signature: 'download(url: string, dest: string): async void'
+    returns: async void
+    params:
+      - name: url
+        type: string
+      - name: dest
+        type: string
+    effect: io
+status: draft
+createdAt: '2026-10-31T23:15:32.197Z'
+updatedAt: '2026-10-31T23:15:35.929Z'

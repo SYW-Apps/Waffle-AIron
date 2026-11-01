@@ -17,8 +17,9 @@ dependsOn:
   - member_registration
   - policy_repository
   - instance_upgrade
+  - files_adapter
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-04T12:33:41.732Z'
-updatedAt: '2026-10-18T14:29:34.219Z'
+updatedAt: '2026-10-31T23:25:37.490Z'

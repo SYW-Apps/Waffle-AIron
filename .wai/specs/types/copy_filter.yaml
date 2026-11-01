@@ -1,0 +1,18 @@
+kind: signature
+id: copy_filter
+name: CopyFilter
+description: Whether a copy takes one source path to its destination.
+subsystem: sdd_io
+fields: []
+methods: []
+sourcePath: src/io/files.ts
+params:
+  - name: source
+    type: string
+    description: The path about to be copied
+  - name: destination
+    type: string
+    description: Where it would be copied to
+returns: bool
+createdAt: '2026-10-31T23:14:35.034Z'
+updatedAt: '2026-10-31T23:14:36.092Z'

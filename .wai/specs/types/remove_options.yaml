@@ -1,0 +1,14 @@
+kind: value-object
+id: remove_options
+name: RemoveOptions
+description: What removing an existing path takes.
+subsystem: sdd_io
+fields:
+  - name: recursive
+    type: bool
+    description: Remove a folder tree
+    optional: true
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:41.871Z'
+updatedAt: '2026-10-31T23:14:42.934Z'

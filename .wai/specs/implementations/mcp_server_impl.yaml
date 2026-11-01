@@ -208,6 +208,22 @@ methods:
           exactly as for a changed schema
         type: return
         outcome: unreadable
+  - name: holdsTree
+    narrative:
+      - stepNumber: 1
+        description: Does dir/.wai exist?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 2
+        description: Does dir/.wairon exist (a v5 tree)?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 3
+        description: Answer whether either exists
+        type: return
+        outcome: either marker present
 lint:
   allow:
     - code: UNNARRATED_CALL
@@ -249,4 +265,4 @@ lint:
         methods.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T13:42:41.577Z'
+updatedAt: '2026-10-31T23:30:44.330Z'

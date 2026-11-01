@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
 import { withFileLock } from '../utils/file-lock.js';
@@ -23,7 +23,7 @@ function registryPath(dataDir: string): string {
 /** iproject_store.read — the persisted records, fresh from disk; an absent or malformed file is the empty set. */
 export function load(dataDir: string): HostedProjectRecord[] {
   try {
-    return JSON.parse(fs.readFileSync(registryPath(dataDir), 'utf8')) as HostedProjectRecord[];
+    return JSON.parse(files.readText(registryPath(dataDir))) as HostedProjectRecord[];
   } catch {
     return [];
   }
@@ -32,7 +32,7 @@ export function load(dataDir: string): HostedProjectRecord[] {
 /** Persist the full set, replacing the file atomically — only ever under update's lock. */
 function save(dataDir: string, records: HostedProjectRecord[]): void {
   const p = registryPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   replaceFile(p, JSON.stringify(records, null, 2) + '\n');
 }
 
@@ -43,7 +43,7 @@ function save(dataDir: string, records: HostedProjectRecord[]): void {
  */
 export function update(dataDir: string, change: (records: HostedProjectRecord[]) => HostedProjectRecord[]): HostedProjectRecord[] {
   const p = registryPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const next = change(readJsonForUpdate(p, []));
     save(dataDir, next);

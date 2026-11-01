@@ -9,6 +9,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - secret_repository
+  - http_client_adapter
 status: complete
 createdAt: '2026-07-08T22:00:27.787Z'
-updatedAt: '2026-07-11T20:29:42.006Z'
+updatedAt: '2026-10-31T23:22:44.676Z'

@@ -21,8 +21,9 @@ methods:
       prior file intact) and release the lock, also when the change throws. Answers the set written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
     symbol: updateLinks
 detail: intent
 status: complete
 createdAt: '2026-07-18T09:25:58.805Z'
-updatedAt: '2026-10-23T22:25:01.264Z'
+updatedAt: '2026-10-31T23:34:52.187Z'

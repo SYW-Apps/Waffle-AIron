@@ -47,6 +47,7 @@ dependsOn:
   - member_reach_rules
   - host_migration_adapter
   - host_git_adapter
+  - files_adapter
 status: complete
 createdAt: '2026-10-01T16:31:44.124Z'
-updatedAt: '2026-10-19T06:16:30.652Z'
+updatedAt: '2026-10-31T23:25:41.625Z'

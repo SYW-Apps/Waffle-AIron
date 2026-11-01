@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import chalk from 'chalk';
 import { logger } from '../utils/logger.js';
@@ -144,7 +144,7 @@ export async function runSurface(action: string, options: SurfaceOptions = {}): 
       // --out names the FILE written: a folder there is refused before anything
       // is rendered, saying how several documents are written (it failed on a
       // raw EISDIR).
-      if (options.out && fs.existsSync(options.out) && fs.statSync(options.out).isDirectory()) {
+      if (options.out && files.exists(options.out) && files.stat(options.out).isDirectory()) {
         throw new WaironError(`--out "${options.out}" is a folder: give a file path (e.g. ${path.join(options.out, `openapi${format === 'openapi' ? '.json' : '.yaml'}`)}). One --portal writes one document there; with no --portal, a project with several portals writes one document per portal beside that path (<file>.<portal>.<ext>).`);
       }
       let result;

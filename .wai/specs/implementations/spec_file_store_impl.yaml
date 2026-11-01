@@ -140,6 +140,9 @@ methods:
       naming the holder's pid (and, when remote, its host and namespace) and pointing at `wairon
       doctor`, exactly as before. A root holding no .wai folder has no tree to guard: nothing is
       created.
+    calls:
+      - files_adapter.realPathNative
+      - files_adapter.exists
   - name: unlockTree
     sourcePath: src/core/spec-files.ts
     narrative: []
@@ -180,4 +183,4 @@ lint:
         a capability of the hosted server's surface.
 status: complete
 createdAt: '2026-07-18T22:57:53.471Z'
-updatedAt: '2026-10-24T00:38:30.799Z'
+updatedAt: '2026-10-31T23:49:17.939Z'

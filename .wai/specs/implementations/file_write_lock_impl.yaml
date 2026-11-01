@@ -67,6 +67,8 @@ methods:
       remote its host and namespace, and `wairon doctor`, as today), and the change never runs. The
       spec-tree write lock layers its own re-entrancy hold count and inspection on top and keeps its
       user-facing waits and messages.
+    calls:
+      - files_adapter.openNew
     symbol: withFileLock
 detail: intent
 lint:
@@ -88,4 +90,4 @@ lint:
         capability.
 status: complete
 createdAt: '2026-10-23T22:17:04.361Z'
-updatedAt: '2026-10-24T11:38:30.334Z'
+updatedAt: '2026-10-31T23:47:47.202Z'

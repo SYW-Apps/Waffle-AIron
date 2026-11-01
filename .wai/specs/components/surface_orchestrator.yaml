@@ -16,6 +16,7 @@ dependsOn:
   - surfaces_core_adapter
   - surface_transfer_adapter
   - design_exporter
+  - files_adapter
 status: complete
 createdAt: '2026-07-10T23:12:12.860Z'
-updatedAt: '2026-10-04T13:54:48.534Z'
+updatedAt: '2026-10-31T23:21:46.770Z'

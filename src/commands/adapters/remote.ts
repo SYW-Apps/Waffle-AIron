@@ -1,3 +1,4 @@
+import { http } from '../../io/index.js';
 import { WaironError } from '../../utils/errors.js';
 import type { TreeExportResult, TreeImportResult } from '../../core/treetransfer.js';
 
@@ -39,7 +40,7 @@ async function callTool(target: RemoteTarget, name: string, args: Record<string,
   const endpoint = `${target.url.replace(/\/+$/, '')}/mcp?project=${encodeURIComponent(target.projectId)}`;
   let res: Response;
   try {
-    res = await fetch(endpoint, {
+    res = await http.request(endpoint, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${target.token}`,
@@ -177,7 +178,7 @@ export async function initializeRemoteProject(target: RemoteTarget, ownerUnitId:
   const endpoint = `${target.url.replace(/\/+$/, '')}/web/projects`;
   let res: Response;
   try {
-    res = await fetch(endpoint, {
+    res = await http.request(endpoint, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${target.token}`,

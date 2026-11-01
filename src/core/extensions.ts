@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { createRequire } from 'module';
@@ -458,7 +458,7 @@ export const PACK_DIR_ENTRIES = ['pack.yaml', 'pack.yml', 'pack.cjs', 'pack.js',
 export function packDirEntry(dir: string): string | null {
   for (const name of PACK_DIR_ENTRIES) {
     const p = path.join(dir, name);
-    if (fs.existsSync(p)) return p;
+    if (files.exists(p)) return p;
   }
   return null;
 }
@@ -468,9 +468,9 @@ export function packDirEntry(dir: string): string | null {
  * when the directory holds no version subdirectory with a pack entry file.
  */
 function latestVersionDir(nameDir: string): string | null {
-  let versions: fs.Dirent[];
+  let versions: files.DirEntry[];
   try {
-    versions = fs.readdirSync(nameDir, { withFileTypes: true });
+    versions = files.listEntries(nameDir);
   } catch {
     return null;
   }
@@ -501,9 +501,9 @@ function latestVersionDir(nameDir: string): string | null {
  * would make the winner a property of the machine.
  */
 export function discoverPacks(dir: string): string[] {
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries = files.listEntries(dir);
   } catch {
     return [];
   }
@@ -576,7 +576,7 @@ export function resolvePackRef(ref: string, projectRoot: string): string {
   const pathLike = ref.startsWith('.') || path.isAbsolute(ref) || isYamlPath(ref);
   if (!pathLike) return ref;
   const resolved = path.resolve(projectRoot, ref);
-  if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+  if (files.exists(resolved) && files.stat(resolved).isDirectory()) {
     const entry = packDirEntry(resolved);
     if (!entry) throw new Error(`directory pack has no entry file (${PACK_DIR_ENTRIES.join(' | ')})`);
     return entry;
@@ -1009,10 +1009,10 @@ function verifyIntegrity(
  */
 function bundlesSingleFile(bundleDir: string, storePath: string): boolean {
   try {
-    if (!fs.statSync(storePath).isFile()) return false;
+    if (!files.stat(storePath).isFile()) return false;
     const entry = packDirEntry(bundleDir);
-    if (!entry || fs.readdirSync(bundleDir).length !== 1) return false;
-    return fs.readFileSync(entry).equals(fs.readFileSync(storePath));
+    if (!entry || files.list(bundleDir).length !== 1) return false;
+    return files.readBytes(entry).equals(files.readBytes(storePath));
   } catch {
     return false;
   }
@@ -1051,9 +1051,9 @@ function findBundledPack(projectRoot: string, selection: PackSelection): string 
   }
   if (packDirEntry(base)) return base;
   // Unpinned: take the newest bundled version.
-  let versions: fs.Dirent[];
+  let versions: files.DirEntry[];
   try {
-    versions = fs.readdirSync(base, { withFileTypes: true });
+    versions = files.listEntries(base);
   } catch {
     return null;
   }

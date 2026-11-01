@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { createRequire } from 'module';
 import { createHash } from 'crypto';
@@ -355,8 +355,8 @@ function compilerFrom(base: string, requireBelow7: boolean): TsModule | null {
   let key: string;
   let major = Number.NaN;
   try {
-    const stat = fs.statSync(manifest);
-    const version = String((JSON.parse(fs.readFileSync(manifest, 'utf8')) as { version?: unknown }).version ?? '');
+    const stat = ioFiles.stat(manifest);
+    const version = String((JSON.parse(ioFiles.readText(manifest)) as { version?: unknown }).version ?? '');
     major = Number.parseInt(version, 10);
     key = `${version}|${stat.mtimeMs}|${stat.size}`;
   } catch {
@@ -2826,7 +2826,7 @@ function resolveRelativeModule(fromFile: string, specifier: string): string | nu
   ];
   for (const c of candidates) {
     try {
-      if (fs.statSync(c).isFile()) return c;
+      if (ioFiles.stat(c).isFile()) return c;
     } catch { /* not this candidate */ }
   }
   return null;
@@ -2851,7 +2851,7 @@ function reexportTarget(
   let targetFacts = exactCache.get(target);
   if (targetFacts === undefined) {
     try {
-      targetFacts = walkExact(ts, fs.readFileSync(target, 'utf8'), target);
+      targetFacts = walkExact(ts, ioFiles.readText(target), target);
     } catch {
       targetFacts = null;
     }
@@ -3008,7 +3008,7 @@ function isOwnFile(projectRoot: string, absolute: string): boolean {
 
 function isFile(absolute: string): boolean {
   try {
-    return fs.statSync(absolute).isFile();
+    return ioFiles.stat(absolute).isFile();
   } catch {
     return false;
   }
@@ -3018,7 +3018,7 @@ function isFile(absolute: string): boolean {
 function readJsonFile(file: string, ts: TsModule | null): unknown {
   let text: string;
   try {
-    text = fs.readFileSync(file, 'utf8');
+    text = ioFiles.readText(file);
   } catch {
     return undefined;
   }
@@ -3128,9 +3128,9 @@ function readLocalPackages(projectRoot: string): Map<string, string> {
     if (key.endsWith('/*')) {
       const base = path.resolve(projectRoot, key.slice(0, -2));
       if (base.includes('*') || !isOwnFile(projectRoot, base)) continue;
-      let children: fs.Dirent[];
+      let children: ioFiles.DirEntry[];
       try {
-        children = fs.readdirSync(base, { withFileTypes: true });
+        children = ioFiles.listEntries(base);
       } catch {
         continue;
       }
@@ -3222,9 +3222,9 @@ function walkDeclaredRoots(
   };
 
   const descend = (dir: string): void => {
-    let entries: fs.Dirent[];
+    let entries: ioFiles.DirEntry[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = ioFiles.listEntries(dir);
     } catch {
       return; // an unreadable directory contributes nothing, and never aborts the run
     }
@@ -3246,9 +3246,9 @@ function walkDeclaredRoots(
     const absolute = path.resolve(projectRoot, key);
     if (path.relative(projectRoot, absolute).startsWith('..')) continue;
     if (isExcluded(key)) continue;
-    let stat: fs.Stats;
+    let stat: ioFiles.FileStat;
     try {
-      stat = fs.statSync(absolute);
+      stat = ioFiles.stat(absolute);
     } catch {
       continue; // a root that does not exist walks nothing
     }
@@ -3346,7 +3346,7 @@ function decoratorMetadataApplies(ts: TsModule, file: string, projectRoot: strin
   }
   if (configFile === null) return true;
   let mtimeMs = 0;
-  try { mtimeMs = fs.statSync(configFile).mtimeMs; } catch { return true; }
+  try { mtimeMs = ioFiles.stat(configFile).mtimeMs; } catch { return true; }
   const cached = decoratorMetadataByConfig.get(configFile);
   if (cached && cached.mtimeMs === mtimeMs) return cached.applies;
   let applies = true;
@@ -4524,7 +4524,7 @@ class ExistingSourceFiles extends Set<string> {
     if (path.isAbsolute(key) || path.normalize(key).split(path.sep)[0] === '..') return false;
     const absolute = path.resolve(this.projectRoot, key);
     if (path.relative(this.projectRoot, absolute).startsWith('..')) return false;
-    try { return fs.statSync(absolute).isFile(); } catch { return false; }
+    try { return ioFiles.stat(absolute).isFile(); } catch { return false; }
   }
 }
 
@@ -4546,7 +4546,7 @@ function importChain(seeds: readonly string[], projectRoot: string): string[] {
       const patterns = language ? LANGUAGE_PATTERNS[language] : undefined;
       if (!patterns || !existing.has(file)) continue;
       let text: string;
-      try { text = fs.readFileSync(path.resolve(projectRoot, file), 'utf8'); } catch { continue; }
+      try { text = ioFiles.readText(path.resolve(projectRoot, file)); } catch { continue; }
       if (text.length > PATTERN_ANALYSIS_MAX_BYTES) continue;
       const stripped = stripComments(text, patterns);
       for (const re of patterns.imports) {
@@ -4593,7 +4593,7 @@ export function fingerprintSources(
       continue;
     }
     try {
-      const stat = fs.statSync(absolute);
+      const stat = ioFiles.stat(absolute);
       entries.set(key, stat.isFile() ? `${stat.size}:${stat.mtimeMs}` : 'missing');
     } catch {
       entries.set(key, 'missing');
@@ -4673,12 +4673,12 @@ export function buildCodeModel(
 
     let buffer: Buffer;
     try {
-      const stat = fs.statSync(absolute);
+      const stat = ioFiles.stat(absolute);
       if (!stat.isFile()) {
         files.push({ path: sourcePath, status: 'missing', ...empty });
         continue;
       }
-      buffer = fs.readFileSync(absolute);
+      buffer = ioFiles.readBytes(absolute);
     } catch {
       files.push({ path: sourcePath, status: 'missing', ...empty });
       continue;
@@ -4886,9 +4886,9 @@ function outsideOf(
   let read = 0;
   const descend = (dir: string): void => {
     if (read >= OUTSIDE_MAX_FILES) return;
-    let entries: fs.Dirent[];
+    let entries: ioFiles.DirEntry[];
     try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
+      entries = ioFiles.listEntries(dir);
     } catch {
       return;
     }
@@ -4905,8 +4905,8 @@ function outsideOf(
       const language = languageOfSourcePath(key);
       if (!language || analyzed.has(key)) continue;
       try {
-        if (fs.statSync(child).size > OUTSIDE_MAX_BYTES) continue;
-        const buffer = fs.readFileSync(child);
+        if (ioFiles.stat(child).size > OUTSIDE_MAX_BYTES) continue;
+        const buffer = ioFiles.readBytes(child);
         if (looksBinary(buffer)) continue;
         read++;
         const patterns = LANGUAGE_PATTERNS[language];
@@ -5083,7 +5083,7 @@ function readTestFiles(testRoots: readonly string[], projectRoot: string): TestF
   for (const key of walkDeclaredRoots(testRoots, [], projectRoot)) {
     let text: string;
     try {
-      const buffer = fs.readFileSync(path.resolve(projectRoot, key));
+      const buffer = ioFiles.readBytes(path.resolve(projectRoot, key));
       if (looksBinary(buffer)) continue;
       text = buffer.toString('utf8');
     } catch {
@@ -5122,7 +5122,7 @@ function reexportReader(): (file: string) => ModuleReexports {
     if (cached) return cached;
     const found: ModuleReexports = { named: [], stars: [] };
     try {
-      const code = stripComments(fs.readFileSync(file, 'utf8'), JS_PATTERNS);
+      const code = stripComments(ioFiles.readText(file), JS_PATTERNS);
       for (const m of code.matchAll(NAMED_REEXPORT_RE)) {
         for (const piece of m[1].split(',')) {
           const sides = piece.replace(/^\s*type\s+/, '').split(/\s+as\s+/).map((s) => s.trim());

@@ -9,7 +9,9 @@ description: >-
   type from that subsystem's export table, optionally renamed with `as` — `export { x as y } from
   './s'`. `from` alone re-exports everything that subsystem exports (a wildcard). Own items and
   re-exports mix freely in one table. A re-export is a name, not a licence: another subsystem still
-  depends on the owning subsystem's published component.
+  depends on the owning subsystem's published component. An own Adapter item may be published as
+  shared: a generic I/O layer (files, processes, outbound HTTP) every subsystem calls directly,
+  instead of each reaching it through a Portal.
 fields:
   - name: type
     type: PublicInterfaceType
@@ -66,6 +68,19 @@ fields:
       What consumers do with the entry: call it (the default) or implement it (an extension point;
       an Adapter may back it, EXPORT_UNCONSUMABLE otherwise)
     optional: true
+  - name: shared
+    type: bool
+    description: >-
+      An own Adapter item published as shared: any component of any subsystem of this project may
+      depend on the Adapter directly — no client Adapter, no trustedLink, no Portal in front — and
+      the stereotype matrix judges that edge as it judges an edge inside one subsystem (a Portal
+      never depends on an Adapter; pure logic never does). `consumers` still restricts who may. A
+      shared Adapter is generic I/O, deployment-neutral because each deployable runs its own copy
+      in-process: it holds no state, depends only on pure Orchestrators and other shared Adapters,
+      and no pattern owns it (public-surface-shared refuses otherwise). It reaches this project's
+      subsystems only: another project calls a library, an InProcess Portal. Read on an own
+      component item only.
+    optional: true
 methods:
   - name: isOwnComponentItem
     signature: 'isOwnComponentItem(): boolean'
@@ -77,4 +92,4 @@ methods:
     symbol: isOwnComponentEntry
 sourcePath: src/models/specs.ts
 createdAt: '2026-09-19T22:58:35.555Z'
-updatedAt: '2026-10-18T19:09:07.685Z'
+updatedAt: '2026-10-31T21:55:06.071Z'

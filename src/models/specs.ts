@@ -376,6 +376,12 @@ export const PublicInterfaceSchema = z.object({
   consumers: z.array(SpecIdSchema).optional(),
   /** What consumers do with the entry: call it (the default) or implement it (an extension point an Adapter may back). */
   role: ExportRoleSchema.optional(),
+  /**
+   * An own Adapter item published as shared: any component of any subsystem of
+   * this project may depend on it directly, with no client Adapter, trustedLink
+   * or Portal in front. Read on an own component item only.
+   */
+  shared: z.boolean().optional(),
 }).refine(pi => pi.from !== undefined || pi.typeDef !== undefined || pi.details !== undefined, {
   message: 'An own component entry states its `details`; only a re-export (`from`) or a type export (`typeDef`) may leave them out. Its export kind is derived from the backing Portal\'s transport, so `type` is no longer authored.',
   path: ['details'],

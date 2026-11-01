@@ -1,9 +1,8 @@
-import * as https from 'https';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { execSync } from 'child_process';
+import { http, processes } from '../io/index.js';
 import { logger } from '../utils/logger.js';
 import { WAIRON_VERSION, GITHUB_REPO } from '../config/defaults.js';
 import {
@@ -167,10 +166,10 @@ export async function runUpdate(options: UpdateOptions = {}): Promise<void> {
     try {
       await downloadFile(checksumAsset.browser_download_url, tmpChecksum);
       verifyChecksum(tmpFile, tmpChecksum, assetName);
-      fs.unlinkSync(tmpChecksum);
+      files.removeFile(tmpChecksum);
     } catch (err) {
       logger.error(`Checksum verification failed: ${(err as Error).message}`);
-      try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+      try { files.removeFile(tmpFile); } catch { /* ignore */ }
       process.exit(1);
     }
   } else {
@@ -302,37 +301,25 @@ export function releaseChannelLabel(tag: string): string {
 // GitHub API
 // ---------------------------------------------------------------------------
 
-function fetchReleases(repo: string): Promise<GithubRelease[]> {
-  return new Promise((resolve, reject) => {
-    // 100 (the GitHub maximum) rather than a page that a run of pre-releases
-    // can fill: `dev` cuts a build per merge, so a page of 20 can hold nothing
-    // but -dev.N and leave a stable install seeing no eligible release at all.
-    const url = `https://api.github.com/repos/${repo}/releases?per_page=100`;
-    const options = {
-      headers: {
-        'User-Agent': `wairon/${WAIRON_VERSION}`,
-        'Accept': 'application/vnd.github+json',
-      },
-    };
+async function fetchReleases(repo: string): Promise<GithubRelease[]> {
+  // 100 (the GitHub maximum) rather than a page that a run of pre-releases
+  // can fill: `dev` cuts a build per merge, so a page of 20 can hold nothing
+  // but -dev.N and leave a stable install seeing no eligible release at all.
+  const url = `https://api.github.com/repos/${repo}/releases?per_page=100`;
+  const headers = {
+    'User-Agent': `wairon/${WAIRON_VERSION}`,
+    'Accept': 'application/vnd.github+json',
+  };
 
-    https.get(url, { ...options, agent: false }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        res.destroy();
-        if (res.statusCode !== 200) {
-          reject(new Error(`GitHub API returned ${res.statusCode}: ${data.slice(0, 200)}`));
-          return;
-        }
-        try {
-          resolve(JSON.parse(data) as GithubRelease[]);
-        } catch {
-          reject(new Error('Failed to parse GitHub API response'));
-        }
-      });
-      res.on('error', reject);
-    }).on('error', reject);
-  });
+  const { status, body } = await http.getText(url, headers);
+  if (status !== 200) {
+    throw new Error(`GitHub API returned ${status}: ${body.slice(0, 200)}`);
+  }
+  try {
+    return JSON.parse(body) as GithubRelease[];
+  } catch {
+    throw new Error('Failed to parse GitHub API response');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -351,11 +338,11 @@ function fetchReleases(repo: string): Promise<GithubRelease[]> {
  *   <hex-hash>  <filename>
  */
 function verifyChecksum(filePath: string, checksumFile: string, expectedFilename: string): void {
-  const checksumContent = fs.readFileSync(checksumFile, 'utf-8').trim();
+  const checksumContent = files.readText(checksumFile).trim();
   // Handle both "hash  filename" and bare "hash" formats
   const expectedHash = checksumContent.split(/\s+/)[0].toLowerCase();
 
-  const fileBuffer = fs.readFileSync(filePath);
+  const fileBuffer = files.readBytes(filePath);
   const actualHash = crypto.createHash('sha256').update(fileBuffer).digest('hex').toLowerCase();
 
   if (actualHash !== expectedHash) {
@@ -402,24 +389,24 @@ function installBinary(tmpFile: string, destPath: string): void {
   const isZip = tmpFile.endsWith('.zip');
   const extractDir = path.join(os.tmpdir(), 'wairon-extract');
 
-  if (fs.existsSync(extractDir)) fs.rmSync(extractDir, { recursive: true });
-  fs.mkdirSync(extractDir, { recursive: true });
+  if (files.exists(extractDir)) files.removeExisting(extractDir, { recursive: true });
+  files.ensureDir(extractDir);
 
   if (isZip) {
     // Use ['ignore', 'pipe', 'pipe'] — piping stdin into PowerShell causes
     // "Input redirection is not supported" on Windows PowerShell 5.x.
-    execSync(
+    processes.runShell(
       `powershell -NoProfile -NonInteractive -Command "Expand-Archive -Path '${tmpFile}' -DestinationPath '${extractDir}' -Force"`,
       { stdio: ['ignore', 'pipe', 'pipe'] },
     );
   } else {
-    execSync(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
+    processes.runShell(`tar -xzf "${tmpFile}" -C "${extractDir}"`, { stdio: ['ignore', 'pipe', 'pipe'] });
   }
 
   const binaryName = platform === 'win32' ? 'wairon.exe' : 'wairon';
   const extractedBinary = path.join(extractDir, binaryName);
 
-  if (!fs.existsSync(extractedBinary)) {
+  if (!files.exists(extractedBinary)) {
     throw new Error(`Extracted binary not found at ${extractedBinary}`);
   }
 
@@ -438,13 +425,13 @@ function installBinary(tmpFile: string, destPath: string): void {
     }
   } else {
     const tmpDest = destPath + '.new';
-    fs.copyFileSync(extractedBinary, tmpDest);
-    fs.chmodSync(tmpDest, 0o755);
-    fs.renameSync(tmpDest, destPath);
+    files.copyFile(extractedBinary, tmpDest);
+    files.chmod(tmpDest, 0o755);
+    files.rename(tmpDest, destPath);
   }
 
-  try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-  try { fs.rmSync(extractDir, { recursive: true }); } catch { /* ignore */ }
+  try { files.removeFile(tmpFile); } catch { /* ignore */ }
+  try { files.removeExisting(extractDir, { recursive: true }); } catch { /* ignore */ }
 }
 
 /**
@@ -463,39 +450,39 @@ export function swapRunningBinary(newBinary: string, destPath: string): void {
   // what follows is two renames on one volume.
   const staged = `${destPath}.new`;
   try {
-    fs.copyFileSync(newBinary, staged);
+    files.copyFile(newBinary, staged);
   } catch (err) {
-    try { fs.rmSync(staged, { force: true }); } catch { /* nothing was written */ }
+    try { files.removeFileIfPresent(staged); } catch { /* nothing was written */ }
     throw err;
   }
   const aside = freeAsideName(destPath);
   try {
-    fs.renameSync(destPath, aside);
+    files.rename(destPath, aside);
   } catch (err) {
-    try { fs.rmSync(staged, { force: true }); } catch { /* swept by a later update */ }
+    try { files.removeFileIfPresent(staged); } catch { /* swept by a later update */ }
     throw err;
   }
   try {
-    fs.renameSync(staged, destPath);
+    files.rename(staged, destPath);
   } catch (err) {
     // The new build could not take the slot: the running one goes back, so the
     // install is never left with no executable at all, and the caller reports
     // the rename's own error.
-    fs.renameSync(aside, destPath);
-    try { fs.rmSync(staged, { force: true }); } catch { /* swept by a later update */ }
+    files.rename(aside, destPath);
+    try { files.removeFileIfPresent(staged); } catch { /* swept by a later update */ }
     throw err;
   }
   // Gone once no process runs from it; until then the next start's sweep retries.
-  try { fs.unlinkSync(aside); } catch { /* removed by a later sweep */ }
+  try { files.removeFile(aside); } catch { /* removed by a later sweep */ }
 }
 
 /** A name beside the executable no leftover holds: `.old`, else `.old-<time>`, counted on past one taken in the same millisecond. */
 function freeAsideName(destPath: string): string {
-  if (!fs.existsSync(`${destPath}.old`)) return `${destPath}.old`;
+  if (!files.exists(`${destPath}.old`)) return `${destPath}.old`;
   const stamp = Date.now();
   for (let n = 0; ; n++) {
     const candidate = n === 0 ? `${destPath}.old-${stamp}` : `${destPath}.old-${stamp}-${n}`;
-    if (!fs.existsSync(candidate)) return candidate;
+    if (!files.exists(candidate)) return candidate;
   }
 }
 
@@ -512,13 +499,13 @@ export function cleanStaleBinary(executable?: string): void {
   const base = path.basename(exe);
   let names: string[];
   try {
-    names = fs.readdirSync(dir);
+    names = files.list(dir);
   } catch {
     return;
   }
   for (const name of names) {
     if (name !== `${base}.old` && !name.startsWith(`${base}.old-`)) continue;
-    try { fs.unlinkSync(path.join(dir, name)); } catch { /* still running — a later sweep */ }
+    try { files.removeFile(path.join(dir, name)); } catch { /* still running — a later sweep */ }
   }
 }
 

@@ -14,12 +14,15 @@ methods:
       file exists; a malformed lock propagates the adapter's error.
     calls:
       - externals_file_adapter.readLock
+      - files_adapter.exists
   - name: writeLock
     narrative: []
     detail: intent
     intent: Writes the lock through the file adapter; a write failure propagates.
     calls:
       - externals_file_adapter.writeLock
+      - files_adapter.exists
+      - files_adapter.removeFile
   - name: readSnapshot
     narrative: []
     detail: intent
@@ -28,6 +31,7 @@ methods:
       stored.
     calls:
       - externals_file_adapter.readSnapshot
+      - files_adapter.exists
   - name: writeSnapshot
     narrative: []
     detail: intent
@@ -48,6 +52,7 @@ methods:
       copy); a missing or malformed file answers null.
     calls:
       - externals_file_adapter.readExcerpt
+      - files_adapter.exists
   - name: writeExcerpt
     narrative: []
     detail: intent
@@ -56,4 +61,4 @@ methods:
       - externals_file_adapter.writeExcerpt
 status: complete
 createdAt: '2026-09-26T17:47:54.596Z'
-updatedAt: '2026-10-02T20:23:29.083Z'
+updatedAt: '2026-10-31T23:34:57.434Z'

@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { processes } from '../io/index.js';
 import * as os from 'os';
 import type { ApproverIdentity } from '../models/lock.js';
 
@@ -39,8 +39,7 @@ import type { ApproverIdentity } from '../models/lock.js';
 /** Read one git config value, or undefined when git is absent/unset/not a repo. */
 function gitConfig(key: string): string | undefined {
   try {
-    const value = execFileSync('git', ['config', '--get', key], {
-      encoding: 'utf8',
+    const value = processes.run('git', ['config', '--get', key], {
       stdio: ['ignore', 'pipe', 'ignore'],
       env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     }).trim();

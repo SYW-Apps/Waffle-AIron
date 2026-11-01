@@ -22,6 +22,11 @@ methods:
           — the passed target types, else the configured enabled targets.
         type: local
       - stepNumber: 3
+        description: Is the built-in skill template present? A missing one is skipped
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 4
         description: >-
           Write each built-in SDD skill into every active target's skills directory as
           <name>/SKILL.md, skipping targets that have no skills directory. The file keeps its line
@@ -29,19 +34,24 @@ methods:
           and one that is unchanged is not rewritten, so a lock or generate that re-exports the
           skills never turns them into whole-file diffs.
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: Load the governing extension packs to obtain their provided skills.
         type: call
         targetComponent: skills_core_adapter
         targetMethod: loadProjectExtensions
-      - stepNumber: 5
+      - stepNumber: 6
+        description: Read each pack skill's SKILL.md source (skipping one whose file is absent)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 7
         description: >-
           For each pack skill whose targets include an active target, write its SKILL.md (resolved
           relative to the pack directory) into that target's skills directory namespaced as
           <pack-id>-<skill-id>, keeping the installed file's line endings the same way; the built-in
           sdd-* names are reserved so a pack cannot shadow them.
         type: local
-      - stepNumber: 6
+      - stepNumber: 8
         description: Return the export result (destinations, file count, skipped targets).
         type: return
         outcome: skills installed
@@ -61,7 +71,9 @@ methods:
       different is stale, identical is ok. Reads only; never writes a file.
     calls:
       - skills_core_adapter.loadProjectExtensions
+      - files_adapter.exists
+      - files_adapter.readText
 detail: calls-only
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-05T23:38:16.240Z'
+updatedAt: '2026-10-31T23:36:21.537Z'

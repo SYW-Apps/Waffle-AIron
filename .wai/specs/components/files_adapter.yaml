@@ -1,0 +1,13 @@
+id: files_adapter
+name: Files Adapter
+description: >-
+  wairon's one place for the file system: read, write, list, copy, move and remove files and
+  folders, and the descriptor calls the lock and durable-write code makes. One call per action, each
+  the node fs call it wraps, so a library or runtime change is made here once.
+subsystem: sdd_io
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-31T23:15:02.408Z'
+updatedAt: '2026-10-31T23:50:39.363Z'

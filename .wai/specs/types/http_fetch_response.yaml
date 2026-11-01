@@ -1,0 +1,18 @@
+kind: value-object
+id: http_fetch_response
+name: HttpFetchResponse
+description: 'What a fetch-style request answers: the platform''s Response, its body read by the caller.'
+subsystem: sdd_io
+fields:
+  - name: status
+    type: int
+    description: The HTTP status code
+    optional: false
+  - name: ok
+    type: bool
+    description: Whether the status is in the 2xx range
+    optional: false
+methods: []
+sourcePath: src/io/http.ts
+createdAt: '2026-10-31T23:14:58.837Z'
+updatedAt: '2026-10-31T23:15:00.044Z'

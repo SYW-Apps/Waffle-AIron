@@ -1,0 +1,30 @@
+kind: value-object
+id: run_options
+name: RunOptions
+description: What running a program takes; the names are child_process's, passed through.
+subsystem: sdd_io
+fields:
+  - name: cwd
+    type: string
+    description: The folder the program runs in
+    optional: true
+  - name: env
+    type: map<string, string?>
+    description: The environment the program sees
+    optional: true
+  - name: timeout
+    type: int
+    description: Milliseconds before the program is stopped
+    optional: true
+  - name: stdio
+    type: string
+    description: How the program's streams are connected
+    optional: true
+  - name: windowsHide
+    type: bool
+    description: Hide the console window on Windows
+    optional: true
+methods: []
+sourcePath: src/io/process.ts
+createdAt: '2026-10-31T23:14:48.618Z'
+updatedAt: '2026-10-31T23:14:49.838Z'

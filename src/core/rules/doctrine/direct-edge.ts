@@ -8,7 +8,7 @@ import { bridgeMissing, libraryOf, verbReachable } from './library-calls.js';
 import { logicClassEdgeFindings } from './logic-dependency-class.js';
 import { visibilityEdgeFinding } from './member-visibility.js';
 import { portalShortcutMethod } from './portal-write-shortcut.js';
-import { crossSubsystemEdgeFindings } from './subsystem-boundary-dependencies.js';
+import { crossSubsystemEdgeFindings, unlistedConsumerFinding } from './subsystem-boundary-dependencies.js';
 import { sharedDataWrite } from './supervisor-shared-data.js';
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,8 @@ function lookupsOf(ctx: RuleContext): Map<string, string[]> {
  *  - a boundary crossing: the client-Adapter-or-trustedLink shape, the
  *    published front door and its listed consumers (subsystem-boundary-
  *    dependencies);
+ *  - an edge into another subsystem's shared Adapter: only the listed
+ *    consumers of that rule, then the matrix as for an internal edge;
  *  - an intra-subsystem edge the governing pack profile does not license:
  *    the entry-point, data-layer and dependency-class matrix
  *    (entrypoint-dependencies, data-block-dependencies,
@@ -71,12 +73,21 @@ export function directEdgeRefusals(ctx: RuleContext, caller: ComponentSpec, targ
     if (library && method !== undefined && !verbReachable(caller, library.effectOf(method))) codes.push('LIBRARY_CALL_IMPURE');
   } else if (edge.reach === 'cross-subsystem') {
     codes.push(...crossSubsystemEdgeFindings(ctx, caller, target).map(f => f.code));
-  } else if (!edge.licensed) {
-    codes.push(
-      ...entrypointEdgeFindings(ctx, caller, target, lookupsOf(ctx)).map(f => f.code),
-      ...dataBlockEdgeFindings(ctx, caller, target).map(f => f.code),
-      ...logicClassEdgeFindings(caller, target).map(f => f.code),
-    );
+  } else {
+    // A shared edge (another subsystem's shared Adapter) adds only the
+    // listed-consumers judgement of the boundary rule; an internal or shared
+    // edge the pack profile does not license adds the matrix.
+    if (edge.reach === 'shared') {
+      const unlisted = unlistedConsumerFinding(ctx, caller, target);
+      if (unlisted) codes.push(unlisted.code);
+    }
+    if (!edge.licensed) {
+      codes.push(
+        ...entrypointEdgeFindings(ctx, caller, target, lookupsOf(ctx)).map(f => f.code),
+        ...dataBlockEdgeFindings(ctx, caller, target).map(f => f.code),
+        ...logicClassEdgeFindings(caller, target).map(f => f.code),
+      );
+    }
   }
 
   const hidden = visibilityEdgeFinding(ctx, ctx.ownershipIndex(), caller, target.id);

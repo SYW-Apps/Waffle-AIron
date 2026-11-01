@@ -2,7 +2,7 @@ import * as http from 'http';
 import * as memberRegistration from './members.js';
 import type { IncomingMessage, ServerResponse } from 'http';
 import type { AddressInfo } from 'net';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { handleMcpRequest, handleViewDiagram } from './request.js';
 import { sendJson, bearerToken, sessionCookieValue, setSessionCookie } from './httpio.js';
@@ -200,6 +200,16 @@ const WEB_MUTATION_PATHS = new Set<string>([
   '/web/projects/destroy',
 ]);
 
+/** host_server.isReady — whether the instance can serve requests: its data directory is writable. */
+export function isReady(config: HostConfig): boolean {
+  try {
+    files.checkWritable(config.dataDir);
+    return true;
+  } catch {
+    return false; // not writable
+  }
+}
+
 export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (req.method === 'GET' && url.pathname === '/healthz') {
@@ -207,13 +217,7 @@ export function routeData(cfg: HostConfig, req: IncomingMessage, res: ServerResp
     return;
   }
   if (req.method === 'GET' && url.pathname === '/readyz') {
-    let ready = false;
-    try {
-      fs.accessSync(cfg.dataDir, fs.constants.W_OK);
-      ready = true;
-    } catch {
-      /* not writable */
-    }
+    const ready = isReady(cfg);
     sendJson(res, ready ? 200 : 503, { ready });
     return;
   }

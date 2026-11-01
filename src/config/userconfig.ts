@@ -1,6 +1,6 @@
 import * as os from 'os';
 import * as path from 'path';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import { withFileLock } from '../utils/file-lock.js';
 import { replaceFile } from '../utils/fs.js';
 
@@ -41,8 +41,8 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 
 export function loadUserConfig(): UserConfig {
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf-8')) as UserConfig;
+    if (files.exists(CONFIG_FILE)) {
+      return JSON.parse(files.readText(CONFIG_FILE)) as UserConfig;
     }
   } catch {
     // Corrupt or unreadable — return defaults
@@ -52,8 +52,8 @@ export function loadUserConfig(): UserConfig {
 
 /** The settings folder, made on the first write: the lock files sit beside the settings in it. */
 function ensureConfigDir(): void {
-  if (!fs.existsSync(CONFIG_DIR)) {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  if (!files.exists(CONFIG_DIR)) {
+    files.ensureDir(CONFIG_DIR);
   }
 }
 

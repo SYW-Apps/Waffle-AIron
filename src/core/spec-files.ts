@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { installTreeFileGuard, listFilesRecursive, removeFile } from '../utils/fs.js';
 import { acquireFileLock, inspectFileLock, releaseFileLock, type FileLockHandle, type FileLockLimits, type FileLockOptions } from '../utils/file-lock.js';
@@ -69,7 +69,7 @@ export function listSpecFiles(specsDir: string): string[] {
  * store is the one component that must never read project.yaml to find it.
  */
 export function removeSpecFile(specPath: string, specsRoot: string): boolean {
-  if (!fs.existsSync(specPath)) return false;
+  if (!files.exists(specPath)) return false;
   removeFile(specPath);
   pruneEmptyDirs(path.dirname(specPath), path.resolve(specsRoot));
   return true;
@@ -147,7 +147,7 @@ function realFolder(dir: string): string {
   if (known !== undefined) return known;
   let real: string;
   try {
-    real = fs.realpathSync.native(dir);
+    real = files.realPathNative(dir);
   } catch {
     const parent = path.dirname(dir);
     return parent === dir ? dir : path.join(realFolder(parent), path.basename(dir));
@@ -187,7 +187,7 @@ function treeLockOptions(key: string): FileLockOptions {
  */
 export function lockTree(root: string): void {
   const dir = path.join(root, '.wai');
-  if (!fs.existsSync(dir)) return;
+  if (!files.exists(dir)) return;
   const file = path.join(dir, LOCK_FILE, LOCK_BASE);
   const key = normalized(path.join(dir, LOCK_FILE));
   const held = lockHolds.get(key) ?? 0;
@@ -211,24 +211,24 @@ function claimLockFolder(folder: string, key: string): void {
   const limits = SPEC_TREE_LOCK_LIMITS;
   const deadline = Date.now() + limits.waitMs;
   for (;;) {
-    let stat: fs.Stats | null = null;
-    try { stat = fs.lstatSync(folder); } catch { /* absent */ }
+    let stat: files.FileStat | null = null;
+    try { stat = files.lstat(folder); } catch { /* absent */ }
     if (stat?.isDirectory()) return;
     if (stat === null) {
-      try { fs.mkdirSync(folder, { recursive: true }); } catch (e) {
+      try { files.ensureDir(folder); } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       }
       continue;
     }
     const age = Date.now() - stat.mtimeMs;
     let holder: LockHolder | null = null;
-    try { holder = parseHolder(fs.readFileSync(folder, 'utf8')); } catch { /* unreadable */ }
+    try { holder = parseHolder(files.readText(folder)); } catch { /* unreadable */ }
     const here = currentHolder(Date.now());
     const reclaim = age > limits.staleMs
       || (holder === null ? age > limits.graceMs : holderIsLocal(holder, here) && holder.pid !== here.pid && !pidAlive(holder.pid))
       || (holder !== null && holder.pid === here.pid && (lockHolds.get(key) ?? 0) === 0);
     if (reclaim) {
-      try { fs.unlinkSync(folder); } catch { /* raced or busy: look again */ }
+      try { files.removeFile(folder); } catch { /* raced or busy: look again */ }
     } else if (Date.now() > deadline) {
       throw (treeLockOptions(key).timeoutError as NonNullable<FileLockOptions['timeoutError']>)({
         file: path.join(folder, LOCK_BASE), lockFile: folder, waitMs: limits.waitMs, holder,
@@ -339,7 +339,7 @@ function assertUnchangedSinceRead(file: string): void {
   if (seen === undefined) return;
   let now: string;
   try {
-    now = digestOf(fs.readFileSync(file, 'utf8'));
+    now = digestOf(files.readText(file));
   } catch {
     return;
   }
@@ -399,8 +399,8 @@ installTreeFileGuard({
 function pruneEmptyDirs(dir: string, specsRoot: string): void {
   let at = dir;
   while (at !== specsRoot && at.startsWith(specsRoot)) {
-    if (!fs.existsSync(at) || fs.readdirSync(at).length > 0) return;
-    fs.rmdirSync(at);
+    if (!files.exists(at) || files.list(at).length > 0) return;
+    files.removeEmptyDir(at);
     at = path.dirname(at);
   }
 }

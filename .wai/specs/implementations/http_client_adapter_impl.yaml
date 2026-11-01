@@ -1,0 +1,29 @@
+id: http_client_adapter_impl
+name: HTTP Client Adapter Implementation
+description: >-
+  wairon's one place to call another server: a fetch-style request, a plain GET answering status and
+  body, and a download to a file. Inbound servers are Portals' transport, never here. A download
+  writes through the Files Adapter. Module functions in src/io/http.ts, reached through the io
+  barrel (src/io/index.ts).
+contract: ihttp_client_adapter
+sourcePath: src/io/http.ts
+methods:
+  - name: request
+    narrative: []
+    intent: >-
+      An outbound request with fetch semantics: the Response, whatever its status. Rejects when the
+      server cannot be reached.
+  - name: getText
+    narrative: []
+    intent: >-
+      GET a URL (http or https by its scheme), no redirects followed, and answer its status and
+      body. Rejects when the server cannot be reached.
+  - name: download
+    narrative: []
+    intent: Download `url` to `dest`, following one level of redirect at a time.
+    calls:
+      - files_adapter.openWriteStream
+      - files_adapter.removeFileLater
+status: draft
+createdAt: '2026-10-31T23:15:38.320Z'
+updatedAt: '2026-10-31T23:47:51.185Z'

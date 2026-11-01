@@ -334,6 +334,22 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     );
   }
 
+  // The Adapters a subsystem publishes as shared: an own entry that says
+  // shared whose component is an Adapter. Every one is in publicSet too;
+  // public-surface-shared judges the entries that name anything else.
+  const sharedSet = new Map<string, Set<string>>();
+  for (const sub of subsystems) {
+    sharedSet.set(
+      sub.id,
+      new Set(
+        sub.publicInterfaces
+          .filter(pi => isOwnComponentEntry(pi) && pi.shared === true)
+          .map(pi => pi.component)
+          .filter((c): c is string => !!c && componentMap.get(c)?.componentType === 'Adapter'),
+      ),
+    );
+  }
+
   const surfaceSnapshots = opts.surfaceSnapshots ?? [];
 
   const isSpecInScope = makeScopeFilter({ components, interfaces, implementations, types, scopeSubsystem });
@@ -1042,6 +1058,7 @@ export function buildRuleContext(opts: BuildContextOptions): RuleContext {
     componentIds,
     interfaceIds,
     publicSet,
+    sharedSet,
     interfacesByComponent,
     implementationsByContract,
     isComponentDraft,

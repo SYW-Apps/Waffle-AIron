@@ -7,9 +7,10 @@ description: >-
 subsystem: sdd_upgrade
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 previousIds:
   - release_notes_adapter
 status: complete
 createdAt: '2026-10-18T13:02:21.816Z'
-updatedAt: '2026-10-18T14:34:13.460Z'
+updatedAt: '2026-10-31T23:22:48.984Z'

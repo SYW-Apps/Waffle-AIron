@@ -111,6 +111,17 @@ methods:
         type: return
         outcome: initialized
     detail: full
+  - name: isReady
+    narrative:
+      - stepNumber: 1
+        description: Is the data directory writable?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: checkWritable
+      - stepNumber: 2
+        description: Answer ready when it is, not ready when the check throws
+        type: return
+        outcome: ready or not
 status: complete
 createdAt: '2026-07-04T12:54:36.977Z'
-updatedAt: '2026-10-19T22:11:53.593Z'
+updatedAt: '2026-10-31T23:46:11.135Z'

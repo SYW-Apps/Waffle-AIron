@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { z } from 'zod';
@@ -57,7 +57,7 @@ function builtinVariantsDir(): string {
     path.resolve(__dirname, '..', 'templates', 'variants'), // src/core & dist/cli
     path.resolve(__dirname, 'templates', 'variants'),       // dist (library entry)
   ];
-  return candidates.find((dir) => fs.existsSync(dir)) ?? candidates[0];
+  return candidates.find((dir) => files.exists(dir)) ?? candidates[0];
 }
 
 /** The project's own variants directory, .wai/variants/. */
@@ -67,9 +67,9 @@ function projectVariantsDir(): string {
 
 /** A directory's *.yaml files in name order; a missing or unreadable directory has none. */
 function variantFiles(dir: string): string[] {
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries = files.listEntries(dir);
   } catch {
     return [];
   }

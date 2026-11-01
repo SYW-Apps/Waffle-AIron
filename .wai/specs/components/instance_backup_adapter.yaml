@@ -4,9 +4,10 @@ description: Copies a hosting data directory whole, beside itself, before an upg
 subsystem: sdd_host
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 previousIds:
   - data_dir_backup_adapter
 status: complete
 createdAt: '2026-10-18T14:27:49.665Z'
-updatedAt: '2026-10-18T14:34:17.021Z'
+updatedAt: '2026-10-31T23:20:20.726Z'

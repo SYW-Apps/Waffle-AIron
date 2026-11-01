@@ -127,6 +127,10 @@ reported (`UNUSED_COMPONENT` / `UNUSED_METHOD`), with both remedies named.
   native library called from another language needs an `abi` (`c` or `wasm`)
   (`LANGUAGE_BRIDGE_MISSING`). Wrapping a volatile third-party API in an Adapter
   stays a good habit, never a rule.
+- **Shared Adapters.** A subsystem may publish an own Adapter as `shared: true`
+  (generic I/O: files, processes, outbound HTTP). Any subsystem of the project
+  depends on it directly; it holds no state and depends only on pure logic and
+  other shared Adapters.
 - **Extension points.** A producer exports a contract consumers implement with
   `role: implement`; the consumer's interface declares `implements: alias::name`.
 - **Networking is derived.** `wairon network flows | policy | diagram | check |

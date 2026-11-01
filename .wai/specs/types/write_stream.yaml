@@ -1,0 +1,14 @@
+kind: value-object
+id: write_stream
+name: WriteStream
+description: A stream that writes a file, as node fs answers it.
+subsystem: sdd_io
+fields:
+  - name: bytesWritten
+    type: int
+    description: How many bytes the stream has written so far
+    optional: false
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:45.171Z'
+updatedAt: '2026-10-31T23:14:46.293Z'

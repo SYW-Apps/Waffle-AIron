@@ -1,0 +1,22 @@
+id: sdd_io
+name: SDD I/O
+description: >-
+  wairon's generic I/O: the file system, child processes and outbound HTTP, each one call per
+  action. Its three Adapters are published as shared, so every subsystem calls them directly; they
+  hold no state and know nothing of wairon's domain, so a library or runtime change is made here
+  once.
+parentSystem: Waffle-AIron
+publicInterfaces:
+  - details: Generic file system I/O every subsystem calls directly.
+    component: files_adapter
+    shared: true
+  - details: Generic process I/O every subsystem calls directly.
+    component: process_adapter
+    shared: true
+  - details: Generic outbound HTTP every subsystem calls directly.
+    component: http_client_adapter
+    shared: true
+trustedLinks: []
+status: complete
+createdAt: '2026-10-31T23:14:22.614Z'
+updatedAt: '2026-10-31T23:50:35.591Z'

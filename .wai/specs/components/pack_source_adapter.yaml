@@ -9,7 +9,8 @@ description: >-
 subsystem: sdd_core
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-07-14T18:58:42.482Z'
-updatedAt: '2026-07-14T20:16:03.493Z'
+updatedAt: '2026-10-31T23:21:09.734Z'

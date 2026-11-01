@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
@@ -59,7 +59,7 @@ export function normalizeInstanceUrl(url: string): string {
 
 function readJson<T>(file: string): T | null {
   try {
-    const text = fs.readFileSync(file, 'utf8');
+    const text = files.readText(file);
     return text ? (JSON.parse(text) as T) : null;
   } catch {
     return null; // absent, unreadable, or malformed — all "nothing stored"
@@ -71,11 +71,11 @@ function readJson<T>(file: string): T | null {
  * a concurrent read never sees a half file and two writers never share a temp.
  */
 function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  files.ensureDir(path.dirname(file));
   replaceFile(file, JSON.stringify(value, null, 2) + '\n', mode);
   if (mode !== undefined) {
     try {
-      fs.chmodSync(file, mode);
+      files.chmod(file, mode);
     } catch {
       /* platforms without POSIX modes (Windows) — the rename already landed */
     }
@@ -90,7 +90,7 @@ function writeJsonAtomic(file: string, value: unknown, mode?: number): void {
  */
 function updateCredentials(change: (store: Record<string, string>) => Record<string, string> | null): void {
   const file = credentialsPath();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  files.ensureDir(path.dirname(file));
   withFileLock(file, () => {
     const current = readJsonForUpdate<unknown>(file, {});
     if (current === null || typeof current !== 'object' || Array.isArray(current)) {
@@ -124,7 +124,7 @@ export function writeBinding(root: string, binding: RemoteBinding): void {
 /** Detach a project root (idempotent). */
 export function clearBinding(root: string): void {
   try {
-    fs.rmSync(bindingPath(root), { force: true });
+    files.removeFileIfPresent(bindingPath(root));
   } catch {
     /* already gone */
   }
@@ -147,7 +147,7 @@ export function writeCredential(url: string, token: string): void {
  * revoke it on the instance; callers must say so plainly.
  */
 export function clearCredential(url: string): void {
-  if (!fs.existsSync(credentialsPath())) return;
+  if (!files.exists(credentialsPath())) return;
   updateCredentials((store) => {
     const key = normalizeInstanceUrl(url);
     if (!(key in store)) return null;

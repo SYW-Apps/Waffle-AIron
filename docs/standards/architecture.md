@@ -195,7 +195,12 @@ standard.
   external" — designed to be swappable for a network service — so a local client
   Adapter is its only reachable surface, and it depends on the **remote subsystem's
   Portal** (its front door), which dispatches inward. It still may not depend on the
-  remote subsystem's Orchestrators or Stores directly.
+  remote subsystem's Orchestrators or Stores directly. **Shared Adapter**: an
+  Adapter a subsystem publishes with `shared: true` (generic I/O: files,
+  processes, outbound HTTP) is the one exception to that hop — any subsystem of
+  the project may depend on it directly, judged by the matrix like an edge inside
+  one subsystem. It holds no state and depends only on pure logic and other shared
+  Adapters, and no pattern owns it.
 - The narrative `call` graph and the `dependsOn` graph must both be **DAGs** (no
   cycles), and every narrative `call` must target a method on a declared dependency.
 
@@ -693,6 +698,18 @@ may — a dependency from any other subsystem is `CROSS_SUBSYSTEM_UNLISTED_CONSU
 (an error). When several entries publish the same component, each naming
 consumers, the union of their lists is the whole set.
 
+An own entry for an **Adapter** may say `shared: true`: generic I/O (files,
+processes, outbound HTTP) that every subsystem of the project may depend on
+directly, with no client Adapter, `trustedLink` or Portal in front. The edge is
+judged by the stereotype matrix as an edge inside one subsystem is (a Portal never
+depends on an Adapter, pure logic never does), and `consumers` still restricts who
+may. A shared Adapter must be an Adapter (`PUBLIC_INTERFACE_SHARED_NOT_ADAPTER`),
+owned by no pattern or Supervisor (`SHARED_ADAPTER_OWNED`), and depend only on pure
+Orchestrators and other shared Adapters (`SHARED_ADAPTER_DEPENDENCY`), so it holds no
+state and each deployable runs its own copy in-process. Generic I/O is no
+responsibility, so the fan-out caps (`GOD_COMPONENT`, `EXCESSIVE_DEPENDENCIES`) do
+not count a dependency on a shared Adapter.
+
 ### Transports: how callers reach a Portal
 A Portal states its **`transport`**, one vocabulary shared with its endpoint
 bindings: **network** (`HTTP`, `gRPC`, `GraphQL`, `MessageBus`, and `Custom` as
@@ -768,7 +785,8 @@ the Adapter's place:
   `abi: wasm`, or a network Portal in front.
 
 Within one project nothing changes: a sibling subsystem's Portal is reached
-through a client Adapter or a `trustedLink`. Wrapping a volatile third-party
+through a client Adapter or a `trustedLink`; only an Adapter a subsystem publishes
+as shared (generic I/O) is depended on directly from any subsystem. Wrapping a volatile third-party
 API in an Adapter of your own — an anti-corruption layer that absorbs upstream
 contract changes — remains a recommended pattern; it is never enforced.
 

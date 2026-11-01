@@ -11,7 +11,7 @@ import {
   McpError,
   ErrorCode,
 } from '@modelcontextprotocol/sdk/types.js';
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { getProjectRoot, setProjectRoot } from '../utils/fs.js';
@@ -1629,7 +1629,7 @@ function standingRefusal(name: string): string | null {
   } catch {
     return null;
   }
-  const hasConfig = ['.wai', '.wairon'].some((dir) => fs.existsSync(path.join(root, dir, 'project.yaml')));
+  const hasConfig = ['.wai', '.wairon'].some((dir) => ioFiles.exists(path.join(root, dir, 'project.yaml')));
   if (!hasConfig) return null;
   const tree = treeStanding(root);
   if (tree.state === 'current') return null;
@@ -2186,6 +2186,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     from: z.string().optional().describe('Re-export source: another subsystem of this project. With neither component nor typeDef, the entry re-exports everything that subsystem exports (a wildcard)'),
     typeDef: z.string().optional().describe('A type exported as is: owned by this subsystem, or re-exported from `from`'),
     as: z.string().optional().describe('The public name; defaults to the narrowed interface, then the component or type id. Must fit [a-z0-9-_]+ (EXPORT_INVALID otherwise)'),
+    shared: z.boolean().optional().describe('An own Adapter item published as shared: any component of any subsystem of this project may depend on the Adapter directly — no client Adapter, trustedLink or Portal in front. Generic I/O only (public-surface-shared: an Adapter, owned by no pattern, depending only on pure Orchestrators and other shared Adapters)'),
   }).strict();
 
   const subsystemInput = {
@@ -2247,10 +2248,10 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
     },
   );
 
-  reg<{ subsystem: string; publicInterfaces: { role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string }[] }>(server,
+  reg<{ subsystem: string; publicInterfaces: { role?: 'call' | 'implement'; details?: string; component?: string; interface?: string; consumers?: string[]; from?: string; typeDef?: string; as?: string; shared?: boolean }[] }>(server,
     'sdd_set_public_interfaces',
     {
-      description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; details are optional on a re-export, which inherits its target\'s. The export kind is derived from the backing Portal\'s transport, so `type` is no longer authored; `role: implement` exports an extension point consumers implement. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
+      description: 'Set (replace) an existing subsystem\'s export table (its publicInterfaces). An OWN item binds details to the component (and optional interface) that realizes it, or exports a type the subsystem owns (typeDef). A RE-EXPORT names another subsystem of the project in `from` and one component (optionally narrowed with `interface`) or one typeDef from what it exports, optionally renamed with `as` — `from` alone re-exports everything it exports; details are optional on a re-export, which inherits its target\'s. An own Adapter item may say `shared: true` to publish the Adapter to every subsystem of the project. The export kind is derived from the backing Portal\'s transport, so `type` is no longer authored; `role: implement` exports an extension point consumers implement. Use this to backfill bindings once the subsystem\'s components exist — cross-subsystem dependencies may only target a component its owning subsystem publishes; a re-export is a name, not a licence. A replacement, not a merge: an entry left out is removed. An own entry\'s identity is its component and interface, a re-export\'s its source, item and name, so a list naming one identity twice is refused. Written through the authoring seam as one gated delta, and answered with the change report — every entry added, changed or removed, or that nothing changed — as structured content beside the sentence.',
       inputSchema: {
         subsystem: z.string().describe('The L1 subsystem id to update'),
         publicInterfaces: z.array(publicInterfaceItemInput).describe('The full replacement list of the subsystem\'s export table: own items and re-exports'),
@@ -2300,7 +2301,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         const dir = typeof source === 'string' && !/^[a-z][a-z0-9+.-]*:|^git@|#/i.test(source.trim()) ? path.resolve(root, source.trim()) : null;
         const relToRoot = dir === null ? null : path.relative(root, dir);
         const outside = dir !== null && relToRoot !== null && (relToRoot.startsWith('..') || path.isAbsolute(relToRoot));
-        const createdOutside = outside && !fs.existsSync(dir!);
+        const createdOutside = outside && !ioFiles.exists(dir!);
         // Step 2: create and declare via core; the answer states what was
         // created and, for a project, its packs.
         const creation = createMember(alias, source, description, as);
@@ -2310,7 +2311,7 @@ function createBareMcpServer(options: McpServerOptions = {}): McpServer {
         // Step 3: a project in a folder on disk is set up for its own sessions,
         // as `wairon member add` sets it up: without them a session opened there
         // has no tools to design it with.
-        const files = creation.as === 'project' && dir !== null && fs.existsSync(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
+        const files = creation.as === 'project' && dir !== null && ioFiles.exists(path.join(dir, '.wai', 'project.yaml')) ? scaffoldSessions(dir) : null;
         const sessions = files === null ? ''
           : files.some((f) => f.startsWith('not set up'))
             ? ` Its own sessions are ${files.join('; ')}.`
@@ -4171,6 +4172,15 @@ function advertiseHostedTools(server: McpServer, options: McpServerOptions): voi
 // ---------------------------------------------------------------------------
 
 /**
+ * mcp_server.holdsTree — whether a folder holds a spec tree: a .wai/ folder, or
+ * a v5 .wairon/ one that wairon upgrade moves. How the stdio server picks the
+ * folder it binds among the ones it is offered.
+ */
+export function holdsTree(dir: string): boolean {
+  return ioFiles.exists(path.join(dir, '.wai')) || ioFiles.exists(path.join(dir, '.wairon'));
+}
+
+/**
  * Scope the server to the client's actual workspace via MCP "roots". This is how
  * a server launched with an unrelated cwd (e.g. a single global Antigravity
  * registration) attaches to the right project — and it stays correct per client
@@ -4198,7 +4208,7 @@ async function scopeToClientWorkspace(server: McpServer): Promise<void> {
   for (const r of roots) {
     let dir: string | null = null;
     try { dir = r.uri.startsWith('file:') ? fileURLToPath(r.uri) : r.uri; } catch { dir = null; }
-    if (dir && (fs.existsSync(path.join(dir, '.wai')) || fs.existsSync(path.join(dir, '.wairon')))) {
+    if (dir && holdsTree(dir)) {
       setProjectRoot(dir);
       process.stderr.write(`[wairon mcp] scoped to client workspace root: ${dir}\n`);
       return;
@@ -4218,7 +4228,7 @@ export async function startMcpServer(): Promise<void> {
   // The session's folder until the client names its own: the pinned project
   // dir, else the folder the process was launched in.
   const pinned = process.env['WAIRON_PROJECT_DIR'];
-  sessionFolder = path.resolve(pinned && fs.existsSync(path.join(pinned, '.wai')) ? pinned : process.cwd());
+  sessionFolder = path.resolve(pinned && holdsTree(pinned) ? pinned : process.cwd());
   const server    = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
