@@ -1,0 +1,14 @@
+id: http_client_adapter
+name: HTTP Client Adapter
+description: >-
+  wairon's one place to call another server: a fetch-style request, a plain GET answering status and
+  body, and a download to a file. Inbound servers are Portals' transport, never here. A download
+  writes through the Files Adapter.
+subsystem: sdd_io
+componentType: Adapter
+owns: []
+dependsOn:
+  - files_adapter
+status: complete
+createdAt: '2026-10-31T23:15:09.663Z'
+updatedAt: '2026-10-31T23:50:46.900Z'

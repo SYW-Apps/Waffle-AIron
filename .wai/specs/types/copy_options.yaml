@@ -1,0 +1,26 @@
+kind: value-object
+id: copy_options
+name: CopyOptions
+description: What a copy takes; the same names as node fs's, passed through.
+subsystem: sdd_io
+fields:
+  - name: recursive
+    type: bool
+    description: Copy a folder with everything in it
+    optional: true
+  - name: force
+    type: bool
+    description: Overwrite what exists at the destination
+    optional: true
+  - name: errorOnExist
+    type: bool
+    description: Throw when the destination exists and force is off
+    optional: true
+  - name: filter
+    type: CopyFilter
+    description: Which paths to copy
+    optional: true
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:31.725Z'
+updatedAt: '2026-10-31T23:14:32.818Z'

@@ -1,0 +1,12 @@
+id: process_adapter
+name: Process Adapter
+description: >-
+  wairon's one place to run another program: a program with arguments, a command line a shell reads,
+  or a program started and left running.
+subsystem: sdd_io
+componentType: Adapter
+owns: []
+dependsOn: []
+status: complete
+createdAt: '2026-10-31T23:15:05.985Z'
+updatedAt: '2026-10-31T23:50:43.165Z'

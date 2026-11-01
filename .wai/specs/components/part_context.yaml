@@ -14,7 +14,8 @@ dependsOn:
   - spec_loader
   - project_config_repository
   - git_source_adapter
+  - files_adapter
 dependencyClass: read
 status: complete
 createdAt: '2026-10-02T20:23:40.695Z'
-updatedAt: '2026-10-02T21:40:56.327Z'
+updatedAt: '2026-10-31T23:23:13.758Z'

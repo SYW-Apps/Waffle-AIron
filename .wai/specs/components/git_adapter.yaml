@@ -9,7 +9,9 @@ description: >-
 subsystem: sdd_git
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
+  - process_adapter
 status: complete
 createdAt: '2026-07-04T16:31:18.263Z'
-updatedAt: '2026-09-25T22:00:46.565Z'
+updatedAt: '2026-10-31T23:19:51.308Z'

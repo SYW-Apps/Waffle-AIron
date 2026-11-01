@@ -154,6 +154,8 @@ methods:
       content (no `.wai/specs/.index.yaml`, no `.wai/lock.json`, no id in its `.wai/project.yaml`):
       a member retired as a part by a demote (stage 8). Any other record — active, top-level, or one
       whose folder still holds a project — is false. Reads the folder; writes nothing.
+    calls:
+      - files_adapter.exists
   - name: declaredSubsystems
     narrative: []
     intent: >-
@@ -177,6 +179,7 @@ methods:
       - project_store.read
       - host_core_adapter.resolveContainedProjectPath
       - host_core_adapter.loadSubsystemSpecs
+      - files_adapter.exists
     symbol: partSubsystemIds
   - name: admitNarrowing
     narrative: []
@@ -190,4 +193,4 @@ methods:
     symbol: assertMintableNarrowingEntry
 status: complete
 createdAt: '2026-07-19T09:00:19.960Z'
-updatedAt: '2026-10-19T06:11:09.261Z'
+updatedAt: '2026-10-31T23:38:26.068Z'

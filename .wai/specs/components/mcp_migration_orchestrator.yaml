@@ -19,6 +19,7 @@ dependsOn:
   - mcp_migration_adapter
   - mcp_core_adapter
   - mcp_skills_adapter
+  - files_adapter
 status: complete
 createdAt: '2026-09-30T20:39:25.526Z'
-updatedAt: '2026-10-07T06:21:56.049Z'
+updatedAt: '2026-10-31T23:25:04.643Z'

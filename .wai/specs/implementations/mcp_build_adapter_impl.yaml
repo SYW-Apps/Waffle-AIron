@@ -12,6 +12,8 @@ methods:
     intent: >-
       Stat the entry file and answer its path, modification time and size; any failure to stat
       answers null.
+    calls:
+      - files_adapter.stat
   - name: isBuildStale
     narrative: []
     detail: intent
@@ -30,6 +32,9 @@ methods:
       schemaFingerprint export prints, cache it under the key and answer it. A child that fails,
       times out or prints nothing throws, naming the module and the cause; a failure is never
       cached, so the next call after a finished build tries again.
+    calls:
+      - files_adapter.stat
+      - process_adapter.run
   - name: findNewerWriter
     narrative: []
     detail: intent
@@ -43,4 +48,4 @@ methods:
     symbol: findNewerWriter
 status: complete
 createdAt: '2026-09-26T00:24:26.203Z'
-updatedAt: '2026-10-17T14:44:18.844Z'
+updatedAt: '2026-10-31T23:43:34.156Z'

@@ -50,6 +50,18 @@ methods:
         description: >-
           The build the server stands for, stamped at startup; null when it could not be stamped,
           which reads as fresh
+  - name: holdsTree
+    description: >-
+      Whether a folder holds a spec tree: a .wai/ folder, or a v5 .wairon/ one that wairon upgrade
+      moves. How the stdio server picks the folder it binds among the ones it is offered, read from
+      the disk.
+    signature: 'holdsTree(dir: string): bool'
+    returns: bool
+    params:
+      - name: dir
+        type: string
+        description: The folder to look in
+    effect: read
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-08T19:33:43.034Z'
+updatedAt: '2026-10-31T23:30:42.680Z'

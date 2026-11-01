@@ -23,7 +23,8 @@ methods:
       when the change throws. Answers the set written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-11T11:34:49.983Z'
-updatedAt: '2026-10-23T22:24:19.327Z'
+updatedAt: '2026-10-31T23:35:06.218Z'

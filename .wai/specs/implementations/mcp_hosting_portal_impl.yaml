@@ -73,13 +73,20 @@ methods:
         type: local
       - stepNumber: 3
         description: >-
+          Ask, of each folder it may bind — WAIRON_PROJECT_DIR at launch, then each root the client
+          names — whether it holds a spec tree
+        type: call
+        targetComponent: mcp_server
+        targetMethod: holdsTree
+      - stepNumber: 4
+        description: >-
           Prefer the client's workspace over the launch cwd: ask the client for its roots and rebind
-          the project root to the first one holding a .wai tree, logging the choice on stderr.
-          Record the session's folder — the first root the client names, else WAIRON_PROJECT_DIR,
-          else the launch cwd — so a write that may only be made from the bound project's own root
+          the project root to the first one holding a tree, logging the choice on stderr. Record the
+          session's folder — the first root the client names, else WAIRON_PROJECT_DIR, else the
+          launch cwd — so a write that may only be made from the bound project's own root
           (initializing its L0) can tell a session opened in a subfolder that bound upward
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Re-scope the same way whenever the client reports its roots changed; a client without
           roots notifications is ignored. The server then runs until the process is ended
@@ -102,4 +109,4 @@ lint:
         verbs it installs are reached as mcp_portal's own entries.
 status: complete
 createdAt: '2026-10-06T19:01:08.253Z'
-updatedAt: '2026-10-09T11:34:11.597Z'
+updatedAt: '2026-10-31T23:30:46.509Z'

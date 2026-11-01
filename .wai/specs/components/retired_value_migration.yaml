@@ -17,6 +17,7 @@ componentType: Orchestrator
 owns: []
 dependsOn:
   - audit_repository
+  - files_adapter
 status: complete
 createdAt: '2026-10-19T06:17:34.427Z'
-updatedAt: '2026-10-19T06:18:25.928Z'
+updatedAt: '2026-10-31T23:24:06.640Z'

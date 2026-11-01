@@ -9,6 +9,7 @@ owns: []
 dependsOn:
   - project_store
   - host_core_adapter
+  - files_adapter
 status: complete
 createdAt: '2026-07-19T08:59:51.799Z'
-updatedAt: '2026-07-24T20:50:13.824Z'
+updatedAt: '2026-10-31T23:23:37.505Z'

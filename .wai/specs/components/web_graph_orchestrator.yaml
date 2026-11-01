@@ -22,6 +22,7 @@ dependsOn:
   - project_repository
   - host_surfaces_adapter
   - host_network_adapter
+  - files_adapter
 status: complete
 createdAt: '2026-07-11T11:31:43.700Z'
-updatedAt: '2026-10-06T13:14:54.185Z'
+updatedAt: '2026-10-31T23:25:45.674Z'

@@ -16,52 +16,59 @@ methods:
         type: loop
         loopKind: forEach
         over: the candidate config paths
-        endStep: 9
+        endStep: 10
       - stepNumber: 2
+        description: Does this config file exist?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 3
         description: >-
           Read and parse this config, and take its wairon server entry. A missing, unreadable or
           malformed file contributes NOTHING and never throws — this runs inside ordinary commands,
           and a broken agent config must not break the CLI.
-        type: local
-      - stepNumber: 3
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 4
         description: Is there no wairon entry here?
         type: branch
         condition: the config carries no mcpServers.wairon entry
-        onTrueStep: 9
-        onFalseStep: 4
-      - stepNumber: 4
+        onTrueStep: 10
+        onFalseStep: 5
+      - stepNumber: 5
         description: Does the entry carry no url (a command/args stdio server)?
         type: branch
         condition: the entry has no url field
-        onTrueStep: 5
-        onFalseStep: 6
-      - stepNumber: 5
+        onTrueStep: 6
+        onFalseStep: 7
+      - stepNumber: 6
         description: >-
           Report a LOCAL source — the agent authors this checkout's own tree — naming the config
           file it came from.
         type: return
         outcome: local
-      - stepNumber: 6
+      - stepNumber: 7
         description: >-
           Reduce the endpoint to the instance base URL the CLI addresses (dropping the /mcp path and
           any query).
         type: local
-      - stepNumber: 7
+      - stepNumber: 8
         description: >-
           Read the project selector from the entry's X-Wairon-Project header, falling back to a
           ?project= query on the endpoint.
         type: local
-      - stepNumber: 8
+      - stepNumber: 9
         description: >-
           Parse the bearer out of the entry's Authorization header when it carries one, then report
           a HOSTED source with the instance, project and credential.
         type: return
         outcome: hosted
-      - stepNumber: 9
+      - stepNumber: 10
         label: nextConfig
         description: Nothing usable here — continue with the next config location.
         type: local
-      - stepNumber: 10
+      - stepNumber: 11
         description: No wairon entry is registered anywhere.
         type: return
         outcome: none
@@ -215,4 +222,4 @@ lint:
   allow: []
 status: complete
 createdAt: '2026-08-12T18:43:49.494Z'
-updatedAt: '2026-10-26T22:46:42.422Z'
+updatedAt: '2026-10-31T23:36:19.685Z'

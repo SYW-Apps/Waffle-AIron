@@ -9,7 +9,8 @@ description: >-
 subsystem: sdd_core
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 durability: read-through
 lint:
   allow:
@@ -20,4 +21,4 @@ lint:
         workflow-layer (core_orchestrator).
 status: complete
 createdAt: '2026-07-04T12:44:48.994Z'
-updatedAt: '2026-09-17T16:34:43.229Z'
+updatedAt: '2026-10-31T23:20:28.821Z'

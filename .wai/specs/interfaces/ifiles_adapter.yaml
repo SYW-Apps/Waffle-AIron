@@ -1,0 +1,343 @@
+id: ifiles_adapter
+name: Files Adapter Interface
+description: >-
+  File system I/O, one call per action. Every method is synchronous and behaves exactly as the node
+  fs call it wraps: it throws where that call throws, and says in its description where it does not
+  (an absent path that is no error).
+component: files_adapter
+methods:
+  - name: exists
+    description: Whether a path exists (a file, a folder, or anything else).
+    signature: 'exists(path: string): bool'
+    returns: bool
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: readText
+    description: A file's content as UTF-8 text. Throws as readFileSync does.
+    signature: 'readText(path: string): string'
+    returns: string
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: readBytes
+    description: A file's content as bytes, unchanged. Throws as readFileSync does (an absent file, a folder).
+    signature: 'readBytes(path: string): bytes'
+    returns: bytes
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: list
+    description: The names in a folder (not recursive), in the order the filesystem gives them.
+    signature: 'list(dir: string): list<string>'
+    returns: list<string>
+    params:
+      - name: dir
+        type: string
+    effect: io
+  - name: listEntries
+    description: The entries in a folder with their kinds (isFile, isDirectory, isSymbolicLink).
+    signature: 'listEntries(dir: string): list<DirEntry>'
+    returns: list<DirEntry>
+    params:
+      - name: dir
+        type: string
+    effect: io
+  - name: stat
+    description: What a path is, following links. Throws when it is absent.
+    signature: 'stat(path: string): FileStat'
+    returns: FileStat
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: statOrNull
+    description: What a path is, following links; undefined when it is absent (other errors throw).
+    signature: 'statOrNull(path: string): FileStat?'
+    returns: FileStat?
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: lstat
+    description: What a path is without following a link. Throws when it is absent.
+    signature: 'lstat(path: string): FileStat'
+    returns: FileStat
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: realPath
+    description: The path with every link resolved. Throws when it is absent.
+    signature: 'realPath(path: string): string'
+    returns: string
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: realPathNative
+    description: >-
+      The path with every link resolved, by the operating system's own resolver (the spelling of the
+      real case on Windows).
+    signature: 'realPathNative(path: string): string'
+    returns: string
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: readLink
+    description: Where a symbolic link points. Throws when the path is not a link.
+    signature: 'readLink(path: string): string'
+    returns: string
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: checkWritable
+    description: Throws unless the process may write to the path.
+    signature: 'checkWritable(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: writeText
+    description: >-
+      Write text (UTF-8) to a file, replacing it; `mode` sets the permission bits of a file this
+      creates.
+    signature: 'writeText(path: string, text: string, options?: WriteOptions): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+      - name: text
+        type: string
+      - name: options
+        type: WriteOptions
+        optional: true
+    effect: io
+  - name: writeBytes
+    description: Write bytes to a file, replacing it; `mode` sets the permission bits of a file this creates.
+    signature: 'writeBytes(path: string, bytes: bytes, options?: WriteOptions): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+      - name: bytes
+        type: bytes
+      - name: options
+        type: WriteOptions
+        optional: true
+    effect: io
+  - name: ensureDir
+    description: Make a folder and every missing folder above it; an existing folder is no error.
+    signature: 'ensureDir(dir: string): void'
+    returns: void
+    params:
+      - name: dir
+        type: string
+    effect: io
+  - name: makeDir
+    description: Make one folder whose parent exists. Throws when it exists or the parent is missing.
+    signature: 'makeDir(dir: string): void'
+    returns: void
+    params:
+      - name: dir
+        type: string
+    effect: io
+  - name: makeTempDir
+    description: >-
+      Make a folder with a unique name from a prefix (the prefix's folder must exist) and answer its
+      path.
+    signature: 'makeTempDir(prefix: string): string'
+    returns: string
+    params:
+      - name: prefix
+        type: string
+    effect: io
+  - name: rename
+    description: Move or rename a file or folder. Throws as renameSync does.
+    signature: 'rename(from: string, to: string): void'
+    returns: void
+    params:
+      - name: from
+        type: string
+      - name: to
+        type: string
+    effect: io
+  - name: copyFile
+    description: Copy one file, replacing the destination when it exists. Throws as copyFileSync does.
+    signature: 'copyFile(from: string, to: string): void'
+    returns: void
+    params:
+      - name: from
+        type: string
+      - name: to
+        type: string
+    effect: io
+  - name: copy
+    description: Copy a file or (with `recursive`) a folder.
+    signature: 'copy(from: string, to: string, options?: CopyOptions): void'
+    returns: void
+    params:
+      - name: from
+        type: string
+      - name: to
+        type: string
+      - name: options
+        type: CopyOptions
+        optional: true
+    effect: io
+  - name: chmod
+    description: Set a file's permission bits (mode). Throws as chmodSync does, an absent file among it.
+    signature: 'chmod(path: string, mode: int): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+      - name: mode
+        type: int
+    effect: io
+  - name: symlink
+    description: Make a symbolic link at `path` pointing at `target`.
+    signature: 'symlink(target: string, path: string): void'
+    returns: void
+    params:
+      - name: target
+        type: string
+      - name: path
+        type: string
+    effect: io
+  - name: remove
+    description: Remove a file or a whole folder tree; an absent path is no error.
+    signature: 'remove(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: removeFileIfPresent
+    description: Remove a file; an absent path is no error (a folder throws).
+    signature: 'removeFileIfPresent(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: removeExisting
+    description: >-
+      Remove a path that must exist: a file, or with `recursive` a folder tree. Throws when it is
+      absent.
+    signature: 'removeExisting(path: string, options?: RemoveOptions): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+      - name: options
+        type: RemoveOptions
+        optional: true
+    effect: io
+  - name: removeFile
+    description: Remove a file with unlink. Throws when it is absent.
+    signature: 'removeFile(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: removeFileLater
+    description: Remove a file in the background; whether it worked is not waited for or reported.
+    signature: 'removeFileLater(path: string): void'
+    returns: void
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: removeEmptyDir
+    description: Remove an empty folder. Throws when it is absent or holds anything.
+    signature: 'removeEmptyDir(dir: string): void'
+    returns: void
+    params:
+      - name: dir
+        type: string
+    effect: io
+  - name: openForRead
+    description: >-
+      Open an existing file (or folder) for reading and answer its descriptor. Throws when it is
+      absent.
+    signature: 'openForRead(path: string): int'
+    returns: int
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: openForWrite
+    description: Open a file for writing, emptying it or creating it.
+    signature: 'openForWrite(path: string): int'
+    returns: int
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: openNew
+    description: Create a file and open it for writing; throws EEXIST when the name is taken.
+    signature: 'openNew(path: string): int'
+    returns: int
+    params:
+      - name: path
+        type: string
+    effect: io
+  - name: writeDescriptor
+    description: Write text or bytes at the descriptor's position.
+    signature: 'writeDescriptor(fd: int, data: bytes): void'
+    returns: void
+    params:
+      - name: fd
+        type: int
+      - name: data
+        type: bytes
+    effect: io
+  - name: readDescriptorHead
+    description: >-
+      Read up to `length` bytes from the start of an open file into `buffer`; answers how many were
+      read.
+    signature: 'readDescriptorHead(fd: int, buffer: bytes, length: int): int'
+    returns: int
+    params:
+      - name: fd
+        type: int
+      - name: buffer
+        type: bytes
+      - name: length
+        type: int
+    effect: io
+  - name: syncDescriptor
+    description: Flush an open file's content to the disk.
+    signature: 'syncDescriptor(fd: int): void'
+    returns: void
+    params:
+      - name: fd
+        type: int
+    effect: io
+  - name: closeDescriptor
+    description: Close an open descriptor; it must not be used again. Throws as closeSync does.
+    signature: 'closeDescriptor(fd: int): void'
+    returns: void
+    params:
+      - name: fd
+        type: int
+    effect: io
+  - name: openWriteStream
+    description: A stream that writes a file, creating or emptying it.
+    signature: 'openWriteStream(path: string): WriteStream'
+    returns: WriteStream
+    params:
+      - name: path
+        type: string
+    effect: io
+status: draft
+createdAt: '2026-10-31T23:15:13.122Z'
+updatedAt: '2026-10-31T23:15:16.755Z'

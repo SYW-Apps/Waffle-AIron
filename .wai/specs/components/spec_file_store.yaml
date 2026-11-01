@@ -14,8 +14,9 @@ description: >-
 subsystem: sdd_core
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 durability: read-through
 status: complete
 createdAt: '2026-07-18T22:57:52.990Z'
-updatedAt: '2026-09-19T18:25:26.189Z'
+updatedAt: '2026-10-31T23:24:27.437Z'

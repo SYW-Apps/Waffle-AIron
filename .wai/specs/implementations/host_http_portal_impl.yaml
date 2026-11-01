@@ -21,7 +21,12 @@ methods:
   - name: readyz
     narrative:
       - stepNumber: 1
-        description: Report ready (200) when the data directory is writable, else 503
+        description: Ask the host server whether the instance can serve
+        type: call
+        targetComponent: host_server
+        targetMethod: isReady
+      - stepNumber: 2
+        description: Report ready (200) when it can, else 503
         type: local
     symbol: /readyz
   - name: viewDiagram
@@ -34,4 +39,4 @@ methods:
     symbol: /view/diagram
 status: complete
 createdAt: '2026-07-04T12:53:08.334Z'
-updatedAt: '2026-10-09T11:40:12.197Z'
+updatedAt: '2026-10-31T23:46:13.232Z'

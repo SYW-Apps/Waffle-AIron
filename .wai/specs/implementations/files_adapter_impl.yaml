@@ -1,0 +1,133 @@
+id: files_adapter_impl
+name: Files Adapter Implementation
+description: >-
+  wairon's one place for the file system: read, write, list, copy, move and remove files and
+  folders, and the descriptor calls the lock and durable-write code makes. One call per action, each
+  the node fs call it wraps, so a library or runtime change is made here once. Module functions in
+  src/io/files.ts, reached through the io barrel (src/io/index.ts).
+contract: ifiles_adapter
+sourcePath: src/io/files.ts
+methods:
+  - name: exists
+    narrative: []
+    intent: Whether a path exists (a file, a folder, or anything else).
+  - name: readText
+    narrative: []
+    intent: A file's content as UTF-8 text. Throws as readFileSync does.
+  - name: readBytes
+    narrative: []
+    intent: A file's content as bytes, unchanged. Throws as readFileSync does (an absent file, a folder).
+  - name: list
+    narrative: []
+    intent: The names in a folder (not recursive), in the order the filesystem gives them.
+  - name: listEntries
+    narrative: []
+    intent: The entries in a folder with their kinds (isFile, isDirectory, isSymbolicLink).
+  - name: stat
+    narrative: []
+    intent: What a path is, following links. Throws when it is absent.
+  - name: statOrNull
+    narrative: []
+    intent: What a path is, following links; undefined when it is absent (other errors throw).
+  - name: lstat
+    narrative: []
+    intent: What a path is without following a link. Throws when it is absent.
+  - name: realPath
+    narrative: []
+    intent: The path with every link resolved. Throws when it is absent.
+  - name: realPathNative
+    narrative: []
+    intent: >-
+      The path with every link resolved, by the operating system's own resolver (the spelling of the
+      real case on Windows).
+  - name: readLink
+    narrative: []
+    intent: Where a symbolic link points. Throws when the path is not a link.
+  - name: checkWritable
+    narrative: []
+    intent: Throws unless the process may write to the path.
+  - name: writeText
+    narrative: []
+    intent: >-
+      Write text (UTF-8) to a file, replacing it; `mode` sets the permission bits of a file this
+      creates.
+  - name: writeBytes
+    narrative: []
+    intent: Write bytes to a file, replacing it; `mode` sets the permission bits of a file this creates.
+  - name: ensureDir
+    narrative: []
+    intent: Make a folder and every missing folder above it; an existing folder is no error.
+  - name: makeDir
+    narrative: []
+    intent: Make one folder whose parent exists. Throws when it exists or the parent is missing.
+  - name: makeTempDir
+    narrative: []
+    intent: >-
+      Make a folder with a unique name from a prefix (the prefix's folder must exist) and answer its
+      path.
+  - name: rename
+    narrative: []
+    intent: Move or rename a file or folder. Throws as renameSync does.
+  - name: copyFile
+    narrative: []
+    intent: Copy one file, replacing the destination when it exists. Throws as copyFileSync does.
+  - name: copy
+    narrative: []
+    intent: Copy a file or (with `recursive`) a folder.
+  - name: chmod
+    narrative: []
+    intent: Set a file's permission bits (mode). Throws as chmodSync does, an absent file among it.
+  - name: symlink
+    narrative: []
+    intent: Make a symbolic link at `path` pointing at `target`.
+  - name: remove
+    narrative: []
+    intent: Remove a file or a whole folder tree; an absent path is no error.
+  - name: removeFileIfPresent
+    narrative: []
+    intent: Remove a file; an absent path is no error (a folder throws).
+  - name: removeExisting
+    narrative: []
+    intent: >-
+      Remove a path that must exist: a file, or with `recursive` a folder tree. Throws when it is
+      absent.
+  - name: removeFile
+    narrative: []
+    intent: Remove a file with unlink. Throws when it is absent.
+  - name: removeFileLater
+    narrative: []
+    intent: Remove a file in the background; whether it worked is not waited for or reported.
+  - name: removeEmptyDir
+    narrative: []
+    intent: Remove an empty folder. Throws when it is absent or holds anything.
+  - name: openForRead
+    narrative: []
+    intent: >-
+      Open an existing file (or folder) for reading and answer its descriptor. Throws when it is
+      absent.
+  - name: openForWrite
+    narrative: []
+    intent: Open a file for writing, emptying it or creating it.
+  - name: openNew
+    narrative: []
+    intent: Create a file and open it for writing; throws EEXIST when the name is taken.
+  - name: writeDescriptor
+    narrative: []
+    intent: Write text or bytes at the descriptor's position.
+  - name: readDescriptorHead
+    narrative: []
+    intent: >-
+      Read up to `length` bytes from the start of an open file into `buffer`; answers how many were
+      read.
+  - name: syncDescriptor
+    narrative: []
+    intent: Flush an open file's content to the disk.
+  - name: closeDescriptor
+    narrative: []
+    intent: Close an open descriptor; it must not be used again. Throws as closeSync does.
+  - name: openWriteStream
+    narrative: []
+    intent: A stream that writes a file, creating or emptying it.
+status: draft
+createdAt: '2026-10-31T23:15:19.163Z'
+updatedAt: '2026-10-31T23:15:20.228Z'

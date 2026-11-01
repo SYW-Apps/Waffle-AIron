@@ -19,12 +19,22 @@ methods:
         targetComponent: skills_core_adapter
         targetMethod: loadProjectExtensions
       - stepNumber: 3
+        description: Which pack skills have their SKILL.md present?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 4
+        description: Read each skill's markdown for its frontmatter name and description
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
+      - stepNumber: 5
         description: >-
           Build one SkillResourceDescriptor per built-in skill and per pack skill — pack skills
           namespaced <pack-id>-<skill-id> and versioned by their source pack — mirroring the
           templates skills_exporter copies to the filesystem.
         type: local
-      - stepNumber: 4
+      - stepNumber: 6
         description: Return the descriptor list.
         type: return
         outcome: skill resource descriptors
@@ -45,7 +55,9 @@ methods:
         type: local
       - stepNumber: 3
         description: Read the resolved skill's markdown content.
-        type: local
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
       - stepNumber: 4
         description: Return the skill content as text.
         type: return
@@ -53,4 +65,4 @@ methods:
     detail: full
 status: complete
 createdAt: '2026-07-10T12:20:56.185Z'
-updatedAt: '2026-09-15T20:47:15.689Z'
+updatedAt: '2026-10-31T23:35:24.930Z'

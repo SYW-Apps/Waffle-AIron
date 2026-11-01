@@ -11,7 +11,8 @@ owns:
   - project_store
   - project_write_registry
   - project_index
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-07-04T12:33:43.673Z'
-updatedAt: '2026-09-17T16:34:38.404Z'
+updatedAt: '2026-10-31T23:23:45.739Z'

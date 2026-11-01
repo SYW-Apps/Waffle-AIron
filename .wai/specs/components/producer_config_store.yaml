@@ -8,7 +8,8 @@ description: >-
 subsystem: sdd_producers
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 durability: read-through
 lint:
   allow:
@@ -18,4 +19,4 @@ lint:
         Repository around it would be ceremony. Consumer is workflow-layer (producer_orchestrator).
 status: complete
 createdAt: '2026-07-04T17:29:08.079Z'
-updatedAt: '2026-09-17T16:34:47.264Z'
+updatedAt: '2026-10-31T23:25:25.105Z'

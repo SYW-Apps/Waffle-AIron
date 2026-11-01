@@ -23,7 +23,8 @@ methods:
       written - for a seed that lost the race, the identity the winner wrote.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-16T00:24:37.545Z'
-updatedAt: '2026-10-23T22:23:31.361Z'
+updatedAt: '2026-10-31T23:34:27.484Z'

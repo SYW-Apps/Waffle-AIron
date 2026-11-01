@@ -24,7 +24,8 @@ methods:
       processes are both kept.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-15T20:28:56.023Z'
-updatedAt: '2026-10-23T22:23:36.729Z'
+updatedAt: '2026-10-31T23:34:31.738Z'

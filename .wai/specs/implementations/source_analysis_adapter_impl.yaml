@@ -9,6 +9,7 @@ description: >-
   recorded lower grade, for every other language and for a file whose exact analysis fails.
 contract: isource_analysis_adapter
 sourcePath: src/core/source-analysis.ts
+simPath: tests/core/analyzer-reach.test.ts
 technologies:
   - typescript-compiler
 methods:
@@ -501,4 +502,4 @@ methods:
         outcome: fingerprint
 status: complete
 createdAt: '2026-07-11T17:52:15.266Z'
-updatedAt: '2026-10-30T22:18:34.483Z'
+updatedAt: '2026-10-31T23:30:38.776Z'

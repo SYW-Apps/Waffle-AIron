@@ -14,7 +14,8 @@ description: >-
 subsystem: sdd_validator
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-07-11T17:51:33.812Z'
-updatedAt: '2026-09-17T22:31:10.245Z'
+updatedAt: '2026-10-31T23:21:34.511Z'

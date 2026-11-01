@@ -44,6 +44,7 @@ dependsOn:
   - validator_surfaces_adapter
   - reach_model_projector
   - network_arbiter
+  - files_adapter
 status: complete
 createdAt: '2026-09-28T06:05:49.633Z'
-updatedAt: '2026-10-30T12:03:41.765Z'
+updatedAt: '2026-10-31T23:22:32.102Z'
