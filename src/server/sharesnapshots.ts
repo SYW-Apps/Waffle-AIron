@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { runWithProjectBinding, runWithProjectRoot, replaceFile } from '../utils/fs.js';
@@ -34,8 +34,8 @@ class ShareSnapshotStore {
 
   write(snapshot: ShareSnapshot): void {
     const p = snapshotPath(this.dataDir, snapshot.id);
-    if (fs.existsSync(p)) return; // write-once: a captured share is immutable
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    if (files.exists(p)) return; // write-once: a captured share is immutable
+    files.ensureDir(path.dirname(p));
     replaceFile(p, JSON.stringify(snapshot, null, 2) + '\n');
   }
 
@@ -43,7 +43,7 @@ class ShareSnapshotStore {
     const p = snapshotPath(this.dataDir, snapshotId);
     let raw: string;
     try {
-      raw = fs.readFileSync(p, 'utf8');
+      raw = files.readText(p);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
       throw new Error(`Cannot read share snapshot at ${p}: ${(err as Error).message}`);

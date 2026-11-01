@@ -137,16 +137,19 @@ methods:
       the SOURCE subsystem (the published-Portal target requirement applies either way). A published
       surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a
       component every one of whose entries names consumers may be depended on only from those
-      subsystems. An edge into another project is judged on the contract entry it resolves to
-      (resolveSurfaceRef: a contained member's live table, a declared external's pin, or a foreign
-      snapshot). When that entry is backed by an InProcess Portal the edge is a library call (reach
-      library): any component may make it directly, no Adapter is asked for, and library-calls
-      judges it instead. Any other entry asks for the same Adapter as a cross-subsystem hop, and
-      foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge
-      into another project that does not resolve is reported once, by project-boundaries, with its
-      resolution; never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id
-      that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack
-      profile.
+      subsystems. An edge into an Adapter that its subsystem publishes as shared (reach shared) asks
+      for none of this: any component of any subsystem may make it directly, the stereotype matrix
+      judges it as an internal edge, and only the consumers its entries name are checked here
+      (CROSS_SUBSYSTEM_UNLISTED_CONSUMER). An edge into another project is judged on the contract
+      entry it resolves to (resolveSurfaceRef: a contained member's live table, a declared
+      external's pin, or a foreign snapshot). When that entry is backed by an InProcess Portal the
+      edge is a library call (reach library): any component may make it directly, no Adapter is
+      asked for, and library-calls judges it instead. Any other entry asks for the same Adapter as a
+      cross-subsystem hop, and foreign snapshots of several providers that disagree make it
+      SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by
+      project-boundaries, with its resolution; never here, and never as the retired
+      CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is
+      INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.
     signature: 'subsystemBoundaryDependencies(ctx: RuleContext): void'
     returns: void
     params:
@@ -558,4 +561,4 @@ methods:
         summary: A native-ABI InProcess library (no abi) is called from a project of another targetLanguage
 status: complete
 createdAt: '2026-09-14T06:06:55.453Z'
-updatedAt: '2026-10-30T12:06:07.703Z'
+updatedAt: '2026-10-31T21:51:52.040Z'

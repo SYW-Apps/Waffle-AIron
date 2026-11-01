@@ -157,15 +157,16 @@ methods:
       - stepNumber: 21
         label: reportGod
         description: >-
-          When comp.dependsOn.length exceeds threshold(comp) AND the component is not a routing
-          table, report GOD_COMPONENT (warning; draft context ctx.isComponentDraft(comp.id)) naming
-          the count and the threshold. A routing table is exempt because its fan-out is where it
-          sends requests rather than what it knows: the responsibility lives in what it forwards to,
-          which is exactly the reasoning INCOHESIVE_METHODS already accepts. Measured across this
-          tree, every high-fan-out Portal narrates hand-offs while every high-fan-out Orchestrator
-          holds real flow, so the exemption separates the two shapes the raw count conflates; a
-          portal that also serves its own static app shell is still a routing table, since that
-          method reaches none of its dependencies
+          When the number of its collaborators — comp.dependsOn without the Adapters a subsystem
+          publishes as shared (ctx.sharedSet), since generic I/O is no responsibility — exceeds
+          threshold(comp) AND the component is not a routing table, report GOD_COMPONENT (warning;
+          draft context ctx.isComponentDraft(comp.id)) naming the count and the threshold. A routing
+          table is exempt because its fan-out is where it sends requests rather than what it knows:
+          the responsibility lives in what it forwards to, which is exactly the reasoning
+          INCOHESIVE_METHODS already accepts. Measured across this tree, every high-fan-out Portal
+          narrates hand-offs while every high-fan-out Orchestrator holds real flow, so the exemption
+          separates the two shapes the raw count conflates; a portal that also serves its own static
+          app shell is still a routing table, since that method reaches none of its dependencies
         type: local
     symbol: check
     exportedVia: couplingRule
@@ -392,13 +393,14 @@ methods:
       - stepNumber: 6
         label: compComplexityCheck
         description: >-
-          When complexityConfig.maxComponentDependencies is set, comp.dependsOn.length exceeds it,
-          AND the component is not a routing table (every narrated method that reaches a
-          collaborator is a single hand-off, a method reaching none is neutral, and at least one
-          hand-off exists — the same test GOD_COMPONENT applies), report EXCESSIVE_DEPENDENCIES
-          (warning) naming the count and the limit. The exemption is what stops the limit from
-          punishing a Portal for the size of the subsystem behind it — a door's fan-out tracks how
-          many areas it publishes, not how much it knows
+          When complexityConfig.maxComponentDependencies is set, the number of its collaborators —
+          comp.dependsOn without the Adapters a subsystem publishes as shared (ctx.sharedSet), since
+          generic I/O is no responsibility — exceeds it, AND the component is not a routing table
+          (every narrated method that reaches a collaborator is a single hand-off, a method reaching
+          none is neutral, and at least one hand-off exists — the same test GOD_COMPONENT applies),
+          report EXCESSIVE_DEPENDENCIES (warning) naming the count and the limit. The exemption is
+          what stops the limit from punishing a Portal for the size of the subsystem behind it — a
+          door's fan-out tracks how many areas it publishes, not how much it knows
         type: local
       - stepNumber: 7
         label: intfLoop
@@ -1130,4 +1132,4 @@ methods:
     exportedVia: removableForwarderRule
 status: complete
 createdAt: '2026-09-14T23:24:48.087Z'
-updatedAt: '2026-10-16T17:41:18.166Z'
+updatedAt: '2026-10-31T23:30:12.819Z'

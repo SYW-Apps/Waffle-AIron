@@ -22,6 +22,8 @@ methods:
       Return every configured identity provider from the store's current in-memory collection, or an
       empty list when none has been configured. Read-only over the store's reference; never fails on
       lookups — absence is an empty list, not an error.
+    calls:
+      - files_adapter.readText
     symbol: listIdentityProviderRecords
   - name: getExposurePolicy
     narrative: []
@@ -30,10 +32,12 @@ methods:
       Return the persisted instance exposure policy read through the store, or null when
       exposure-policy.json has never been written (callers substitute the safe default — web UI off,
       TLS required).
+    calls:
+      - files_adapter.readText
     symbol: getExposurePolicyRecord
 detail: intent
 lint:
   allow: []
 status: complete
 createdAt: '2026-07-09T20:47:47.802Z'
-updatedAt: '2026-10-04T19:50:51.825Z'
+updatedAt: '2026-10-31T23:38:28.167Z'

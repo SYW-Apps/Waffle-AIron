@@ -6,7 +6,8 @@ description: >-
 subsystem: sdd_surfaces
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-07-10T23:12:23.201Z'
-updatedAt: '2026-10-04T22:34:04.841Z'
+updatedAt: '2026-10-31T23:20:41.217Z'

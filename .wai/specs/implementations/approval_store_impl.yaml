@@ -24,7 +24,8 @@ methods:
       throws, which writes nothing. Answers the set written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-09T19:30:56.124Z'
-updatedAt: '2026-10-23T22:18:19.269Z'
+updatedAt: '2026-10-31T23:34:16.703Z'

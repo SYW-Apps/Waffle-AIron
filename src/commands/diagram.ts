@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { assertProjectInitialized, AI_PATHS } from '../config/paths.js';
@@ -85,7 +85,7 @@ function applyFormat(options: DiagramOptions): DiagramOptions {
 /** Write one rendered artifact, creating the directory it lands in. */
 function writeArtifact(dest: string, content: string): void {
   ensureDir(path.dirname(path.resolve(dest)));
-  fs.writeFileSync(dest, content, 'utf-8');
+  files.writeText(dest, content);
 }
 
 function parseSequenceRef(ref: string): { component: string; method: string } {

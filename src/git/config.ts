@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { aiDir } from '../utils/fs.js';
 import type { GitConfig } from './types.js';
@@ -18,7 +18,7 @@ function configPath(): string {
 /** Read the bound project's GitConfig, or null when not git-backed. */
 export function readGitConfig(): GitConfig | null {
   try {
-    return JSON.parse(fs.readFileSync(configPath(), 'utf8')) as GitConfig;
+    return JSON.parse(files.readText(configPath())) as GitConfig;
   } catch {
     return null;
   }
@@ -27,16 +27,16 @@ export function readGitConfig(): GitConfig | null {
 /** Persist the bound project's GitConfig atomically. */
 export function writeGitConfig(config: GitConfig): void {
   const p = configPath();
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(config, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  files.writeText(tmp, JSON.stringify(config, null, 2) + '\n');
+  files.rename(tmp, p);
 }
 
 /** Remove the bound project's git-backing config (idempotent). */
 export function clearGitConfig(): void {
   try {
-    fs.rmSync(configPath(), { force: true });
+    files.removeFileIfPresent(configPath());
   } catch {
     /* already absent */
   }

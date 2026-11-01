@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 
 // ---------------------------------------------------------------------------
@@ -76,8 +76,8 @@ function readOne(named: string, projectRoot: string): BindingModule {
   // Step 3: read it.
   let buffer: Buffer;
   try {
-    if (!fs.statSync(absolute).isFile()) return answer('missing');
-    buffer = fs.readFileSync(absolute);
+    if (!files.stat(absolute).isFile()) return answer('missing');
+    buffer = files.readBytes(absolute);
   } catch {
     return answer('missing');
   }

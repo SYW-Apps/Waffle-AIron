@@ -21,6 +21,7 @@ owns: []
 dependsOn:
   - host_http_portal
   - web_portal
+  - http_client_adapter
 status: complete
 createdAt: '2026-08-12T18:31:27.931Z'
-updatedAt: '2026-09-15T21:02:27.973Z'
+updatedAt: '2026-10-31T23:22:15.335Z'

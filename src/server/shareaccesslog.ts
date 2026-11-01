@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { ShareAccessEntry } from './types.js';
@@ -23,7 +23,7 @@ class ShareAccessStore {
     const p = storePath(this.dataDir);
     let raw: string;
     try {
-      raw = fs.readFileSync(p, 'utf8');
+      raw = files.readText(p);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw new Error(`Cannot read share-access store at ${p}: ${(err as Error).message}`);
@@ -47,7 +47,7 @@ class ShareAccessStore {
    */
   update(change: (entries: ShareAccessEntry[]) => ShareAccessEntry[]): ShareAccessEntry[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     return withFileLock(p, () => {
       const current = readJsonForUpdate<unknown>(p, []);
       if (!Array.isArray(current)) {

@@ -8,7 +8,8 @@ componentType: Store
 owns: []
 dependsOn:
   - file_write_lock
+  - files_adapter
 durability: read-through
 status: complete
 createdAt: '2026-07-08T20:14:31.257Z'
-updatedAt: '2026-10-23T22:23:10.689Z'
+updatedAt: '2026-10-31T23:24:35.693Z'

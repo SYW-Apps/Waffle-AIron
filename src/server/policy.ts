@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { runWithProjectRoot, replaceFile, readJsonForUpdate } from '../utils/fs.js';
 import { withFileLock } from '../utils/file-lock.js';
@@ -75,7 +75,7 @@ function storeLoadPackPolicy(dataDir: string): InstancePackPolicy | null {
   const p = packPolicyPath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new Error(`Failed to read pack policy store at ${p}: ${(e as Error).message}`);
@@ -98,7 +98,7 @@ function updatePackPolicy(
   change: (current: InstancePackPolicy | null) => InstancePackPolicy,
 ): InstancePackPolicy {
   const p = packPolicyPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const next = change(readJsonForUpdate<InstancePackPolicy | null>(p, null));
     replaceFile(p, JSON.stringify(next, null, 2) + '\n');
@@ -184,7 +184,7 @@ export function getExposurePolicyRecord(dataDir: string): HostExposurePolicy | n
   const p = exposurePolicyPath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw new Error(`Failed to read exposure policy store at ${p}: ${(e as Error).message}`);
@@ -223,7 +223,7 @@ function updateExposurePolicy(
   change: (current: HostExposurePolicy | null) => HostExposurePolicy,
 ): HostExposurePolicy {
   const p = exposurePolicyPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const next = change(readJsonForUpdate<HostExposurePolicy | null>(p, null));
     replaceFile(p, JSON.stringify(next, null, 2) + '\n');
@@ -307,7 +307,7 @@ function updateIdentityProviders(
   change: (records: IdentityProviderConfig[]) => IdentityProviderConfig[],
 ): IdentityProviderConfig[] {
   const p = identityProvidersPath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const next = change(readJsonForUpdate<IdentityProviderConfig[]>(p, []));
     replaceFile(p, JSON.stringify(next, null, 2) + '\n');
@@ -326,7 +326,7 @@ export function listIdentityProviderRecords(dataDir: string): IdentityProviderCo
   const p = identityProvidersPath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read identity provider store at ${p}: ${(e as Error).message}`);

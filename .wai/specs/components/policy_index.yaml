@@ -8,6 +8,7 @@ componentType: Index
 owns: []
 dependsOn:
   - policy_store
+  - files_adapter
 status: complete
 createdAt: '2026-07-08T21:59:13.986Z'
-updatedAt: '2026-07-09T20:53:24.479Z'
+updatedAt: '2026-10-31T23:23:21.630Z'

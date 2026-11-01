@@ -14,8 +14,9 @@ description: >-
 subsystem: sdd_core
 componentType: Orchestrator
 owns: []
-dependsOn: []
+dependsOn:
+  - process_adapter
 dependencyClass: read
 status: complete
 createdAt: '2026-09-21T10:06:49.901Z'
-updatedAt: '2026-09-21T10:07:59.854Z'
+updatedAt: '2026-10-31T23:24:44.110Z'

@@ -3,6 +3,7 @@ name: Network File Adapter Implementation
 description: 'File reads of the deployment-side inputs: a bindings document and an observed-flow export.'
 contract: inetwork_file_adapter
 sourcePath: src/network/adapters/files.ts
+simPath: tests/network/network-gate.test.ts
 technologies:
   - name: yaml
     matches:
@@ -26,4 +27,4 @@ methods:
       number; nothing is half-read.
 status: complete
 createdAt: '2026-10-06T13:11:40.982Z'
-updatedAt: '2026-10-06T13:12:37.442Z'
+updatedAt: '2026-10-31T23:30:37.415Z'

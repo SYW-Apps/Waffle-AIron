@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as sdkPortal from '@wairon/sdk';
 import type {
@@ -163,8 +163,8 @@ export function createStagingDir(destDir: string): string {
   // root — same filesystem (so the swap is a rename, not a cross-device copy)
   // and never outside the project's isolated root.
   const root = path.resolve(destDir);
-  fs.mkdirSync(root, { recursive: true });
-  const stagingDir = fs.mkdtempSync(path.join(root, STAGING_PREFIX));
+  files.ensureDir(root);
+  const stagingDir = files.makeTempDir(path.join(root, STAGING_PREFIX));
   // Step 2: return the staging directory path.
   return stagingDir;
 }
@@ -189,26 +189,26 @@ export function commitStagedTree(
   for (const rootRel of roots) {
     const relative = rootRel === '.' ? '' : rootRel;
     const stagedSpecDir = path.join(stagingDir, relative, '.wai');
-    if (!fs.existsSync(stagedSpecDir)) continue; // nothing staged for this root
+    if (!files.exists(stagedSpecDir)) continue; // nothing staged for this root
     const liveSpecDir = liveSpecDirFor(path.join(root, relative));
 
     // Step 3: does this root hold an existing spec dir the caller asked to preserve?
-    if (backupExisting && liveSpecDir && fs.existsSync(liveSpecDir)) {
+    if (backupExisting && liveSpecDir && files.exists(liveSpecDir)) {
       // Step 4: move it into the backup directory under this root's relative
       // path, so one backup holds the whole previous tree in its original shape.
       const backupTarget = path.join(backupDir, relative, path.basename(liveSpecDir));
-      fs.mkdirSync(path.dirname(backupTarget), { recursive: true });
-      fs.renameSync(liveSpecDir, backupTarget);
+      files.ensureDir(path.dirname(backupTarget));
+      files.rename(liveSpecDir, backupTarget);
       backedUp = true;
-    } else if (liveSpecDir && fs.existsSync(liveSpecDir)) {
-      fs.rmSync(liveSpecDir, { recursive: true, force: true });
+    } else if (liveSpecDir && files.exists(liveSpecDir)) {
+      files.remove(liveSpecDir);
     }
 
     // Step 5 (swapEnd): move the staged root's .wai into position.
     const target = path.join(root, relative, '.wai');
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    if (fs.existsSync(target)) fs.rmSync(target, { recursive: true, force: true });
-    fs.renameSync(stagedSpecDir, target);
+    files.ensureDir(path.dirname(target));
+    if (files.exists(target)) files.remove(target);
+    files.rename(stagedSpecDir, target);
   }
 
   // Step 6: was anything moved aside?
@@ -230,8 +230,8 @@ export function dropStagedApprovals(stagingDir: string, roots: string[]): string
   const dropped: string[] = [];
   for (const rootRel of roots) {
     const record = path.join(stagingDir, rootRel === '.' ? '' : rootRel, '.wai', 'lock.json');
-    if (!fs.existsSync(record)) continue;
-    fs.rmSync(record, { force: true });
+    if (!files.exists(record)) continue;
+    files.removeFileIfPresent(record);
     dropped.push(rootRel);
   }
   return dropped;
@@ -242,7 +242,7 @@ export function discardStagingDir(stagingDir: string): void {
   // Step 1: remove it, swallowing any failure — tidying must never fail an
   // import that already succeeded.
   try {
-    fs.rmSync(stagingDir, { recursive: true, force: true });
+    files.remove(stagingDir);
   } catch {
     /* best-effort cleanup */
   }
@@ -391,7 +391,7 @@ export function importSpecTree(archive: Uint8Array, options: TreeImportOptions):
  */
 function liveSpecDirFor(rootDir: string): string | null {
   const modern = path.join(rootDir, '.wai');
-  return fs.existsSync(modern) ? modern : null;
+  return files.exists(modern) ? modern : null;
 }
 
 /** A filesystem-safe timestamp for one backup directory. */

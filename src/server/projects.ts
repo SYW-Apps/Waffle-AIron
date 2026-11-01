@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { aiPathsAt } from '../config/paths.js';
 import { readYamlFile } from '../utils/yaml.js';
@@ -145,7 +145,7 @@ function rootOnDisk(dataDir: string, id: string): string | null {
   const records = load(dataDir);
   const rec = records.find((r) => r.id === id);
   const root = rec ? derivedRoot(records, rec) : null;
-  return root && fs.existsSync(root) ? root : null;
+  return root && files.exists(root) ? root : null;
 }
 
 /** The local ids of the subsystems the tree at a folder declares (a member's own are its record's, so left out). */
@@ -166,7 +166,7 @@ export function partSubsystemIds(dataDir: string, id: string, alias: string): st
   const decl = root ? memberDeclarationsOn(root).find((d) => d.alias === alias && d.path && !d.hosted && !d.refused) : undefined;
   if (!root || !decl?.path) return null;
   const dir = resolveContainedProjectPath(root, decl.path);
-  return fs.existsSync(dir) ? subsystemIdsAt(dir) : null;
+  return files.exists(dir) ? subsystemIdsAt(dir) : null;
 }
 
 /** Allocate an isolated root, create its directory, and persist the record. */
@@ -185,7 +185,7 @@ export function createProjectRecord(dataDir: string, id: string): HostedProjectR
     if (records.some((r) => r.id === id)) {
       throw new Error(`Project "${id}" already exists.`);
     }
-    fs.mkdirSync(root, { recursive: true });
+    files.ensureDir(root);
     return [...records, record];
   });
   return record;
@@ -343,7 +343,7 @@ export function removeProjectRecord(dataDir: string, id: string): void {
   // longer than any lock is held, and a failed write keeps both.
   if (tree) {
     try {
-      fs.rmSync(tree, { recursive: true, force: true });
+      files.remove(tree);
     } catch {
       /* best-effort tree removal */
     }
@@ -421,7 +421,7 @@ interface MemberDeclaration {
 function rawConfigAt(root: string): Record<string, unknown> | null {
   try {
     const file = aiPathsAt(root).projectConfig();
-    if (!fs.existsSync(file)) return null;
+    if (!files.exists(file)) return null;
     const raw = readYamlFile(file);
     return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
   } catch {
@@ -447,7 +447,7 @@ function memberDeclarationsOn(root: string): MemberDeclaration[] {
 /** The project id a member's own project.yaml declares, read through the host core adapter; null when unreadable. */
 function projectIdAt(root: string): string | null {
   try {
-    if (!fs.existsSync(root)) return null;
+    if (!files.exists(root)) return null;
     const config = runWithProjectRoot(root, () => loadProjectConfig());
     return config ? effectiveProjectId(config) : null;
   } catch {
@@ -457,8 +457,8 @@ function projectIdAt(root: string): string | null {
 
 /** A member directory's own project id, or why none can be read — in words a person acts on. */
 function memberIdAt(dir: string): { id: string } | { reason: string } {
-  if (!fs.existsSync(dir)) return { reason: `its directory ${dir} does not exist` };
-  if (!fs.existsSync(aiPathsAt(dir).projectConfig())) return { reason: `${dir} holds no .wai/project.yaml` };
+  if (!files.exists(dir)) return { reason: `its directory ${dir} does not exist` };
+  if (!files.exists(aiPathsAt(dir).projectConfig())) return { reason: `${dir} holds no .wai/project.yaml` };
   let id: string | null;
   try {
     const config = runWithProjectRoot(dir, () => loadProjectConfig());
@@ -508,7 +508,7 @@ export function planMemberRecords(dataDir: string, id: string): PlannedMemberRec
 /** Whether a member root holds a project's content — an id, an L0 or a lock — or is a part (stage 8). */
 function holdsProjectContent(dir: string): boolean {
   const paths = aiPathsAt(dir);
-  if (fs.existsSync(paths.specsSystem()) || fs.existsSync(path.join(paths.root(), 'lock.json'))) return true;
+  if (files.exists(paths.specsSystem()) || files.exists(path.join(paths.root(), 'lock.json'))) return true;
   return rawConfigAt(dir)?.id !== undefined;
 }
 
@@ -519,7 +519,7 @@ function holdsProjectContent(dir: string): boolean {
  */
 export function isRetiredPart(record: HostedProjectRecord): boolean {
   return record.status === 'disabled' && record.parentProjectId !== undefined && !!record.rootPath
-    && fs.existsSync(record.rootPath) && !holdsProjectContent(record.rootPath);
+    && files.exists(record.rootPath) && !holdsProjectContent(record.rootPath);
 }
 
 /**
@@ -548,12 +548,12 @@ function planOne(
     return unreadable(`its path "${decl.path}" does not stay within its parent: ${e instanceof Error ? e.message : String(e)}`);
   }
   // A project.yaml that cannot be parsed at all is a member nobody can read, never a part: say why.
-  if (fs.existsSync(aiPathsAt(dir).projectConfig()) && rawConfigAt(dir) === null) {
+  if (files.exists(aiPathsAt(dir).projectConfig()) && rawConfigAt(dir) === null) {
     const unparsed = memberIdAt(dir);
     return unreadable('reason' in unparsed ? unparsed.reason : 'its .wai/project.yaml cannot be read');
   }
   // A part is part of its parent's record (stage 8): a record its member held as a project is retired.
-  if (fs.existsSync(dir) && !holdsProjectContent(dir)) {
+  if (files.exists(dir) && !holdsProjectContent(dir)) {
     const memberPath = normalizeMemberPath(decl.path);
     const held = records.find((r) => r.parentProjectId === parentId && r.memberPath === memberPath && r.status === 'active');
     return held ? { record: held, familyRootId, qualifier, action: 'retire', reason: `part of ${parentId}` } : null;

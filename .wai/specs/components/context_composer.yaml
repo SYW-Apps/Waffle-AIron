@@ -17,6 +17,7 @@ dependsOn:
   - project_config_repository
   - version_stamp
   - ai_tool_guide
+  - files_adapter
 status: complete
 createdAt: '2026-09-23T11:11:01.297Z'
-updatedAt: '2026-09-23T11:12:09.173Z'
+updatedAt: '2026-10-31T23:22:19.579Z'

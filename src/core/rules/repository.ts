@@ -20,6 +20,7 @@ import { renameTracesRule } from './integrity/rename-traces.js';
 import { typeGroupsRule } from './integrity/type-groups.js';
 import { publicSurfaceBindingRule } from './integrity/public-surface-binding.js';
 import { publicSurfaceConsumersRule } from './integrity/public-surface-consumers.js';
+import { publicSurfaceSharedRule } from './integrity/public-surface-shared.js';
 import { implementsContractsRule } from './integrity/implements-contracts.js';
 import { publicSurfaceBoundContractRule } from './integrity/public-surface-bound-contract.js';
 import { exportTablesRule } from './integrity/export-tables.js';
@@ -259,6 +260,7 @@ export const SDD_RULES: SddRule[] = [
   // Portal's transport, so no rule compares an authored one.
   publicSurfaceBindingRule,
   publicSurfaceConsumersRule,
+  publicSurfaceSharedRule,
   implementsContractsRule,
   publicSurfaceBoundContractRule,
   // The export tables the resolver settled: what the published names bind.

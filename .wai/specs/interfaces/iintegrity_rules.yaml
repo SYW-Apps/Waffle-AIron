@@ -126,7 +126,8 @@ methods:
       component exists, and the subsystem owns it — a subsystem may only publish its own components.
       A published component that is not a Portal is reported: nothing can use it, since a hop from
       another subsystem enters through a published Portal and another project consumes only a
-      Portal's verbs.
+      Portal's verbs — except an Adapter its subsystem publishes as shared, which every subsystem of
+      the project may call directly, and which public-surface-shared judges.
     signature: 'publicSurfaceBinding(ctx: RuleContext): void'
     returns: void
     params:
@@ -728,6 +729,34 @@ methods:
         summary: >-
           A group's parent exists but lives in another home (shared folder vs a subsystem's, or two
           subsystems'); a group and its parent share one home
+  - name: publicSurfaceShared
+    description: >-
+      Rule public-surface-shared. Every own component entry that publishes its component as shared
+      (shared: true) must publish what a shared Adapter is: generic I/O every subsystem of the
+      project calls directly, deployment-neutral because each deployable runs its own copy
+      in-process. So the component is an Adapter (PUBLIC_INTERFACE_SHARED_NOT_ADAPTER); no pattern
+      or Supervisor owns it, since a member is private to its owner (SHARED_ADAPTER_OWNED); and it
+      depends only on pure Orchestrators and other shared Adapters, so it holds no state and reaches
+      nothing a deployable would have to share (SHARED_ADAPTER_DEPENDENCY). An entry whose component
+      is missing or foreign is public-surface-binding's, never judged here.
+    signature: 'publicSurfaceShared(ctx: RuleContext): void'
+    returns: void
+    params:
+      - name: ctx
+        type: RuleContext
+        description: The validation run's shared read model and issue sink
+    findings:
+      - code: PUBLIC_INTERFACE_SHARED_NOT_ADAPTER
+        severity: error
+        summary: A public interface entry publishes a component that is not an Adapter as shared
+      - code: SHARED_ADAPTER_OWNED
+        severity: error
+        summary: An Adapter published as shared is a member a pattern or a Supervisor owns
+      - code: SHARED_ADAPTER_DEPENDENCY
+        severity: error
+        summary: >-
+          An Adapter published as shared depends on something other than a pure Orchestrator or
+          another shared Adapter
 status: complete
 createdAt: '2026-09-14T06:05:51.190Z'
-updatedAt: '2026-10-23T22:26:10.364Z'
+updatedAt: '2026-10-31T21:55:08.943Z'

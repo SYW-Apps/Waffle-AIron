@@ -25,6 +25,9 @@ dependsOn:
   - cli_migration_adapter
   - cli_network_adapter
   - cli_upgrade_adapter
+  - files_adapter
+  - http_client_adapter
+  - process_adapter
 lint:
   allow:
     - code: GOD_COMPONENT
@@ -54,4 +57,4 @@ lint:
         responsibility.
 status: complete
 createdAt: '2026-06-10T19:28:00.000Z'
-updatedAt: '2026-10-18T19:04:35.235Z'
+updatedAt: '2026-10-31T23:20:57.519Z'

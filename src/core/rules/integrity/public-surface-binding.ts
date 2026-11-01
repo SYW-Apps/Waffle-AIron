@@ -18,7 +18,7 @@ export const publicSurfaceBindingRule: SddRule = {
   name: 'public-surface-binding',
   judges: 'design',
   description:
-    'Every declared publicInterface names a backing component, that component exists, and the subsystem owns it — a subsystem may only publish its own components. A published component that is not a Portal is reported: nothing can use it, since a hop from another subsystem enters through a published Portal and another project consumes only a Portal\'s verbs.',
+    'Every declared publicInterface names a backing component, that component exists, and the subsystem owns it — a subsystem may only publish its own components. A published component that is not a Portal is reported: nothing can use it, since a hop from another subsystem enters through a published Portal and another project consumes only a Portal\'s verbs — except an Adapter its subsystem publishes as shared, which every subsystem of the project may call directly, and which public-surface-shared judges.',
   codes: [
     { code: 'PUBLIC_INTERFACE_UNBOUND', defaultSeverity: 'error', summary: 'Public interface with no backing component' },
     { code: 'PUBLIC_INTERFACE_INVALID_COMPONENT', defaultSeverity: 'error', summary: 'Public interface references a non-existent component' },
@@ -45,8 +45,8 @@ export const publicSurfaceBindingRule: SddRule = {
           ctx.addIssue('error', 'PUBLIC_INTERFACE_FOREIGN_COMPONENT', `Subsystem "${sub.id}" publishes component "${pi.component}", but it belongs to subsystem "${backing.subsystem}". A subsystem may only publish its own components.`, sub.id, isDraftCtx);
           continue;
         }
-        if (backing.componentType !== 'Portal') {
-          ctx.addIssue('warning', 'PUBLIC_INTERFACE_NOT_PORTAL', `Subsystem "${sub.id}" publishes "${pi.component}", a ${backing.componentType}, not a Portal. Nothing can use it: a hop from another subsystem enters through a published Portal (CROSS_SUBSYSTEM_TARGET_NON_PORTAL where it is declared), and another project consumes only a Portal's verbs. Publish the Portal that dispatches to it, or drop the entry.`, sub.id, isDraftCtx);
+        if (backing.componentType !== 'Portal' && !ctx.sharedSet.get(sub.id)?.has(backing.id)) {
+          ctx.addIssue('warning', 'PUBLIC_INTERFACE_NOT_PORTAL', `Subsystem "${sub.id}" publishes "${pi.component}", a ${backing.componentType}, not a Portal. Nothing can use it: a hop from another subsystem enters through a published Portal (CROSS_SUBSYSTEM_TARGET_NON_PORTAL where it is declared), and another project consumes only a Portal's verbs. Publish the Portal that dispatches to it, publish an Adapter as shared, or drop the entry.`, sub.id, isDraftCtx);
         }
       }
     }

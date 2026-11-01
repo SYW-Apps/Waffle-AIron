@@ -21,10 +21,11 @@ fields:
   - name: matrix
     type: list<DependencyEdge>
     description: >-
-      The edges the intra-subsystem stereotype matrix judges: resolved inside one subsystem, both
-      ends live, and unlicensed by the governing pack profile. Their target always resolved
+      The edges the stereotype matrix judges: resolved inside one subsystem or into another
+      subsystem's shared Adapter (reach internal or shared), both ends live, and unlicensed by the
+      governing pack profile. Their target always resolved
     optional: false
 methods: []
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-09-18T01:06:31.002Z'
-updatedAt: '2026-10-04T10:20:02.173Z'
+updatedAt: '2026-10-31T21:51:47.409Z'

@@ -1,8 +1,8 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
-import { spawn } from 'child_process';
+import { processes } from '../io/index.js';
 import chalk from 'chalk';
 import inquirer from 'inquirer';
 import { logger } from '../utils/logger.js';
@@ -336,11 +336,7 @@ function openBrowser(url: string): void {
     const platform = process.platform;
     const cmd = platform === 'win32' ? 'cmd' : platform === 'darwin' ? 'open' : 'xdg-open';
     const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
-    const child = spawn(cmd, args, { stdio: 'ignore', detached: true });
-    child.on('error', () => {
-      /* no browser available — best-effort */
-    });
-    child.unref();
+    processes.start(cmd, args);
   } catch {
     /* opening a browser is best-effort and never fatal */
   }
@@ -1033,7 +1029,7 @@ export async function runHostPacks(action: string, options: HostOptions = {}): P
       case 'install': {
         if (!options.file) throw new WaironError('`--file <path>` (a declarative pack YAML) is required for install.');
         const name = options.name ?? path.basename(options.file).replace(/\.(ya?ml)$/i, '');
-        const content = fs.readFileSync(path.resolve(options.file), 'utf8');
+        const content = files.readText(path.resolve(options.file));
         // Steps 10-14: into a project, the impact first — then install only on yes.
         if (project && !hostPackWriteUnattended(options.yes)) {
           printHostPackImpact(localAdmin.previewProjectPack(cfg, cred, project, name, content));

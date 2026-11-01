@@ -34,6 +34,17 @@ methods:
         type: HostConfig
     guarantees:
       - idempotent
+  - name: isReady
+    description: >-
+      Whether the instance can serve requests: its data directory is writable. What the readiness
+      probe reports; a folder it cannot write to is not ready, never an error.
+    signature: 'isReady(config: HostConfig): bool'
+    returns: bool
+    params:
+      - name: config
+        type: HostConfig
+        description: The instance configuration naming its data directory
+    effect: read
 status: complete
 createdAt: '2026-07-04T12:49:31.392Z'
-updatedAt: '2026-09-25T23:00:20.759Z'
+updatedAt: '2026-10-31T23:46:09.464Z'

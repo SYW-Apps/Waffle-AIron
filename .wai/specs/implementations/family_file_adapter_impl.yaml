@@ -34,6 +34,8 @@ methods:
     narrative: []
     detail: intent
     intent: Reads the file; null on ENOENT; any other error throws naming the file.
+    calls:
+      - files_adapter.readBytes
   - name: digest
     narrative: []
     detail: intent
@@ -52,6 +54,13 @@ methods:
     intent: >-
       Writes the bytes to `<path>.wairon-restore` in the same directory, fsyncs it, and renames it
       over the path with replace's retries; removes the temporary sibling when the rename fails.
+    calls:
+      - files_adapter.ensureDir
+      - files_adapter.openForWrite
+      - files_adapter.writeDescriptor
+      - files_adapter.syncDescriptor
+      - files_adapter.closeDescriptor
+      - files_adapter.removeFile
   - name: remove
     narrative: []
     detail: intent
@@ -62,6 +71,9 @@ methods:
     intent: >-
       Walks up from the directory to the first existing ancestor, then creates the missing ones
       downward, answering them shallowest first.
+    calls:
+      - files_adapter.exists
+      - files_adapter.makeDir
   - name: prune
     narrative: []
     detail: intent
@@ -81,6 +93,8 @@ methods:
       to its nearest existing ancestor and answers the directory only when that ancestor's real path
       is the root's real path or lies within it, else null. Never throws for an absent directory: an
       absent one is judged by the ancestor that exists.
+    calls:
+      - files_adapter.realPath
   - name: holdsProject
     narrative: []
     detail: intent
@@ -97,4 +111,4 @@ methods:
       directories below the source, the source included. Throws the first failure naming the file.
 status: complete
 createdAt: '2026-09-30T20:27:27.264Z'
-updatedAt: '2026-10-01T18:07:37.662Z'
+updatedAt: '2026-10-31T23:47:41.068Z'

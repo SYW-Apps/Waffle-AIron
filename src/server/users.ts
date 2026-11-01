@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import type { HostedUserRecord, UnitIdRemap } from './types.js';
 import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
@@ -38,7 +38,7 @@ function loadStore(dataDir: string): HostedUserRecord[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Cannot read hosted-user store at ${p}: ${(err as Error).message}`);
@@ -62,7 +62,7 @@ function loadStore(dataDir: string): HostedUserRecord[] {
  */
 function update(dataDir: string, change: (records: HostedUserRecord[]) => HostedUserRecord[]): HostedUserRecord[] {
   const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const current = readJsonForUpdate<unknown>(p, []);
     if (!Array.isArray(current)) {

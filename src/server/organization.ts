@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
@@ -63,7 +63,7 @@ function readState(dataDir: string): OrganizationState {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return { units: [], placements: [] };
     throw new Error(`Failed to read organization store at ${p}: ${(e as Error).message}`);
@@ -187,7 +187,7 @@ class OrganizationStore {
    */
   update(change: (state: OrganizationState) => OrganizationState): OrganizationState {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     const next = withFileLock(p, () => {
       const current = readCurrentState(p);
       const before = JSON.stringify(current);

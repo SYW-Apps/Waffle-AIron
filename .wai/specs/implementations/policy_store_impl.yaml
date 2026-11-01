@@ -30,6 +30,7 @@ methods:
       when the change throws. Answers the policy written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
   - name: updateIdentityProviders
     narrative: []
     intent: >-
@@ -39,6 +40,7 @@ methods:
       collection written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
   - name: updateExposurePolicy
     narrative: []
     intent: >-
@@ -48,7 +50,8 @@ methods:
       written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-09T20:47:39.801Z'
-updatedAt: '2026-10-23T22:23:38.896Z'
+updatedAt: '2026-10-31T23:35:08.473Z'

@@ -1,5 +1,5 @@
-import { SddRule } from '../types.js';
-import { splitNamespace } from '../../../models/index.js';
+import { SddRule, type RuleContext } from '../types.js';
+import { splitNamespace, type ComponentSpec } from '../../../models/index.js';
 import { routingTableComponents } from './method-cohesion.js';
 
 /** Default dependsOn count above which a component is flagged as doing too much.
@@ -19,7 +19,7 @@ export const couplingRule: SddRule = {
   name: 'coupling-health',
   judges: 'design',
   description:
-    'Two subsystems depending on each other is a real architectural commitment (deployment affinity, backpressure, scaling coupling). It is allowed but must be acknowledged with a trustedLinks declaration on either side, stating the reason (e.g. a latency fast lane that bypasses the bus). A trustedLink on the SOURCE subsystem additionally licenses its direct edges into the peer without the client-Adapter shim; the published-Portal target requirement stays either way. Also flags components whose dependsOn fan-out suggests a god component.',
+    'Two subsystems depending on each other is a real architectural commitment (deployment affinity, backpressure, scaling coupling). It is allowed but must be acknowledged with a trustedLinks declaration on either side, stating the reason (e.g. a latency fast lane that bypasses the bus). A trustedLink on the SOURCE subsystem additionally licenses its direct edges into the peer without the client-Adapter shim; the published-Portal target requirement stays either way. Also flags components whose dependsOn fan-out suggests a god component; a shared Adapter is generic I/O, not a collaborator, and is not counted.',
   codes: [
     { code: 'MUTUAL_SUBSYSTEM_DEPENDENCY', defaultSeverity: 'warning', summary: 'Subsystems depend on each other without a declared trusted link' },
     { code: 'INVALID_TRUSTED_LINK', defaultSeverity: 'error', summary: 'trustedLinks references a non-existent subsystem' },
@@ -127,11 +127,12 @@ export const couplingRule: SddRule = {
     const routingTables = routingTableComponents(ctx);
     for (const comp of ctx.components) {
       const threshold = ctx.complexityConfigFor(comp.subsystem)?.maxComponentDependencies ?? DEFAULT_GOD_COMPONENT_THRESHOLD;
-      if (comp.dependsOn.length > threshold && !routingTables.has(comp.id)) {
+      const collaborators = collaboratorCount(ctx, comp);
+      if (collaborators > threshold && !routingTables.has(comp.id)) {
         ctx.addIssue(
           'warning',
           'GOD_COMPONENT',
-          `Component "${comp.id}" depends on ${comp.dependsOn.length} components (> ${threshold}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a Repository facade.`,
+          `Component "${comp.id}" depends on ${collaborators} components (> ${threshold}). That fan-out suggests it owns more than one responsibility — split the workflow, or group cohesive collaborators behind a Repository facade.`,
           comp.id,
           ctx.isComponentDraft(comp.id),
         );
@@ -139,3 +140,13 @@ export const couplingRule: SddRule = {
     }
   },
 };
+
+/**
+ * How many collaborators a component has: its dependsOn without the Adapters a
+ * subsystem publishes as shared. Generic I/O is no responsibility, so a component
+ * that reads a file pays no fan-out for it — both fan-out rules count this.
+ */
+export function collaboratorCount(ctx: RuleContext, comp: ComponentSpec): number {
+  const shared = (id: string): boolean => [...ctx.sharedSet.values()].some(ids => ids.has(id));
+  return comp.dependsOn.filter(id => !shared(id)).length;
+}

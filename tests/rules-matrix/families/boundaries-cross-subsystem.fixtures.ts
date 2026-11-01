@@ -63,6 +63,22 @@ const INVOICE_LEDGER_ORCH = {
   description: 'Drives invoice drafting and ledger posting inside billing.',
 };
 
+const DOCUMENT_STORAGE_ADAPTER = {
+  id: 'document-storage-adapter',
+  componentType: 'Adapter',
+  subsystem: 'billing',
+  description: 'Generic file I/O over the billing documents on local disk.',
+};
+
+/** billing publishes the document storage adapter as shared, optionally only to some subsystems. */
+const SHARED_STORAGE_SUB = (consumers?: string[]) => ({
+  id: 'billing',
+  description: 'Invoicing and payment collection for booked visits.',
+  publicInterfaces: [
+    { details: 'Document file I/O for every subsystem.', component: 'document-storage-adapter', shared: true, ...(consumers ? { consumers } : {}) },
+  ],
+});
+
 export default [
   // -------------------------------------------------------------------------
   // CROSS_SUBSYSTEM_NON_ADAPTER
@@ -915,6 +931,141 @@ export default [
             { name: 'findAppointment', description: 'Load one appointment by id.', effect: 'read' },
           ],
         },
+      ],
+    },
+  }),
+
+  // -------------------------------------------------------------------------
+  // Shared Adapters: an Adapter its subsystem publishes as shared (shared: true)
+  // is reached directly from any subsystem — reach `shared`. The stereotype
+  // matrix judges the edge as an internal one; the boundary rule asks only the
+  // consumers question.
+  // -------------------------------------------------------------------------
+  ...(['CROSS_SUBSYSTEM_NON_ADAPTER', 'CROSS_SUBSYSTEM_PRIVATE_ACCESS', 'CROSS_SUBSYSTEM_TARGET_NON_PORTAL'] as const).map((code) =>
+    defineRuleFixture({
+      code,
+      expectFire: false,
+      reason: 'The Adapter is published as shared, so it is no front door and no client Adapter, trustedLink or Portal is asked for: the edge is judged by the stereotype matrix like an internal one.',
+      scenario:
+        'The scheduling appointment orchestrator depends directly on the billing subsystem\'s document storage adapter, which billing publishes as shared generic file I/O.',
+      tree: {
+        system: SYSTEM,
+        subsystems: [
+          { id: 'scheduling', description: 'Appointment booking and slot management.' },
+          SHARED_STORAGE_SUB(),
+        ],
+        components: [
+          {
+            id: 'appointment-orchestrator',
+            componentType: 'Orchestrator',
+            subsystem: 'scheduling',
+            description: 'Coordinates the appointment booking workflow end to end.',
+            dependsOn: ['document-storage-adapter'],
+          },
+          DOCUMENT_STORAGE_ADAPTER,
+        ],
+      },
+    })),
+  defineRuleFixture({
+    code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+    severity: 'error',
+    anchoredTo: 'appointment-orchestrator',
+    expectFire: true,
+    scenario:
+      'The billing subsystem publishes its document storage adapter as shared but only to the claims subsystem, and the scheduling appointment orchestrator depends on it anyway.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        { id: 'claims', description: 'Insurance claim submission for billed visits.' },
+        SHARED_STORAGE_SUB(['claims']),
+      ],
+      components: [
+        {
+          id: 'appointment-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'scheduling',
+          description: 'Coordinates the appointment booking workflow end to end.',
+          dependsOn: ['document-storage-adapter'],
+        },
+        DOCUMENT_STORAGE_ADAPTER,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'ARCHITECTURE_VIOLATION_PORTAL_FORBIDDEN_DEP',
+    severity: 'error',
+    anchoredTo: 'booking-api-portal',
+    expectFire: true,
+    scenario:
+      'The scheduling booking API portal depends directly on the billing subsystem\'s shared document storage adapter: a Portal never depends on an Adapter, whichever subsystem it lives in.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        SHARED_STORAGE_SUB(),
+      ],
+      components: [
+        {
+          id: 'booking-api-portal',
+          componentType: 'Portal',
+          transport: 'Custom',
+          subsystem: 'scheduling',
+          description: 'Patient-facing API surface receiving appointment booking requests.',
+          dependsOn: ['document-storage-adapter'],
+        },
+        DOCUMENT_STORAGE_ADAPTER,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'DEPENDENCY_CLASS_VIOLATION',
+    severity: 'error',
+    anchoredTo: 'slot-matching-arbiter',
+    expectFire: true,
+    scenario:
+      'The scheduling slot-matching arbiter, pure logic, depends on the billing subsystem\'s shared document storage adapter: pure logic never does I/O, so the shared edge is judged as an internal one.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        SHARED_STORAGE_SUB(),
+      ],
+      components: [
+        {
+          id: 'slot-matching-arbiter',
+          componentType: 'Orchestrator',
+          dependencyClass: 'pure',
+          subsystem: 'scheduling',
+          description: 'Pure logic matching visit requests to open clinician slots from the values it is handed.',
+          dependsOn: ['document-storage-adapter'],
+        },
+        DOCUMENT_STORAGE_ADAPTER,
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'DEPENDENCY_CLASS_VIOLATION',
+    expectFire: false,
+    reason: 'Read logic may read through an Adapter, and a shared Adapter is judged as an internal one.',
+    scenario:
+      'The scheduling availability projector, read logic, depends on the billing subsystem\'s shared document storage adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'scheduling', description: 'Appointment booking and slot management.' },
+        SHARED_STORAGE_SUB(),
+      ],
+      components: [
+        {
+          id: 'availability-projector',
+          componentType: 'Orchestrator',
+          dependencyClass: 'read',
+          subsystem: 'scheduling',
+          description: 'Read logic projecting clinician availability from stored schedule documents.',
+          dependsOn: ['document-storage-adapter'],
+        },
+        DOCUMENT_STORAGE_ADAPTER,
       ],
     },
   }),

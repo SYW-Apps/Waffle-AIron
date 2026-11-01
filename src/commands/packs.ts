@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import chalk from 'chalk';
@@ -124,10 +124,10 @@ function describe(probe: PackProbe): string {
 /** The unit to vendor: the file itself, or the whole directory of a directory pack. */
 function resolveSourceUnit(source: string): { abs: string; isDir: boolean } {
   const abs = path.resolve(source);
-  if (!fs.existsSync(abs)) {
+  if (!files.exists(abs)) {
     throw new Error(`Pack source "${source}" does not exist.`);
   }
-  const isDir = fs.statSync(abs).isDirectory();
+  const isDir = files.stat(abs).isDirectory();
   if (isDir && !packDirEntry(abs)) {
     throw new Error(`"${source}" is a directory without a pack entry file (pack.yaml | pack.cjs | index.cjs | ...).`);
   }
@@ -164,8 +164,8 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
     const destDir = globalPacksDir();
     const dest = path.join(destDir, path.basename(abs));
     if (path.resolve(dest) !== abs) {
-      fs.mkdirSync(destDir, { recursive: true });
-      fs.cpSync(abs, dest, { recursive: true, force: true });
+      files.ensureDir(destDir);
+      files.copy(abs, dest, { recursive: true, force: true });
     }
     logger.success(`Installed pack "${probe.name}" globally: ${dest}`);
     logger.info(`${describe(probe)} — auto-loaded for every project on this machine (WAIRON_PACKS_DIR / ~/.wairon/packs).`);
@@ -187,14 +187,14 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
   const dest = path.join(root, '.wai', 'packs', path.basename(abs));
   if (path.resolve(dest) !== abs) {
 
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.cpSync(abs, dest, { recursive: true, force: true });
+    files.ensureDir(path.dirname(dest));
+    files.copy(abs, dest, { recursive: true, force: true });
   }
 
   if (registerPackRef(relRef)) {
     logger.success(`Vendored pack "${probe.name}" into ${relRef} and registered it in .wai/project.yaml.`);
   } else {
-    fs.cpSync(abs, dest, { recursive: true, force: true });
+    files.copy(abs, dest, { recursive: true, force: true });
     logger.success(`Pack "${probe.name}" already registered — refreshed ${relRef} from the source.`);
   }
   logger.info(`${describe(probe)} — commit .wai/ so CI and every clone enforce it.`);
@@ -211,7 +211,7 @@ export async function addPack(source: string, global?: boolean, yes?: boolean): 
  */
 async function addPackFromArchive(source: string, options: { global?: boolean; yes?: boolean }): Promise<void> {
   const abs = path.resolve(source);
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+  if (!files.exists(abs) || !files.stat(abs).isFile()) {
     logger.error(`Pack archive "${source}" does not exist.`);
     process.exitCode = 1;
     return;
@@ -236,9 +236,9 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
   // name (and thus its final directory) is only known from the extraction
   // result's manifest, and nothing may land in the project before the impact
   // was shown and accepted.
-  const bytes = fs.readFileSync(abs);
-  const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-wpack-staging-'));
-  const dropStaging = (): void => { try { fs.rmSync(staging, { recursive: true, force: true }); } catch { /* temp */ } };
+  const bytes = files.readBytes(abs);
+  const staging = files.makeTempDir(path.join(os.tmpdir(), 'wairon-wpack-staging-'));
+  const dropStaging = (): void => { try { files.remove(staging); } catch { /* temp */ } };
   let result: PackExtractionResult;
   try {
     result = extractPack(bytes, staging);
@@ -269,9 +269,9 @@ async function addPackFromArchive(source: string, options: { global?: boolean; y
 
   // Relocate the extracted tree to <name>/ (replacing any prior copy).
   const destDir = path.join(baseDir, name);
-  fs.mkdirSync(baseDir, { recursive: true });
-  if (fs.existsSync(destDir)) fs.rmSync(destDir, { recursive: true, force: true });
-  fs.cpSync(staging, destDir, { recursive: true });
+  files.ensureDir(baseDir);
+  if (files.exists(destDir)) files.remove(destDir);
+  files.copy(staging, destDir, { recursive: true });
   dropStaging();
 
   if (options.global) {
@@ -334,7 +334,7 @@ export function buildPack(source: string, options: { out?: string } = {}): void 
 
   // Step 2: write the archive bytes to --out (or the suggested file name) and report.
   const outPath = options.out ?? result.suggestedFileName;
-  fs.writeFileSync(outPath, result.archive);
+  files.writeBytes(outPath, result.archive);
   logger.success(`Built pack "${result.info.name}" v${result.info.version} → ${outPath} (${result.archive.byteLength} bytes)`);
   logger.info(`Install it with \`wairon pack add ${outPath}\`, or upload it to a hosted instance.`);
 }
@@ -367,7 +367,7 @@ export function expandSource(source: string, version?: string): string {
 
 /** Fetch a remote .wpack into a temp file, returning its path. */
 async function fetchArchive(url: string): Promise<string> {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-packdl-'));
+  const dir = files.makeTempDir(path.join(os.tmpdir(), 'wairon-packdl-'));
   const dest = path.join(dir, 'pack.wpack');
   await downloadFile(url, dest);
   return dest;
@@ -392,7 +392,7 @@ export async function installPack(source: string, yes?: boolean): Promise<void> 
       return;
     }
     const extracted = extractArchiveToTemp(archive);
-    try { fs.rmSync(path.dirname(archive), { recursive: true, force: true }); } catch { /* temp */ }
+    try { files.remove(path.dirname(archive)); } catch { /* temp */ }
     if (!extracted) return;
     try {
       const update = await confirmFloatingUpdate(extracted.dir, yes);
@@ -403,7 +403,7 @@ export async function installPack(source: string, yes?: boolean): Promise<void> 
       logger.error(e instanceof Error ? e.message : String(e));
       process.exitCode = 1;
     } finally {
-      try { fs.rmSync(extracted.dir, { recursive: true, force: true }); } catch { /* temp */ }
+      try { files.remove(extracted.dir); } catch { /* temp */ }
     }
     return;
   }
@@ -443,7 +443,7 @@ export async function installPack(source: string, yes?: boolean): Promise<void> 
     logger.error(e instanceof Error ? e.message : String(e));
     process.exitCode = 1;
   } finally {
-    if (cleanup) { try { fs.rmSync(cleanup, { recursive: true, force: true }); } catch { /* temp dir */ } }
+    if (cleanup) { try { files.remove(cleanup); } catch { /* temp dir */ } }
   }
 }
 
@@ -497,18 +497,18 @@ function reportInstalled(installed: InstalledPack, origin: string, movedFloating
 /** Extract a .wpack/.zip into a temp directory via the SDK, or null on failure. */
 function extractArchiveToTemp(source: string): { dir: string } | null {
   const abs = path.resolve(source);
-  if (!fs.existsSync(abs)) {
+  if (!files.exists(abs)) {
     logger.error(`Pack archive "${source}" does not exist.`);
     process.exitCode = 1;
     return null;
   }
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wairon-packinstall-'));
+  const tempDir = files.makeTempDir(path.join(os.tmpdir(), 'wairon-packinstall-'));
   try {
-    const result: PackExtractionResult = extractPack(new Uint8Array(fs.readFileSync(abs)), tempDir);
+    const result: PackExtractionResult = extractPack(new Uint8Array(files.readBytes(abs)), tempDir);
     void result;
     return { dir: tempDir };
   } catch (e) {
-    try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* temp dir */ }
+    try { files.remove(tempDir); } catch { /* temp dir */ }
     logger.error(`Could not extract "${source}": ${e instanceof Error ? e.message : String(e)}`);
     process.exitCode = 1;
     return null;
@@ -754,7 +754,7 @@ function syncBlocker(selection: PackSelection): string | null {
 async function fetchAndInstall(selection: PackSelection, url: string): Promise<InstalledPack | null> {
   const archive = await fetchArchive(url);
   const extracted = extractArchiveToTemp(archive);
-  try { fs.rmSync(path.dirname(archive), { recursive: true, force: true }); } catch { /* temp */ }
+  try { files.remove(path.dirname(archive)); } catch { /* temp */ }
   if (!extracted) return null;
   try {
     const pack = installPackFromDirectory(extracted.dir, selection.source);
@@ -763,7 +763,7 @@ async function fetchAndInstall(selection: PackSelection, url: string): Promise<I
     }
     return pack;
   } finally {
-    try { fs.rmSync(extracted.dir, { recursive: true, force: true }); } catch { /* temp */ }
+    try { files.remove(extracted.dir); } catch { /* temp */ }
   }
 }
 
@@ -777,15 +777,15 @@ function bundleTargets(selections: PackSelection[], name: string | undefined, al
 /** Replace the committed copy of one pack, returning where it was written. */
 function writeBundle(root: string, resolved: InstalledPack): string {
   const dest = path.join(root, '.wai', 'packs', resolved.name, resolved.version);
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  if (fs.statSync(resolved.path).isFile()) {
+  files.remove(dest);
+  files.ensureDir(path.dirname(dest));
+  if (files.stat(resolved.path).isFile()) {
     // A legacy single-file pack (a bare .yaml/.cjs in the machine-wide folder):
     // the bundle is a pack DIRECTORY, so the file becomes its entry file.
-    fs.mkdirSync(dest, { recursive: true });
-    fs.copyFileSync(resolved.path, path.join(dest, `pack${path.extname(resolved.path).toLowerCase()}`));
+    files.ensureDir(dest);
+    files.copyFile(resolved.path, path.join(dest, `pack${path.extname(resolved.path).toLowerCase()}`));
   } else {
-    fs.cpSync(resolved.path, dest, { recursive: true });
+    files.copy(resolved.path, dest, { recursive: true });
   }
   return dest;
 }
@@ -924,7 +924,7 @@ export async function removePack(name: string, global?: boolean, yes?: boolean):
     for (const ref of discoverPacks(globalPacksDir())) {
       const probe = probePack(ref, path.dirname(ref), 'global');
       if (probe.name === name || path.basename(ref) === name) {
-        fs.rmSync(ref, { recursive: true, force: true });
+        files.remove(ref);
         logger.success(`Removed global pack "${probe.name ?? name}" (${ref}).`);
         return;
       }
@@ -966,7 +966,7 @@ export async function removePack(name: string, global?: boolean, yes?: boolean):
       const resolved = path.resolve(root, ref);
       const vendorDir = path.resolve(root, '.wai', 'packs');
       if (resolved.startsWith(vendorDir + path.sep)) {
-        fs.rmSync(resolved, { recursive: true, force: true });
+        files.remove(resolved);
         logger.success(`Deregistered pack "${probe.name ?? name}" and deleted ${ref}.`);
       } else {
         logger.success(`Deregistered pack "${probe.name ?? name}" (files at ${ref} left in place).`);

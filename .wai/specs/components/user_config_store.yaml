@@ -12,7 +12,8 @@ description: >-
 subsystem: sdd_cli
 componentType: Store
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 durability: read-through
 lint:
   allow:
@@ -27,4 +28,4 @@ lint:
         or a read that needs logic of its own beyond the unknown-channel fallback.
 status: complete
 createdAt: '2026-09-22T21:17:47.544Z'
-updatedAt: '2026-09-22T21:19:46.561Z'
+updatedAt: '2026-10-31T23:21:58.851Z'

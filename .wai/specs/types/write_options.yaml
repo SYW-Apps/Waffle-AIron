@@ -1,0 +1,14 @@
+kind: value-object
+id: write_options
+name: WriteOptions
+description: What a file write takes.
+subsystem: sdd_io
+fields:
+  - name: mode
+    type: int
+    description: The permission bits of a file the write creates
+    optional: true
+methods: []
+sourcePath: src/io/files.ts
+createdAt: '2026-10-31T23:14:38.436Z'
+updatedAt: '2026-10-31T23:14:39.638Z'

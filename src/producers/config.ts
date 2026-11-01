@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { aiDir } from '../utils/fs.js';
 import type { ProducerConfig } from './types.js';
@@ -14,7 +14,7 @@ function configPath(): string {
 
 function load(): ProducerConfig[] {
   try {
-    return JSON.parse(fs.readFileSync(configPath(), 'utf8')) as ProducerConfig[];
+    return JSON.parse(files.readText(configPath())) as ProducerConfig[];
   } catch {
     return [];
   }
@@ -22,10 +22,10 @@ function load(): ProducerConfig[] {
 
 function save(configs: ProducerConfig[]): void {
   const p = configPath();
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(configs, null, 2) + '\n');
-  fs.renameSync(tmp, p);
+  files.writeText(tmp, JSON.stringify(configs, null, 2) + '\n');
+  files.rename(tmp, p);
 }
 
 export function readProducerConfig(target: string): ProducerConfig | null {

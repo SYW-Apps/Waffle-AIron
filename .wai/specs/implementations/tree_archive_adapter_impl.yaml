@@ -50,12 +50,19 @@ methods:
   - name: createStagingDir
     narrative:
       - stepNumber: 1
+        description: Make sure the destination root folder exists
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
+      - stepNumber: 2
         description: >-
           Derive a uniquely named staging directory beside the destination root (a sibling, so the
           swap is a rename within one filesystem rather than a cross-device copy) and create it
           empty.
-        type: local
-      - stepNumber: 2
+        type: call
+        targetComponent: files_adapter
+        targetMethod: makeTempDir
+      - stepNumber: 3
         description: Return the staging directory path.
         type: return
         outcome: success
@@ -72,35 +79,57 @@ methods:
         type: loop
         loopKind: forEach
         over: roots
-        endStep: 5
+        endStep: 9
       - stepNumber: 3
+        description: Does the destination root hold an existing .wai?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 4
         description: Does this root hold an existing .wai that the caller asked to preserve?
         type: branch
         condition: backupExisting is set and the destination root's .wai exists
-        onTrueStep: 4
-        onFalseStep: 5
-      - stepNumber: 4
-        description: >-
-          Move the existing .wai into the backup directory under this root's project-relative path,
-          so one backup holds the whole previous tree in its original shape.
-        type: local
+        onTrueStep: 5
+        onFalseStep: 7
       - stepNumber: 5
-        label: swapEnd
-        description: >-
-          Move the staged root's .wai into position under the destination, replacing whatever
-          remains there.
-        type: local
+        description: Make the backup folder for this root's project-relative path
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
       - stepNumber: 6
+        description: >-
+          Move the existing .wai into the backup directory, so one backup holds the whole previous
+          tree in its original shape.
+        type: call
+        targetComponent: files_adapter
+        targetMethod: rename
+      - stepNumber: 7
+        label: swapEnd
+        description: Make sure the target's parent folder exists, ready for the staged root's .wai
+        type: call
+        targetComponent: files_adapter
+        targetMethod: ensureDir
+      - stepNumber: 8
+        description: Remove whatever remains at the target, when present
+        type: call
+        targetComponent: files_adapter
+        targetMethod: remove
+      - stepNumber: 9
+        description: Move the staged root's .wai into position under the destination
+        type: call
+        targetComponent: files_adapter
+        targetMethod: rename
+      - stepNumber: 10
         description: Was anything moved aside?
         type: branch
         condition: the backup directory was created
-        onTrueStep: 7
-        onFalseStep: 8
-      - stepNumber: 7
+        onTrueStep: 11
+        onFalseStep: 12
+      - stepNumber: 11
         description: Return the backup directory path.
         type: return
         outcome: replaced
-      - stepNumber: 8
+      - stepNumber: 12
         description: Return an empty string — the destination held no previous tree.
         type: return
         outcome: fresh
@@ -111,7 +140,9 @@ methods:
         description: >-
           Remove the staging directory and everything under it, swallowing any failure — tidying
           must never fail an import that already succeeded.
-        type: local
+        type: call
+        targetComponent: files_adapter
+        targetMethod: remove
     detail: full
   - name: hasAuthoredSpecs
     narrative:
@@ -157,13 +188,20 @@ methods:
   - name: dropStagedApprovals
     narrative:
       - stepNumber: 1
-        description: For each staged root, remove its .wai/lock.json when present and collect the root
-        type: local
+        description: Does the staged root hold a lock.json?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
       - stepNumber: 2
+        description: For each staged root, remove its .wai/lock.json when present and collect the root
+        type: call
+        targetComponent: files_adapter
+        targetMethod: removeFileIfPresent
+      - stepNumber: 3
         description: Return the roots whose approval record was removed
         type: return
         outcome: the roots
     detail: full
 status: complete
 createdAt: '2026-08-12T17:25:38.862Z'
-updatedAt: '2026-10-17T14:47:04.270Z'
+updatedAt: '2026-10-31T23:35:46.627Z'

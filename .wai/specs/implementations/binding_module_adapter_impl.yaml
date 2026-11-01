@@ -7,6 +7,7 @@ description: >-
   enums and their members are read without a compiler.
 contract: ibinding_module_adapter
 sourcePath: src/core/binding-modules.ts
+simPath: tests/core/binding-modules.test.ts
 methods:
   - name: readBindingModules
     narrative:
@@ -68,4 +69,4 @@ methods:
         outcome: read
 status: complete
 createdAt: '2026-10-08T08:21:54.979Z'
-updatedAt: '2026-10-09T00:21:49.303Z'
+updatedAt: '2026-10-31T23:30:36.084Z'

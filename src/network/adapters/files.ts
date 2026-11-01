@@ -5,7 +5,7 @@
 // half-read. It writes nothing.
 // ---------------------------------------------------------------------------
 
-import * as fs from 'fs';
+import { files } from '../../io/index.js';
 import * as nodePath from 'path';
 import { LineCounter, parseDocument } from 'yaml';
 import { WaironError } from '../../utils/errors.js';
@@ -21,8 +21,8 @@ export class NetworkInputError extends WaironError {
 
 function readText(file: string): string {
   const resolved = nodePath.resolve(file);
-  if (!fs.existsSync(resolved)) throw new NetworkInputError(`${file}: no such file`);
-  return fs.readFileSync(resolved, 'utf-8');
+  if (!files.exists(resolved)) throw new NetworkInputError(`${file}: no such file`);
+  return files.readText(resolved);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

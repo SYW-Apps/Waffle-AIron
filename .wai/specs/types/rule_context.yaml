@@ -260,6 +260,13 @@ fields:
       The file each grouped type was read from, by type id: the type-groups rule reports a type
       whose folder is not its group's. Absent with groups
     optional: true
+  - name: sharedSet
+    type: map<string, set<string>>
+    description: >-
+      Per subsystem, the ids of the Adapters it publishes as shared — an own component entry with
+      shared: true whose component is an Adapter; each is in publicSet too. An edge from another
+      subsystem into one is reach shared
+    optional: false
 methods:
   - name: isComponentDraft
     signature: 'isComponentDraft(compId: string): boolean'
@@ -403,7 +410,9 @@ methods:
       dependency rules each used to re-pay before they could judge anything, including the pack
       allowedEdges escape that must relax the whole matrix or none of it. An edge into another
       project whose contract entry is backed by an InProcess Portal is classified library once,
-      here, so no boundary or matrix rule needs its own exemption
+      here, so no boundary or matrix rule needs its own exemption, and an edge into another
+      subsystem's shared Adapter is classified shared once, here, so the matrix judges it with the
+      internal edges
   - name: specIds
     signature: 'specIds(): SpecId[]'
     returns: list<SpecId>
@@ -497,4 +506,4 @@ methods:
       which type a bare name lands on. Pure: over the types the context already holds.
 sourcePath: src/core/rules/types.ts
 createdAt: '2026-07-14T18:57:12.033Z'
-updatedAt: '2026-10-24T11:33:49.523Z'
+updatedAt: '2026-10-31T21:51:48.383Z'

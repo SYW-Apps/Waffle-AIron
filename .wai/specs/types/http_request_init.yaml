@@ -1,0 +1,22 @@
+kind: value-object
+id: http_request_init
+name: HttpRequestInit
+description: 'What a fetch-style request takes: the platform''s RequestInit.'
+subsystem: sdd_io
+fields:
+  - name: method
+    type: string
+    description: The HTTP method; GET when absent
+    optional: true
+  - name: headers
+    type: map<string, string>
+    description: The request headers
+    optional: true
+  - name: body
+    type: string
+    description: The request body
+    optional: true
+methods: []
+sourcePath: src/io/http.ts
+createdAt: '2026-10-31T23:14:55.341Z'
+updatedAt: '2026-10-31T23:14:56.494Z'

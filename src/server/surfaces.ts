@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import type { ProjectPublicSurfaceSnapshot, PublicInterfaceSummary } from './types.js';
 import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
@@ -51,7 +51,7 @@ function readSnapshots(dataDir: string): ProjectPublicSurfaceSnapshot[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read public surface store at ${p}: ${(e as Error).message}`);
@@ -91,7 +91,7 @@ class PublicSurfaceStore {
    *  reads always observe a consistent set. */
   update(change: (snapshots: ProjectPublicSurfaceSnapshot[]) => ProjectPublicSurfaceSnapshot[]): ProjectPublicSurfaceSnapshot[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     this.snapshots = withFileLock(p, () => {
       const next = change(readCurrent(p));
       replaceFile(p, JSON.stringify(next, null, 2) + '\n');

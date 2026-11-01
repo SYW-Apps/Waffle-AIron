@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { readJsonForUpdate, replaceFile } from './fs.js';
 import { withFileLock } from './file-lock.js';
@@ -29,7 +29,7 @@ function readStore(): Record<string, string> {
   const p = storePath();
   if (!p) return {};
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf8')) as Record<string, string>;
+    return JSON.parse(files.readText(p)) as Record<string, string>;
   } catch {
     return {};
   }
@@ -92,7 +92,7 @@ function registryWriteSecret(key: string, value: string): void {
 function updateStore(change: (store: Record<string, string>) => Record<string, string>): Record<string, string> {
   const p = storePath();
   if (!p) throw new Error('WAIRON_DATA_DIR is not set — a running server needs it to store secrets.');
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const current = readJsonForUpdate<unknown>(p, {});
     if (current === null || typeof current !== 'object' || Array.isArray(current)) {

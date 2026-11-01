@@ -47,15 +47,18 @@ methods:
         description: >-
           A cross-subsystem edge adds the codes of crossSubsystemEdgeFindings(ctx, caller, target) —
           subsystem-boundary-dependencies' judgement of the crossing's shape, the published front
-          door and its listed consumers.
+          door and its listed consumers. A shared edge (another subsystem's shared Adapter) adds
+          only the listed-consumers judgement of that function, CROSS_SUBSYSTEM_UNLISTED_CONSUMER,
+          and is judged by the matrix as step 8 says.
         type: local
       - stepNumber: 8
         description: >-
-          An internal edge the pack profile does not license adds the codes of the stereotype
-          matrix, exactly the three judgements its rules report with: entrypointEdgeFindings(ctx,
-          caller, target, lookups) — lookups being maintainedRegistries(ctx), read once per run —
-          then dataBlockEdgeFindings(ctx, caller, target) and logicClassEdgeFindings(caller,
-          target). A licensed pair skips them, as a declared licensed edge does.
+          An internal or shared edge the pack profile does not license adds the codes of the
+          stereotype matrix, exactly the three judgements its rules report with:
+          entrypointEdgeFindings(ctx, caller, target, lookups) — lookups being
+          maintainedRegistries(ctx), read once per run — then dataBlockEdgeFindings(ctx, caller,
+          target) and logicClassEdgeFindings(caller, target). A licensed pair skips them, as a
+          declared licensed edge does.
         type: local
       - stepNumber: 9
         description: >-
@@ -79,4 +82,4 @@ methods:
         outcome: codes
 status: complete
 createdAt: '2026-10-16T17:41:15.281Z'
-updatedAt: '2026-10-16T17:41:16.362Z'
+updatedAt: '2026-10-31T21:51:56.305Z'

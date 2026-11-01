@@ -255,7 +255,9 @@ methods:
           Ask GitHub for the release list. A failure here reports the network problem and stops,
           rather than reporting no update available — which would be indistinguishable from being
           current
-        type: local
+        type: call
+        targetComponent: http_client_adapter
+        targetMethod: getText
       - stepNumber: 8
         description: >-
           Keep only the releases eligible for that channel and take the newest, then say so when the
@@ -291,6 +293,11 @@ methods:
         type: return
         outcome: update available
       - stepNumber: 14
+        description: Clear the leftovers of any earlier extraction
+        type: call
+        targetComponent: files_adapter
+        targetMethod: removeExisting
+      - stepNumber: 15
         description: >-
           Download the asset for this platform and swap the running binary, keeping the previous one
           beside it so a bad release can be stepped back from. On Windows the running exe is renamed
@@ -300,8 +307,15 @@ methods:
           build cannot take the slot, the running one is moved back before the error is reported, so
           the install is never left without an executable, and the error says the running wairon is
           unchanged
-        type: local
-      - stepNumber: 15
+        type: call
+        targetComponent: files_adapter
+        targetMethod: copyFile
+      - stepNumber: 16
+        description: Remove the downloaded archive and its checksum file
+        type: call
+        targetComponent: files_adapter
+        targetMethod: removeFile
+      - stepNumber: 17
         description: Done
         type: return
         outcome: updated
@@ -2022,6 +2036,23 @@ methods:
         targetComponent: cli_core_adapter
         targetMethod: diagnoseProjectPacks
       - stepNumber: 62
+        description: Does the legacy approval baselines folder in the home directory exist?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 63
+        description: List the leftover approval baseline files in it
+        type: call
+        targetComponent: files_adapter
+        targetMethod: list
+      - stepNumber: 64
+        description: >-
+          Is each backend's MCP registration file (the Antigravity home, the project's Gemini
+          settings) present?
+        type: call
+        targetComponent: files_adapter
+        targetMethod: exists
+      - stepNumber: 65
         description: >-
           Report leftover approval baselines outside the project, never deleting them, and the
           extension packs: those unresolved, those installed on this machine but not applied (only
@@ -2029,7 +2060,7 @@ methods:
           developer's home store is never doctrine, so --fix never selects it into a project), and
           those applied from the machine-wide store
         type: local
-      - stepNumber: 63
+      - stepNumber: 66
         description: >-
           MCP server: check that each active backend's registration points at a launchable server,
           and which build it would start against the running CLI — `wairon --version` for a bare
@@ -2038,7 +2069,7 @@ methods:
           when a project entry names an absolute path of one machine; flag a legacy global
           Antigravity plugin
         type: local
-      - stepNumber: 64
+      - stepNumber: 67
         description: Print the summary, exiting non-zero when any check reported an error
         type: return
         outcome: reported
@@ -2311,17 +2342,22 @@ methods:
           running executable sits in — so nothing is looked up and nothing can be stale
         type: local
       - stepNumber: 3
+        description: Ask the shell which program the name resolves to on PATH
+        type: call
+        targetComponent: process_adapter
+        targetMethod: runShell
+      - stepNumber: 4
         description: >-
           For each supported alias, report which of five states it is in: registered by npm and
           unchangeable from here, opted out, shadowed by a different program already on PATH,
           present, or missing with the command that would create it
         type: local
-      - stepNumber: 4
+      - stepNumber: 5
         description: >-
           Close with the install directory when there is one to name, and say plainly when there is
           not — an npm install has no directory of ours to manage
         type: local
-      - stepNumber: 5
+      - stepNumber: 6
         description: Done
         type: return
         outcome: listed
@@ -2356,14 +2392,24 @@ methods:
         type: branch
         condition: this is a packaged binary
         onTrueStep: 6
-        onFalseStep: 7
+        onFalseStep: 9
       - stepNumber: 6
+        description: Link the alias to the binary (a symlink on Unix)
+        type: call
+        targetComponent: files_adapter
+        targetMethod: symlink
+      - stepNumber: 7
+        description: Make the link executable
+        type: call
+        targetComponent: files_adapter
+        targetMethod: chmod
+      - stepNumber: 8
         description: >-
           Create the alias beside the binary — a symlink on Unix, a .cmd wrapper on Windows — and
           report it enabled
         type: return
         outcome: enabled
-      - stepNumber: 7
+      - stepNumber: 9
         description: Report that npm's own bin entries already register it, so nothing on disk changed
         type: return
         outcome: already registered
@@ -2398,12 +2444,22 @@ methods:
         type: branch
         condition: this is a packaged binary
         onTrueStep: 6
-        onFalseStep: 7
+        onFalseStep: 9
       - stepNumber: 6
+        description: Look at what sits at the alias path, to tell a link from a foreign file
+        type: call
+        targetComponent: files_adapter
+        targetMethod: lstat
+      - stepNumber: 7
+        description: Read where the link points, to confirm the alias is ours before removing it
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readLink
+      - stepNumber: 8
         description: Remove the symlink or wrapper beside the binary and report it disabled
         type: return
         outcome: disabled
-      - stepNumber: 7
+      - stepNumber: 9
         description: >-
           Report that npm's bin entries cannot be changed from here, and what would have to happen
           instead
@@ -2789,7 +2845,9 @@ methods:
       - stepNumber: 8
         label: install
         description: Read the pack file the flags name
-        type: local
+        type: call
+        targetComponent: files_adapter
+        targetMethod: readText
       - stepNumber: 9
         description: Is a project named?
         type: branch
@@ -3081,7 +3139,9 @@ methods:
         targetMethod: startHostServer
       - stepNumber: 7
         description: Optionally open the browser, and run until signalled
-        type: local
+        type: call
+        targetComponent: process_adapter
+        targetMethod: start
       - stepNumber: 8
         description: Return on shutdown
         type: return
@@ -4389,4 +4449,4 @@ lint:
         names as the wire names.
 status: complete
 createdAt: '2026-06-11T14:50:00Z'
-updatedAt: '2026-10-30T13:42:40.071Z'
+updatedAt: '2026-10-31T23:49:15.889Z'

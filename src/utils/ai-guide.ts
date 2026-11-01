@@ -11,7 +11,7 @@
 // Local scope:   <project-root>/.claude/CLAUDE.md  or  <project-root>/.gemini/GEMINI.md
 // ---------------------------------------------------------------------------
 
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as os from 'os';
 import * as path from 'path';
 import { versionStamp } from '../core/stamp.js';
@@ -162,14 +162,14 @@ export function injectGuide(filePath: string, scope: GuideScope): void {
   const body = guideBody(scope);
   const section = `\n\n${GUIDE_MARKER_START}\n${versionStamp()}\n${body}\n${GUIDE_MARKER_END}\n`;
 
-  const existing = fs.existsSync(filePath)
-    ? fs.readFileSync(filePath, 'utf-8')
+  const existing = files.exists(filePath)
+    ? files.readText(filePath)
     : '';
 
   const stripped = stripGuideSection(existing);
   const newContent = stripped.trimEnd() + section;
 
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  files.ensureDir(path.dirname(filePath));
   writeFile(filePath, newContent); // keeps the file's line endings
 }
 
@@ -358,7 +358,7 @@ export function writeRootGuideDelegator(projectRoot: string, targetType: string)
   const pointer = rootPointerOf(projectRoot, targetType);
   if (!pointer) return;
   // Step 2: the file as it stands.
-  const existing = fs.existsSync(pointer.file) ? fs.readFileSync(pointer.file, 'utf-8') : null;
+  const existing = files.exists(pointer.file) ? files.readText(pointer.file) : null;
   // Steps 3-9: the block written into it.
   const fileName = path.basename(pointer.file);
   if (existing === null) {
@@ -368,7 +368,7 @@ export function writeRootGuideDelegator(projectRoot: string, targetType: string)
   }
   const next = withRootPointer(fileName, existing, pointer.body);
   // Step 10: only when it changed, every byte outside the block as it was.
-  if (next !== existing) fs.writeFileSync(pointer.file, next, 'utf-8');
+  if (next !== existing) files.writeText(pointer.file, next);
 }
 
 // Target types that carry a guide-bearing root delegator file.
@@ -406,9 +406,9 @@ export function reinjectLocalGuides(projectRoot: string, targetTypes: string[]):
 export function registerProjectServer(projectRoot: string): string | null {
   const file = path.join(projectRoot, '.mcp.json');
   let settings: Record<string, unknown> = {};
-  if (fs.existsSync(file)) {
+  if (files.exists(file)) {
     try {
-      settings = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+      settings = JSON.parse(files.readText(file)) as Record<string, unknown>;
     } catch {
       return null;
     }

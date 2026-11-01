@@ -304,7 +304,9 @@ export interface ImportGraph {
  * Where a dependsOn edge lands, decided once per edge so the rules that judge
  * it never re-derive it. The seven answers are exhaustive: a ref either names a
  * component in this tree (`internal` when it shares the source's subsystem,
- * `cross-subsystem` when it does not), or it leaves the project and lands on an
+ * `cross-subsystem` when it does not — `shared` when the target is an Adapter
+ * its subsystem publishes as shared, which the stereotype matrix judges as an
+ * internal edge and the boundary rule asks only for its listed consumers), or it leaves the project and lands on an
  * exported InProcess Portal of another project — a contained member's or a
  * declared external's (`library`: a library call, which any component may make
  * directly and library-calls alone judges) — or it leaves the project and
@@ -318,6 +320,7 @@ export interface ImportGraph {
 export type EdgeReach =
   | 'internal'
   | 'cross-subsystem'
+  | 'shared'
   | 'library'
   | 'surface'
   | 'ambiguous'
@@ -459,6 +462,8 @@ export interface RuleContext {
   interfaceIds: Set<string>;
   /** Per-subsystem published component ids (its public surface). */
   publicSet: Map<string, Set<string>>;
+  /** Per-subsystem ids of the Adapters it publishes as shared (an own entry with shared: true); each is in publicSet too. An edge into one from another subsystem is reach shared. */
+  sharedSet: Map<string, Set<string>>;
   /** Interfaces grouped by owning component id — the shared read path for a component's contract methods (rules and the reachability walker must agree on this enumeration). */
   interfacesByComponent: Map<string, InterfaceSpec[]>;
   /**

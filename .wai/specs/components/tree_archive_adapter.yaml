@@ -16,6 +16,7 @@ componentType: Adapter
 owns: []
 dependsOn:
   - sdk_portal
+  - files_adapter
 status: complete
 createdAt: '2026-08-12T17:23:52.913Z'
-updatedAt: '2026-08-12T17:26:32.523Z'
+updatedAt: '2026-10-31T23:19:59.894Z'

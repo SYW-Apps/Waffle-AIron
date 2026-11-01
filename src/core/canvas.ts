@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import {
   loadSystemSpec,
@@ -683,8 +683,8 @@ function loadCytoscapeLib(): string {
     path.resolve(__dirname, 'templates', 'canvas', 'cytoscape.min.js'),       // dist (library entry)
   ];
   for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      return fs.readFileSync(p, 'utf-8').replace(/<\/script/gi, '<\\/script');
+    if (files.exists(p)) {
+      return files.readText(p).replace(/<\/script/gi, '<\\/script');
     }
   }
   throw new Error('Vendored cytoscape bundle not found (templates/canvas/cytoscape.min.js) — the wairon installation is incomplete.');

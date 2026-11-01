@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { readJsonForUpdate, replaceFile } from '../utils/fs.js';
 import { withFileLock } from '../utils/file-lock.js';
@@ -38,7 +38,7 @@ function withoutRevoked(records: StoredRecord[]): ApiKeyRecord[] {
  */
 export function load(dataDir: string): ApiKeyRecord[] {
   try {
-    return withoutRevoked(JSON.parse(fs.readFileSync(storePath(dataDir), 'utf8')) as StoredRecord[]);
+    return withoutRevoked(JSON.parse(files.readText(storePath(dataDir))) as StoredRecord[]);
   } catch {
     return [];
   }
@@ -47,7 +47,7 @@ export function load(dataDir: string): ApiKeyRecord[] {
 /** Persist the full set, replacing the file atomically, owner-only (0600) — only ever under update's lock. */
 function save(dataDir: string, records: ApiKeyRecord[]): void {
   const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   replaceFile(p, JSON.stringify(records, null, 2) + '\n', 0o600);
 }
 
@@ -58,7 +58,7 @@ function save(dataDir: string, records: ApiKeyRecord[]): void {
  */
 export function update(dataDir: string, change: (records: ApiKeyRecord[]) => ApiKeyRecord[]): ApiKeyRecord[] {
   const p = storePath(dataDir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
+  files.ensureDir(path.dirname(p));
   return withFileLock(p, () => {
     const next = change(withoutRevoked(readJsonForUpdate<StoredRecord[]>(p, [])));
     save(dataDir, next);

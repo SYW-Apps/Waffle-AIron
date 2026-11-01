@@ -1,0 +1,27 @@
+id: process_adapter_impl
+name: Process Adapter Implementation
+description: >-
+  wairon's one place to run another program: a program with arguments, a command line a shell reads,
+  or a program started and left running. Module functions in src/io/process.ts, reached through the
+  io barrel (src/io/index.ts).
+contract: iprocess_adapter
+sourcePath: src/io/process.ts
+methods:
+  - name: run
+    narrative: []
+    intent: >-
+      Run a program with arguments and answer its standard output as UTF-8 text. Throws as
+      execFileSync does (a non-zero exit, a timeout, a missing program).
+  - name: runShell
+    narrative: []
+    intent: >-
+      Run a command line through the shell and answer its standard output as UTF-8 text. Throws as
+      execSync does.
+  - name: start
+    narrative: []
+    intent: >-
+      Start a program detached with its streams ignored and leave it running (opening a browser). A
+      program that cannot be started is not an error here: it is fire-and-forget.
+status: draft
+createdAt: '2026-10-31T23:15:28.703Z'
+updatedAt: '2026-10-31T23:15:29.887Z'

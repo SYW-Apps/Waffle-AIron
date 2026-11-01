@@ -89,7 +89,8 @@ methods:
         description: >-
           Where does the edge land? An edge that resolved inside its own subsystem is the stereotype
           matrix's business, and a library edge (an exported InProcess Portal of another project) is
-          library-calls': continue with the next edge
+          library-calls': continue with the next edge. An edge into another subsystem's shared
+          Adapter is the matrix's too, and asks only the consumer question below
         type: switch
         'on': edge.reach
         cases:
@@ -105,6 +106,8 @@ methods:
             step: 6
           - value: library
             step: 1
+          - value: shared
+            step: 19
         defaultStep: 1
       - stepNumber: 4
         label: invalidReference
@@ -213,12 +216,12 @@ methods:
       - stepNumber: 19
         label: consumerCheck
         description: >-
-          Is the target published to a named set of consumers that leaves this subsystem out? A
-          component is restricted when EVERY publicInterfaces entry of edge.to.subsystem that
-          publishes it declares consumers, and the union of those lists is who may depend on it; one
-          entry without the field publishes it to anyone. A restricted surface exists so that a door
-          that must not reach it cannot — the raw spec writes, which only the gated authoring seam
-          may call
+          Is the target — a published component, or a shared Adapter reached directly — published to
+          a named set of consumers that leaves this subsystem out? A component is restricted when
+          EVERY publicInterfaces entry of edge.to.subsystem that publishes it declares consumers,
+          and the union of those lists is who may depend on it; one entry without the field
+          publishes it to anyone. A restricted surface exists so that a door that must not reach it
+          cannot — the raw spec writes, which only the gated authoring seam may call
         type: branch
         condition: >-
           every publicInterfaces entry of the subsystem in ctx.subsystems whose id is
@@ -243,9 +246,9 @@ methods:
         label: edge
         description: >-
           For each edge of ctx.dependencyEdges().matrix — the edges the intra-subsystem stereotype
-          matrix judges: resolved inside one subsystem, both ends live, and not licensed by the
-          governing pack profile's allowedEdges. The dependency-edge index applied all three once,
-          for every matrix rule
+          matrix judges: resolved inside one subsystem or into another subsystem's shared Adapter,
+          both ends live, and not licensed by the governing pack profile's allowedEdges. The
+          dependency-edge index applied all three once, for every matrix rule
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().matrix
@@ -315,8 +318,8 @@ methods:
         label: edge
         description: >-
           For each edge of ctx.dependencyEdges().matrix — the edges the intra-subsystem stereotype
-          matrix judges: resolved inside one subsystem, both ends live, and not licensed by the
-          governing pack profile's allowedEdges
+          matrix judges: resolved inside one subsystem or into another subsystem's shared Adapter,
+          both ends live, and not licensed by the governing pack profile's allowedEdges
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().matrix
@@ -432,8 +435,8 @@ methods:
         label: edge
         description: >-
           For each edge of ctx.dependencyEdges().matrix — the edges the intra-subsystem stereotype
-          matrix judges: resolved inside one subsystem, both ends live, and not licensed by the
-          governing pack profile's allowedEdges
+          matrix judges: resolved inside one subsystem or into another subsystem's shared Adapter,
+          both ends live, and not licensed by the governing pack profile's allowedEdges
         type: loop
         loopKind: forEach
         over: ctx.dependencyEdges().matrix
@@ -1629,4 +1632,4 @@ methods:
     exportedVia: libraryCallsRule
 status: complete
 createdAt: '2026-09-14T23:15:53.747Z'
-updatedAt: '2026-10-21T22:44:45.489Z'
+updatedAt: '2026-10-31T21:51:53.784Z'

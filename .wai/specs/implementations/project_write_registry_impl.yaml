@@ -16,6 +16,7 @@ methods:
       creates <dataDir>/projects/<id>, and appends an active HostedProjectRecord.
     calls:
       - project_store.update
+      - files_adapter.ensureDir
     symbol: createProjectRecord
   - name: remove
     narrative: []
@@ -28,6 +29,7 @@ methods:
     calls:
       - project_store.read
       - project_store.update
+      - files_adapter.remove
     symbol: removeProjectRecord
   - name: register
     narrative: []
@@ -60,4 +62,4 @@ methods:
     symbol: setProjectRecordStatus
 status: complete
 createdAt: '2026-07-19T09:00:09.975Z'
-updatedAt: '2026-10-22T19:48:14.211Z'
+updatedAt: '2026-10-31T23:35:13.981Z'

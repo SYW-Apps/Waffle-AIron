@@ -327,7 +327,9 @@ methods:
         targetMethod: buildPack
       - stepNumber: 2
         description: Write the archive bytes to the suggested file name (or --out) and print the path + size.
-        type: local
+        type: call
+        targetComponent: files_adapter
+        targetMethod: writeBytes
     detail: intent
     intent: >-
       Build a .wpack archive from a pack directory via the SDK portal and write it to
@@ -339,7 +341,9 @@ methods:
         description: >-
           An HTTP(S) source is downloaded to a temporary archive first, so a remote pack rejoins the
           identical local-archive path below instead of getting its own validation route.
-        type: local
+        type: call
+        targetComponent: http_client_adapter
+        targetMethod: download
       - stepNumber: 2
         description: >-
           A .wpack/.zip source is extracted into a temp directory through the SDK portal's hardened
@@ -370,7 +374,7 @@ methods:
         condition: >-
           not inside a project, or the project does not select the name floating, or the new version
           would not become the latest installed, or the run is unattended
-        onTrueStep: 10
+        onTrueStep: 11
         onFalseStep: 6
       - stepNumber: 6
         label: measure-update
@@ -388,12 +392,17 @@ methods:
         description: Installing a pack that changes a project's doctrine is intentional
         type: branch
         condition: the answer is not yes
-        onFalseStep: 10
+        onFalseStep: 11
       - stepNumber: 9
+        description: Remove the temporary extraction
+        type: call
+        targetComponent: files_adapter
+        targetMethod: remove
+      - stepNumber: 10
         description: 'Stop without installing: remove the temporary extraction and write nothing to the store'
         type: return
         outcome: declined; nothing installed
-      - stepNumber: 10
+      - stepNumber: 11
         label: install
         description: >-
           Install the materialized directory into the pack store via the core surface, recording the
@@ -401,7 +410,7 @@ methods:
         type: call
         targetComponent: extension_portal
         targetMethod: installPackFromDirectory
-      - stepNumber: 11
+      - stepNumber: 12
         description: >-
           Report what was installed (name, version, path, digest) and state plainly that it applies
           to NOTHING until a project selects it — the distinction the old --global install never
@@ -409,7 +418,14 @@ methods:
           resolves to this version; an unattended run adds that the impact was not shown and names
           `wairon pack impact <name>`.
         type: local
-      - stepNumber: 12
+      - stepNumber: 13
+        description: >-
+          Whether the install ran or not, remove the temporary download folder and the extracted
+          directory
+        type: call
+        targetComponent: files_adapter
+        targetMethod: remove
+      - stepNumber: 14
         description: >-
           Warn when the origin is a local path rather than a fetchable URL: a selection recorded
           from it cannot be resolved by CI or a fresh clone.
@@ -955,4 +971,4 @@ methods:
 detail: calls-only
 status: complete
 createdAt: '2026-07-14T20:10:02.916Z'
-updatedAt: '2026-10-20T09:25:48.916Z'
+updatedAt: '2026-10-31T23:47:38.883Z'

@@ -327,6 +327,37 @@ export default [
     code: 'EXCESSIVE_DEPENDENCIES',
     expectFire: false,
     reason:
+      'A shared Adapter is generic I/O every subsystem calls, not a dependency the cap is about: the orchestrator\'s third dependency is the records file Adapter, so it coordinates two intake checks, at the cap.',
+    scenario:
+      'With component dependencies capped at two, the visit intake orchestrator coordinates two intake checks and also reads files through the records subsystem\'s shared file Adapter.',
+    tree: {
+      system: SYSTEM,
+      subsystems: [
+        { id: 'patient-intake', description: 'Patient intake, eligibility, and consent handling.' },
+        {
+          id: 'records',
+          description: 'Patient records on local disk.',
+          publicInterfaces: [{ details: 'File I/O for every subsystem.', component: 'records-file-adapter', shared: true }],
+        },
+      ],
+      rules: { complexity: { maxComponentDependencies: 2 } },
+      components: [
+        {
+          id: 'visit-intake-orchestrator',
+          componentType: 'Orchestrator',
+          subsystem: 'patient-intake',
+          description: 'Coordinates the intake flow from eligibility to consent.',
+          dependsOn: [...INTAKE_CHECKS.slice(0, 2).map(s => s.id), 'records-file-adapter'],
+        },
+        ...INTAKE_CHECKS.slice(0, 2).map(s => ({ ...s, subsystem: 'patient-intake' })),
+        { id: 'records-file-adapter', componentType: 'Adapter', subsystem: 'records', description: 'Generic file I/O over the patient record files.' },
+      ],
+    },
+  }),
+  defineRuleFixture({
+    code: 'EXCESSIVE_DEPENDENCIES',
+    expectFire: false,
+    reason:
       'The counter is a pure forwarder: every narrated method is one hand-off and nothing else, so its three dependencies count how many intake checks the clinic publishes rather than how much the counter knows. Capping it would ask the counter to shrink because the subsystem behind it grew.',
     scenario:
       'With component dependencies capped at two, an intake counter hands each of its three commands straight to the check that owns it.',

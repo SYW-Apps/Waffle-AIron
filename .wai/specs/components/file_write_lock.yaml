@@ -13,7 +13,8 @@ description: >-
 subsystem: sdd_host
 componentType: Adapter
 owns: []
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-10-23T22:16:13.870Z'
-updatedAt: '2026-10-23T22:25:04.284Z'
+updatedAt: '2026-10-31T23:25:49.783Z'

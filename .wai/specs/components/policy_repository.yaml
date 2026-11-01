@@ -9,7 +9,8 @@ owns:
   - policy_store
   - policy_registry
   - policy_index
-dependsOn: []
+dependsOn:
+  - files_adapter
 status: complete
 createdAt: '2026-07-08T21:59:18.801Z'
-updatedAt: '2026-07-09T20:53:25.470Z'
+updatedAt: '2026-10-31T23:23:25.724Z'

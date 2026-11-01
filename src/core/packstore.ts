@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { readYamlFile, writeYamlFile } from '../utils/yaml.js';
 import { WAIRON_VERSION } from '../config/defaults.js';
@@ -72,9 +72,9 @@ export function packStoreDir(): string {
 
 /** Regular files under `dir`, as sorted forward-slash relative paths. */
 function packFiles(dir: string, prefix = ''): string[] {
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries = files.listEntries(dir);
   } catch {
     return [];
   }
@@ -103,7 +103,7 @@ export function computePackDigest(packDir: string): string {
   const abs = path.resolve(packDir);
 
   let isFile = false;
-  try { isFile = fs.statSync(abs).isFile(); } catch { /* missing → empty digest below */ }
+  try { isFile = files.stat(abs).isFile(); } catch { /* missing → empty digest below */ }
 
   const entries: [string, string][] = isFile
     ? [[path.basename(abs), abs]]
@@ -112,7 +112,7 @@ export function computePackDigest(packDir: string): string {
   for (const [rel, full] of entries) {
     hash.update(rel);
     hash.update('\0');
-    try { hash.update(fs.readFileSync(full)); } catch { /* unreadable file contributes its path only */ }
+    try { hash.update(files.readBytes(full)); } catch { /* unreadable file contributes its path only */ }
     hash.update('\0');
   }
   return `sha256-${hash.digest('hex')}`;
@@ -160,9 +160,9 @@ function installedFrom(location: string, name: string, version: string): Install
 
 /** The `<name>/<version>/` packs under a versioned store entry. */
 function versionedEntries(nameDir: string, fallbackName: string): InstalledPack[] {
-  let versions: fs.Dirent[];
+  let versions: files.DirEntry[];
   try {
-    versions = fs.readdirSync(nameDir, { withFileTypes: true });
+    versions = files.listEntries(nameDir);
   } catch {
     return [];
   }
@@ -183,7 +183,7 @@ function versionedEntries(nameDir: string, fallbackName: string): InstalledPack[
  * pack DIRECTORY holding its entry file directly (both legacy, reported
  * unversioned), and the current `<name>/<version>/` layout.
  */
-function storeEntryPacks(store: string, entry: fs.Dirent): InstalledPack[] {
+function storeEntryPacks(store: string, entry: files.DirEntry): InstalledPack[] {
   const full = path.join(store, entry.name);
 
   if (entry.isFile()) {
@@ -207,9 +207,9 @@ function storeEntryPacks(store: string, entry: fs.Dirent): InstalledPack[] {
  */
 export function listInstalledPacks(): InstalledPack[] {
   const store = packStoreDir();
-  let entries: fs.Dirent[];
+  let entries: files.DirEntry[];
   try {
-    entries = fs.readdirSync(store, { withFileTypes: true });
+    entries = files.listEntries(store);
   } catch {
     return [];
   }
@@ -263,9 +263,9 @@ export function installPackFromDirectory(sourceDir: string, origin?: string): In
   const dest = path.join(packStoreDir(), manifest.name, version);
 
   // Reinstalling the same name@version replaces it, so an install is idempotent.
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.cpSync(abs, dest, { recursive: true });
+  files.remove(dest);
+  files.ensureDir(path.dirname(dest));
+  files.copy(abs, dest, { recursive: true });
 
   const digest = computePackDigest(dest);
   const record: InstallRecord = {
@@ -299,12 +299,12 @@ export function uninstallPack(name: string, version?: string): boolean {
   if (targets.length === 0) return false;
 
   for (const target of targets) {
-    fs.rmSync(target.path, { recursive: true, force: true });
+    files.remove(target.path);
     // Prune the now-empty <store>/<name>/ level left behind by a versioned pack.
     const parent = path.dirname(target.path);
     if (path.resolve(parent) === path.resolve(packStoreDir())) continue;
     try {
-      if (fs.readdirSync(parent).length === 0) fs.rmdirSync(parent);
+      if (files.list(parent).length === 0) files.removeEmptyDir(parent);
     } catch { /* not empty, or already gone */ }
   }
   return true;

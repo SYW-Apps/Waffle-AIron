@@ -12,7 +12,7 @@ export const subsystemBoundaryDepsRule: SddRule = {
   name: 'subsystem-boundary-dependencies',
   judges: 'design',
   description:
-    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef: a contained member's live table, a declared external's pin, or a foreign snapshot). When that entry is backed by an InProcess Portal the edge is a library call (reach library): any component may make it directly, no Adapter is asked for, and library-calls judges it instead. Any other entry asks for the same Adapter as a cross-subsystem hop, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution; never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
+    "Judges every dependsOn edge that leaves its own subsystem, and every one that resolves nowhere. Across subsystems the shape is client Adapter → published remote Portal, OR a direct in-process edge licensed by a trustedLink declared on the SOURCE subsystem (the published-Portal target requirement applies either way). A published surface may also name the subsystems it serves (a publicInterfaces entry's consumers): a component every one of whose entries names consumers may be depended on only from those subsystems. An edge into an Adapter that its subsystem publishes as shared (reach shared) asks for none of this: any component of any subsystem may make it directly, the stereotype matrix judges it as an internal edge, and only the consumers its entries name are checked here (CROSS_SUBSYSTEM_UNLISTED_CONSUMER). An edge into another project is judged on the contract entry it resolves to (resolveSurfaceRef: a contained member's live table, a declared external's pin, or a foreign snapshot). When that entry is backed by an InProcess Portal the edge is a library call (reach library): any component may make it directly, no Adapter is asked for, and library-calls judges it instead. Any other entry asks for the same Adapter as a cross-subsystem hop, and foreign snapshots of several providers that disagree make it SURFACE_REF_AMBIGUOUS. An edge into another project that does not resolve is reported once, by project-boundaries, with its resolution; never here, and never as the retired CROSS_TREE_REF_UNRESOLVED warning. A bare id that names nothing is INVALID_DEPENDENCY_REFERENCE. Boundary rules are never relaxed by a pack profile.",
   codes: [
     { code: 'INVALID_DEPENDENCY_REFERENCE', defaultSeverity: 'error', summary: "dependsOn names a non-existent component" },
     { code: 'SURFACE_REF_AMBIGUOUS', defaultSeverity: 'error', summary: "Cross-tree dependsOn matched by surface snapshots of several providers with different contracts" },
@@ -86,6 +86,14 @@ export const subsystemBoundaryDepsRule: SddRule = {
           }
           continue;
 
+        case 'shared': {
+          // An Adapter its subsystem publishes as shared: the matrix judges
+          // the edge; only the consumers its entries name are asked here.
+          const unlisted = unlistedConsumerFinding(ctx, comp, edge.to!);
+          if (unlisted) ctx.addIssue(unlisted.severity, unlisted.code, unlisted.message, comp.id, edge.draftContext);
+          continue;
+        }
+
         case 'cross-subsystem':
           break;
 
@@ -157,15 +165,25 @@ export function crossSubsystemEdgeFindings(ctx: RuleContext, comp: ComponentSpec
   // published to a named set of subsystems may be depended on only from
   // those — it is how a provider keeps a surface (the raw spec writes)
   // away from a door that must not reach it.
-  const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
-  if (publishedTo && !publishedTo.includes(comp.subsystem)) {
-    findings.push({
-      severity: 'error',
-      code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
-      message: `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
-    });
-  }
+  const unlisted = unlistedConsumerFinding(ctx, comp, depComp);
+  if (unlisted) findings.push(unlisted);
   return findings;
+}
+
+/**
+ * The consumer question alone, asked of an edge from `comp` into ANOTHER
+ * subsystem's `depComp`: CROSS_SUBSYSTEM_UNLISTED_CONSUMER when the target is
+ * published only to subsystems that leave the caller's out. It is the whole of
+ * what a shared edge is asked here, and the last judgement of a crossing.
+ */
+export function unlistedConsumerFinding(ctx: RuleContext, comp: ComponentSpec, depComp: ComponentSpec): EdgeFinding | undefined {
+  const publishedTo = restrictedConsumers(ctx, depComp.subsystem, depComp.id);
+  if (!publishedTo || publishedTo.includes(comp.subsystem)) return undefined;
+  return {
+    severity: 'error',
+    code: 'CROSS_SUBSYSTEM_UNLISTED_CONSUMER',
+    message: `Boundary violation: "${comp.id}" (subsystem "${comp.subsystem}") depends on "${depComp.id}", which subsystem "${depComp.subsystem}" publishes only to ${publishedTo.map((s) => `"${s}"`).join(', ')}. Depend on a surface published to "${comp.subsystem}" instead, or — when "${comp.subsystem}" really is a caller the provider meant to serve — add it to the entry's consumers.`,
+  };
 }
 
 /**

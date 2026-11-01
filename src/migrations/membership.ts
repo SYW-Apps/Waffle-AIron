@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files as ioFiles } from '../io/index.js';
 import * as path from 'path';
 import * as core from './adapters/core.js';
 import * as surfaces from './adapters/surfaces.js';
@@ -101,7 +101,7 @@ function hasSystemAt(dir: string): boolean {
  */
 function occupied(dir: string): boolean {
   try {
-    return !fs.statSync(dir).isDirectory() || fs.readdirSync(dir).length > 0;
+    return !ioFiles.stat(dir).isDirectory() || ioFiles.list(dir).length > 0;
   } catch {
     return false;
   }

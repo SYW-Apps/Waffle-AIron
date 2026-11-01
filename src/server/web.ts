@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { signSsoState, verifySsoState, authenticateSession, verifyBuiltinAdmin, localDevSubject } from './auth.js';
@@ -1075,7 +1075,7 @@ function loadReactBundle(): string | null {
   ];
   for (const candidate of candidates) {
     try {
-      if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf8');
+      if (files.exists(candidate)) return files.readText(candidate);
     } catch {
       /* try the next candidate */
     }

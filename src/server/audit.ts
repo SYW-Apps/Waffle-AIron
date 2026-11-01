@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import type { AuditEvent, AuditQuery, AuditRetentionPolicy, HostConfig } from './types.js';
@@ -84,7 +84,7 @@ function readEvents(dataDir: string): AuditEvent[] {
   const p = storePath(dataDir);
   let raw: string;
   try {
-    raw = fs.readFileSync(p, 'utf8');
+    raw = files.readText(p);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
     throw new Error(`Failed to read audit store at ${p}: ${(e as Error).message}`);
@@ -158,7 +158,7 @@ class AuditStore {
    */
   update(change: (events: AuditEvent[]) => AuditEvent[]): AuditEvent[] {
     const p = storePath(this.dataDir);
-    fs.mkdirSync(path.dirname(p), { recursive: true });
+    files.ensureDir(path.dirname(p));
     this.events = withFileLock(p, () => {
       const current = readCurrent(p);
       const before = JSON.stringify(current);

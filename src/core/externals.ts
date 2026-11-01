@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { files } from '../io/index.js';
 import * as path from 'path';
 import { getProjectRoot, withLineEndings } from '../utils/fs.js';
 import { readYamlFile, serializeYaml } from '../utils/yaml.js';
@@ -39,10 +39,10 @@ function snapshotPath(root: string, alias: string): string {
 
 /** Write a file atomically: to a sibling temp file, then renamed over the target. */
 function writeAtomically(file: string, text: string): void {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  files.ensureDir(path.dirname(file));
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, withLineEndings(file, text));
-  fs.renameSync(tmp, file);
+  files.writeText(tmp, withLineEndings(file, text));
+  files.rename(tmp, file);
 }
 
 /** The lock with its aliases sorted, so a re-pin of the same set writes the same bytes; a part's parent entry kept. */
@@ -70,7 +70,7 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
     // Null when absent; a lock that fails to parse or fails the schema is
     // refused naming the file — read as empty, it would silently unpin everything.
     const file = lockPath(getProjectRoot());
-    if (!fs.existsSync(file)) return null;
+    if (!files.exists(file)) return null;
     let raw: unknown;
     try {
       raw = readYamlFile(file);
@@ -88,7 +88,7 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
     // A lock with no entry left goes with its last entry, as the externals
     // directory goes with its last snapshot: `externals: {}` pins nothing.
     if (Object.keys(lock.externals).length === 0 && lock.parent === undefined) {
-      if (fs.existsSync(file)) fs.unlinkSync(file);
+      if (files.exists(file)) files.removeFile(file);
       return;
     }
     writeAtomically(file, serializeYaml(sortedLock(lock)));
@@ -96,7 +96,7 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
   readSnapshot(alias) {
     // Null when absent or malformed: status then reports the alias as unpinned.
     const file = snapshotPath(getProjectRoot(), alias);
-    if (!fs.existsSync(file)) return null;
+    if (!files.exists(file)) return null;
     try {
       return SurfaceSnapshotSchema.parse(readYamlFile(file));
     } catch {
@@ -108,18 +108,18 @@ export const externalsFileAdapter: ExternalsFileAdapter = {
   },
   deleteSnapshot(alias) {
     const file = snapshotPath(getProjectRoot(), alias);
-    if (!fs.existsSync(file)) return false;
-    fs.unlinkSync(file);
+    if (!files.exists(file)) return false;
+    files.removeFile(file);
     // An emptied externals directory goes with its last snapshot.
     const dir = path.dirname(file);
-    if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+    if (files.exists(dir) && files.list(dir).length === 0) files.removeEmptyDir(dir);
     return true;
   },
   readExcerpt(project) {
     // Null when absent, not valid YAML or failing the schema: the gate then
     // reports the part's parent as unpinned rather than throwing (stage 8).
     const file = snapshotPath(getProjectRoot(), project);
-    if (!fs.existsSync(file)) return null;
+    if (!files.exists(file)) return null;
     try {
       return ParentExcerptSchema.parse(readYamlFile(file));
     } catch {

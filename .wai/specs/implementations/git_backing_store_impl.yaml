@@ -24,7 +24,8 @@ methods:
       Answers the collection written.
     calls:
       - file_write_lock.run
+      - files_adapter.ensureDir
 detail: intent
 status: complete
 createdAt: '2026-07-16T15:39:47.904Z'
-updatedAt: '2026-10-23T22:23:29.296Z'
+updatedAt: '2026-10-31T23:34:25.476Z'

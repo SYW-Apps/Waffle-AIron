@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { http } from '../io/index.js';
 import { resolveSecret } from '../utils/secrets.js';
 import { providerNotSetUpMessage, providerSetupProblem } from './types.js';
 import type { IdentityProviderConfig, PrincipalSubject, ProviderEndpoints } from './types.js';
@@ -173,7 +174,7 @@ async function fetchDiscovery(issuer: string): Promise<OidcDiscoveryDocument | n
   if (cached) return cached;
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(`${issuer}/.well-known/openid-configuration`, {
+    res = await http.request(`${issuer}/.well-known/openid-configuration`, {
       headers: { Accept: 'application/json' },
     });
   } catch {
@@ -323,7 +324,7 @@ export async function exchangeCode(
 
   let res: Awaited<ReturnType<typeof fetch>>;
   try {
-    res = await fetch(endpoints.tokenEndpoint, {
+    res = await http.request(endpoints.tokenEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -380,7 +381,7 @@ export async function exchangeCode(
 
 /** Fetch the JWKS at a URI (uncached), returning its keys array. */
 async function fetchJwksFresh(jwksUri: string): Promise<Jwk[]> {
-  const res = await fetch(jwksUri, { headers: { Accept: 'application/json' } });
+  const res = await http.request(jwksUri, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`JWKS fetch failed: provider returned HTTP ${res.status}.`);
   const doc = (await res.json()) as { keys?: Jwk[] };
   return Array.isArray(doc?.keys) ? doc.keys : [];
