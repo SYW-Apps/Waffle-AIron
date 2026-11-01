@@ -1433,6 +1433,16 @@ not know) is reported as `UNKNOWN_SPEC_KEY`, never silently ignored, and an
 unknown setting in `.wai/project.yaml` as `UNKNOWN_CONFIG_KEY`. A reference to a
 name the producer does not export is `EXTERNAL_NOT_EXPORTED`.
 
+**Shared Adapters stay inside the project.** A subsystem may publish one of its
+Adapters with `shared: true` on its L1 `publicInterfaces` entry (through
+`sdd_set_public_interfaces`): generic I/O such as files, processes or outbound
+HTTP that every subsystem of the project depends on directly, with no client
+Adapter, `trustedLink` or Portal in front. It is not something another project
+can reach: an Adapter in the L0 export table is `EXPORT_UNCONSUMABLE`. To offer
+that I/O to other projects, put a library (an `InProcess` Portal) in front of it
+and export the Portal. The rules a shared Adapter follows are in
+`docs/standards/architecture.md`.
+
 **Export audiences.** Each L0 entry carries an `audience` (default `instance`)
 that decides who may see the public name. Narrowest first:
 

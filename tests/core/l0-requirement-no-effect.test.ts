@@ -24,6 +24,15 @@ describe('sdd_update_spec: L0 requirement spellings in the NO EFFECT report', ()
     });
   }
 
+  it('a plain-list value written as { value } is judged by its value, as the merge stores it', () => {
+    const stored = { owns: ['reading_store'] };
+    const merged = { owns: ['reading_store', 'blob_files'] };
+    expect(ineffectiveDeltaPaths({ owns: [{ value: 'blob_files' }] }, merged, stored)).toEqual([]);
+    expect(ineffectiveDeltaPaths({ owns: [{ value: 'reading_store' }] }, stored, stored))
+      .toEqual(['owns — the stored spec already held this value']);
+    expect(ineffectiveDeltaPaths({ owns: [{ value: 'lost' }] }, stored, stored)).toHaveLength(1);
+  });
+
   it('a requirement the write genuinely dropped is still reported, in either spelling', () => {
     const stored = { globalRequirements: [text('keep')] };
     const merged = { globalRequirements: [text('keep')] };

@@ -172,7 +172,10 @@ function checkConsumable(entry: ResolvedExport, owner: string, problems: ExportP
     targets: [entry.component!],
     detail: implemented
       ? `"${entry.publicName}" exports ${entry.componentType} "${entry.component}" for consumers to implement, but an extension point is backed only by a Portal (a webhook or callback contract) or the Adapter holding the port the producer calls`
-      : `"${entry.publicName}" exports ${entry.componentType} "${entry.component}", which no caller across the boundary may reach — only a Portal (a gateway is a Portal variant) or an Observer can serve one (an Adapter only as an extension point consumers implement, with role implement)`,
+      : `"${entry.publicName}" exports ${entry.componentType} "${entry.component}", which no caller across the boundary may reach — only a Portal (a gateway is a Portal variant) or an Observer can serve one (an Adapter only as an extension point consumers implement, with role implement)`
+        + (entry.componentType === 'Adapter'
+          ? '. An Adapter published as shared is reachable only inside its own project; to offer that I/O to other projects, put a library (an InProcess Portal) in front of it and export the Portal'
+          : ''),
   });
 }
 
