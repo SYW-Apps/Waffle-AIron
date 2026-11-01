@@ -408,45 +408,48 @@ methods:
       checker lands in a file of the target, through every barrel, port declaration, dependency bag
       and unowned helper (UNREALIZED_DEPENDENCY — DI indirection can defeat the import reading,
       hence warning); a type-only import realizes it, since `import type` is what dependency
-      injection writes down. An Adapter's edge to a Portal reached over an out-of-process transport
-      (HTTP, gRPC, a bus, a CLI…) is the link the design models: the Adapter's transport client
-      realizes it, never an import, so it is never UNREALIZED_DEPENDENCY — and nothing asks for an
-      import across that boundary, which would couple two deployables' builds. Two twins of design
-      rules are judged on the same code: a Portal file calling a write- or lifecycle-effect contract
-      method of a Repository, Index, Store or Registry is the persistence shortcut the design rule
-      PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own narrative already claims that call (the
-      design rule's finding then) (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by
-      the TypeScript type checker: every call written in a file realizing only Portals — in a file
-      shared with other components, every call in a body the Portal's own methods reach — and every
-      reference there to a function or method the code takes as a value (passed as an argument,
-      assigned, returned, bound, handed to Reflect.apply), together with every call the UNOWNED code
-      they reach makes (a function in a file no component realizes, or one that is none of its
-      file's components' modelled methods, read as if inlined at the call site, transitively to a
-      bounded depth, the finding naming the hops), lands on the declaration its signature resolves
-      to, whatever the receiver's spelling, and a declaration in an interface or type shape, a port
-      the Portal declares for itself included, lands on each class of the project that realizes it
-      (the classes whose implements clause names it when any does, else every class the checker
-      finds assignable to it); such a landing on a component the file neither imports at runtime nor
-      is justified to reach is UNDECLARED_DEPENDENCY on that edge. Where no type checker could be
-      loaded, the receiver is followed through the shape facts instead: a non-null assertion,
-      parentheses, `satisfies`, a cast to a named type and a local alias or destructuring of a field
-      exactly as through the field itself. A call in a Portal's own code the analysis cannot resolve
-      at all — its receiver typed any or unknown however it came to be (a cast, an untyped or
-      any-typed parameter of a closure, a local typed any, a function result typed any), cast to
-      either or to an index signature, its member picked by a computed key, or typed nothing — under
-      the name of a write- or lifecycle-effect method of a data component, or reading a member by a
-      key that names no single member off a receiver that was a data component before any cast —
-      invoked on the spot or taken as a value, however the receiver or the key is cast (where the
-      checker recorded the receiver's ORIGINAL type, before any cast — an `await (x)` written
-      outside an async function read as the x it means, nullability set aside, a name bound once by
-      a const read through its initializer, an interface no class realizes landing on the file
-      declaring it — a write of the data component that type lands on — any of its writes when a
-      computed key names none; else one in the Portal's own subsystem or one it depends into — the
-      design's write set, which a data component whose code is still planned has too, and what a
-      receiver landing only on the Portal's own file, a port it declares for itself, is judged by),
-      which the Portal does not already claim, fails closed — one finding per site and per function
-      it is written in, so one shortcut never hides another of the same name: it is neither proven a
-      shortcut nor cleared, and it is a warning, so a CI gate never passes what it could not read
+      injection writes down. An `owns` edge that is not also a dependsOn is realized as well when
+      the owner reaches another member it owns that reaches the owned one: a Repository whose Store
+      only its Registry and Index touch still holds it. An Adapter's edge to a Portal reached over
+      an out-of-process transport (HTTP, gRPC, a bus, a CLI…) is the link the design models: the
+      Adapter's transport client realizes it, never an import, so it is never UNREALIZED_DEPENDENCY
+      — and nothing asks for an import across that boundary, which would couple two deployables'
+      builds. Two twins of design rules are judged on the same code: a Portal file calling a write-
+      or lifecycle-effect contract method of a Repository, Index, Store or Registry is the
+      persistence shortcut the design rule PORTAL_WRITE_SHORTCUT refuses, unless the Portal's own
+      narrative already claims that call (the design rule's finding then)
+      (PORTAL_WRITE_SHORTCUT_IN_CODE). A Portal's calls are resolved by the TypeScript type checker:
+      every call written in a file realizing only Portals — in a file shared with other components,
+      every call in a body the Portal's own methods reach — and every reference there to a function
+      or method the code takes as a value (passed as an argument, assigned, returned, bound, handed
+      to Reflect.apply), together with every call the UNOWNED code they reach makes (a function in a
+      file no component realizes, or one that is none of its file's components' modelled methods,
+      read as if inlined at the call site, transitively to a bounded depth, the finding naming the
+      hops), lands on the declaration its signature resolves to, whatever the receiver's spelling,
+      and a declaration in an interface or type shape, a port the Portal declares for itself
+      included, lands on each class of the project that realizes it (the classes whose implements
+      clause names it when any does, else every class the checker finds assignable to it); such a
+      landing on a component the file neither imports at runtime nor is justified to reach is
+      UNDECLARED_DEPENDENCY on that edge. Where no type checker could be loaded, the receiver is
+      followed through the shape facts instead: a non-null assertion, parentheses, `satisfies`, a
+      cast to a named type and a local alias or destructuring of a field exactly as through the
+      field itself. A call in a Portal's own code the analysis cannot resolve at all — its receiver
+      typed any or unknown however it came to be (a cast, an untyped or any-typed parameter of a
+      closure, a local typed any, a function result typed any), cast to either or to an index
+      signature, its member picked by a computed key, or typed nothing — under the name of a write-
+      or lifecycle-effect method of a data component, or reading a member by a key that names no
+      single member off a receiver that was a data component before any cast — invoked on the spot
+      or taken as a value, however the receiver or the key is cast (where the checker recorded the
+      receiver's ORIGINAL type, before any cast — an `await (x)` written outside an async function
+      read as the x it means, nullability set aside, a name bound once by a const read through its
+      initializer, an interface no class realizes landing on the file declaring it — a write of the
+      data component that type lands on — any of its writes when a computed key names none; else one
+      in the Portal's own subsystem or one it depends into — the design's write set, which a data
+      component whose code is still planned has too, and what a receiver landing only on the
+      Portal's own file, a port it declares for itself, is judged by), which the Portal does not
+      already claim, fails closed — one finding per site and per function it is written in, so one
+      shortcut never hides another of the same name: it is neither proven a shortcut nor cleared,
+      and it is a warning, so a CI gate never passes what it could not read
       (PORTAL_CALL_UNRESOLVED). So does a call landing only on a PORT no written class realizes — a
       member of an interface or shape declared where no component's contract answers for it — under
       the name of such a write the Portal claims nowhere and no narrative of the Portal names on any
@@ -1013,59 +1016,63 @@ methods:
       and a date, a datetime or a duration with the string, Date or number the code writes it as —
       takes a different value than the design declares: PARAM_TYPE_MISMATCH, naming both types
       (`authorId: number` realizing `authorId: string`, a Python `text: int` realizing `text:
-      string`), whether the names agree or not. An annotation either side does not read as one
-      scalar — a union, a named type the design does not know, any — is not compared. Where nothing
-      decides between a rename and another argument (the types cannot be compared, no kind or field
-      speaks, and no handle name does), the name still differs from the contract's either way, so it
-      is PARAM_NAME_MISMATCH, said with the comparison that could not be made: a Python
-      `quote_order(order_items: list[dict])` realizing `quote_order(items: list<order_item>)` is
-      never silent. A parameter standing ahead of every kept pair under a name transports give their
-      handles (req, request, res, response, reply, url, ctx, context, next, event, socket) is how a
-      transport handle arrives, and the finding names the one green path for it: the handle in
-      `injectedParams`, the contract's own parameters after it in order, the router unpacking the
-      request into them — or, where the framework hands the function the handles alone, the
-      contract's parameters read off the injected request by their own names: a contract parameter
-      the code does not take but reads off an injected request handle (req, request, ctx, context,
-      event, url) by its own name is realized through that handle — `req.params.code`,
-      `req.query.limit`, `req.body.code`, `url.searchParams.get('limit')`, a destructuring at any
-      depth, a local the handle's value flows into (`const url = new URL(req.url, base)`), and what
-      a helper the handle is passed to reads off it or its result yields, where the helper is
-      written in the same file or in a file no implementation claims (`const { orderId } =
-      pathParams(req)`) — and the one RECORD parameter left unpaired is realized by the request's
-      body read whole: `req.body`, or the request handed as the first argument to a function — any
-      function, an imported one included, but a collaborator's method (a callee reached through
-      `this.<field>` or through another of the handler's parameters) — whose result the handler
-      binds to a local and then uses whole, passing it on, returning it, placing it into an object
-      or a list, or assigning it (`const cart = await readJsonBody(req)`); a result only
-      destructured or only read for members is a set of named reads, never the body. A parameter
-      left unrealized because the implementation injects its own name is said so: the injection set
-      the code's parameter of that name aside as wiring. An injected name none of the
-      implementation's realizing functions read in this run takes is said as a NOTICE
-      (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and one nothing
-      takes hides nothing, since no function takes a parameter it could set aside — so it never
-      fails a gate. A name with several bodies is judged on what they all agree on, and a method the
-      named file only CALLS is left to `methodRealization`, which already reports that the body is
-      not here; a method whose conformance dial is off (its own, else its implementation's) is not
-      judged. The signature's other half is its RETURN: a realizing function annotated to return a
-      type its contract's `returns` does not describe is RETURN_TYPE_MISMATCH, naming the method,
-      the contract's type and the code's — whatever every body of the name agrees on, read through
-      the file's dialect. Completing later is ASYNC_MISMATCH's subject, so both sides are read past
-      `async`; a named scalar agrees with what it holds, an enum with a string, a date, a datetime
-      or a duration with the string (or Date, or number) the code writes it as, and a name differing
-      only in case and separators with itself. Not compared: a contract returning void (whatever the
-      code hands back beside it, no caller built from the contract reads), a function that registers
-      the method's handler (a narrative `register` step), whose result is the handler's, a void
-      function handed a response handle (`injectedParams`: res, response, reply, ctx, context),
-      which writes its result through the handle, an unannotated body, and a type either side does
-      not read or the design does not know — never accused. A caller whose port no longer matches
-      the drifted class is not reported again on its own: its call to the drifted component that no
-      longer resolves (CALL_ORIGIN_UNRESOLVED) and its declared edge to it that no longer shows
-      (UNREALIZED_DEPENDENCY) are held under RETURN_TYPE_MISMATCH and judged again once it is fixed.
-      Python is read without a type checker by the analyzer's signature reader
-      (source_file_facts.reads): its `def` parameter names — compared in the language's snake_case,
-      so the contract's `documentId` is the code's `document_id` — their annotations and return
-      annotations, the receiver (`self`, `cls`) set aside, judged like any other signature; an
-      unannotated Python parameter is never read as opaque.
+      string`), whether the names agree or not. So is one value annotated where the contract
+      declares a list or a set, or a list or a set annotated where it declares one value —
+      `ingredients: string` realizing `ingredients: list<ingredient>`, `tag: string[]` realizing
+      `tag: string` — bytes aside, which travel as a list; two lists are not compared here. An
+      annotation either side does not read as one scalar — a union, a named type the design does not
+      know, any — is not compared. Where nothing decides between a rename and another argument (the
+      types cannot be compared, no kind or field speaks, and no handle name does), the name still
+      differs from the contract's either way, so it is PARAM_NAME_MISMATCH, said with the comparison
+      that could not be made: a Python `quote_order(order_items: list[dict])` realizing
+      `quote_order(items: list<order_item>)` is never silent. A parameter standing ahead of every
+      kept pair under a name transports give their handles (req, request, res, response, reply, url,
+      ctx, context, next, event, socket) is how a transport handle arrives, and the finding names
+      the one green path for it: the handle in `injectedParams`, the contract's own parameters after
+      it in order, the router unpacking the request into them — or, where the framework hands the
+      function the handles alone, the contract's parameters read off the injected request by their
+      own names: a contract parameter the code does not take but reads off an injected request
+      handle (req, request, ctx, context, event, url) by its own name is realized through that
+      handle — `req.params.code`, `req.query.limit`, `req.body.code`,
+      `url.searchParams.get('limit')`, a destructuring at any depth, a local the handle's value
+      flows into (`const url = new URL(req.url, base)`), and what a helper the handle is passed to
+      reads off it or its result yields, where the helper is written in the same file or in a file
+      no implementation claims (`const { orderId } = pathParams(req)`) — and the one RECORD
+      parameter left unpaired is realized by the request's body read whole: `req.body`, or the
+      request handed as the first argument to a function — any function, an imported one included,
+      but a collaborator's method (a callee reached through `this.<field>` or through another of the
+      handler's parameters) — whose result the handler binds to a local and then uses whole, passing
+      it on, returning it, placing it into an object or a list, or assigning it (`const cart = await
+      readJsonBody(req)`); a result only destructured or only read for members is a set of named
+      reads, never the body. A parameter left unrealized because the implementation injects its own
+      name is said so: the injection set the code's parameter of that name aside as wiring. An
+      injected name none of the implementation's realizing functions read in this run takes is said
+      as a NOTICE (UNUSED_INJECTED_PARAM): an injection is code linkage outside the approval, and
+      one nothing takes hides nothing, since no function takes a parameter it could set aside — so
+      it never fails a gate. A name with several bodies is judged on what they all agree on, and a
+      method the named file only CALLS is left to `methodRealization`, which already reports that
+      the body is not here; a method whose conformance dial is off (its own, else its
+      implementation's) is not judged. The signature's other half is its RETURN: a realizing
+      function annotated to return a type its contract's `returns` does not describe is
+      RETURN_TYPE_MISMATCH, naming the method, the contract's type and the code's — whatever every
+      body of the name agrees on, read through the file's dialect. Completing later is
+      ASYNC_MISMATCH's subject, so both sides are read past `async`; a named scalar agrees with what
+      it holds, an enum with a string, a date, a datetime or a duration with the string (or Date, or
+      number) the code writes it as, and a name differing only in case and separators with itself.
+      Not compared: a contract returning void (whatever the code hands back beside it, no caller
+      built from the contract reads), a function that registers the method's handler (a narrative
+      `register` step), whose result is the handler's, a void function handed a response handle
+      (`injectedParams`: res, response, reply, ctx, context), which writes its result through the
+      handle, an unannotated body, and a type either side does not read or the design does not know
+      — never accused. A caller whose port no longer matches the drifted class is not reported again
+      on its own: its call to the drifted component that no longer resolves (CALL_ORIGIN_UNRESOLVED)
+      and its declared edge to it that no longer shows (UNREALIZED_DEPENDENCY) are held under
+      RETURN_TYPE_MISMATCH and judged again once it is fixed. Python is read without a type checker
+      by the analyzer's signature reader (source_file_facts.reads): its `def` parameter names —
+      compared in the language's snake_case, so the contract's `documentId` is the code's
+      `document_id` — their annotations and return annotations, the receiver (`self`, `cls`) set
+      aside, judged like any other signature; an unannotated Python parameter is never read as
+      opaque.
     signature: 'paramConformance(ctx: RuleContext): void'
     returns: void
     params:
@@ -1106,8 +1113,9 @@ methods:
         summary: >-
           A contract parameter is realized by a parameter whose type cannot hold it — a record under
           an opaque type (any, unknown, an index signature) or an object missing the record's fields
-          or adding its own, a scalar under an opaque type the body reads as an object, or a scalar
-          annotated as another scalar — so what a caller hands over is not what the design declares
+          or adding its own, a scalar under an opaque type the body reads as an object, a scalar
+          annotated as another scalar, or one value annotated where a list is declared (or a list
+          where one value is) — so what a caller hands over is not what the design declares
       - code: RETURN_TYPE_MISMATCH
         severity: warning
         summary: >-
@@ -1441,4 +1449,4 @@ methods:
           yet, so whether the code runs it that way is not judged
 status: complete
 createdAt: '2026-09-14T06:08:40.026Z'
-updatedAt: '2026-11-01T12:42:36.553Z'
+updatedAt: '2026-11-01T17:55:00.714Z'
